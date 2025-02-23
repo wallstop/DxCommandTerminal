@@ -1,42 +1,41 @@
-using System.Diagnostics;
-using System.Text;
-using UnityEngine;
-
 namespace CommandTerminal
 {
-    public static class BuiltinCommands
+    using System.Collections.Generic;
+    using System.Diagnostics;
+    using System.Text;
+    using Attributes;
+
+    internal static class RegisterCommands
     {
         [RegisterCommand(Help = "Clear the command console", MaxArgCount = 0)]
-        static void CommandClear(CommandArg[] args)
+        internal static void CommandClear(CommandArg[] args)
         {
             Terminal.Buffer.Clear();
         }
 
         [RegisterCommand(Help = "Display help information about a command", MaxArgCount = 1)]
-        static void CommandHelp(CommandArg[] args)
+        internal static void CommandHelp(CommandArg[] args)
         {
             if (args.Length == 0)
             {
-                foreach (var command in Terminal.Shell.Commands)
+                foreach (KeyValuePair<string, CommandInfo> command in Terminal.Shell.Commands)
                 {
                     Terminal.Log("{0}: {1}", command.Key.PadRight(16), command.Value.help);
                 }
                 return;
             }
 
-            string command_name = args[0].String.ToUpper();
+            string commandName = args[0].String.ToUpper();
 
-            if (!Terminal.Shell.Commands.ContainsKey(command_name))
+            if (!Terminal.Shell.Commands.TryGetValue(commandName, out CommandInfo info))
             {
-                Terminal.Shell.IssueErrorMessage("Command {0} could not be found.", command_name);
+                Terminal.Shell.IssueErrorMessage("Command {0} could not be found.", commandName);
                 return;
             }
 
-            var info = Terminal.Shell.Commands[command_name];
-
             if (info.help == null)
             {
-                Terminal.Log("{0} does not provide any help documentation.", command_name);
+                Terminal.Log("{0} does not provide any help documentation.", commandName);
             }
             else if (info.hint == null)
             {
@@ -49,15 +48,14 @@ namespace CommandTerminal
         }
 
         [RegisterCommand(Help = "Time the execution of a command", MinArgCount = 1)]
-        static void CommandTime(CommandArg[] args)
+        internal static void CommandTime(CommandArg[] args)
         {
-            var sw = new Stopwatch();
-            sw.Start();
+            Stopwatch sw = Stopwatch.StartNew();
 
             Terminal.Shell.RunCommand(JoinArguments(args));
 
             sw.Stop();
-            Terminal.Log("Time: {0}ms", (double)sw.ElapsedTicks / 10000);
+            Terminal.Log("Time: {0}ms", (double)sw.ElapsedMilliseconds);
         }
 
         [RegisterCommand(Help = "Output message")]
@@ -68,60 +66,60 @@ namespace CommandTerminal
 
 #if DEBUG
         [RegisterCommand(Help = "Output the stack trace of the previous message", MaxArgCount = 0)]
-        static void CommandTrace(CommandArg[] args)
+        internal static void CommandTrace(CommandArg[] args)
         {
-            int log_count = Terminal.Buffer.Logs.Count;
+            int logCount = Terminal.Buffer.Logs.Count;
 
-            if (log_count - 2 < 0)
+            if (logCount - 2 < 0)
             {
                 Terminal.Log("Nothing to trace.");
                 return;
             }
 
-            var log_item = Terminal.Buffer.Logs[log_count - 2];
+            LogItem logItem = Terminal.Buffer.Logs[logCount - 2];
 
-            if (log_item.stack_trace == "")
+            if (string.IsNullOrWhiteSpace(logItem.stackTrace))
             {
-                Terminal.Log("{0} (no trace)", log_item.message);
+                Terminal.Log("{0} (no trace)", logItem.message);
             }
             else
             {
-                Terminal.Log(log_item.stack_trace);
+                Terminal.Log(logItem.stackTrace);
             }
         }
 #endif
 
         [RegisterCommand(Help = "List all variables or set a variable value")]
-        static void CommandSet(CommandArg[] args)
+        internal static void CommandSet(CommandArg[] args)
         {
             if (args.Length == 0)
             {
-                foreach (var kv in Terminal.Shell.Variables)
+                foreach (KeyValuePair<string, CommandArg> kv in Terminal.Shell.Variables)
                 {
                     Terminal.Log("{0}: {1}", kv.Key.PadRight(16), kv.Value);
                 }
                 return;
             }
 
-            string variable_name = args[0].String;
+            string variableName = args[0].String;
 
-            if (variable_name[0] == '$')
+            if (variableName[0] == '$')
             {
                 Terminal.Log(
                     TerminalLogType.Warning,
                     "Warning: Variable name starts with '$', '${0}'.",
-                    variable_name
+                    variableName
                 );
             }
 
-            Terminal.Shell.SetVariable(variable_name, JoinArguments(args, 1));
+            Terminal.Shell.SetVariable(variableName, JoinArguments(args, 1));
         }
 
         [RegisterCommand(Help = "No operation")]
-        static void CommandNoop(CommandArg[] args) { }
+        internal static void CommandNoop(CommandArg[] args) { }
 
         [RegisterCommand(Help = "Quit running application", MaxArgCount = 0)]
-        static void CommandQuit(CommandArg[] args)
+        internal static void CommandQuit(CommandArg[] args)
         {
 #if UNITY_EDITOR
             UnityEditor.EditorApplication.isPlaying = false;
@@ -130,16 +128,16 @@ namespace CommandTerminal
 #endif
         }
 
-        static string JoinArguments(CommandArg[] args, int start = 0)
+        private static string JoinArguments(CommandArg[] args, int start = 0)
         {
-            var sb = new StringBuilder();
-            int arg_length = args.Length;
+            StringBuilder sb = new();
+            int argLength = args.Length;
 
-            for (int i = start; i < arg_length; i++)
+            for (int i = start; i < argLength; i++)
             {
                 sb.Append(args[i].String);
 
-                if (i < arg_length - 1)
+                if (i < argLength - 1)
                 {
                     sb.Append(" ");
                 }

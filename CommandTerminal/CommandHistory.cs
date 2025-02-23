@@ -1,57 +1,57 @@
-using System.Collections.Generic;
-
 namespace CommandTerminal
 {
-    public class CommandHistory
-    {
-        List<string> history = new List<string>();
-        int position;
+    using System.Collections.Generic;
 
-        public void Push(string command_string)
+    public sealed class CommandHistory
+    {
+        private readonly List<string> _history = new();
+        private int _position;
+
+        public void Push(string commandString)
         {
-            if (command_string == "")
+            if (string.IsNullOrWhiteSpace(commandString))
             {
                 return;
             }
 
-            history.Add(command_string);
-            position = history.Count;
+            _history.Add(commandString);
+            _position = _history.Count;
         }
 
         public string Next()
         {
-            position++;
+            _position++;
 
-            if (position >= history.Count)
+            if (_position < _history.Count)
             {
-                position = history.Count;
-                return "";
+                return _history[_position];
             }
 
-            return history[position];
+            _position = _history.Count;
+            return string.Empty;
         }
 
         public string Previous()
         {
-            if (history.Count == 0)
+            if (_history.Count == 0)
             {
-                return "";
+                return string.Empty;
             }
 
-            position--;
+            _position--;
 
-            if (position < 0)
+            if (_position < 0)
             {
-                position = 0;
+                _position = 0;
             }
 
-            return history[position];
+            return _history[_position];
         }
 
         public void Clear()
         {
-            history.Clear();
-            position = 0;
+            _history.Clear();
+            _position = 0;
         }
     }
 }

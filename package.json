@@ -1,0 +1,30 @@
+{
+  "name": "com.wallstop-studios.dxcommandterminal",
+  "version": "1.0.0-rc01",
+  "displayName": "DxCommandTerminal",
+  "description": "Wallstop Studios fork of Command Terminal for Unity",
+  "dependencies": {},
+  "unity": "2021.3",
+  "keywords": [
+    "helper",
+    "library",
+    "command",
+    "extension",
+    "helpers",
+    "terminal"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wallstop/DxCommandTerminal.git"
+  },
+  "bugs": {
+    "url": "https://github.com/wallstop/DxCommandTerminal/issues"
+  },
+  "author": "wallstop studios <wallstop@wallstopstudios.com> (https://wallstopstudios.com)",
+  "homepage": "https://github.com/wallstop/DxCommandTerminal/blob/master/README.md",
+  "main": "README.md",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}

@@ -1,18 +1,34 @@
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Reflection;
-using UnityEngine;
-
 namespace CommandTerminal
 {
-    public struct CommandInfo
+    using System;
+    using System.Collections.Generic;
+    using System.Linq;
+    using System.Reflection;
+    using System.Runtime.CompilerServices;
+    using Attributes;
+
+    public readonly struct CommandInfo
     {
-        public Action<CommandArg[]> proc;
-        public int max_arg_count;
-        public int min_arg_count;
-        public string help;
-        public string hint;
+        public readonly Action<CommandArg[]> proc;
+        public readonly int minArgCount;
+        public readonly int maxArgCount;
+        public readonly string help;
+        public readonly string hint;
+
+        public CommandInfo(
+            Action<CommandArg[]> proc,
+            int minArgCount,
+            int maxArgCount,
+            string help,
+            string hint
+        )
+        {
+            this.proc = proc;
+            this.maxArgCount = maxArgCount;
+            this.minArgCount = minArgCount;
+            this.help = help;
+            this.hint = hint;
+        }
     }
 
     public struct CommandArg
@@ -23,14 +39,12 @@ namespace CommandTerminal
         {
             get
             {
-                int int_value;
-
-                if (int.TryParse(String, out int_value))
+                if (int.TryParse(String, out int intValue))
                 {
-                    return int_value;
+                    return intValue;
                 }
 
-                TypeError("int");
+                TypeError();
                 return 0;
             }
         }
@@ -39,14 +53,12 @@ namespace CommandTerminal
         {
             get
             {
-                float float_value;
-
-                if (float.TryParse(String, out float_value))
+                if (float.TryParse(String, out float floatValue))
                 {
-                    return float_value;
+                    return floatValue;
                 }
 
-                TypeError("float");
+                TypeError();
                 return 0;
             }
         }
@@ -55,19 +67,26 @@ namespace CommandTerminal
         {
             get
             {
-                if (string.Compare(String, "TRUE", ignoreCase: true) == 0)
+                if (bool.TryParse(String, out bool boolValue))
                 {
-                    return true;
+                    return boolValue;
                 }
 
-                if (string.Compare(String, "FALSE", ignoreCase: true) == 0)
-                {
-                    return false;
-                }
-
-                TypeError("bool");
+                TypeError();
                 return false;
             }
+        }
+
+        public T Enum<T>()
+            where T : struct, Enum
+        {
+            if (System.Enum.TryParse(String, out T enumValue))
+            {
+                return enumValue;
+            }
+
+            TypeError();
+            return default;
         }
 
         public override string ToString()
@@ -75,52 +94,54 @@ namespace CommandTerminal
             return String;
         }
 
-        void TypeError(string expected_type)
+        private void TypeError([CallerMemberName] string expectedType = null)
         {
             Terminal.Shell.IssueErrorMessage(
                 "Incorrect type for {0}, expected <{1}>",
                 String,
-                expected_type
+                expectedType
             );
         }
     }
 
-    public class CommandShell
+    public sealed class CommandShell
     {
-        Dictionary<string, CommandInfo> commands = new Dictionary<string, CommandInfo>();
-        Dictionary<string, CommandArg> variables = new Dictionary<string, CommandArg>();
-        List<CommandArg> arguments = new List<CommandArg>(); // Cache for performance
+        private readonly Dictionary<string, CommandInfo> _commands = new();
+        private readonly Dictionary<string, CommandArg> _variables = new();
+        private readonly List<CommandArg> _arguments = new(); // Cache for performance
 
         public string IssuedErrorMessage { get; private set; }
 
-        public Dictionary<string, CommandInfo> Commands
-        {
-            get { return commands; }
-        }
+        public IReadOnlyDictionary<string, CommandInfo> Commands => _commands;
 
-        public Dictionary<string, CommandArg> Variables
-        {
-            get { return variables; }
-        }
+        public IReadOnlyDictionary<string, CommandArg> Variables => _variables;
 
         /// <summary>
         /// Uses reflection to find all RegisterCommand attributes
         /// and adds them to the commands dictionary.
         /// </summary>
-        public void RegisterCommands()
+        public void RegisterCommands(IEnumerable<string> ignoredCommands = null)
         {
-            var rejected_commands = new Dictionary<string, CommandInfo>();
-            var method_flags = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+            HashSet<string> ignoredCommandSet = new(
+                ignoredCommands ?? Enumerable.Empty<string>(),
+                StringComparer.OrdinalIgnoreCase
+            );
+            Dictionary<string, CommandInfo> rejectedCommands = new();
+            const BindingFlags methodFlags =
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
 
-            foreach (var type in Assembly.GetExecutingAssembly().GetTypes())
+            foreach (
+                Type type in AppDomain
+                    .CurrentDomain.GetAssemblies()
+                    .SelectMany(assembly => assembly.GetTypes())
+            )
             {
-                foreach (var method in type.GetMethods(method_flags))
+                foreach (MethodInfo method in type.GetMethods(methodFlags))
                 {
-                    var attribute =
+                    if (
                         Attribute.GetCustomAttribute(method, typeof(RegisterCommandAttribute))
-                        as RegisterCommandAttribute;
-
-                    if (attribute == null)
+                        is not RegisterCommandAttribute attribute
+                    )
                     {
                         if (
                             method.Name.StartsWith(
@@ -138,33 +159,24 @@ namespace CommandTerminal
                         }
                     }
 
-                    var methods_params = method.GetParameters();
+                    ParameterInfo[] methodsParams = method.GetParameters();
 
-                    string command_name = InferFrontCommandName(method.Name);
-                    Action<CommandArg[]> proc;
+                    string commandName = InferFrontCommandName(method.Name);
 
-                    if (attribute.Name == null)
-                    {
-                        // Use the method's name as the command's name
-                        command_name = InferCommandName(
-                            command_name == null ? method.Name : command_name
-                        );
-                    }
-                    else
-                    {
-                        command_name = attribute.Name;
-                    }
+                    // Use the method's name as the command's name
+                    commandName = attribute.Name ?? InferCommandName(commandName ?? method.Name);
 
                     if (
-                        methods_params.Length != 1
-                        || methods_params[0].ParameterType != typeof(CommandArg[])
+                        methodsParams.Length != 1
+                        || methodsParams[0].ParameterType != typeof(CommandArg[])
+                        || ignoredCommandSet.Contains(commandName)
                     )
                     {
                         // Method does not match expected Action signature,
                         // this could be a command that has a FrontCommand method to handle its arguments.
-                        rejected_commands.Add(
-                            command_name.ToUpper(),
-                            CommandFromParamInfo(methods_params, attribute.Help)
+                        rejectedCommands.Add(
+                            commandName.ToUpper(),
+                            CommandFromParamInfo(methodsParams, attribute.Help)
                         );
                         continue;
                     }
@@ -172,11 +184,11 @@ namespace CommandTerminal
                     // Convert MethodInfo to Action.
                     // This is essentially allows us to store a reference to the method,
                     // which makes calling the method significantly more performant than using MethodInfo.Invoke().
-                    proc =
+                    Action<CommandArg[]> proc =
                         (Action<CommandArg[]>)
                             Delegate.CreateDelegate(typeof(Action<CommandArg[]>), method);
                     AddCommand(
-                        command_name,
+                        commandName,
                         proc,
                         attribute.MinArgCount,
                         attribute.MaxArgCount,
@@ -185,7 +197,7 @@ namespace CommandTerminal
                     );
                 }
             }
-            HandleRejectedCommands(rejected_commands);
+            HandleRejectedCommands(rejectedCommands);
         }
 
         /// <summary>
@@ -195,94 +207,82 @@ namespace CommandTerminal
         {
             string remaining = line;
             IssuedErrorMessage = null;
-            arguments.Clear();
+            _arguments.Clear();
 
-            while (remaining != "")
+            while (!string.IsNullOrWhiteSpace(remaining))
             {
-                var argument = EatArgument(ref remaining);
+                CommandArg argument = EatArgument(ref remaining);
 
-                if (argument.String != "")
+                if (string.IsNullOrWhiteSpace(argument.String))
                 {
-                    if (argument.String[0] == '$')
-                    {
-                        string variable_name = argument.String.Substring(1).ToUpper();
-
-                        if (variables.ContainsKey(variable_name))
-                        {
-                            // Replace variable argument if it's defined
-                            argument = variables[variable_name];
-                        }
-                    }
-                    arguments.Add(argument);
+                    continue;
                 }
+
+                if (argument.String[0] == '$')
+                {
+                    string variableName = argument.String.Substring(1).ToUpper();
+
+                    if (_variables.TryGetValue(variableName, out CommandArg variable))
+                    {
+                        // Replace variable argument if it's defined
+                        argument = variable;
+                    }
+                }
+                _arguments.Add(argument);
             }
 
-            if (arguments.Count == 0)
+            if (_arguments.Count == 0)
             {
                 // Nothing to run
                 return;
             }
 
-            string command_name = arguments[0].String.ToUpper();
-            arguments.RemoveAt(0); // Remove command name from arguments
+            string commandName = _arguments[0].String.ToUpper();
+            _arguments.RemoveAt(0); // Remove command name from arguments
 
-            if (!commands.ContainsKey(command_name))
+            if (!_commands.ContainsKey(commandName))
             {
-                IssueErrorMessage("Command {0} could not be found", command_name);
+                IssueErrorMessage("Command {0} could not be found", commandName);
                 return;
             }
 
-            RunCommand(command_name, arguments.ToArray());
+            RunCommand(commandName, _arguments.ToArray());
         }
 
-        public void RunCommand(string command_name, CommandArg[] arguments)
+        public void RunCommand(string commandName, CommandArg[] arguments)
         {
-            var command = commands[command_name];
-            int arg_count = arguments.Length;
-            string error_message = null;
+            CommandInfo command = _commands[commandName];
+            int argCount = arguments.Length;
+            string errorMessage = null;
             int required_arg = 0;
 
-            if (arg_count < command.min_arg_count)
+            if (argCount < command.minArgCount)
             {
-                if (command.min_arg_count == command.max_arg_count)
-                {
-                    error_message = "exactly";
-                }
-                else
-                {
-                    error_message = "at least";
-                }
-                required_arg = command.min_arg_count;
+                errorMessage = command.minArgCount == command.maxArgCount ? "exactly" : "at least";
+                required_arg = command.minArgCount;
             }
-            else if (command.max_arg_count > -1 && arg_count > command.max_arg_count)
+            else if (command.maxArgCount > -1 && argCount > command.maxArgCount)
             {
                 // Do not check max allowed number of arguments if it is -1
-                if (command.min_arg_count == command.max_arg_count)
-                {
-                    error_message = "exactly";
-                }
-                else
-                {
-                    error_message = "at most";
-                }
-                required_arg = command.max_arg_count;
+                errorMessage = command.minArgCount == command.maxArgCount ? "exactly" : "at most";
+                required_arg = command.maxArgCount;
             }
 
-            if (error_message != null)
+            if (errorMessage != null)
             {
-                string plural_fix = required_arg == 1 ? "" : "s";
+                string pluralFix = required_arg == 1 ? "" : "s";
 
                 IssueErrorMessage(
                     "{0} requires {1} {2} argument{3}",
-                    command_name,
-                    error_message,
+                    commandName,
+                    errorMessage,
                     required_arg,
-                    plural_fix
+                    pluralFix
                 );
 
-                if (command.hint != null)
+                if (!string.IsNullOrWhiteSpace(command.hint))
                 {
-                    IssuedErrorMessage += string.Format("\n    -> Usage: {0}", command.hint);
+                    IssuedErrorMessage += $"\n    -> Usage: {command.hint}";
                 }
 
                 return;
@@ -295,33 +295,22 @@ namespace CommandTerminal
         {
             name = name.ToUpper();
 
-            if (commands.ContainsKey(name))
+            if (!_commands.TryAdd(name, info))
             {
                 IssueErrorMessage("Command {0} is already defined.", name);
-                return;
             }
-
-            commands.Add(name, info);
         }
 
         public void AddCommand(
             string name,
             Action<CommandArg[]> proc,
-            int min_args = 0,
-            int max_args = -1,
+            int minArgs = 0,
+            int maxArgs = -1,
             string help = "",
             string hint = null
         )
         {
-            var info = new CommandInfo()
-            {
-                proc = proc,
-                min_arg_count = min_args,
-                max_arg_count = max_args,
-                help = help,
-                hint = hint,
-            };
-
+            CommandInfo info = new(proc, minArgs, maxArgs, help, hint);
             AddCommand(name, info);
         }
 
@@ -333,24 +322,16 @@ namespace CommandTerminal
         public void SetVariable(string name, CommandArg value)
         {
             name = name.ToUpper();
-
-            if (variables.ContainsKey(name))
-            {
-                variables[name] = value;
-            }
-            else
-            {
-                variables.Add(name, value);
-            }
+            _variables[name] = value;
         }
 
         public CommandArg GetVariable(string name)
         {
             name = name.ToUpper();
 
-            if (variables.ContainsKey(name))
+            if (_variables.TryGetValue(name, out CommandArg variable))
             {
-                return variables[name];
+                return variable;
             }
 
             IssueErrorMessage("No variable named {0}", name);
@@ -362,43 +343,35 @@ namespace CommandTerminal
             IssuedErrorMessage = string.Format(format, message);
         }
 
-        string InferCommandName(string method_name)
+        private static string InferCommandName(string methodName)
         {
-            string command_name;
-            int index = method_name.IndexOf("COMMAND", StringComparison.CurrentCultureIgnoreCase);
+            int index = methodName.IndexOf("COMMAND", StringComparison.CurrentCultureIgnoreCase);
 
-            if (index >= 0)
-            {
-                // Method is prefixed, suffixed with, or contains "COMMAND".
-                command_name = method_name.Remove(index, 7);
-            }
-            else
-            {
-                command_name = method_name;
-            }
+            // Method is prefixed, suffixed with, or contains "COMMAND".
+            string commandName = index >= 0 ? methodName.Remove(index, 7) : methodName;
 
-            return command_name;
+            return commandName;
         }
 
-        string InferFrontCommandName(string method_name)
+        private static string InferFrontCommandName(string methodName)
         {
-            int index = method_name.IndexOf("FRONT", StringComparison.CurrentCultureIgnoreCase);
-            return index >= 0 ? method_name.Remove(index, 5) : null;
+            int index = methodName.IndexOf("FRONT", StringComparison.CurrentCultureIgnoreCase);
+            return index >= 0 ? methodName.Remove(index, 5) : null;
         }
 
-        void HandleRejectedCommands(Dictionary<string, CommandInfo> rejected_commands)
+        private void HandleRejectedCommands(Dictionary<string, CommandInfo> rejectedCommands)
         {
-            foreach (var command in rejected_commands)
+            foreach (KeyValuePair<string, CommandInfo> command in rejectedCommands)
             {
-                if (commands.ContainsKey(command.Key))
+                if (_commands.ContainsKey(command.Key))
                 {
-                    commands[command.Key] = new CommandInfo()
-                    {
-                        proc = commands[command.Key].proc,
-                        min_arg_count = command.Value.min_arg_count,
-                        max_arg_count = command.Value.max_arg_count,
-                        help = command.Value.help,
-                    };
+                    _commands[command.Key] = new CommandInfo(
+                        _commands[command.Key].proc,
+                        command.Value.minArgCount,
+                        command.Value.maxArgCount,
+                        command.Value.help,
+                        command.Value.hint
+                    );
                 }
                 else
                 {
@@ -407,41 +380,41 @@ namespace CommandTerminal
             }
         }
 
-        CommandInfo CommandFromParamInfo(ParameterInfo[] parameters, string help)
+        private static CommandInfo CommandFromParamInfo(ParameterInfo[] parameters, string help)
         {
-            int optional_args = 0;
+            int optionalArgs = 0;
 
-            foreach (var param in parameters)
+            foreach (ParameterInfo param in parameters)
             {
                 if (param.IsOptional)
                 {
-                    optional_args += 1;
+                    optionalArgs += 1;
                 }
             }
 
-            return new CommandInfo()
-            {
-                proc = null,
-                min_arg_count = parameters.Length - optional_args,
-                max_arg_count = parameters.Length,
-                help = help,
-            };
+            return new CommandInfo(
+                null,
+                parameters.Length - optionalArgs,
+                parameters.Length,
+                help,
+                string.Empty
+            );
         }
 
-        CommandArg EatArgument(ref string s)
+        private static CommandArg EatArgument(ref string s)
         {
-            var arg = new CommandArg();
-            int space_index = s.IndexOf(' ');
+            CommandArg arg = new();
+            int spaceIndex = s.IndexOf(' ');
 
-            if (space_index >= 0)
+            if (spaceIndex >= 0)
             {
-                arg.String = s.Substring(0, space_index);
-                s = s.Substring(space_index + 1); // Remaining
+                arg.String = s.Substring(0, spaceIndex);
+                s = s.Substring(spaceIndex + 1); // Remaining
             }
             else
             {
                 arg.String = s;
-                s = "";
+                s = string.Empty;
             }
 
             return arg;

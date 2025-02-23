@@ -1,6 +1,12 @@
 Unity Command Terminal
 ======================
 
+# Notice
+
+This is a fork of [Command Terminal](https://github.com/stillwwater/command_terminal) for Unity, mainly to address usability gaps and add maintenance
+
+---
+
 A simple and highly performant in-game drop down Console.
 
 ![gif](./demo.gif)

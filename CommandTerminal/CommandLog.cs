@@ -1,8 +1,8 @@
-using System.Collections.Generic;
-using UnityEngine;
-
 namespace CommandTerminal
 {
+    using System.Collections.Generic;
+    using UnityEngine;
+
     public enum TerminalLogType
     {
         Error = LogType.Error,
@@ -14,53 +14,52 @@ namespace CommandTerminal
         ShellMessage,
     }
 
-    public struct LogItem
+    public readonly struct LogItem
     {
-        public TerminalLogType type;
-        public string message;
-        public string stack_trace;
+        public readonly TerminalLogType type;
+        public readonly string message;
+        public readonly string stackTrace;
+
+        public LogItem(TerminalLogType type, string message, string stackTrace)
+        {
+            this.type = type;
+            this.message = message;
+            this.stackTrace = stackTrace;
+        }
     }
 
-    public class CommandLog
+    public sealed class CommandLog
     {
-        List<LogItem> logs = new List<LogItem>();
-        int max_items;
+        private readonly List<LogItem> _logs = new();
+        private readonly int _maxItems;
 
-        public List<LogItem> Logs
-        {
-            get { return logs; }
-        }
+        public IReadOnlyList<LogItem> Logs => _logs;
 
-        public CommandLog(int max_items)
+        public CommandLog(int maxItems)
         {
-            this.max_items = max_items;
+            _maxItems = maxItems;
         }
 
         public void HandleLog(string message, TerminalLogType type)
         {
-            HandleLog(message, "", type);
+            HandleLog(message, string.Empty, type);
         }
 
-        public void HandleLog(string message, string stack_trace, TerminalLogType type)
+        public void HandleLog(string message, string stackTrace, TerminalLogType type)
         {
-            LogItem log = new LogItem()
-            {
-                message = message,
-                stack_trace = stack_trace,
-                type = type,
-            };
+            LogItem log = new(type, message, stackTrace);
 
-            logs.Add(log);
+            _logs.Add(log);
 
-            if (logs.Count > max_items)
+            if (_logs.Count > _maxItems)
             {
-                logs.RemoveAt(0);
+                _logs.RemoveRange(0, _logs.Count - _maxItems);
             }
         }
 
         public void Clear()
         {
-            logs.Clear();
+            _logs.Clear();
         }
     }
 }
