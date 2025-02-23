@@ -9,12 +9,14 @@ namespace CommandTerminal
         int min_arg_count = 0;
         int max_arg_count = -1;
 
-        public int MinArgCount {
+        public int MinArgCount
+        {
             get { return min_arg_count; }
             set { min_arg_count = value; }
         }
 
-        public int MaxArgCount {
+        public int MaxArgCount
+        {
             get { return max_arg_count; }
             set { max_arg_count = value; }
         }
@@ -23,7 +25,8 @@ namespace CommandTerminal
         public string Help { get; set; }
         public string Hint { get; set; }
 
-        public RegisterCommandAttribute(string command_name = null) {
+        public RegisterCommandAttribute(string command_name = null)
+        {
             Name = command_name;
         }
     }
