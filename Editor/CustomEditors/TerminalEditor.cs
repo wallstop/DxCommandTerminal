@@ -1,12 +1,12 @@
 ﻿namespace DxCommandTerminal.Editor.CustomEditors
 {
+#if UNITY_EDITOR
     using System.Collections.Generic;
     using System.Linq;
     using CommandTerminal;
     using UnityEditor;
     using UnityEngine;
 
-#if UNITY_EDITOR
     [CustomEditor(typeof(Terminal))]
     public sealed class TerminalEditor : Editor
     {
