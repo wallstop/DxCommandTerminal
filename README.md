@@ -1,6 +1,44 @@
 Unity Command Terminal
 ======================
 
+# Notice
+
+This is a fork of [Command Terminal](https://github.com/stillwwater/command_terminal) for Unity, mainly to address usability gaps and add maintenance
+
+## Improvements Over Baseline
+- Add ability to ignore commands that have been annotated with `RegisterCommandAttribute`. In this way, your terminals can ignore any built-in commands, for cleanliness. A custom editor has been added to provide users with the ability to identify what commands are available to ignore, and selectively ignore them.
+- Add ability to ignore certain (or all) log levels, such that unwanted logs do not clutter terminal output
+- Add ability to optionally have Unity log messages routed to the terminal, default on, but can be turned off
+- Added Assembly Definitions, so that this project can be used cleanly in projects that utilize Assembly Definitions
+- Fixed a bug where commands annotated with `RegisterCommandAttribute` in other assemblies failed to be recognized
+- Fixed a bug where only the latest error message was preserved - errors are now queued
+- Fixed a bug where attempting to access static `Terminal` properties would throw if the Terminal had been enabled yet.
+- Minor performance benefits if there are terminals in multiple scenes
+- Minor performance benefits (O(n) -> O(1)) when the terminal buffer becomes full
+- Minor performance benefits around multiple-indexing into dictionary issues
+- Minor performance benefits around using string interpolation and intelligent checking of parameters to only force `string.Format` when relevant in logging paths
+- All string comparisons are now `OrdinalIgnoreCase` instead of relying on CurrentCulture
+- `Bool` property conversion of `CommandArg` now uses `bool.TryParse` for maximum flexibllity
+- Added an `Enum` property conversion on `CommandArg`
+- `Terminal` has been made to be Editor-Aware. If the Editor is in Play mode, changes to the current terminal will take effect immediately. If the terminal is open, it will be closed, to prevent bugs.
+- Extra input validation has been added on all public methods, such that user code is sanitized where appropriate, or rejected if invalid.
+
+## Code changes
+- All code is formatted via [Csharpier](https://csharpier.com/)
+- All variables are now consistently named
+- Access modifiers have been explicitly applied to every field
+- All warnings have been gotten rid of
+- Collections / properties are now exposed as immutable by default. Mutable fields / properties are only exposed as necessary
+- Conversion to capitalization/lowercase is now only done where absolutely required
+- Annotated all logging methods with Jetbrain's `StringFormatMethod` attribute to aid in intellisense and help identify formatting issues
+- All classes / structs have been made sealed / readonly where possible to promote immutability
+- Validation around command ignoring and log level ignoring has been added to Terminal, to prevent invalid data
+
+## The Future
+- More improvements are coming :)
+
+---
+
 A simple and highly performant in-game drop down Console.
 
 ![gif](./demo.gif)
