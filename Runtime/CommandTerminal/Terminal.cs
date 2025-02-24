@@ -9,7 +9,6 @@ namespace CommandTerminal
     using UnityEditor;
     using UnityEngine;
     using UnityEngine.Assertions;
-    using UnityEngine.Serialization;
 
     public enum TerminalState
     {
@@ -34,84 +33,65 @@ namespace CommandTerminal
         public bool IsClosed =>
             _state == TerminalState.Close && Mathf.Approximately(_currentOpenT, _openTarget);
 
-        [FormerlySerializedAs("MaxHeight")]
         [Header("Window")]
         [Range(0, 1)]
         [SerializeField]
         private float _maxHeight = 0.7f;
 
-        [FormerlySerializedAs("SmallTerminalRatio")]
         [SerializeField]
         [Range(0, 1)]
         private float _smallTerminalRatio = 0.33f;
 
-        [FormerlySerializedAs("ToggleSpeed")]
         [Range(100, 1000)]
         [SerializeField]
         private float _toggleSpeed = 360;
 
-        [FormerlySerializedAs("ToggleHotkey")]
         [SerializeField]
         private string _toggleHotkey = "`";
 
-        [FormerlySerializedAs("ToggleFullHotkey")]
         [SerializeField]
         private string _toggleFullHotkey = "#`";
 
-        [FormerlySerializedAs("BufferSize")]
         [SerializeField]
         private int _bufferSize = 512;
 
-        [FormerlySerializedAs("ConsoleFont")]
         [Header("Input")]
         [SerializeField]
         private Font _consoleFont;
 
-        [FormerlySerializedAs("InputCaret")]
         [SerializeField]
         private string _inputCaret = ">";
 
-        [FormerlySerializedAs("ShowGUIButtons")]
         [SerializeField]
         private bool _showGUIButtons;
 
-        [FormerlySerializedAs("RightAlignButtons")]
         [SerializeField]
         private bool _rightAlignButtons;
 
-        [FormerlySerializedAs("InputContrast")]
         [Header("Theme")]
         [Range(0, 1)]
         [SerializeField]
         private float _inputContrast;
 
-        [FormerlySerializedAs("_nputAlpha")]
-        [FormerlySerializedAs("InputAlpha")]
         [Range(0, 1)]
         [SerializeField]
         private float _inputAlpha = 0.5f;
 
-        [FormerlySerializedAs("BackgroundColor")]
         [SerializeField]
         private Color _backgroundColor = Color.black;
 
-        [FormerlySerializedAs("ForegroundColor")]
         [SerializeField]
         private Color _foregroundColor = Color.white;
 
-        [FormerlySerializedAs("ShellColor")]
         [SerializeField]
         private Color _shellColor = Color.white;
 
-        [FormerlySerializedAs("InputColor")]
         [SerializeField]
         private Color _inputColor = Color.cyan;
 
-        [FormerlySerializedAs("WarningColor")]
         [SerializeField]
         private Color _warningColor = Color.yellow;
 
-        [FormerlySerializedAs("ErrorColor")]
         [SerializeField]
         private Color _errorColor = Color.red;
 
@@ -237,13 +217,16 @@ namespace CommandTerminal
 
         private void OnDisable()
         {
-            if (!_unityLogAttached)
+            if (_unityLogAttached)
             {
-                return;
+                Application.logMessageReceivedThreaded -= HandleUnityLog;
+                _unityLogAttached = false;
             }
 
-            Application.logMessageReceivedThreaded -= HandleUnityLog;
-            _unityLogAttached = false;
+            Buffer = null;
+            Shell = null;
+            History = null;
+            Autocomplete = null;
         }
 
         private void Start()
@@ -261,9 +244,8 @@ namespace CommandTerminal
 
             _commandText = string.Empty;
             _cachedCommandText = _commandText;
-            Assert.AreNotEqual(
-                _toggleHotkey.ToLower(),
-                "return",
+            Assert.IsFalse(
+                string.Equals(_toggleHotkey, "return", StringComparison.OrdinalIgnoreCase),
                 "Return is not a valid ToggleHotkey"
             );
 
