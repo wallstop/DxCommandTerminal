@@ -2,10 +2,11 @@ namespace CommandTerminal
 {
     using System;
     using System.Collections.Generic;
+    using System.Linq;
 
     public sealed class CommandAutocomplete
     {
-        private readonly List<string> _knownWords = new();
+        private readonly HashSet<string> _knownWords = new();
         private readonly List<string> _buffer = new();
 
         public void Register(string word)
@@ -13,21 +14,24 @@ namespace CommandTerminal
             _knownWords.Add(word);
         }
 
+        public void Clear()
+        {
+            _knownWords.Clear();
+        }
+
         public string[] Complete(ref string text, ref int formatWidth)
         {
             _buffer.Clear();
             string partialWord = EatLastWord(ref text);
 
-            foreach (string known in _knownWords)
+            foreach (
+                string known in _knownWords.Where(known =>
+                    known.StartsWith(partialWord, StringComparison.OrdinalIgnoreCase)
+                )
+            )
             {
-                if (!known.StartsWith(partialWord, StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
                 _buffer.Add(known);
-
-                if (known.Length > formatWidth)
+                if (formatWidth < known.Length)
                 {
                     formatWidth = known.Length;
                 }

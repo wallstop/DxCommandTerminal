@@ -30,7 +30,7 @@ namespace CommandTerminal
             {
                 foreach (KeyValuePair<string, CommandInfo> command in shell.Commands)
                 {
-                    Terminal.Log($"{command.Key, -16}: {command.Value.help}");
+                    Terminal.Log($"{command.Key.ToUpperInvariant(), -16}: {command.Value.help}");
                 }
                 return;
             }
@@ -43,11 +43,11 @@ namespace CommandTerminal
                 return;
             }
 
-            if (info.help == null)
+            if (string.IsNullOrWhiteSpace(info.help))
             {
                 Terminal.Log($"{commandName} does not provide any help documentation.");
             }
-            else if (info.hint == null)
+            else if (string.IsNullOrWhiteSpace(info.hint))
             {
                 Terminal.Log(info.help);
             }
@@ -73,11 +73,18 @@ namespace CommandTerminal
             Terminal.Log($"Time: {sw.ElapsedMilliseconds}ms");
         }
 
-        [RegisterCommand(Help = "Output message")]
+        [RegisterCommand(Help = "Output message via Terminal.Log")]
         // ReSharper disable once UnusedMember.Local
         private static void CommandPrint(CommandArg[] args)
         {
             Terminal.Log(JoinArguments(args));
+        }
+
+        [RegisterCommand(Help = "Output message via Debug.Log")]
+        // ReSharper disable once UnusedMember.Local
+        private static void CommandLog(CommandArg[] args)
+        {
+            UnityEngine.Debug.Log(JoinArguments(args));
         }
 
         [RegisterCommand(Help = "Output the stack trace of the previous message", MaxArgCount = 0)]

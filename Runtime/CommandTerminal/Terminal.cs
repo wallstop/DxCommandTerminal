@@ -60,7 +60,6 @@ namespace CommandTerminal
 
         [FormerlySerializedAs("BufferSize")]
         [SerializeField]
-        [Range(0, int.MaxValue)]
         private int _bufferSize = 512;
 
         [FormerlySerializedAs("ConsoleFont")]
@@ -123,11 +122,10 @@ namespace CommandTerminal
         [SerializeField]
         private bool _logUnityMessages = true;
 
-        [SerializeField]
-        internal List<string> _disabledCommands = new();
+        public List<string> disabledCommands = new();
 
 #if UNITY_EDITOR
-        private readonly HashSet<TerminalLogType> _seenLogTypes = new();
+        private readonly Dictionary<TerminalLogType, int> _seenLogTypes = new();
 #endif
 
         private TerminalState _state;
@@ -146,6 +144,7 @@ namespace CommandTerminal
         private GUIStyle _labelStyle;
         private GUIStyle _inputStyle;
         private bool _unityLogAttached;
+        private bool _started;
 
         [StringFormatMethod("format")]
         public static bool Log(string format, params object[] message)
@@ -249,6 +248,11 @@ namespace CommandTerminal
 
         private void Start()
         {
+            if (_started)
+            {
+                SetState(TerminalState.Close);
+            }
+
             if (_consoleFont == null)
             {
                 _consoleFont = Font.CreateDynamicFontFromOSFont("Courier New", 16);
@@ -267,17 +271,20 @@ namespace CommandTerminal
             SetupInput();
             SetupLabels();
 
-            Shell.RegisterCommands(_disabledCommands);
+            Shell.RegisterCommands(disabledCommands);
 
             while (Shell.TryConsumeErrorMessage(out string error))
             {
                 Log(TerminalLogType.Error, $"Error: {error}");
             }
 
+            Autocomplete.Clear();
             foreach (KeyValuePair<string, CommandInfo> command in Shell.Commands)
             {
                 Autocomplete.Register(command.Key);
             }
+
+            _started = true;
         }
 
 #if UNITY_EDITOR
@@ -290,6 +297,8 @@ namespace CommandTerminal
                 _toggleHotkey = string.Empty;
             }
 
+            if (_bufferSize < 0) { }
+
             if (_ignoredLogTypes == null)
             {
                 anyChanged = true;
@@ -300,11 +309,17 @@ namespace CommandTerminal
             for (int i = _ignoredLogTypes.Count - 1; 0 <= i; --i)
             {
                 TerminalLogType logType = _ignoredLogTypes[i];
-                if (Enum.IsDefined(typeof(TerminalLogType), logType) && _seenLogTypes.Add(logType))
+                int count = 0;
+                if (
+                    Enum.IsDefined(typeof(TerminalLogType), logType)
+                    && (!_seenLogTypes.TryGetValue(logType, out count) || count <= 1)
+                )
                 {
+                    _seenLogTypes[logType] = count + 1;
                     continue;
                 }
 
+                _seenLogTypes[logType] = count + 1;
                 anyChanged = true;
                 _ignoredLogTypes.RemoveAt(i);
             }
@@ -312,6 +327,13 @@ namespace CommandTerminal
             if (anyChanged)
             {
                 EditorUtility.SetDirty(this);
+            }
+
+            if (Application.isPlaying && enabled && gameObject.activeInHierarchy)
+            {
+                OnDisable();
+                OnEnable();
+                Start();
             }
         }
 #endif
@@ -346,6 +368,7 @@ namespace CommandTerminal
         private void SetupWindow()
         {
             _realWindowSize = Screen.height * _maxHeight / 3;
+
             _window = new Rect(0, _currentOpenT - _realWindowSize, Screen.width, _realWindowSize);
 
             // Set background color

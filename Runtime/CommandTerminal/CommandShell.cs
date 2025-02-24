@@ -114,49 +114,51 @@ namespace CommandTerminal
 
     public sealed class CommandShell
     {
-        private static readonly Lazy<(MethodInfo, RegisterCommandAttribute)[]> RegisteredCommands =
-            new(() =>
-            {
-                List<(MethodInfo, RegisterCommandAttribute)> commands = new();
-                const BindingFlags methodFlags =
-                    BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+        public static readonly Lazy<(
+            MethodInfo method,
+            RegisterCommandAttribute attribute
+        )[]> RegisteredCommands = new(() =>
+        {
+            List<(MethodInfo, RegisterCommandAttribute)> commands = new();
+            const BindingFlags methodFlags =
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
 
-                foreach (
-                    Type type in AppDomain
-                        .CurrentDomain.GetAssemblies()
-                        .SelectMany(assembly => assembly.GetTypes())
-                )
+            foreach (
+                Type type in AppDomain
+                    .CurrentDomain.GetAssemblies()
+                    .SelectMany(assembly => assembly.GetTypes())
+            )
+            {
+                foreach (MethodInfo method in type.GetMethods(methodFlags))
                 {
-                    foreach (MethodInfo method in type.GetMethods(methodFlags))
+                    if (
+                        Attribute.GetCustomAttribute(method, typeof(RegisterCommandAttribute))
+                        is not RegisterCommandAttribute attribute
+                    )
                     {
                         if (
-                            Attribute.GetCustomAttribute(method, typeof(RegisterCommandAttribute))
-                            is not RegisterCommandAttribute attribute
+                            method.Name.StartsWith(
+                                "FRONTCOMMAND",
+                                StringComparison.OrdinalIgnoreCase
+                            )
                         )
                         {
-                            if (
-                                method.Name.StartsWith(
-                                    "FRONTCOMMAND",
-                                    StringComparison.OrdinalIgnoreCase
-                                )
-                            )
-                            {
-                                // Front-end Command methods don't implement RegisterCommand, use default attribute
-                                attribute = new RegisterCommandAttribute();
-                            }
-                            else
-                            {
-                                continue;
-                            }
+                            // Front-end Command methods don't implement RegisterCommand, use default attribute
+                            attribute = new RegisterCommandAttribute();
                         }
-
-                        attribute.NormalizeName(method);
-                        commands.Add((method, attribute));
+                        else
+                        {
+                            continue;
+                        }
                     }
-                }
 
-                return commands.ToArray();
-            });
+                    attribute.NormalizeName(method);
+                    commands.Add((method, attribute));
+                }
+            }
+
+            return commands.ToArray();
+        });
         public IReadOnlyDictionary<string, CommandInfo> Commands => _commands;
 
         public IReadOnlyDictionary<string, CommandArg> Variables => _variables;
@@ -184,6 +186,7 @@ namespace CommandTerminal
         /// </summary>
         public void RegisterCommands(IEnumerable<string> ignoredCommands = null)
         {
+            _commands.Clear();
             HashSet<string> ignoredCommandSet = new(
                 ignoredCommands ?? Enumerable.Empty<string>(),
                 StringComparer.OrdinalIgnoreCase
@@ -197,12 +200,15 @@ namespace CommandTerminal
             )
             {
                 string commandName = attribute.Name;
-                ParameterInfo[] methodsParams = method.GetParameters();
+                if (ignoredCommandSet.Contains(commandName))
+                {
+                    continue;
+                }
 
+                ParameterInfo[] methodsParams = method.GetParameters();
                 if (
                     methodsParams.Length != 1
                     || methodsParams[0].ParameterType != typeof(CommandArg[])
-                    || ignoredCommandSet.Contains(commandName)
                 )
                 {
                     // Method does not match expected Action signature,
