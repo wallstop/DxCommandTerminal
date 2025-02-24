@@ -5,16 +5,20 @@ namespace CommandTerminal
     using System.Text;
     using Attributes;
 
+    // ReSharper disable once UnusedType.Global
     internal static class BuiltInCommands
     {
         [RegisterCommand(Help = "Clear the command console", MaxArgCount = 0)]
-        internal static void CommandClear(CommandArg[] args)
+        // ReSharper disable once UnusedMember.Local
+        // ReSharper disable once UnusedParameter.Local
+        private static void CommandClear(CommandArg[] args)
         {
             Terminal.Buffer?.Clear();
         }
 
         [RegisterCommand(Help = "Display help information about a command", MaxArgCount = 1)]
-        internal static void CommandHelp(CommandArg[] args)
+        // ReSharper disable once UnusedMember.Local
+        private static void CommandHelp(CommandArg[] args)
         {
             CommandShell shell = Terminal.Shell;
             if (shell == null)
@@ -26,7 +30,7 @@ namespace CommandTerminal
             {
                 foreach (KeyValuePair<string, CommandInfo> command in shell.Commands)
                 {
-                    Terminal.Log("{0}: {1}", command.Key.PadRight(16), command.Value.help);
+                    Terminal.Log($"{command.Key, -16}: {command.Value.help}");
                 }
                 return;
             }
@@ -35,13 +39,13 @@ namespace CommandTerminal
 
             if (!shell.Commands.TryGetValue(commandName, out CommandInfo info))
             {
-                shell.IssueErrorMessage("Command {0} could not be found.", commandName);
+                shell.IssueErrorMessage($"Command {commandName} could not be found.");
                 return;
             }
 
             if (info.help == null)
             {
-                Terminal.Log("{0} does not provide any help documentation.", commandName);
+                Terminal.Log($"{commandName} does not provide any help documentation.");
             }
             else if (info.hint == null)
             {
@@ -49,12 +53,13 @@ namespace CommandTerminal
             }
             else
             {
-                Terminal.Log("{0}\nUsage: {1}", info.help, info.hint);
+                Terminal.Log($"{info.help}\nUsage: {info.hint}");
             }
         }
 
         [RegisterCommand(Help = "Time the execution of a command", MinArgCount = 1)]
-        internal static void CommandTime(CommandArg[] args)
+        // ReSharper disable once UnusedMember.Local
+        private static void CommandTime(CommandArg[] args)
         {
             CommandShell shell = Terminal.Shell;
             if (shell == null)
@@ -63,21 +68,22 @@ namespace CommandTerminal
             }
 
             Stopwatch sw = Stopwatch.StartNew();
-
             shell.RunCommand(JoinArguments(args));
-
             sw.Stop();
-            Terminal.Log("Time: {0}ms", (double)sw.ElapsedMilliseconds);
+            Terminal.Log($"Time: {sw.ElapsedMilliseconds}ms");
         }
 
         [RegisterCommand(Help = "Output message")]
-        static void CommandPrint(CommandArg[] args)
+        // ReSharper disable once UnusedMember.Local
+        private static void CommandPrint(CommandArg[] args)
         {
             Terminal.Log(JoinArguments(args));
         }
 
         [RegisterCommand(Help = "Output the stack trace of the previous message", MaxArgCount = 0)]
-        internal static void CommandTrace(CommandArg[] args)
+        // ReSharper disable once UnusedMember.Local
+        // ReSharper disable once UnusedParameter.Local
+        private static void CommandTrace(CommandArg[] args)
         {
             CommandLog buffer = Terminal.Buffer;
             if (buffer == null)
@@ -95,18 +101,17 @@ namespace CommandTerminal
 
             LogItem logItem = buffer.Logs[logCount - 2];
 
-            if (string.IsNullOrWhiteSpace(logItem.stackTrace))
-            {
-                Terminal.Log("{0} (no trace)", logItem.message);
-            }
-            else
-            {
-                Terminal.Log(logItem.stackTrace);
-            }
+            Terminal.Log(
+                string.IsNullOrWhiteSpace(logItem.stackTrace)
+                    ? $"{logItem.message} (no trace)"
+                    : logItem.stackTrace
+            );
         }
 
         [RegisterCommand(Help = "List all variables or set a variable value")]
-        internal static void CommandSet(CommandArg[] args)
+        // ReSharper disable once UnusedMember.Global
+        // ReSharper disable once UnusedMember.Local
+        private static void CommandSet(CommandArg[] args)
         {
             CommandShell shell = Terminal.Shell;
             if (shell == null)
@@ -118,7 +123,7 @@ namespace CommandTerminal
             {
                 foreach (KeyValuePair<string, CommandArg> kv in shell.Variables)
                 {
-                    Terminal.Log("{0}: {1}", kv.Key.PadRight(16), kv.Value);
+                    Terminal.Log($"{kv.Key, -16}: {kv.Value}");
                 }
                 return;
             }
@@ -129,8 +134,7 @@ namespace CommandTerminal
             {
                 Terminal.Log(
                     TerminalLogType.Warning,
-                    "Warning: Variable name starts with '$', '${0}'.",
-                    variableName
+                    $"Warning: Variable name starts with '$', '${variableName}'."
                 );
             }
 
@@ -138,10 +142,17 @@ namespace CommandTerminal
         }
 
         [RegisterCommand(Help = "No operation")]
-        internal static void CommandNoop(CommandArg[] args) { }
+        // ReSharper disable once UnusedParameter.Local
+        // ReSharper disable once UnusedMember.Local
+        private static void CommandNoop(CommandArg[] args)
+        {
+            // No-op
+        }
 
         [RegisterCommand(Help = "Quit running application", MaxArgCount = 0)]
-        internal static void CommandQuit(CommandArg[] args)
+        // ReSharper disable once UnusedMember.Local
+        // ReSharper disable once UnusedParameter.Local
+        private static void CommandQuit(CommandArg[] args)
         {
 #if UNITY_EDITOR
             UnityEditor.EditorApplication.isPlaying = false;

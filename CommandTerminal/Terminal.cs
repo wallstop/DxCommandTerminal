@@ -2,9 +2,11 @@ namespace CommandTerminal
 {
     using System;
     using System.Collections.Generic;
+    using System.ComponentModel;
     using System.Linq;
     using System.Text;
     using JetBrains.Annotations;
+    using UnityEditor;
     using UnityEngine;
     using UnityEngine.Assertions;
     using UnityEngine.Serialization;
@@ -21,15 +23,16 @@ namespace CommandTerminal
     {
         public static CommandLog Buffer { get; private set; }
         public static CommandShell Shell { get; private set; }
+
+        // ReSharper disable once MemberCanBePrivate.Global
         public static CommandHistory History { get; private set; }
+
+        // ReSharper disable once MemberCanBePrivate.Global
         public static CommandAutocomplete Autocomplete { get; private set; }
 
-        public static bool IssuedError => !string.IsNullOrWhiteSpace(Shell?.IssuedErrorMessage);
-
+        // ReSharper disable once MemberCanBePrivate.Global
         public bool IsClosed =>
             _state == TerminalState.Close && Mathf.Approximately(_currentOpenT, _openTarget);
-
-        internal static List<TerminalLogType> IgnoredLogTypes;
 
         [FormerlySerializedAs("MaxHeight")]
         [Header("Window")]
@@ -57,6 +60,7 @@ namespace CommandTerminal
 
         [FormerlySerializedAs("BufferSize")]
         [SerializeField]
+        [Range(0, int.MaxValue)]
         private int _bufferSize = 512;
 
         [FormerlySerializedAs("ConsoleFont")]
@@ -117,7 +121,14 @@ namespace CommandTerminal
         private List<TerminalLogType> _ignoredLogTypes = new();
 
         [SerializeField]
+        private bool _logUnityMessages = true;
+
+        [SerializeField]
         internal List<string> _disabledCommands = new();
+
+#if UNITY_EDITOR
+        private readonly HashSet<TerminalLogType> _seenLogTypes = new();
+#endif
 
         private TerminalState _state;
         private TextEditor _editorState;
@@ -134,6 +145,7 @@ namespace CommandTerminal
         private GUIStyle _windowStyle;
         private GUIStyle _labelStyle;
         private GUIStyle _inputStyle;
+        private bool _unityLogAttached;
 
         [StringFormatMethod("format")]
         public static bool Log(string format, params object[] message)
@@ -149,12 +161,14 @@ namespace CommandTerminal
             {
                 return false;
             }
+
             string formattedMessage = message is { Length: > 0 }
                 ? string.Format(format, message)
                 : format;
             return buffer.HandleLog(formattedMessage, type);
         }
 
+        // ReSharper disable once MemberCanBePrivate.Global
         public void SetState(TerminalState newState)
         {
             _inputFix = true;
@@ -184,17 +198,25 @@ namespace CommandTerminal
                     break;
                 }
                 case TerminalState.OpenFull:
-                default:
                 {
                     _realWindowSize = Screen.height * _maxHeight;
                     _openTarget = _realWindowSize;
                     break;
+                }
+                default:
+                {
+                    throw new InvalidEnumArgumentException(
+                        nameof(newState),
+                        (int)newState,
+                        typeof(TerminalState)
+                    );
                 }
             }
 
             _state = newState;
         }
 
+        // ReSharper disable once MemberCanBePrivate.Global
         public void ToggleState(TerminalState newState)
         {
             SetState(_state == newState ? TerminalState.Close : newState);
@@ -202,19 +224,27 @@ namespace CommandTerminal
 
         private void OnEnable()
         {
-            Buffer = new CommandLog(_bufferSize);
+            Buffer = new CommandLog(_bufferSize, _ignoredLogTypes);
             Shell = new CommandShell();
             History = new CommandHistory();
             Autocomplete = new CommandAutocomplete();
-            IgnoredLogTypes = _ignoredLogTypes?.ToList() ?? new List<TerminalLogType>(0);
 
-            // Hook Unity log events
-            Application.logMessageReceivedThreaded += HandleUnityLog;
+            if (_logUnityMessages && !_unityLogAttached)
+            {
+                _unityLogAttached = true;
+                Application.logMessageReceivedThreaded += HandleUnityLog;
+            }
         }
 
         private void OnDisable()
         {
+            if (!_unityLogAttached)
+            {
+                return;
+            }
+
             Application.logMessageReceivedThreaded -= HandleUnityLog;
+            _unityLogAttached = false;
         }
 
         private void Start()
@@ -239,9 +269,9 @@ namespace CommandTerminal
 
             Shell.RegisterCommands(_disabledCommands);
 
-            if (IssuedError)
+            while (Shell.TryConsumeErrorMessage(out string error))
             {
-                Log(TerminalLogType.Error, "Error: {0}", Shell.IssuedErrorMessage);
+                Log(TerminalLogType.Error, $"Error: {error}");
             }
 
             foreach (KeyValuePair<string, CommandInfo> command in Shell.Commands)
@@ -249,6 +279,42 @@ namespace CommandTerminal
                 Autocomplete.Register(command.Key);
             }
         }
+
+#if UNITY_EDITOR
+        private void OnValidate()
+        {
+            bool anyChanged = false;
+            if (_toggleHotkey == null)
+            {
+                anyChanged = true;
+                _toggleHotkey = string.Empty;
+            }
+
+            if (_ignoredLogTypes == null)
+            {
+                anyChanged = true;
+                _ignoredLogTypes = new List<TerminalLogType>();
+            }
+
+            _seenLogTypes.Clear();
+            for (int i = _ignoredLogTypes.Count - 1; 0 <= i; --i)
+            {
+                TerminalLogType logType = _ignoredLogTypes[i];
+                if (Enum.IsDefined(typeof(TerminalLogType), logType) && _seenLogTypes.Add(logType))
+                {
+                    continue;
+                }
+
+                anyChanged = true;
+                _ignoredLogTypes.RemoveAt(i);
+            }
+
+            if (anyChanged)
+            {
+                EditorUtility.SetDirty(this);
+            }
+        }
+#endif
 
         private void OnGUI()
         {
@@ -488,9 +554,9 @@ namespace CommandTerminal
             Shell?.RunCommand(_commandText);
             History?.Push(_commandText);
 
-            if (IssuedError)
+            while (Shell?.TryConsumeErrorMessage(out string error) == true)
             {
-                Log(TerminalLogType.Error, "Error: {0}", Shell?.IssuedErrorMessage ?? string.Empty);
+                Log(TerminalLogType.Error, $"Error: {error}");
             }
 
             _commandText = string.Empty;

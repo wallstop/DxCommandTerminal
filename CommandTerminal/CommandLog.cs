@@ -1,6 +1,9 @@
 namespace CommandTerminal
 {
     using System.Collections.Generic;
+    using System.Diagnostics;
+    using System.Linq;
+    using DataStructures;
     using UnityEngine;
 
     public enum TerminalLogType
@@ -32,35 +35,41 @@ namespace CommandTerminal
     {
         public IReadOnlyList<LogItem> Logs => _logs;
 
-        private readonly List<LogItem> _logs = new();
-        private readonly int _maxItems;
+        private readonly CyclicBuffer<LogItem> _logs;
+        private readonly HashSet<TerminalLogType> _ignoredLogTypes;
 
-        public CommandLog(int maxItems)
+        public CommandLog(int maxItems, IEnumerable<TerminalLogType> ignoredLogTypes = null)
         {
-            _maxItems = maxItems < 0 ? 0 : maxItems;
+            _logs = new CyclicBuffer<LogItem>(maxItems);
+            _ignoredLogTypes = new HashSet<TerminalLogType>(
+                ignoredLogTypes ?? Enumerable.Empty<TerminalLogType>()
+            );
         }
 
-        public bool HandleLog(string message, TerminalLogType type)
+        public bool HandleLog(string message, TerminalLogType type, bool includeStackTrace = false)
         {
-            return HandleLog(message, string.Empty, type);
+            string stackTrace;
+            if (includeStackTrace)
+            {
+                StackTrace stack = new();
+                stackTrace = stack.ToString();
+            }
+            else
+            {
+                stackTrace = string.Empty;
+            }
+            return HandleLog(message, stackTrace, type);
         }
 
         public bool HandleLog(string message, string stackTrace, TerminalLogType type)
         {
-            if (Terminal.IgnoredLogTypes?.Contains(type) == true)
+            if (_ignoredLogTypes.Contains(type))
             {
                 return false;
             }
 
             LogItem log = new(type, message, stackTrace);
-
             _logs.Add(log);
-
-            if (_logs.Count > _maxItems)
-            {
-                _logs.RemoveRange(0, _logs.Count - _maxItems);
-            }
-
             return true;
         }
 

@@ -36,6 +36,7 @@ namespace CommandTerminal
     {
         public string String { get; }
 
+        // ReSharper disable once UnusedMember.Global
         public int Int
         {
             get
@@ -50,6 +51,7 @@ namespace CommandTerminal
             }
         }
 
+        // ReSharper disable once UnusedMember.Global
         public float Float
         {
             get
@@ -64,6 +66,7 @@ namespace CommandTerminal
             }
         }
 
+        // ReSharper disable once UnusedMember.Global
         public bool Bool
         {
             get
@@ -78,6 +81,7 @@ namespace CommandTerminal
             }
         }
 
+        // ReSharper disable once UnusedMember.Global
         public T Enum<T>()
             where T : struct, Enum
         {
@@ -103,18 +107,61 @@ namespace CommandTerminal
         private void TypeError([CallerMemberName] string expectedType = null)
         {
             Terminal.Shell?.IssueErrorMessage(
-                "Incorrect type for {0}, expected <{1}>",
-                String,
-                expectedType
+                $"Incorrect type for {String}, expected <{expectedType}>"
             );
         }
     }
 
     public sealed class CommandShell
     {
+        private static readonly Lazy<(MethodInfo, RegisterCommandAttribute)[]> RegisteredCommands =
+            new(() =>
+            {
+                List<(MethodInfo, RegisterCommandAttribute)> commands = new();
+                const BindingFlags methodFlags =
+                    BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+
+                foreach (
+                    Type type in AppDomain
+                        .CurrentDomain.GetAssemblies()
+                        .SelectMany(assembly => assembly.GetTypes())
+                )
+                {
+                    foreach (MethodInfo method in type.GetMethods(methodFlags))
+                    {
+                        if (
+                            Attribute.GetCustomAttribute(method, typeof(RegisterCommandAttribute))
+                            is not RegisterCommandAttribute attribute
+                        )
+                        {
+                            if (
+                                method.Name.StartsWith(
+                                    "FRONTCOMMAND",
+                                    StringComparison.OrdinalIgnoreCase
+                                )
+                            )
+                            {
+                                // Front-end Command methods don't implement RegisterCommand, use default attribute
+                                attribute = new RegisterCommandAttribute();
+                            }
+                            else
+                            {
+                                continue;
+                            }
+                        }
+
+                        attribute.NormalizeName(method);
+                        commands.Add((method, attribute));
+                    }
+                }
+
+                return commands.ToArray();
+            });
         public IReadOnlyDictionary<string, CommandInfo> Commands => _commands;
 
         public IReadOnlyDictionary<string, CommandArg> Variables => _variables;
+
+        public bool HasErrors => _errorMessages.Any();
 
         private readonly Dictionary<string, CommandInfo> _commands = new(
             StringComparer.OrdinalIgnoreCase
@@ -124,7 +171,12 @@ namespace CommandTerminal
         );
         private readonly List<CommandArg> _arguments = new(); // Cache for performance
 
-        public string IssuedErrorMessage { get; private set; }
+        private readonly Queue<string> _errorMessages = new();
+
+        public bool TryConsumeErrorMessage(out string errorMessage)
+        {
+            return _errorMessages.TryDequeue(out errorMessage);
+        }
 
         /// <summary>
         /// Uses reflection to find all RegisterCommand attributes
@@ -139,74 +191,45 @@ namespace CommandTerminal
             Dictionary<string, CommandInfo> rejectedCommands = new(
                 StringComparer.OrdinalIgnoreCase
             );
-            const BindingFlags methodFlags =
-                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
 
             foreach (
-                Type type in AppDomain
-                    .CurrentDomain.GetAssemblies()
-                    .SelectMany(assembly => assembly.GetTypes())
+                (MethodInfo method, RegisterCommandAttribute attribute) in RegisteredCommands.Value
             )
             {
-                foreach (MethodInfo method in type.GetMethods(methodFlags))
+                string commandName = attribute.Name;
+                ParameterInfo[] methodsParams = method.GetParameters();
+
+                if (
+                    methodsParams.Length != 1
+                    || methodsParams[0].ParameterType != typeof(CommandArg[])
+                    || ignoredCommandSet.Contains(commandName)
+                )
                 {
-                    if (
-                        Attribute.GetCustomAttribute(method, typeof(RegisterCommandAttribute))
-                        is not RegisterCommandAttribute attribute
-                    )
-                    {
-                        if (
-                            method.Name.StartsWith(
-                                "FRONTCOMMAND",
-                                StringComparison.OrdinalIgnoreCase
-                            )
-                        )
-                        {
-                            // Front-end Command methods don't implement RegisterCommand, use default attribute
-                            attribute = new RegisterCommandAttribute();
-                        }
-                        else
-                        {
-                            continue;
-                        }
-                    }
-
-                    attribute.NormalizeName(method);
-                    string commandName = attribute.Name;
-
-                    ParameterInfo[] methodsParams = method.GetParameters();
-
-                    if (
-                        methodsParams.Length != 1
-                        || methodsParams[0].ParameterType != typeof(CommandArg[])
-                        || ignoredCommandSet.Contains(commandName)
-                    )
-                    {
-                        // Method does not match expected Action signature,
-                        // this could be a command that has a FrontCommand method to handle its arguments.
-                        rejectedCommands.TryAdd(
-                            commandName,
-                            CommandFromParamInfo(methodsParams, attribute.Help)
-                        );
-                        continue;
-                    }
-
-                    // Convert MethodInfo to Action.
-                    // This is essentially allows us to store a reference to the method,
-                    // which makes calling the method significantly more performant than using MethodInfo.Invoke().
-                    Action<CommandArg[]> proc =
-                        (Action<CommandArg[]>)
-                            Delegate.CreateDelegate(typeof(Action<CommandArg[]>), method);
-                    AddCommand(
+                    // Method does not match expected Action signature,
+                    // this could be a command that has a FrontCommand method to handle its arguments.
+                    rejectedCommands.TryAdd(
                         commandName,
-                        proc,
-                        attribute.MinArgCount,
-                        attribute.MaxArgCount,
-                        attribute.Help,
-                        attribute.Hint
+                        CommandFromParamInfo(methodsParams, attribute.Help)
                     );
+                    continue;
                 }
+
+                // Convert MethodInfo to Action.
+                // This is essentially allows us to store a reference to the method,
+                // which makes calling the method significantly more performant than using MethodInfo.Invoke().
+                Action<CommandArg[]> proc =
+                    (Action<CommandArg[]>)
+                        Delegate.CreateDelegate(typeof(Action<CommandArg[]>), method);
+                AddCommand(
+                    commandName,
+                    proc,
+                    attribute.MinArgCount,
+                    attribute.MaxArgCount,
+                    attribute.Help,
+                    attribute.Hint
+                );
             }
+
             HandleRejectedCommands(rejectedCommands);
         }
 
@@ -216,7 +239,6 @@ namespace CommandTerminal
         public void RunCommand(string line)
         {
             string remaining = line;
-            IssuedErrorMessage = string.Empty;
             _arguments.Clear();
 
             while (!string.IsNullOrWhiteSpace(remaining))
@@ -253,7 +275,7 @@ namespace CommandTerminal
 
             if (!_commands.ContainsKey(commandName))
             {
-                IssueErrorMessage("Command {0} could not be found", commandName);
+                IssueErrorMessage($"Command {commandName} could not be found");
                 return;
             }
 
@@ -265,13 +287,13 @@ namespace CommandTerminal
             commandName = commandName?.Replace(" ", string.Empty);
             if (string.IsNullOrWhiteSpace(commandName))
             {
-                IssueErrorMessage($"Invalid command name '{0}'", commandName);
+                IssueErrorMessage($"Invalid command name '{commandName}'");
                 return;
             }
 
             if (!_commands.TryGetValue(commandName, out CommandInfo command))
             {
-                IssueErrorMessage("Command {0} not found", commandName);
+                IssueErrorMessage($"Command {commandName} not found");
                 return;
             }
 
@@ -295,18 +317,13 @@ namespace CommandTerminal
             {
                 string pluralFix = requiredArg == 1 ? "" : "s";
 
-                IssueErrorMessage(
-                    "{0} requires {1} {2} argument{3}",
-                    commandName,
-                    errorMessage,
-                    requiredArg,
-                    pluralFix
-                );
-
+                string invalidMessage =
+                    $"{commandName} requires {errorMessage} {requiredArg} argument{pluralFix}";
                 if (!string.IsNullOrWhiteSpace(command.hint))
                 {
-                    IssuedErrorMessage += $"\n    -> Usage: {command.hint}";
+                    invalidMessage += $"\n    -> Usage: {command.hint}";
                 }
+                _errorMessages.Enqueue(invalidMessage);
 
                 return;
             }
@@ -314,21 +331,23 @@ namespace CommandTerminal
             command.proc?.Invoke(arguments);
         }
 
+        // ReSharper disable once MemberCanBePrivate.Global
         public void AddCommand(string name, CommandInfo info)
         {
             if (string.IsNullOrWhiteSpace(name))
             {
-                IssueErrorMessage("Invalid Command Name: {0}", name);
+                IssueErrorMessage($"Invalid Command Name: {name}");
                 return;
             }
 
             name = name.Replace(" ", string.Empty);
             if (!_commands.TryAdd(name, info))
             {
-                IssueErrorMessage("Command {0} is already defined.", name);
+                IssueErrorMessage($"Command {name} is already defined.");
             }
         }
 
+        // ReSharper disable once MemberCanBePrivate.Global
         public void AddCommand(
             string name,
             Action<CommandArg[]> proc,
@@ -348,11 +367,12 @@ namespace CommandTerminal
             SetVariable(name, new CommandArg(value));
         }
 
+        // ReSharper disable once MemberCanBePrivate.Global
         public void SetVariable(string name, CommandArg value)
         {
             if (string.IsNullOrWhiteSpace(name))
             {
-                IssueErrorMessage("Invalid Variable Name: {0}", name);
+                IssueErrorMessage($"Invalid Variable Name: {name}");
                 return;
             }
 
@@ -360,6 +380,7 @@ namespace CommandTerminal
             _variables[name] = value;
         }
 
+        // ReSharper disable once UnusedMember.Global
         public bool TryGetVariable(string name, out CommandArg variable)
         {
             name = name?.Replace(" ", string.Empty) ?? string.Empty;
@@ -372,7 +393,7 @@ namespace CommandTerminal
             string formattedMessage =
                 (message is { Length: > 0 } ? string.Format(format, message) : format)
                 ?? string.Empty;
-            IssuedErrorMessage = formattedMessage;
+            _errorMessages.Enqueue(formattedMessage);
         }
 
         private void HandleRejectedCommands(Dictionary<string, CommandInfo> rejectedCommands)
@@ -391,7 +412,7 @@ namespace CommandTerminal
                 }
                 else
                 {
-                    IssueErrorMessage("{0} is missing a front command.", command);
+                    IssueErrorMessage($"{command.Key} is missing a front command.");
                 }
             }
         }
