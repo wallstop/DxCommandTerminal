@@ -5,6 +5,16 @@ Unity Command Terminal
 
 This is a fork of [Command Terminal](https://github.com/stillwwater/command_terminal) for Unity, mainly to address usability gaps and add maintenance
 
+# To Install as Unity Package
+1. Open Unity Package Manager
+2. (Optional) Enable Pre-release packages to get the latest, cutting-edge builds
+3. Open the Advanced Package Settings
+4. Add an entry for a new "Scoped Registry"
+    - Name: `NPM`
+    - URL: `https://registry.npmjs.org`
+    - Scope(s): `com.wallstop-studios.dxcommandterminal`
+5. Resolve the latest `com.wallstop-studios.dxcommandterminal`
+
 ## Improvements Over Baseline
 - Add ability to ignore commands that have been annotated with `RegisterCommandAttribute`. In this way, your terminals can ignore any built-in commands, for cleanliness. A custom editor has been added to provide users with the ability to identify what commands are available to ignore, and selectively ignore them.
 - Add ability to ignore certain (or all) log levels, such that unwanted logs do not clutter terminal output
