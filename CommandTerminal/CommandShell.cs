@@ -6,6 +6,7 @@ namespace CommandTerminal
     using System.Reflection;
     using System.Runtime.CompilerServices;
     using Attributes;
+    using JetBrains.Annotations;
 
     public readonly struct CommandInfo
     {
@@ -31,9 +32,9 @@ namespace CommandTerminal
         }
     }
 
-    public struct CommandArg
+    public readonly struct CommandArg
     {
-        public string String { get; set; }
+        public string String { get; }
 
         public int Int
         {
@@ -89,6 +90,11 @@ namespace CommandTerminal
             return default;
         }
 
+        public CommandArg(string stringValue)
+        {
+            String = stringValue;
+        }
+
         public override string ToString()
         {
             return String;
@@ -96,7 +102,7 @@ namespace CommandTerminal
 
         private void TypeError([CallerMemberName] string expectedType = null)
         {
-            Terminal.Shell.IssueErrorMessage(
+            Terminal.Shell?.IssueErrorMessage(
                 "Incorrect type for {0}, expected <{1}>",
                 String,
                 expectedType
@@ -106,15 +112,19 @@ namespace CommandTerminal
 
     public sealed class CommandShell
     {
-        private readonly Dictionary<string, CommandInfo> _commands = new();
-        private readonly Dictionary<string, CommandArg> _variables = new();
-        private readonly List<CommandArg> _arguments = new(); // Cache for performance
-
-        public string IssuedErrorMessage { get; private set; }
-
         public IReadOnlyDictionary<string, CommandInfo> Commands => _commands;
 
         public IReadOnlyDictionary<string, CommandArg> Variables => _variables;
+
+        private readonly Dictionary<string, CommandInfo> _commands = new(
+            StringComparer.OrdinalIgnoreCase
+        );
+        private readonly Dictionary<string, CommandArg> _variables = new(
+            StringComparer.OrdinalIgnoreCase
+        );
+        private readonly List<CommandArg> _arguments = new(); // Cache for performance
+
+        public string IssuedErrorMessage { get; private set; }
 
         /// <summary>
         /// Uses reflection to find all RegisterCommand attributes
@@ -126,7 +136,9 @@ namespace CommandTerminal
                 ignoredCommands ?? Enumerable.Empty<string>(),
                 StringComparer.OrdinalIgnoreCase
             );
-            Dictionary<string, CommandInfo> rejectedCommands = new();
+            Dictionary<string, CommandInfo> rejectedCommands = new(
+                StringComparer.OrdinalIgnoreCase
+            );
             const BindingFlags methodFlags =
                 BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
 
@@ -146,7 +158,7 @@ namespace CommandTerminal
                         if (
                             method.Name.StartsWith(
                                 "FRONTCOMMAND",
-                                StringComparison.CurrentCultureIgnoreCase
+                                StringComparison.OrdinalIgnoreCase
                             )
                         )
                         {
@@ -159,12 +171,10 @@ namespace CommandTerminal
                         }
                     }
 
+                    attribute.NormalizeName(method);
+                    string commandName = attribute.Name;
+
                     ParameterInfo[] methodsParams = method.GetParameters();
-
-                    string commandName = InferFrontCommandName(method.Name);
-
-                    // Use the method's name as the command's name
-                    commandName = attribute.Name ?? InferCommandName(commandName ?? method.Name);
 
                     if (
                         methodsParams.Length != 1
@@ -174,8 +184,8 @@ namespace CommandTerminal
                     {
                         // Method does not match expected Action signature,
                         // this could be a command that has a FrontCommand method to handle its arguments.
-                        rejectedCommands.Add(
-                            commandName.ToUpper(),
+                        rejectedCommands.TryAdd(
+                            commandName,
                             CommandFromParamInfo(methodsParams, attribute.Help)
                         );
                         continue;
@@ -206,7 +216,7 @@ namespace CommandTerminal
         public void RunCommand(string line)
         {
             string remaining = line;
-            IssuedErrorMessage = null;
+            IssuedErrorMessage = string.Empty;
             _arguments.Clear();
 
             while (!string.IsNullOrWhiteSpace(remaining))
@@ -220,7 +230,7 @@ namespace CommandTerminal
 
                 if (argument.String[0] == '$')
                 {
-                    string variableName = argument.String.Substring(1).ToUpper();
+                    string variableName = argument.String.Substring(1);
 
                     if (_variables.TryGetValue(variableName, out CommandArg variable))
                     {
@@ -237,7 +247,8 @@ namespace CommandTerminal
                 return;
             }
 
-            string commandName = _arguments[0].String.ToUpper();
+            string commandName = _arguments[0].String ?? string.Empty;
+            commandName = commandName.Replace(" ", string.Empty);
             _arguments.RemoveAt(0); // Remove command name from arguments
 
             if (!_commands.ContainsKey(commandName))
@@ -251,32 +262,44 @@ namespace CommandTerminal
 
         public void RunCommand(string commandName, CommandArg[] arguments)
         {
-            CommandInfo command = _commands[commandName];
+            commandName = commandName?.Replace(" ", string.Empty);
+            if (string.IsNullOrWhiteSpace(commandName))
+            {
+                IssueErrorMessage($"Invalid command name '{0}'", commandName);
+                return;
+            }
+
+            if (!_commands.TryGetValue(commandName, out CommandInfo command))
+            {
+                IssueErrorMessage("Command {0} not found", commandName);
+                return;
+            }
+
             int argCount = arguments.Length;
             string errorMessage = null;
-            int required_arg = 0;
+            int requiredArg = 0;
 
             if (argCount < command.minArgCount)
             {
                 errorMessage = command.minArgCount == command.maxArgCount ? "exactly" : "at least";
-                required_arg = command.minArgCount;
+                requiredArg = command.minArgCount;
             }
-            else if (command.maxArgCount > -1 && argCount > command.maxArgCount)
+            else if (command.maxArgCount >= 0 && argCount > command.maxArgCount)
             {
                 // Do not check max allowed number of arguments if it is -1
                 errorMessage = command.minArgCount == command.maxArgCount ? "exactly" : "at most";
-                required_arg = command.maxArgCount;
+                requiredArg = command.maxArgCount;
             }
 
             if (errorMessage != null)
             {
-                string pluralFix = required_arg == 1 ? "" : "s";
+                string pluralFix = requiredArg == 1 ? "" : "s";
 
                 IssueErrorMessage(
                     "{0} requires {1} {2} argument{3}",
                     commandName,
                     errorMessage,
-                    required_arg,
+                    requiredArg,
                     pluralFix
                 );
 
@@ -288,13 +311,18 @@ namespace CommandTerminal
                 return;
             }
 
-            command.proc(arguments);
+            command.proc?.Invoke(arguments);
         }
 
         public void AddCommand(string name, CommandInfo info)
         {
-            name = name.ToUpper();
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                IssueErrorMessage("Invalid Command Name: {0}", name);
+                return;
+            }
 
+            name = name.Replace(" ", string.Empty);
             if (!_commands.TryAdd(name, info))
             {
                 IssueErrorMessage("Command {0} is already defined.", name);
@@ -316,57 +344,45 @@ namespace CommandTerminal
 
         public void SetVariable(string name, string value)
         {
-            SetVariable(name, new CommandArg() { String = value });
+            value ??= string.Empty;
+            SetVariable(name, new CommandArg(value));
         }
 
         public void SetVariable(string name, CommandArg value)
         {
-            name = name.ToUpper();
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                IssueErrorMessage("Invalid Variable Name: {0}", name);
+                return;
+            }
+
+            name = name.Replace(" ", string.Empty);
             _variables[name] = value;
         }
 
-        public CommandArg GetVariable(string name)
+        public bool TryGetVariable(string name, out CommandArg variable)
         {
-            name = name.ToUpper();
-
-            if (_variables.TryGetValue(name, out CommandArg variable))
-            {
-                return variable;
-            }
-
-            IssueErrorMessage("No variable named {0}", name);
-            return new CommandArg();
+            name = name?.Replace(" ", string.Empty) ?? string.Empty;
+            return _variables.TryGetValue(name, out variable);
         }
 
+        [StringFormatMethod("format")]
         public void IssueErrorMessage(string format, params object[] message)
         {
-            IssuedErrorMessage = string.Format(format, message);
-        }
-
-        private static string InferCommandName(string methodName)
-        {
-            int index = methodName.IndexOf("COMMAND", StringComparison.CurrentCultureIgnoreCase);
-
-            // Method is prefixed, suffixed with, or contains "COMMAND".
-            string commandName = index >= 0 ? methodName.Remove(index, 7) : methodName;
-
-            return commandName;
-        }
-
-        private static string InferFrontCommandName(string methodName)
-        {
-            int index = methodName.IndexOf("FRONT", StringComparison.CurrentCultureIgnoreCase);
-            return index >= 0 ? methodName.Remove(index, 5) : null;
+            string formattedMessage =
+                (message is { Length: > 0 } ? string.Format(format, message) : format)
+                ?? string.Empty;
+            IssuedErrorMessage = formattedMessage;
         }
 
         private void HandleRejectedCommands(Dictionary<string, CommandInfo> rejectedCommands)
         {
             foreach (KeyValuePair<string, CommandInfo> command in rejectedCommands)
             {
-                if (_commands.ContainsKey(command.Key))
+                if (_commands.TryGetValue(command.Key, out CommandInfo existingCommand))
                 {
                     _commands[command.Key] = new CommandInfo(
-                        _commands[command.Key].proc,
+                        existingCommand.proc,
                         command.Value.minArgCount,
                         command.Value.maxArgCount,
                         command.Value.help,
@@ -382,15 +398,7 @@ namespace CommandTerminal
 
         private static CommandInfo CommandFromParamInfo(ParameterInfo[] parameters, string help)
         {
-            int optionalArgs = 0;
-
-            foreach (ParameterInfo param in parameters)
-            {
-                if (param.IsOptional)
-                {
-                    optionalArgs += 1;
-                }
-            }
+            int optionalArgs = parameters.Count(param => param.IsOptional);
 
             return new CommandInfo(
                 null,
@@ -401,23 +409,25 @@ namespace CommandTerminal
             );
         }
 
-        private static CommandArg EatArgument(ref string s)
+        private static CommandArg EatArgument(ref string stringValue)
         {
-            CommandArg arg = new();
-            int spaceIndex = s.IndexOf(' ');
+            int spaceIndex = stringValue.IndexOf(' ');
 
             if (spaceIndex >= 0)
             {
-                arg.String = s.Substring(0, spaceIndex);
-                s = s.Substring(spaceIndex + 1); // Remaining
+                CommandArg arg = new(stringValue.Substring(0, spaceIndex));
+                stringValue =
+                    spaceIndex == stringValue.Length - 1
+                        ? string.Empty
+                        : stringValue.Substring(spaceIndex + 1); // Remaining
+                return arg;
             }
             else
             {
-                arg.String = s;
-                s = string.Empty;
+                CommandArg arg = new(stringValue);
+                stringValue = string.Empty;
+                return arg;
             }
-
-            return arg;
         }
     }
 }

@@ -5,31 +5,37 @@ namespace CommandTerminal
     using System.Text;
     using Attributes;
 
-    internal static class RegisterCommands
+    internal static class BuiltInCommands
     {
         [RegisterCommand(Help = "Clear the command console", MaxArgCount = 0)]
         internal static void CommandClear(CommandArg[] args)
         {
-            Terminal.Buffer.Clear();
+            Terminal.Buffer?.Clear();
         }
 
         [RegisterCommand(Help = "Display help information about a command", MaxArgCount = 1)]
         internal static void CommandHelp(CommandArg[] args)
         {
+            CommandShell shell = Terminal.Shell;
+            if (shell == null)
+            {
+                return;
+            }
+
             if (args.Length == 0)
             {
-                foreach (KeyValuePair<string, CommandInfo> command in Terminal.Shell.Commands)
+                foreach (KeyValuePair<string, CommandInfo> command in shell.Commands)
                 {
                     Terminal.Log("{0}: {1}", command.Key.PadRight(16), command.Value.help);
                 }
                 return;
             }
 
-            string commandName = args[0].String.ToUpper();
+            string commandName = args[0].String ?? string.Empty;
 
-            if (!Terminal.Shell.Commands.TryGetValue(commandName, out CommandInfo info))
+            if (!shell.Commands.TryGetValue(commandName, out CommandInfo info))
             {
-                Terminal.Shell.IssueErrorMessage("Command {0} could not be found.", commandName);
+                shell.IssueErrorMessage("Command {0} could not be found.", commandName);
                 return;
             }
 
@@ -50,9 +56,15 @@ namespace CommandTerminal
         [RegisterCommand(Help = "Time the execution of a command", MinArgCount = 1)]
         internal static void CommandTime(CommandArg[] args)
         {
+            CommandShell shell = Terminal.Shell;
+            if (shell == null)
+            {
+                return;
+            }
+
             Stopwatch sw = Stopwatch.StartNew();
 
-            Terminal.Shell.RunCommand(JoinArguments(args));
+            shell.RunCommand(JoinArguments(args));
 
             sw.Stop();
             Terminal.Log("Time: {0}ms", (double)sw.ElapsedMilliseconds);
@@ -64,11 +76,16 @@ namespace CommandTerminal
             Terminal.Log(JoinArguments(args));
         }
 
-#if DEBUG
         [RegisterCommand(Help = "Output the stack trace of the previous message", MaxArgCount = 0)]
         internal static void CommandTrace(CommandArg[] args)
         {
-            int logCount = Terminal.Buffer.Logs.Count;
+            CommandLog buffer = Terminal.Buffer;
+            if (buffer == null)
+            {
+                return;
+            }
+
+            int logCount = buffer.Logs.Count;
 
             if (logCount - 2 < 0)
             {
@@ -76,7 +93,7 @@ namespace CommandTerminal
                 return;
             }
 
-            LogItem logItem = Terminal.Buffer.Logs[logCount - 2];
+            LogItem logItem = buffer.Logs[logCount - 2];
 
             if (string.IsNullOrWhiteSpace(logItem.stackTrace))
             {
@@ -87,14 +104,19 @@ namespace CommandTerminal
                 Terminal.Log(logItem.stackTrace);
             }
         }
-#endif
 
         [RegisterCommand(Help = "List all variables or set a variable value")]
         internal static void CommandSet(CommandArg[] args)
         {
+            CommandShell shell = Terminal.Shell;
+            if (shell == null)
+            {
+                return;
+            }
+
             if (args.Length == 0)
             {
-                foreach (KeyValuePair<string, CommandArg> kv in Terminal.Shell.Variables)
+                foreach (KeyValuePair<string, CommandArg> kv in shell.Variables)
                 {
                     Terminal.Log("{0}: {1}", kv.Key.PadRight(16), kv.Value);
                 }
@@ -112,7 +134,7 @@ namespace CommandTerminal
                 );
             }
 
-            Terminal.Shell.SetVariable(variableName, JoinArguments(args, 1));
+            shell.SetVariable(variableName, JoinArguments(args, 1));
         }
 
         [RegisterCommand(Help = "No operation")]

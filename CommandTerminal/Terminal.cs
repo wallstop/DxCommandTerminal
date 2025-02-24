@@ -1,8 +1,10 @@
 namespace CommandTerminal
 {
+    using System;
     using System.Collections.Generic;
+    using System.Linq;
     using System.Text;
-    using Attributes;
+    using JetBrains.Annotations;
     using UnityEngine;
     using UnityEngine.Assertions;
     using UnityEngine.Serialization;
@@ -14,8 +16,21 @@ namespace CommandTerminal
         OpenFull,
     }
 
-    public class Terminal : MonoBehaviour
+    [DisallowMultipleComponent]
+    public sealed class Terminal : MonoBehaviour
     {
+        public static CommandLog Buffer { get; private set; }
+        public static CommandShell Shell { get; private set; }
+        public static CommandHistory History { get; private set; }
+        public static CommandAutocomplete Autocomplete { get; private set; }
+
+        public static bool IssuedError => !string.IsNullOrWhiteSpace(Shell?.IssuedErrorMessage);
+
+        public bool IsClosed =>
+            _state == TerminalState.Close && Mathf.Approximately(_currentOpenT, _openTarget);
+
+        internal static List<TerminalLogType> IgnoredLogTypes;
+
         [FormerlySerializedAs("MaxHeight")]
         [Header("Window")]
         [Range(0, 1)]
@@ -97,6 +112,10 @@ namespace CommandTerminal
         [SerializeField]
         private Color _errorColor = Color.red;
 
+        [Header("System")]
+        [SerializeField]
+        private List<TerminalLogType> _ignoredLogTypes = new();
+
         [SerializeField]
         internal List<string> _disabledCommands = new();
 
@@ -115,34 +134,32 @@ namespace CommandTerminal
         private GUIStyle _windowStyle;
         private GUIStyle _labelStyle;
         private GUIStyle _inputStyle;
-        private Texture2D _backgroundTexture;
-        private Texture2D _inputBackgroundTexture;
 
-        public static CommandLog Buffer { get; private set; }
-        public static CommandShell Shell { get; private set; }
-        public static CommandHistory History { get; private set; }
-        public static CommandAutocomplete Autocomplete { get; private set; }
-
-        public static bool IssuedError => Shell.IssuedErrorMessage != null;
-
-        public bool IsClosed =>
-            _state == TerminalState.Close && Mathf.Approximately(_currentOpenT, _openTarget);
-
-        public static void Log(string format, params object[] message)
+        [StringFormatMethod("format")]
+        public static bool Log(string format, params object[] message)
         {
-            Log(TerminalLogType.ShellMessage, format, message);
+            return Log(TerminalLogType.ShellMessage, format, message);
         }
 
-        public static void Log(TerminalLogType type, string format, params object[] message)
+        [StringFormatMethod("format")]
+        public static bool Log(TerminalLogType type, string format, params object[] message)
         {
-            Buffer.HandleLog(string.Format(format, message), type);
+            CommandLog buffer = Buffer;
+            if (buffer == null)
+            {
+                return false;
+            }
+            string formattedMessage = message is { Length: > 0 }
+                ? string.Format(format, message)
+                : format;
+            return buffer.HandleLog(formattedMessage, type);
         }
 
         public void SetState(TerminalState newState)
         {
             _inputFix = true;
             _cachedCommandText = _commandText;
-            _commandText = "";
+            _commandText = string.Empty;
 
             switch (newState)
             {
@@ -189,6 +206,7 @@ namespace CommandTerminal
             Shell = new CommandShell();
             History = new CommandHistory();
             Autocomplete = new CommandAutocomplete();
+            IgnoredLogTypes = _ignoredLogTypes?.ToList() ?? new List<TerminalLogType>(0);
 
             // Hook Unity log events
             Application.logMessageReceivedThreaded += HandleUnityLog;
@@ -207,7 +225,7 @@ namespace CommandTerminal
                 Debug.LogWarning("Command Console Warning: Please assign a font.");
             }
 
-            _commandText = "";
+            _commandText = string.Empty;
             _cachedCommandText = _commandText;
             Assert.AreNotEqual(
                 _toggleHotkey.ToLower(),
@@ -219,14 +237,14 @@ namespace CommandTerminal
             SetupInput();
             SetupLabels();
 
-            Shell.RegisterCommands();
+            Shell.RegisterCommands(_disabledCommands);
 
             if (IssuedError)
             {
                 Log(TerminalLogType.Error, "Error: {0}", Shell.IssuedErrorMessage);
             }
 
-            foreach (var command in Shell.Commands)
+            foreach (KeyValuePair<string, CommandInfo> command in Shell.Commands)
             {
                 Autocomplete.Register(command.Key);
             }
@@ -256,7 +274,7 @@ namespace CommandTerminal
             }
 
             HandleOpenness();
-            _window = GUILayout.Window(88, _window, DrawConsole, "", _windowStyle);
+            _window = GUILayout.Window(88, _window, DrawConsole, string.Empty, _windowStyle);
         }
 
         private void SetupWindow()
@@ -265,15 +283,16 @@ namespace CommandTerminal
             _window = new Rect(0, _currentOpenT - _realWindowSize, Screen.width, _realWindowSize);
 
             // Set background color
-            _backgroundTexture = new Texture2D(1, 1);
-            _backgroundTexture.SetPixel(0, 0, _backgroundColor);
-            _backgroundTexture.Apply();
+            Texture2D backgroundTexture = new(1, 1);
+            backgroundTexture.SetPixel(0, 0, _backgroundColor);
+            backgroundTexture.Apply();
 
-            _windowStyle = new GUIStyle();
-            _windowStyle.normal.background = _backgroundTexture;
-            _windowStyle.padding = new RectOffset(4, 4, 4, 4);
-            _windowStyle.normal.textColor = _foregroundColor;
-            _windowStyle.font = _consoleFont;
+            _windowStyle = new GUIStyle
+            {
+                normal = { background = backgroundTexture, textColor = _foregroundColor },
+                padding = new RectOffset(4, 4, 4, 4),
+                font = _consoleFont,
+            };
         }
 
         private void SetupLabels()
@@ -304,10 +323,10 @@ namespace CommandTerminal
                 a = _inputAlpha,
             };
 
-            _inputBackgroundTexture = new Texture2D(1, 1);
-            _inputBackgroundTexture.SetPixel(0, 0, darkBackground);
-            _inputBackgroundTexture.Apply();
-            _inputStyle.normal.background = _inputBackgroundTexture;
+            Texture2D inputBackgroundTexture = new(1, 1);
+            inputBackgroundTexture.SetPixel(0, 0, darkBackground);
+            inputBackgroundTexture.Apply();
+            _inputStyle.normal.background = inputBackgroundTexture;
         }
 
         private void DrawConsole(int window2D)
@@ -344,12 +363,12 @@ namespace CommandTerminal
             }
             else if (Event.current.Equals(Event.KeyboardEvent("up")))
             {
-                _commandText = History.Previous();
+                _commandText = History?.Previous() ?? string.Empty;
                 _moveCursor = true;
             }
             else if (Event.current.Equals(Event.KeyboardEvent("down")))
             {
-                _commandText = History.Next();
+                _commandText = History?.Next() ?? string.Empty;
             }
             else if (Event.current.Equals(Event.KeyboardEvent(_toggleHotkey)))
             {
@@ -367,7 +386,7 @@ namespace CommandTerminal
 
             GUILayout.BeginHorizontal();
 
-            if (_inputCaret != "")
+            if (!string.IsNullOrEmpty(_inputCaret))
             {
                 GUILayout.Label(_inputCaret, _inputStyle, GUILayout.Width(_consoleFont.fontSize));
             }
@@ -401,7 +420,7 @@ namespace CommandTerminal
 
         private void DrawLogs()
         {
-            foreach (LogItem log in Buffer.Logs)
+            foreach (LogItem log in Buffer?.Logs ?? Enumerable.Empty<LogItem>())
             {
                 _labelStyle.normal.textColor = GetLogColor(log.type);
                 GUILayout.Label(log.message, _labelStyle);
@@ -465,16 +484,16 @@ namespace CommandTerminal
 
         private void EnterCommand()
         {
-            Log(TerminalLogType.Input, "{0}", _commandText);
-            Shell.RunCommand(_commandText);
-            History.Push(_commandText);
+            Log(TerminalLogType.Input, _commandText);
+            Shell?.RunCommand(_commandText);
+            History?.Push(_commandText);
 
             if (IssuedError)
             {
-                Log(TerminalLogType.Error, "Error: {0}", Shell.IssuedErrorMessage);
+                Log(TerminalLogType.Error, "Error: {0}", Shell?.IssuedErrorMessage ?? string.Empty);
             }
 
-            _commandText = "";
+            _commandText = string.Empty;
             _scrollPosition.y = int.MaxValue;
         }
 
@@ -483,7 +502,8 @@ namespace CommandTerminal
             string headText = _commandText;
             int formatWidth = 0;
 
-            string[] completionBuffer = Autocomplete.Complete(ref headText, ref formatWidth);
+            string[] completionBuffer =
+                Autocomplete?.Complete(ref headText, ref formatWidth) ?? Array.Empty<string>();
             int completionLength = completionBuffer.Length;
 
             if (completionLength != 0)
@@ -491,36 +511,41 @@ namespace CommandTerminal
                 _commandText = headText;
             }
 
-            if (completionLength > 1)
+            if (completionLength <= 1)
             {
-                // Print possible completions
-                StringBuilder logBuffer = new();
+                return;
+            }
 
-                foreach (string completion in completionBuffer)
-                {
-                    logBuffer.Append(completion.PadRight(formatWidth + 4));
-                }
+            // Print possible completions
+            StringBuilder logBuffer = new();
 
-                Log("{0}", logBuffer);
+            foreach (string completion in completionBuffer)
+            {
+                logBuffer.Append(completion.PadRight(formatWidth + 4));
+            }
+
+            bool handled = Log(logBuffer.ToString());
+            if (handled)
+            {
                 _scrollPosition.y = int.MaxValue;
             }
         }
 
         private void CursorToEnd()
         {
-            if (_editorState == null)
-            {
-                _editorState = (TextEditor)
-                    GUIUtility.GetStateObject(typeof(TextEditor), GUIUtility.keyboardControl);
-            }
+            _editorState ??= (TextEditor)
+                GUIUtility.GetStateObject(typeof(TextEditor), GUIUtility.keyboardControl);
 
             _editorState.MoveCursorToPosition(new Vector2(999, 999));
         }
 
         private void HandleUnityLog(string message, string stackTrace, LogType type)
         {
-            Buffer.HandleLog(message, stackTrace, (TerminalLogType)type);
-            _scrollPosition.y = int.MaxValue;
+            bool? handled = Buffer?.HandleLog(message, stackTrace, (TerminalLogType)type);
+            if (handled == true)
+            {
+                _scrollPosition.y = int.MaxValue;
+            }
         }
 
         private Color GetLogColor(TerminalLogType type)

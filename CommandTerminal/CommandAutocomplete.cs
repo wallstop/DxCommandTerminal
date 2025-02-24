@@ -10,24 +10,26 @@ namespace CommandTerminal
 
         public void Register(string word)
         {
-            _knownWords.Add(word.ToLowerInvariant());
+            _knownWords.Add(word);
         }
 
         public string[] Complete(ref string text, ref int formatWidth)
         {
             _buffer.Clear();
-            string partialWord = EatLastWord(ref text).ToLowerInvariant();
+            string partialWord = EatLastWord(ref text);
 
             foreach (string known in _knownWords)
             {
-                if (known.StartsWith(partialWord, StringComparison.Ordinal))
+                if (!known.StartsWith(partialWord, StringComparison.OrdinalIgnoreCase))
                 {
-                    _buffer.Add(known);
+                    continue;
+                }
 
-                    if (known.Length > formatWidth)
-                    {
-                        formatWidth = known.Length;
-                    }
+                _buffer.Add(known);
+
+                if (known.Length > formatWidth)
+                {
+                    formatWidth = known.Length;
                 }
             }
 

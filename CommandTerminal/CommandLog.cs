@@ -23,30 +23,35 @@ namespace CommandTerminal
         public LogItem(TerminalLogType type, string message, string stackTrace)
         {
             this.type = type;
-            this.message = message;
-            this.stackTrace = stackTrace;
+            this.message = message ?? string.Empty;
+            this.stackTrace = stackTrace ?? string.Empty;
         }
     }
 
     public sealed class CommandLog
     {
+        public IReadOnlyList<LogItem> Logs => _logs;
+
         private readonly List<LogItem> _logs = new();
         private readonly int _maxItems;
 
-        public IReadOnlyList<LogItem> Logs => _logs;
-
         public CommandLog(int maxItems)
         {
-            _maxItems = maxItems;
+            _maxItems = maxItems < 0 ? 0 : maxItems;
         }
 
-        public void HandleLog(string message, TerminalLogType type)
+        public bool HandleLog(string message, TerminalLogType type)
         {
-            HandleLog(message, string.Empty, type);
+            return HandleLog(message, string.Empty, type);
         }
 
-        public void HandleLog(string message, string stackTrace, TerminalLogType type)
+        public bool HandleLog(string message, string stackTrace, TerminalLogType type)
         {
+            if (Terminal.IgnoredLogTypes?.Contains(type) == true)
+            {
+                return false;
+            }
+
             LogItem log = new(type, message, stackTrace);
 
             _logs.Add(log);
@@ -55,11 +60,15 @@ namespace CommandTerminal
             {
                 _logs.RemoveRange(0, _logs.Count - _maxItems);
             }
+
+            return true;
         }
 
-        public void Clear()
+        public int Clear()
         {
+            int logCount = _logs.Count;
             _logs.Clear();
+            return logCount;
         }
     }
 }
