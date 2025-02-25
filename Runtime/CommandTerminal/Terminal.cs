@@ -133,13 +133,13 @@ namespace CommandTerminal
         private int? _lastHeight;
 
         [StringFormatMethod("format")]
-        public static bool Log(string format, params object[] message)
+        public static bool Log(string format, params object[] parameters)
         {
-            return Log(TerminalLogType.ShellMessage, format, message);
+            return Log(TerminalLogType.ShellMessage, format, parameters);
         }
 
         [StringFormatMethod("format")]
-        public static bool Log(TerminalLogType type, string format, params object[] message)
+        public static bool Log(TerminalLogType type, string format, params object[] parameters)
         {
             CommandLog buffer = Buffer;
             if (buffer == null)
@@ -147,8 +147,8 @@ namespace CommandTerminal
                 return false;
             }
 
-            string formattedMessage = message is { Length: > 0 }
-                ? string.Format(format, message)
+            string formattedMessage = parameters is { Length: > 0 }
+                ? string.Format(format, parameters)
                 : format;
             return buffer.HandleLog(formattedMessage, type);
         }

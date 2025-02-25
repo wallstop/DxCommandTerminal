@@ -42,6 +42,10 @@ namespace CommandTerminal
             Dictionary<string, PropertyInfo>
         > StaticProperties = new();
         private static readonly Dictionary<Type, Dictionary<string, FieldInfo>> ConstFields = new();
+        private static readonly Dictionary<Type, object> EnumValues = new();
+
+        // Public to allow custom-mutation, if desired
+        public static readonly List<char> Delimiters = new() { ',', ';', ':', '_', '/', '\\' };
 
         public string String { get; }
 
@@ -109,6 +113,11 @@ namespace CommandTerminal
                 return TryGetTypeDefined(String, out parsed)
                     || InnerParse<byte>(String, byte.TryParse, out parsed);
             }
+            if (type == typeof(sbyte))
+            {
+                return TryGetTypeDefined(String, out parsed)
+                    || InnerParse<sbyte>(String, sbyte.TryParse, out parsed);
+            }
             if (type == typeof(string))
             {
                 if (TryGetTypeDefined(String, out parsed))
@@ -143,8 +152,35 @@ namespace CommandTerminal
                 parsed = default;
                 return false;
             }
+            if (type == typeof(decimal))
+            {
+                return TryGetTypeDefined(String, out parsed)
+                    || InnerParse<decimal>(String, decimal.TryParse, out parsed);
+            }
             if (type.IsEnum)
             {
+                if (!Enum.IsDefined(type, String))
+                {
+                    if (int.TryParse(String, out int enumIntValue))
+                    {
+                        if (!EnumValues.TryGetValue(type, out object enumValues))
+                        {
+                            enumValues = Enum.GetValues(type).OfType<T>().ToArray();
+                            EnumValues[type] = enumValues;
+                        }
+
+                        T[] values = (T[])enumValues;
+                        if (0 <= enumIntValue && enumIntValue < values.Length)
+                        {
+                            parsed = values[enumIntValue];
+                            return true;
+                        }
+                    }
+
+                    parsed = default;
+                    return false;
+                }
+
                 bool parseOk = Enum.TryParse(type, String, out object parsedObject);
                 if (parseOk)
                 {
@@ -370,8 +406,7 @@ namespace CommandTerminal
                     .Replace("<", string.Empty)
                     .Replace(">", string.Empty);
 
-                char[] delimiters = { ',', ';', ':', '_', '/', '\\' };
-                foreach (char delimiter in delimiters)
+                foreach (char delimiter in Delimiters)
                 {
                     if (strippedInput.Contains(delimiter))
                     {
@@ -757,10 +792,10 @@ namespace CommandTerminal
         }
 
         [StringFormatMethod("format")]
-        public void IssueErrorMessage(string format, params object[] message)
+        public void IssueErrorMessage(string format, params object[] parameters)
         {
             string formattedMessage =
-                (message is { Length: > 0 } ? string.Format(format, message) : format)
+                (parameters is { Length: > 0 } ? string.Format(format, parameters) : format)
                 ?? string.Empty;
             _errorMessages.Enqueue(formattedMessage);
         }
@@ -770,7 +805,8 @@ namespace CommandTerminal
             foreach (KeyValuePair<string, MethodInfo> command in rejectedCommands)
             {
                 IssueErrorMessage(
-                    $"{command.Key} has an invalid signature - must accept CommandArg[]. "
+                    $"{command.Key} has an invalid signature. "
+                        + $"Expected: {command.Value.Name}(CommandArg[]). "
                         + $"Found: {command.Value.Name}({string.Join(",", command.Value.GetParameters().Select(p => p.ParameterType.Name))})"
                 );
             }
