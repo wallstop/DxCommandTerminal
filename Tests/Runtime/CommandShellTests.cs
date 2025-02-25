@@ -12,6 +12,16 @@
 
     public sealed class CommandShellTests
     {
+        private readonly struct TestStruct1
+        {
+            public readonly Guid id;
+
+            public TestStruct1(Guid id)
+            {
+                this.id = id;
+            }
+        }
+
         private enum TestEnum1
         {
             [UsedImplicitly]
@@ -61,6 +71,9 @@
 
         private readonly Random _random = new();
 
+        private readonly List<string> _prepend = new() { "(", "[", "<", "{" };
+        private readonly List<string> _append = new() { ")", "[", ">", "}" };
+
         [Test]
         public void Float()
         {
@@ -69,6 +82,24 @@
             arg = new CommandArg("0");
             Assert.IsTrue(arg.TryGet(out value));
             Assert.AreEqual(0f, value);
+            arg = new CommandArg("1");
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.IsTrue(
+                Mathf.Approximately(1.0f, value),
+                $"Expected {value} to be equal to {1.0f}"
+            );
+            arg = new CommandArg("3");
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.IsTrue(
+                Mathf.Approximately(3.0f, value),
+                $"Expected {value} to be equal to {3.0f}"
+            );
+            arg = new CommandArg("-100");
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.IsTrue(
+                Mathf.Approximately(-100.0f, value),
+                $"Expected {value} to be equal to {-100.0f}"
+            );
 
             for (int i = 0; i < NumTries; ++i)
             {
@@ -110,6 +141,24 @@
             arg = new CommandArg("0");
             Assert.IsTrue(arg.TryGet(out value));
             Assert.AreEqual(0.0, value);
+            arg = new CommandArg("1");
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.IsTrue(
+                Mathf.Approximately(1.0f, (float)value),
+                $"Expected {value} to be equal to {1.0}"
+            );
+            arg = new CommandArg("3");
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.IsTrue(
+                Mathf.Approximately(3.0f, (float)value),
+                $"Expected {value} to be equal to {3.0}"
+            );
+            arg = new CommandArg("-100");
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.IsTrue(
+                Mathf.Approximately(-100.0f, (float)value),
+                $"Expected {value} to be equal to {-100.0}"
+            );
 
             for (int i = 0; i < NumTries; ++i)
             {
@@ -267,19 +316,17 @@
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
 
             Vector2 expected;
-            List<string> prepend = new() { "(", "[", "<", "{" };
-            List<string> append = new() { ")", "[", ">", "}" };
 
             // Unexpected input
             for (int i = 0; i < NumTries; ++i)
             {
                 float x = (float)_random.NextDouble();
-                arg = new CommandArg(x.ToString());
-                Assert.IsTrue(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+                arg = new CommandArg(x.ToString(CultureInfo.InvariantCulture));
+                Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
                 foreach (
-                    (string pre, string post) in prepend.Zip(
-                        append,
-                        (preValue, postvalue) => (x: preValue, y: postvalue)
+                    (string pre, string post) in _prepend.Zip(
+                        _append,
+                        (preValue, postValue) => (preValue, postValue)
                     )
                 )
                 {
@@ -314,9 +361,9 @@
                 );
 
                 foreach (
-                    (string pre, string post) in prepend.Zip(
-                        append,
-                        (preValue, postvalue) => (x: preValue, y: postvalue)
+                    (string pre, string post) in _prepend.Zip(
+                        _append,
+                        (preValue, postValue) => (preValue, postValue)
                     )
                 )
                 {
@@ -358,9 +405,9 @@
                 );
 
                 foreach (
-                    (string pre, string post) in prepend.Zip(
-                        append,
-                        (preValue, postvalue) => (x: preValue, y: postvalue)
+                    (string pre, string post) in _prepend.Zip(
+                        _append,
+                        (preValue, postValue) => (preValue, postValue)
                     )
                 )
                 {
@@ -440,17 +487,132 @@
 
             for (int i = 0; i < NumTries; ++i)
             {
-                // Colors have a floating point precision of 3 decimal places, otherwise our equality checks will be off
-                float r = (float)Math.Round(_random.NextDouble(), 3);
-                float g = (float)Math.Round(_random.NextDouble(), 3);
-                float b = (float)Math.Round(_random.NextDouble(), 3);
+                float r = (float)_random.NextDouble();
+                float g = (float)_random.NextDouble();
+                float b = (float)_random.NextDouble();
                 expected = new Color(r, g, b);
                 arg = new CommandArg(expected.ToString());
-                // TODO
-                throw new NotImplementedException("TODO LOL");
+
+                // Colors have a floating point precision of 3 decimal places, otherwise our equality checks will be off
                 Assert.IsTrue(arg.TryGet(out value));
-                Assert.AreEqual(expected, value);
+                Assert.IsTrue(
+                    Mathf.Approximately((float)Math.Round(expected.r, 3), value.r)
+                        && Mathf.Approximately((float)Math.Round(expected.g, 3), value.g)
+                        && Mathf.Approximately((float)Math.Round(expected.b, 3), value.b),
+                    $"Expected {value} to be approximately {expected}. "
+                        + $"Value: ({r},{g},{b}). "
+                        + $"Expected: ({expected.r},{expected.g},{expected.b})."
+                );
             }
         }
+
+        [Test]
+        public void Untyped()
+        {
+            CommandArg arg = new("1");
+            Assert.IsTrue(arg.TryGet(typeof(int), out object value));
+            Assert.AreEqual(1, value);
+
+            arg = new CommandArg("2.5");
+            Assert.IsTrue(arg.TryGet(typeof(float), out value));
+            Assert.IsTrue(
+                Mathf.Approximately((float)value, 2.5f),
+                $"Expected {value} to be approximately {2.5f}"
+            );
+
+            arg = new CommandArg("red");
+            Assert.IsTrue(arg.TryGet(typeof(Color), out value));
+            Assert.AreEqual(UnityEngine.Color.red, (Color)value);
+
+            arg = new CommandArg("invisible");
+            Assert.IsFalse(arg.TryGet(typeof(Color), out value));
+
+            arg = new CommandArg("(1.2564, 3.6)");
+            Assert.IsTrue(arg.TryGet(typeof(Vector2), out value));
+            Vector2 expected = (Vector2)value;
+            Assert.IsTrue(
+                Mathf.Approximately(expected.x, 1.2564f) && Mathf.Approximately(expected.y, 3.6f),
+                $"Expected {expected} to be approximately {arg.String}"
+            );
+
+            arg = new CommandArg("asdf");
+            Assert.IsFalse(arg.TryGet(typeof(float), out value));
+            Assert.IsFalse(arg.TryGet(typeof(int), out value));
+            Assert.IsTrue(arg.TryGet(typeof(string), out value));
+            Assert.AreEqual(arg.String, value);
+        }
+
+        [Test]
+        public void CustomParserBuiltInType()
+        {
+            for (int i = 0; i < NumTries; ++i)
+            {
+                string expectedString = Guid.NewGuid().ToString();
+                int expected = _random.Next(int.MinValue, int.MaxValue);
+                CommandArg arg = new(expectedString);
+                Assert.IsFalse(arg.TryGet(out int value));
+                Assert.IsTrue(arg.TryGet(out value, CustomParser));
+                Assert.AreEqual(expected, value);
+
+                // Make sure the parser isn't sticky
+                Assert.IsFalse(arg.TryGet(out value));
+
+                arg = new CommandArg(Guid.NewGuid().ToString());
+                Assert.IsFalse(arg.TryGet(out value, CustomParser));
+                continue;
+
+                bool CustomParser(string input, out int parsed)
+                {
+                    if (string.Equals(expectedString, input, StringComparison.OrdinalIgnoreCase))
+                    {
+                        parsed = expected;
+                        return true;
+                    }
+
+                    parsed = default;
+                    return false;
+                }
+            }
+        }
+
+        [Test]
+        public void CustomParserCustomType()
+        {
+            for (int i = 0; i < NumTries; ++i)
+            {
+                string expectedString = Guid.NewGuid().ToString();
+                TestStruct1 expected = new(Guid.NewGuid());
+                CommandArg arg = new(expectedString);
+                Assert.IsFalse(arg.TryGet(out TestStruct1 value));
+                Assert.IsTrue(arg.TryGet(out value, CustomParser));
+                Assert.AreEqual(expected, value);
+
+                // Make sure the parser isn't sticky
+                Assert.IsFalse(arg.TryGet(out value));
+
+                arg = new CommandArg(Guid.NewGuid().ToString());
+                Assert.IsFalse(arg.TryGet(out value, CustomParser));
+
+                continue;
+
+                bool CustomParser(string input, out TestStruct1 parsed)
+                {
+                    if (string.Equals(expectedString, input, StringComparison.OrdinalIgnoreCase))
+                    {
+                        parsed = expected;
+                        return true;
+                    }
+
+                    parsed = default;
+                    return false;
+                }
+            }
+        }
+
+        [Test]
+        public void ParserRegistration() { }
+
+        [Test]
+        public void ParserDeregistration() { }
     }
 }

@@ -36,6 +36,13 @@ namespace CommandTerminal
 
     public readonly struct CommandArg
     {
+        private static readonly Lazy<MethodInfo> TryGetMethod = new(
+            () =>
+                typeof(CommandArg)
+                    .GetMethods(BindingFlags.Instance | BindingFlags.Public)
+                    .Where(method => method.Name == nameof(TryGet))
+                    .FirstOrDefault(method => method.GetParameters().Length == 1)
+        );
         private static readonly Dictionary<Type, object> RegisteredParsers = new();
         private static readonly Dictionary<
             Type,
@@ -46,10 +53,46 @@ namespace CommandTerminal
 
         // Public to allow custom-mutation, if desired
         public static readonly List<char> Delimiters = new() { ',', ';', ':', '_', '/', '\\' };
+        public static readonly List<string> IgnoredValues = new()
+        {
+            "(",
+            ")",
+            "[",
+            "]",
+            "'",
+            "`",
+            "|",
+            "{",
+            "}",
+            "<",
+            ">",
+        };
 
         public string String { get; }
 
-        public bool TryGet<T>(out T parsed, CommandArgParser<T> parserOverride = null)
+        public bool TryGet(Type type, out object parsed)
+        {
+            // TODO: Convert into delegates and cache for performance
+            MethodInfo genericMethod = TryGetMethod.Value;
+            if (genericMethod == null)
+            {
+                parsed = default;
+                return false;
+            }
+
+            MethodInfo constructed = genericMethod.MakeGenericMethod(type);
+            object[] parameters = { null };
+            bool success = (bool)constructed.Invoke(this, parameters);
+            parsed = parameters[0];
+            return success;
+        }
+
+        public bool TryGet<T>(out T parsed)
+        {
+            return TryGet(out parsed, parserOverride: null);
+        }
+
+        public bool TryGet<T>(out T parsed, CommandArgParser<T> parserOverride)
         {
             if (parserOverride != null)
             {
@@ -62,87 +105,71 @@ namespace CommandTerminal
                 return ((CommandArgParser<T>)parser)(String, out parsed);
             }
 
+            if (TryGetTypeDefined(String, out parsed))
+            {
+                return true;
+            }
+
             // TODO: Slap into a dictionary of built-in type -> parser mapping
             if (type == typeof(bool))
             {
-                return TryGetTypeDefined(String, out parsed)
-                    || InnerParse<bool>(String, bool.TryParse, out parsed);
+                return InnerParse<bool>(String, bool.TryParse, out parsed);
             }
             if (type == typeof(float))
             {
-                return TryGetTypeDefined(String, out parsed)
-                    || InnerParse<float>(String, float.TryParse, out parsed);
+                return InnerParse<float>(String, float.TryParse, out parsed);
             }
             if (type == typeof(int))
             {
-                return TryGetTypeDefined(String, out parsed)
-                    || InnerParse<int>(String, int.TryParse, out parsed);
+                return InnerParse<int>(String, int.TryParse, out parsed);
             }
             if (type == typeof(uint))
             {
-                return TryGetTypeDefined(String, out parsed)
-                    || InnerParse<uint>(String, uint.TryParse, out parsed);
+                return InnerParse<uint>(String, uint.TryParse, out parsed);
             }
             if (type == typeof(long))
             {
-                return TryGetTypeDefined(String, out parsed)
-                    || InnerParse<long>(String, long.TryParse, out parsed);
+                return InnerParse<long>(String, long.TryParse, out parsed);
             }
             if (type == typeof(ulong))
             {
-                return TryGetTypeDefined(String, out parsed)
-                    || InnerParse<ulong>(String, ulong.TryParse, out parsed);
+                return InnerParse<ulong>(String, ulong.TryParse, out parsed);
             }
             if (type == typeof(double))
             {
-                return TryGetTypeDefined(String, out parsed)
-                    || InnerParse<double>(String, double.TryParse, out parsed);
+                return InnerParse<double>(String, double.TryParse, out parsed);
             }
             if (type == typeof(short))
             {
-                return TryGetTypeDefined(String, out parsed)
-                    || InnerParse<short>(String, short.TryParse, out parsed);
+                return InnerParse<short>(String, short.TryParse, out parsed);
             }
             if (type == typeof(ushort))
             {
-                return TryGetTypeDefined(String, out parsed)
-                    || InnerParse<ushort>(String, ushort.TryParse, out parsed);
+                return InnerParse<ushort>(String, ushort.TryParse, out parsed);
             }
             if (type == typeof(byte))
             {
-                return TryGetTypeDefined(String, out parsed)
-                    || InnerParse<byte>(String, byte.TryParse, out parsed);
+                return InnerParse<byte>(String, byte.TryParse, out parsed);
             }
             if (type == typeof(sbyte))
             {
-                return TryGetTypeDefined(String, out parsed)
-                    || InnerParse<sbyte>(String, sbyte.TryParse, out parsed);
+                return InnerParse<sbyte>(String, sbyte.TryParse, out parsed);
             }
             if (type == typeof(string))
             {
-                if (TryGetTypeDefined(String, out parsed))
-                {
-                    return true;
-                }
                 parsed = (T)Convert.ChangeType(String, type);
                 return true;
             }
             if (type == typeof(Guid))
             {
-                return TryGetTypeDefined(String, out parsed)
-                    || InnerParse<Guid>(String, Guid.TryParse, out parsed);
+                return InnerParse<Guid>(String, Guid.TryParse, out parsed);
             }
             if (type == typeof(DateTime))
             {
-                return TryGetTypeDefined(String, out parsed)
-                    || InnerParse<DateTime>(String, DateTime.TryParse, out parsed);
+                return InnerParse<DateTime>(String, DateTime.TryParse, out parsed);
             }
             if (type == typeof(char))
             {
-                if (TryGetTypeDefined(String, out parsed))
-                {
-                    return true;
-                }
                 if (String.Length == 1)
                 {
                     parsed = (T)Convert.ChangeType(String[0], type);
@@ -154,8 +181,7 @@ namespace CommandTerminal
             }
             if (type == typeof(decimal))
             {
-                return TryGetTypeDefined(String, out parsed)
-                    || InnerParse<decimal>(String, decimal.TryParse, out parsed);
+                return InnerParse<decimal>(String, decimal.TryParse, out parsed);
             }
             if (type.IsEnum)
             {
@@ -198,8 +224,6 @@ namespace CommandTerminal
                 string[] split = StripAndSplit(String);
                 switch (split.Length)
                 {
-                    case 1:
-                        return TryGetTypeDefined(split[0], out parsed);
                     case 2
                         when float.TryParse(split[0], out float x)
                             && float.TryParse(split[1], out float y):
@@ -218,8 +242,6 @@ namespace CommandTerminal
                 string[] split = StripAndSplit(String);
                 switch (split.Length)
                 {
-                    case 1:
-                        return TryGetTypeDefined(split[0], out parsed);
                     case 2
                         when float.TryParse(split[0], out float x)
                             && float.TryParse(split[1], out float y):
@@ -238,8 +260,6 @@ namespace CommandTerminal
                 string[] split = StripAndSplit(String);
                 switch (split.Length)
                 {
-                    case 1:
-                        return TryGetTypeDefined(split[0], out parsed);
                     case 2
                         when float.TryParse(split[0], out float x)
                             && float.TryParse(split[1], out float y):
@@ -265,8 +285,6 @@ namespace CommandTerminal
                 string[] split = StripAndSplit(String);
                 switch (split.Length)
                 {
-                    case 1:
-                        return TryGetTypeDefined(split[0], out parsed);
                     case 2
                         when int.TryParse(split[0], out int x) && int.TryParse(split[1], out int y):
                         parsed = (T)Convert.ChangeType(new Vector2Int(x, y), type);
@@ -284,8 +302,6 @@ namespace CommandTerminal
                 string[] split = StripAndSplit(String);
                 switch (split.Length)
                 {
-                    case 1:
-                        return TryGetTypeDefined(split[0], out parsed);
                     case 2
                         when int.TryParse(split[0], out int x) && int.TryParse(split[1], out int y):
                         parsed = (T)Convert.ChangeType(new Vector3Int(x, y), type);
@@ -309,8 +325,6 @@ namespace CommandTerminal
                 string[] split = StripAndSplit(colorString);
                 switch (split.Length)
                 {
-                    case 1:
-                        return TryGetTypeDefined(split[0], out parsed);
                     case 3
                         when float.TryParse(split[0], out float r)
                             && float.TryParse(split[1], out float g)
@@ -331,8 +345,6 @@ namespace CommandTerminal
                 string[] split = StripAndSplit(String);
                 switch (split.Length)
                 {
-                    case 1:
-                        return TryGetTypeDefined(split[0], out parsed);
                     case 4
                         when float.TryParse(split[0], out float x)
                             && float.TryParse(split[1], out float y)
@@ -347,8 +359,6 @@ namespace CommandTerminal
                 string[] split = StripAndSplit(String);
                 switch (split.Length)
                 {
-                    case 1:
-                        return TryGetTypeDefined(split[0], out parsed);
                     case 4
                         when float.TryParse(split[0], out float x)
                             && float.TryParse(split[1], out float y)
@@ -363,8 +373,6 @@ namespace CommandTerminal
                 string[] split = StripAndSplit(String);
                 switch (split.Length)
                 {
-                    case 1:
-                        return TryGetTypeDefined(split[0], out parsed);
                     case 4
                         when int.TryParse(split[0], out int x)
                             && int.TryParse(split[1], out int y)
@@ -399,18 +407,16 @@ namespace CommandTerminal
 
             static string[] StripAndSplit(string input)
             {
-                string strippedInput = input
-                    .Replace("(", string.Empty)
-                    .Replace(")", string.Empty)
-                    .Replace("[", string.Empty)
-                    .Replace("]", string.Empty)
-                    .Replace("'", string.Empty)
-                    .Replace("`", string.Empty)
-                    .Replace("|", string.Empty)
-                    .Replace("{", string.Empty)
-                    .Replace("}", string.Empty)
-                    .Replace("<", string.Empty)
-                    .Replace(">", string.Empty);
+                string strippedInput = input;
+                foreach (string ignored in IgnoredValues)
+                {
+                    if (string.IsNullOrEmpty(ignored))
+                    {
+                        continue;
+                    }
+
+                    strippedInput = strippedInput.Replace(ignored, string.Empty);
+                }
 
                 foreach (char delimiter in Delimiters)
                 {
