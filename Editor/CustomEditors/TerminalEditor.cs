@@ -1,6 +1,7 @@
 ﻿namespace DxCommandTerminal.Editor.CustomEditors
 {
 #if UNITY_EDITOR
+    using System;
     using System.Collections.Generic;
     using System.Linq;
     using CommandTerminal;
@@ -11,6 +12,17 @@
     public sealed class TerminalEditor : Editor
     {
         private int _commandIndex;
+        private bool _initialized;
+
+        private readonly HashSet<string> _allCommands = new(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _defaultCommands = new(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _nonDefaultCommands = new(
+            StringComparer.OrdinalIgnoreCase
+        );
+        private readonly HashSet<string> _seenCommands = new(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _intermediateResults = new(
+            StringComparer.OrdinalIgnoreCase
+        );
 
         public override void OnInspectorGUI()
         {
@@ -22,9 +34,30 @@
                 return;
             }
 
-            string[] allCommands = CommandShell
-                .RegisteredCommands.Value.Select(tuple => tuple.attribute.Name)
-                .ToArray();
+            if (!_initialized)
+            {
+                _allCommands.Clear();
+                _allCommands.UnionWith(
+                    CommandShell
+                        .RegisteredCommands.Value.Select(tuple => tuple.attribute)
+                        .Select(attribute => attribute.Name)
+                );
+                _defaultCommands.Clear();
+                _defaultCommands.UnionWith(
+                    CommandShell
+                        .RegisteredCommands.Value.Select(tuple => tuple.attribute)
+                        .Where(tuple => tuple.Default)
+                        .Select(attribute => attribute.Name)
+                );
+                _nonDefaultCommands.Clear();
+                _nonDefaultCommands.UnionWith(
+                    CommandShell
+                        .RegisteredCommands.Value.Select(tuple => tuple.attribute)
+                        .Where(tuple => !tuple.Default)
+                        .Select(attribute => attribute.Name)
+                );
+                _initialized = true;
+            }
 
             bool anyChanged = false;
             if (terminal.disabledCommands == null)
@@ -33,21 +66,37 @@
                 terminal.disabledCommands = new List<string>();
             }
 
-            for (int i = terminal.disabledCommands.Count - 1; i >= 0; --i)
+            _seenCommands.Clear();
+            for (int i = terminal.disabledCommands.Count - 1; 0 <= i; --i)
             {
                 string command = terminal.disabledCommands[i];
-                if (allCommands.Contains(command))
+                if (!_seenCommands.Add(command))
                 {
+                    terminal.disabledCommands.RemoveAt(i);
+                    anyChanged = true;
                     continue;
                 }
 
-                terminal.disabledCommands.RemoveAt(i);
-                anyChanged = true;
+                if (!_allCommands.Contains(command))
+                {
+                    terminal.disabledCommands.RemoveAt(i);
+                    anyChanged = true;
+                }
             }
 
-            string[] ignorableCommands = allCommands.Except(terminal.disabledCommands).ToArray();
-            if (ignorableCommands.Any())
+            _intermediateResults.Clear();
+            _intermediateResults.UnionWith(_nonDefaultCommands);
+            if (!terminal.ignoreDefaultCommands)
             {
+                _intermediateResults.UnionWith(_defaultCommands);
+            }
+            _intermediateResults.ExceptWith(terminal.disabledCommands);
+
+            if (_intermediateResults.Any())
+            {
+                string[] ignorableCommands = _intermediateResults.ToArray();
+                Array.Sort(ignorableCommands);
+
                 EditorGUILayout.Space();
                 EditorGUILayout.LabelField("Ignorable Commands");
 

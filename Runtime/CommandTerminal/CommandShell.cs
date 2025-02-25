@@ -184,16 +184,17 @@ namespace CommandTerminal
         /// Uses reflection to find all RegisterCommand attributes
         /// and adds them to the commands dictionary.
         /// </summary>
-        public void RegisterCommands(IEnumerable<string> ignoredCommands = null)
+        public void RegisterCommands(
+            IEnumerable<string> ignoredCommands = null,
+            bool ignoreDefaultCommands = false
+        )
         {
             _commands.Clear();
             HashSet<string> ignoredCommandSet = new(
                 ignoredCommands ?? Enumerable.Empty<string>(),
                 StringComparer.OrdinalIgnoreCase
             );
-            Dictionary<string, CommandInfo> rejectedCommands = new(
-                StringComparer.OrdinalIgnoreCase
-            );
+            Dictionary<string, MethodInfo> rejectedCommands = new(StringComparer.OrdinalIgnoreCase);
 
             foreach (
                 (MethodInfo method, RegisterCommandAttribute attribute) in RegisteredCommands.Value
@@ -205,18 +206,18 @@ namespace CommandTerminal
                     continue;
                 }
 
+                if (ignoreDefaultCommands && attribute.Default)
+                {
+                    continue;
+                }
+
                 ParameterInfo[] methodsParams = method.GetParameters();
                 if (
                     methodsParams.Length != 1
                     || methodsParams[0].ParameterType != typeof(CommandArg[])
                 )
                 {
-                    // Method does not match expected Action signature,
-                    // this could be a command that has a FrontCommand method to handle its arguments.
-                    rejectedCommands.TryAdd(
-                        commandName,
-                        CommandFromParamInfo(methodsParams, attribute.Help)
-                    );
+                    rejectedCommands.TryAdd(commandName, method);
                     continue;
                 }
 
@@ -402,45 +403,22 @@ namespace CommandTerminal
             _errorMessages.Enqueue(formattedMessage);
         }
 
-        private void HandleRejectedCommands(Dictionary<string, CommandInfo> rejectedCommands)
+        private void HandleRejectedCommands(Dictionary<string, MethodInfo> rejectedCommands)
         {
-            foreach (KeyValuePair<string, CommandInfo> command in rejectedCommands)
+            foreach (KeyValuePair<string, MethodInfo> command in rejectedCommands)
             {
-                if (_commands.TryGetValue(command.Key, out CommandInfo existingCommand))
-                {
-                    _commands[command.Key] = new CommandInfo(
-                        existingCommand.proc,
-                        command.Value.minArgCount,
-                        command.Value.maxArgCount,
-                        command.Value.help,
-                        command.Value.hint
-                    );
-                }
-                else
-                {
-                    IssueErrorMessage($"{command.Key} is missing a front command.");
-                }
+                IssueErrorMessage(
+                    $"{command.Key} has an invalid signature - must accept CommandArg[]. "
+                        + $"Found: {command.Value.Name}({string.Join(",", command.Value.GetParameters().Select(p => p.ParameterType.Name))})"
+                );
             }
-        }
-
-        private static CommandInfo CommandFromParamInfo(ParameterInfo[] parameters, string help)
-        {
-            int optionalArgs = parameters.Count(param => param.IsOptional);
-
-            return new CommandInfo(
-                null,
-                parameters.Length - optionalArgs,
-                parameters.Length,
-                help,
-                string.Empty
-            );
         }
 
         private static CommandArg EatArgument(ref string stringValue)
         {
             int spaceIndex = stringValue.IndexOf(' ');
 
-            if (spaceIndex >= 0)
+            if (0 <= spaceIndex)
             {
                 CommandArg arg = new(stringValue.Substring(0, spaceIndex));
                 stringValue =

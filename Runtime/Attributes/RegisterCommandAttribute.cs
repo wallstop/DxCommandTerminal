@@ -12,6 +12,9 @@ namespace Attributes
         public string Help { get; set; }
         public string Hint { get; set; }
 
+        // Should not be used by client code - internal flag to indicate that this is a "Default", or in-built command
+        public bool Default { get; set; }
+
         public RegisterCommandAttribute(string commandName = null)
         {
             commandName = commandName?.Replace(" ", string.Empty);
