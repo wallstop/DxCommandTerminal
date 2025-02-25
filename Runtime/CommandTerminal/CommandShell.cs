@@ -115,7 +115,7 @@ namespace CommandTerminal
 
             if (type == typeof(string))
             {
-                parsed = (T)Convert.ChangeType(stringValue, type);
+                parsed = (T)Convert.ChangeType(String, type);
                 return true;
             }
             if (TryGetTypeDefined(stringValue, out parsed))

@@ -348,8 +348,10 @@
                 Assert.IsTrue(
                     Approximately(expectedRounded.x, value.x)
                         && Approximately(expectedRounded.y, value.y),
-                    $"Expected {value} to be approximately {expected}. "
-                        + $"Value: ({value.x},{value.y}). Expected: ({x},{y})."
+                    $"Expected {value} to be approximately {expectedRounded}. "
+                        + $"Input: ({x},{y}). "
+                        + $"Value: ({value.x},{value.y}). "
+                        + $"Expected: ({expectedRounded.x},{expectedRounded.y})."
                 );
 
                 arg = new CommandArg($"{expected.x},{expected.y}");
@@ -390,8 +392,10 @@
                 Assert.IsTrue(
                     Approximately(expectedRounded.x, value.x)
                         && Approximately(expectedRounded.y, value.y),
-                    $"Expected {value} to be approximately {expected}. "
-                        + $"Value: ({value.x},{value.y}). Expected: ({x},{y})."
+                    $"Expected {value} to be approximately {expectedRounded}. "
+                        + $"Input: ({x},{y},{z}). "
+                        + $"Value: ({value.x},{value.y}). "
+                        + $"Expected: ({expectedRounded.x},{expectedRounded.y})."
                 );
 
                 arg = new CommandArg($"{expected.x},{expected.y},{z}");
@@ -452,6 +456,240 @@
         }
 
         [Test]
+        public void Vector3()
+        {
+            CommandArg arg = new("");
+            Assert.IsFalse(arg.TryGet(out Vector3 value), $"Unexpectedly parsed {value}");
+            arg = new CommandArg("0");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+
+            Vector3 expected;
+
+            // Unexpected input
+            for (int i = 0; i < NumTries; ++i)
+            {
+                float x = (float)_random.NextDouble();
+                arg = new CommandArg(x.ToString(CultureInfo.InvariantCulture));
+                Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+                foreach (
+                    (string pre, string post) in _prepend.Zip(
+                        _append,
+                        (preValue, postValue) => (preValue, postValue)
+                    )
+                )
+                {
+                    arg = new CommandArg($"{pre}{x}{post}");
+                    Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+                }
+            }
+
+            // x,y
+            for (int i = 0; i < NumTries; ++i)
+            {
+                float x = (float)_random.NextDouble();
+                float y = (float)_random.NextDouble();
+                float z = 0f;
+                expected = new Vector3(x, y);
+                Vector3 expectedRounded = new((float)Math.Round(x, 2), (float)Math.Round(y, 2));
+                arg = new CommandArg(expected.ToString());
+                Assert.IsTrue(arg.TryGet(out value));
+                Assert.IsTrue(
+                    Approximately(expectedRounded.x, value.x)
+                        && Approximately(expectedRounded.y, value.y)
+                        && Approximately(expectedRounded.z, value.z),
+                    $"Expected {value} to be approximately {expectedRounded}. "
+                        + $"Input: ({x},{y},{z}). "
+                        + $"Value: ({value.x},{value.y},{value.z}). "
+                        + $"Expected: ({expectedRounded.x},{expectedRounded.y},{expectedRounded.z})."
+                );
+
+                arg = new CommandArg($"{expected.x},{expected.y}");
+                Assert.IsTrue(arg.TryGet(out value));
+                Assert.IsTrue(
+                    Approximately(expected.x, value.x)
+                        && Approximately(expected.y, value.y)
+                        && Approximately(expected.z, value.z),
+                    $"Expected {value} to be approximately {expected}. "
+                        + $"Value: ({value.x},{value.y},{value.z}). Expected: ({x},{y},{z})."
+                );
+
+                foreach (
+                    (string pre, string post) in _prepend.Zip(
+                        _append,
+                        (preValue, postValue) => (preValue, postValue)
+                    )
+                )
+                {
+                    arg = new CommandArg($"{pre}{expected.x},{expected.y}{post}");
+                    Assert.IsTrue(arg.TryGet(out value));
+                    Assert.IsTrue(
+                        Approximately(expected.x, value.x)
+                            && Approximately(expected.y, value.y)
+                            && Approximately(expected.z, value.z),
+                        $"Expected {value} to be approximately {expected}. "
+                            + $"Value: ({value.x},{value.y}). Expected: ({x},{y})."
+                    );
+                }
+            }
+
+            // x,y,z (z is ok, but ignored)
+            for (int i = 0; i < NumTries; ++i)
+            {
+                float x = (float)_random.NextDouble();
+                float y = (float)_random.NextDouble();
+                float z = (float)_random.NextDouble();
+                expected = new Vector3(x, y, z);
+                Vector3 expectedRounded = new(
+                    (float)Math.Round(x, 2),
+                    (float)Math.Round(y, 2),
+                    (float)Math.Round(z, 2)
+                );
+                arg = new CommandArg(expected.ToString());
+                Assert.IsTrue(arg.TryGet(out value));
+                Assert.IsTrue(
+                    Approximately(expectedRounded.x, value.x)
+                        && Approximately(expectedRounded.y, value.y)
+                        && Approximately(expectedRounded.z, value.z),
+                    $"Expected {value} to be approximately {expectedRounded}. "
+                        + $"Input: ({x},{y},{z}). "
+                        + $"Value: ({value.x},{value.y},{value.z}). "
+                        + $"Expected: ({expectedRounded.x},{expectedRounded.y},{expectedRounded.z})."
+                );
+
+                arg = new CommandArg($"{expected.x},{expected.y},{expected.z}");
+                Assert.IsTrue(arg.TryGet(out value));
+                Assert.IsTrue(
+                    Approximately(expected.x, value.x)
+                        && Approximately(expected.y, value.y)
+                        && Approximately(expected.z, value.z),
+                    $"Expected {value} to be approximately {expected}. "
+                        + $"Value: ({value.x},{value.y},{value.z}). Expected: ({x},{y},{z})."
+                );
+
+                foreach (
+                    (string pre, string post) in _prepend.Zip(
+                        _append,
+                        (preValue, postValue) => (preValue, postValue)
+                    )
+                )
+                {
+                    arg = new CommandArg($"{pre}{expected.x},{expected.y},{z}{post}");
+                    Assert.IsTrue(arg.TryGet(out value));
+                    Assert.IsTrue(
+                        Approximately(expected.x, value.x)
+                            && Approximately(expected.y, value.y)
+                            && Approximately(expected.z, value.z),
+                        $"Expected {value} to be approximately {expected}. "
+                            + $"Value: ({value.x},{value.y},{value.z}). Expected: ({x},{y},{z})."
+                    );
+                }
+            }
+
+            arg = new CommandArg(nameof(UnityEngine.Vector3.zero));
+            expected = UnityEngine.Vector3.zero;
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.IsTrue(
+                Approximately(expected.x, value.x)
+                    && Approximately(expected.y, value.y)
+                    && Approximately(expected.z, value.z),
+                $"Expected {value} to be approximately {expected}."
+            );
+
+            arg = new CommandArg(nameof(UnityEngine.Vector3.up));
+            expected = UnityEngine.Vector3.up;
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.IsTrue(
+                Approximately(expected.x, value.x)
+                    && Approximately(expected.y, value.y)
+                    && Approximately(expected.z, value.z),
+                $"Expected {value} to be approximately {expected}."
+            );
+
+            arg = new CommandArg(nameof(UnityEngine.Vector3.left));
+            expected = UnityEngine.Vector3.left;
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.IsTrue(
+                Approximately(expected.x, value.x)
+                    && Approximately(expected.y, value.y)
+                    && Approximately(expected.z, value.z),
+                $"Expected {value} to be approximately {expected}."
+            );
+
+            arg = new CommandArg(nameof(UnityEngine.Vector3.back));
+            expected = UnityEngine.Vector3.back;
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.IsTrue(
+                Approximately(expected.x, value.x)
+                    && Approximately(expected.y, value.y)
+                    && Approximately(expected.z, value.z),
+                $"Expected {value} to be approximately {expected}."
+            );
+
+            arg = new CommandArg(nameof(UnityEngine.Vector3.forward));
+            expected = UnityEngine.Vector3.forward;
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.IsTrue(
+                Approximately(expected.x, value.x)
+                    && Approximately(expected.y, value.y)
+                    && Approximately(expected.z, value.z),
+                $"Expected {value} to be approximately {expected}."
+            );
+
+            arg = new CommandArg(nameof(UnityEngine.Vector3.one));
+            expected = UnityEngine.Vector3.one;
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.IsTrue(
+                Approximately(expected.x, value.x)
+                    && Approximately(expected.y, value.y)
+                    && Approximately(expected.z, value.z),
+                $"Expected {value} to be approximately {expected}."
+            );
+
+            arg = new CommandArg(Guid.NewGuid().ToString());
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+            arg = new CommandArg("false");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+            arg = new CommandArg("asdf");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+        }
+
+        [Test]
+        public void String()
+        {
+            CommandArg arg = new("");
+            Assert.IsTrue(arg.TryGet(out string value));
+            Assert.AreEqual(arg.String, value);
+
+            arg = new CommandArg("asdf");
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(arg.String, value);
+
+            arg = new CommandArg("1111");
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(arg.String, value);
+
+            arg = new CommandArg("1.3333");
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(arg.String, value);
+
+            for (int i = 0; i < NumTries; ++i)
+            {
+                arg = new CommandArg(Guid.NewGuid().ToString());
+                Assert.IsTrue(arg.TryGet(out value));
+                Assert.AreEqual(arg.String, value);
+            }
+
+            arg = new CommandArg("#$$$__.azxfd87&*_&&&-={'|");
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(arg.String, value);
+
+            // Check strings aren't sanitized
+            arg = new CommandArg("   ");
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(arg.String, value);
+        }
+
+        [Test]
         public void Quaternion()
         {
             CommandArg arg = new("");
@@ -506,59 +744,51 @@
                         + $"Expected: ({expectedRounded.x},{expectedRounded.y},{expectedRounded.z},{expectedRounded.w})."
                 );
 
-                // arg = new CommandArg($"{expected.x},{expected.y},{z}");
-                // Assert.IsTrue(arg.TryGet(out value));
-                // Assert.IsTrue(
-                //     Approximately(expected.x, value.x)
-                //         && Approximately(expected.y, value.y),
-                //     $"Expected {value} to be approximately {expected}. "
-                //         + $"Value: ({value.x},{value.y}). Expected: ({x},{y})."
-                // );
-                //
-                // foreach (
-                //     (string pre, string post) in _prepend.Zip(
-                //         _append,
-                //         (preValue, postValue) => (preValue, postValue)
-                //     )
-                // )
-                // {
-                //     arg = new CommandArg($"{pre}{expected.x},{expected.y},{z}{post}");
-                //     Assert.IsTrue(arg.TryGet(out value));
-                //     Assert.IsTrue(
-                //         Approximately(expected.x, value.x)
-                //             && Approximately(expected.y, value.y),
-                //         $"Expected {value} to be approximately {expected}. "
-                //             + $"Value: ({value.x},{value.y}). Expected: ({x},{y})."
-                //     );
-                // }
+                arg = new CommandArg($"{x},{y},{z},{w}");
+                Assert.IsTrue(arg.TryGet(out value));
+                Assert.IsTrue(
+                    Approximately(expected.x, value.x)
+                        && Approximately(expected.y, value.y)
+                        && Approximately(expected.z, value.z)
+                        && Approximately(expected.w, value.w),
+                    $"Expected {value} to be approximately {expected}. "
+                        + $"Value: ({value.x},{value.y},{value.z},{value.w}). "
+                        + $"Expected: ({expected.x},{expected.y},{expected.z},{expected.w})."
+                );
+
+                foreach (
+                    (string pre, string post) in _prepend.Zip(
+                        _append,
+                        (preValue, postValue) => (preValue, postValue)
+                    )
+                )
+                {
+                    arg = new CommandArg($"{pre}{x},{y},{z},{w}{post}");
+                    Assert.IsTrue(arg.TryGet(out value));
+                    Assert.IsTrue(
+                        Approximately(expected.x, value.x)
+                            && Approximately(expected.y, value.y)
+                            && Approximately(expected.z, value.z)
+                            && Approximately(expected.w, value.w),
+                        $"Expected {value} to be approximately {expected}. "
+                            + $"Value: ({value.x},{value.y},{value.z},{value.w}). "
+                            + $"Expected: ({expected.x},{expected.y},{expected.z},{expected.w})."
+                    );
+                }
             }
 
-            // arg = new CommandArg(nameof(UnityEngine.Vector2.zero));
-            // expected = UnityEngine.Vector2.zero;
-            // Assert.IsTrue(arg.TryGet(out value));
-            // Assert.IsTrue(
-            //     Approximately(expected.x, value.x)
-            //         && Approximately(expected.y, value.y),
-            //     $"Expected {value} to be approximately {expected}."
-            // );
-            //
-            // arg = new CommandArg(nameof(UnityEngine.Vector2.up));
-            // expected = UnityEngine.Vector2.up;
-            // Assert.IsTrue(arg.TryGet(out value));
-            // Assert.IsTrue(
-            //     Approximately(expected.x, value.x)
-            //         && Approximately(expected.y, value.y),
-            //     $"Expected {value} to be approximately {expected}."
-            // );
-            //
-            // arg = new CommandArg(nameof(UnityEngine.Vector2.left));
-            // expected = UnityEngine.Vector2.left;
-            // Assert.IsTrue(arg.TryGet(out value));
-            // Assert.IsTrue(
-            //     Approximately(expected.x, value.x)
-            //         && Approximately(expected.y, value.y),
-            //     $"Expected {value} to be approximately {expected}."
-            // );
+            arg = new CommandArg(nameof(UnityEngine.Quaternion.identity));
+            expected = UnityEngine.Quaternion.identity;
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.IsTrue(
+                Approximately(expected.x, value.x)
+                    && Approximately(expected.y, value.y)
+                    && Approximately(expected.z, value.z)
+                    && Approximately(expected.w, value.w),
+                $"Expected {value} to be approximately {expected}. "
+                    + $"Value: ({value.x},{value.y},{value.z},{value.w}). "
+                    + $"Expected: ({expected.x},{expected.y},{expected.z},{expected.w})."
+            );
 
             arg = new CommandArg(Guid.NewGuid().ToString());
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
@@ -794,7 +1024,7 @@
             return delta <= tolerance;
         }
 
-        private static bool Approximately(double a, double b, double tolerance = 0.0001f)
+        private static bool Approximately(double a, double b, double tolerance = 0.0001)
         {
             double delta = Math.Abs(a - b);
             return delta <= tolerance;
