@@ -97,14 +97,15 @@ namespace CommandTerminal
 
         [Header("System")]
         [SerializeField]
-        private List<TerminalLogType> _ignoredLogTypes = new();
-
-        [SerializeField]
         public bool ignoreDefaultCommands;
 
         [SerializeField]
         private bool _logUnityMessages = true;
 
+        [SerializeField]
+        private List<TerminalLogType> _ignoredLogTypes = new();
+
+        [SerializeField]
         public List<string> disabledCommands = new();
 
 #if UNITY_EDITOR
@@ -289,7 +290,19 @@ namespace CommandTerminal
                 _toggleHotkey = string.Empty;
             }
 
-            if (_bufferSize < 0) { }
+            switch (_bufferSize)
+            {
+                case <= 0:
+                    Debug.LogError(
+                        $"Invalid buffer size '{_bufferSize}', must be greater than zero."
+                    );
+                    break;
+                case < 10:
+                    Debug.LogWarning(
+                        $"Unsupported buffer size '{_bufferSize}', recommended size is > 10."
+                    );
+                    break;
+            }
 
             if (_ignoredLogTypes == null)
             {
