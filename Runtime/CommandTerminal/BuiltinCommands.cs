@@ -8,7 +8,7 @@ namespace CommandTerminal
     // ReSharper disable once UnusedType.Global
     internal static class BuiltInCommands
     {
-        [RegisterCommand(Help = "Clear the command console", MaxArgCount = 0)]
+        [RegisterCommand(Help = "Clear the command console", MaxArgCount = 0, Default = true)]
         // ReSharper disable once UnusedMember.Local
         // ReSharper disable once UnusedParameter.Local
         private static void CommandClear(CommandArg[] args)
@@ -16,7 +16,11 @@ namespace CommandTerminal
             Terminal.Buffer?.Clear();
         }
 
-        [RegisterCommand(Help = "Display help information about a command", MaxArgCount = 1)]
+        [RegisterCommand(
+            Help = "Display help information about a command",
+            MaxArgCount = 1,
+            Default = true
+        )]
         // ReSharper disable once UnusedMember.Local
         private static void CommandHelp(CommandArg[] args)
         {
@@ -57,7 +61,7 @@ namespace CommandTerminal
             }
         }
 
-        [RegisterCommand(Help = "Time the execution of a command", MinArgCount = 1)]
+        [RegisterCommand(Help = "Time the execution of a command", MinArgCount = 1, Default = true)]
         // ReSharper disable once UnusedMember.Local
         private static void CommandTime(CommandArg[] args)
         {
@@ -73,21 +77,25 @@ namespace CommandTerminal
             Terminal.Log($"Time: {sw.ElapsedMilliseconds}ms");
         }
 
-        [RegisterCommand(Help = "Output message via Terminal.Log")]
+        [RegisterCommand(Help = "Output message via Terminal.Log", Default = true)]
         // ReSharper disable once UnusedMember.Local
         private static void CommandPrint(CommandArg[] args)
         {
             Terminal.Log(JoinArguments(args));
         }
 
-        [RegisterCommand(Help = "Output message via Debug.Log")]
+        [RegisterCommand(Help = "Output message via Debug.Log", Default = true)]
         // ReSharper disable once UnusedMember.Local
         private static void CommandLog(CommandArg[] args)
         {
             UnityEngine.Debug.Log(JoinArguments(args));
         }
 
-        [RegisterCommand(Help = "Output the stack trace of the previous message", MaxArgCount = 0)]
+        [RegisterCommand(
+            Help = "Output the stack trace of the previous message",
+            MaxArgCount = 0,
+            Default = true
+        )]
         // ReSharper disable once UnusedMember.Local
         // ReSharper disable once UnusedParameter.Local
         private static void CommandTrace(CommandArg[] args)
@@ -115,7 +123,7 @@ namespace CommandTerminal
             );
         }
 
-        [RegisterCommand(Help = "List all variables or set a variable value")]
+        [RegisterCommand(Help = "List all variables or set a variable value", Default = true)]
         // ReSharper disable once UnusedMember.Global
         // ReSharper disable once UnusedMember.Local
         private static void CommandSet(CommandArg[] args)
@@ -148,7 +156,7 @@ namespace CommandTerminal
             shell.SetVariable(variableName, JoinArguments(args, 1));
         }
 
-        [RegisterCommand(Help = "No operation")]
+        [RegisterCommand(Help = "No operation", Default = true)]
         // ReSharper disable once UnusedParameter.Local
         // ReSharper disable once UnusedMember.Local
         private static void CommandNoop(CommandArg[] args)
@@ -156,7 +164,7 @@ namespace CommandTerminal
             // No-op
         }
 
-        [RegisterCommand(Help = "Quit running application", MaxArgCount = 0)]
+        [RegisterCommand(Help = "Quit running application", MaxArgCount = 0, Default = true)]
         // ReSharper disable once UnusedMember.Local
         // ReSharper disable once UnusedParameter.Local
         private static void CommandQuit(CommandArg[] args)

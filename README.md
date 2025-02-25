@@ -19,6 +19,8 @@ This is a fork of [Command Terminal](https://github.com/stillwwater/command_term
 - Add ability to ignore commands that have been annotated with `RegisterCommandAttribute`. In this way, your terminals can ignore any built-in commands, for cleanliness. A custom editor has been added to provide users with the ability to identify what commands are available to ignore, and selectively ignore them.
 - Add ability to ignore certain (or all) log levels, such that unwanted logs do not clutter terminal output
 - Add ability to optionally have Unity log messages routed to the terminal, default on, but can be turned off
+- Add ability to optionally ignore all default commands, such that you can write your own commands that conflict with the default provided ones, such as `HELP`, `TIME`, etc
+- Dynamic console resizing when Screen Size change is detected, implemented in a very performant fashion
 - Added Assembly Definitions, so that this project can be used cleanly in projects that utilize Assembly Definitions
 - Fixed a bug where commands annotated with `RegisterCommandAttribute` in other assemblies failed to be recognized
 - Fixed a bug where only the latest error message was preserved - errors are now queued
@@ -27,6 +29,7 @@ This is a fork of [Command Terminal](https://github.com/stillwwater/command_term
 - Minor performance benefits (O(n) -> O(1)) when the terminal buffer becomes full
 - Minor performance benefits around multiple-indexing into dictionary issues
 - Minor performance benefits around using string interpolation and intelligent checking of parameters to only force `string.Format` when relevant in logging paths
+- Better invalid command identification and error messages
 - All string comparisons are now `OrdinalIgnoreCase` instead of relying on CurrentCulture
 - `Bool` property conversion of `CommandArg` now uses `bool.TryParse` for maximum flexibllity
 - Added an `Enum` property conversion on `CommandArg`
@@ -45,7 +48,16 @@ This is a fork of [Command Terminal](https://github.com/stillwwater/command_term
 - Validation around command ignoring and log level ignoring has been added to Terminal, to prevent invalid data
 
 ## The Future
-- More improvements are coming :)
+More improvements coming soon, stick around :)
+
+Planned improvements:
+- Integration with the new Input System
+- Ensure working on WebGL builds
+- Command Groups
+- Background not being rendered bug
+- Up key support (move cursor to end)
+- Support for more out of the box command argument types
+- Ensure working in Mobile builds
 
 ---
 

@@ -100,6 +100,9 @@ namespace CommandTerminal
         private List<TerminalLogType> _ignoredLogTypes = new();
 
         [SerializeField]
+        public bool ignoreDefaultCommands;
+
+        [SerializeField]
         private bool _logUnityMessages = true;
 
         public List<string> disabledCommands = new();
@@ -125,6 +128,9 @@ namespace CommandTerminal
         private GUIStyle _inputStyle;
         private bool _unityLogAttached;
         private bool _started;
+
+        private int? _lastWidth;
+        private int? _lastHeight;
 
         [StringFormatMethod("format")]
         public static bool Log(string format, params object[] message)
@@ -250,10 +256,14 @@ namespace CommandTerminal
             );
 
             SetupWindow();
+            SetupWindowStyle();
             SetupInput();
             SetupLabels();
 
-            Shell.RegisterCommands(disabledCommands);
+            Shell.RegisterCommands(
+                ignoredCommands: disabledCommands,
+                ignoreDefaultCommands: ignoreDefaultCommands
+            );
 
             while (Shell.TryConsumeErrorMessage(out string error))
             {
@@ -320,6 +330,14 @@ namespace CommandTerminal
         }
 #endif
 
+        private void LateUpdate()
+        {
+            if (_lastHeight != Screen.height || _lastWidth != Screen.width)
+            {
+                SetupWindow();
+            }
+        }
+
         private void OnGUI()
         {
             if (Event.current.Equals(Event.KeyboardEvent(_toggleHotkey)))
@@ -349,10 +367,41 @@ namespace CommandTerminal
 
         private void SetupWindow()
         {
-            _realWindowSize = Screen.height * _maxHeight / 3;
+            int height = Screen.height;
+            int width = Screen.width;
 
-            _window = new Rect(0, _currentOpenT - _realWindowSize, Screen.width, _realWindowSize);
+            _realWindowSize = height * _maxHeight * _smallTerminalRatio;
 
+            try
+            {
+                // TODO: Consolidate
+                switch (_state)
+                {
+                    case TerminalState.OpenSmall:
+                    {
+                        _openTarget = height * _maxHeight * _smallTerminalRatio;
+                        _realWindowSize = _openTarget;
+                        _scrollPosition.y = int.MaxValue;
+                        break;
+                    }
+                    case TerminalState.OpenFull:
+                    {
+                        _realWindowSize = height * _maxHeight;
+                        _openTarget = _realWindowSize;
+                        break;
+                    }
+                }
+            }
+            finally
+            {
+                _window = new Rect(0, _currentOpenT - _realWindowSize, width, _realWindowSize);
+                _lastHeight = height;
+                _lastWidth = width;
+            }
+        }
+
+        private void SetupWindowStyle()
+        {
             // Set background color
             Texture2D backgroundTexture = new(1, 1);
             backgroundTexture.SetPixel(0, 0, _backgroundColor);
