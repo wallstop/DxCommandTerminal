@@ -48,7 +48,16 @@ This is a fork of [Command Terminal](https://github.com/stillwwater/command_term
 - Validation around command ignoring and log level ignoring has been added to Terminal, to prevent invalid data
 
 ## The Future
-- More improvements are coming :)
+More improvements coming soon, stick around :)
+
+Planned improvements:
+- Integration with the new Input System
+- Ensure working on WebGL builds
+- Command Groups
+- Background not being rendered bug
+- Up key support (move cursor to end)
+- Support for more out of the box command argument types
+- Ensure working in Mobile builds
 
 ---
 
