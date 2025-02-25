@@ -76,7 +76,7 @@
 
         [SetUp]
         [TearDown]
-        public void Clean()
+        public void CleanUp()
         {
             int unregistered = CommandArg.UnregisterAllParsers();
             if (0 < unregistered)
@@ -95,20 +95,14 @@
             Assert.AreEqual(0f, value);
             arg = new CommandArg("1");
             Assert.IsTrue(arg.TryGet(out value));
-            Assert.IsTrue(
-                Mathf.Approximately(1.0f, value),
-                $"Expected {value} to be equal to {1.0f}"
-            );
+            Assert.IsTrue(Approximately(1.0f, value), $"Expected {value} to be equal to {1.0f}");
             arg = new CommandArg("3");
             Assert.IsTrue(arg.TryGet(out value));
-            Assert.IsTrue(
-                Mathf.Approximately(3.0f, value),
-                $"Expected {value} to be equal to {3.0f}"
-            );
+            Assert.IsTrue(Approximately(3.0f, value), $"Expected {value} to be equal to {3.0f}");
             arg = new CommandArg("-100");
             Assert.IsTrue(arg.TryGet(out value));
             Assert.IsTrue(
-                Mathf.Approximately(-100.0f, value),
+                Approximately(-100.0f, value),
                 $"Expected {value} to be equal to {-100.0f}"
             );
 
@@ -117,10 +111,7 @@
                 float expected = (float)_random.NextDouble();
                 arg = new CommandArg(expected.ToString(CultureInfo.InvariantCulture));
                 Assert.IsTrue(arg.TryGet(out value));
-                Assert.IsTrue(
-                    Mathf.Approximately(expected, value),
-                    $"{expected} not equal to {value}"
-                );
+                Assert.IsTrue(Approximately(expected, value), $"{expected} not equal to {value}");
             }
 
             arg = new CommandArg(nameof(float.PositiveInfinity));
@@ -155,19 +146,19 @@
             arg = new CommandArg("1");
             Assert.IsTrue(arg.TryGet(out value));
             Assert.IsTrue(
-                Mathf.Approximately(1.0f, (float)value),
+                Approximately(1.0f, (float)value),
                 $"Expected {value} to be equal to {1.0}"
             );
             arg = new CommandArg("3");
             Assert.IsTrue(arg.TryGet(out value));
             Assert.IsTrue(
-                Mathf.Approximately(3.0f, (float)value),
+                Approximately(3.0f, (float)value),
                 $"Expected {value} to be equal to {3.0}"
             );
             arg = new CommandArg("-100");
             Assert.IsTrue(arg.TryGet(out value));
             Assert.IsTrue(
-                Mathf.Approximately(-100.0f, (float)value),
+                Approximately(-100.0f, (float)value),
                 $"Expected {value} to be equal to {-100.0}"
             );
 
@@ -176,8 +167,7 @@
                 double expected = _random.NextDouble();
                 arg = new CommandArg(expected.ToString(CultureInfo.InvariantCulture));
                 Assert.IsTrue(arg.TryGet(out value));
-                double delta = Math.Abs(expected - value);
-                Assert.IsTrue(delta <= 0.00001, $"{expected} not equal to {value}");
+                Assert.IsTrue(Approximately(expected, value), $"{expected} not equal to {value}");
             }
 
             arg = new CommandArg(nameof(double.PositiveInfinity));
@@ -356,8 +346,8 @@
                 arg = new CommandArg(expected.ToString());
                 Assert.IsTrue(arg.TryGet(out value));
                 Assert.IsTrue(
-                    Mathf.Approximately(expectedRounded.x, value.x)
-                        && Mathf.Approximately(expectedRounded.y, value.y),
+                    Approximately(expectedRounded.x, value.x)
+                        && Approximately(expectedRounded.y, value.y),
                     $"Expected {value} to be approximately {expected}. "
                         + $"Value: ({value.x},{value.y}). Expected: ({x},{y})."
                 );
@@ -365,8 +355,7 @@
                 arg = new CommandArg($"{expected.x},{expected.y}");
                 Assert.IsTrue(arg.TryGet(out value));
                 Assert.IsTrue(
-                    Mathf.Approximately(expected.x, value.x)
-                        && Mathf.Approximately(expected.y, value.y),
+                    Approximately(expected.x, value.x) && Approximately(expected.y, value.y),
                     $"Expected {value} to be approximately {expected}. "
                         + $"Value: ({value.x},{value.y}). Expected: ({x},{y})."
                 );
@@ -381,8 +370,7 @@
                     arg = new CommandArg($"{pre}{expected.x},{expected.y}{post}");
                     Assert.IsTrue(arg.TryGet(out value));
                     Assert.IsTrue(
-                        Mathf.Approximately(expected.x, value.x)
-                            && Mathf.Approximately(expected.y, value.y),
+                        Approximately(expected.x, value.x) && Approximately(expected.y, value.y),
                         $"Expected {value} to be approximately {expected}. "
                             + $"Value: ({value.x},{value.y}). Expected: ({x},{y})."
                     );
@@ -400,8 +388,8 @@
                 arg = new CommandArg(expected.ToString());
                 Assert.IsTrue(arg.TryGet(out value));
                 Assert.IsTrue(
-                    Mathf.Approximately(expectedRounded.x, value.x)
-                        && Mathf.Approximately(expectedRounded.y, value.y),
+                    Approximately(expectedRounded.x, value.x)
+                        && Approximately(expectedRounded.y, value.y),
                     $"Expected {value} to be approximately {expected}. "
                         + $"Value: ({value.x},{value.y}). Expected: ({x},{y})."
                 );
@@ -409,8 +397,7 @@
                 arg = new CommandArg($"{expected.x},{expected.y},{z}");
                 Assert.IsTrue(arg.TryGet(out value));
                 Assert.IsTrue(
-                    Mathf.Approximately(expected.x, value.x)
-                        && Mathf.Approximately(expected.y, value.y),
+                    Approximately(expected.x, value.x) && Approximately(expected.y, value.y),
                     $"Expected {value} to be approximately {expected}. "
                         + $"Value: ({value.x},{value.y}). Expected: ({x},{y})."
                 );
@@ -425,8 +412,7 @@
                     arg = new CommandArg($"{pre}{expected.x},{expected.y},{z}{post}");
                     Assert.IsTrue(arg.TryGet(out value));
                     Assert.IsTrue(
-                        Mathf.Approximately(expected.x, value.x)
-                            && Mathf.Approximately(expected.y, value.y),
+                        Approximately(expected.x, value.x) && Approximately(expected.y, value.y),
                         $"Expected {value} to be approximately {expected}. "
                             + $"Value: ({value.x},{value.y}). Expected: ({x},{y})."
                     );
@@ -437,8 +423,7 @@
             expected = UnityEngine.Vector2.zero;
             Assert.IsTrue(arg.TryGet(out value));
             Assert.IsTrue(
-                Mathf.Approximately(expected.x, value.x)
-                    && Mathf.Approximately(expected.y, value.y),
+                Approximately(expected.x, value.x) && Approximately(expected.y, value.y),
                 $"Expected {value} to be approximately {expected}."
             );
 
@@ -446,8 +431,7 @@
             expected = UnityEngine.Vector2.up;
             Assert.IsTrue(arg.TryGet(out value));
             Assert.IsTrue(
-                Mathf.Approximately(expected.x, value.x)
-                    && Mathf.Approximately(expected.y, value.y),
+                Approximately(expected.x, value.x) && Approximately(expected.y, value.y),
                 $"Expected {value} to be approximately {expected}."
             );
 
@@ -455,10 +439,126 @@
             expected = UnityEngine.Vector2.left;
             Assert.IsTrue(arg.TryGet(out value));
             Assert.IsTrue(
-                Mathf.Approximately(expected.x, value.x)
-                    && Mathf.Approximately(expected.y, value.y),
+                Approximately(expected.x, value.x) && Approximately(expected.y, value.y),
                 $"Expected {value} to be approximately {expected}."
             );
+
+            arg = new CommandArg(Guid.NewGuid().ToString());
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+            arg = new CommandArg("false");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+            arg = new CommandArg("asdf");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+        }
+
+        [Test]
+        public void Quaternion()
+        {
+            CommandArg arg = new("");
+            Assert.IsFalse(arg.TryGet(out Quaternion value), $"Unexpectedly parsed {value}");
+            arg = new CommandArg("0");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+
+            Quaternion expected;
+
+            // Unexpected input
+            for (int i = 0; i < NumTries; ++i)
+            {
+                float x = (float)_random.NextDouble();
+                arg = new CommandArg(x.ToString(CultureInfo.InvariantCulture));
+                Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+                foreach (
+                    (string pre, string post) in _prepend.Zip(
+                        _append,
+                        (preValue, postValue) => (preValue, postValue)
+                    )
+                )
+                {
+                    arg = new CommandArg($"{pre}{x}{post}");
+                    Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+                }
+            }
+
+            // x,y,z, w (z is ok, but ignored)
+            for (int i = 0; i < NumTries; ++i)
+            {
+                float x = (float)_random.NextDouble();
+                float y = (float)_random.NextDouble();
+                float z = (float)_random.NextDouble();
+                float w = (float)_random.NextDouble();
+                expected = new Quaternion(x, y, z, w);
+                Quaternion expectedRounded = new(
+                    (float)Math.Round(x, 5),
+                    (float)Math.Round(y, 5),
+                    (float)Math.Round(z, 5),
+                    (float)Math.Round(w, 5)
+                );
+                arg = new CommandArg(expected.ToString());
+                Assert.IsTrue(arg.TryGet(out value));
+                Assert.IsTrue(
+                    Approximately(expectedRounded.x, value.x)
+                        && Approximately(expectedRounded.y, value.y)
+                        && Approximately(expectedRounded.z, value.z)
+                        && Approximately(expectedRounded.w, value.w),
+                    $"Expected {value} to be approximately {expectedRounded}. "
+                        + $"Input: ({x},{y},{z},{w}). "
+                        + $"Value: ({value.x},{value.y},{value.z},{value.w}). "
+                        + $"Expected: ({expectedRounded.x},{expectedRounded.y},{expectedRounded.z},{expectedRounded.w})."
+                );
+
+                // arg = new CommandArg($"{expected.x},{expected.y},{z}");
+                // Assert.IsTrue(arg.TryGet(out value));
+                // Assert.IsTrue(
+                //     Approximately(expected.x, value.x)
+                //         && Approximately(expected.y, value.y),
+                //     $"Expected {value} to be approximately {expected}. "
+                //         + $"Value: ({value.x},{value.y}). Expected: ({x},{y})."
+                // );
+                //
+                // foreach (
+                //     (string pre, string post) in _prepend.Zip(
+                //         _append,
+                //         (preValue, postValue) => (preValue, postValue)
+                //     )
+                // )
+                // {
+                //     arg = new CommandArg($"{pre}{expected.x},{expected.y},{z}{post}");
+                //     Assert.IsTrue(arg.TryGet(out value));
+                //     Assert.IsTrue(
+                //         Approximately(expected.x, value.x)
+                //             && Approximately(expected.y, value.y),
+                //         $"Expected {value} to be approximately {expected}. "
+                //             + $"Value: ({value.x},{value.y}). Expected: ({x},{y})."
+                //     );
+                // }
+            }
+
+            // arg = new CommandArg(nameof(UnityEngine.Vector2.zero));
+            // expected = UnityEngine.Vector2.zero;
+            // Assert.IsTrue(arg.TryGet(out value));
+            // Assert.IsTrue(
+            //     Approximately(expected.x, value.x)
+            //         && Approximately(expected.y, value.y),
+            //     $"Expected {value} to be approximately {expected}."
+            // );
+            //
+            // arg = new CommandArg(nameof(UnityEngine.Vector2.up));
+            // expected = UnityEngine.Vector2.up;
+            // Assert.IsTrue(arg.TryGet(out value));
+            // Assert.IsTrue(
+            //     Approximately(expected.x, value.x)
+            //         && Approximately(expected.y, value.y),
+            //     $"Expected {value} to be approximately {expected}."
+            // );
+            //
+            // arg = new CommandArg(nameof(UnityEngine.Vector2.left));
+            // expected = UnityEngine.Vector2.left;
+            // Assert.IsTrue(arg.TryGet(out value));
+            // Assert.IsTrue(
+            //     Approximately(expected.x, value.x)
+            //         && Approximately(expected.y, value.y),
+            //     $"Expected {value} to be approximately {expected}."
+            // );
 
             arg = new CommandArg(Guid.NewGuid().ToString());
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
@@ -507,9 +607,9 @@
                 // Colors have a floating point precision of 3 decimal places, otherwise our equality checks will be off
                 Assert.IsTrue(arg.TryGet(out value));
                 Assert.IsTrue(
-                    Mathf.Approximately((float)Math.Round(expected.r, 3), value.r)
-                        && Mathf.Approximately((float)Math.Round(expected.g, 3), value.g)
-                        && Mathf.Approximately((float)Math.Round(expected.b, 3), value.b),
+                    Approximately((float)Math.Round(expected.r, 3), value.r)
+                        && Approximately((float)Math.Round(expected.g, 3), value.g)
+                        && Approximately((float)Math.Round(expected.b, 3), value.b),
                     $"Expected {value} to be approximately {expected}. "
                         + $"Value: ({r},{g},{b}). "
                         + $"Expected: ({expected.r},{expected.g},{expected.b})."
@@ -527,7 +627,7 @@
             arg = new CommandArg("2.5");
             Assert.IsTrue(arg.TryGet(typeof(float), out value));
             Assert.IsTrue(
-                Mathf.Approximately((float)value, 2.5f),
+                Approximately((float)value, 2.5f),
                 $"Expected {value} to be approximately {2.5f}"
             );
 
@@ -542,7 +642,7 @@
             Assert.IsTrue(arg.TryGet(typeof(Vector2), out value));
             Vector2 expected = (Vector2)value;
             Assert.IsTrue(
-                Mathf.Approximately(expected.x, 1.2564f) && Mathf.Approximately(expected.y, 3.6f),
+                Approximately(expected.x, 1.2564f) && Approximately(expected.y, 3.6f),
                 $"Expected {expected} to be approximately {arg.String}"
             );
 
@@ -686,6 +786,18 @@
                 parsed = 1;
                 return false;
             }
+        }
+
+        private static bool Approximately(float a, float b, float tolerance = 0.0001f)
+        {
+            float delta = Math.Abs(a - b);
+            return delta <= tolerance;
+        }
+
+        private static bool Approximately(double a, double b, double tolerance = 0.0001f)
+        {
+            double delta = Math.Abs(a - b);
+            return delta <= tolerance;
         }
     }
 }

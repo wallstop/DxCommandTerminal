@@ -283,7 +283,7 @@ namespace CommandTerminal
                         when float.TryParse(split[0], out float x)
                             && float.TryParse(split[1], out float y)
                             && float.TryParse(split[2], out float z)
-                            && float.TryParse(split[2], out float w):
+                            && float.TryParse(split[3], out float w):
                         parsed = (T)Convert.ChangeType(new Vector4(x, y, z, w), type);
                         return true;
                 }
@@ -357,7 +357,7 @@ namespace CommandTerminal
                         when float.TryParse(split[0], out float x)
                             && float.TryParse(split[1], out float y)
                             && float.TryParse(split[2], out float z)
-                            && float.TryParse(split[2], out float w):
+                            && float.TryParse(split[3], out float w):
                         parsed = (T)Convert.ChangeType(new Quaternion(x, y, z, w), type);
                         return true;
                 }
