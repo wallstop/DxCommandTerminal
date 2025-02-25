@@ -300,7 +300,13 @@ namespace CommandTerminal
             }
             else if (type == typeof(Color))
             {
-                string[] split = StripAndSplit(String);
+                string colorString = String;
+                if (colorString.StartsWith("RGBA", StringComparison.OrdinalIgnoreCase))
+                {
+                    colorString = colorString.Replace("RGBA", string.Empty);
+                }
+
+                string[] split = StripAndSplit(colorString);
                 switch (split.Length)
                 {
                     case 1:

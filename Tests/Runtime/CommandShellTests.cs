@@ -5,6 +5,7 @@
     using System.Globalization;
     using System.Linq;
     using CommandTerminal;
+    using JetBrains.Annotations;
     using NUnit.Framework;
     using UnityEngine;
     using Random = System.Random;
@@ -13,22 +14,46 @@
     {
         private enum TestEnum1
         {
+            [UsedImplicitly]
             Value1,
+
+            [UsedImplicitly]
             Value2,
+
+            [UsedImplicitly]
             Value3,
+
+            [UsedImplicitly]
             Value4,
+
+            [UsedImplicitly]
             Value5,
         }
 
         private enum TestEnum2
         {
+            [UsedImplicitly]
             Value1,
+
+            [UsedImplicitly]
             Value2,
+
+            [UsedImplicitly]
             Value3,
+
+            [UsedImplicitly]
             Value4,
+
+            [UsedImplicitly]
             Value5,
+
+            [UsedImplicitly]
             Value6,
+
+            [UsedImplicitly]
             Value7,
+
+            [UsedImplicitly]
             Value8,
         }
 
@@ -123,24 +148,24 @@
             Assert.IsFalse(arg.TryGet(out bool value), $"Unexpectedly parsed {value}");
             arg = new CommandArg("True");
             Assert.IsTrue(arg.TryGet(out value));
-            Assert.AreEqual(true, value);
+            Assert.IsTrue(value);
             arg = new CommandArg("False");
             Assert.IsTrue(arg.TryGet(out value));
-            Assert.AreEqual(false, value);
+            Assert.IsFalse(value);
 
             arg = new CommandArg("TRUE");
             Assert.IsTrue(arg.TryGet(out value));
-            Assert.AreEqual(true, value);
+            Assert.IsTrue(value);
             arg = new CommandArg("true");
             Assert.IsTrue(arg.TryGet(out value));
-            Assert.AreEqual(true, value);
+            Assert.IsTrue(value);
 
             arg = new CommandArg(bool.TrueString);
             Assert.IsTrue(arg.TryGet(out value));
-            Assert.AreEqual(true, value);
+            Assert.IsTrue(value);
             arg = new CommandArg(bool.FalseString);
             Assert.IsTrue(arg.TryGet(out value));
-            Assert.AreEqual(false, value);
+            Assert.IsFalse(value);
 
             arg = new CommandArg(Guid.NewGuid().ToString());
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
@@ -169,7 +194,7 @@
 
             arg = new CommandArg(nameof(int.MaxValue));
             Assert.IsTrue(arg.TryGet(out value));
-            Assert.AreEqual((int.MaxValue), value);
+            Assert.AreEqual(int.MaxValue, value);
             arg = new CommandArg(nameof(int.MinValue));
             Assert.IsTrue(arg.TryGet(out value));
             Assert.AreEqual(int.MinValue, value);
@@ -244,11 +269,31 @@
             Vector2 expected;
             List<string> prepend = new() { "(", "[", "<", "{" };
             List<string> append = new() { ")", "[", ">", "}" };
+
+            // Unexpected input
+            for (int i = 0; i < NumTries; ++i)
+            {
+                float x = (float)_random.NextDouble();
+                arg = new CommandArg(x.ToString());
+                Assert.IsTrue(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+                foreach (
+                    (string pre, string post) in prepend.Zip(
+                        append,
+                        (preValue, postvalue) => (x: preValue, y: postvalue)
+                    )
+                )
+                {
+                    arg = new CommandArg($"{pre}{x}{post}");
+                    Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+                }
+            }
+
+            // x,y
             for (int i = 0; i < NumTries; ++i)
             {
                 float x = (float)_random.NextDouble();
                 float y = (float)_random.NextDouble();
-                expected = new(x, y);
+                expected = new Vector2(x, y);
                 Vector2 expectedRounded = new((float)Math.Round(x, 2), (float)Math.Round(y, 2));
                 arg = new CommandArg(expected.ToString());
                 Assert.IsTrue(arg.TryGet(out value));
@@ -286,12 +331,13 @@
                 }
             }
 
+            // x,y,z (z is ok, but ignored)
             for (int i = 0; i < NumTries; ++i)
             {
                 float x = (float)_random.NextDouble();
                 float y = (float)_random.NextDouble();
                 float z = (float)_random.NextDouble();
-                expected = new(x, y);
+                expected = new Vector2(x, y);
                 Vector2 expectedRounded = new((float)Math.Round(x, 2), (float)Math.Round(y, 2));
                 arg = new CommandArg(expected.ToString());
                 Assert.IsTrue(arg.TryGet(out value));
@@ -362,6 +408,49 @@
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
             arg = new CommandArg("asdf");
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+        }
+
+        [Test]
+        public void Color()
+        {
+            CommandArg arg = new("");
+            Assert.IsFalse(arg.TryGet(out Color value), $"Unexpectedly parsed {value}");
+            arg = new CommandArg("0");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+
+            Color expected = UnityEngine.Color.white;
+            arg = new CommandArg(nameof(UnityEngine.Color.white));
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(expected, value);
+
+            expected = UnityEngine.Color.red;
+            arg = new CommandArg(nameof(UnityEngine.Color.red));
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(expected, value);
+
+            expected = UnityEngine.Color.cyan;
+            arg = new CommandArg(nameof(UnityEngine.Color.cyan));
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(expected, value);
+
+            expected = UnityEngine.Color.black;
+            arg = new CommandArg(nameof(UnityEngine.Color.black));
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(expected, value);
+
+            for (int i = 0; i < NumTries; ++i)
+            {
+                // Colors have a floating point precision of 3 decimal places, otherwise our equality checks will be off
+                float r = (float)Math.Round(_random.NextDouble(), 3);
+                float g = (float)Math.Round(_random.NextDouble(), 3);
+                float b = (float)Math.Round(_random.NextDouble(), 3);
+                expected = new Color(r, g, b);
+                arg = new CommandArg(expected.ToString());
+                // TODO
+                throw new NotImplementedException("TODO LOL");
+                Assert.IsTrue(arg.TryGet(out value));
+                Assert.AreEqual(expected, value);
+            }
         }
     }
 }
