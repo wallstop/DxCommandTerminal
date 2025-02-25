@@ -4,9 +4,9 @@ namespace CommandTerminal
     using System.Collections.Generic;
     using System.Linq;
     using System.Reflection;
-    using System.Runtime.CompilerServices;
     using Attributes;
     using JetBrains.Annotations;
+    using UnityEngine;
 
     public readonly struct CommandInfo
     {
@@ -32,83 +32,445 @@ namespace CommandTerminal
         }
     }
 
+    public delegate bool CommandArgParser<T>(string input, out T parsed);
+
     public readonly struct CommandArg
     {
+        private static readonly Dictionary<Type, object> RegisteredParsers = new();
+        private static readonly Dictionary<
+            Type,
+            Dictionary<string, PropertyInfo>
+        > StaticProperties = new();
+        private static readonly Dictionary<Type, Dictionary<string, FieldInfo>> ConstFields = new();
+
         public string String { get; }
 
-        // ReSharper disable once UnusedMember.Global
-        public int Int
+        public bool TryGet<T>(out T parsed, CommandArgParser<T> parserOverride = null)
         {
-            get
+            if (parserOverride != null)
             {
-                if (int.TryParse(String, out int intValue))
-                {
-                    return intValue;
-                }
-
-                TypeError();
-                return 0;
+                return parserOverride(String, out parsed);
             }
-        }
 
-        // ReSharper disable once UnusedMember.Global
-        public float Float
-        {
-            get
+            Type type = typeof(T);
+            if (RegisteredParsers.TryGetValue(type, out object parser))
             {
-                if (float.TryParse(String, out float floatValue))
-                {
-                    return floatValue;
-                }
-
-                TypeError();
-                return 0;
+                return ((CommandArgParser<T>)parser)(String, out parsed);
             }
-        }
 
-        // ReSharper disable once UnusedMember.Global
-        public bool Bool
-        {
-            get
+            // TODO: Slap into a dictionary of built-in type -> parser mapping
+            if (type == typeof(bool))
             {
-                if (bool.TryParse(String, out bool boolValue))
+                return TryGetTypeDefined(String, out parsed)
+                    || InnerParse<bool>(String, bool.TryParse, out parsed);
+            }
+            if (type == typeof(float))
+            {
+                return TryGetTypeDefined(String, out parsed)
+                    || InnerParse<float>(String, float.TryParse, out parsed);
+            }
+            if (type == typeof(int))
+            {
+                return TryGetTypeDefined(String, out parsed)
+                    || InnerParse<int>(String, int.TryParse, out parsed);
+            }
+            if (type == typeof(uint))
+            {
+                return TryGetTypeDefined(String, out parsed)
+                    || InnerParse<uint>(String, uint.TryParse, out parsed);
+            }
+            if (type == typeof(long))
+            {
+                return TryGetTypeDefined(String, out parsed)
+                    || InnerParse<long>(String, long.TryParse, out parsed);
+            }
+            if (type == typeof(ulong))
+            {
+                return TryGetTypeDefined(String, out parsed)
+                    || InnerParse<ulong>(String, ulong.TryParse, out parsed);
+            }
+            if (type == typeof(double))
+            {
+                return TryGetTypeDefined(String, out parsed)
+                    || InnerParse<double>(String, double.TryParse, out parsed);
+            }
+            if (type == typeof(short))
+            {
+                return TryGetTypeDefined(String, out parsed)
+                    || InnerParse<short>(String, short.TryParse, out parsed);
+            }
+            if (type == typeof(ushort))
+            {
+                return TryGetTypeDefined(String, out parsed)
+                    || InnerParse<ushort>(String, ushort.TryParse, out parsed);
+            }
+            if (type == typeof(byte))
+            {
+                return TryGetTypeDefined(String, out parsed)
+                    || InnerParse<byte>(String, byte.TryParse, out parsed);
+            }
+            if (type == typeof(string))
+            {
+                if (TryGetTypeDefined(String, out parsed))
                 {
-                    return boolValue;
+                    return true;
+                }
+                parsed = (T)Convert.ChangeType(String, type);
+                return true;
+            }
+            if (type == typeof(Guid))
+            {
+                return TryGetTypeDefined(String, out parsed)
+                    || InnerParse<Guid>(String, Guid.TryParse, out parsed);
+            }
+            if (type == typeof(DateTime))
+            {
+                return TryGetTypeDefined(String, out parsed)
+                    || InnerParse<DateTime>(String, DateTime.TryParse, out parsed);
+            }
+            if (type == typeof(char))
+            {
+                if (TryGetTypeDefined(String, out parsed))
+                {
+                    return true;
+                }
+                if (String.Length == 1)
+                {
+                    parsed = (T)Convert.ChangeType(String[0], type);
+                    return true;
                 }
 
-                TypeError();
+                parsed = default;
+                return false;
+            }
+            if (type.IsEnum)
+            {
+                bool parseOk = Enum.TryParse(type, String, out object parsedObject);
+                if (parseOk)
+                {
+                    parsed = (T)Convert.ChangeType(parsedObject, type);
+                }
+                else
+                {
+                    parsed = default;
+                }
+
+                return parseOk;
+            }
+            if (type == typeof(Vector2))
+            {
+                string[] split = StripAndSplit(String);
+                switch (split.Length)
+                {
+                    case 1:
+                        return TryGetTypeDefined(split[0], out parsed);
+                    case 2
+                        when float.TryParse(split[0], out float x)
+                            && float.TryParse(split[1], out float y):
+                        parsed = (T)Convert.ChangeType(new Vector2(x, y), type);
+                        return true;
+                    case 3
+                        when float.TryParse(split[0], out float x)
+                            && float.TryParse(split[1], out float y)
+                            && float.TryParse(split[2], out float z):
+                        parsed = (T)Convert.ChangeType((Vector2)new Vector3(x, y, z), type);
+                        return true;
+                }
+            }
+            else if (type == typeof(Vector3))
+            {
+                string[] split = StripAndSplit(String);
+                switch (split.Length)
+                {
+                    case 1:
+                        return TryGetTypeDefined(split[0], out parsed);
+                    case 2
+                        when float.TryParse(split[0], out float x)
+                            && float.TryParse(split[1], out float y):
+                        parsed = (T)Convert.ChangeType(new Vector3(x, y), type);
+                        return true;
+                    case 3
+                        when float.TryParse(split[0], out float x)
+                            && float.TryParse(split[1], out float y)
+                            && float.TryParse(split[2], out float z):
+                        parsed = (T)Convert.ChangeType(new Vector3(x, y, z), type);
+                        return true;
+                }
+            }
+            else if (type == typeof(Vector4))
+            {
+                string[] split = StripAndSplit(String);
+                switch (split.Length)
+                {
+                    case 1:
+                        return TryGetTypeDefined(split[0], out parsed);
+                    case 2
+                        when float.TryParse(split[0], out float x)
+                            && float.TryParse(split[1], out float y):
+                        parsed = (T)Convert.ChangeType(new Vector4(x, y), type);
+                        return true;
+                    case 3
+                        when float.TryParse(split[0], out float x)
+                            && float.TryParse(split[1], out float y)
+                            && float.TryParse(split[2], out float z):
+                        parsed = (T)Convert.ChangeType(new Vector4(x, y, z), type);
+                        return true;
+                    case 4
+                        when float.TryParse(split[0], out float x)
+                            && float.TryParse(split[1], out float y)
+                            && float.TryParse(split[2], out float z)
+                            && float.TryParse(split[2], out float w):
+                        parsed = (T)Convert.ChangeType(new Vector4(x, y, z, w), type);
+                        return true;
+                }
+            }
+            else if (type == typeof(Vector2Int))
+            {
+                string[] split = StripAndSplit(String);
+                switch (split.Length)
+                {
+                    case 1:
+                        return TryGetTypeDefined(split[0], out parsed);
+                    case 2
+                        when int.TryParse(split[0], out int x) && int.TryParse(split[1], out int y):
+                        parsed = (T)Convert.ChangeType(new Vector2Int(x, y), type);
+                        return true;
+                    case 3
+                        when int.TryParse(split[0], out int x)
+                            && int.TryParse(split[1], out int y)
+                            && int.TryParse(split[2], out int z):
+                        parsed = (T)Convert.ChangeType((Vector2Int)new Vector3Int(x, y, z), type);
+                        return true;
+                }
+            }
+            else if (type == typeof(Vector3Int))
+            {
+                string[] split = StripAndSplit(String);
+                switch (split.Length)
+                {
+                    case 1:
+                        return TryGetTypeDefined(split[0], out parsed);
+                    case 2
+                        when int.TryParse(split[0], out int x) && int.TryParse(split[1], out int y):
+                        parsed = (T)Convert.ChangeType(new Vector3Int(x, y), type);
+                        return true;
+                    case 3
+                        when int.TryParse(split[0], out int x)
+                            && int.TryParse(split[1], out int y)
+                            && int.TryParse(split[2], out int z):
+                        parsed = (T)Convert.ChangeType(new Vector3Int(x, y, z), type);
+                        return true;
+                }
+            }
+            else if (type == typeof(Color))
+            {
+                string[] split = StripAndSplit(String);
+                switch (split.Length)
+                {
+                    case 1:
+                        return TryGetTypeDefined(split[0], out parsed);
+                    case 3
+                        when float.TryParse(split[0], out float r)
+                            && float.TryParse(split[1], out float g)
+                            && float.TryParse(split[2], out float b):
+                        parsed = (T)Convert.ChangeType(new Color(r, g, b), type);
+                        return true;
+                    case 4
+                        when float.TryParse(split[0], out float r)
+                            && float.TryParse(split[1], out float g)
+                            && float.TryParse(split[2], out float b)
+                            && float.TryParse(split[3], out float a):
+                        parsed = (T)Convert.ChangeType(new Color(r, g, b, a), type);
+                        return true;
+                }
+            }
+            else if (type == typeof(Quaternion))
+            {
+                string[] split = StripAndSplit(String);
+                switch (split.Length)
+                {
+                    case 1:
+                        return TryGetTypeDefined(split[0], out parsed);
+                    case 4
+                        when float.TryParse(split[0], out float x)
+                            && float.TryParse(split[1], out float y)
+                            && float.TryParse(split[2], out float z)
+                            && float.TryParse(split[2], out float w):
+                        parsed = (T)Convert.ChangeType(new Quaternion(x, y, z, w), type);
+                        return true;
+                }
+            }
+            else if (type == typeof(Rect))
+            {
+                string[] split = StripAndSplit(String);
+                switch (split.Length)
+                {
+                    case 1:
+                        return TryGetTypeDefined(split[0], out parsed);
+                    case 4
+                        when float.TryParse(split[0], out float x)
+                            && float.TryParse(split[1], out float y)
+                            && float.TryParse(split[2], out float width)
+                            && float.TryParse(split[3], out float height):
+                        parsed = (T)Convert.ChangeType(new Rect(x, y, width, height), type);
+                        return true;
+                }
+            }
+            else if (type == typeof(RectInt))
+            {
+                string[] split = StripAndSplit(String);
+                switch (split.Length)
+                {
+                    case 1:
+                        return TryGetTypeDefined(split[0], out parsed);
+                    case 4
+                        when int.TryParse(split[0], out int x)
+                            && int.TryParse(split[1], out int y)
+                            && int.TryParse(split[2], out int width)
+                            && int.TryParse(split[3], out int height):
+                        parsed = (T)Convert.ChangeType(new RectInt(x, y, width, height), type);
+                        return true;
+                }
+            }
+
+            parsed = default;
+            return false;
+
+            static bool InnerParse<TParsed>(
+                string input,
+                CommandArgParser<TParsed> typedParser,
+                out T parsed
+            )
+            {
+                bool parseOk = typedParser(input, out TParsed value);
+                if (parseOk)
+                {
+                    parsed = (T)Convert.ChangeType(value, typeof(T));
+                }
+                else
+                {
+                    parsed = default;
+                }
+
+                return parseOk;
+            }
+
+            static string[] StripAndSplit(string input)
+            {
+                string strippedInput = input
+                    .Replace("(", string.Empty)
+                    .Replace(")", string.Empty)
+                    .Replace("[", string.Empty)
+                    .Replace("]", string.Empty)
+                    .Replace("'", string.Empty)
+                    .Replace("`", string.Empty)
+                    .Replace("|", string.Empty)
+                    .Replace("{", string.Empty)
+                    .Replace("}", string.Empty)
+                    .Replace("<", string.Empty)
+                    .Replace(">", string.Empty);
+
+                char[] delimiters = { ',', ';', ':', '_', '/', '\\' };
+                foreach (char delimiter in delimiters)
+                {
+                    if (strippedInput.Contains(delimiter))
+                    {
+                        return strippedInput.Split(delimiter);
+                    }
+                }
+
+                return new[] { strippedInput };
+            }
+
+            static bool TryGetTypeDefined(string input, out T value)
+            {
+                Type type = typeof(T);
+                if (
+                    !StaticProperties.TryGetValue(
+                        type,
+                        out Dictionary<string, PropertyInfo> properties
+                    )
+                )
+                {
+                    properties = LoadStaticPropertiesForType<T>();
+                    StaticProperties[type] = properties;
+                }
+
+                if (properties.TryGetValue(input, out PropertyInfo property))
+                {
+                    object resolved = property.GetValue(null);
+                    value = (T)Convert.ChangeType(resolved, type);
+                    return true;
+                }
+
+                if (!ConstFields.TryGetValue(type, out Dictionary<string, FieldInfo> fields))
+                {
+                    fields = LoadConstFieldsForType<T>();
+                    ConstFields[type] = fields;
+                }
+
+                if (fields.TryGetValue(input, out FieldInfo field))
+                {
+                    object resolved = field.GetValue(null);
+                    value = (T)Convert.ChangeType(resolved, type);
+                    return true;
+                }
+
+                value = default;
                 return false;
             }
         }
 
-        // ReSharper disable once UnusedMember.Global
-        public T Enum<T>()
-            where T : struct, Enum
-        {
-            if (System.Enum.TryParse(String, out T enumValue))
-            {
-                return enumValue;
-            }
-
-            TypeError();
-            return default;
-        }
-
         public CommandArg(string stringValue)
         {
+            stringValue = stringValue?.Replace(" ", string.Empty).Trim() ?? string.Empty;
             String = stringValue;
+        }
+
+        public static bool RegisterParser<T>(CommandArgParser<T> parser, bool force = false)
+        {
+            if (force)
+            {
+                RegisteredParsers[typeof(T)] = parser;
+                return true;
+            }
+
+            return RegisteredParsers.TryAdd(typeof(T), parser);
+        }
+
+        public static bool UnregisterParser<T>()
+        {
+            return RegisteredParsers.Remove(typeof(T));
+        }
+
+        private static Dictionary<string, PropertyInfo> LoadStaticPropertiesForType<T>()
+        {
+            Type type = typeof(T);
+            return type.GetProperties(BindingFlags.Static | BindingFlags.Public)
+                .Where(property => property.PropertyType == type)
+                .ToDictionary(
+                    property => property.Name,
+                    property => property,
+                    StringComparer.OrdinalIgnoreCase
+                );
+        }
+
+        private static Dictionary<string, FieldInfo> LoadConstFieldsForType<T>()
+        {
+            Type type = typeof(T);
+            return type.GetFields(BindingFlags.Static | BindingFlags.Public)
+                .Where(field => field.FieldType == type)
+                .Where(field => field.IsLiteral)
+                .ToDictionary(
+                    field => field.Name,
+                    field => field,
+                    StringComparer.OrdinalIgnoreCase
+                );
         }
 
         public override string ToString()
         {
             return String;
-        }
-
-        private void TypeError([CallerMemberName] string expectedType = null)
-        {
-            Terminal.Shell?.IssueErrorMessage(
-                $"Incorrect type for {String}, expected <{expectedType}>"
-            );
         }
     }
 

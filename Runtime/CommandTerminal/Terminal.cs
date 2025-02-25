@@ -3,7 +3,6 @@ namespace CommandTerminal
     using System;
     using System.Collections.Generic;
     using System.ComponentModel;
-    using System.Linq;
     using System.Text;
     using JetBrains.Annotations;
     using UnityEditor;
@@ -553,7 +552,13 @@ namespace CommandTerminal
 
         private void DrawLogs()
         {
-            foreach (LogItem log in Buffer?.Logs ?? Enumerable.Empty<LogItem>())
+            IReadOnlyList<LogItem> logs = Buffer?.Logs;
+            if (logs == null)
+            {
+                return;
+            }
+
+            foreach (LogItem log in logs)
             {
                 _labelStyle.normal.textColor = GetLogColor(log.type);
                 GUILayout.Label(log.message, _labelStyle);
