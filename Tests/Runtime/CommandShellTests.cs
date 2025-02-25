@@ -74,6 +74,17 @@
         private readonly List<string> _prepend = new() { "(", "[", "<", "{" };
         private readonly List<string> _append = new() { ")", "[", ">", "}" };
 
+        [SetUp]
+        [TearDown]
+        public void Clean()
+        {
+            int unregistered = CommandArg.UnregisterAllParsers();
+            if (0 < unregistered)
+            {
+                Debug.Log($"Unregistered {unregistered} parser{(unregistered == 1 ? "" : "s")}.");
+            }
+        }
+
         [Test]
         public void Float()
         {

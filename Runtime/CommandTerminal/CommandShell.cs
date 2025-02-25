@@ -95,23 +95,30 @@ namespace CommandTerminal
 
         public bool TryGet<T>(out T parsed, CommandArgParser<T> parserOverride)
         {
+            string stringValue = String.Replace(" ", string.Empty);
+            foreach (string ignoredValue in IgnoredValuesForAllTypes)
+            {
+                stringValue = stringValue.Replace(ignoredValue, string.Empty);
+            }
+            stringValue = stringValue.Trim();
+
             if (parserOverride != null)
             {
-                return parserOverride(String, out parsed);
+                return parserOverride(stringValue, out parsed);
             }
 
             Type type = typeof(T);
             if (TryGetParser(out CommandArgParser<T> parser))
             {
-                return parser(String, out parsed);
+                return parser(stringValue, out parsed);
             }
 
             if (type == typeof(string))
             {
-                parsed = (T)Convert.ChangeType(String, type);
+                parsed = (T)Convert.ChangeType(stringValue, type);
                 return true;
             }
-            if (TryGetTypeDefined(String, out parsed))
+            if (TryGetTypeDefined(stringValue, out parsed))
             {
                 return true;
             }
@@ -119,61 +126,61 @@ namespace CommandTerminal
             // TODO: Slap into a dictionary of built-in type -> parser mapping
             if (type == typeof(bool))
             {
-                return InnerParse<bool>(String, bool.TryParse, out parsed);
+                return InnerParse<bool>(stringValue, bool.TryParse, out parsed);
             }
             if (type == typeof(float))
             {
-                return InnerParse<float>(String, float.TryParse, out parsed);
+                return InnerParse<float>(stringValue, float.TryParse, out parsed);
             }
             if (type == typeof(int))
             {
-                return InnerParse<int>(String, int.TryParse, out parsed);
+                return InnerParse<int>(stringValue, int.TryParse, out parsed);
             }
             if (type == typeof(uint))
             {
-                return InnerParse<uint>(String, uint.TryParse, out parsed);
+                return InnerParse<uint>(stringValue, uint.TryParse, out parsed);
             }
             if (type == typeof(long))
             {
-                return InnerParse<long>(String, long.TryParse, out parsed);
+                return InnerParse<long>(stringValue, long.TryParse, out parsed);
             }
             if (type == typeof(ulong))
             {
-                return InnerParse<ulong>(String, ulong.TryParse, out parsed);
+                return InnerParse<ulong>(stringValue, ulong.TryParse, out parsed);
             }
             if (type == typeof(double))
             {
-                return InnerParse<double>(String, double.TryParse, out parsed);
+                return InnerParse<double>(stringValue, double.TryParse, out parsed);
             }
             if (type == typeof(short))
             {
-                return InnerParse<short>(String, short.TryParse, out parsed);
+                return InnerParse<short>(stringValue, short.TryParse, out parsed);
             }
             if (type == typeof(ushort))
             {
-                return InnerParse<ushort>(String, ushort.TryParse, out parsed);
+                return InnerParse<ushort>(stringValue, ushort.TryParse, out parsed);
             }
             if (type == typeof(byte))
             {
-                return InnerParse<byte>(String, byte.TryParse, out parsed);
+                return InnerParse<byte>(stringValue, byte.TryParse, out parsed);
             }
             if (type == typeof(sbyte))
             {
-                return InnerParse<sbyte>(String, sbyte.TryParse, out parsed);
+                return InnerParse<sbyte>(stringValue, sbyte.TryParse, out parsed);
             }
             if (type == typeof(Guid))
             {
-                return InnerParse<Guid>(String, Guid.TryParse, out parsed);
+                return InnerParse<Guid>(stringValue, Guid.TryParse, out parsed);
             }
             if (type == typeof(DateTime))
             {
-                return InnerParse<DateTime>(String, DateTime.TryParse, out parsed);
+                return InnerParse<DateTime>(stringValue, DateTime.TryParse, out parsed);
             }
             if (type == typeof(char))
             {
-                if (String.Length == 1)
+                if (stringValue.Length == 1)
                 {
-                    parsed = (T)Convert.ChangeType(String[0], type);
+                    parsed = (T)Convert.ChangeType(stringValue[0], type);
                     return true;
                 }
 
@@ -182,13 +189,13 @@ namespace CommandTerminal
             }
             if (type == typeof(decimal))
             {
-                return InnerParse<decimal>(String, decimal.TryParse, out parsed);
+                return InnerParse<decimal>(stringValue, decimal.TryParse, out parsed);
             }
             if (type.IsEnum)
             {
-                if (!Enum.IsDefined(type, String))
+                if (!Enum.IsDefined(type, stringValue))
                 {
-                    if (int.TryParse(String, out int enumIntValue))
+                    if (int.TryParse(stringValue, out int enumIntValue))
                     {
                         if (!EnumValues.TryGetValue(type, out object enumValues))
                         {
@@ -208,7 +215,7 @@ namespace CommandTerminal
                     return false;
                 }
 
-                bool parseOk = Enum.TryParse(type, String, out object parsedObject);
+                bool parseOk = Enum.TryParse(type, stringValue, out object parsedObject);
                 if (parseOk)
                 {
                     parsed = (T)Convert.ChangeType(parsedObject, type);
@@ -222,7 +229,7 @@ namespace CommandTerminal
             }
             if (type == typeof(Vector2))
             {
-                string[] split = StripAndSplit(String);
+                string[] split = StripAndSplit(stringValue);
                 switch (split.Length)
                 {
                     case 2
@@ -240,7 +247,7 @@ namespace CommandTerminal
             }
             else if (type == typeof(Vector3))
             {
-                string[] split = StripAndSplit(String);
+                string[] split = StripAndSplit(stringValue);
                 switch (split.Length)
                 {
                     case 2
@@ -258,7 +265,7 @@ namespace CommandTerminal
             }
             else if (type == typeof(Vector4))
             {
-                string[] split = StripAndSplit(String);
+                string[] split = StripAndSplit(stringValue);
                 switch (split.Length)
                 {
                     case 2
@@ -283,7 +290,7 @@ namespace CommandTerminal
             }
             else if (type == typeof(Vector2Int))
             {
-                string[] split = StripAndSplit(String);
+                string[] split = StripAndSplit(stringValue);
                 switch (split.Length)
                 {
                     case 2
@@ -300,7 +307,7 @@ namespace CommandTerminal
             }
             else if (type == typeof(Vector3Int))
             {
-                string[] split = StripAndSplit(String);
+                string[] split = StripAndSplit(stringValue);
                 switch (split.Length)
                 {
                     case 2
@@ -317,7 +324,7 @@ namespace CommandTerminal
             }
             else if (type == typeof(Color))
             {
-                string colorString = String;
+                string colorString = stringValue;
                 if (colorString.StartsWith("RGBA", StringComparison.OrdinalIgnoreCase))
                 {
                     colorString = colorString.Replace("RGBA", string.Empty);
@@ -343,7 +350,7 @@ namespace CommandTerminal
             }
             else if (type == typeof(Quaternion))
             {
-                string[] split = StripAndSplit(String);
+                string[] split = StripAndSplit(stringValue);
                 switch (split.Length)
                 {
                     case 4
@@ -357,7 +364,7 @@ namespace CommandTerminal
             }
             else if (type == typeof(Rect))
             {
-                string[] split = StripAndSplit(String);
+                string[] split = StripAndSplit(stringValue);
                 switch (split.Length)
                 {
                     case 4
@@ -371,7 +378,7 @@ namespace CommandTerminal
             }
             else if (type == typeof(RectInt))
             {
-                string[] split = StripAndSplit(String);
+                string[] split = StripAndSplit(stringValue);
                 switch (split.Length)
                 {
                     case 4
@@ -471,12 +478,7 @@ namespace CommandTerminal
 
         public CommandArg(string stringValue)
         {
-            stringValue = stringValue?.Replace(" ", string.Empty).Trim() ?? string.Empty;
-            foreach (string ignoredValue in IgnoredValuesForAllTypes)
-            {
-                stringValue = stringValue.Replace(ignoredValue, string.Empty);
-            }
-            String = stringValue;
+            String = stringValue ?? string.Empty;
         }
 
         public static bool RegisterParser<T>(CommandArgParser<T> parser, bool force = false)
@@ -506,6 +508,13 @@ namespace CommandTerminal
         public static bool UnregisterParser<T>()
         {
             return RegisteredParsers.Remove(typeof(T));
+        }
+
+        public static int UnregisterAllParsers()
+        {
+            int parserCount = RegisteredParsers.Count;
+            RegisteredParsers.Clear();
+            return parserCount;
         }
 
         private static Dictionary<string, PropertyInfo> LoadStaticPropertiesForType<T>()
