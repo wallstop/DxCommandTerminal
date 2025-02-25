@@ -610,9 +610,71 @@
         }
 
         [Test]
-        public void ParserRegistration() { }
+        public void ParserRegistration()
+        {
+            bool registered = CommandArg.RegisterParser<int>(CustomIntParser1);
+            Assert.IsTrue(registered);
+            Assert.IsTrue(CommandArg.TryGetParser(out CommandArgParser<int> registeredParser));
+            Assert.AreEqual((CommandArgParser<int>)CustomIntParser1, registeredParser);
+
+            registered = CommandArg.RegisterParser<int>(CustomIntParser1);
+            Assert.IsFalse(registered);
+            Assert.IsTrue(CommandArg.TryGetParser(out registeredParser));
+            Assert.AreEqual((CommandArgParser<int>)CustomIntParser1, registeredParser);
+
+            registered = CommandArg.RegisterParser<int>(CustomIntParser2);
+            Assert.IsFalse(registered);
+            Assert.IsTrue(CommandArg.TryGetParser(out registeredParser));
+            Assert.AreEqual((CommandArgParser<int>)CustomIntParser1, registeredParser);
+
+            registered = CommandArg.RegisterParser<int>(CustomIntParser2, force: true);
+            Assert.IsTrue(registered);
+
+            Assert.IsTrue(CommandArg.TryGetParser(out registeredParser));
+            Assert.AreEqual((CommandArgParser<int>)CustomIntParser2, registeredParser);
+
+            return;
+
+            static bool CustomIntParser1(string input, out int parsed)
+            {
+                parsed = 1;
+                return false;
+            }
+
+            static bool CustomIntParser2(string input, out int parsed)
+            {
+                parsed = 2;
+                return false;
+            }
+        }
 
         [Test]
-        public void ParserDeregistration() { }
+        public void ParserDeregistration()
+        {
+            Assert.IsFalse(CommandArg.TryGetParser(out CommandArgParser<int> registeredParser));
+
+            bool deregistered = CommandArg.UnregisterParser<int>();
+            Assert.IsFalse(deregistered);
+
+            bool registered = CommandArg.RegisterParser<int>(CustomIntParser1);
+            Assert.IsTrue(registered);
+            Assert.IsTrue(CommandArg.TryGetParser(out registeredParser));
+
+            deregistered = CommandArg.UnregisterParser<int>();
+            Assert.IsTrue(deregistered);
+            Assert.IsFalse(CommandArg.TryGetParser(out registeredParser));
+
+            deregistered = CommandArg.UnregisterParser<int>();
+            Assert.IsFalse(deregistered);
+            Assert.IsFalse(CommandArg.TryGetParser(out registeredParser));
+
+            return;
+
+            static bool CustomIntParser1(string input, out int parsed)
+            {
+                parsed = 1;
+                return false;
+            }
+        }
     }
 }

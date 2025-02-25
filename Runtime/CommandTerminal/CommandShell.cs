@@ -53,7 +53,8 @@ namespace CommandTerminal
 
         // Public to allow custom-mutation, if desired
         public static readonly List<char> Delimiters = new() { ',', ';', ':', '_', '/', '\\' };
-        public static readonly List<string> IgnoredValues = new()
+        public static readonly List<string> IgnoredValuesForAllTypes = new();
+        public static readonly List<string> IgnoredValuesForComplexTypes = new()
         {
             "(",
             ")",
@@ -100,11 +101,16 @@ namespace CommandTerminal
             }
 
             Type type = typeof(T);
-            if (RegisteredParsers.TryGetValue(type, out object parser))
+            if (TryGetParser(out CommandArgParser<T> parser))
             {
-                return ((CommandArgParser<T>)parser)(String, out parsed);
+                return parser(String, out parsed);
             }
 
+            if (type == typeof(string))
+            {
+                parsed = (T)Convert.ChangeType(String, type);
+                return true;
+            }
             if (TryGetTypeDefined(String, out parsed))
             {
                 return true;
@@ -154,11 +160,6 @@ namespace CommandTerminal
             if (type == typeof(sbyte))
             {
                 return InnerParse<sbyte>(String, sbyte.TryParse, out parsed);
-            }
-            if (type == typeof(string))
-            {
-                parsed = (T)Convert.ChangeType(String, type);
-                return true;
             }
             if (type == typeof(Guid))
             {
@@ -408,7 +409,7 @@ namespace CommandTerminal
             static string[] StripAndSplit(string input)
             {
                 string strippedInput = input;
-                foreach (string ignored in IgnoredValues)
+                foreach (string ignored in IgnoredValuesForComplexTypes)
                 {
                     if (string.IsNullOrEmpty(ignored))
                     {
@@ -471,18 +472,35 @@ namespace CommandTerminal
         public CommandArg(string stringValue)
         {
             stringValue = stringValue?.Replace(" ", string.Empty).Trim() ?? string.Empty;
+            foreach (string ignoredValue in IgnoredValuesForAllTypes)
+            {
+                stringValue = stringValue.Replace(ignoredValue, string.Empty);
+            }
             String = stringValue;
         }
 
         public static bool RegisterParser<T>(CommandArgParser<T> parser, bool force = false)
         {
+            Type type = typeof(T);
             if (force)
             {
-                RegisteredParsers[typeof(T)] = parser;
+                RegisteredParsers[type] = parser;
                 return true;
             }
 
-            return RegisteredParsers.TryAdd(typeof(T), parser);
+            return RegisteredParsers.TryAdd(type, parser);
+        }
+
+        public static bool TryGetParser<T>(out CommandArgParser<T> parser)
+        {
+            if (RegisteredParsers.TryGetValue(typeof(T), out object untypedParser))
+            {
+                parser = (CommandArgParser<T>)untypedParser;
+                return true;
+            }
+
+            parser = default;
+            return false;
         }
 
         public static bool UnregisterParser<T>()
