@@ -20,9 +20,10 @@ This is a fork of [Command Terminal](https://github.com/stillwwater/command_term
 - Add ability to ignore certain (or all) log levels, such that unwanted logs do not clutter terminal output
 - Add ability to optionally have Unity log messages routed to the terminal, default on, but can be turned off
 - Add ability to optionally ignore all default commands, such that you can write your own commands that conflict with the default provided ones, such as `HELP`, `TIME`, etc
+- CommandArg value parsing has been overhauled. Instead of specific properties like `Float` and `Int` that always return a value, regardless of if parsing succeeded or not, a singular `bool TryGet<T>(out T parsed)` method is supplied. This method provides robust parsing for all common types and has the ability to take in user-specified custom parsers for any fancy logic. See [Custom Parsing](#custom-parsing) for details.
 - Dynamic console resizing when Screen Size change is detected, implemented in a very performant fashion
 - Added Assembly Definitions, so that this project can be used cleanly in projects that utilize Assembly Definitions
-- Fixed a bug where commands annotated with `RegisterCommandAttribute` in other assemblies failed to be recognized
+- Fixed a bug where commands annotated with `RegisterCommandAttribute` in other assemblies failed to be recognized. User assemblies have higher precedence.
 - Fixed a bug where only the latest error message was preserved - errors are now queued
 - Fixed a bug where attempting to access static `Terminal` properties would throw if the Terminal had been enabled yet.
 - Minor performance benefits if there are terminals in multiple scenes
@@ -31,10 +32,9 @@ This is a fork of [Command Terminal](https://github.com/stillwwater/command_term
 - Minor performance benefits around using string interpolation and intelligent checking of parameters to only force `string.Format` when relevant in logging paths
 - Better invalid command identification and error messages
 - All string comparisons are now `OrdinalIgnoreCase` instead of relying on CurrentCulture
-- `Bool` property conversion of `CommandArg` now uses `bool.TryParse` for maximum flexibllity
-- Added an `Enum` property conversion on `CommandArg`
 - `Terminal` has been made to be Editor-Aware. If the Editor is in Play mode, changes to the current terminal will take effect immediately. If the terminal is open, it will be closed, to prevent bugs.
 - Extra input validation has been added on all public methods, such that user code is sanitized where appropriate, or rejected if invalid.
+- The concept of "FrontCommands" has been exterminated
 
 ## Code changes
 - All code is formatted via [Csharpier](https://csharpier.com/)
@@ -46,6 +46,9 @@ This is a fork of [Command Terminal](https://github.com/stillwwater/command_term
 - Annotated all logging methods with Jetbrain's `StringFormatMethod` attribute to aid in intellisense and help identify formatting issues
 - All classes / structs have been made sealed / readonly where possible to promote immutability
 - Validation around command ignoring and log level ignoring has been added to Terminal, to prevent invalid data
+
+## Custom Parsing
+TODO TODO
 
 ## The Future
 More improvements coming soon, stick around :)
