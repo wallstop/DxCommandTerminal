@@ -17,14 +17,18 @@ namespace Attributes
 
         public RegisterCommandAttribute(string commandName = null)
         {
-            commandName = commandName?.Replace(" ", string.Empty);
+            commandName = commandName?.Replace(" ", string.Empty)?.Trim();
             Name = commandName;
         }
 
         public void NormalizeName(MethodInfo method)
         {
-            Name ??= InferCommandName(InferFrontCommandName(method.Name) ?? method.Name);
-            Name = Name.Replace(" ", string.Empty);
+            if (string.IsNullOrWhiteSpace(Name))
+            {
+                Name = InferCommandName(method.Name);
+            }
+
+            Name = Name.Replace(" ", string.Empty).Trim();
         }
 
         private static string InferCommandName(string methodName)
@@ -34,16 +38,9 @@ namespace Attributes
 
             // Method is prefixed, suffixed with, or contains "COMMAND".
             string commandName =
-                index >= 0 ? methodName.Remove(index, commandId.Length) : methodName;
+                0 <= index ? methodName.Remove(index, commandId.Length) : methodName;
 
             return commandName;
-        }
-
-        private static string InferFrontCommandName(string methodName)
-        {
-            const string frontId = "FRONT";
-            int index = methodName.IndexOf(frontId, StringComparison.OrdinalIgnoreCase);
-            return index >= 0 ? methodName.Remove(index, frontId.Length) : null;
         }
     }
 }

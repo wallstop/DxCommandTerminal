@@ -509,13 +509,18 @@ namespace CommandTerminal
                 return true;
             }
 
-            parser = default;
+            parser = null;
             return false;
         }
 
         public static bool UnregisterParser<T>()
         {
-            return RegisteredParsers.Remove(typeof(T));
+            return UnregisterParser(typeof(T));
+        }
+
+        public static bool UnregisterParser(Type type)
+        {
+            return RegisteredParsers.Remove(type);
         }
 
         public static int UnregisterAllParsers()
@@ -567,9 +572,16 @@ namespace CommandTerminal
             const BindingFlags methodFlags =
                 BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
 
+            Assembly[] ourAssembly = { typeof(CommandShell).Assembly };
             foreach (
                 Type type in AppDomain
                     .CurrentDomain.GetAssemblies()
+                    /*
+                        Force our assembly to be processed last so user commands,
+                        if they conflict with in-built ones, are always registered first.
+                     */
+                    .Except(ourAssembly)
+                    .Concat(ourAssembly)
                     .SelectMany(assembly => assembly.GetTypes())
             )
             {
@@ -580,20 +592,7 @@ namespace CommandTerminal
                         is not RegisterCommandAttribute attribute
                     )
                     {
-                        if (
-                            method.Name.StartsWith(
-                                "FRONTCOMMAND",
-                                StringComparison.OrdinalIgnoreCase
-                            )
-                        )
-                        {
-                            // Front-end Command methods don't implement RegisterCommand, use default attribute
-                            attribute = new RegisterCommandAttribute();
-                        }
-                        else
-                        {
-                            continue;
-                        }
+                        continue;
                     }
 
                     attribute.NormalizeName(method);

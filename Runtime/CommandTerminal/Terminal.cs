@@ -209,7 +209,23 @@ namespace CommandTerminal
 
         private void OnEnable()
         {
-            Buffer = new CommandLog(_bufferSize, _ignoredLogTypes);
+            switch (_bufferSize)
+            {
+                case <= 0:
+                    Debug.LogError(
+                        $"Invalid buffer size '{_bufferSize}', must be greater than zero. Defaulting to 0 (empty buffer).",
+                        this
+                    );
+                    break;
+                case < 10:
+                    Debug.LogWarning(
+                        $"Unsupported buffer size '{_bufferSize}', recommended size is > 10.",
+                        this
+                    );
+                    break;
+            }
+
+            Buffer = new CommandLog(Math.Max(0, _bufferSize), _ignoredLogTypes);
             Shell = new CommandShell();
             History = new CommandHistory();
             Autocomplete = new CommandAutocomplete();
@@ -245,7 +261,7 @@ namespace CommandTerminal
             if (_consoleFont == null)
             {
                 _consoleFont = Font.CreateDynamicFontFromOSFont("Courier New", 16);
-                Debug.LogWarning("Command Console Warning: Please assign a font.");
+                Debug.LogWarning("Command Console Warning: Please assign a font.", this);
             }
 
             _commandText = string.Empty;
@@ -287,20 +303,6 @@ namespace CommandTerminal
             {
                 anyChanged = true;
                 _toggleHotkey = string.Empty;
-            }
-
-            switch (_bufferSize)
-            {
-                case <= 0:
-                    Debug.LogError(
-                        $"Invalid buffer size '{_bufferSize}', must be greater than zero."
-                    );
-                    break;
-                case < 10:
-                    Debug.LogWarning(
-                        $"Unsupported buffer size '{_bufferSize}', recommended size is > 10."
-                    );
-                    break;
             }
 
             if (_ignoredLogTypes == null)
