@@ -95,19 +95,27 @@ namespace CommandTerminal
 
         public bool TryGet<T>(out T parsed, CommandArgParser<T> parserOverride)
         {
-            string stringValue = String.Replace(" ", string.Empty);
-            foreach (string ignoredValue in IgnoredValuesForAllTypes)
+            Type type = typeof(T);
+            string stringValue;
+            if (type == typeof(string))
             {
-                stringValue = stringValue.Replace(ignoredValue, string.Empty);
+                stringValue = String;
             }
-            stringValue = stringValue.Trim();
+            else
+            {
+                stringValue = String.Replace(" ", string.Empty);
+                stringValue = IgnoredValuesForAllTypes.Aggregate(
+                    stringValue,
+                    (current, ignoredValue) => current.Replace(ignoredValue, string.Empty)
+                );
+                stringValue = stringValue.Trim();
+            }
 
             if (parserOverride != null)
             {
                 return parserOverride(stringValue, out parsed);
             }
 
-            Type type = typeof(T);
             if (TryGetParser(out CommandArgParser<T> parser))
             {
                 return parser(stringValue, out parsed);
@@ -115,7 +123,7 @@ namespace CommandTerminal
 
             if (type == typeof(string))
             {
-                parsed = (T)Convert.ChangeType(String, type);
+                parsed = (T)Convert.ChangeType(stringValue, type);
                 return true;
             }
             if (TryGetTypeDefined(stringValue, out parsed))

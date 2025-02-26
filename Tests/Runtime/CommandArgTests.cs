@@ -10,15 +10,30 @@
     using UnityEngine;
     using Random = System.Random;
 
-    public sealed class CommandShellTests
+    public sealed class CommandArgTests
     {
-        private readonly struct TestStruct1
+        private readonly struct TestStruct1 : IEquatable<TestStruct1>
         {
-            public readonly Guid id;
+            private readonly Guid _id;
 
             public TestStruct1(Guid id)
             {
-                this.id = id;
+                _id = id;
+            }
+
+            public override bool Equals(object obj)
+            {
+                return obj is TestStruct1 other && Equals(other);
+            }
+
+            public bool Equals(TestStruct1 other)
+            {
+                return _id.Equals(other._id);
+            }
+
+            public override int GetHashCode()
+            {
+                return _id.GetHashCode();
             }
         }
 
@@ -67,12 +82,12 @@
             Value8,
         }
 
-        private const int NumTries = 1_000;
+        private const int NumTries = 5_000;
 
         private readonly Random _random = new();
 
         private readonly List<string> _prepend = new() { "(", "[", "<", "{" };
-        private readonly List<string> _append = new() { ")", "[", ">", "}" };
+        private readonly List<string> _append = new() { ")", "]", ">", "}" };
 
         [SetUp]
         [TearDown]
@@ -108,7 +123,9 @@
 
             for (int i = 0; i < NumTries; ++i)
             {
-                float expected = (float)_random.NextDouble();
+                float expected = (float)(
+                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
+                );
                 arg = new CommandArg(expected.ToString(CultureInfo.InvariantCulture));
                 Assert.IsTrue(arg.TryGet(out value));
                 Assert.IsTrue(Approximately(expected, value), $"{expected} not equal to {value}");
@@ -126,6 +143,14 @@
             arg = new CommandArg(nameof(float.MaxValue));
             Assert.IsTrue(arg.TryGet(out value));
             Assert.AreEqual(float.MaxValue, value);
+
+            const double tooBig = (double)float.MaxValue * 2;
+            arg = new CommandArg(tooBig.ToString(CultureInfo.InvariantCulture));
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+
+            const double tooSmall = (double)float.MinValue * 2;
+            arg = new CommandArg(tooSmall.ToString(CultureInfo.InvariantCulture));
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
 
             arg = new CommandArg(Guid.NewGuid().ToString());
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
@@ -164,7 +189,7 @@
 
             for (int i = 0; i < NumTries; ++i)
             {
-                double expected = _random.NextDouble();
+                double expected = _random.NextDouble() * _random.Next(int.MinValue, int.MaxValue);
                 arg = new CommandArg(expected.ToString(CultureInfo.InvariantCulture));
                 Assert.IsTrue(arg.TryGet(out value));
                 Assert.IsTrue(Approximately(expected, value), $"{expected} not equal to {value}");
@@ -230,6 +255,7 @@
         {
             CommandArg arg = new("");
             Assert.IsFalse(arg.TryGet(out int value), $"Unexpectedly parsed {value}");
+
             arg = new CommandArg("0");
             Assert.IsTrue(arg.TryGet(out value));
             Assert.AreEqual(0, value);
@@ -245,9 +271,126 @@
             arg = new CommandArg(nameof(int.MaxValue));
             Assert.IsTrue(arg.TryGet(out value));
             Assert.AreEqual(int.MaxValue, value);
+
+            arg = new CommandArg(int.MaxValue.ToString());
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(int.MaxValue, value);
+
             arg = new CommandArg(nameof(int.MinValue));
             Assert.IsTrue(arg.TryGet(out value));
             Assert.AreEqual(int.MinValue, value);
+
+            arg = new CommandArg(int.MinValue.ToString());
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(int.MinValue, value);
+
+            const long tooBig = int.MaxValue + 1L;
+            arg = new CommandArg(tooBig.ToString());
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+
+            const long tooSmall = int.MinValue - 1L;
+            arg = new CommandArg(tooSmall.ToString());
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+
+            arg = new CommandArg(Guid.NewGuid().ToString());
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+            arg = new CommandArg("false");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+            arg = new CommandArg("asdf");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+        }
+
+        [Test]
+        public void Long()
+        {
+            CommandArg arg = new("");
+            Assert.IsFalse(arg.TryGet(out long value), $"Unexpectedly parsed {value}");
+
+            arg = new CommandArg("0");
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(0L, value);
+
+            byte[] bytes = new byte[sizeof(long)];
+            for (int i = 0; i < NumTries; ++i)
+            {
+                _random.NextBytes(bytes);
+                long expected = BitConverter.ToInt64(bytes, 0);
+                arg = new CommandArg(expected.ToString());
+                Assert.IsTrue(arg.TryGet(out value));
+                Assert.AreEqual(expected, value);
+            }
+
+            arg = new CommandArg(nameof(long.MaxValue));
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(long.MaxValue, value);
+
+            arg = new CommandArg(long.MaxValue.ToString());
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(long.MaxValue, value);
+
+            arg = new CommandArg(nameof(long.MinValue));
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(long.MinValue, value);
+
+            arg = new CommandArg(long.MinValue.ToString());
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(long.MinValue, value);
+
+            arg = new CommandArg(long.MinValue + "0");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+
+            arg = new CommandArg(long.MinValue + "0");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+
+            arg = new CommandArg(Guid.NewGuid().ToString());
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+            arg = new CommandArg("false");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+            arg = new CommandArg("asdf");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+        }
+
+        [Test]
+        public void Ulong()
+        {
+            CommandArg arg = new("");
+            Assert.IsFalse(arg.TryGet(out ulong value), $"Unexpectedly parsed {value}");
+
+            arg = new CommandArg("0");
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(0UL, value);
+
+            byte[] bytes = new byte[sizeof(ulong)];
+            for (int i = 0; i < NumTries; ++i)
+            {
+                _random.NextBytes(bytes);
+                ulong expected = BitConverter.ToUInt64(bytes, 0);
+                arg = new CommandArg(expected.ToString());
+                Assert.IsTrue(arg.TryGet(out value));
+                Assert.AreEqual(expected, value);
+            }
+
+            arg = new CommandArg(nameof(ulong.MaxValue));
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(ulong.MaxValue, value);
+
+            arg = new CommandArg(ulong.MaxValue.ToString());
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(ulong.MaxValue, value);
+
+            arg = new CommandArg(nameof(ulong.MinValue));
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(ulong.MinValue, value);
+
+            arg = new CommandArg(ulong.MinValue.ToString());
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(ulong.MinValue, value);
+
+            arg = new CommandArg("-1");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+
+            arg = new CommandArg(ulong.MaxValue + "0");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
 
             arg = new CommandArg(Guid.NewGuid().ToString());
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
@@ -279,6 +422,11 @@
                 Assert.AreEqual(expected, value);
             }
 
+            arg = new CommandArg("Value6");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+            Assert.IsTrue(arg.TryGet(out TestEnum2 testEnum2Value));
+            Assert.AreEqual(TestEnum2.Value6, testEnum2Value);
+
             TestEnum2[] testEnum2Values = System
                 .Enum.GetValues(typeof(TestEnum2))
                 .OfType<TestEnum2>()
@@ -295,6 +443,9 @@
             arg = new CommandArg("1");
             Assert.IsTrue(arg.TryGet(out value));
             Assert.AreEqual((TestEnum1)1, value);
+            Assert.IsTrue(arg.TryGet(out testEnum2Value));
+            Assert.AreEqual((TestEnum2)1, testEnum2Value);
+
             arg = new CommandArg("100");
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
             arg = new CommandArg("-1");
@@ -321,7 +472,9 @@
             // Unexpected input
             for (int i = 0; i < NumTries; ++i)
             {
-                float x = (float)_random.NextDouble();
+                float x = (float)(
+                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
+                );
                 arg = new CommandArg(x.ToString(CultureInfo.InvariantCulture));
                 Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
                 foreach (
@@ -336,22 +489,27 @@
                 }
             }
 
+            const float vector2RoundTolerance = 0.01f;
+
             // x,y
             for (int i = 0; i < NumTries; ++i)
             {
-                float x = (float)_random.NextDouble();
-                float y = (float)_random.NextDouble();
+                float x = (float)(
+                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
+                );
+                float y = (float)(
+                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
+                );
                 expected = new Vector2(x, y);
-                Vector2 expectedRounded = new((float)Math.Round(x, 2), (float)Math.Round(y, 2));
                 arg = new CommandArg(expected.ToString());
                 Assert.IsTrue(arg.TryGet(out value));
                 Assert.IsTrue(
-                    Approximately(expectedRounded.x, value.x)
-                        && Approximately(expectedRounded.y, value.y),
-                    $"Expected {value} to be approximately {expectedRounded}. "
+                    Approximately(expected.x, value.x, vector2RoundTolerance)
+                        && Approximately(expected.y, value.y, vector2RoundTolerance),
+                    $"Expected {value} to be approximately {expected}. "
                         + $"Input: ({x},{y}). "
                         + $"Value: ({value.x},{value.y}). "
-                        + $"Expected: ({expectedRounded.x},{expectedRounded.y})."
+                        + $"Expected: ({expected.x},{expected.y})."
                 );
 
                 arg = new CommandArg($"{expected.x},{expected.y}");
@@ -382,20 +540,25 @@
             // x,y,z (z is ok, but ignored)
             for (int i = 0; i < NumTries; ++i)
             {
-                float x = (float)_random.NextDouble();
-                float y = (float)_random.NextDouble();
-                float z = (float)_random.NextDouble();
+                float x = (float)(
+                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
+                );
+                float y = (float)(
+                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
+                );
+                float z = (float)(
+                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
+                );
                 expected = new Vector2(x, y);
-                Vector2 expectedRounded = new((float)Math.Round(x, 2), (float)Math.Round(y, 2));
                 arg = new CommandArg(expected.ToString());
                 Assert.IsTrue(arg.TryGet(out value));
                 Assert.IsTrue(
-                    Approximately(expectedRounded.x, value.x)
-                        && Approximately(expectedRounded.y, value.y),
-                    $"Expected {value} to be approximately {expectedRounded}. "
+                    Approximately(expected.x, value.x, vector2RoundTolerance)
+                        && Approximately(expected.y, value.y, vector2RoundTolerance),
+                    $"Expected {value} to be approximately {expected}. "
                         + $"Input: ({x},{y},{z}). "
                         + $"Value: ({value.x},{value.y}). "
-                        + $"Expected: ({expectedRounded.x},{expectedRounded.y})."
+                        + $"Expected: ({expected.x},{expected.y})."
                 );
 
                 arg = new CommandArg($"{expected.x},{expected.y},{z}");
@@ -465,10 +628,14 @@
 
             Vector3 expected;
 
+            const float vector3RoundTolerance = 0.01f;
+
             // Unexpected input
             for (int i = 0; i < NumTries; ++i)
             {
-                float x = (float)_random.NextDouble();
+                float x = (float)(
+                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
+                );
                 arg = new CommandArg(x.ToString(CultureInfo.InvariantCulture));
                 Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
                 foreach (
@@ -486,21 +653,24 @@
             // x,y
             for (int i = 0; i < NumTries; ++i)
             {
-                float x = (float)_random.NextDouble();
-                float y = (float)_random.NextDouble();
+                float x = (float)(
+                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
+                );
+                float y = (float)(
+                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
+                );
                 float z = 0f;
                 expected = new Vector3(x, y);
-                Vector3 expectedRounded = new((float)Math.Round(x, 2), (float)Math.Round(y, 2));
                 arg = new CommandArg(expected.ToString());
                 Assert.IsTrue(arg.TryGet(out value));
                 Assert.IsTrue(
-                    Approximately(expectedRounded.x, value.x)
-                        && Approximately(expectedRounded.y, value.y)
-                        && Approximately(expectedRounded.z, value.z),
-                    $"Expected {value} to be approximately {expectedRounded}. "
+                    Approximately(expected.x, value.x, vector3RoundTolerance)
+                        && Approximately(expected.y, value.y, vector3RoundTolerance)
+                        && Approximately(expected.z, value.z, vector3RoundTolerance),
+                    $"Expected {value} to be approximately {expected}. "
                         + $"Input: ({x},{y},{z}). "
                         + $"Value: ({value.x},{value.y},{value.z}). "
-                        + $"Expected: ({expectedRounded.x},{expectedRounded.y},{expectedRounded.z})."
+                        + $"Expected: ({expected.x},{expected.y},{expected.z})."
                 );
 
                 arg = new CommandArg($"{expected.x},{expected.y}");
@@ -535,25 +705,26 @@
             // x,y,z (z is ok, but ignored)
             for (int i = 0; i < NumTries; ++i)
             {
-                float x = (float)_random.NextDouble();
-                float y = (float)_random.NextDouble();
-                float z = (float)_random.NextDouble();
-                expected = new Vector3(x, y, z);
-                Vector3 expectedRounded = new(
-                    (float)Math.Round(x, 2),
-                    (float)Math.Round(y, 2),
-                    (float)Math.Round(z, 2)
+                float x = (float)(
+                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
                 );
+                float y = (float)(
+                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
+                );
+                float z = (float)(
+                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
+                );
+                expected = new Vector3(x, y, z);
                 arg = new CommandArg(expected.ToString());
                 Assert.IsTrue(arg.TryGet(out value));
                 Assert.IsTrue(
-                    Approximately(expectedRounded.x, value.x)
-                        && Approximately(expectedRounded.y, value.y)
-                        && Approximately(expectedRounded.z, value.z),
-                    $"Expected {value} to be approximately {expectedRounded}. "
+                    Approximately(expected.x, value.x, vector3RoundTolerance)
+                        && Approximately(expected.y, value.y, vector3RoundTolerance)
+                        && Approximately(expected.z, value.z, vector3RoundTolerance),
+                    $"Expected {value} to be approximately {expected}. "
                         + $"Input: ({x},{y},{z}). "
                         + $"Value: ({value.x},{value.y},{value.z}). "
-                        + $"Expected: ({expectedRounded.x},{expectedRounded.y},{expectedRounded.z})."
+                        + $"Expected: ({expected.x},{expected.y},{expected.z})."
                 );
 
                 arg = new CommandArg($"{expected.x},{expected.y},{expected.z}");
@@ -654,39 +825,166 @@
         }
 
         [Test]
-        public void String()
+        public void Uint()
         {
             CommandArg arg = new("");
+            Assert.IsFalse(arg.TryGet(out uint value), $"Unexpectedly parsed {value}");
+
+            arg = new CommandArg("0");
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(0U, value);
+
+            arg = new CommandArg("-1");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+
+            arg = new CommandArg("1.3");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+            unchecked
+            {
+                for (int i = 0; i < NumTries; ++i)
+                {
+                    uint expected = (uint)_random.Next(int.MinValue, int.MaxValue);
+                    arg = new CommandArg(expected.ToString());
+                    Assert.IsTrue(arg.TryGet(out value));
+                    Assert.AreEqual(expected, value);
+                }
+            }
+
+            const long tooBig = uint.MaxValue + 1L;
+            arg = new CommandArg(tooBig.ToString());
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+
+            arg = new CommandArg(nameof(uint.MaxValue));
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(uint.MaxValue, value);
+
+            arg = new CommandArg(nameof(uint.MinValue));
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(uint.MinValue, value);
+
+            arg = new CommandArg(Guid.NewGuid().ToString());
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+            arg = new CommandArg("false");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+            arg = new CommandArg("asdf");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+        }
+
+        [Test]
+        public void Ushort()
+        {
+            CommandArg arg = new("");
+            Assert.IsFalse(arg.TryGet(out ushort value), $"Unexpectedly parsed {value}");
+
+            arg = new CommandArg("0");
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual((ushort)0, value);
+
+            arg = new CommandArg("-1");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+
+            arg = new CommandArg("1.3");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+            unchecked
+            {
+                for (int i = 0; i < NumTries; ++i)
+                {
+                    ushort expected = (ushort)_random.Next(short.MinValue, short.MaxValue);
+                    arg = new CommandArg(expected.ToString());
+                    Assert.IsTrue(arg.TryGet(out value));
+                    Assert.AreEqual(expected, value);
+                }
+            }
+
+            const int tooBig = ushort.MaxValue + 1;
+            arg = new CommandArg(tooBig.ToString());
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+
+            arg = new CommandArg(nameof(ushort.MaxValue));
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(ushort.MaxValue, value);
+
+            arg = new CommandArg(ushort.MaxValue.ToString());
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(ushort.MaxValue, value);
+
+            arg = new CommandArg(nameof(ushort.MinValue));
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(ushort.MinValue, value);
+
+            arg = new CommandArg(ushort.MinValue.ToString());
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(ushort.MinValue, value);
+
+            arg = new CommandArg(Guid.NewGuid().ToString());
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+            arg = new CommandArg("false");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+            arg = new CommandArg("asdf");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+        }
+
+        [Test]
+        public void String()
+        {
+            string expected = string.Empty;
+            CommandArg arg = new(expected);
             Assert.IsTrue(arg.TryGet(out string value));
             Assert.AreEqual(arg.String, value);
+            Assert.AreEqual(expected, value);
 
-            arg = new CommandArg("asdf");
+            expected = "asdf";
+            arg = new CommandArg(expected);
             Assert.IsTrue(arg.TryGet(out value));
             Assert.AreEqual(arg.String, value);
+            Assert.AreEqual(expected, value);
 
-            arg = new CommandArg("1111");
+            expected = "1111";
+            arg = new CommandArg(expected);
             Assert.IsTrue(arg.TryGet(out value));
             Assert.AreEqual(arg.String, value);
+            Assert.AreEqual(expected, value);
 
-            arg = new CommandArg("1.3333");
+            expected = "1.3333";
+            arg = new CommandArg(expected);
             Assert.IsTrue(arg.TryGet(out value));
             Assert.AreEqual(arg.String, value);
+            Assert.AreEqual(expected, value);
 
             for (int i = 0; i < NumTries; ++i)
             {
-                arg = new CommandArg(Guid.NewGuid().ToString());
+                expected = Guid.NewGuid().ToString();
+                arg = new CommandArg(expected);
                 Assert.IsTrue(arg.TryGet(out value));
                 Assert.AreEqual(arg.String, value);
+                Assert.AreEqual(expected, value);
             }
 
-            arg = new CommandArg("#$$$__.azxfd87&*_&&&-={'|");
+            expected = "#$$$__.azxfd87&*_&&&-={'|";
+            arg = new CommandArg(expected);
             Assert.IsTrue(arg.TryGet(out value));
             Assert.AreEqual(arg.String, value);
+            Assert.AreEqual(expected, value);
 
             // Check strings aren't sanitized
-            arg = new CommandArg("   ");
+            expected = "   ";
+            arg = new CommandArg(expected);
             Assert.IsTrue(arg.TryGet(out value));
             Assert.AreEqual(arg.String, value);
+            Assert.AreEqual(expected, value);
+
+            // Make sure string.Empty isn't resolved to ""
+            expected = "Empty";
+            arg = new CommandArg(expected);
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(arg.String, value);
+            Assert.AreEqual(expected, value);
+
+            expected = "string.Empty";
+            arg = new CommandArg(expected);
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(arg.String, value);
+            Assert.AreEqual(expected, value);
         }
 
         [Test]
@@ -702,7 +1000,9 @@
             // Unexpected input
             for (int i = 0; i < NumTries; ++i)
             {
-                float x = (float)_random.NextDouble();
+                float x = (float)(
+                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
+                );
                 arg = new CommandArg(x.ToString(CultureInfo.InvariantCulture));
                 Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
                 foreach (
@@ -717,31 +1017,35 @@
                 }
             }
 
+            const float quaternionRoundTolerance = 0.00001f;
+
             // x,y,z, w (z is ok, but ignored)
             for (int i = 0; i < NumTries; ++i)
             {
-                float x = (float)_random.NextDouble();
-                float y = (float)_random.NextDouble();
-                float z = (float)_random.NextDouble();
-                float w = (float)_random.NextDouble();
-                expected = new Quaternion(x, y, z, w);
-                Quaternion expectedRounded = new(
-                    (float)Math.Round(x, 5),
-                    (float)Math.Round(y, 5),
-                    (float)Math.Round(z, 5),
-                    (float)Math.Round(w, 5)
+                float x = (float)(
+                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
                 );
+                float y = (float)(
+                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
+                );
+                float z = (float)(
+                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
+                );
+                float w = (float)(
+                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
+                );
+                expected = new Quaternion(x, y, z, w);
                 arg = new CommandArg(expected.ToString());
                 Assert.IsTrue(arg.TryGet(out value));
                 Assert.IsTrue(
-                    Approximately(expectedRounded.x, value.x)
-                        && Approximately(expectedRounded.y, value.y)
-                        && Approximately(expectedRounded.z, value.z)
-                        && Approximately(expectedRounded.w, value.w),
-                    $"Expected {value} to be approximately {expectedRounded}. "
+                    Approximately(expected.x, value.x, quaternionRoundTolerance)
+                        && Approximately(expected.y, value.y, quaternionRoundTolerance)
+                        && Approximately(expected.z, value.z, quaternionRoundTolerance)
+                        && Approximately(expected.w, value.w, quaternionRoundTolerance),
+                    $"Expected {value} to be approximately {expected}. "
                         + $"Input: ({x},{y},{z},{w}). "
                         + $"Value: ({value.x},{value.y},{value.z},{value.w}). "
-                        + $"Expected: ({expectedRounded.x},{expectedRounded.y},{expectedRounded.z},{expectedRounded.w})."
+                        + $"Expected: ({expected.x},{expected.y},{expected.z},{expected.w})."
                 );
 
                 arg = new CommandArg($"{x},{y},{z},{w}");
@@ -826,6 +1130,11 @@
             Assert.IsTrue(arg.TryGet(out value));
             Assert.AreEqual(expected, value);
 
+            arg = new CommandArg("(1.0, 0.5)");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+            arg = new CommandArg("(0.7)");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+
             for (int i = 0; i < NumTries; ++i)
             {
                 float r = (float)_random.NextDouble();
@@ -837,14 +1146,110 @@
                 // Colors have a floating point precision of 3 decimal places, otherwise our equality checks will be off
                 Assert.IsTrue(arg.TryGet(out value));
                 Assert.IsTrue(
-                    Approximately((float)Math.Round(expected.r, 3), value.r)
-                        && Approximately((float)Math.Round(expected.g, 3), value.g)
-                        && Approximately((float)Math.Round(expected.b, 3), value.b),
+                    Approximately(expected.r, value.r, 0.001f)
+                        && Approximately(expected.g, value.g, 0.001f)
+                        && Approximately(expected.b, value.b, 0.001f)
+                        && Approximately(expected.a, value.a, 0.001f),
                     $"Expected {value} to be approximately {expected}. "
-                        + $"Value: ({r},{g},{b}). "
-                        + $"Expected: ({expected.r},{expected.g},{expected.b})."
+                        + $"Value: ({r},{g},{b},{expected.a}). "
+                        + $"Expected: ({expected.r},{expected.g},{expected.b},{expected.a})."
                 );
+
+                arg = new CommandArg($"{r},{g},{b}");
+                Assert.IsTrue(arg.TryGet(out value));
+                Assert.IsTrue(
+                    Approximately(expected.r, value.r, 0.001f)
+                        && Approximately(expected.g, value.g, 0.001f)
+                        && Approximately(expected.b, value.b, 0.001f)
+                        && Approximately(expected.a, value.a, 0.001f),
+                    $"Expected {value} to be approximately {expected}. "
+                        + $"Value: ({r},{g},{b},{expected.a}). "
+                        + $"Expected: ({expected.r},{expected.g},{expected.b},{expected.a})."
+                );
+
+                foreach (
+                    (string pre, string post) in _prepend.Zip(
+                        _append,
+                        (preValue, postValue) => (preValue, postValue)
+                    )
+                )
+                {
+                    arg = new CommandArg($"{pre}{r},{g},{b}{post}");
+                    Assert.IsTrue(arg.TryGet(out value));
+                    Assert.IsTrue(
+                        Approximately(expected.r, value.r, 0.001f)
+                            && Approximately(expected.g, value.g, 0.001f)
+                            && Approximately(expected.b, value.b, 0.001f)
+                            && Approximately(expected.a, value.a, 0.001f),
+                        $"Expected {value} to be approximately {expected}. "
+                            + $"Value: ({r},{g},{b},{expected.a}). "
+                            + $"Expected: ({expected.r},{expected.g},{expected.b},{expected.a})."
+                    );
+                }
             }
+
+            for (int i = 0; i < NumTries; ++i)
+            {
+                float r = (float)_random.NextDouble();
+                float g = (float)_random.NextDouble();
+                float b = (float)_random.NextDouble();
+                float a = (float)_random.NextDouble();
+                expected = new Color(r, g, b, a);
+                arg = new CommandArg(expected.ToString());
+
+                // Colors have a floating point precision of 3 decimal places, otherwise our equality checks will be off
+                Assert.IsTrue(arg.TryGet(out value));
+                Assert.IsTrue(
+                    Approximately(expected.r, value.r, 0.001f)
+                        && Approximately(expected.g, value.g, 0.001f)
+                        && Approximately(expected.b, value.b, 0.001f)
+                        && Approximately(expected.a, value.a, 0.001f),
+                    $"Expected {value} to be approximately {expected}. "
+                        + $"Value: ({r},{g},{b},{a}). "
+                        + $"Expected: ({expected.r},{expected.g},{expected.b},{expected.a})."
+                );
+
+                arg = new CommandArg($"{r},{g},{b},{a}");
+                Assert.IsTrue(arg.TryGet(out value));
+                Assert.IsTrue(
+                    Approximately(expected.r, value.r, 0.001f)
+                        && Approximately(expected.g, value.g, 0.001f)
+                        && Approximately(expected.b, value.b, 0.001f)
+                        && Approximately(expected.a, value.a, 0.001f),
+                    $"Expected {value} to be approximately {expected}. "
+                        + $"Value: ({r},{g},{b},{a}). "
+                        + $"Expected: ({expected.r},{expected.g},{expected.b},{expected.a})."
+                );
+
+                foreach (
+                    (string pre, string post) in _prepend.Zip(
+                        _append,
+                        (preValue, postValue) => (preValue, postValue)
+                    )
+                )
+                {
+                    arg = new CommandArg($"{pre}{r},{g},{b},{a}{post}");
+                    Assert.IsTrue(arg.TryGet(out value));
+                    Assert.IsTrue(
+                        Approximately(expected.r, value.r, 0.001f)
+                            && Approximately(expected.g, value.g, 0.001f)
+                            && Approximately(expected.b, value.b, 0.001f)
+                            && Approximately(expected.a, value.a, 0.001f),
+                        $"Expected {value} to be approximately {expected}. "
+                            + $"Value: ({r},{g},{b},{a}). "
+                            + $"Expected: ({expected.r},{expected.g},{expected.b},{expected.a})."
+                    );
+                }
+            }
+
+            arg = new CommandArg("invisible");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+            arg = new CommandArg(Guid.NewGuid().ToString());
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+            arg = new CommandArg("false");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+            arg = new CommandArg("asdf");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
         }
 
         [Test]
@@ -910,7 +1315,7 @@
                         return true;
                     }
 
-                    parsed = default;
+                    parsed = 0;
                     return false;
                 }
             }
@@ -1021,13 +1426,19 @@
         private static bool Approximately(float a, float b, float tolerance = 0.0001f)
         {
             float delta = Math.Abs(a - b);
-            return delta <= tolerance;
+            // Check ToString representations too, the numbers may be crazy small or crazy big, outside the scope of our tolerance
+            return delta <= tolerance
+                || a.ToString(CultureInfo.InvariantCulture)
+                    .Equals(b.ToString(CultureInfo.InvariantCulture));
         }
 
         private static bool Approximately(double a, double b, double tolerance = 0.0001)
         {
             double delta = Math.Abs(a - b);
-            return delta <= tolerance;
+            // Check ToString representations too, the numbers may be crazy small or crazy big, outside the scope of our tolerance
+            return delta <= tolerance
+                || a.ToString(CultureInfo.InvariantCulture)
+                    .Equals(b.ToString(CultureInfo.InvariantCulture));
         }
     }
 }
