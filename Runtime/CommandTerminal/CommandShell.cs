@@ -52,9 +52,10 @@ namespace CommandTerminal
         private static readonly Dictionary<Type, object> EnumValues = new();
 
         // Public to allow custom-mutation, if desired
-        public static readonly List<char> Delimiters = new() { ',', ';', ':', '_', '/', '\\' };
-        public static readonly List<string> IgnoredValuesForAllTypes = new();
-        public static readonly List<string> IgnoredValuesForComplexTypes = new()
+        public static readonly HashSet<char> Delimiters = new() { ',', ';', ':', '_', '/', '\\' };
+        public static readonly HashSet<char> Quotes = new() { '"', '\'' };
+        public static readonly HashSet<string> IgnoredValuesForAllTypes = new();
+        public static readonly HashSet<string> IgnoredValuesForComplexTypes = new()
         {
             "(",
             ")",
@@ -871,7 +872,7 @@ namespace CommandTerminal
             }
 
             char firstChar = stringValue[0];
-            if (firstChar is '"' or '\'')
+            if (CommandArg.Quotes.Contains(firstChar))
             {
                 int closingQuoteIndex = -1;
 
@@ -914,10 +915,7 @@ namespace CommandTerminal
                 {
                     string input = stringValue.Substring(0, spaceIndex);
                     arg = new CommandArg(input);
-                    stringValue =
-                        spaceIndex == stringValue.Length - 1
-                            ? string.Empty
-                            : stringValue.Substring(spaceIndex + 1);
+                    stringValue = stringValue.Substring(spaceIndex + 1);
                 }
             }
 
