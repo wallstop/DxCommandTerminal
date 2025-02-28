@@ -693,7 +693,10 @@ namespace CommandTerminal
 
             while (!string.IsNullOrWhiteSpace(remaining))
             {
-                CommandArg argument = EatArgument(ref remaining);
+                if (!TryEatArgument(ref remaining, out CommandArg argument))
+                {
+                    continue;
+                }
 
                 if (string.IsNullOrWhiteSpace(argument.String))
                 {
@@ -858,25 +861,67 @@ namespace CommandTerminal
             }
         }
 
-        private static CommandArg EatArgument(ref string stringValue)
+        public static bool TryEatArgument(ref string stringValue, out CommandArg arg)
         {
-            int spaceIndex = stringValue.IndexOf(' ');
-
-            if (0 <= spaceIndex)
+            stringValue = stringValue.TrimStart();
+            if (stringValue.Length == 0)
             {
-                CommandArg arg = new(stringValue.Substring(0, spaceIndex));
-                stringValue =
-                    spaceIndex == stringValue.Length - 1
-                        ? string.Empty
-                        : stringValue.Substring(spaceIndex + 1); // Remaining
-                return arg;
+                arg = default;
+                return false;
+            }
+
+            char firstChar = stringValue[0];
+            if (firstChar is '"' or '\'')
+            {
+                int closingQuoteIndex = -1;
+
+                // Find the matching closing quote.
+                for (int i = 1; i < stringValue.Length; ++i)
+                {
+                    if (stringValue[i] == firstChar)
+                    {
+                        closingQuoteIndex = i;
+                        break;
+                    }
+                }
+
+                if (closingQuoteIndex < 0)
+                {
+                    // No closing quote was found; consume the rest of the string (excluding the opening quote).
+                    string input = stringValue.Substring(1);
+                    arg = new CommandArg(input);
+                    stringValue = string.Empty;
+                }
+                else
+                {
+                    // Extract the argument inside the quotes.
+                    string input = stringValue.Substring(1, closingQuoteIndex - 1);
+                    arg = new CommandArg(input);
+                    // Remove the parsed argument (including the quotes) from the input.
+                    stringValue = stringValue.Substring(closingQuoteIndex + 1);
+                }
             }
             else
             {
-                CommandArg arg = new(stringValue);
-                stringValue = string.Empty;
-                return arg;
+                // Unquoted argument: find the next space.
+                int spaceIndex = stringValue.IndexOf(' ');
+                if (spaceIndex < 0)
+                {
+                    arg = new CommandArg(stringValue);
+                    stringValue = string.Empty;
+                }
+                else
+                {
+                    string input = stringValue.Substring(0, spaceIndex);
+                    arg = new CommandArg(input);
+                    stringValue =
+                        spaceIndex == stringValue.Length - 1
+                            ? string.Empty
+                            : stringValue.Substring(spaceIndex + 1);
+                }
             }
+
+            return true;
         }
     }
 }
