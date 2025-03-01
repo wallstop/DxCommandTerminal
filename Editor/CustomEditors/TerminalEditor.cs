@@ -99,8 +99,8 @@
             _seenCommands.UnionWith(terminal.disabledCommands);
 
             if (
-                terminal.disabledCommands.Any(command => !_allCommands.Contains(command))
-                || _seenCommands.Count != terminal.disabledCommands.Count
+                _seenCommands.Count != terminal.disabledCommands.Count
+                || terminal.disabledCommands.Exists(command => !_allCommands.Contains(command))
             )
             {
                 if (GUILayout.Button("Cleanup Disabled Commands"))
