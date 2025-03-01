@@ -2,7 +2,6 @@ namespace CommandTerminal
 {
     using System;
     using System.Collections.Generic;
-    using System.Globalization;
     using System.Linq;
     using System.Reflection;
     using Attributes;
@@ -56,7 +55,6 @@ namespace CommandTerminal
         public static readonly HashSet<char> Delimiters = new() { ',', ';', ':', '_', '/', '\\' };
         public static readonly HashSet<char> Quotes = new() { '"', '\'' };
         public static readonly HashSet<string> IgnoredValuesForAllTypes = new();
-
         public static readonly HashSet<Type> DoNotCleanTypes = new()
         {
             typeof(string),
@@ -86,10 +84,19 @@ namespace CommandTerminal
             get
             {
                 string cleanedString = String;
-                cleanedString = String.Replace(" ", string.Empty);
+                cleanedString = String.Replace(
+                    " ",
+                    string.Empty,
+                    StringComparison.OrdinalIgnoreCase
+                );
                 cleanedString = IgnoredValuesForAllTypes.Aggregate(
                     cleanedString,
-                    (current, ignoredValue) => current.Replace(ignoredValue, string.Empty)
+                    (current, ignoredValue) =>
+                        current.Replace(
+                            ignoredValue,
+                            string.Empty,
+                            StringComparison.OrdinalIgnoreCase
+                        )
                 );
                 cleanedString = cleanedString.Trim();
                 return cleanedString;
@@ -210,11 +217,14 @@ namespace CommandTerminal
             }
             if (type.IsEnum)
             {
-                bool parseOk = Enum.TryParse(type, stringValue, out object parsedObject);
-                if (parseOk)
+                if (Enum.IsDefined(type, stringValue))
                 {
-                    parsed = (T)Convert.ChangeType(parsedObject, type);
-                    return true;
+                    bool parseOk = Enum.TryParse(type, stringValue, out object parsedObject);
+                    if (parseOk)
+                    {
+                        parsed = (T)Convert.ChangeType(parsedObject, type);
+                        return true;
+                    }
                 }
 
                 if (int.TryParse(stringValue, out int enumIntValue))
@@ -333,7 +343,11 @@ namespace CommandTerminal
                 string colorString = stringValue;
                 if (colorString.StartsWith("RGBA", StringComparison.OrdinalIgnoreCase))
                 {
-                    colorString = colorString.Replace("RGBA", string.Empty);
+                    colorString = colorString.Replace(
+                        "RGBA",
+                        string.Empty,
+                        StringComparison.OrdinalIgnoreCase
+                    );
                 }
 
                 string[] split = StripAndSplit(colorString);
@@ -374,10 +388,38 @@ namespace CommandTerminal
                 switch (split.Length)
                 {
                     case 4
-                        when float.TryParse(split[0], out float x)
-                            && float.TryParse(split[1], out float y)
-                            && float.TryParse(split[2], out float width)
-                            && float.TryParse(split[3], out float height):
+                        when float.TryParse(
+                            split[0]
+                                .Replace("x:", string.Empty, StringComparison.OrdinalIgnoreCase),
+                            out float x
+                        )
+                            && float.TryParse(
+                                split[1]
+                                    .Replace(
+                                        "y:",
+                                        string.Empty,
+                                        StringComparison.OrdinalIgnoreCase
+                                    ),
+                                out float y
+                            )
+                            && float.TryParse(
+                                split[2]
+                                    .Replace(
+                                        "width:",
+                                        string.Empty,
+                                        StringComparison.OrdinalIgnoreCase
+                                    ),
+                                out float width
+                            )
+                            && float.TryParse(
+                                split[3]
+                                    .Replace(
+                                        "height:",
+                                        string.Empty,
+                                        StringComparison.OrdinalIgnoreCase
+                                    ),
+                                out float height
+                            ):
                         parsed = (T)Convert.ChangeType(new Rect(x, y, width, height), type);
                         return true;
                 }
@@ -388,10 +430,38 @@ namespace CommandTerminal
                 switch (split.Length)
                 {
                     case 4
-                        when int.TryParse(split[0], out int x)
-                            && int.TryParse(split[1], out int y)
-                            && int.TryParse(split[2], out int width)
-                            && int.TryParse(split[3], out int height):
+                        when int.TryParse(
+                            split[0]
+                                .Replace("x:", string.Empty, StringComparison.OrdinalIgnoreCase),
+                            out int x
+                        )
+                            && int.TryParse(
+                                split[1]
+                                    .Replace(
+                                        "y:",
+                                        string.Empty,
+                                        StringComparison.OrdinalIgnoreCase
+                                    ),
+                                out int y
+                            )
+                            && int.TryParse(
+                                split[2]
+                                    .Replace(
+                                        "width:",
+                                        string.Empty,
+                                        StringComparison.OrdinalIgnoreCase
+                                    ),
+                                out int width
+                            )
+                            && int.TryParse(
+                                split[3]
+                                    .Replace(
+                                        "height:",
+                                        string.Empty,
+                                        StringComparison.OrdinalIgnoreCase
+                                    ),
+                                out int height
+                            ):
                         parsed = (T)Convert.ChangeType(new RectInt(x, y, width, height), type);
                         return true;
                 }
@@ -399,17 +469,6 @@ namespace CommandTerminal
 
             parsed = default;
             return false;
-
-            static bool TryParseDateTime(string input, out DateTime parsed)
-            {
-                return DateTime.TryParseExact(
-                    input,
-                    (string)null,
-                    CultureInfo.InvariantCulture,
-                    DateTimeStyles.RoundtripKind,
-                    out parsed
-                );
-            }
 
             static bool InnerParse<TParsed>(
                 string input,
@@ -440,7 +499,11 @@ namespace CommandTerminal
                         continue;
                     }
 
-                    strippedInput = strippedInput.Replace(ignored, string.Empty);
+                    strippedInput = strippedInput.Replace(
+                        ignored,
+                        string.Empty,
+                        StringComparison.OrdinalIgnoreCase
+                    );
                 }
 
                 foreach (char delimiter in Delimiters)
@@ -731,7 +794,11 @@ namespace CommandTerminal
             }
 
             string commandName = _arguments[0].String ?? string.Empty;
-            commandName = commandName.Replace(" ", string.Empty);
+            commandName = commandName.Replace(
+                " ",
+                string.Empty,
+                StringComparison.OrdinalIgnoreCase
+            );
             _arguments.RemoveAt(0); // Remove command name from arguments
 
             if (!_commands.ContainsKey(commandName))
@@ -745,7 +812,11 @@ namespace CommandTerminal
 
         public void RunCommand(string commandName, CommandArg[] arguments)
         {
-            commandName = commandName?.Replace(" ", string.Empty);
+            commandName = commandName?.Replace(
+                " ",
+                string.Empty,
+                StringComparison.OrdinalIgnoreCase
+            );
             if (string.IsNullOrWhiteSpace(commandName))
             {
                 IssueErrorMessage($"Invalid command name '{commandName}'");
@@ -801,7 +872,7 @@ namespace CommandTerminal
                 return;
             }
 
-            name = name.Replace(" ", string.Empty);
+            name = name.Replace(" ", string.Empty, StringComparison.OrdinalIgnoreCase);
             if (!_commands.TryAdd(name, info))
             {
                 IssueErrorMessage($"Command {name} is already defined.");
@@ -837,14 +908,16 @@ namespace CommandTerminal
                 return;
             }
 
-            name = name.Replace(" ", string.Empty);
+            name = name.Replace(" ", string.Empty, StringComparison.OrdinalIgnoreCase);
             _variables[name] = value;
         }
 
         // ReSharper disable once UnusedMember.Global
         public bool TryGetVariable(string name, out CommandArg variable)
         {
-            name = name?.Replace(" ", string.Empty) ?? string.Empty;
+            name =
+                name?.Replace(" ", string.Empty, StringComparison.OrdinalIgnoreCase)
+                ?? string.Empty;
             return _variables.TryGetValue(name, out variable);
         }
 
