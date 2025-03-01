@@ -3,7 +3,6 @@ namespace CommandTerminal
     using System;
     using System.Collections.Generic;
     using System.ComponentModel;
-    using System.Linq;
     using System.Text;
     using JetBrains.Annotations;
     using UnityEditor;
@@ -134,13 +133,13 @@ namespace CommandTerminal
         private int? _lastHeight;
 
         [StringFormatMethod("format")]
-        public static bool Log(string format, params object[] message)
+        public static bool Log(string format, params object[] parameters)
         {
-            return Log(TerminalLogType.ShellMessage, format, message);
+            return Log(TerminalLogType.ShellMessage, format, parameters);
         }
 
         [StringFormatMethod("format")]
-        public static bool Log(TerminalLogType type, string format, params object[] message)
+        public static bool Log(TerminalLogType type, string format, params object[] parameters)
         {
             CommandLog buffer = Buffer;
             if (buffer == null)
@@ -148,8 +147,8 @@ namespace CommandTerminal
                 return false;
             }
 
-            string formattedMessage = message is { Length: > 0 }
-                ? string.Format(format, message)
+            string formattedMessage = parameters is { Length: > 0 }
+                ? string.Format(format, parameters)
                 : format;
             return buffer.HandleLog(formattedMessage, type);
         }
@@ -210,7 +209,23 @@ namespace CommandTerminal
 
         private void OnEnable()
         {
-            Buffer = new CommandLog(_bufferSize, _ignoredLogTypes);
+            switch (_bufferSize)
+            {
+                case <= 0:
+                    Debug.LogError(
+                        $"Invalid buffer size '{_bufferSize}', must be greater than zero. Defaulting to 0 (empty buffer).",
+                        this
+                    );
+                    break;
+                case < 10:
+                    Debug.LogWarning(
+                        $"Unsupported buffer size '{_bufferSize}', recommended size is > 10.",
+                        this
+                    );
+                    break;
+            }
+
+            Buffer = new CommandLog(Math.Max(0, _bufferSize), _ignoredLogTypes);
             Shell = new CommandShell();
             History = new CommandHistory();
             Autocomplete = new CommandAutocomplete();
@@ -246,7 +261,7 @@ namespace CommandTerminal
             if (_consoleFont == null)
             {
                 _consoleFont = Font.CreateDynamicFontFromOSFont("Courier New", 16);
-                Debug.LogWarning("Command Console Warning: Please assign a font.");
+                Debug.LogWarning("Command Console Warning: Please assign a font.", this);
             }
 
             _commandText = string.Empty;
@@ -288,20 +303,6 @@ namespace CommandTerminal
             {
                 anyChanged = true;
                 _toggleHotkey = string.Empty;
-            }
-
-            switch (_bufferSize)
-            {
-                case <= 0:
-                    Debug.LogError(
-                        $"Invalid buffer size '{_bufferSize}', must be greater than zero."
-                    );
-                    break;
-                case < 10:
-                    Debug.LogWarning(
-                        $"Unsupported buffer size '{_bufferSize}', recommended size is > 10."
-                    );
-                    break;
             }
 
             if (_ignoredLogTypes == null)
@@ -553,7 +554,13 @@ namespace CommandTerminal
 
         private void DrawLogs()
         {
-            foreach (LogItem log in Buffer?.Logs ?? Enumerable.Empty<LogItem>())
+            IReadOnlyList<LogItem> logs = Buffer?.Logs;
+            if (logs == null)
+            {
+                return;
+            }
+
+            foreach (LogItem log in logs)
             {
                 _labelStyle.normal.textColor = GetLogColor(log.type);
                 GUILayout.Label(log.message, _labelStyle);

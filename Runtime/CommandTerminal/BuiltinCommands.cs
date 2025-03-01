@@ -6,12 +6,12 @@ namespace CommandTerminal
     using Attributes;
 
     // ReSharper disable once UnusedType.Global
-    internal static class BuiltInCommands
+    public static class BuiltInCommands
     {
         [RegisterCommand(Help = "Clear the command console", MaxArgCount = 0, Default = true)]
         // ReSharper disable once UnusedMember.Local
         // ReSharper disable once UnusedParameter.Local
-        private static void CommandClear(CommandArg[] args)
+        public static void CommandClear(CommandArg[] args)
         {
             Terminal.Buffer?.Clear();
         }
@@ -22,7 +22,7 @@ namespace CommandTerminal
             Default = true
         )]
         // ReSharper disable once UnusedMember.Local
-        private static void CommandHelp(CommandArg[] args)
+        public static void CommandHelp(CommandArg[] args)
         {
             CommandShell shell = Terminal.Shell;
             if (shell == null)
@@ -63,7 +63,7 @@ namespace CommandTerminal
 
         [RegisterCommand(Help = "Time the execution of a command", MinArgCount = 1, Default = true)]
         // ReSharper disable once UnusedMember.Local
-        private static void CommandTime(CommandArg[] args)
+        public static void CommandTime(CommandArg[] args)
         {
             CommandShell shell = Terminal.Shell;
             if (shell == null)
@@ -79,14 +79,14 @@ namespace CommandTerminal
 
         [RegisterCommand(Help = "Output message via Terminal.Log", Default = true)]
         // ReSharper disable once UnusedMember.Local
-        private static void CommandPrint(CommandArg[] args)
+        public static void CommandPrint(CommandArg[] args)
         {
             Terminal.Log(JoinArguments(args));
         }
 
         [RegisterCommand(Help = "Output message via Debug.Log", Default = true)]
         // ReSharper disable once UnusedMember.Local
-        private static void CommandLog(CommandArg[] args)
+        public static void CommandLog(CommandArg[] args)
         {
             UnityEngine.Debug.Log(JoinArguments(args));
         }
@@ -98,7 +98,7 @@ namespace CommandTerminal
         )]
         // ReSharper disable once UnusedMember.Local
         // ReSharper disable once UnusedParameter.Local
-        private static void CommandTrace(CommandArg[] args)
+        public static void CommandTrace(CommandArg[] args)
         {
             CommandLog buffer = Terminal.Buffer;
             if (buffer == null)
@@ -126,7 +126,7 @@ namespace CommandTerminal
         [RegisterCommand(Help = "List all variables or set a variable value", Default = true)]
         // ReSharper disable once UnusedMember.Global
         // ReSharper disable once UnusedMember.Local
-        private static void CommandSet(CommandArg[] args)
+        public static void CommandSet(CommandArg[] args)
         {
             CommandShell shell = Terminal.Shell;
             if (shell == null)
@@ -159,7 +159,7 @@ namespace CommandTerminal
         [RegisterCommand(Help = "No operation", Default = true)]
         // ReSharper disable once UnusedParameter.Local
         // ReSharper disable once UnusedMember.Local
-        private static void CommandNoop(CommandArg[] args)
+        public static void CommandNoop(CommandArg[] args)
         {
             // No-op
         }
@@ -167,25 +167,23 @@ namespace CommandTerminal
         [RegisterCommand(Help = "Quit running application", MaxArgCount = 0, Default = true)]
         // ReSharper disable once UnusedMember.Local
         // ReSharper disable once UnusedParameter.Local
-        private static void CommandQuit(CommandArg[] args)
+        public static void CommandQuit(CommandArg[] args)
         {
 #if UNITY_EDITOR
             UnityEditor.EditorApplication.isPlaying = false;
 #else
-            Application.Quit();
+            UnityEngine.Application.Quit();
 #endif
         }
 
         private static string JoinArguments(CommandArg[] args, int start = 0)
         {
             StringBuilder sb = new();
-            int argLength = args.Length;
-
-            for (int i = start; i < argLength; i++)
+            for (int i = start; i < args.Length; i++)
             {
                 sb.Append(args[i].String);
 
-                if (i < argLength - 1)
+                if (i < args.Length - 1)
                 {
                     sb.Append(" ");
                 }

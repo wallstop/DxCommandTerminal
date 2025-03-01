@@ -66,24 +66,6 @@
                 terminal.disabledCommands = new List<string>();
             }
 
-            _seenCommands.Clear();
-            for (int i = terminal.disabledCommands.Count - 1; 0 <= i; --i)
-            {
-                string command = terminal.disabledCommands[i];
-                if (!_seenCommands.Add(command))
-                {
-                    terminal.disabledCommands.RemoveAt(i);
-                    anyChanged = true;
-                    continue;
-                }
-
-                if (!_allCommands.Contains(command))
-                {
-                    terminal.disabledCommands.RemoveAt(i);
-                    anyChanged = true;
-                }
-            }
-
             _intermediateResults.Clear();
             _intermediateResults.UnionWith(_nonDefaultCommands);
             if (!terminal.ignoreDefaultCommands)
@@ -110,6 +92,36 @@
                     string command = ignorableCommands[_commandIndex];
                     terminal.disabledCommands.Add(command);
                     anyChanged = true;
+                }
+            }
+
+            _seenCommands.Clear();
+            _seenCommands.UnionWith(terminal.disabledCommands);
+
+            if (
+                _seenCommands.Count != terminal.disabledCommands.Count
+                || terminal.disabledCommands.Exists(command => !_allCommands.Contains(command))
+            )
+            {
+                if (GUILayout.Button("Cleanup Disabled Commands"))
+                {
+                    _seenCommands.Clear();
+                    for (int i = terminal.disabledCommands.Count - 1; 0 <= i; --i)
+                    {
+                        string command = terminal.disabledCommands[i];
+                        if (!_seenCommands.Add(command))
+                        {
+                            terminal.disabledCommands.RemoveAt(i);
+                            anyChanged = true;
+                            continue;
+                        }
+
+                        if (!_allCommands.Contains(command))
+                        {
+                            terminal.disabledCommands.RemoveAt(i);
+                            anyChanged = true;
+                        }
+                    }
                 }
             }
 
