@@ -137,7 +137,7 @@ Terminal.Shell.AddCommand("add", CommandAdd, 2, 2, "Adds 2 numbers");
 ---
 
 # Custom Parsing
-One change from the original Command Parser is the usage / functionality exposed for parsing the parameters to the CommandArgs themselves. The original library exposed four methods for retrieving arguments - `String`, `Float`, `Int`, and `bool`. If the input was invalid, these parsing methods would simply return the default value and log an error, making it very difficult to programtically react to bad input.
+One change from the original Command Parser is the usage / functionality exposed for parsing the parameters to the CommandArgs themselves. The original library exposed four methods for retrieving arguments - `String`, `Float`, `Int`, and `bool`. If the input was invalid, these parsing methods would simply return the default value and log an error, making it very difficult to programmatically react to bad input.
 
 To remedy this, DxCommandTerminal exposes two methods - `String` and `TryGet`. `String` returns the original input parameters as-is. `TryGet` attempts to parse the provided input parameter as the given type, taking in an optional parser. You can also register and deregister parsers for any type, which will override the built-in ones, making use of whatever custom logic you want (JSON, for example).
 
@@ -168,6 +168,7 @@ Assert.IsFalse(arg.TryGet(out int invalidInt)); // Failed to parse
 - bool
 - float
 - double
+- decimal
 - int
 - uint
 - long
@@ -205,7 +206,7 @@ Similarly, for Colors:
 - "red"
 - "clear"
 
-For all built-in types, the parsers are guaranteed to work with the type's default `ToString()` implementation, as well as logical versions of the data structure. See `Color` sample parseable inputs for an exmaple of this.
+For all built-in types, the parsers are guaranteed to work with the type's default `ToString()` implementation, as well as logical versions of the data structure. See `Color` sample parsable inputs for an example of this.
 
 If you would like to have built-in parsers for a type that is not listed above, please open an issue!
 
