@@ -96,7 +96,9 @@
             int unregistered = CommandArg.UnregisterAllParsers();
             if (0 < unregistered)
             {
-                Debug.Log($"Unregistered {unregistered} parser{(unregistered == 1 ? "" : "s")}.");
+                Debug.Log(
+                    $"Unregistered {unregistered} parser{(unregistered == 1 ? string.Empty : "s")}."
+                );
             }
         }
 
@@ -2643,6 +2645,15 @@
         }
 
         [Test]
+        public void NullParserRegistration()
+        {
+            bool registered = CommandArg.RegisterParser<int>(null);
+            Assert.IsFalse(registered);
+            registered = CommandArg.RegisterParser<int>(null, force: true);
+            Assert.IsFalse(registered);
+        }
+
+        [Test]
         public void ParserDeregistration()
         {
             Assert.IsFalse(CommandArg.TryGetParser(out CommandArgParser<int> registeredParser));
@@ -2653,6 +2664,7 @@
             bool registered = CommandArg.RegisterParser<int>(CustomIntParser1);
             Assert.IsTrue(registered);
             Assert.IsTrue(CommandArg.TryGetParser(out registeredParser));
+            Assert.IsNotNull(registeredParser);
 
             deregistered = CommandArg.UnregisterParser<int>();
             Assert.IsTrue(deregistered);

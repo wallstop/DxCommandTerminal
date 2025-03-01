@@ -54,7 +54,7 @@ namespace CommandTerminal
         // Public to allow custom-mutation, if desired
         public static readonly HashSet<char> Delimiters = new() { ',', ';', ':', '_', '/', '\\' };
         public static readonly HashSet<char> Quotes = new() { '"', '\'' };
-        public static readonly HashSet<string> IgnoredValuesForAllTypes = new();
+        public static readonly HashSet<string> IgnoredValuesForCleanedTypes = new() { "\r", "\n" };
         public static readonly HashSet<Type> DoNotCleanTypes = new()
         {
             typeof(string),
@@ -84,12 +84,7 @@ namespace CommandTerminal
             get
             {
                 string cleanedString = String;
-                cleanedString = String.Replace(
-                    " ",
-                    string.Empty,
-                    StringComparison.OrdinalIgnoreCase
-                );
-                cleanedString = IgnoredValuesForAllTypes.Aggregate(
+                cleanedString = IgnoredValuesForCleanedTypes.Aggregate(
                     cleanedString,
                     (current, ignoredValue) =>
                         current.Replace(
@@ -98,7 +93,6 @@ namespace CommandTerminal
                             StringComparison.OrdinalIgnoreCase
                         )
                 );
-                cleanedString = cleanedString.Trim();
                 return cleanedString;
             }
         }
@@ -563,6 +557,11 @@ namespace CommandTerminal
 
         public static bool RegisterParser<T>(CommandArgParser<T> parser, bool force = false)
         {
+            if (parser == null)
+            {
+                return false;
+            }
+
             Type type = typeof(T);
             if (force)
             {

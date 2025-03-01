@@ -48,9 +48,6 @@ This is a fork of [Command Terminal](https://github.com/stillwwater/command_term
 - All classes / structs have been made sealed / readonly where possible to promote immutability
 - Validation around command ignoring and log level ignoring has been added to Terminal, to prevent invalid data
 
-## Custom Parsing
-TODO TODO
-
 ## The Future
 More improvements coming soon, stick around :)
 
@@ -62,6 +59,7 @@ Planned improvements:
 - Up key support (move cursor to end)
 - Support for more out of the box command argument types
 - Ensure working in Mobile builds
+- Ensure HTML color coding works
 
 ---
 
@@ -135,3 +133,148 @@ static void FrontCommandAdd(CommandArg[] args) {
 ```csharp
 Terminal.Shell.AddCommand("add", CommandAdd, 2, 2, "Adds 2 numbers");
 ```
+
+---
+
+# Custom Parsing
+One change from the original Command Parser is the usage / functionality exposed for parsing the parameters to the CommandArgs themselves. The original library exposed four methods for retrieving arguments - `String`, `Float`, `Int`, and `bool`. If the input was invalid, these parsing methods would simply return the default value and log an error, making it very difficult to programtically react to bad input.
+
+To remedy this, DxCommandTerminal exposes two methods - `String` and `TryGet`. `String` returns the original input parameters as-is. `TryGet` attempts to parse the provided input parameter as the given type, taking in an optional parser. You can also register and deregister parsers for any type, which will override the built-in ones, making use of whatever custom logic you want (JSON, for example).
+
+```csharp
+public bool TryGet<T>(out T parsed);
+```
+
+Sample usage:
+
+```csharp
+CommandArg arg = new CommandArg("1");
+Assert.IsTrue(arg.TryGet(out int parsedInt)); // 1
+Assert.IsTrue(arg.TryGet(out double parsedDouble)); // 1.0d
+Assert.IsTrue(arg.TryGet(out float parsedFloat)); // 1.0f
+Assert.IsTrue(arg.TryGet(out char parsedChar)); // '1'
+
+Assert.IsFalse(arg.TryGet(out Vector2 invalidVector2)); // Failed to parse
+Assert.IsFalse(arg.TryGet(out Color invalidColor)); // Failed to parse
+
+arg = new CommandArg("red");
+Assert.IsTrue(arg.TryGet(out Color color)); // Color.red
+Assert.IsFalse(arg.TryGet(out int invalidInt)); // Failed to parse
+```
+
+`TryGet<T>` supports the following types out of the box:
+- string
+- char
+- bool
+- float
+- double
+- int
+- uint
+- long
+- ulong
+- short
+- ushort
+- byte
+- sbyte
+- Guid
+- DateTime
+- DateTimeOffset
+- Enums
+
+**Unity Types**:
+- Vector2
+- Vector3
+- Vector4
+- Quaternion
+- Vector2Int
+- Vector3Int
+- Rect
+- RectInt
+- Color
+
+In addition to parsing values directly, `TryGet` will automatically attempt to match `public static` or `public const` named fields. For example, all of the following will parse as doubles:
+
+- "1.2"
+- "MaxValue"
+- "MinValue"
+
+Similarly, for Colors:
+- "RGBA(0.7, 0.5, 0.1, 1.0)"
+- "(0.7, 0.5, 0.1, 1.0)"
+- "(0.7, 0.5, 0.1)"
+- "red"
+- "clear"
+
+For all built-in types, the parsers are guaranteed to work with the type's default `ToString()` implementation, as well as logical versions of the data structure. See `Color` sample parseable inputs for an exmaple of this.
+
+If you would like to have built-in parsers for a type that is not listed above, please open an issue!
+
+## Advanced Parsing - Custom Parsers
+`TryGet<T>` has an overload that takes a nullable `CommandArgParser<T>`, which is a function with the following definition:
+
+```csharp
+bool CustomParser<T>(string input, out T value);
+```
+
+If a custom parser is provided, it will be used instead of any of the built in parsing functions. Please note that, as input, if the type is not in the `DoNotCleanTypes` set, the function will be provided with a cleaned version of the input string.
+
+```csharp
+// Somewhere
+public static bool AlwaysParseIntAs32(string input, out int value)
+{
+    // Ignore input, always parse as 32
+    value = 32;
+    return true;
+}
+
+// Usage
+CommandArg arg = new CommandArg("SomeInput");
+Assert.IsTrue(arg.TryGet(out int value, AlwaysParseIntAs32)); // 32
+Assert.IsFalse(arg.TryGet(out float invalidFloat)); // Failed to parse
+Assert.IsFalse(arg.TryGet(out Color invalidColor)); // Failed to parse
+```
+
+If a parsing function is common enough, it can be registered via:
+
+```csharp
+bool CommandArgParser.RegisterParser<T>(CommandArgParser<T> parser, bool force);
+```
+
+This function will return true if the parser was registered successfully. You can provide an optional `force` flag to override any pre-existing registered parsers for that type.
+
+Parsers registered in this way will be used instead of any built-in parsing functions.
+
+Parsers can be unregistered via:
+
+```csharp
+bool CommandArgParser.UnregisterParser<T>();
+```
+
+or
+
+```csharp
+bool CommandArgParser.UnregisterParser(Type parserType);
+```
+
+or even
+
+```csharp
+int CommandArgParser.UnregisterAllParsers();
+```
+
+All of these unregistration functions will return you information on whether the unregistration functions were successful. 
+
+Note: Built in parser functions cannot be unregistered.
+
+## Advanced Parsing - Changing Control Sets
+By default, command parameter input is stripped of whitespace characters. This, along with several other parsing-specific behaviors, are controlled via public static sets on `CommandArg` itself. If you would like to change this behavior in your code, you can modify the contents of these sets to be whatever you'd like. Below are a description of the sets and what they control.
+
+**Delimiters**: For complex, multi-value types like `Vector2`, `Quaternion`, `Color`, etc, the parameter is split using the first match, if any, found in this set. ie, `1,2,3` will get split into the array `["1", "2", "3"]` for parsing
+
+**Quotes**: By default, parameter values are split using whitespace characters. ie, `mycommand 1 2` will call `mycommand` with the arguments `1` and `2`. Another augmentation of DxCommandTerminal is the ability to capture spaces, or any normally-ignored character as input, as long as they're surrounded by any of the characters found in the `Quotes` set. If there is a chunk of text that starts with a character found in the `Quotes` set, but has no matching terminating character, the input string from the first quote character to the end is considered as one parameter. For example, `my command "1 2"` will call `mycommand` with a single argument of `"1 2"`.
+
+**IgnoredValuesForCleanedTypes**: For cleaned types, string sequences in this set will be replaced with the empty string.
+
+**DoNotCleanTypes**: A set of types for which input cleaning is not enabled.
+
+**IgnoredValuesForComplexTypes**: For complex, multi-value types like `Vector2`, `Quaternion`, `Color`, etc, the parameter input will replace all strings found in this set with the empty string.
