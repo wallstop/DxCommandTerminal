@@ -152,7 +152,7 @@
             arg = new CommandArg(tooSmall.ToString(CultureInfo.InvariantCulture));
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
 
-            arg = new CommandArg(Guid.NewGuid().ToString());
+            arg = new CommandArg(System.Guid.NewGuid().ToString());
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
             arg = new CommandArg("false");
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
@@ -208,7 +208,7 @@
             Assert.IsTrue(arg.TryGet(out value));
             Assert.AreEqual(double.MaxValue, value);
 
-            arg = new CommandArg(Guid.NewGuid().ToString());
+            arg = new CommandArg(System.Guid.NewGuid().ToString());
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
             arg = new CommandArg("false");
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
@@ -242,9 +242,424 @@
             Assert.IsTrue(arg.TryGet(out value));
             Assert.IsFalse(value);
 
-            arg = new CommandArg(Guid.NewGuid().ToString());
+            arg = new CommandArg(System.Guid.NewGuid().ToString());
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
             arg = new CommandArg("     ");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+            arg = new CommandArg("asdf");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+        }
+
+        [Test]
+        public void DateTimeOffset()
+        {
+            CommandArg arg = new("");
+            Assert.IsFalse(arg.TryGet(out DateTimeOffset value), $"Unexpectedly parsed {value}");
+
+            byte[] longBytes = new byte[sizeof(long)];
+            for (int i = 0; i < NumTries; ++i)
+            {
+                long ticks;
+                do
+                {
+                    _random.NextBytes(longBytes);
+                    ticks = BitConverter.ToInt64(longBytes, 0);
+                } while (
+                    ticks < System.DateTime.MinValue.Ticks || System.DateTime.MaxValue.Ticks < ticks
+                );
+
+                DateTimeOffset expected = new(ticks, TimeSpan.Zero);
+                arg = new CommandArg(expected.ToString("O"));
+                Assert.IsTrue(arg.TryGet(out value));
+                Assert.AreEqual(expected, value);
+            }
+
+            DateTimeOffset now = System.DateTimeOffset.Now;
+            arg = new CommandArg(now.ToString("O"));
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(now, value);
+
+            DateTimeOffset utcNow = System.DateTimeOffset.UtcNow;
+            arg = new CommandArg(utcNow.ToString("O"));
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(utcNow, value);
+
+            /*
+                Don't validate these, as they're mutable and might change between time of
+                generation and time of check, all we need to know is if they're parsable
+             */
+            arg = new CommandArg(nameof(System.DateTimeOffset.Now));
+            Assert.IsTrue(arg.TryGet(out value));
+            arg = new CommandArg(nameof(System.DateTimeOffset.UtcNow));
+            Assert.IsTrue(arg.TryGet(out value));
+
+            arg = new CommandArg(nameof(System.DateTimeOffset.MaxValue));
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(System.DateTimeOffset.MaxValue, value);
+
+            arg = new CommandArg(System.DateTimeOffset.MaxValue.ToString("O"));
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(System.DateTimeOffset.MaxValue, value);
+
+            arg = new CommandArg(nameof(System.DateTimeOffset.MinValue));
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(System.DateTimeOffset.MinValue, value);
+
+            arg = new CommandArg(System.DateTimeOffset.MinValue.ToString("O"));
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(System.DateTimeOffset.MinValue, value);
+
+            arg = new CommandArg(nameof(System.DateTimeOffset.UnixEpoch));
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(System.DateTimeOffset.UnixEpoch, value);
+
+            arg = new CommandArg(System.DateTimeOffset.UnixEpoch.ToString("O"));
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(System.DateTimeOffset.UnixEpoch, value);
+
+            arg = new CommandArg("00");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+            arg = new CommandArg("false");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+            arg = new CommandArg("asdf");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+        }
+
+        [Test]
+        public void DateTime()
+        {
+            CommandArg arg = new("");
+            Assert.IsFalse(arg.TryGet(out DateTime value), $"Unexpectedly parsed {value}");
+
+            DateTimeKind[] kinds = System
+                .Enum.GetValues(typeof(DateTimeKind))
+                .OfType<DateTimeKind>()
+                .ToArray();
+
+            byte[] longBytes = new byte[sizeof(long)];
+            for (int i = 0; i < NumTries; ++i)
+            {
+                DateTimeKind kind = kinds[_random.Next(0, kinds.Length)];
+                long ticks;
+                do
+                {
+                    _random.NextBytes(longBytes);
+                    ticks = BitConverter.ToInt64(longBytes, 0);
+                } while (
+                    ticks < System.DateTime.MinValue.Ticks || System.DateTime.MaxValue.Ticks < ticks
+                );
+
+                DateTime expected = new(ticks, kind);
+                arg = new CommandArg(expected.ToString("O"));
+                Assert.IsTrue(arg.TryGet(out value));
+                if (kind == DateTimeKind.Utc)
+                {
+                    Assert.AreEqual(expected.ToLocalTime(), value);
+                }
+                else
+                {
+                    if (!expected.Equals(value))
+                    {
+                        Assert.IsTrue(
+                            Math.Abs(expected.Hour - value.Hour) <= 1,
+                            $"Failed to parse - expected: {expected}, parsed: {value}"
+                        );
+                    }
+                    else
+                    {
+                        Assert.AreEqual(
+                            expected,
+                            value,
+                            $"Failed to parse - expected is using {expected.Kind}, parsed is using {value.Kind}"
+                        );
+                    }
+                }
+            }
+
+            DateTime now = System.DateTime.Now;
+            arg = new CommandArg(now.ToString("O"));
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(now, value);
+
+            DateTime utcNow = System.DateTime.UtcNow;
+            arg = new CommandArg(utcNow.ToString("O"));
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(utcNow.ToLocalTime(), value);
+
+            /*
+                Don't validate these, as they're mutable and might change between time of
+                generation and time of check, all we need to know is if they're parsable
+             */
+            arg = new CommandArg(nameof(System.DateTime.Now));
+            Assert.IsTrue(arg.TryGet(out value));
+            arg = new CommandArg(nameof(System.DateTime.UtcNow));
+            Assert.IsTrue(arg.TryGet(out value));
+            arg = new CommandArg(nameof(System.DateTime.Today));
+            Assert.IsTrue(arg.TryGet(out value));
+
+            arg = new CommandArg(nameof(System.DateTime.MaxValue));
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(System.DateTime.MaxValue, value);
+
+            arg = new CommandArg(System.DateTime.MaxValue.ToString("O"));
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(System.DateTime.MaxValue, value);
+
+            arg = new CommandArg(nameof(System.DateTime.MinValue));
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(System.DateTime.MinValue, value);
+
+            arg = new CommandArg(System.DateTime.MinValue.ToString("O"));
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(System.DateTime.MinValue, value);
+
+            arg = new CommandArg("00");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+            arg = new CommandArg("false");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+            arg = new CommandArg("asdf");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+        }
+
+        [Test]
+        public void Guid()
+        {
+            CommandArg arg = new("");
+            Assert.IsFalse(arg.TryGet(out Guid value), $"Unexpectedly parsed {value}");
+
+            arg = new CommandArg(System.Guid.Empty.ToString());
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(System.Guid.Empty, value);
+
+            for (int i = 0; i < NumTries; ++i)
+            {
+                Guid expected = System.Guid.NewGuid();
+                arg = new CommandArg(
+                    _random.Next() % 2 == 0
+                        ? expected.ToString().ToLower()
+                        : expected.ToString().ToUpper()
+                );
+                Assert.IsTrue(arg.TryGet(out value));
+                Assert.AreEqual(expected, value);
+            }
+
+            arg = new CommandArg(nameof(System.Guid.Empty));
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(System.Guid.Empty, value);
+
+            arg = new CommandArg("00");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+            arg = new CommandArg("false");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+            arg = new CommandArg("asdf");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+        }
+
+        [Test]
+        public void Char()
+        {
+            CommandArg arg = new("");
+            Assert.IsFalse(arg.TryGet(out char value), $"Unexpectedly parsed {value}");
+
+            arg = new CommandArg("0");
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual('0', value);
+
+            for (int i = 0; i < NumTries; ++i)
+            {
+                char expected = (char)_random.Next(char.MinValue, char.MaxValue);
+                arg = new CommandArg(expected.ToString());
+                Assert.IsTrue(
+                    arg.TryGet(out value),
+                    $"Failed to parse {expected} as char. Cleaned arg: '{arg.CleanedString}'"
+                );
+                Assert.AreEqual(expected, value);
+            }
+
+            arg = new CommandArg("00");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+
+            arg = new CommandArg("z");
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(arg.String[0], value);
+
+            arg = new CommandArg(nameof(char.MaxValue));
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(char.MaxValue, value);
+
+            arg = new CommandArg(char.MaxValue.ToString());
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(char.MaxValue, value);
+
+            arg = new CommandArg(nameof(char.MinValue));
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(char.MinValue, value);
+
+            arg = new CommandArg(char.MinValue.ToString());
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(char.MinValue, value);
+
+            const long tooBig = char.MaxValue + 1L;
+            arg = new CommandArg(tooBig.ToString());
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+
+            const long tooSmall = char.MinValue - 1L;
+            arg = new CommandArg(tooSmall.ToString());
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+
+            arg = new CommandArg(System.Guid.NewGuid().ToString());
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+            arg = new CommandArg("false");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+            arg = new CommandArg("asdf");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+        }
+
+        [Test]
+        public void Sbyte()
+        {
+            CommandArg arg = new("");
+            Assert.IsFalse(arg.TryGet(out sbyte value), $"Unexpectedly parsed {value}");
+
+            arg = new CommandArg("0");
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(0, value);
+
+            for (int i = 0; i < NumTries; ++i)
+            {
+                sbyte expected = (sbyte)_random.Next(sbyte.MinValue, sbyte.MaxValue);
+                arg = new CommandArg(expected.ToString());
+                Assert.IsTrue(arg.TryGet(out value));
+                Assert.AreEqual(expected, value);
+            }
+
+            arg = new CommandArg(nameof(sbyte.MaxValue));
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(sbyte.MaxValue, value);
+
+            arg = new CommandArg(sbyte.MaxValue.ToString());
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(sbyte.MaxValue, value);
+
+            arg = new CommandArg(nameof(sbyte.MinValue));
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(sbyte.MinValue, value);
+
+            arg = new CommandArg(sbyte.MinValue.ToString());
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(sbyte.MinValue, value);
+
+            long tooBig = sbyte.MaxValue + 1L;
+            arg = new CommandArg(tooBig.ToString());
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+
+            long tooSmall = sbyte.MinValue - 1L;
+            arg = new CommandArg(tooSmall.ToString());
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+
+            arg = new CommandArg(System.Guid.NewGuid().ToString());
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+            arg = new CommandArg("false");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+            arg = new CommandArg("asdf");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+        }
+
+        [Test]
+        public void Byte()
+        {
+            CommandArg arg = new("");
+            Assert.IsFalse(arg.TryGet(out byte value), $"Unexpectedly parsed {value}");
+
+            arg = new CommandArg("0");
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(0, value);
+
+            for (int i = 0; i < NumTries; ++i)
+            {
+                byte expected = (byte)_random.Next(byte.MinValue, byte.MaxValue);
+                arg = new CommandArg(expected.ToString());
+                Assert.IsTrue(arg.TryGet(out value));
+                Assert.AreEqual(expected, value);
+            }
+
+            arg = new CommandArg(nameof(byte.MaxValue));
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(byte.MaxValue, value);
+
+            arg = new CommandArg(byte.MaxValue.ToString());
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(byte.MaxValue, value);
+
+            arg = new CommandArg(nameof(byte.MinValue));
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(byte.MinValue, value);
+
+            arg = new CommandArg(byte.MinValue.ToString());
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(byte.MinValue, value);
+
+            const long tooBig = byte.MaxValue + 1L;
+            arg = new CommandArg(tooBig.ToString());
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+
+            const long tooSmall = byte.MinValue - 1L;
+            arg = new CommandArg(tooSmall.ToString());
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+
+            arg = new CommandArg(System.Guid.NewGuid().ToString());
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+            arg = new CommandArg("false");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+            arg = new CommandArg("asdf");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+        }
+
+        [Test]
+        public void Short()
+        {
+            CommandArg arg = new("");
+            Assert.IsFalse(arg.TryGet(out short value), $"Unexpectedly parsed {value}");
+
+            arg = new CommandArg("0");
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(0, value);
+
+            for (int i = 0; i < NumTries; ++i)
+            {
+                short expected = (short)_random.Next(short.MinValue, short.MaxValue);
+                arg = new CommandArg(expected.ToString());
+                Assert.IsTrue(arg.TryGet(out value));
+                Assert.AreEqual(expected, value);
+            }
+
+            arg = new CommandArg(nameof(short.MaxValue));
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(short.MaxValue, value);
+
+            arg = new CommandArg(short.MaxValue.ToString());
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(short.MaxValue, value);
+
+            arg = new CommandArg(nameof(short.MinValue));
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(short.MinValue, value);
+
+            arg = new CommandArg(short.MinValue.ToString());
+            Assert.IsTrue(arg.TryGet(out value));
+            Assert.AreEqual(short.MinValue, value);
+
+            const long tooBig = short.MaxValue + 1L;
+            arg = new CommandArg(tooBig.ToString());
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+
+            const long tooSmall = short.MinValue - 1L;
+            arg = new CommandArg(tooSmall.ToString());
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+
+            arg = new CommandArg(System.Guid.NewGuid().ToString());
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+            arg = new CommandArg("false");
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
             arg = new CommandArg("asdf");
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
@@ -292,7 +707,7 @@
             arg = new CommandArg(tooSmall.ToString());
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
 
-            arg = new CommandArg(Guid.NewGuid().ToString());
+            arg = new CommandArg(System.Guid.NewGuid().ToString());
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
             arg = new CommandArg("false");
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
@@ -342,7 +757,7 @@
             arg = new CommandArg(long.MinValue + "0");
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
 
-            arg = new CommandArg(Guid.NewGuid().ToString());
+            arg = new CommandArg(System.Guid.NewGuid().ToString());
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
             arg = new CommandArg("false");
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
@@ -392,7 +807,7 @@
             arg = new CommandArg(ulong.MaxValue + "0");
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
 
-            arg = new CommandArg(Guid.NewGuid().ToString());
+            arg = new CommandArg(System.Guid.NewGuid().ToString());
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
             arg = new CommandArg("false");
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
@@ -417,7 +832,7 @@
             {
                 int index = _random.Next(testEnum1Values.Length);
                 TestEnum1 expected = testEnum1Values[index];
-                arg = new CommandArg(expected.ToString());
+                arg = new CommandArg(expected.ToString("G"));
                 Assert.IsTrue(arg.TryGet(out value));
                 Assert.AreEqual(expected, value);
             }
@@ -435,7 +850,7 @@
             {
                 int index = _random.Next(testEnum2Values.Length);
                 TestEnum2 expected = testEnum2Values[index];
-                arg = new CommandArg(expected.ToString());
+                arg = new CommandArg(expected.ToString("G"));
                 Assert.IsTrue(arg.TryGet(out TestEnum2 value2));
                 Assert.AreEqual(expected, value2);
             }
@@ -451,7 +866,7 @@
             arg = new CommandArg("-1");
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
 
-            arg = new CommandArg(Guid.NewGuid().ToString());
+            arg = new CommandArg(System.Guid.NewGuid().ToString());
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
             arg = new CommandArg("false");
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
@@ -610,7 +1025,7 @@
                 $"Expected {value} to be approximately {expected}."
             );
 
-            arg = new CommandArg(Guid.NewGuid().ToString());
+            arg = new CommandArg(System.Guid.NewGuid().ToString());
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
             arg = new CommandArg("false");
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
@@ -816,7 +1231,7 @@
                 $"Expected {value} to be approximately {expected}."
             );
 
-            arg = new CommandArg(Guid.NewGuid().ToString());
+            arg = new CommandArg(System.Guid.NewGuid().ToString());
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
             arg = new CommandArg("false");
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
@@ -862,7 +1277,7 @@
             Assert.IsTrue(arg.TryGet(out value));
             Assert.AreEqual(uint.MinValue, value);
 
-            arg = new CommandArg(Guid.NewGuid().ToString());
+            arg = new CommandArg(System.Guid.NewGuid().ToString());
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
             arg = new CommandArg("false");
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
@@ -916,7 +1331,7 @@
             Assert.IsTrue(arg.TryGet(out value));
             Assert.AreEqual(ushort.MinValue, value);
 
-            arg = new CommandArg(Guid.NewGuid().ToString());
+            arg = new CommandArg(System.Guid.NewGuid().ToString());
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
             arg = new CommandArg("false");
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
@@ -953,7 +1368,7 @@
 
             for (int i = 0; i < NumTries; ++i)
             {
-                expected = Guid.NewGuid().ToString();
+                expected = System.Guid.NewGuid().ToString();
                 arg = new CommandArg(expected);
                 Assert.IsTrue(arg.TryGet(out value));
                 Assert.AreEqual(arg.String, value);
@@ -1094,7 +1509,7 @@
                     + $"Expected: ({expected.x},{expected.y},{expected.z},{expected.w})."
             );
 
-            arg = new CommandArg(Guid.NewGuid().ToString());
+            arg = new CommandArg(System.Guid.NewGuid().ToString());
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
             arg = new CommandArg("false");
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
@@ -1244,7 +1659,7 @@
 
             arg = new CommandArg("invisible");
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
-            arg = new CommandArg(Guid.NewGuid().ToString());
+            arg = new CommandArg(System.Guid.NewGuid().ToString());
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
             arg = new CommandArg("false");
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
@@ -1293,7 +1708,7 @@
         {
             for (int i = 0; i < NumTries; ++i)
             {
-                string expectedString = Guid.NewGuid().ToString();
+                string expectedString = System.Guid.NewGuid().ToString();
                 int expected = _random.Next(int.MinValue, int.MaxValue);
                 CommandArg arg = new(expectedString);
                 Assert.IsFalse(arg.TryGet(out int value));
@@ -1303,7 +1718,7 @@
                 // Make sure the parser isn't sticky
                 Assert.IsFalse(arg.TryGet(out value));
 
-                arg = new CommandArg(Guid.NewGuid().ToString());
+                arg = new CommandArg(System.Guid.NewGuid().ToString());
                 Assert.IsFalse(arg.TryGet(out value, CustomParser));
                 continue;
 
@@ -1326,8 +1741,8 @@
         {
             for (int i = 0; i < NumTries; ++i)
             {
-                string expectedString = Guid.NewGuid().ToString();
-                TestStruct1 expected = new(Guid.NewGuid());
+                string expectedString = System.Guid.NewGuid().ToString();
+                TestStruct1 expected = new(System.Guid.NewGuid());
                 CommandArg arg = new(expectedString);
                 Assert.IsFalse(arg.TryGet(out TestStruct1 value));
                 Assert.IsTrue(arg.TryGet(out value, CustomParser));
@@ -1336,7 +1751,7 @@
                 // Make sure the parser isn't sticky
                 Assert.IsFalse(arg.TryGet(out value));
 
-                arg = new CommandArg(Guid.NewGuid().ToString());
+                arg = new CommandArg(System.Guid.NewGuid().ToString());
                 Assert.IsFalse(arg.TryGet(out value, CustomParser));
 
                 continue;
@@ -1352,6 +1767,65 @@
                     parsed = default;
                     return false;
                 }
+            }
+        }
+
+        [Test]
+        public void RegisteredParsersAreUsed()
+        {
+            const int constParsed = -23;
+            bool registered = CommandArg.RegisterParser<int>(CustomIntParser);
+            Assert.IsTrue(registered);
+
+            CommandArg arg = new("Garbage");
+            RunRegisteredParsingLogic();
+
+            arg = new CommandArg(System.Guid.NewGuid().ToString());
+            RunRegisteredParsingLogic();
+
+            arg = new CommandArg("");
+            RunRegisteredParsingLogic();
+
+            arg = new CommandArg("x_YZZZZ$$$");
+            RunRegisteredParsingLogic();
+
+            bool unregistered = CommandArg.UnregisterParser<int>();
+            Assert.IsTrue(unregistered);
+
+            arg = new CommandArg("Garbage");
+            RunUnregisteredParsingLogic();
+
+            arg = new CommandArg(System.Guid.NewGuid().ToString());
+            RunUnregisteredParsingLogic();
+
+            arg = new CommandArg("");
+            RunUnregisteredParsingLogic();
+
+            arg = new CommandArg("x_YZZZZ$$$");
+            RunUnregisteredParsingLogic();
+
+            return;
+
+            void RunRegisteredParsingLogic()
+            {
+                Assert.IsTrue(arg.TryGet(typeof(int), out object value));
+                Assert.AreEqual(constParsed, value);
+                Assert.IsTrue(arg.TryGet(out int parsed));
+                Assert.AreEqual(constParsed, parsed);
+                Assert.IsFalse(arg.TryGet(out float _));
+            }
+
+            void RunUnregisteredParsingLogic()
+            {
+                Assert.IsFalse(arg.TryGet(typeof(int), out object _));
+                Assert.IsFalse(arg.TryGet(out int _));
+                Assert.IsFalse(arg.TryGet(out float _));
+            }
+
+            static bool CustomIntParser(string input, out int parsed)
+            {
+                parsed = constParsed;
+                return true;
             }
         }
 

@@ -2,6 +2,7 @@ namespace CommandTerminal
 {
     using System;
     using System.Collections.Generic;
+    using System.Globalization;
     using System.Linq;
     using System.Reflection;
     using Attributes;
@@ -55,6 +56,14 @@ namespace CommandTerminal
         public static readonly HashSet<char> Delimiters = new() { ',', ';', ':', '_', '/', '\\' };
         public static readonly HashSet<char> Quotes = new() { '"', '\'' };
         public static readonly HashSet<string> IgnoredValuesForAllTypes = new();
+
+        public static readonly HashSet<Type> DoNotCleanTypes = new()
+        {
+            typeof(string),
+            typeof(char),
+            typeof(DateTime),
+            typeof(DateTimeOffset),
+        };
         public static readonly HashSet<string> IgnoredValuesForComplexTypes = new()
         {
             "(",
@@ -71,6 +80,21 @@ namespace CommandTerminal
         };
 
         public string String { get; }
+
+        public string CleanedString
+        {
+            get
+            {
+                string cleanedString = String;
+                cleanedString = String.Replace(" ", string.Empty);
+                cleanedString = IgnoredValuesForAllTypes.Aggregate(
+                    cleanedString,
+                    (current, ignoredValue) => current.Replace(ignoredValue, string.Empty)
+                );
+                cleanedString = cleanedString.Trim();
+                return cleanedString;
+            }
+        }
 
         public bool TryGet(Type type, out object parsed)
         {
@@ -97,20 +121,7 @@ namespace CommandTerminal
         public bool TryGet<T>(out T parsed, CommandArgParser<T> parserOverride)
         {
             Type type = typeof(T);
-            string stringValue;
-            if (type == typeof(string))
-            {
-                stringValue = String;
-            }
-            else
-            {
-                stringValue = String.Replace(" ", string.Empty);
-                stringValue = IgnoredValuesForAllTypes.Aggregate(
-                    stringValue,
-                    (current, ignoredValue) => current.Replace(ignoredValue, string.Empty)
-                );
-                stringValue = stringValue.Trim();
-            }
+            string stringValue = DoNotCleanTypes.Contains(type) ? String : CleanedString;
 
             if (parserOverride != null)
             {
@@ -185,16 +196,13 @@ namespace CommandTerminal
             {
                 return InnerParse<DateTime>(stringValue, DateTime.TryParse, out parsed);
             }
+            if (type == typeof(DateTimeOffset))
+            {
+                return InnerParse<DateTimeOffset>(stringValue, DateTimeOffset.TryParse, out parsed);
+            }
             if (type == typeof(char))
             {
-                if (stringValue.Length == 1)
-                {
-                    parsed = (T)Convert.ChangeType(stringValue[0], type);
-                    return true;
-                }
-
-                parsed = default;
-                return false;
+                return InnerParse<char>(stringValue, char.TryParse, out parsed);
             }
             if (type == typeof(decimal))
             {
@@ -202,39 +210,28 @@ namespace CommandTerminal
             }
             if (type.IsEnum)
             {
-                if (!Enum.IsDefined(type, stringValue))
-                {
-                    if (int.TryParse(stringValue, out int enumIntValue))
-                    {
-                        if (!EnumValues.TryGetValue(type, out object enumValues))
-                        {
-                            enumValues = Enum.GetValues(type).OfType<T>().ToArray();
-                            EnumValues[type] = enumValues;
-                        }
-
-                        T[] values = (T[])enumValues;
-                        if (0 <= enumIntValue && enumIntValue < values.Length)
-                        {
-                            parsed = values[enumIntValue];
-                            return true;
-                        }
-                    }
-
-                    parsed = default;
-                    return false;
-                }
-
                 bool parseOk = Enum.TryParse(type, stringValue, out object parsedObject);
                 if (parseOk)
                 {
                     parsed = (T)Convert.ChangeType(parsedObject, type);
-                }
-                else
-                {
-                    parsed = default;
+                    return true;
                 }
 
-                return parseOk;
+                if (int.TryParse(stringValue, out int enumIntValue))
+                {
+                    if (!EnumValues.TryGetValue(type, out object enumValues))
+                    {
+                        enumValues = Enum.GetValues(type).OfType<T>().ToArray();
+                        EnumValues[type] = enumValues;
+                    }
+
+                    T[] values = (T[])enumValues;
+                    if (0 <= enumIntValue && enumIntValue < values.Length)
+                    {
+                        parsed = values[enumIntValue];
+                        return true;
+                    }
+                }
             }
             if (type == typeof(Vector2))
             {
@@ -403,6 +400,17 @@ namespace CommandTerminal
             parsed = default;
             return false;
 
+            static bool TryParseDateTime(string input, out DateTime parsed)
+            {
+                return DateTime.TryParseExact(
+                    input,
+                    (string)null,
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.RoundtripKind,
+                    out parsed
+                );
+            }
+
             static bool InnerParse<TParsed>(
                 string input,
                 CommandArgParser<TParsed> typedParser,
@@ -469,7 +477,7 @@ namespace CommandTerminal
 
                 if (!ConstFields.TryGetValue(type, out Dictionary<string, FieldInfo> fields))
                 {
-                    fields = LoadConstFieldsForType<T>();
+                    fields = LoadStaticFieldsForType<T>();
                     ConstFields[type] = fields;
                 }
 
@@ -543,12 +551,11 @@ namespace CommandTerminal
                 );
         }
 
-        private static Dictionary<string, FieldInfo> LoadConstFieldsForType<T>()
+        private static Dictionary<string, FieldInfo> LoadStaticFieldsForType<T>()
         {
             Type type = typeof(T);
             return type.GetFields(BindingFlags.Static | BindingFlags.Public)
                 .Where(field => field.FieldType == type)
-                .Where(field => field.IsLiteral)
                 .ToDictionary(
                     field => field.Name,
                     field => field,
