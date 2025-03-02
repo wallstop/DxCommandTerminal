@@ -23,7 +23,9 @@ namespace CommandTerminal
     [DisallowMultipleComponent]
     public sealed class Terminal : MonoBehaviour
     {
-        private static readonly Dictionary<string, string> SpecialKeyCodeMap = new()
+        private static readonly Dictionary<string, string> SpecialKeyCodeMap = new(
+            StringComparer.OrdinalIgnoreCase
+        )
         {
             { "`", "backquote" },
             { "-", "minus" },
@@ -46,11 +48,18 @@ namespace CommandTerminal
             { "8", "digit8" },
             { "9", "digit9" },
             { "0", "digit0" },
+            { "up", "upArrow" },
+            { "left", "leftArrow" },
+            { "right", "rightArrow" },
+            { "down", "downArrow" },
+            { " ", "space" },
         };
 
-        private static readonly Dictionary<string, string> SpecialShiftedKeyCodeMap = new()
+        private static readonly Dictionary<string, string> SpecialShiftedKeyCodeMap = new(
+            StringComparer.OrdinalIgnoreCase
+        )
         {
-            { "~", "backquote" }, // Shifted version
+            { "~", "backquote" },
             { "!", "digit1" },
             { "@", "digit2" },
             { "#", "digit3" },
@@ -61,16 +70,16 @@ namespace CommandTerminal
             { "*", "digit8" },
             { "(", "digit9" },
             { ")", "digit0" },
-            { "_", "minus" }, // Shifted version
-            { "+", "equals" }, // Shifted version
-            { "{", "leftBracket" }, // Shifted version
-            { "}", "rightBracket" }, // Shifted version
-            { ":", "semicolon" }, // Shifted version
-            { "\"", "quote" }, // Shifted version
-            { "|", "backslash" }, // Shifted version
-            { "<", "comma" }, // Shifted version
-            { ">", "period" }, // Shifted version
-            { "?", "slash" }, // Shifted version
+            { "_", "minus" },
+            { "+", "equals" },
+            { "{", "leftBracket" },
+            { "}", "rightBracket" },
+            { ":", "semicolon" },
+            { "\"", "quote" },
+            { "|", "backslash" },
+            { "<", "comma" },
+            { ">", "period" },
+            { "?", "slash" },
         };
 
         public static CommandLog Buffer { get; private set; }
@@ -800,6 +809,7 @@ namespace CommandTerminal
         public void HandleNext()
         {
             _commandText = History?.Next() ?? string.Empty;
+            _moveCursor = true;
         }
 
         public void Close()
