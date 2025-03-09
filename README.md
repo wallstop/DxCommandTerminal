@@ -34,6 +34,9 @@ This is a fork of [Command Terminal](https://github.com/stillwwater/command_term
 - Fixed a bug where moving through command history did not update the cursor position
 - Fixed a bug where enabling and disabling the Terminal would break AutoComplete
 - Fixed a bug where you could interact with the terminal when it was in closed state
+- Fixed a bug where commands run programmatically were not added to history
+- Fixed a bug where terminal line height was not being calculated correctly
+- Fixed a bug where input caret width was not being calculated correctly. Previously, long caret strings would be rendered improperly
 - Unified behavior around navigating up and down through command history. Previously, navigating up as far as possible would "stick" to the up-most command, while navigating down as far as possible would result in a "blank" command. Now, walking past either end of up/down results in a blank command.
 - Minor performance benefits if there are terminals in multiple scenes
 - Minor performance benefits (O(n) -> O(1)) when the terminal buffer becomes full

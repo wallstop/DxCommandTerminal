@@ -687,6 +687,12 @@ namespace CommandTerminal
         private readonly List<CommandArg> _arguments = new(); // Cache for performance
 
         private readonly Queue<string> _errorMessages = new();
+        private readonly CommandHistory _history;
+
+        public CommandShell(CommandHistory history)
+        {
+            _history = history ?? throw new ArgumentNullException(nameof(history));
+        }
 
         public bool TryConsumeErrorMessage(out string errorMessage)
         {
@@ -788,7 +794,7 @@ namespace CommandTerminal
 
             if (_arguments.Count == 0)
             {
-                // Nothing to run
+                _history.Push(line, false, true);
                 return false;
             }
 
@@ -803,6 +809,7 @@ namespace CommandTerminal
             if (!_commands.ContainsKey(commandName))
             {
                 IssueErrorMessage($"Command {commandName} could not be found");
+                _history.Push(line, false, false);
                 return false;
             }
 
@@ -811,20 +818,25 @@ namespace CommandTerminal
 
         public bool RunCommand(string commandName, CommandArg[] arguments)
         {
+            string line =
+                $"{commandName} {string.Join(" ", arguments.Select(argument => argument.String))}";
             commandName = commandName?.Replace(
                 " ",
                 string.Empty,
                 StringComparison.OrdinalIgnoreCase
             );
+
             if (string.IsNullOrWhiteSpace(commandName))
             {
                 IssueErrorMessage($"Invalid command name '{commandName}'");
+                _history.Push(line, false, false);
                 return false;
             }
 
             if (!_commands.TryGetValue(commandName, out CommandInfo command))
             {
                 IssueErrorMessage($"Command {commandName} not found");
+                _history.Push(line, false, false);
                 return false;
             }
 
@@ -855,11 +867,13 @@ namespace CommandTerminal
                     invalidMessage += $"\n    -> Usage: {command.hint}";
                 }
                 _errorMessages.Enqueue(invalidMessage);
-
+                _history.Push(line, false, false);
                 return false;
             }
 
+            int errorCount = _errorMessages.Count;
             command.proc?.Invoke(arguments);
+            _history.Push(line, true, errorCount == _errorMessages.Count);
             return true;
         }
 
