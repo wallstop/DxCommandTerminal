@@ -687,6 +687,12 @@ namespace CommandTerminal
         private readonly List<CommandArg> _arguments = new(); // Cache for performance
 
         private readonly Queue<string> _errorMessages = new();
+        private readonly CommandHistory _history;
+
+        public CommandShell(CommandHistory history)
+        {
+            _history = history ?? throw new ArgumentNullException(nameof(history));
+        }
 
         public bool TryConsumeErrorMessage(out string errorMessage)
         {
@@ -756,7 +762,7 @@ namespace CommandTerminal
         /// <summary>
         /// Parses an input line into a command and runs that command.
         /// </summary>
-        public void RunCommand(string line)
+        public bool RunCommand(string line)
         {
             string remaining = line;
             _arguments.Clear();
@@ -788,8 +794,8 @@ namespace CommandTerminal
 
             if (_arguments.Count == 0)
             {
-                // Nothing to run
-                return;
+                _history.Push(line, false, true);
+                return false;
             }
 
             string commandName = _arguments[0].String ?? string.Empty;
@@ -803,29 +809,35 @@ namespace CommandTerminal
             if (!_commands.ContainsKey(commandName))
             {
                 IssueErrorMessage($"Command {commandName} could not be found");
-                return;
+                _history.Push(line, false, false);
+                return false;
             }
 
-            RunCommand(commandName, _arguments.ToArray());
+            return RunCommand(commandName, _arguments.ToArray());
         }
 
-        public void RunCommand(string commandName, CommandArg[] arguments)
+        public bool RunCommand(string commandName, CommandArg[] arguments)
         {
+            string line =
+                $"{commandName} {string.Join(" ", arguments.Select(argument => argument.String))}";
             commandName = commandName?.Replace(
                 " ",
                 string.Empty,
                 StringComparison.OrdinalIgnoreCase
             );
+
             if (string.IsNullOrWhiteSpace(commandName))
             {
                 IssueErrorMessage($"Invalid command name '{commandName}'");
-                return;
+                _history.Push(line, false, false);
+                return false;
             }
 
             if (!_commands.TryGetValue(commandName, out CommandInfo command))
             {
                 IssueErrorMessage($"Command {commandName} not found");
-                return;
+                _history.Push(line, false, false);
+                return false;
             }
 
             int argCount = arguments.Length;
@@ -855,11 +867,14 @@ namespace CommandTerminal
                     invalidMessage += $"\n    -> Usage: {command.hint}";
                 }
                 _errorMessages.Enqueue(invalidMessage);
-
-                return;
+                _history.Push(line, false, false);
+                return false;
             }
 
+            int errorCount = _errorMessages.Count;
             command.proc?.Invoke(arguments);
+            _history.Push(line, true, errorCount == _errorMessages.Count);
+            return true;
         }
 
         // ReSharper disable once MemberCanBePrivate.Global

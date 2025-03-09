@@ -16,6 +16,7 @@ This is a fork of [Command Terminal](https://github.com/stillwwater/command_term
 5. Resolve the latest `com.wallstop-studios.dxcommandterminal`
 
 ## Improvements Over Baseline
+- [Enhanced Auto-Complete + Hint system + styling](#hints)
 - Fixed Input handling bugs related to [WebGL](#web-gl)
 - Fully integrated with Unity's [new Input System](#new-input-system)
 - Fully [configurable and bindable controls](#hotkeys) for every action
@@ -31,7 +32,13 @@ This is a fork of [Command Terminal](https://github.com/stillwwater/command_term
 - Fixed a bug where only the latest error message was preserved - errors are now queued
 - Fixed a bug where attempting to access static `Terminal` properties would throw if the Terminal had been enabled yet.
 - Fixed a bug where moving through command history did not update the cursor position
+- Fixed a bug where enabling and disabling the Terminal would break AutoComplete
+- Fixed a bug where you could interact with the terminal when it was in closed state
+- Fixed a bug where commands run programmatically were not added to history
+- Fixed a bug where terminal line height was not being calculated correctly
+- Fixed a bug where input caret width was not being calculated correctly. Previously, long caret strings would be rendered improperly
 - Unified behavior around navigating up and down through command history. Previously, navigating up as far as possible would "stick" to the up-most command, while navigating down as far as possible would result in a "blank" command. Now, walking past either end of up/down results in a blank command.
+- History is now filterable by execution success (command existence) as well as error status of the command
 - Minor performance benefits if there are terminals in multiple scenes
 - Minor performance benefits (O(n) -> O(1)) when the terminal buffer becomes full
 - Minor performance benefits around multiple-indexing into dictionary issues
@@ -287,9 +294,12 @@ All actions are now fully configurable by either explicit keybindings, for keybo
 
 ![png](./Media/Hotkeys.png)
 
-Keyboard hotkey bindings are now intelligent as they can be about shift key interaction. There are two ways to create a `shift+<binding>`:
+Keyboard hotkey bindings are now intelligent as they can be about shift key interaction. There are three ways to create a `shift+<binding>`:
 1. Prefix the binding with the `#` symbol. For example, `#tab` will be interpreted as `shift+tab`
-2. For keys with shifted versions, such as alpha numeric keys, simply use the shifted version. For example, `A` will be interpreted as `shift+a` 
+2. For keys with shifted versions, such as alpha numeric keys, simply use the shifted version. For example, `A` will be interpreted as `shift+a`
+3. When using the new input system, hotkeys can be represented as `shift+<binding>`. `shift+tab` will be interpreted as the combination `left shift` + `tab`.
+
+The only combination keys that are supported without using custom bindings via the new Input System are `shift+<binding>`.
 
 # New Input System
 DxCommandTerminal is now fully integrated with Unity's new Input System, if it is found in the project and enabled. 
@@ -300,11 +310,24 @@ You can also use `PlayerInput` or similar to bind InputActions to all available 
 - `Close`: If the terminal is open, closes it.
 - `ToggleSmall`: If the terminal is not opened to its small height, opens it to small height, otherwise closes it.
 - `ToggleFull`: If the terminal is not opened to its full height, opens it to full height, otherwise closes it.
-- `CompleteCommand`: Uses auto-complete to attempt to complete the current command using what is typed in the command buffer.
+- `CompleteCommand`: Uses auto-complete to attempt to complete the current command using what is typed in the command buffer, cycling forwards through results.
+- `ReverseCompleteCommand`: Uses auto-complete to attempt to complete the current command using what is typed in the command buffer, but cycling backwards through results.
 - `EnterCommand`: Takes the current buffer and attempts to execute it as a command + parameters.
 
 ## Note
 If using PlayerInput to bind to the above controls, you will need to uncheck `Use Hotkeys` under the `Hotkeys` header in the Terminal script.
+
+When InputActions are not bound, there is an order of precedence for input checking. It is:
+- Close
+- Enter Command
+- Previous
+- Next
+- Toggle Full Terminal
+- Toggle Small Terminal
+- Auto Complete (backward)
+- Auto Complete (forward)
+
+This order is irrelevant when using PlayerInput.
 
 # Web GL
 If you are relying on `RegisterCommandAttribute` to wire up your commands to the CommandShell instead of manually registering them, you will need to set `Managed Stripping Level` to `Low`, `Minimal`, or `None` under `Player > WebGL > Other Settings > Optimizations > Managed Stripping Level` in order for command registration to work. Settings of `Medium` or higher will break the reflection code that loads the commands, causing the terminal to forget about its capabilities.
@@ -313,4 +336,7 @@ If you are relying on `RegisterCommandAttribute` to wire up your commands to the
 
 See [Unity docs on Managed Stripping Level](https://docs.unity3d.com/2022.3/Documentation/ScriptReference/ManagedStrippingLevel.html) for more details.
 
+# Hints
+AutoComplete has gotten a major upgrade in this fork. Completion is now not only case-insensitive, but it will now also search (unique) commands that have been executed, ignoring any irrelevant input. Pressing the complete key multiple times now selects available options in a persistent fashion. Completion can be walked both forward and backwards. Results are now presented in a new UI that intelligently adapts to screen space and current selection position. When completion is no longer relevant, the UI is disabled. However, you can opt to always show the available commands by toggling the new `Display Hints` option in the Terminal configuration. There are also several new theming options for hints, with controls over the currently selected hint v unselected hints.
 
+![png](./Media/AutoComplete.png)
