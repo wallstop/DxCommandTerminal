@@ -3,11 +3,18 @@ namespace CommandTerminal
     using System;
     using System.Collections.Generic;
     using System.ComponentModel;
+    using System.Linq;
     using System.Text;
+    using Attributes;
     using JetBrains.Annotations;
     using UnityEditor;
     using UnityEngine;
     using UnityEngine.Assertions;
+    using Utils;
+#if ENABLE_INPUT_SYSTEM
+    using UnityEngine.InputSystem;
+    using UnityEngine.InputSystem.Controls;
+#endif
 
     public enum TerminalState
     {
@@ -19,6 +26,65 @@ namespace CommandTerminal
     [DisallowMultipleComponent]
     public sealed class Terminal : MonoBehaviour
     {
+        private static readonly Dictionary<string, string> SpecialKeyCodeMap = new(
+            StringComparer.OrdinalIgnoreCase
+        )
+        {
+            { "`", "backquote" },
+            { "-", "minus" },
+            { "=", "equals" },
+            { "[", "leftBracket" },
+            { "]", "rightBracket" },
+            { ";", "semicolon" },
+            { "'", "quote" },
+            { "\\", "backslash" },
+            { ",", "comma" },
+            { ".", "period" },
+            { "/", "slash" },
+            { "1", "digit1" },
+            { "2", "digit2" },
+            { "3", "digit3" },
+            { "4", "digit4" },
+            { "5", "digit5" },
+            { "6", "digit6" },
+            { "7", "digit7" },
+            { "8", "digit8" },
+            { "9", "digit9" },
+            { "0", "digit0" },
+            { "up", "upArrow" },
+            { "left", "leftArrow" },
+            { "right", "rightArrow" },
+            { "down", "downArrow" },
+            { " ", "space" },
+        };
+
+        private static readonly Dictionary<string, string> SpecialShiftedKeyCodeMap = new(
+            StringComparer.OrdinalIgnoreCase
+        )
+        {
+            { "~", "backquote" },
+            { "!", "digit1" },
+            { "@", "digit2" },
+            { "#", "digit3" },
+            { "$", "digit4" },
+            { "^", "digit6" },
+            { "%", "digit5" },
+            { "&", "digit7" },
+            { "*", "digit8" },
+            { "(", "digit9" },
+            { ")", "digit0" },
+            { "_", "minus" },
+            { "+", "equals" },
+            { "{", "leftBracket" },
+            { "}", "rightBracket" },
+            { ":", "semicolon" },
+            { "\"", "quote" },
+            { "|", "backslash" },
+            { "<", "comma" },
+            { ">", "period" },
+            { "?", "slash" },
+        };
+
         public static CommandLog Buffer { get; private set; }
         public static CommandShell Shell { get; private set; }
 
@@ -46,13 +112,45 @@ namespace CommandTerminal
         private float _toggleSpeed = 360;
 
         [SerializeField]
+        private int _bufferSize = 512;
+
+        [Header("Hotkeys")]
+#if ENABLE_INPUT_SYSTEM
+        [SerializeField]
+        [Tooltip("If you are binding your own input actions, this needs to be set to false.")]
+        private bool _useHotkeys = true;
+#endif
+
+        [ShowIf(nameof(_useHotkeys))]
+        [SerializeField]
         private string _toggleHotkey = "`";
 
+        [ShowIf(nameof(_useHotkeys))]
         [SerializeField]
         private string _toggleFullHotkey = "#`";
 
+        [ShowIf(nameof(_useHotkeys))]
         [SerializeField]
-        private int _bufferSize = 512;
+        private string _completeHotkey = "tab";
+
+        [ShowIf(nameof(_useHotkeys))]
+        [SerializeField]
+        private string _previousHotkey = "up";
+
+        [ShowIf(nameof(_useHotkeys))]
+        [SerializeField]
+        private ListWrapper<string> _completeCommandHotkeys = new()
+        {
+            list = { "enter", "return" },
+        };
+
+        [ShowIf(nameof(_useHotkeys))]
+        [SerializeField]
+        private string _closeHotkey = "escape";
+
+        [ShowIf(nameof(_useHotkeys))]
+        [SerializeField]
+        private string _nextHotkey = "down";
 
         [Header("Input")]
         [SerializeField]
@@ -113,7 +211,9 @@ namespace CommandTerminal
 
         private TerminalState _state;
         private TextEditor _editorState;
+#if !ENABLE_INPUT_SYSTEM
         private bool _inputFix;
+#endif
         private bool _moveCursor;
         private bool _initialOpen; // Used to focus on TextField when console opens
         private Rect _window;
@@ -131,6 +231,7 @@ namespace CommandTerminal
 
         private int? _lastWidth;
         private int? _lastHeight;
+        private bool _handledInputThisFrame;
 
         [StringFormatMethod("format")]
         public static bool Log(string format, params object[] parameters)
@@ -156,7 +257,14 @@ namespace CommandTerminal
         // ReSharper disable once MemberCanBePrivate.Global
         public void SetState(TerminalState newState)
         {
+#if !ENABLE_INPUT_SYSTEM
             _inputFix = true;
+#endif
+            if (newState != TerminalState.Close)
+            {
+                _initialOpen = true;
+            }
+
             _cachedCommandText = _commandText;
             _commandText = string.Empty;
 
@@ -253,6 +361,11 @@ namespace CommandTerminal
 
         private void Start()
         {
+#if ENABLE_INPUT_SYSTEM
+            Debug.Log("Utilizing new Input System for control handling...", this);
+#else
+            Debug.Log("Utilizing Legacy Input System for control handling...", this);
+#endif
             if (_started)
             {
                 SetState(TerminalState.Close);
@@ -266,10 +379,15 @@ namespace CommandTerminal
 
             _commandText = string.Empty;
             _cachedCommandText = _commandText;
-            Assert.IsFalse(
-                string.Equals(_toggleHotkey, "return", StringComparison.OrdinalIgnoreCase),
-                "Return is not a valid ToggleHotkey"
-            );
+            if (_useHotkeys)
+            {
+                Assert.IsFalse(
+                    _completeCommandHotkeys?.list?.Exists(command =>
+                        string.Equals(command, _toggleHotkey, StringComparison.OrdinalIgnoreCase)
+                    ) ?? false,
+                    $"Invalid Toggle Hotkey {_toggleHotkey} - cannot be in the set of complete command hotkeys: [{string.Join(",", _completeCommandHotkeys?.list ?? Enumerable.Empty<string>())}]"
+                );
+            }
 
             SetupWindow();
             SetupWindowStyle();
@@ -344,27 +462,76 @@ namespace CommandTerminal
         }
 #endif
 
+#if ENABLE_INPUT_SYSTEM
+        private void Update()
+        {
+            if (!_useHotkeys || _handledInputThisFrame)
+            {
+                return;
+            }
+
+            if (IsKeyPressed(_closeHotkey))
+            {
+                Close();
+                _handledInputThisFrame = true;
+            }
+            else if (_completeCommandHotkeys?.list?.Exists(IsKeyPressed) == true)
+            {
+                EnterCommand();
+                _handledInputThisFrame = true;
+            }
+            else if (IsKeyPressed(_previousHotkey))
+            {
+                HandlePrevious();
+                _handledInputThisFrame = true;
+            }
+            else if (IsKeyPressed(_nextHotkey))
+            {
+                HandleNext();
+                _handledInputThisFrame = true;
+            }
+            else if (IsKeyPressed(_toggleFullHotkey))
+            {
+                ToggleFull();
+                _handledInputThisFrame = true;
+            }
+            else if (IsKeyPressed(_toggleHotkey))
+            {
+                ToggleSmall();
+                _handledInputThisFrame = true;
+            }
+            else if (IsKeyPressed(_completeHotkey))
+            {
+                CompleteCommand();
+                _handledInputThisFrame = true;
+            }
+        }
+#endif
+
         private void LateUpdate()
         {
             if (_lastHeight != Screen.height || _lastWidth != Screen.width)
             {
                 SetupWindow();
             }
+
+            _handledInputThisFrame = false;
         }
 
         private void OnGUI()
         {
+#if !ENABLE_INPUT_SYSTEM
             if (Event.current.Equals(Event.KeyboardEvent(_toggleHotkey)))
             {
-                SetState(TerminalState.OpenSmall);
+                ToggleSmall();
                 _initialOpen = true;
             }
             else if (Event.current.Equals(Event.KeyboardEvent(_toggleFullHotkey)))
             {
-                SetState(TerminalState.OpenFull);
+                ToggleFull();
                 _initialOpen = true;
             }
-
+#endif
             if (_showGUIButtons)
             {
                 DrawGUIButtons();
@@ -466,90 +633,272 @@ namespace CommandTerminal
         private void DrawConsole(int window2D)
         {
             GUILayout.BeginVertical();
-
-            _scrollPosition = GUILayout.BeginScrollView(
-                _scrollPosition,
-                false,
-                false,
-                GUIStyle.none,
-                GUIStyle.none
-            );
-            GUILayout.FlexibleSpace();
-            DrawLogs();
-            GUILayout.EndScrollView();
-
-            if (_moveCursor)
+            try
             {
-                CursorToEnd();
-                _moveCursor = false;
+                _scrollPosition = GUILayout.BeginScrollView(
+                    _scrollPosition,
+                    false,
+                    false,
+                    GUIStyle.none,
+                    GUIStyle.none
+                );
+                try
+                {
+                    GUILayout.FlexibleSpace();
+                    DrawLogs();
+                }
+                finally
+                {
+                    GUILayout.EndScrollView();
+                }
+#if !ENABLE_INPUT_SYSTEM
+                if (Event.current.Equals(Event.KeyboardEvent(_closeHotkey)))
+                {
+                    Close();
+                }
+                else if (
+                    _completeCommandHotkeys?.Exists(command =>
+                        Event.current.Equals(Event.KeyboardEvent(command))
+                    ) == true
+                )
+                {
+                    EnterCommand();
+                }
+                else if (Event.current.Equals(Event.KeyboardEvent(_previousHotkey)))
+                {
+                    HandlePrevious();
+                }
+                else if (Event.current.Equals(Event.KeyboardEvent(_nextHotkey)))
+                {
+                    HandleNext();
+                }
+                else if (Event.current.Equals(Event.KeyboardEvent(_toggleHotkey)))
+                {
+                    OpenSmall();
+                }
+                else if (Event.current.Equals(Event.KeyboardEvent(_toggleFullHotkey)))
+                {
+                    OpenFull();
+                }
+                else if (Event.current.Equals(Event.KeyboardEvent(_completeHotkey)))
+                {
+                    CompleteCommand();
+                }
+#endif
+                GUILayout.BeginHorizontal();
+                try
+                {
+                    if (!string.IsNullOrEmpty(_inputCaret))
+                    {
+                        GUILayout.Label(
+                            _inputCaret,
+                            _inputStyle,
+                            GUILayout.Width(_consoleFont.fontSize)
+                        );
+                    }
+
+                    GUI.SetNextControlName("command_text_field");
+                    _commandText = GUILayout.TextField(_commandText, _inputStyle);
+
+                    if (_moveCursor)
+                    {
+                        CursorToEnd();
+                        _moveCursor = false;
+                    }
+
+#if !ENABLE_INPUT_SYSTEM
+                    if (_inputFix && _commandText.Length > 0)
+                    {
+                        _commandText = _cachedCommandText; // Otherwise the TextField picks up the ToggleHotkey character event
+                        _inputFix = false; // Prevents checking string Length every draw call
+                    }
+#endif
+
+                    if (_initialOpen)
+                    {
+                        GUI.FocusControl("command_text_field");
+                        _initialOpen = false;
+                    }
+
+                    if (
+                        _showGUIButtons
+                        && GUILayout.Button(
+                            "| run",
+                            _inputStyle,
+                            GUILayout.Width(Screen.width / 10f)
+                        )
+                    )
+                    {
+                        EnterCommand();
+                    }
+                }
+                finally
+                {
+                    GUILayout.EndHorizontal();
+                }
+            }
+            finally
+            {
+                GUILayout.EndVertical();
+            }
+        }
+
+#if ENABLE_INPUT_SYSTEM
+        private static bool IsKeyPressed(string key)
+        {
+            if (1 < key.Length && key.StartsWith("#", StringComparison.OrdinalIgnoreCase))
+            {
+                string expected = key.Substring(1);
+                if (expected.Length == 1)
+                {
+                    expected = expected.ToLowerInvariant();
+                }
+
+                return Keyboard.current.shiftKey.isPressed
+                    && Keyboard.current.TryGetChildControl<KeyControl>(
+                        SpecialKeyCodeMap.GetValueOrDefault(expected, expected)
+                    )
+                        is { wasPressedThisFrame: true };
+            }
+            else if (SpecialShiftedKeyCodeMap.TryGetValue(key, out string expected))
+            {
+                return Keyboard.current.shiftKey.isPressed
+                    && Keyboard.current.TryGetChildControl<KeyControl>(expected)
+                        is { wasPressedThisFrame: true };
+            }
+            else if (key.Length == 1 && key.ToLowerInvariant() != key)
+            {
+                key = key.ToLowerInvariant();
+                return Keyboard.current.shiftKey.isPressed
+                    && Keyboard.current.TryGetChildControl<KeyControl>(key)
+                        is { wasPressedThisFrame: true };
+            }
+            else
+            {
+                return Keyboard.current.TryGetChildControl<KeyControl>(
+                    SpecialKeyCodeMap.GetValueOrDefault(key, key)
+                )
+                    is { wasPressedThisFrame: true };
+            }
+        }
+
+        public void OnHandlePrevious(InputValue inputValue)
+        {
+            HandlePrevious();
+        }
+
+        public void OnHandleNext(InputValue inputValue)
+        {
+            HandleNext();
+        }
+
+        public void OnClose(InputValue inputValue)
+        {
+            Close();
+        }
+
+        public void OnToggleSmall(InputValue inputValue)
+        {
+            ToggleSmall();
+        }
+
+        public void OnToggleFull(InputValue inputValue)
+        {
+            ToggleFull();
+        }
+
+        public void OnCompleteCommand(InputValue input)
+        {
+            CompleteCommand();
+        }
+
+        public void OnEnterCommand(InputValue inputValue)
+        {
+            EnterCommand();
+        }
+#endif
+
+        public void HandlePrevious()
+        {
+            _commandText = History?.Previous() ?? string.Empty;
+            _moveCursor = true;
+        }
+
+        public void HandleNext()
+        {
+            _commandText = History?.Next() ?? string.Empty;
+            _moveCursor = true;
+        }
+
+        public void Close()
+        {
+            SetState(TerminalState.Close);
+        }
+
+        public void ToggleSmall()
+        {
+            ToggleState(TerminalState.OpenSmall);
+        }
+
+        public void ToggleFull()
+        {
+            ToggleState(TerminalState.OpenFull);
+        }
+
+        public void EnterCommand()
+        {
+            Log(TerminalLogType.Input, _commandText);
+            Shell?.RunCommand(_commandText);
+            History?.Push(_commandText);
+
+            while (Shell?.TryConsumeErrorMessage(out string error) == true)
+            {
+                Log(TerminalLogType.Error, $"Error: {error}");
             }
 
-            if (Event.current.Equals(Event.KeyboardEvent("escape")))
+            _commandText = string.Empty;
+            _scrollPosition.y = int.MaxValue;
+        }
+
+        public void CompleteCommand()
+        {
+            try
             {
-                SetState(TerminalState.Close);
+                string headText = _commandText;
+                int formatWidth = 0;
+
+                string[] completionBuffer =
+                    Autocomplete?.Complete(ref headText, ref formatWidth) ?? Array.Empty<string>();
+                int completionLength = completionBuffer.Length;
+
+                if (completionLength != 0)
+                {
+                    _commandText = headText;
+                }
+
+                if (completionLength <= 1)
+                {
+                    return;
+                }
+
+                // Print possible completions
+                StringBuilder logBuffer = new();
+
+                foreach (string completion in completionBuffer)
+                {
+                    logBuffer.Append(completion.PadRight(formatWidth + 4));
+                }
+
+                bool handled = Log(logBuffer.ToString());
+                if (handled)
+                {
+                    _scrollPosition.y = int.MaxValue;
+                }
             }
-            else if (
-                Event.current.Equals(Event.KeyboardEvent("return"))
-                || Event.current.Equals(Event.KeyboardEvent("[enter]"))
-            )
+            finally
             {
-                EnterCommand();
-            }
-            else if (Event.current.Equals(Event.KeyboardEvent("up")))
-            {
-                _commandText = History?.Previous() ?? string.Empty;
                 _moveCursor = true;
             }
-            else if (Event.current.Equals(Event.KeyboardEvent("down")))
-            {
-                _commandText = History?.Next() ?? string.Empty;
-            }
-            else if (Event.current.Equals(Event.KeyboardEvent(_toggleHotkey)))
-            {
-                ToggleState(TerminalState.OpenSmall);
-            }
-            else if (Event.current.Equals(Event.KeyboardEvent(_toggleFullHotkey)))
-            {
-                ToggleState(TerminalState.OpenFull);
-            }
-            else if (Event.current.Equals(Event.KeyboardEvent("tab")))
-            {
-                CompleteCommand();
-                _moveCursor = true; // Wait till next draw call
-            }
-
-            GUILayout.BeginHorizontal();
-
-            if (!string.IsNullOrEmpty(_inputCaret))
-            {
-                GUILayout.Label(_inputCaret, _inputStyle, GUILayout.Width(_consoleFont.fontSize));
-            }
-
-            GUI.SetNextControlName("command_text_field");
-            _commandText = GUILayout.TextField(_commandText, _inputStyle);
-
-            if (_inputFix && _commandText.Length > 0)
-            {
-                _commandText = _cachedCommandText; // Otherwise the TextField picks up the ToggleHotkey character event
-                _inputFix = false; // Prevents checking string Length every draw call
-            }
-
-            if (_initialOpen)
-            {
-                GUI.FocusControl("command_text_field");
-                _initialOpen = false;
-            }
-
-            if (
-                _showGUIButtons
-                && GUILayout.Button("| run", _inputStyle, GUILayout.Width(Screen.width / 10f))
-            )
-            {
-                EnterCommand();
-            }
-
-            GUILayout.EndHorizontal();
-            GUILayout.EndVertical();
         }
 
         private void DrawLogs()
@@ -612,63 +961,13 @@ namespace CommandTerminal
             }
             else
             {
-                if (_inputFix)
-                {
-                    _inputFix = false;
-                }
+#if !ENABLE_INPUT_SYSTEM
+                _inputFix = false;
+#endif
                 return; // Already at target
             }
 
             _window = new Rect(0, _currentOpenT - _realWindowSize, Screen.width, _realWindowSize);
-        }
-
-        private void EnterCommand()
-        {
-            Log(TerminalLogType.Input, _commandText);
-            Shell?.RunCommand(_commandText);
-            History?.Push(_commandText);
-
-            while (Shell?.TryConsumeErrorMessage(out string error) == true)
-            {
-                Log(TerminalLogType.Error, $"Error: {error}");
-            }
-
-            _commandText = string.Empty;
-            _scrollPosition.y = int.MaxValue;
-        }
-
-        private void CompleteCommand()
-        {
-            string headText = _commandText;
-            int formatWidth = 0;
-
-            string[] completionBuffer =
-                Autocomplete?.Complete(ref headText, ref formatWidth) ?? Array.Empty<string>();
-            int completionLength = completionBuffer.Length;
-
-            if (completionLength != 0)
-            {
-                _commandText = headText;
-            }
-
-            if (completionLength <= 1)
-            {
-                return;
-            }
-
-            // Print possible completions
-            StringBuilder logBuffer = new();
-
-            foreach (string completion in completionBuffer)
-            {
-                logBuffer.Append(completion.PadRight(formatWidth + 4));
-            }
-
-            bool handled = Log(logBuffer.ToString());
-            if (handled)
-            {
-                _scrollPosition.y = int.MaxValue;
-            }
         }
 
         private void CursorToEnd()
@@ -693,15 +992,25 @@ namespace CommandTerminal
             switch (type)
             {
                 case TerminalLogType.Message:
+                {
                     return _foregroundColor;
+                }
                 case TerminalLogType.Warning:
+                {
                     return _warningColor;
+                }
                 case TerminalLogType.Input:
+                {
                     return _inputColor;
+                }
                 case TerminalLogType.ShellMessage:
+                {
                     return _shellColor;
+                }
                 default:
+                {
                     return _errorColor;
+                }
             }
         }
     }

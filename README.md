@@ -16,6 +16,9 @@ This is a fork of [Command Terminal](https://github.com/stillwwater/command_term
 5. Resolve the latest `com.wallstop-studios.dxcommandterminal`
 
 ## Improvements Over Baseline
+- Fixed Input handling bugs related to [WebGL](#web-gl)
+- Fully integrated with Unity's [new Input System](#new-input-system)
+- Fully [configurable and bindable controls](#hotkeys) for every action
 - Add ability to ignore commands that have been annotated with `RegisterCommandAttribute`. In this way, your terminals can ignore any built-in commands, for cleanliness. A custom editor has been added to provide users with the ability to identify what commands are available to ignore, and selectively ignore them.
 - Add ability to ignore certain (or all) log levels, such that unwanted logs do not clutter terminal output
 - Add ability to optionally have Unity log messages routed to the terminal, default on, but can be turned off
@@ -27,6 +30,8 @@ This is a fork of [Command Terminal](https://github.com/stillwwater/command_term
 - Fixed a bug where commands annotated with `RegisterCommandAttribute` in other assemblies failed to be recognized. User assemblies have higher precedence.
 - Fixed a bug where only the latest error message was preserved - errors are now queued
 - Fixed a bug where attempting to access static `Terminal` properties would throw if the Terminal had been enabled yet.
+- Fixed a bug where moving through command history did not update the cursor position
+- Unified behavior around navigating up and down through command history. Previously, navigating up as far as possible would "stick" to the up-most command, while navigating down as far as possible would result in a "blank" command. Now, walking past either end of up/down results in a blank command.
 - Minor performance benefits if there are terminals in multiple scenes
 - Minor performance benefits (O(n) -> O(1)) when the terminal buffer becomes full
 - Minor performance benefits around multiple-indexing into dictionary issues
@@ -52,20 +57,17 @@ This is a fork of [Command Terminal](https://github.com/stillwwater/command_term
 More improvements coming soon, stick around :)
 
 Planned improvements:
-- Integration with the new Input System
-- Ensure working on WebGL builds
 - Command Groups
 - Background not being rendered bug
-- Up key support (move cursor to end)
-- Support for more out of the box command argument types
 - Ensure working in Mobile builds
+- Smarter auto complete
 - Ensure HTML color coding works
 
 ---
 
 A simple and highly performant in-game drop down Console.
 
-![gif](./demo.gif)
+![gif](./Media/demo.gif)
 
 Command Terminal is based on [an implementation by Jonathan Blow](https://youtu.be/N2UdveBwWY4) done in the Jai programming language.
 
@@ -279,3 +281,36 @@ By default, command parameter input is stripped of whitespace characters. This, 
 **DoNotCleanTypes**: A set of types for which input cleaning is not enabled.
 
 **IgnoredValuesForComplexTypes**: For complex, multi-value types like `Vector2`, `Quaternion`, `Color`, etc, the parameter input will replace all strings found in this set with the empty string.
+
+# Hotkeys
+All actions are now fully configurable by either explicit keybindings, for keyboard controls, or via [new Input System](#new-input-system) bindings.
+
+![png](./Media/Hotkeys.png)
+
+Keyboard hotkey bindings are now intelligent as they can be about shift key interaction. There are two ways to create a `shift+<binding>`:
+1. Prefix the binding with the `#` symbol. For example, `#tab` will be interpreted as `shift+tab`
+2. For keys with shifted versions, such as alpha numeric keys, simply use the shifted version. For example, `A` will be interpreted as `shift+a` 
+
+# New Input System
+DxCommandTerminal is now fully integrated with Unity's new Input System, if it is found in the project and enabled. 
+
+You can also use `PlayerInput` or similar to bind InputActions to all available command terminal behavior. The available message are:
+- `HandlePrevious`: Selects the previously issued command form current command history location.
+- `HandleNext`: Selects the next issued command from current command history location.
+- `Close`: If the terminal is open, closes it.
+- `ToggleSmall`: If the terminal is not opened to its small height, opens it to small height, otherwise closes it.
+- `ToggleFull`: If the terminal is not opened to its full height, opens it to full height, otherwise closes it.
+- `CompleteCommand`: Uses auto-complete to attempt to complete the current command using what is typed in the command buffer.
+- `EnterCommand`: Takes the current buffer and attempts to execute it as a command + parameters.
+
+## Note
+If using PlayerInput to bind to the above controls, you will need to uncheck `Use Hotkeys` under the `Hotkeys` header in the Terminal script.
+
+# Web GL
+If you are relying on `RegisterCommandAttribute` to wire up your commands to the CommandShell instead of manually registering them, you will need to set `Managed Stripping Level` to `Low`, `Minimal`, or `None` under `Player > WebGL > Other Settings > Optimizations > Managed Stripping Level` in order for command registration to work. Settings of `Medium` or higher will break the reflection code that loads the commands, causing the terminal to forget about its capabilities.
+
+![png](./Media/ManagedStrippingLevel.png)
+
+See [Unity docs on Managed Stripping Level](https://docs.unity3d.com/2022.3/Documentation/ScriptReference/ManagedStrippingLevel.html) for more details.
+
+

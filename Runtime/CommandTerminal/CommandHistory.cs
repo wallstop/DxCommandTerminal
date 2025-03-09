@@ -21,8 +21,7 @@ namespace CommandTerminal
         public string Next()
         {
             _position++;
-
-            if (_position < _history.Count)
+            if (0 <= _position && _position < _history.Count)
             {
                 return _history[_position];
             }
@@ -33,19 +32,15 @@ namespace CommandTerminal
 
         public string Previous()
         {
-            if (_history.Count == 0)
-            {
-                return string.Empty;
-            }
-
             _position--;
 
-            if (_position < 0)
+            if (0 <= _position && _position < _history.Count)
             {
-                _position = 0;
+                return _history[_position];
             }
 
-            return _history[_position];
+            _position = -1;
+            return string.Empty;
         }
 
         public void Clear()
