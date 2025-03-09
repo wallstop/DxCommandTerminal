@@ -936,22 +936,34 @@ namespace CommandTerminal
             int size = _consoleFont.fontSize;
             float xPosition = _rightAlignButtons ? Screen.width - 7 * size : 0;
 
-            // 7 is the number of chars in the button plus some padding, 2 is the line height.
-            // The layout will resize according to the font size.
+            /*
+                7 is the number of chars in the button plus some padding, 2 is the line height.
+                The layout will resize according to the font size.
+             */
             GUILayout.BeginArea(new Rect(xPosition, _currentOpenT, 7 * size, size * 2));
-            GUILayout.BeginHorizontal();
-
-            if (GUILayout.Button("Small", _windowStyle))
+            try
             {
-                ToggleState(TerminalState.OpenSmall);
+                GUILayout.BeginHorizontal();
+                try
+                {
+                    if (GUILayout.Button("Small", _windowStyle))
+                    {
+                        ToggleState(TerminalState.OpenSmall);
+                    }
+                    else if (GUILayout.Button("Full", _windowStyle))
+                    {
+                        ToggleState(TerminalState.OpenFull);
+                    }
+                }
+                finally
+                {
+                    GUILayout.EndHorizontal();
+                }
             }
-            else if (GUILayout.Button("Full", _windowStyle))
+            finally
             {
-                ToggleState(TerminalState.OpenFull);
+                GUILayout.EndArea();
             }
-
-            GUILayout.EndHorizontal();
-            GUILayout.EndArea();
         }
 
         private void HandleOpenness()
@@ -1004,29 +1016,14 @@ namespace CommandTerminal
 
         private Color GetLogColor(TerminalLogType type)
         {
-            switch (type)
+            return type switch
             {
-                case TerminalLogType.Message:
-                {
-                    return _foregroundColor;
-                }
-                case TerminalLogType.Warning:
-                {
-                    return _warningColor;
-                }
-                case TerminalLogType.Input:
-                {
-                    return _inputColor;
-                }
-                case TerminalLogType.ShellMessage:
-                {
-                    return _shellColor;
-                }
-                default:
-                {
-                    return _errorColor;
-                }
-            }
+                TerminalLogType.Message => _foregroundColor,
+                TerminalLogType.Warning => _warningColor,
+                TerminalLogType.Input => _inputColor,
+                TerminalLogType.ShellMessage => _shellColor,
+                _ => _errorColor,
+            };
         }
     }
 }
