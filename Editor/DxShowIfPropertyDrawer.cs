@@ -5,8 +5,8 @@
     using UnityEngine;
     using UnityEditor;
 
-    [CustomPropertyDrawer(typeof(ShowIfAttribute))]
-    public sealed class ShowIfPropertyDrawer : PropertyDrawer
+    [CustomPropertyDrawer(typeof(DxShowIfAttribute))]
+    public sealed class DxShowIfPropertyDrawer : PropertyDrawer
     {
         public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
         {
@@ -23,14 +23,14 @@
 
         private bool ShouldShow(SerializedProperty property)
         {
-            ShowIfAttribute showIf = (ShowIfAttribute)attribute;
+            DxShowIfAttribute dxShowIf = (DxShowIfAttribute)attribute;
             SerializedProperty conditionProperty = property.serializedObject.FindProperty(
-                showIf.conditionField
+                dxShowIf.conditionField
             );
             if (conditionProperty is { propertyType: SerializedPropertyType.Boolean })
             {
                 bool condition = conditionProperty.boolValue;
-                return showIf.inverse ? !condition : condition;
+                return dxShowIf.inverse ? !condition : condition;
             }
             return true;
         }

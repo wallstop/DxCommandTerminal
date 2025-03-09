@@ -1,6 +1,6 @@
 {
   "name": "com.wallstop-studios.dxcommandterminal",
-  "version": "1.0.0-rc13",
+  "version": "1.0.0-rc14",
   "displayName": "DxCommandTerminal",
   "description": "Wallstop Studios fork of Command Terminal for Unity",
   "dependencies": {},

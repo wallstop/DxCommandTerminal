@@ -122,38 +122,38 @@ namespace CommandTerminal
         private bool _useHotkeys = true;
 #endif
 
-        [ShowIf(nameof(_useHotkeys))]
+        [DxShowIf(nameof(_useHotkeys))]
         [SerializeField]
         private string _toggleHotkey = "`";
 
-        [ShowIf(nameof(_useHotkeys))]
+        [DxShowIf(nameof(_useHotkeys))]
         [SerializeField]
         private string _toggleFullHotkey = "#`";
 
-        [ShowIf(nameof(_useHotkeys))]
+        [DxShowIf(nameof(_useHotkeys))]
         [SerializeField]
         private string _completeHotkey = "tab";
 
-        [ShowIf(nameof(_useHotkeys))]
+        [DxShowIf(nameof(_useHotkeys))]
         [SerializeField]
         private string _reverseCompleteHotkey = "#tab";
 
-        [ShowIf(nameof(_useHotkeys))]
+        [DxShowIf(nameof(_useHotkeys))]
         [SerializeField]
         private string _previousHotkey = "up";
 
-        [ShowIf(nameof(_useHotkeys))]
+        [DxShowIf(nameof(_useHotkeys))]
         [SerializeField]
         private ListWrapper<string> _completeCommandHotkeys = new()
         {
             list = { "enter", "return" },
         };
 
-        [ShowIf(nameof(_useHotkeys))]
+        [DxShowIf(nameof(_useHotkeys))]
         [SerializeField]
         private string _closeHotkey = "escape";
 
-        [ShowIf(nameof(_useHotkeys))]
+        [DxShowIf(nameof(_useHotkeys))]
         [SerializeField]
         private string _nextHotkey = "down";
 
