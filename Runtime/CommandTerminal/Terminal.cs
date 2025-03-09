@@ -217,7 +217,6 @@ namespace CommandTerminal
         private bool _inputFix;
 #endif
         private bool _moveCursor;
-        private bool _initialOpen; // Used to focus on TextField when console opens
         private Rect _window;
         private float _currentOpenT;
         private float _openTarget;
@@ -240,6 +239,7 @@ namespace CommandTerminal
         private int? _lastWidth;
         private int? _lastHeight;
         private bool _handledInputThisFrame;
+        private bool _needsFocus;
 
         [StringFormatMethod("format")]
         public static bool Log(string format, params object[] parameters)
@@ -270,7 +270,7 @@ namespace CommandTerminal
 #endif
             if (newState != TerminalState.Close)
             {
-                _initialOpen = true;
+                _needsFocus = true;
             }
 #if !ENABLE_INPUT_SYSTEM
             _cachedCommandText = _commandText;
@@ -536,12 +536,10 @@ namespace CommandTerminal
             if (Event.current.Equals(Event.KeyboardEvent(_toggleHotkey)))
             {
                 ToggleSmall();
-                _initialOpen = true;
             }
             else if (Event.current.Equals(Event.KeyboardEvent(_toggleFullHotkey)))
             {
                 ToggleFull();
-                _initialOpen = true;
             }
 #endif
             if (_showGUIButtons)
@@ -658,12 +656,13 @@ namespace CommandTerminal
 
             GUIStyle GenerateGUIStyle()
             {
+                const int paddingSize = 4;
                 return new GUIStyle
                 {
-                    padding = new RectOffset(4, 4, 4, 4),
+                    padding = new RectOffset(paddingSize, paddingSize, paddingSize, paddingSize),
                     font = _consoleFont,
                     normal = { textColor = _inputColor, background = inputBackgroundTexture },
-                    fixedHeight = _consoleFont.lineHeight,
+                    fixedHeight = _consoleFont.lineHeight + paddingSize * 2,
                 };
             }
         }
@@ -764,10 +763,10 @@ namespace CommandTerminal
                         _inputFix = false; // Prevents checking string Length every draw call
                     }
 #endif
-                    if (_initialOpen)
+                    if (_needsFocus && Event.current.type == EventType.Repaint)
                     {
                         GUI.FocusControl(CommandControlName);
-                        _initialOpen = false;
+                        _needsFocus = false;
                     }
 
                     if (
