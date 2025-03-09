@@ -26,6 +26,8 @@ namespace CommandTerminal
     [DisallowMultipleComponent]
     public sealed class Terminal : MonoBehaviour
     {
+        private const string CommandControlName = "command_text_field";
+
         private static readonly Dictionary<string, string> SpecialKeyCodeMap = new(
             StringComparer.OrdinalIgnoreCase
         )
@@ -221,10 +223,14 @@ namespace CommandTerminal
         private float _openTarget;
         private float _realWindowSize;
         private string _commandText;
+#if !ENABLE_INPUT_SYSTEM
         private string _cachedCommandText;
+#endif
         private Vector2 _scrollPosition;
         private GUIStyle _windowStyle;
         private GUIStyle _labelStyle;
+
+        private GUIStyle _inputCaretStyle;
         private GUIStyle _inputStyle;
         private GUILayoutOption[] _inputCaretOptions;
         private GUILayoutOption[] _runButtonOptions;
@@ -266,8 +272,9 @@ namespace CommandTerminal
             {
                 _initialOpen = true;
             }
-
+#if !ENABLE_INPUT_SYSTEM
             _cachedCommandText = _commandText;
+#endif
             _commandText = string.Empty;
 
             switch (newState)
@@ -380,7 +387,9 @@ namespace CommandTerminal
             }
 
             _commandText = string.Empty;
+#if !ENABLE_INPUT_SYSTEM
             _cachedCommandText = _commandText;
+#endif
             if (_useHotkeys)
             {
                 Assert.IsFalse(
@@ -615,15 +624,6 @@ namespace CommandTerminal
 
         private void SetupInput()
         {
-            _inputStyle = new GUIStyle
-            {
-                padding = new RectOffset(4, 4, 4, 4),
-                font = _consoleFont,
-                fixedHeight = _consoleFont.fontSize * 1.6f,
-                normal = { textColor = _inputColor },
-                alignment = TextAnchor.MiddleLeft,
-            };
-
             Color darkBackground = new()
             {
                 r = _backgroundColor.r - _inputContrast,
@@ -635,16 +635,34 @@ namespace CommandTerminal
             Texture2D inputBackgroundTexture = new(1, 1);
             inputBackgroundTexture.SetPixel(0, 0, darkBackground);
             inputBackgroundTexture.Apply();
-            _inputStyle.normal.background = inputBackgroundTexture;
+
+            _inputStyle = GenerateGUIStyle();
 
             if (!string.IsNullOrEmpty(_inputCaret))
             {
-                Vector2 size = _inputStyle.CalcSize(new GUIContent(_inputCaret));
+                _inputCaretStyle = GenerateGUIStyle();
+                _inputCaretStyle.alignment = TextAnchor.MiddleRight;
+                _inputCaretStyle.padding.right = 0;
+
+                GUIContent inputCaretContent = new(_inputCaret);
+                Vector2 size = _inputCaretStyle.CalcSize(inputCaretContent);
                 _inputCaretOptions = new[] { GUILayout.Width(size.x) };
             }
             else
             {
                 _inputCaretOptions = Array.Empty<GUILayoutOption>();
+            }
+
+            return;
+
+            GUIStyle GenerateGUIStyle()
+            {
+                return new GUIStyle
+                {
+                    padding = new RectOffset(4, 4, 4, 4),
+                    font = _consoleFont,
+                    normal = { textColor = _inputColor, background = inputBackgroundTexture },
+                };
             }
         }
 
@@ -669,6 +687,7 @@ namespace CommandTerminal
                 {
                     GUILayout.EndScrollView();
                 }
+
 #if !ENABLE_INPUT_SYSTEM
                 if (Event.current.Equals(Event.KeyboardEvent(_closeHotkey)))
                 {
@@ -708,16 +727,31 @@ namespace CommandTerminal
                 {
                     if (!string.IsNullOrEmpty(_inputCaret))
                     {
-                        GUILayout.Label(_inputCaret, _inputStyle, _inputCaretOptions);
+                        GUILayout.Label(_inputCaret, _inputCaretStyle, _inputCaretOptions);
                     }
 
-                    const string commandControlName = "command_text_field";
-                    GUI.SetNextControlName(commandControlName);
+                    GUI.SetNextControlName(CommandControlName);
                     _commandText = GUILayout.TextField(_commandText, _inputStyle);
 
-                    if (_moveCursor)
+                    if (
+                        _moveCursor
+                        && Event.current.type == EventType.Repaint
+                        && string.Equals(GUI.GetNameOfFocusedControl(), CommandControlName)
+                    )
                     {
-                        CursorToEnd();
+                        if (
+                            GUIUtility.GetStateObject(
+                                typeof(TextEditor),
+                                GUIUtility.keyboardControl
+                            )
+                            is TextEditor textEditor
+                        )
+                        {
+                            int textLength = _commandText.Length;
+                            textEditor.cursorIndex = textLength;
+                            textEditor.selectIndex = textLength;
+                        }
+
                         _moveCursor = false;
                     }
 
@@ -730,7 +764,7 @@ namespace CommandTerminal
 #endif
                     if (_initialOpen)
                     {
-                        GUI.FocusControl(commandControlName);
+                        GUI.FocusControl(CommandControlName);
                         _initialOpen = false;
                     }
 
@@ -831,12 +865,14 @@ namespace CommandTerminal
         {
             _commandText = History?.Previous() ?? string.Empty;
             _moveCursor = true;
+            GUI.FocusControl(CommandControlName);
         }
 
         public void HandleNext()
         {
             _commandText = History?.Next() ?? string.Empty;
             _moveCursor = true;
+            GUI.FocusControl(CommandControlName);
         }
 
         public void Close()
@@ -913,6 +949,7 @@ namespace CommandTerminal
             finally
             {
                 _moveCursor = true;
+                GUI.FocusControl(CommandControlName);
             }
         }
 
@@ -995,14 +1032,6 @@ namespace CommandTerminal
             }
 
             _window = new Rect(0, _currentOpenT - _realWindowSize, Screen.width, _realWindowSize);
-        }
-
-        private void CursorToEnd()
-        {
-            _editorState ??= (TextEditor)
-                GUIUtility.GetStateObject(typeof(TextEditor), GUIUtility.keyboardControl);
-
-            _editorState.MoveCursorToPosition(new Vector2(999, 999));
         }
 
         private void HandleUnityLog(string message, string stackTrace, LogType type)
