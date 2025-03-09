@@ -32,6 +32,8 @@ This is a fork of [Command Terminal](https://github.com/stillwwater/command_term
 - Fixed a bug where only the latest error message was preserved - errors are now queued
 - Fixed a bug where attempting to access static `Terminal` properties would throw if the Terminal had been enabled yet.
 - Fixed a bug where moving through command history did not update the cursor position
+- Fixed a bug where enabling and disabling the Terminal would break AutoComplete
+- Fixed a bug where you could interact with the terminal when it was in closed state
 - Unified behavior around navigating up and down through command history. Previously, navigating up as far as possible would "stick" to the up-most command, while navigating down as far as possible would result in a "blank" command. Now, walking past either end of up/down results in a blank command.
 - Minor performance benefits if there are terminals in multiple scenes
 - Minor performance benefits (O(n) -> O(1)) when the terminal buffer becomes full
@@ -288,9 +290,12 @@ All actions are now fully configurable by either explicit keybindings, for keybo
 
 ![png](./Media/Hotkeys.png)
 
-Keyboard hotkey bindings are now intelligent as they can be about shift key interaction. There are two ways to create a `shift+<binding>`:
+Keyboard hotkey bindings are now intelligent as they can be about shift key interaction. There are three ways to create a `shift+<binding>`:
 1. Prefix the binding with the `#` symbol. For example, `#tab` will be interpreted as `shift+tab`
-2. For keys with shifted versions, such as alpha numeric keys, simply use the shifted version. For example, `A` will be interpreted as `shift+a` 
+2. For keys with shifted versions, such as alpha numeric keys, simply use the shifted version. For example, `A` will be interpreted as `shift+a`
+3. When using the new input system, hotkeys can be represented as `shift+<binding>`. `shift+tab` will be interpreted as the combination `left shift` + `tab`.
+
+The only combination keys that are supported without using custom bindings via the new Input System are `shift+<binding>`.
 
 # New Input System
 DxCommandTerminal is now fully integrated with Unity's new Input System, if it is found in the project and enabled. 

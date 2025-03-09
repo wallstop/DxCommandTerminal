@@ -34,25 +34,15 @@ namespace CommandTerminal
             _knownWords.Clear();
         }
 
-        public string[] Complete(string text, ref int formatWidth)
+        public string[] Complete(string text)
         {
             _duplicateBuffer.Clear();
             _buffer.Clear();
-            formatWidth = WalkHistory(
-                text.Trim(),
-                formatWidth,
-                onlySuccess: true,
-                onlyErrorFree: false
-            );
+            WalkHistory(text.Trim(), onlySuccess: true, onlyErrorFree: false);
             return 0 == _buffer.Count ? Array.Empty<string>() : _buffer.ToArray();
         }
 
-        private int WalkHistory(
-            string input,
-            int currentFormatWidth,
-            bool onlySuccess,
-            bool onlyErrorFree
-        )
+        private void WalkHistory(string input, bool onlySuccess, bool onlyErrorFree)
         {
             foreach (
                 string known in _shell
@@ -67,11 +57,8 @@ namespace CommandTerminal
                 if (_duplicateBuffer.Add(known))
                 {
                     _buffer.Add(known);
-                    currentFormatWidth = Math.Max(currentFormatWidth, known.Length);
                 }
             }
-
-            return currentFormatWidth;
         }
     }
 }

@@ -4,13 +4,11 @@ namespace CommandTerminal
     using System.Collections.Generic;
     using System.ComponentModel;
     using System.Linq;
-    using System.Text;
     using Attributes;
     using JetBrains.Annotations;
     using UnityEditor;
     using UnityEngine;
     using UnityEngine.Assertions;
-    using UnityEngine.Serialization;
     using Utils;
 #if ENABLE_INPUT_SYSTEM
     using UnityEngine.InputSystem;
@@ -273,11 +271,13 @@ namespace CommandTerminal
         private bool _needsFocus;
 
         private string _lastKnownCommandText;
-        private string[] _lastCompletionBuffer;
-        private float[] _completionElementWidthBuffer;
+        private string[] _lastCompletionBuffer = Array.Empty<string>();
+        private float[] _completionElementWidthBuffer = Array.Empty<float>();
+        private GUILayoutOption[][] _completionElementStyles = Array.Empty<GUILayoutOption[]>();
+        private readonly List<int> _completionIndexWindow = new();
         private int? _lastCompletionIndex;
+        private int? _previousLastCompletionIndex;
         private int _currentHintStartIndex;
-        private int _formatWidth;
 
         [StringFormatMethod("format")]
         public static bool Log(string format, params object[] parameters)
@@ -598,19 +598,25 @@ namespace CommandTerminal
             if (_displayHints)
             {
                 _lastCompletionBuffer =
-                    AutoComplete?.Complete(_lastKnownCommandText, ref _formatWidth)
-                    ?? Array.Empty<string>();
-                CalculateAutoCompleteHintSize();
+                    AutoComplete?.Complete(_lastKnownCommandText) ?? Array.Empty<string>();
             }
             else
             {
                 _lastCompletionBuffer = Array.Empty<string>();
             }
+            CalculateAutoCompleteHintSize();
         }
 
         private void CalculateAutoCompleteHintSize()
         {
-            _completionElementWidthBuffer = new float[_lastCompletionBuffer.Length];
+            _completionElementWidthBuffer =
+                _lastCompletionBuffer.Length == 0
+                    ? Array.Empty<float>()
+                    : new float[_lastCompletionBuffer.Length];
+            _completionElementStyles =
+                _lastCompletionBuffer.Length == 0
+                    ? Array.Empty<GUILayoutOption[]>()
+                    : new GUILayoutOption[_lastCompletionBuffer.Length][];
             for (int i = 0; i < _lastCompletionBuffer.Length; ++i)
             {
                 string completion = _lastCompletionBuffer[i];
@@ -618,7 +624,8 @@ namespace CommandTerminal
                 GUIStyle style =
                     _lastCompletionIndex == i ? _selectedHintStyle : _unselectedHintStyle;
                 Vector2 size = style.CalcSize(completionContent);
-                _completionElementWidthBuffer[i] = size.x + _formatWidth;
+                _completionElementWidthBuffer[i] = size.x;
+                _completionElementStyles[i] = new[] { GUILayout.Width(size.x) };
             }
         }
 
@@ -729,8 +736,10 @@ namespace CommandTerminal
             _unselectedHintStyle = GenerateGUIStyle(
                 unselectedHintBackgroundTexture,
                 TextAnchor.MiddleCenter,
-                padding: 0,
-                margin: 4
+                paddingX: 4,
+                paddingY: 0,
+                marginX: 4,
+                marginY: 4
             );
             _unselectedHintStyle.normal.textColor = _unselectedHintColor;
 
@@ -749,8 +758,10 @@ namespace CommandTerminal
             _selectedHintStyle = GenerateGUIStyle(
                 selectedHintBackgroundTexture,
                 TextAnchor.MiddleCenter,
-                padding: 0,
-                margin: 4
+                paddingX: 4,
+                paddingY: 0,
+                marginX: 4,
+                marginY: 4
             );
             _selectedHintStyle.normal.textColor = _selectedHintColor;
 
@@ -759,17 +770,19 @@ namespace CommandTerminal
             GUIStyle GenerateGUIStyle(
                 Texture2D texture,
                 TextAnchor alignment,
-                int padding = 4,
-                int margin = 0
+                int paddingX = 4,
+                int paddingY = 4,
+                int marginX = 0,
+                int marginY = 0
             )
             {
                 return new GUIStyle
                 {
-                    padding = new RectOffset(padding, padding, padding, padding),
-                    margin = new RectOffset(margin, margin, margin, margin),
+                    padding = new RectOffset(paddingX, paddingX, paddingY, paddingY),
+                    margin = new RectOffset(marginX, marginX, marginY, marginY),
                     font = _consoleFont,
                     normal = { textColor = _inputColor, background = texture },
-                    fixedHeight = _consoleFont.lineHeight + padding * 2,
+                    fixedHeight = _consoleFont.lineHeight + paddingY * 2,
                     alignment = alignment,
                 };
             }
@@ -834,6 +847,10 @@ namespace CommandTerminal
                 if (_lastCompletionBuffer is { Length: > 0 })
                 {
                     RenderCompletionHints();
+                }
+                else
+                {
+                    _previousLastCompletionIndex = null;
                 }
 
                 GUILayout.BeginHorizontal();
@@ -911,58 +928,164 @@ namespace CommandTerminal
             GUILayout.BeginHorizontal();
             try
             {
-                float totalWidth = _completionElementWidthBuffer.Sum();
                 float availableWidth = Screen.width;
-
-                if (availableWidth < totalWidth && _lastCompletionIndex != null)
+                float totalWidth = _completionElementWidthBuffer.Sum();
+                int length = _completionElementWidthBuffer.Length;
+                if (
+                    0 < availableWidth
+                    && availableWidth < totalWidth
+                    && _lastCompletionIndex != null
+                )
                 {
-                    int targetIndex = _lastCompletionIndex.Value;
-                    float accumulatedWidth = 0f;
-
-                    for (
-                        int i = _currentHintStartIndex;
-                        i < _currentHintStartIndex + _completionElementWidthBuffer.Length;
-                        ++i
-                    )
+                    int selected = _lastCompletionIndex.Value;
+                    bool forward = true;
+                    if (_previousLastCompletionIndex != null)
                     {
-                        int index = i % _completionElementWidthBuffer.Length;
-                        if (index == targetIndex)
+                        int prev = _previousLastCompletionIndex.Value;
+                        forward = (selected == (prev + 1) % length);
+                    }
+                    float accumulation = 0f;
+                    int index = _currentHintStartIndex;
+                    _completionIndexWindow.Clear();
+                    int count = 0;
+                    while (count < length && accumulation < availableWidth)
+                    {
+                        float width = _completionElementWidthBuffer[index];
+                        if (accumulation + width > availableWidth)
                         {
-                            if (
-                                accumulatedWidth + _completionElementWidthBuffer[index]
-                                > availableWidth
-                            )
-                            {
-                                _currentHintStartIndex = targetIndex;
-                            }
                             break;
                         }
-                        accumulatedWidth += _completionElementWidthBuffer[index];
+
+                        _completionIndexWindow.Add(index);
+                        accumulation += width;
+                        index = (index + 1) % length;
+                        count++;
+                    }
+                    int position = _completionIndexWindow.IndexOf(selected);
+                    bool needsRecalculation = position < 0;
+                    if (!needsRecalculation)
+                    {
+                        float offset = 0f;
+                        for (int i = 0; i < position; i++)
+                        {
+                            offset += _completionElementWidthBuffer[_completionIndexWindow[i]];
+                        }
+
+                        if (
+                            offset < 0f
+                            || offset + _completionElementWidthBuffer[selected] > availableWidth
+                        )
+                        {
+                            needsRecalculation = true;
+                        }
+                    }
+                    if (needsRecalculation)
+                    {
+                        if (forward)
+                        {
+                            _currentHintStartIndex = selected;
+                        }
+                        else
+                        {
+                            float sum = _completionElementWidthBuffer[selected];
+                            int start = selected;
+                            do
+                            {
+                                int previous = (start - 1 + length) % length;
+                                if (sum + _completionElementWidthBuffer[previous] > availableWidth)
+                                {
+                                    break;
+                                }
+
+                                sum += _completionElementWidthBuffer[previous];
+                                start = previous;
+                                if (start == selected)
+                                {
+                                    break;
+                                }
+                            } while (true);
+                            _currentHintStartIndex = start;
+                        }
                     }
                 }
-
-                for (int i = _currentHintStartIndex; i < _lastCompletionBuffer.Length; ++i)
+                for (int i = _currentHintStartIndex; i < _lastCompletionBuffer.Length; i++)
                 {
                     GUILayout.Label(
                         _lastCompletionBuffer[i],
                         _lastCompletionIndex == i ? _selectedHintStyle : _unselectedHintStyle,
-                        GUILayout.Width(_completionElementWidthBuffer[i])
+                        _completionElementStyles[i]
                     );
                 }
-
-                for (int i = 0; i < _currentHintStartIndex && i < _lastCompletionBuffer.Length; ++i)
+                for (int i = 0; i < _currentHintStartIndex && i < _lastCompletionBuffer.Length; i++)
                 {
                     GUILayout.Label(
                         _lastCompletionBuffer[i],
                         _lastCompletionIndex == i ? _selectedHintStyle : _unselectedHintStyle,
-                        GUILayout.Width(_completionElementWidthBuffer[i])
+                        _completionElementStyles[i]
                     );
                 }
             }
             finally
             {
                 GUILayout.EndHorizontal();
+                _previousLastCompletionIndex = _lastCompletionIndex;
             }
+
+            // GUILayout.BeginHorizontal();
+            // try
+            // {
+            //     float totalWidth = _completionElementWidthBuffer.Sum();
+            //     float availableWidth = Screen.width;
+            //
+            //     if (availableWidth < totalWidth && _lastCompletionIndex != null)
+            //     {
+            //         int targetIndex = _lastCompletionIndex.Value;
+            //         float accumulatedWidth = 0f;
+            //
+            //         for (
+            //             int i = _currentHintStartIndex;
+            //             i < _currentHintStartIndex + _completionElementWidthBuffer.Length;
+            //             ++i
+            //         )
+            //         {
+            //             int index = i % _completionElementWidthBuffer.Length;
+            //             if (index == targetIndex)
+            //             {
+            //                 if (
+            //                     accumulatedWidth + _completionElementWidthBuffer[index]
+            //                     > availableWidth
+            //                 )
+            //                 {
+            //                     _currentHintStartIndex = targetIndex;
+            //                 }
+            //                 break;
+            //             }
+            //             accumulatedWidth += _completionElementWidthBuffer[index];
+            //         }
+            //     }
+            //
+            //     for (int i = _currentHintStartIndex; i < _lastCompletionBuffer.Length; ++i)
+            //     {
+            //         GUILayout.Label(
+            //             _lastCompletionBuffer[i],
+            //             _lastCompletionIndex == i ? _selectedHintStyle : _unselectedHintStyle,
+            //             GUILayout.Width(_completionElementWidthBuffer[i])
+            //         );
+            //     }
+            //
+            //     for (int i = 0; i < _currentHintStartIndex && i < _lastCompletionBuffer.Length; ++i)
+            //     {
+            //         GUILayout.Label(
+            //             _lastCompletionBuffer[i],
+            //             _lastCompletionIndex == i ? _selectedHintStyle : _unselectedHintStyle,
+            //             GUILayout.Width(_completionElementWidthBuffer[i])
+            //         );
+            //     }
+            // }
+            // finally
+            // {
+            //     GUILayout.EndHorizontal();
+            // }
         }
 
 #if ENABLE_INPUT_SYSTEM
@@ -1144,8 +1267,7 @@ namespace CommandTerminal
             {
                 _lastKnownCommandText ??= _commandText;
                 string[] completionBuffer =
-                    AutoComplete?.Complete(_lastKnownCommandText, ref _formatWidth)
-                    ?? Array.Empty<string>();
+                    AutoComplete?.Complete(_lastKnownCommandText) ?? Array.Empty<string>();
                 try
                 {
                     int completionLength = completionBuffer.Length;
