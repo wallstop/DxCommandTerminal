@@ -226,6 +226,8 @@ namespace CommandTerminal
         private GUIStyle _windowStyle;
         private GUIStyle _labelStyle;
         private GUIStyle _inputStyle;
+        private GUILayoutOption[] _inputCaretOptions;
+        private GUILayoutOption[] _runButtonOptions;
         private bool _unityLogAttached;
         private bool _started;
 
@@ -385,7 +387,8 @@ namespace CommandTerminal
                     _completeCommandHotkeys?.list?.Exists(command =>
                         string.Equals(command, _toggleHotkey, StringComparison.OrdinalIgnoreCase)
                     ) ?? false,
-                    $"Invalid Toggle Hotkey {_toggleHotkey} - cannot be in the set of complete command hotkeys: [{string.Join(",", _completeCommandHotkeys?.list ?? Enumerable.Empty<string>())}]"
+                    $"Invalid Toggle Hotkey {_toggleHotkey} - cannot be in the set of complete command "
+                        + $"hotkeys: [{string.Join(",", _completeCommandHotkeys?.list ?? Enumerable.Empty<string>())}]"
                 );
             }
 
@@ -579,6 +582,10 @@ namespace CommandTerminal
                 _lastHeight = height;
                 _lastWidth = width;
             }
+
+            _runButtonOptions = _showGUIButtons
+                ? new[] { GUILayout.Width(Screen.width / 10f) }
+                : Array.Empty<GUILayoutOption>();
         }
 
         private void SetupWindowStyle()
@@ -614,6 +621,7 @@ namespace CommandTerminal
                 font = _consoleFont,
                 fixedHeight = _consoleFont.fontSize * 1.6f,
                 normal = { textColor = _inputColor },
+                alignment = TextAnchor.MiddleLeft,
             };
 
             Color darkBackground = new()
@@ -628,6 +636,16 @@ namespace CommandTerminal
             inputBackgroundTexture.SetPixel(0, 0, darkBackground);
             inputBackgroundTexture.Apply();
             _inputStyle.normal.background = inputBackgroundTexture;
+
+            if (!string.IsNullOrEmpty(_inputCaret))
+            {
+                Vector2 size = _inputStyle.CalcSize(new GUIContent(_inputCaret));
+                _inputCaretOptions = new[] { GUILayout.Width(size.x) };
+            }
+            else
+            {
+                _inputCaretOptions = Array.Empty<GUILayoutOption>();
+            }
         }
 
         private void DrawConsole(int window2D)
@@ -690,14 +708,11 @@ namespace CommandTerminal
                 {
                     if (!string.IsNullOrEmpty(_inputCaret))
                     {
-                        GUILayout.Label(
-                            _inputCaret,
-                            _inputStyle,
-                            GUILayout.Width(_consoleFont.fontSize)
-                        );
+                        GUILayout.Label(_inputCaret, _inputStyle, _inputCaretOptions);
                     }
 
-                    GUI.SetNextControlName("command_text_field");
+                    const string commandControlName = "command_text_field";
+                    GUI.SetNextControlName(commandControlName);
                     _commandText = GUILayout.TextField(_commandText, _inputStyle);
 
                     if (_moveCursor)
@@ -713,20 +728,14 @@ namespace CommandTerminal
                         _inputFix = false; // Prevents checking string Length every draw call
                     }
 #endif
-
                     if (_initialOpen)
                     {
-                        GUI.FocusControl("command_text_field");
+                        GUI.FocusControl(commandControlName);
                         _initialOpen = false;
                     }
 
                     if (
-                        _showGUIButtons
-                        && GUILayout.Button(
-                            "| run",
-                            _inputStyle,
-                            GUILayout.Width(Screen.width / 10f)
-                        )
+                        _showGUIButtons && GUILayout.Button("| run", _inputStyle, _runButtonOptions)
                     )
                     {
                         EnterCommand();
@@ -847,6 +856,12 @@ namespace CommandTerminal
 
         public void EnterCommand()
         {
+            _commandText = _commandText.Trim();
+            if (string.IsNullOrWhiteSpace(_commandText))
+            {
+                return;
+            }
+
             Log(TerminalLogType.Input, _commandText);
             Shell?.RunCommand(_commandText);
             History?.Push(_commandText);
@@ -921,22 +936,34 @@ namespace CommandTerminal
             int size = _consoleFont.fontSize;
             float xPosition = _rightAlignButtons ? Screen.width - 7 * size : 0;
 
-            // 7 is the number of chars in the button plus some padding, 2 is the line height.
-            // The layout will resize according to the font size.
+            /*
+                7 is the number of chars in the button plus some padding, 2 is the line height.
+                The layout will resize according to the font size.
+             */
             GUILayout.BeginArea(new Rect(xPosition, _currentOpenT, 7 * size, size * 2));
-            GUILayout.BeginHorizontal();
-
-            if (GUILayout.Button("Small", _windowStyle))
+            try
             {
-                ToggleState(TerminalState.OpenSmall);
+                GUILayout.BeginHorizontal();
+                try
+                {
+                    if (GUILayout.Button("Small", _windowStyle))
+                    {
+                        ToggleState(TerminalState.OpenSmall);
+                    }
+                    else if (GUILayout.Button("Full", _windowStyle))
+                    {
+                        ToggleState(TerminalState.OpenFull);
+                    }
+                }
+                finally
+                {
+                    GUILayout.EndHorizontal();
+                }
             }
-            else if (GUILayout.Button("Full", _windowStyle))
+            finally
             {
-                ToggleState(TerminalState.OpenFull);
+                GUILayout.EndArea();
             }
-
-            GUILayout.EndHorizontal();
-            GUILayout.EndArea();
         }
 
         private void HandleOpenness()
@@ -989,29 +1016,14 @@ namespace CommandTerminal
 
         private Color GetLogColor(TerminalLogType type)
         {
-            switch (type)
+            return type switch
             {
-                case TerminalLogType.Message:
-                {
-                    return _foregroundColor;
-                }
-                case TerminalLogType.Warning:
-                {
-                    return _warningColor;
-                }
-                case TerminalLogType.Input:
-                {
-                    return _inputColor;
-                }
-                case TerminalLogType.ShellMessage:
-                {
-                    return _shellColor;
-                }
-                default:
-                {
-                    return _errorColor;
-                }
-            }
+                TerminalLogType.Message => _foregroundColor,
+                TerminalLogType.Warning => _warningColor,
+                TerminalLogType.Input => _inputColor,
+                TerminalLogType.ShellMessage => _shellColor,
+                _ => _errorColor,
+            };
         }
     }
 }
