@@ -637,6 +637,7 @@ namespace CommandTerminal
             inputBackgroundTexture.Apply();
 
             _inputStyle = GenerateGUIStyle();
+            _inputStyle.alignment = TextAnchor.MiddleLeft;
 
             if (!string.IsNullOrEmpty(_inputCaret))
             {
@@ -662,6 +663,7 @@ namespace CommandTerminal
                     padding = new RectOffset(4, 4, 4, 4),
                     font = _consoleFont,
                     normal = { textColor = _inputColor, background = inputBackgroundTexture },
+                    fixedHeight = _consoleFont.lineHeight,
                 };
             }
         }
