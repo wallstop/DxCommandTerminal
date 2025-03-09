@@ -3,11 +3,14 @@ namespace CommandTerminal
     using System;
     using System.Collections.Generic;
     using System.ComponentModel;
+    using System.Linq;
     using System.Text;
+    using Attributes;
     using JetBrains.Annotations;
     using UnityEditor;
     using UnityEngine;
     using UnityEngine.Assertions;
+    using Utils;
 #if ENABLE_INPUT_SYSTEM
     using UnityEngine.InputSystem;
     using UnityEngine.InputSystem.Controls;
@@ -118,24 +121,34 @@ namespace CommandTerminal
         private bool _useHotkeys = true;
 #endif
 
+        [ShowIf(nameof(_useHotkeys))]
         [SerializeField]
         private string _toggleHotkey = "`";
 
+        [ShowIf(nameof(_useHotkeys))]
         [SerializeField]
         private string _toggleFullHotkey = "#`";
 
+        [ShowIf(nameof(_useHotkeys))]
         [SerializeField]
         private string _completeHotkey = "tab";
 
+        [ShowIf(nameof(_useHotkeys))]
         [SerializeField]
         private string _previousHotkey = "up";
 
+        [ShowIf(nameof(_useHotkeys))]
         [SerializeField]
-        private List<string> _completeCommandHotkeys = new() { "enter", "return" };
+        private ListWrapper<string> _completeCommandHotkeys = new()
+        {
+            list = { "enter", "return" },
+        };
 
+        [ShowIf(nameof(_useHotkeys))]
         [SerializeField]
         private string _closeHotkey = "escape";
 
+        [ShowIf(nameof(_useHotkeys))]
         [SerializeField]
         private string _nextHotkey = "down";
 
@@ -348,6 +361,11 @@ namespace CommandTerminal
 
         private void Start()
         {
+#if ENABLE_INPUT_SYSTEM
+            Debug.Log("Utilizing new Input System for control handling...", this);
+#else
+            Debug.Log("Utilizing Legacy Input System for control handling...", this);
+#endif
             if (_started)
             {
                 SetState(TerminalState.Close);
@@ -364,9 +382,10 @@ namespace CommandTerminal
             if (_useHotkeys)
             {
                 Assert.IsFalse(
-                    _completeCommandHotkeys?.Exists(command =>
+                    _completeCommandHotkeys?.list?.Exists(command =>
                         string.Equals(command, _toggleHotkey, StringComparison.OrdinalIgnoreCase)
-                    ) ?? false
+                    ) ?? false,
+                    $"Invalid Toggle Hotkey {_toggleHotkey} - cannot be in the set of complete command hotkeys: [{string.Join(",", _completeCommandHotkeys?.list ?? Enumerable.Empty<string>())}]"
                 );
             }
 
@@ -456,7 +475,7 @@ namespace CommandTerminal
                 Close();
                 _handledInputThisFrame = true;
             }
-            else if (_completeCommandHotkeys?.Exists(IsKeyPressed) == true)
+            else if (_completeCommandHotkeys?.list?.Exists(IsKeyPressed) == true)
             {
                 EnterCommand();
                 _handledInputThisFrame = true;
@@ -725,7 +744,6 @@ namespace CommandTerminal
         }
 
 #if ENABLE_INPUT_SYSTEM
-
         private static bool IsKeyPressed(string key)
         {
             if (1 < key.Length && key.StartsWith("#", StringComparison.OrdinalIgnoreCase))
