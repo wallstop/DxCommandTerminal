@@ -16,6 +16,7 @@ This is a fork of [Command Terminal](https://github.com/stillwwater/command_term
 5. Resolve the latest `com.wallstop-studios.dxcommandterminal`
 
 ## Improvements Over Baseline
+- [Enhanced Auto-Complete + Hint system + styling](#hints)
 - Fixed Input handling bugs related to [WebGL](#web-gl)
 - Fully integrated with Unity's [new Input System](#new-input-system)
 - Fully [configurable and bindable controls](#hotkeys) for every action
@@ -307,6 +308,18 @@ You can also use `PlayerInput` or similar to bind InputActions to all available 
 ## Note
 If using PlayerInput to bind to the above controls, you will need to uncheck `Use Hotkeys` under the `Hotkeys` header in the Terminal script.
 
+When InputActions are not bound, there is an order of precedence for input checking. It is:
+- Close
+- Enter Command
+- Previous
+- Next
+- Toggle Full Terminal
+- Toggle Small Terminal
+- Auto Complete (backward)
+- Auto Complete (forward)
+
+This order is irrelevant when using PlayerInput.
+
 # Web GL
 If you are relying on `RegisterCommandAttribute` to wire up your commands to the CommandShell instead of manually registering them, you will need to set `Managed Stripping Level` to `Low`, `Minimal`, or `None` under `Player > WebGL > Other Settings > Optimizations > Managed Stripping Level` in order for command registration to work. Settings of `Medium` or higher will break the reflection code that loads the commands, causing the terminal to forget about its capabilities.
 
@@ -314,4 +327,7 @@ If you are relying on `RegisterCommandAttribute` to wire up your commands to the
 
 See [Unity docs on Managed Stripping Level](https://docs.unity3d.com/2022.3/Documentation/ScriptReference/ManagedStrippingLevel.html) for more details.
 
+# Hints
+AutoComplete has gotten a major upgrade in this fork. Completion is now not only case-insensitive, but it will now also search (unique) commands that have been executed, ignoring any irrelevant input. Pressing the complete key multiple times now selects available options in a persistent fashion. Completion can be walked both forward and backwards. Results are now presented in a new UI that intelligently adapts to screen space and current selection position. When completion is no longer relevant, the UI is disabled. However, you can opt to always show the available commands by toggling the new `Display Hints` option in the Terminal configuration. There are also several new theming options for hints, with controls over the currently selected hint v unselected hints.
 
+![png](./Media/AutoComplete.png)

@@ -10,6 +10,7 @@ namespace CommandTerminal
     using UnityEditor;
     using UnityEngine;
     using UnityEngine.Assertions;
+    using UnityEngine.Serialization;
     using Utils;
 #if ENABLE_INPUT_SYSTEM
     using UnityEngine.InputSystem;
@@ -94,7 +95,7 @@ namespace CommandTerminal
         public static CommandHistory History { get; private set; }
 
         // ReSharper disable once MemberCanBePrivate.Global
-        public static CommandAutocomplete Autocomplete { get; private set; }
+        public static CommandAutoComplete AutoComplete { get; private set; }
 
         // ReSharper disable once MemberCanBePrivate.Global
         public bool IsClosed =>
@@ -171,6 +172,30 @@ namespace CommandTerminal
         [SerializeField]
         private bool _rightAlignButtons;
 
+        [Header("Hints")]
+        [SerializeField]
+        private bool _displayHints;
+
+        [Range(0, 1)]
+        [SerializeField]
+        private float _unselectedHintContrast;
+
+        [Range(0, 1)]
+        [SerializeField]
+        private float _selectedHintContrast;
+
+        [SerializeField]
+        private float _unselectedHintAlpha = 0.25f;
+
+        [SerializeField]
+        private float _selectedHintAlpha = 0.75f;
+
+        [SerializeField]
+        private Color _unselectedHintColor = Color.grey;
+
+        [SerializeField]
+        private Color _selectedHintColor = Color.white;
+
         [Header("Theme")]
         [Range(0, 1)]
         [SerializeField]
@@ -234,6 +259,8 @@ namespace CommandTerminal
         private GUIStyle _labelStyle;
 
         private GUIStyle _inputCaretStyle;
+        private GUIStyle _unselectedHintStyle;
+        private GUIStyle _selectedHintStyle;
         private GUIStyle _inputStyle;
         private GUILayoutOption[] _inputCaretOptions;
         private GUILayoutOption[] _runButtonOptions;
@@ -247,7 +274,10 @@ namespace CommandTerminal
 
         private string _lastKnownCommandText;
         private string[] _lastCompletionBuffer;
+        private float[] _completionElementWidthBuffer;
         private int? _lastCompletionIndex;
+        private int _currentHintStartIndex;
+        private int _formatWidth;
 
         [StringFormatMethod("format")]
         public static bool Log(string format, params object[] parameters)
@@ -284,7 +314,7 @@ namespace CommandTerminal
             _cachedCommandText = _commandText;
 #endif
             _commandText = string.Empty;
-            _lastKnownCommandText = _commandText;
+            ResetAutoComplete();
 
             switch (newState)
             {
@@ -354,7 +384,7 @@ namespace CommandTerminal
             Buffer = new CommandLog(Math.Max(0, _bufferSize), _ignoredLogTypes);
             Shell = new CommandShell();
             History = new CommandHistory();
-            Autocomplete = new CommandAutocomplete(History, Shell);
+            AutoComplete = new CommandAutoComplete(History, Shell);
 
             if (_logUnityMessages && !_unityLogAttached)
             {
@@ -374,7 +404,7 @@ namespace CommandTerminal
             Buffer = null;
             Shell = null;
             History = null;
-            Autocomplete = null;
+            AutoComplete = null;
         }
 
         private void Start()
@@ -391,7 +421,7 @@ namespace CommandTerminal
             }
 
             _commandText = string.Empty;
-            _lastKnownCommandText = _commandText;
+            ResetAutoComplete();
 #if !ENABLE_INPUT_SYSTEM
             _cachedCommandText = _commandText;
 #endif
@@ -560,6 +590,38 @@ namespace CommandTerminal
             _window = GUILayout.Window(88, _window, DrawConsole, string.Empty, _windowStyle);
         }
 
+        private void ResetAutoComplete()
+        {
+            _lastKnownCommandText = _commandText;
+            _lastCompletionIndex = null;
+            _currentHintStartIndex = 0;
+            if (_displayHints)
+            {
+                _lastCompletionBuffer =
+                    AutoComplete?.Complete(_lastKnownCommandText, ref _formatWidth)
+                    ?? Array.Empty<string>();
+                CalculateAutoCompleteHintSize();
+            }
+            else
+            {
+                _lastCompletionBuffer = Array.Empty<string>();
+            }
+        }
+
+        private void CalculateAutoCompleteHintSize()
+        {
+            _completionElementWidthBuffer = new float[_lastCompletionBuffer.Length];
+            for (int i = 0; i < _lastCompletionBuffer.Length; ++i)
+            {
+                string completion = _lastCompletionBuffer[i];
+                GUIContent completionContent = new(completion);
+                GUIStyle style =
+                    _lastCompletionIndex == i ? _selectedHintStyle : _unselectedHintStyle;
+                Vector2 size = style.CalcSize(completionContent);
+                _completionElementWidthBuffer[i] = size.x + _formatWidth;
+            }
+        }
+
         private void SetupWindow()
         {
             int height = Screen.height;
@@ -569,7 +631,6 @@ namespace CommandTerminal
 
             try
             {
-                // TODO: Consolidate
                 switch (_state)
                 {
                     case TerminalState.OpenSmall:
@@ -601,7 +662,6 @@ namespace CommandTerminal
 
         private void SetupWindowStyle()
         {
-            // Set background color
             Texture2D backgroundTexture = new(1, 1);
             backgroundTexture.SetPixel(0, 0, _backgroundColor);
             backgroundTexture.Apply();
@@ -638,13 +698,11 @@ namespace CommandTerminal
             inputBackgroundTexture.SetPixel(0, 0, darkBackground);
             inputBackgroundTexture.Apply();
 
-            _inputStyle = GenerateGUIStyle();
-            _inputStyle.alignment = TextAnchor.MiddleLeft;
+            _inputStyle = GenerateGUIStyle(inputBackgroundTexture, TextAnchor.MiddleLeft);
 
             if (!string.IsNullOrEmpty(_inputCaret))
             {
-                _inputCaretStyle = GenerateGUIStyle();
-                _inputCaretStyle.alignment = TextAnchor.MiddleRight;
+                _inputCaretStyle = GenerateGUIStyle(inputBackgroundTexture, TextAnchor.MiddleRight);
                 _inputCaretStyle.padding.right = 0;
 
                 GUIContent inputCaretContent = new(_inputCaret);
@@ -656,17 +714,63 @@ namespace CommandTerminal
                 _inputCaretOptions = Array.Empty<GUILayoutOption>();
             }
 
+            Color unselectedHintBackground = new()
+            {
+                r = _backgroundColor.r - _unselectedHintContrast,
+                g = _backgroundColor.g - _unselectedHintContrast,
+                b = _backgroundColor.b - _unselectedHintContrast,
+                a = _unselectedHintAlpha,
+            };
+
+            Texture2D unselectedHintBackgroundTexture = new(1, 1);
+            unselectedHintBackgroundTexture.SetPixel(0, 0, unselectedHintBackground);
+            unselectedHintBackgroundTexture.Apply();
+
+            _unselectedHintStyle = GenerateGUIStyle(
+                unselectedHintBackgroundTexture,
+                TextAnchor.MiddleCenter,
+                padding: 0,
+                margin: 4
+            );
+            _unselectedHintStyle.normal.textColor = _unselectedHintColor;
+
+            Color selectedHintBackground = new()
+            {
+                r = _backgroundColor.r - _selectedHintContrast,
+                g = _backgroundColor.g - _selectedHintContrast,
+                b = _backgroundColor.b - _selectedHintContrast,
+                a = _selectedHintAlpha,
+            };
+
+            Texture2D selectedHintBackgroundTexture = new(1, 1);
+            selectedHintBackgroundTexture.SetPixel(0, 0, selectedHintBackground);
+            selectedHintBackgroundTexture.Apply();
+
+            _selectedHintStyle = GenerateGUIStyle(
+                selectedHintBackgroundTexture,
+                TextAnchor.MiddleCenter,
+                padding: 0,
+                margin: 4
+            );
+            _selectedHintStyle.normal.textColor = _selectedHintColor;
+
             return;
 
-            GUIStyle GenerateGUIStyle()
+            GUIStyle GenerateGUIStyle(
+                Texture2D texture,
+                TextAnchor alignment,
+                int padding = 4,
+                int margin = 0
+            )
             {
-                const int paddingSize = 4;
                 return new GUIStyle
                 {
-                    padding = new RectOffset(paddingSize, paddingSize, paddingSize, paddingSize),
+                    padding = new RectOffset(padding, padding, padding, padding),
+                    margin = new RectOffset(margin, margin, margin, margin),
                     font = _consoleFont,
-                    normal = { textColor = _inputColor, background = inputBackgroundTexture },
-                    fixedHeight = _consoleFont.lineHeight + paddingSize * 2,
+                    normal = { textColor = _inputColor, background = texture },
+                    fixedHeight = _consoleFont.lineHeight + padding * 2,
+                    alignment = alignment,
                 };
             }
         }
@@ -727,6 +831,11 @@ namespace CommandTerminal
                     CompleteCommand();
                 }
 #endif
+                if (_lastCompletionBuffer is { Length: > 0 })
+                {
+                    RenderCompletionHints();
+                }
+
                 GUILayout.BeginHorizontal();
                 try
                 {
@@ -740,7 +849,7 @@ namespace CommandTerminal
                     if (!string.Equals(newCommandText, _commandText))
                     {
                         _commandText = newCommandText;
-                        _lastKnownCommandText = newCommandText;
+                        ResetAutoComplete();
                     }
 
                     if (
@@ -769,7 +878,7 @@ namespace CommandTerminal
                     if (_inputFix && _commandText.Length > 0)
                     {
                         _commandText = _cachedCommandText; // Otherwise the TextField picks up the ToggleHotkey character event
-                        _lastKnownCommandText = _commandText;
+                        ResetAutoComplete();
                         _inputFix = false; // Prevents checking string Length every draw call
                     }
 #endif
@@ -797,6 +906,65 @@ namespace CommandTerminal
             }
         }
 
+        private void RenderCompletionHints()
+        {
+            GUILayout.BeginHorizontal();
+            try
+            {
+                float totalWidth = _completionElementWidthBuffer.Sum();
+                float availableWidth = Screen.width;
+
+                if (availableWidth < totalWidth && _lastCompletionIndex != null)
+                {
+                    int targetIndex = _lastCompletionIndex.Value;
+                    float accumulatedWidth = 0f;
+
+                    for (
+                        int i = _currentHintStartIndex;
+                        i < _currentHintStartIndex + _completionElementWidthBuffer.Length;
+                        ++i
+                    )
+                    {
+                        int index = i % _completionElementWidthBuffer.Length;
+                        if (index == targetIndex)
+                        {
+                            if (
+                                accumulatedWidth + _completionElementWidthBuffer[index]
+                                > availableWidth
+                            )
+                            {
+                                _currentHintStartIndex = targetIndex;
+                            }
+                            break;
+                        }
+                        accumulatedWidth += _completionElementWidthBuffer[index];
+                    }
+                }
+
+                for (int i = _currentHintStartIndex; i < _lastCompletionBuffer.Length; ++i)
+                {
+                    GUILayout.Label(
+                        _lastCompletionBuffer[i],
+                        _lastCompletionIndex == i ? _selectedHintStyle : _unselectedHintStyle,
+                        GUILayout.Width(_completionElementWidthBuffer[i])
+                    );
+                }
+
+                for (int i = 0; i < _currentHintStartIndex && i < _lastCompletionBuffer.Length; ++i)
+                {
+                    GUILayout.Label(
+                        _lastCompletionBuffer[i],
+                        _lastCompletionIndex == i ? _selectedHintStyle : _unselectedHintStyle,
+                        GUILayout.Width(_completionElementWidthBuffer[i])
+                    );
+                }
+            }
+            finally
+            {
+                GUILayout.EndHorizontal();
+            }
+        }
+
 #if ENABLE_INPUT_SYSTEM
         private static bool IsKeyPressed(string key)
         {
@@ -808,6 +976,19 @@ namespace CommandTerminal
                     expected = expected.ToLowerInvariant();
                 }
 
+                return Keyboard.current.shiftKey.isPressed
+                    && Keyboard.current.TryGetChildControl<KeyControl>(
+                        SpecialKeyCodeMap.GetValueOrDefault(expected, expected)
+                    )
+                        is { wasPressedThisFrame: true };
+            }
+            if (key.StartsWith("shift+", StringComparison.OrdinalIgnoreCase))
+            {
+                string expected = key.Substring("shift+".Length);
+                if (expected.Length == 1)
+                {
+                    expected = expected.ToLowerInvariant();
+                }
                 return Keyboard.current.shiftKey.isPressed
                     && Keyboard.current.TryGetChildControl<KeyControl>(
                         SpecialKeyCodeMap.GetValueOrDefault(expected, expected)
@@ -884,7 +1065,7 @@ namespace CommandTerminal
                 return;
             }
             _commandText = History?.Previous() ?? string.Empty;
-            _lastKnownCommandText = _commandText;
+            ResetAutoComplete();
             _moveCursor = true;
             GUI.FocusControl(CommandControlName);
         }
@@ -896,7 +1077,7 @@ namespace CommandTerminal
                 return;
             }
             _commandText = History?.Next() ?? string.Empty;
-            _lastKnownCommandText = _commandText;
+            ResetAutoComplete();
             _moveCursor = true;
             GUI.FocusControl(CommandControlName);
         }
@@ -924,30 +1105,35 @@ namespace CommandTerminal
             }
 
             _commandText = _commandText.Trim();
-            _lastKnownCommandText = _commandText;
-            if (string.IsNullOrWhiteSpace(_commandText))
+            try
             {
-                return;
+                if (string.IsNullOrWhiteSpace(_commandText))
+                {
+                    return;
+                }
+
+                Log(TerminalLogType.Input, _commandText);
+                bool? success = Shell?.RunCommand(_commandText);
+
+                bool? errorFree = Shell == null ? null : true;
+                while (Shell?.TryConsumeErrorMessage(out string error) == true)
+                {
+                    Log(TerminalLogType.Error, $"Error: {error}");
+                    errorFree = false;
+                }
+
+                History?.Push(_commandText, success, errorFree);
+
+                _commandText = string.Empty;
+                _scrollPosition.y = int.MaxValue;
             }
-
-            Log(TerminalLogType.Input, _commandText);
-            bool? success = Shell?.RunCommand(_commandText);
-
-            bool? errorFree = Shell == null ? null : true;
-            while (Shell?.TryConsumeErrorMessage(out string error) == true)
+            finally
             {
-                Log(TerminalLogType.Error, $"Error: {error}");
-                errorFree = false;
+                ResetAutoComplete();
             }
-
-            History?.Push(_commandText, success, errorFree);
-
-            _commandText = string.Empty;
-            _lastKnownCommandText = _commandText;
-            _scrollPosition.y = int.MaxValue;
         }
 
-        public void CompleteCommand(bool searchForward = true, bool includeErrors = false)
+        public void CompleteCommand(bool searchForward = true)
         {
             if (_state == TerminalState.Close)
             {
@@ -957,19 +1143,12 @@ namespace CommandTerminal
             try
             {
                 _lastKnownCommandText ??= _commandText;
-                int formatWidth = 0;
-
                 string[] completionBuffer =
-                    Autocomplete?.Complete(_lastKnownCommandText, ref formatWidth)
+                    AutoComplete?.Complete(_lastKnownCommandText, ref _formatWidth)
                     ?? Array.Empty<string>();
                 try
                 {
                     int completionLength = completionBuffer.Length;
-                    if (0 < completionLength)
-                    {
-                        _commandText = completionBuffer[0];
-                    }
-
                     if (
                         _lastCompletionBuffer == null
                         || _lastCompletionBuffer.SequenceEqual(
@@ -978,51 +1157,48 @@ namespace CommandTerminal
                         )
                     )
                     {
-                        if (_lastCompletionIndex == null)
+                        if (0 < completionLength)
                         {
-                            _lastCompletionIndex = 0;
-                        }
-                        else if (searchForward)
-                        {
-                            _lastCompletionIndex = (_lastCompletionIndex + 1) % completionLength;
+                            if (_lastCompletionIndex == null)
+                            {
+                                _lastCompletionIndex = 0;
+                            }
+                            else if (searchForward)
+                            {
+                                _lastCompletionIndex =
+                                    (_lastCompletionIndex + 1) % completionLength;
+                            }
+                            else
+                            {
+                                _lastCompletionIndex =
+                                    (_lastCompletionIndex - 1 + completionLength)
+                                    % completionLength;
+                            }
+
+                            _commandText = completionBuffer[_lastCompletionIndex.Value];
                         }
                         else
                         {
-                            _lastCompletionIndex =
-                                (_lastCompletionIndex - 1 + completionLength) % completionLength;
-                        }
-
-                        _commandText = completionBuffer[_lastCompletionIndex.Value];
-                        if (_lastCompletionBuffer != null)
-                        {
-                            return;
+                            _lastCompletionIndex = null;
                         }
                     }
                     else
                     {
-                        _lastCompletionIndex = null;
-                    }
-
-                    if (1 < completionLength)
-                    {
-                        // Print possible completions
-                        StringBuilder logBuffer = new();
-
-                        foreach (string completion in completionBuffer)
+                        if (0 < completionLength)
                         {
-                            logBuffer.Append(completion.PadRight(formatWidth + 4));
+                            _lastCompletionIndex = 0;
+                            _commandText = completionBuffer[0];
                         }
-
-                        bool handled = Log(logBuffer.ToString());
-                        if (handled)
+                        else
                         {
-                            _scrollPosition.y = int.MaxValue;
+                            _lastCompletionIndex = null;
                         }
                     }
                 }
                 finally
                 {
                     _lastCompletionBuffer = completionBuffer;
+                    CalculateAutoCompleteHintSize();
                 }
             }
             finally
