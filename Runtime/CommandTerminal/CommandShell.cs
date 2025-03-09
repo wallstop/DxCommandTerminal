@@ -819,7 +819,9 @@ namespace CommandTerminal
         public bool RunCommand(string commandName, CommandArg[] arguments)
         {
             string line =
-                $"{commandName} {string.Join(" ", arguments.Select(argument => argument.String))}";
+                $"{commandName}{(arguments.Length == 0 ? string.Empty : " ")}"
+                + $"{string.Join(" ", arguments.Select(argument => argument.String.Contains(" ") ? $"\"{argument.String}\"" : argument.String))}";
+
             commandName = commandName?.Replace(
                 " ",
                 string.Empty,
