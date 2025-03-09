@@ -1,20 +1,29 @@
 namespace CommandTerminal
 {
     using System.Collections.Generic;
+    using System.Linq;
 
     public sealed class CommandHistory
     {
-        private readonly List<string> _history = new();
+        private readonly List<(string text, bool? success, bool? errorFree)> _history = new();
         private int _position;
 
-        public void Push(string commandString)
+        public IEnumerable<string> GetHistory(bool onlySuccess, bool onlyErrorFree)
+        {
+            return _history
+                .Where(value => !onlySuccess || value.success == true)
+                .Where(value => !onlyErrorFree || value.errorFree == true)
+                .Select(value => value.text);
+        }
+
+        public void Push(string commandString, bool? success, bool? errorFree)
         {
             if (string.IsNullOrWhiteSpace(commandString))
             {
                 return;
             }
 
-            _history.Add(commandString);
+            _history.Add((commandString, success, errorFree));
             _position = _history.Count;
         }
 
@@ -23,7 +32,7 @@ namespace CommandTerminal
             _position++;
             if (0 <= _position && _position < _history.Count)
             {
-                return _history[_position];
+                return _history[_position].text;
             }
 
             _position = _history.Count;
@@ -36,7 +45,7 @@ namespace CommandTerminal
 
             if (0 <= _position && _position < _history.Count)
             {
-                return _history[_position];
+                return _history[_position].text;
             }
 
             _position = -1;

@@ -17,6 +17,19 @@ namespace CommandTerminal
         }
 
         [RegisterCommand(
+            Help = "Clear the command console's history",
+            Name = "clear-history",
+            MaxArgCount = 0,
+            Default = true
+        )]
+        // ReSharper disable once UnusedMember.Local
+        // ReSharper disable once UnusedParameter.Local
+        public static void CommandClearHistory(CommandArg[] args)
+        {
+            Terminal.History?.Clear();
+        }
+
+        [RegisterCommand(
             Help = "Display help information about a command",
             MaxArgCount = 1,
             Default = true

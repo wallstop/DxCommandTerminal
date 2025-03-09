@@ -8,6 +8,19 @@ namespace CommandTerminal
     {
         private readonly HashSet<string> _knownWords = new();
         private readonly List<string> _buffer = new();
+        private readonly CommandHistory _history;
+        private readonly CommandShell _shell;
+
+        public CommandAutocomplete(
+            CommandHistory history,
+            CommandShell shell,
+            IEnumerable<string> commands = null
+        )
+        {
+            _history = history ?? throw new ArgumentNullException(nameof(history));
+            _shell = shell ?? throw new ArgumentNullException(nameof(shell));
+            _knownWords.UnionWith(commands ?? Enumerable.Empty<string>());
+        }
 
         public void Register(string word)
         {
@@ -19,69 +32,38 @@ namespace CommandTerminal
             _knownWords.Clear();
         }
 
-        public string[] Complete(ref string text, ref int formatWidth)
+        public string[] Complete(string text, ref int formatWidth)
         {
             _buffer.Clear();
-            string partialWord = EatLastWord(ref text);
+            formatWidth = WalkHistory(text.Trim(), formatWidth, false);
+            return _buffer.ToArray();
 
-            foreach (
-                string known in _knownWords.Where(known =>
-                    known.StartsWith(partialWord, StringComparison.OrdinalIgnoreCase)
-                )
-            )
+            int WalkHistory(string input, int currentFormatWidth, bool onlyErrorFree)
             {
-                _buffer.Add(known);
-                if (formatWidth < known.Length)
+                foreach (
+                    string known in _shell
+                        .Commands.Keys.Select(command => command.ToLowerInvariant())
+                        .Concat(_knownWords)
+                        .Concat(
+                            _history.GetHistory(onlySuccess: true, onlyErrorFree: onlyErrorFree)
+                        )
+                        .Where(known => known.StartsWith(input, StringComparison.OrdinalIgnoreCase))
+                )
                 {
-                    formatWidth = known.Length;
+                    _buffer.Add(known);
+                    currentFormatWidth = Math.Max(currentFormatWidth, known.Length);
                 }
-            }
 
-            string[] completions = _buffer.ToArray();
-            text += PartialWord(completions);
-            return completions;
+                return currentFormatWidth;
+            }
         }
 
-        private static string EatLastWord(ref string text)
+        private static string EatLastWord(string text)
         {
+            text = text.Trim();
             int lastSpace = text.LastIndexOf(' ');
             string result = text.Substring(lastSpace + 1);
-
-            text = text.Substring(0, lastSpace + 1); // Remaining (keep space)
             return result;
-        }
-
-        private static string PartialWord(string[] words)
-        {
-            if (words.Length == 0)
-            {
-                return string.Empty;
-            }
-
-            string firstMatch = words[0];
-            int partialLength = firstMatch.Length;
-
-            if (words.Length == 1)
-            {
-                return firstMatch;
-            }
-
-            foreach (string word in words)
-            {
-                if (partialLength > word.Length)
-                {
-                    partialLength = word.Length;
-                }
-
-                for (int i = 0; i < partialLength; i++)
-                {
-                    if (word[i] != firstMatch[i])
-                    {
-                        partialLength = i;
-                    }
-                }
-            }
-            return firstMatch.Substring(0, partialLength);
         }
     }
 }

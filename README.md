@@ -300,7 +300,8 @@ You can also use `PlayerInput` or similar to bind InputActions to all available 
 - `Close`: If the terminal is open, closes it.
 - `ToggleSmall`: If the terminal is not opened to its small height, opens it to small height, otherwise closes it.
 - `ToggleFull`: If the terminal is not opened to its full height, opens it to full height, otherwise closes it.
-- `CompleteCommand`: Uses auto-complete to attempt to complete the current command using what is typed in the command buffer.
+- `CompleteCommand`: Uses auto-complete to attempt to complete the current command using what is typed in the command buffer, cycling forwards through results.
+- `ReverseCompleteCommand`: Uses auto-complete to attempt to complete the current command using what is typed in the command buffer, but cycling backwards through results.
 - `EnterCommand`: Takes the current buffer and attempts to execute it as a command + parameters.
 
 ## Note

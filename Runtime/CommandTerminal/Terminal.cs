@@ -137,6 +137,10 @@ namespace CommandTerminal
 
         [ShowIf(nameof(_useHotkeys))]
         [SerializeField]
+        private string _reverseCompleteHotkey = "#tab";
+
+        [ShowIf(nameof(_useHotkeys))]
+        [SerializeField]
         private string _previousHotkey = "up";
 
         [ShowIf(nameof(_useHotkeys))]
@@ -241,6 +245,10 @@ namespace CommandTerminal
         private bool _handledInputThisFrame;
         private bool _needsFocus;
 
+        private string _lastKnownCommandText;
+        private string[] _lastCompletionBuffer;
+        private int? _lastCompletionIndex;
+
         [StringFormatMethod("format")]
         public static bool Log(string format, params object[] parameters)
         {
@@ -276,6 +284,7 @@ namespace CommandTerminal
             _cachedCommandText = _commandText;
 #endif
             _commandText = string.Empty;
+            _lastKnownCommandText = _commandText;
 
             switch (newState)
             {
@@ -345,7 +354,7 @@ namespace CommandTerminal
             Buffer = new CommandLog(Math.Max(0, _bufferSize), _ignoredLogTypes);
             Shell = new CommandShell();
             History = new CommandHistory();
-            Autocomplete = new CommandAutocomplete();
+            Autocomplete = new CommandAutocomplete(History, Shell);
 
             if (_logUnityMessages && !_unityLogAttached)
             {
@@ -370,11 +379,6 @@ namespace CommandTerminal
 
         private void Start()
         {
-#if ENABLE_INPUT_SYSTEM
-            Debug.Log("Utilizing new Input System for control handling...", this);
-#else
-            Debug.Log("Utilizing Legacy Input System for control handling...", this);
-#endif
             if (_started)
             {
                 SetState(TerminalState.Close);
@@ -387,6 +391,7 @@ namespace CommandTerminal
             }
 
             _commandText = string.Empty;
+            _lastKnownCommandText = _commandText;
 #if !ENABLE_INPUT_SYSTEM
             _cachedCommandText = _commandText;
 #endif
@@ -414,12 +419,6 @@ namespace CommandTerminal
             while (Shell.TryConsumeErrorMessage(out string error))
             {
                 Log(TerminalLogType.Error, $"Error: {error}");
-            }
-
-            Autocomplete.Clear();
-            foreach (KeyValuePair<string, CommandInfo> command in Shell.Commands)
-            {
-                Autocomplete.Register(command.Key);
             }
 
             _started = true;
@@ -512,9 +511,14 @@ namespace CommandTerminal
                 ToggleSmall();
                 _handledInputThisFrame = true;
             }
+            else if (IsKeyPressed(_reverseCompleteHotkey))
+            {
+                CompleteCommand(searchForward: false);
+                _handledInputThisFrame = true;
+            }
             else if (IsKeyPressed(_completeHotkey))
             {
-                CompleteCommand();
+                CompleteCommand(searchForward: true);
                 _handledInputThisFrame = true;
             }
         }
@@ -732,7 +736,12 @@ namespace CommandTerminal
                     }
 
                     GUI.SetNextControlName(CommandControlName);
-                    _commandText = GUILayout.TextField(_commandText, _inputStyle);
+                    string newCommandText = GUILayout.TextField(_commandText, _inputStyle);
+                    if (!string.Equals(newCommandText, _commandText))
+                    {
+                        _commandText = newCommandText;
+                        _lastKnownCommandText = newCommandText;
+                    }
 
                     if (
                         _moveCursor
@@ -760,6 +769,7 @@ namespace CommandTerminal
                     if (_inputFix && _commandText.Length > 0)
                     {
                         _commandText = _cachedCommandText; // Otherwise the TextField picks up the ToggleHotkey character event
+                        _lastKnownCommandText = _commandText;
                         _inputFix = false; // Prevents checking string Length every draw call
                     }
 #endif
@@ -853,7 +863,12 @@ namespace CommandTerminal
 
         public void OnCompleteCommand(InputValue input)
         {
-            CompleteCommand();
+            CompleteCommand(searchForward: true);
+        }
+
+        public void OnReverseCompleteCommand(InputValue input)
+        {
+            CompleteCommand(searchForward: false);
         }
 
         public void OnEnterCommand(InputValue inputValue)
@@ -864,14 +879,24 @@ namespace CommandTerminal
 
         public void HandlePrevious()
         {
+            if (_state == TerminalState.Close)
+            {
+                return;
+            }
             _commandText = History?.Previous() ?? string.Empty;
+            _lastKnownCommandText = _commandText;
             _moveCursor = true;
             GUI.FocusControl(CommandControlName);
         }
 
         public void HandleNext()
         {
+            if (_state == TerminalState.Close)
+            {
+                return;
+            }
             _commandText = History?.Next() ?? string.Empty;
+            _lastKnownCommandText = _commandText;
             _moveCursor = true;
             GUI.FocusControl(CommandControlName);
         }
@@ -893,58 +918,111 @@ namespace CommandTerminal
 
         public void EnterCommand()
         {
+            if (_state == TerminalState.Close)
+            {
+                return;
+            }
+
             _commandText = _commandText.Trim();
+            _lastKnownCommandText = _commandText;
             if (string.IsNullOrWhiteSpace(_commandText))
             {
                 return;
             }
 
             Log(TerminalLogType.Input, _commandText);
-            Shell?.RunCommand(_commandText);
-            History?.Push(_commandText);
+            bool? success = Shell?.RunCommand(_commandText);
 
+            bool? errorFree = Shell == null ? null : true;
             while (Shell?.TryConsumeErrorMessage(out string error) == true)
             {
                 Log(TerminalLogType.Error, $"Error: {error}");
+                errorFree = false;
             }
 
+            History?.Push(_commandText, success, errorFree);
+
             _commandText = string.Empty;
+            _lastKnownCommandText = _commandText;
             _scrollPosition.y = int.MaxValue;
         }
 
-        public void CompleteCommand()
+        public void CompleteCommand(bool searchForward = true, bool includeErrors = false)
         {
+            if (_state == TerminalState.Close)
+            {
+                return;
+            }
+
             try
             {
-                string headText = _commandText;
+                _lastKnownCommandText ??= _commandText;
                 int formatWidth = 0;
 
                 string[] completionBuffer =
-                    Autocomplete?.Complete(ref headText, ref formatWidth) ?? Array.Empty<string>();
-                int completionLength = completionBuffer.Length;
-
-                if (completionLength != 0)
+                    Autocomplete?.Complete(_lastKnownCommandText, ref formatWidth)
+                    ?? Array.Empty<string>();
+                try
                 {
-                    _commandText = headText;
+                    int completionLength = completionBuffer.Length;
+                    if (0 < completionLength)
+                    {
+                        _commandText = completionBuffer[0];
+                    }
+
+                    if (
+                        _lastCompletionBuffer == null
+                        || _lastCompletionBuffer.SequenceEqual(
+                            completionBuffer,
+                            StringComparer.OrdinalIgnoreCase
+                        )
+                    )
+                    {
+                        if (_lastCompletionIndex == null)
+                        {
+                            _lastCompletionIndex = 0;
+                        }
+                        else if (searchForward)
+                        {
+                            _lastCompletionIndex = (_lastCompletionIndex + 1) % completionLength;
+                        }
+                        else
+                        {
+                            _lastCompletionIndex =
+                                (_lastCompletionIndex - 1 + completionLength) % completionLength;
+                        }
+
+                        _commandText = completionBuffer[_lastCompletionIndex.Value];
+                        if (_lastCompletionBuffer != null)
+                        {
+                            return;
+                        }
+                    }
+                    else
+                    {
+                        _lastCompletionIndex = null;
+                    }
+
+                    if (1 < completionLength)
+                    {
+                        // Print possible completions
+                        StringBuilder logBuffer = new();
+
+                        foreach (string completion in completionBuffer)
+                        {
+                            logBuffer.Append(completion.PadRight(formatWidth + 4));
+                        }
+
+                        bool handled = Log(logBuffer.ToString());
+                        if (handled)
+                        {
+                            _scrollPosition.y = int.MaxValue;
+                        }
+                    }
                 }
-
-                if (completionLength <= 1)
+                finally
                 {
-                    return;
-                }
-
-                // Print possible completions
-                StringBuilder logBuffer = new();
-
-                foreach (string completion in completionBuffer)
-                {
-                    logBuffer.Append(completion.PadRight(formatWidth + 4));
-                }
-
-                bool handled = Log(logBuffer.ToString());
-                if (handled)
-                {
-                    _scrollPosition.y = int.MaxValue;
+                    _lastCompletionBuffer = completionBuffer;
                 }
             }
             finally

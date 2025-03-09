@@ -756,7 +756,7 @@ namespace CommandTerminal
         /// <summary>
         /// Parses an input line into a command and runs that command.
         /// </summary>
-        public void RunCommand(string line)
+        public bool RunCommand(string line)
         {
             string remaining = line;
             _arguments.Clear();
@@ -789,7 +789,7 @@ namespace CommandTerminal
             if (_arguments.Count == 0)
             {
                 // Nothing to run
-                return;
+                return false;
             }
 
             string commandName = _arguments[0].String ?? string.Empty;
@@ -803,13 +803,13 @@ namespace CommandTerminal
             if (!_commands.ContainsKey(commandName))
             {
                 IssueErrorMessage($"Command {commandName} could not be found");
-                return;
+                return false;
             }
 
-            RunCommand(commandName, _arguments.ToArray());
+            return RunCommand(commandName, _arguments.ToArray());
         }
 
-        public void RunCommand(string commandName, CommandArg[] arguments)
+        public bool RunCommand(string commandName, CommandArg[] arguments)
         {
             commandName = commandName?.Replace(
                 " ",
@@ -819,13 +819,13 @@ namespace CommandTerminal
             if (string.IsNullOrWhiteSpace(commandName))
             {
                 IssueErrorMessage($"Invalid command name '{commandName}'");
-                return;
+                return false;
             }
 
             if (!_commands.TryGetValue(commandName, out CommandInfo command))
             {
                 IssueErrorMessage($"Command {commandName} not found");
-                return;
+                return false;
             }
 
             int argCount = arguments.Length;
@@ -856,10 +856,11 @@ namespace CommandTerminal
                 }
                 _errorMessages.Enqueue(invalidMessage);
 
-                return;
+                return false;
             }
 
             command.proc?.Invoke(arguments);
+            return true;
         }
 
         // ReSharper disable once MemberCanBePrivate.Global
