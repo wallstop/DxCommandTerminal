@@ -86,6 +86,8 @@ namespace CommandTerminal
             { "?", "slash" },
         };
 
+        public static Terminal Instance { get; private set; }
+
         public static CommandLog Buffer { get; private set; }
         public static CommandShell Shell { get; private set; }
 
@@ -381,6 +383,7 @@ namespace CommandTerminal
                     break;
             }
 
+            Instance = this;
             Buffer = new CommandLog(Math.Max(0, _bufferSize), _ignoredLogTypes);
             History = new CommandHistory();
             Shell = new CommandShell(History);
@@ -401,6 +404,7 @@ namespace CommandTerminal
                 _unityLogAttached = false;
             }
 
+            Instance = null;
             Buffer = null;
             Shell = null;
             History = null;

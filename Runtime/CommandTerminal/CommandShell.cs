@@ -4,6 +4,7 @@ namespace CommandTerminal
     using System.Collections.Generic;
     using System.Linq;
     using System.Reflection;
+    using System.Text;
     using Attributes;
     using JetBrains.Annotations;
     using UnityEngine;
@@ -53,7 +54,7 @@ namespace CommandTerminal
 
         // Public to allow custom-mutation, if desired
         public static readonly HashSet<char> Delimiters = new() { ',', ';', ':', '_', '/', '\\' };
-        public static readonly HashSet<char> Quotes = new() { '"', '\'' };
+        public static readonly List<char> Quotes = new() { '"', '\'' };
         public static readonly HashSet<string> IgnoredValuesForCleanedTypes = new() { "\r", "\n" };
         public static readonly HashSet<Type> DoNotCleanTypes = new()
         {
@@ -78,6 +79,7 @@ namespace CommandTerminal
         };
 
         public string String { get; }
+        public char? Quote { get; }
 
         public string CleanedString
         {
@@ -550,9 +552,10 @@ namespace CommandTerminal
             }
         }
 
-        public CommandArg(string stringValue)
+        public CommandArg(string stringValue, char? quote = null)
         {
             String = stringValue ?? string.Empty;
+            Quote = quote;
         }
 
         public static bool RegisterParser<T>(CommandArgParser<T> parser, bool force = false)
@@ -688,6 +691,7 @@ namespace CommandTerminal
 
         private readonly Queue<string> _errorMessages = new();
         private readonly CommandHistory _history;
+        private readonly StringBuilder _commandBuilder = new();
 
         public CommandShell(CommandHistory history)
         {
@@ -774,21 +778,25 @@ namespace CommandTerminal
                     continue;
                 }
 
-                if (string.IsNullOrWhiteSpace(argument.String))
+                string argumentString = argument.String;
+                if (argument.Quote == null)
                 {
-                    continue;
-                }
-
-                if (argument.String[0] == '$')
-                {
-                    string variableName = argument.String.Substring(1);
-
-                    if (_variables.TryGetValue(variableName, out CommandArg variable))
+                    if (string.IsNullOrWhiteSpace(argumentString))
                     {
-                        // Replace variable argument if it's defined
-                        argument = variable;
+                        continue;
+                    }
+                    if (argumentString.StartsWith('$'))
+                    {
+                        string variableName = argumentString.Substring(1);
+
+                        if (_variables.TryGetValue(variableName, out CommandArg variable))
+                        {
+                            // Replace variable argument if it's defined
+                            argument = variable;
+                        }
                     }
                 }
+
                 _arguments.Add(argument);
             }
 
@@ -799,28 +807,47 @@ namespace CommandTerminal
             }
 
             string commandName = _arguments[0].String ?? string.Empty;
-            commandName = commandName.Replace(
-                " ",
-                string.Empty,
-                StringComparison.OrdinalIgnoreCase
-            );
             _arguments.RemoveAt(0); // Remove command name from arguments
 
-            if (!_commands.ContainsKey(commandName))
-            {
-                IssueErrorMessage($"Command {commandName} could not be found");
-                _history.Push(line, false, false);
-                return false;
-            }
-
-            return RunCommand(commandName, _arguments.ToArray());
+            return RunCommand(
+                commandName,
+                _arguments.Count == 0 ? Array.Empty<CommandArg>() : _arguments.ToArray()
+            );
         }
 
         public bool RunCommand(string commandName, CommandArg[] arguments)
         {
-            string line =
-                $"{commandName}{(arguments.Length == 0 ? string.Empty : " ")}"
-                + $"{string.Join(" ", arguments.Select(argument => argument.String.Contains(" ") ? $"\"{argument.String}\"" : argument.String))}";
+            _commandBuilder.Clear();
+            _commandBuilder.Append(commandName);
+            if (arguments.Length != 0)
+            {
+                _commandBuilder.Append(' ');
+            }
+
+            for (int i = 0; i < arguments.Length; ++i)
+            {
+                CommandArg argument = arguments[i];
+                string argumentString = argument.String;
+                char? quote = argument.Quote;
+
+                if (quote != null)
+                {
+                    _commandBuilder.Append(quote.Value);
+                    _commandBuilder.Append(argumentString);
+                    _commandBuilder.Append(quote.Value);
+                }
+                else
+                {
+                    _commandBuilder.Append(argumentString);
+                }
+
+                if (i != arguments.Length - 1)
+                {
+                    _commandBuilder.Append(' ');
+                }
+            }
+
+            string line = _commandBuilder.ToString();
 
             commandName = commandName?.Replace(
                 " ",
@@ -831,7 +858,7 @@ namespace CommandTerminal
             if (string.IsNullOrWhiteSpace(commandName))
             {
                 IssueErrorMessage($"Invalid command name '{commandName}'");
-                _history.Push(line, false, false);
+                // Don't log empty commands
                 return false;
             }
 
@@ -993,7 +1020,7 @@ namespace CommandTerminal
                 {
                     // Extract the argument inside the quotes.
                     string input = stringValue.Substring(1, closingQuoteIndex - 1);
-                    arg = new CommandArg(input);
+                    arg = new CommandArg(input, firstChar);
                     // Remove the parsed argument (including the quotes) from the input.
                     stringValue = stringValue.Substring(closingQuoteIndex + 1);
                 }
