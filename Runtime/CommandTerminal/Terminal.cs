@@ -92,7 +92,6 @@ namespace CommandTerminal
         public static CommandLog Buffer { get; private set; }
         public static CommandShell Shell { get; private set; }
 
-        // ReSharper disable once MemberCanBePrivate.Global
         public static CommandHistory History { get; private set; }
 
         // ReSharper disable once MemberCanBePrivate.Global
@@ -240,7 +239,6 @@ namespace CommandTerminal
 #if UNITY_EDITOR
         private readonly Dictionary<TerminalLogType, int> _seenLogTypes = new();
 #endif
-
         private TerminalState _state;
         private TextEditor _editorState;
 #if !ENABLE_INPUT_SYSTEM

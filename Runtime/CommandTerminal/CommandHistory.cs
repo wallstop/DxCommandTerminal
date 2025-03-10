@@ -16,15 +16,16 @@ namespace CommandTerminal
                 .Select(value => value.text);
         }
 
-        public void Push(string commandString, bool? success, bool? errorFree)
+        public bool Push(string commandString, bool? success, bool? errorFree)
         {
             if (string.IsNullOrWhiteSpace(commandString))
             {
-                return;
+                return false;
             }
 
             _history.Add((commandString, success, errorFree));
             _position = _history.Count;
+            return true;
         }
 
         public string Next()
