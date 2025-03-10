@@ -17,9 +17,10 @@ namespace CommandTerminal
 
     public enum TerminalState
     {
-        Close,
-        OpenSmall,
-        OpenFull,
+        Unknown = 0,
+        Closed = 1,
+        OpenSmall = 2,
+        OpenFull = 3,
     }
 
     [DisallowMultipleComponent]
@@ -99,7 +100,7 @@ namespace CommandTerminal
 
         // ReSharper disable once MemberCanBePrivate.Global
         public bool IsClosed =>
-            _state == TerminalState.Close && Mathf.Approximately(_currentOpenT, _openTarget);
+            _state == TerminalState.Closed && Mathf.Approximately(_currentOpenT, _openTarget);
 
         [Header("Window")]
         [Range(0, 1)]
@@ -302,70 +303,7 @@ namespace CommandTerminal
             return buffer.HandleLog(formattedMessage, type);
         }
 
-        // ReSharper disable once MemberCanBePrivate.Global
-        public void SetState(TerminalState newState)
-        {
-#if !ENABLE_INPUT_SYSTEM
-            _inputFix = true;
-#endif
-            if (newState != TerminalState.Close)
-            {
-                _needsFocus = true;
-            }
-#if !ENABLE_INPUT_SYSTEM
-            _cachedCommandText = _commandText;
-#endif
-            _commandText = string.Empty;
-            ResetAutoComplete();
-
-            switch (newState)
-            {
-                case TerminalState.Close:
-                {
-                    _openTarget = 0;
-                    break;
-                }
-                case TerminalState.OpenSmall:
-                {
-                    _openTarget = Screen.height * _maxHeight * _smallTerminalRatio;
-                    if (_currentOpenT > _openTarget)
-                    {
-                        // Prevent resizing from OpenFull to OpenSmall if window y position
-                        // is greater than OpenSmall's target
-                        _openTarget = 0;
-                        _state = TerminalState.Close;
-                        return;
-                    }
-                    _realWindowSize = _openTarget;
-                    _scrollPosition.y = int.MaxValue;
-                    break;
-                }
-                case TerminalState.OpenFull:
-                {
-                    _realWindowSize = Screen.height * _maxHeight;
-                    _openTarget = _realWindowSize;
-                    break;
-                }
-                default:
-                {
-                    throw new InvalidEnumArgumentException(
-                        nameof(newState),
-                        (int)newState,
-                        typeof(TerminalState)
-                    );
-                }
-            }
-
-            _state = newState;
-        }
-
-        // ReSharper disable once MemberCanBePrivate.Global
-        public void ToggleState(TerminalState newState)
-        {
-            SetState(_state == newState ? TerminalState.Close : newState);
-        }
-
-        private void OnEnable()
+        private void Awake()
         {
             switch (_bufferSize)
             {
@@ -389,11 +327,21 @@ namespace CommandTerminal
             Shell = new CommandShell(History);
             AutoComplete = new CommandAutoComplete(History, Shell);
 
+            Shell.RegisterCommands(
+                ignoredCommands: disabledCommands,
+                ignoreDefaultCommands: ignoreDefaultCommands
+            );
+        }
+
+        private void OnEnable()
+        {
             if (_logUnityMessages && !_unityLogAttached)
             {
                 _unityLogAttached = true;
                 Application.logMessageReceivedThreaded += HandleUnityLog;
             }
+
+            ConsumeAndLogErrors();
         }
 
         private void OnDisable()
@@ -402,6 +350,16 @@ namespace CommandTerminal
             {
                 Application.logMessageReceivedThreaded -= HandleUnityLog;
                 _unityLogAttached = false;
+            }
+
+            SetState(TerminalState.Closed);
+        }
+
+        private void OnDestroy()
+        {
+            if (Instance != this)
+            {
+                return;
             }
 
             Instance = null;
@@ -415,7 +373,7 @@ namespace CommandTerminal
         {
             if (_started)
             {
-                SetState(TerminalState.Close);
+                SetState(TerminalState.Closed);
             }
 
             if (_consoleFont == null)
@@ -444,16 +402,7 @@ namespace CommandTerminal
             SetupWindowStyle();
             SetupInput();
             SetupLabels();
-
-            Shell.RegisterCommands(
-                ignoredCommands: disabledCommands,
-                ignoreDefaultCommands: ignoreDefaultCommands
-            );
-
-            while (Shell.TryConsumeErrorMessage(out string error))
-            {
-                Log(TerminalLogType.Error, $"Error: {error}");
-            }
+            ConsumeAndLogErrors();
 
             _started = true;
         }
@@ -592,6 +541,77 @@ namespace CommandTerminal
 
             HandleOpenness();
             _window = GUILayout.Window(88, _window, DrawConsole, string.Empty, _windowStyle);
+        }
+
+        // ReSharper disable once MemberCanBePrivate.Global
+        public void ToggleState(TerminalState newState)
+        {
+            SetState(_state == newState ? TerminalState.Closed : newState);
+        }
+
+        // ReSharper disable once MemberCanBePrivate.Global
+        public void SetState(TerminalState newState)
+        {
+#if !ENABLE_INPUT_SYSTEM
+            _inputFix = true;
+#endif
+            if (newState != TerminalState.Closed)
+            {
+                _needsFocus = true;
+            }
+#if !ENABLE_INPUT_SYSTEM
+            _cachedCommandText = _commandText;
+#endif
+            _commandText = string.Empty;
+            ResetAutoComplete();
+
+            switch (newState)
+            {
+                case TerminalState.Closed:
+                {
+                    _openTarget = 0;
+                    break;
+                }
+                case TerminalState.OpenSmall:
+                {
+                    _openTarget = Screen.height * _maxHeight * _smallTerminalRatio;
+                    if (_currentOpenT > _openTarget)
+                    {
+                        // Prevent resizing from OpenFull to OpenSmall if window y position
+                        // is greater than OpenSmall's target
+                        _openTarget = 0;
+                        _state = TerminalState.Closed;
+                        return;
+                    }
+                    _realWindowSize = _openTarget;
+                    _scrollPosition.y = int.MaxValue;
+                    break;
+                }
+                case TerminalState.OpenFull:
+                {
+                    _realWindowSize = Screen.height * _maxHeight;
+                    _openTarget = _realWindowSize;
+                    break;
+                }
+                default:
+                {
+                    throw new InvalidEnumArgumentException(
+                        nameof(newState),
+                        (int)newState,
+                        typeof(TerminalState)
+                    );
+                }
+            }
+
+            _state = newState;
+        }
+
+        private void ConsumeAndLogErrors()
+        {
+            while (Shell.TryConsumeErrorMessage(out string error))
+            {
+                Log(TerminalLogType.Error, $"Error: {error}");
+            }
         }
 
         private void ResetAutoComplete()
@@ -1142,7 +1162,7 @@ namespace CommandTerminal
 
         public void HandlePrevious()
         {
-            if (_state == TerminalState.Close)
+            if (_state == TerminalState.Closed)
             {
                 return;
             }
@@ -1154,7 +1174,7 @@ namespace CommandTerminal
 
         public void HandleNext()
         {
-            if (_state == TerminalState.Close)
+            if (_state == TerminalState.Closed)
             {
                 return;
             }
@@ -1166,7 +1186,7 @@ namespace CommandTerminal
 
         public void Close()
         {
-            SetState(TerminalState.Close);
+            SetState(TerminalState.Closed);
         }
 
         public void ToggleSmall()
@@ -1181,7 +1201,7 @@ namespace CommandTerminal
 
         public void EnterCommand()
         {
-            if (_state == TerminalState.Close)
+            if (_state == TerminalState.Closed)
             {
                 return;
             }
@@ -1212,7 +1232,7 @@ namespace CommandTerminal
 
         public void CompleteCommand(bool searchForward = true)
         {
-            if (_state == TerminalState.Close)
+            if (_state == TerminalState.Closed)
             {
                 return;
             }
