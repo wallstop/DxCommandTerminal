@@ -547,7 +547,7 @@
                 arg = new CommandArg(expected.ToString());
                 Assert.IsTrue(
                     arg.TryGet(out value),
-                    $"Failed to parse {expected} as char. Cleaned arg: '{arg.CleanedString}'"
+                    $"Failed to parse {expected} as char. Cleaned arg: '{arg.CleanedContents}'"
                 );
                 Assert.AreEqual(expected, value);
             }
@@ -557,7 +557,7 @@
 
             arg = new CommandArg("z");
             Assert.IsTrue(arg.TryGet(out value));
-            Assert.AreEqual(arg.String[0], value);
+            Assert.AreEqual(arg.contents[0], value);
 
             arg = new CommandArg(nameof(char.MaxValue));
             Assert.IsTrue(arg.TryGet(out value));
@@ -2121,25 +2121,25 @@
             string expected = string.Empty;
             CommandArg arg = new(expected);
             Assert.IsTrue(arg.TryGet(out string value));
-            Assert.AreEqual(arg.String, value);
+            Assert.AreEqual(arg.contents, value);
             Assert.AreEqual(expected, value);
 
             expected = "asdf";
             arg = new CommandArg(expected);
             Assert.IsTrue(arg.TryGet(out value));
-            Assert.AreEqual(arg.String, value);
+            Assert.AreEqual(arg.contents, value);
             Assert.AreEqual(expected, value);
 
             expected = "1111";
             arg = new CommandArg(expected);
             Assert.IsTrue(arg.TryGet(out value));
-            Assert.AreEqual(arg.String, value);
+            Assert.AreEqual(arg.contents, value);
             Assert.AreEqual(expected, value);
 
             expected = "1.3333";
             arg = new CommandArg(expected);
             Assert.IsTrue(arg.TryGet(out value));
-            Assert.AreEqual(arg.String, value);
+            Assert.AreEqual(arg.contents, value);
             Assert.AreEqual(expected, value);
 
             for (int i = 0; i < NumTries; ++i)
@@ -2147,34 +2147,34 @@
                 expected = System.Guid.NewGuid().ToString();
                 arg = new CommandArg(expected);
                 Assert.IsTrue(arg.TryGet(out value));
-                Assert.AreEqual(arg.String, value);
+                Assert.AreEqual(arg.contents, value);
                 Assert.AreEqual(expected, value);
             }
 
             expected = "#$$$__.azxfd87&*_&&&-={'|";
             arg = new CommandArg(expected);
             Assert.IsTrue(arg.TryGet(out value));
-            Assert.AreEqual(arg.String, value);
+            Assert.AreEqual(arg.contents, value);
             Assert.AreEqual(expected, value);
 
             // Check strings aren't sanitized
             expected = "   ";
             arg = new CommandArg(expected);
             Assert.IsTrue(arg.TryGet(out value));
-            Assert.AreEqual(arg.String, value);
+            Assert.AreEqual(arg.contents, value);
             Assert.AreEqual(expected, value);
 
             // Make sure string.Empty isn't resolved to ""
             expected = "Empty";
             arg = new CommandArg(expected);
             Assert.IsTrue(arg.TryGet(out value));
-            Assert.AreEqual(arg.String, value);
+            Assert.AreEqual(arg.contents, value);
             Assert.AreEqual(expected, value);
 
             expected = "string.Empty";
             arg = new CommandArg(expected);
             Assert.IsTrue(arg.TryGet(out value));
-            Assert.AreEqual(arg.String, value);
+            Assert.AreEqual(arg.contents, value);
             Assert.AreEqual(expected, value);
         }
 
@@ -2469,14 +2469,14 @@
             Vector2 expected = (Vector2)value;
             Assert.IsTrue(
                 Approximately(expected.x, 1.2564f) && Approximately(expected.y, 3.6f),
-                $"Expected {expected} to be approximately {arg.String}"
+                $"Expected {expected} to be approximately {arg.contents}"
             );
 
             arg = new CommandArg("asdf");
             Assert.IsFalse(arg.TryGet(typeof(float), out value));
             Assert.IsFalse(arg.TryGet(typeof(int), out value));
             Assert.IsTrue(arg.TryGet(typeof(string), out value));
-            Assert.AreEqual(arg.String, value);
+            Assert.AreEqual(arg.contents, value);
         }
 
         [Test]

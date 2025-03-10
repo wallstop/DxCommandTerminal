@@ -1,5 +1,6 @@
 namespace CommandTerminal
 {
+    using System;
     using System.Collections.Generic;
     using System.Linq;
 
@@ -53,10 +54,22 @@ namespace CommandTerminal
             return string.Empty;
         }
 
-        public void Clear()
+        public int Remove(Predicate<(string text, bool? success, bool? errorFree)> acceptance)
         {
+            if (acceptance == null)
+            {
+                throw new ArgumentNullException(nameof(acceptance));
+            }
+
+            return _history.RemoveAll(acceptance);
+        }
+
+        public int Clear()
+        {
+            int count = _history.Count;
             _history.Clear();
             _position = 0;
+            return count;
         }
     }
 }

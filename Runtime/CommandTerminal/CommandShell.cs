@@ -2,637 +2,12 @@ namespace CommandTerminal
 {
     using System;
     using System.Collections.Generic;
+    using System.Collections.Immutable;
     using System.Linq;
     using System.Reflection;
     using System.Text;
     using Attributes;
     using JetBrains.Annotations;
-    using UnityEngine;
-
-    public readonly struct CommandInfo
-    {
-        public readonly Action<CommandArg[]> proc;
-        public readonly int minArgCount;
-        public readonly int maxArgCount;
-        public readonly string help;
-        public readonly string hint;
-
-        public CommandInfo(
-            Action<CommandArg[]> proc,
-            int minArgCount,
-            int maxArgCount,
-            string help,
-            string hint
-        )
-        {
-            this.proc = proc;
-            this.maxArgCount = maxArgCount;
-            this.minArgCount = minArgCount;
-            this.help = help;
-            this.hint = hint;
-        }
-    }
-
-    public delegate bool CommandArgParser<T>(string input, out T parsed);
-
-    public readonly struct CommandArg
-    {
-        private static readonly Lazy<MethodInfo> TryGetMethod = new(
-            () =>
-                typeof(CommandArg)
-                    .GetMethods(BindingFlags.Instance | BindingFlags.Public)
-                    .Where(method => method.Name == nameof(TryGet))
-                    .FirstOrDefault(method => method.GetParameters().Length == 1)
-        );
-        private static readonly Dictionary<Type, object> RegisteredParsers = new();
-        private static readonly Dictionary<
-            Type,
-            Dictionary<string, PropertyInfo>
-        > StaticProperties = new();
-        private static readonly Dictionary<Type, Dictionary<string, FieldInfo>> ConstFields = new();
-        private static readonly Dictionary<Type, object> EnumValues = new();
-
-        // Public to allow custom-mutation, if desired
-        public static readonly HashSet<char> Delimiters = new() { ',', ';', ':', '_', '/', '\\' };
-        public static readonly List<char> Quotes = new() { '"', '\'' };
-        public static readonly HashSet<string> IgnoredValuesForCleanedTypes = new() { "\r", "\n" };
-        public static readonly HashSet<Type> DoNotCleanTypes = new()
-        {
-            typeof(string),
-            typeof(char),
-            typeof(DateTime),
-            typeof(DateTimeOffset),
-        };
-        public static readonly HashSet<string> IgnoredValuesForComplexTypes = new()
-        {
-            "(",
-            ")",
-            "[",
-            "]",
-            "'",
-            "`",
-            "|",
-            "{",
-            "}",
-            "<",
-            ">",
-        };
-
-        public string String { get; }
-        public char? Quote { get; }
-
-        public string CleanedString
-        {
-            get
-            {
-                string cleanedString = String;
-                cleanedString = IgnoredValuesForCleanedTypes.Aggregate(
-                    cleanedString,
-                    (current, ignoredValue) =>
-                        current.Replace(
-                            ignoredValue,
-                            string.Empty,
-                            StringComparison.OrdinalIgnoreCase
-                        )
-                );
-                return cleanedString;
-            }
-        }
-
-        public bool TryGet(Type type, out object parsed)
-        {
-            // TODO: Convert into delegates and cache for performance
-            MethodInfo genericMethod = TryGetMethod.Value;
-            if (genericMethod == null)
-            {
-                parsed = default;
-                return false;
-            }
-
-            MethodInfo constructed = genericMethod.MakeGenericMethod(type);
-            object[] parameters = { null };
-            bool success = (bool)constructed.Invoke(this, parameters);
-            parsed = parameters[0];
-            return success;
-        }
-
-        public bool TryGet<T>(out T parsed)
-        {
-            return TryGet(out parsed, parserOverride: null);
-        }
-
-        public bool TryGet<T>(out T parsed, CommandArgParser<T> parserOverride)
-        {
-            Type type = typeof(T);
-            string stringValue = DoNotCleanTypes.Contains(type) ? String : CleanedString;
-
-            if (parserOverride != null)
-            {
-                return parserOverride(stringValue, out parsed);
-            }
-
-            if (TryGetParser(out CommandArgParser<T> parser))
-            {
-                return parser(stringValue, out parsed);
-            }
-
-            if (type == typeof(string))
-            {
-                parsed = (T)Convert.ChangeType(stringValue, type);
-                return true;
-            }
-            if (TryGetTypeDefined(stringValue, out parsed))
-            {
-                return true;
-            }
-
-            // TODO: Slap into a dictionary of built-in type -> parser mapping
-            if (type == typeof(bool))
-            {
-                return InnerParse<bool>(stringValue, bool.TryParse, out parsed);
-            }
-            if (type == typeof(float))
-            {
-                return InnerParse<float>(stringValue, float.TryParse, out parsed);
-            }
-            if (type == typeof(int))
-            {
-                return InnerParse<int>(stringValue, int.TryParse, out parsed);
-            }
-            if (type == typeof(uint))
-            {
-                return InnerParse<uint>(stringValue, uint.TryParse, out parsed);
-            }
-            if (type == typeof(long))
-            {
-                return InnerParse<long>(stringValue, long.TryParse, out parsed);
-            }
-            if (type == typeof(ulong))
-            {
-                return InnerParse<ulong>(stringValue, ulong.TryParse, out parsed);
-            }
-            if (type == typeof(double))
-            {
-                return InnerParse<double>(stringValue, double.TryParse, out parsed);
-            }
-            if (type == typeof(short))
-            {
-                return InnerParse<short>(stringValue, short.TryParse, out parsed);
-            }
-            if (type == typeof(ushort))
-            {
-                return InnerParse<ushort>(stringValue, ushort.TryParse, out parsed);
-            }
-            if (type == typeof(byte))
-            {
-                return InnerParse<byte>(stringValue, byte.TryParse, out parsed);
-            }
-            if (type == typeof(sbyte))
-            {
-                return InnerParse<sbyte>(stringValue, sbyte.TryParse, out parsed);
-            }
-            if (type == typeof(Guid))
-            {
-                return InnerParse<Guid>(stringValue, Guid.TryParse, out parsed);
-            }
-            if (type == typeof(DateTime))
-            {
-                return InnerParse<DateTime>(stringValue, DateTime.TryParse, out parsed);
-            }
-            if (type == typeof(DateTimeOffset))
-            {
-                return InnerParse<DateTimeOffset>(stringValue, DateTimeOffset.TryParse, out parsed);
-            }
-            if (type == typeof(char))
-            {
-                return InnerParse<char>(stringValue, char.TryParse, out parsed);
-            }
-            if (type == typeof(decimal))
-            {
-                return InnerParse<decimal>(stringValue, decimal.TryParse, out parsed);
-            }
-            if (type.IsEnum)
-            {
-                if (Enum.IsDefined(type, stringValue))
-                {
-                    bool parseOk = Enum.TryParse(type, stringValue, out object parsedObject);
-                    if (parseOk)
-                    {
-                        parsed = (T)Convert.ChangeType(parsedObject, type);
-                        return true;
-                    }
-                }
-
-                if (int.TryParse(stringValue, out int enumIntValue))
-                {
-                    if (!EnumValues.TryGetValue(type, out object enumValues))
-                    {
-                        enumValues = Enum.GetValues(type).OfType<T>().ToArray();
-                        EnumValues[type] = enumValues;
-                    }
-
-                    T[] values = (T[])enumValues;
-                    if (0 <= enumIntValue && enumIntValue < values.Length)
-                    {
-                        parsed = values[enumIntValue];
-                        return true;
-                    }
-                }
-            }
-            if (type == typeof(Vector2))
-            {
-                string[] split = StripAndSplit(stringValue);
-                switch (split.Length)
-                {
-                    case 2
-                        when float.TryParse(split[0], out float x)
-                            && float.TryParse(split[1], out float y):
-                        parsed = (T)Convert.ChangeType(new Vector2(x, y), type);
-                        return true;
-                    case 3
-                        when float.TryParse(split[0], out float x)
-                            && float.TryParse(split[1], out float y)
-                            && float.TryParse(split[2], out float z):
-                        parsed = (T)Convert.ChangeType((Vector2)new Vector3(x, y, z), type);
-                        return true;
-                }
-            }
-            else if (type == typeof(Vector3))
-            {
-                string[] split = StripAndSplit(stringValue);
-                switch (split.Length)
-                {
-                    case 2
-                        when float.TryParse(split[0], out float x)
-                            && float.TryParse(split[1], out float y):
-                        parsed = (T)Convert.ChangeType(new Vector3(x, y), type);
-                        return true;
-                    case 3
-                        when float.TryParse(split[0], out float x)
-                            && float.TryParse(split[1], out float y)
-                            && float.TryParse(split[2], out float z):
-                        parsed = (T)Convert.ChangeType(new Vector3(x, y, z), type);
-                        return true;
-                }
-            }
-            else if (type == typeof(Vector4))
-            {
-                string[] split = StripAndSplit(stringValue);
-                switch (split.Length)
-                {
-                    case 2
-                        when float.TryParse(split[0], out float x)
-                            && float.TryParse(split[1], out float y):
-                        parsed = (T)Convert.ChangeType(new Vector4(x, y), type);
-                        return true;
-                    case 3
-                        when float.TryParse(split[0], out float x)
-                            && float.TryParse(split[1], out float y)
-                            && float.TryParse(split[2], out float z):
-                        parsed = (T)Convert.ChangeType(new Vector4(x, y, z), type);
-                        return true;
-                    case 4
-                        when float.TryParse(split[0], out float x)
-                            && float.TryParse(split[1], out float y)
-                            && float.TryParse(split[2], out float z)
-                            && float.TryParse(split[3], out float w):
-                        parsed = (T)Convert.ChangeType(new Vector4(x, y, z, w), type);
-                        return true;
-                }
-            }
-            else if (type == typeof(Vector2Int))
-            {
-                string[] split = StripAndSplit(stringValue);
-                switch (split.Length)
-                {
-                    case 2
-                        when int.TryParse(split[0], out int x) && int.TryParse(split[1], out int y):
-                        parsed = (T)Convert.ChangeType(new Vector2Int(x, y), type);
-                        return true;
-                    case 3
-                        when int.TryParse(split[0], out int x)
-                            && int.TryParse(split[1], out int y)
-                            && int.TryParse(split[2], out int z):
-                        parsed = (T)Convert.ChangeType((Vector2Int)new Vector3Int(x, y, z), type);
-                        return true;
-                }
-            }
-            else if (type == typeof(Vector3Int))
-            {
-                string[] split = StripAndSplit(stringValue);
-                switch (split.Length)
-                {
-                    case 2
-                        when int.TryParse(split[0], out int x) && int.TryParse(split[1], out int y):
-                        parsed = (T)Convert.ChangeType(new Vector3Int(x, y), type);
-                        return true;
-                    case 3
-                        when int.TryParse(split[0], out int x)
-                            && int.TryParse(split[1], out int y)
-                            && int.TryParse(split[2], out int z):
-                        parsed = (T)Convert.ChangeType(new Vector3Int(x, y, z), type);
-                        return true;
-                }
-            }
-            else if (type == typeof(Color))
-            {
-                string colorString = stringValue;
-                if (colorString.StartsWith("RGBA", StringComparison.OrdinalIgnoreCase))
-                {
-                    colorString = colorString.Replace(
-                        "RGBA",
-                        string.Empty,
-                        StringComparison.OrdinalIgnoreCase
-                    );
-                }
-
-                string[] split = StripAndSplit(colorString);
-                switch (split.Length)
-                {
-                    case 3
-                        when float.TryParse(split[0], out float r)
-                            && float.TryParse(split[1], out float g)
-                            && float.TryParse(split[2], out float b):
-                        parsed = (T)Convert.ChangeType(new Color(r, g, b), type);
-                        return true;
-                    case 4
-                        when float.TryParse(split[0], out float r)
-                            && float.TryParse(split[1], out float g)
-                            && float.TryParse(split[2], out float b)
-                            && float.TryParse(split[3], out float a):
-                        parsed = (T)Convert.ChangeType(new Color(r, g, b, a), type);
-                        return true;
-                }
-            }
-            else if (type == typeof(Quaternion))
-            {
-                string[] split = StripAndSplit(stringValue);
-                switch (split.Length)
-                {
-                    case 4
-                        when float.TryParse(split[0], out float x)
-                            && float.TryParse(split[1], out float y)
-                            && float.TryParse(split[2], out float z)
-                            && float.TryParse(split[3], out float w):
-                        parsed = (T)Convert.ChangeType(new Quaternion(x, y, z, w), type);
-                        return true;
-                }
-            }
-            else if (type == typeof(Rect))
-            {
-                string[] split = StripAndSplit(stringValue);
-                switch (split.Length)
-                {
-                    case 4
-                        when float.TryParse(
-                            split[0]
-                                .Replace("x:", string.Empty, StringComparison.OrdinalIgnoreCase),
-                            out float x
-                        )
-                            && float.TryParse(
-                                split[1]
-                                    .Replace(
-                                        "y:",
-                                        string.Empty,
-                                        StringComparison.OrdinalIgnoreCase
-                                    ),
-                                out float y
-                            )
-                            && float.TryParse(
-                                split[2]
-                                    .Replace(
-                                        "width:",
-                                        string.Empty,
-                                        StringComparison.OrdinalIgnoreCase
-                                    ),
-                                out float width
-                            )
-                            && float.TryParse(
-                                split[3]
-                                    .Replace(
-                                        "height:",
-                                        string.Empty,
-                                        StringComparison.OrdinalIgnoreCase
-                                    ),
-                                out float height
-                            ):
-                        parsed = (T)Convert.ChangeType(new Rect(x, y, width, height), type);
-                        return true;
-                }
-            }
-            else if (type == typeof(RectInt))
-            {
-                string[] split = StripAndSplit(stringValue);
-                switch (split.Length)
-                {
-                    case 4
-                        when int.TryParse(
-                            split[0]
-                                .Replace("x:", string.Empty, StringComparison.OrdinalIgnoreCase),
-                            out int x
-                        )
-                            && int.TryParse(
-                                split[1]
-                                    .Replace(
-                                        "y:",
-                                        string.Empty,
-                                        StringComparison.OrdinalIgnoreCase
-                                    ),
-                                out int y
-                            )
-                            && int.TryParse(
-                                split[2]
-                                    .Replace(
-                                        "width:",
-                                        string.Empty,
-                                        StringComparison.OrdinalIgnoreCase
-                                    ),
-                                out int width
-                            )
-                            && int.TryParse(
-                                split[3]
-                                    .Replace(
-                                        "height:",
-                                        string.Empty,
-                                        StringComparison.OrdinalIgnoreCase
-                                    ),
-                                out int height
-                            ):
-                        parsed = (T)Convert.ChangeType(new RectInt(x, y, width, height), type);
-                        return true;
-                }
-            }
-
-            parsed = default;
-            return false;
-
-            static bool InnerParse<TParsed>(
-                string input,
-                CommandArgParser<TParsed> typedParser,
-                out T parsed
-            )
-            {
-                bool parseOk = typedParser(input, out TParsed value);
-                if (parseOk)
-                {
-                    parsed = (T)Convert.ChangeType(value, typeof(T));
-                }
-                else
-                {
-                    parsed = default;
-                }
-
-                return parseOk;
-            }
-
-            static string[] StripAndSplit(string input)
-            {
-                string strippedInput = input;
-                foreach (string ignored in IgnoredValuesForComplexTypes)
-                {
-                    if (string.IsNullOrEmpty(ignored))
-                    {
-                        continue;
-                    }
-
-                    strippedInput = strippedInput.Replace(
-                        ignored,
-                        string.Empty,
-                        StringComparison.OrdinalIgnoreCase
-                    );
-                }
-
-                foreach (char delimiter in Delimiters)
-                {
-                    if (strippedInput.Contains(delimiter))
-                    {
-                        return strippedInput.Split(delimiter);
-                    }
-                }
-
-                return new[] { strippedInput };
-            }
-
-            static bool TryGetTypeDefined(string input, out T value)
-            {
-                Type type = typeof(T);
-                if (
-                    !StaticProperties.TryGetValue(
-                        type,
-                        out Dictionary<string, PropertyInfo> properties
-                    )
-                )
-                {
-                    properties = LoadStaticPropertiesForType<T>();
-                    StaticProperties[type] = properties;
-                }
-
-                if (properties.TryGetValue(input, out PropertyInfo property))
-                {
-                    object resolved = property.GetValue(null);
-                    value = (T)Convert.ChangeType(resolved, type);
-                    return true;
-                }
-
-                if (!ConstFields.TryGetValue(type, out Dictionary<string, FieldInfo> fields))
-                {
-                    fields = LoadStaticFieldsForType<T>();
-                    ConstFields[type] = fields;
-                }
-
-                if (fields.TryGetValue(input, out FieldInfo field))
-                {
-                    object resolved = field.GetValue(null);
-                    value = (T)Convert.ChangeType(resolved, type);
-                    return true;
-                }
-
-                value = default;
-                return false;
-            }
-        }
-
-        public CommandArg(string stringValue, char? quote = null)
-        {
-            String = stringValue ?? string.Empty;
-            Quote = quote;
-        }
-
-        public static bool RegisterParser<T>(CommandArgParser<T> parser, bool force = false)
-        {
-            if (parser == null)
-            {
-                return false;
-            }
-
-            Type type = typeof(T);
-            if (force)
-            {
-                RegisteredParsers[type] = parser;
-                return true;
-            }
-
-            return RegisteredParsers.TryAdd(type, parser);
-        }
-
-        public static bool TryGetParser<T>(out CommandArgParser<T> parser)
-        {
-            if (RegisteredParsers.TryGetValue(typeof(T), out object untypedParser))
-            {
-                parser = (CommandArgParser<T>)untypedParser;
-                return true;
-            }
-
-            parser = null;
-            return false;
-        }
-
-        public static bool UnregisterParser<T>()
-        {
-            return UnregisterParser(typeof(T));
-        }
-
-        public static bool UnregisterParser(Type type)
-        {
-            return RegisteredParsers.Remove(type);
-        }
-
-        public static int UnregisterAllParsers()
-        {
-            int parserCount = RegisteredParsers.Count;
-            RegisteredParsers.Clear();
-            return parserCount;
-        }
-
-        private static Dictionary<string, PropertyInfo> LoadStaticPropertiesForType<T>()
-        {
-            Type type = typeof(T);
-            return type.GetProperties(BindingFlags.Static | BindingFlags.Public)
-                .Where(property => property.PropertyType == type)
-                .ToDictionary(
-                    property => property.Name,
-                    property => property,
-                    StringComparer.OrdinalIgnoreCase
-                );
-        }
-
-        private static Dictionary<string, FieldInfo> LoadStaticFieldsForType<T>()
-        {
-            Type type = typeof(T);
-            return type.GetFields(BindingFlags.Static | BindingFlags.Public)
-                .Where(field => field.FieldType == type)
-                .ToDictionary(
-                    field => field.Name,
-                    field => field,
-                    StringComparer.OrdinalIgnoreCase
-                );
-        }
-
-        public override string ToString()
-        {
-            return String;
-        }
-    }
 
     public sealed class CommandShell
     {
@@ -676,8 +51,10 @@ namespace CommandTerminal
             return commands.ToArray();
         });
         public IReadOnlyDictionary<string, CommandInfo> Commands => _commands;
-
         public IReadOnlyDictionary<string, CommandArg> Variables => _variables;
+        public IReadOnlyCollection<string> DefaultCommands => _defaultCommands;
+        public ImmutableHashSet<string> IgnoredCommands => _immutableIgnoredCommands;
+        public bool IgnoringDefaultCommands { get; private set; }
 
         public bool HasErrors => _errorMessages.Any();
 
@@ -692,6 +69,13 @@ namespace CommandTerminal
         private readonly Queue<string> _errorMessages = new();
         private readonly CommandHistory _history;
         private readonly StringBuilder _commandBuilder = new();
+        private readonly HashSet<string> _ignoredCommands = new(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _defaultCommands = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, MethodInfo> _rejectedCommands = new(
+            StringComparer.OrdinalIgnoreCase
+        );
+
+        private ImmutableHashSet<string> _immutableIgnoredCommands = ImmutableHashSet<string>.Empty;
 
         public CommandShell(CommandHistory history)
         {
@@ -703,28 +87,50 @@ namespace CommandTerminal
             return _errorMessages.TryDequeue(out errorMessage);
         }
 
-        /// <summary>
-        /// Uses reflection to find all RegisterCommand attributes
-        /// and adds them to the commands dictionary.
-        /// </summary>
+        public int ClearAllCommands()
+        {
+            int count = _commands.Count;
+            _commands.Clear();
+            count += ClearDefaultCommands();
+            return count;
+        }
+
+        public int ClearDefaultCommands()
+        {
+            int count = _defaultCommands.Count;
+            _defaultCommands.Clear();
+            return count;
+        }
+
         public void RegisterCommands(
             IEnumerable<string> ignoredCommands = null,
             bool ignoreDefaultCommands = false
         )
         {
-            _commands.Clear();
-            HashSet<string> ignoredCommandSet = new(
-                ignoredCommands ?? Enumerable.Empty<string>(),
-                StringComparer.OrdinalIgnoreCase
-            );
-            Dictionary<string, MethodInfo> rejectedCommands = new(StringComparer.OrdinalIgnoreCase);
+            IgnoringDefaultCommands = ignoreDefaultCommands;
+            foreach (string defaultCommand in _defaultCommands)
+            {
+                _commands.Remove(defaultCommand);
+            }
+
+            ClearDefaultCommands();
+
+            _ignoredCommands.Clear();
+            _ignoredCommands.UnionWith(ignoredCommands ?? Enumerable.Empty<string>());
+            foreach (string ignoredCommand in _ignoredCommands)
+            {
+                _commands.Remove(ignoredCommand);
+            }
+            _immutableIgnoredCommands = _ignoredCommands.ToImmutableHashSet();
+
+            _rejectedCommands.Clear();
 
             foreach (
                 (MethodInfo method, RegisterCommandAttribute attribute) in RegisteredCommands.Value
             )
             {
                 string commandName = attribute.Name;
-                if (ignoredCommandSet.Contains(commandName))
+                if (_ignoredCommands.Contains(commandName))
                 {
                     continue;
                 }
@@ -740,7 +146,7 @@ namespace CommandTerminal
                     || methodsParams[0].ParameterType != typeof(CommandArg[])
                 )
                 {
-                    rejectedCommands.TryAdd(commandName, method);
+                    _rejectedCommands.TryAdd(commandName, method);
                     continue;
                 }
 
@@ -750,17 +156,21 @@ namespace CommandTerminal
                 Action<CommandArg[]> proc =
                     (Action<CommandArg[]>)
                         Delegate.CreateDelegate(typeof(Action<CommandArg[]>), method);
-                AddCommand(
+                bool success = AddCommand(
                     commandName,
                     proc,
-                    attribute.MinArgCount,
-                    attribute.MaxArgCount,
-                    attribute.Help,
-                    attribute.Hint
+                    minArgs: attribute.MinArgCount,
+                    maxArgs: attribute.MaxArgCount,
+                    help: attribute.Help,
+                    hint: attribute.Hint
                 );
+                if (success)
+                {
+                    _defaultCommands.Add(commandName);
+                }
             }
 
-            HandleRejectedCommands(rejectedCommands);
+            HandleRejectedCommands();
         }
 
         /// <summary>
@@ -778,8 +188,8 @@ namespace CommandTerminal
                     continue;
                 }
 
-                string argumentString = argument.String;
-                if (argument.Quote == null)
+                string argumentString = argument.contents;
+                if (argument.endQuote == null)
                 {
                     if (string.IsNullOrWhiteSpace(argumentString))
                     {
@@ -806,7 +216,7 @@ namespace CommandTerminal
                 return false;
             }
 
-            string commandName = _arguments[0].String ?? string.Empty;
+            string commandName = _arguments[0].contents ?? string.Empty;
             _arguments.RemoveAt(0); // Remove command name from arguments
 
             return RunCommand(
@@ -827,18 +237,14 @@ namespace CommandTerminal
             for (int i = 0; i < arguments.Length; ++i)
             {
                 CommandArg argument = arguments[i];
-                string argumentString = argument.String;
-                char? quote = argument.Quote;
-
-                if (quote != null)
+                if (argument.startQuote != null)
                 {
-                    _commandBuilder.Append(quote.Value);
-                    _commandBuilder.Append(argumentString);
-                    _commandBuilder.Append(quote.Value);
+                    _commandBuilder.Append(argument.startQuote.Value);
                 }
-                else
+                _commandBuilder.Append(argument.contents);
+                if (argument.endQuote != null)
                 {
-                    _commandBuilder.Append(argumentString);
+                    _commandBuilder.Append(argument.endQuote.Value);
                 }
 
                 if (i != arguments.Length - 1)
@@ -907,23 +313,26 @@ namespace CommandTerminal
         }
 
         // ReSharper disable once MemberCanBePrivate.Global
-        public void AddCommand(string name, CommandInfo info)
+        public bool AddCommand(string name, CommandInfo info)
         {
             if (string.IsNullOrWhiteSpace(name))
             {
                 IssueErrorMessage($"Invalid Command Name: {name}");
-                return;
+                return false;
             }
 
             name = name.Replace(" ", string.Empty, StringComparison.OrdinalIgnoreCase);
             if (!_commands.TryAdd(name, info))
             {
                 IssueErrorMessage($"Command {name} is already defined.");
+                return false;
             }
+
+            return true;
         }
 
         // ReSharper disable once MemberCanBePrivate.Global
-        public void AddCommand(
+        public bool AddCommand(
             string name,
             Action<CommandArg[]> proc,
             int minArgs = 0,
@@ -933,26 +342,27 @@ namespace CommandTerminal
         )
         {
             CommandInfo info = new(proc, minArgs, maxArgs, help, hint);
-            AddCommand(name, info);
+            return AddCommand(name, info);
         }
 
-        public void SetVariable(string name, string value)
+        public bool SetVariable(string name, string value)
         {
             value ??= string.Empty;
-            SetVariable(name, new CommandArg(value));
+            return SetVariable(name, new CommandArg(value));
         }
 
         // ReSharper disable once MemberCanBePrivate.Global
-        public void SetVariable(string name, CommandArg value)
+        public bool SetVariable(string name, CommandArg value)
         {
             if (string.IsNullOrWhiteSpace(name))
             {
                 IssueErrorMessage($"Invalid Variable Name: {name}");
-                return;
+                return false;
             }
 
             name = name.Replace(" ", string.Empty, StringComparison.OrdinalIgnoreCase);
             _variables[name] = value;
+            return true;
         }
 
         // ReSharper disable once UnusedMember.Global
@@ -973,9 +383,9 @@ namespace CommandTerminal
             _errorMessages.Enqueue(formattedMessage);
         }
 
-        private void HandleRejectedCommands(Dictionary<string, MethodInfo> rejectedCommands)
+        private void HandleRejectedCommands()
         {
-            foreach (KeyValuePair<string, MethodInfo> command in rejectedCommands)
+            foreach (KeyValuePair<string, MethodInfo> command in _rejectedCommands)
             {
                 IssueErrorMessage(
                     $"{command.Key} has an invalid signature. "
@@ -1013,14 +423,14 @@ namespace CommandTerminal
                 {
                     // No closing quote was found; consume the rest of the string (excluding the opening quote).
                     string input = stringValue.Substring(1);
-                    arg = new CommandArg(input);
+                    arg = new CommandArg(input, startQuote: firstChar);
                     stringValue = string.Empty;
                 }
                 else
                 {
                     // Extract the argument inside the quotes.
                     string input = stringValue.Substring(1, closingQuoteIndex - 1);
-                    arg = new CommandArg(input, firstChar);
+                    arg = new CommandArg(input, startQuote: firstChar, endQuote: firstChar);
                     // Remove the parsed argument (including the quotes) from the input.
                     stringValue = stringValue.Substring(closingQuoteIndex + 1);
                 }

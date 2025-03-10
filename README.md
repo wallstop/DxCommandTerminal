@@ -45,7 +45,7 @@ This is a fork of [Command Terminal](https://github.com/stillwwater/command_term
 - Minor performance benefits around using string interpolation and intelligent checking of parameters to only force `string.Format` when relevant in logging paths
 - Better invalid command identification and error messages
 - All string comparisons are now `OrdinalIgnoreCase` instead of relying on CurrentCulture
-- `Terminal` has been made to be Editor-Aware. If the Editor is in Play mode, changes to the current terminal will take effect immediately. If the terminal is open, it will be closed, to prevent bugs.
+- `Terminal` has been made to be Editor-Change-Aware. If the Editor is in Play mode, changes to the current terminal properties will take effect immediately.
 - Extra input validation has been added on all public methods, such that user code is sanitized where appropriate, or rejected if invalid.
 - The concept of "FrontCommands" has been exterminated
 

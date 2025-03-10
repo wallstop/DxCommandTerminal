@@ -5,23 +5,17 @@ namespace CommandTerminal
     using System.ComponentModel;
     using System.Linq;
     using Attributes;
+    using Extensions;
     using JetBrains.Annotations;
     using UnityEditor;
     using UnityEngine;
     using UnityEngine.Assertions;
+    using UnityEngine.Serialization;
     using Utils;
 #if ENABLE_INPUT_SYSTEM
     using UnityEngine.InputSystem;
     using UnityEngine.InputSystem.Controls;
 #endif
-
-    public enum TerminalState
-    {
-        Unknown = 0,
-        Closed = 1,
-        OpenSmall = 2,
-        OpenFull = 3,
-    }
 
     [DisallowMultipleComponent]
     public sealed class Terminal : MonoBehaviour
@@ -86,6 +80,21 @@ namespace CommandTerminal
             { ">", "period" },
             { "?", "slash" },
         };
+
+        private static readonly Dictionary<string, string> AlternativeSpecialShiftedKeyCodeMap =
+            new(StringComparer.OrdinalIgnoreCase)
+            {
+                { "!", "1" },
+                { "@", "2" },
+                { "#", "3" },
+                { "$", "4" },
+                { "^", "5" },
+                { "%", "6" },
+                { "&", "7" },
+                { "*", "8" },
+                { "(", "9" },
+                { ")", "0" },
+            };
 
         public static Terminal Instance { get; private set; }
 
@@ -224,6 +233,10 @@ namespace CommandTerminal
         private Color _errorColor = Color.red;
 
         [Header("System")]
+        [Tooltip("Will reset static command state in `Awake()` when set to true")]
+        [SerializeField]
+        private bool _resetStateOnInit;
+
         [SerializeField]
         public bool ignoreDefaultCommands;
 
@@ -238,6 +251,14 @@ namespace CommandTerminal
 
 #if UNITY_EDITOR
         private readonly Dictionary<TerminalLogType, int> _seenLogTypes = new();
+        private readonly Dictionary<string, object> _propertyValues = new();
+        private readonly List<SerializedProperty> _staticStateProperties = new();
+        private readonly List<SerializedProperty> _windowProperties = new();
+        private readonly List<SerializedProperty> _windowStyleProperties = new();
+        private readonly List<SerializedProperty> _inputProperties = new();
+        private readonly List<SerializedProperty> _labelProperties = new();
+        private readonly List<SerializedProperty> _logUnityMessageProperties = new();
+        private SerializedObject _serializedObject;
 #endif
         private TerminalState _state;
         private TextEditor _editorState;
@@ -320,15 +341,77 @@ namespace CommandTerminal
             }
 
             Instance = this;
-            Buffer = new CommandLog(Math.Max(0, _bufferSize), _ignoredLogTypes);
-            History = new CommandHistory();
-            Shell = new CommandShell(History);
-            AutoComplete = new CommandAutoComplete(History, Shell);
 
-            Shell.RegisterCommands(
-                ignoredCommands: disabledCommands,
-                ignoreDefaultCommands: ignoreDefaultCommands
-            );
+#if UNITY_EDITOR
+            _serializedObject = new SerializedObject(this);
+
+            string[] staticStaticPropertiesTracked =
+            {
+                nameof(_bufferSize),
+                nameof(_ignoredLogTypes),
+                nameof(disabledCommands),
+                nameof(ignoreDefaultCommands),
+            };
+            TrackProperties(staticStaticPropertiesTracked, _staticStateProperties);
+
+            string[] windowPropertiesTracked =
+            {
+                nameof(_maxHeight),
+                nameof(_smallTerminalRatio),
+                nameof(_showGUIButtons),
+            };
+            TrackProperties(windowPropertiesTracked, _windowProperties);
+
+            string[] windowStylePropertiesTracked =
+            {
+                nameof(_backgroundColor),
+                nameof(_foregroundColor),
+                nameof(_consoleFont),
+            };
+            TrackProperties(windowStylePropertiesTracked, _windowStyleProperties);
+
+            string[] inputPropertiesTracked =
+            {
+                nameof(_inputContrast),
+                nameof(_inputColor),
+                nameof(_inputAlpha),
+                nameof(_inputCaret),
+                nameof(_unselectedHintColor),
+                nameof(_unselectedHintAlpha),
+                nameof(_unselectedHintContrast),
+                nameof(_selectedHintColor),
+                nameof(_selectedHintAlpha),
+                nameof(_selectedHintContrast),
+            };
+            TrackProperties(inputPropertiesTracked, _inputProperties);
+
+            string[] labelPropertiesTracked = { nameof(_consoleFont), nameof(_foregroundColor) };
+            TrackProperties(labelPropertiesTracked, _labelProperties);
+
+            string[] logUnityMessagePropertiesTracked = { nameof(_logUnityMessages) };
+            TrackProperties(logUnityMessagePropertiesTracked, _logUnityMessageProperties);
+
+            void TrackProperties(string[] properties, List<SerializedProperty> storage)
+            {
+                foreach (string propertyName in properties)
+                {
+                    SerializedProperty property = _serializedObject.FindProperty(propertyName);
+                    storage.Add(property);
+                    if (property != null)
+                    {
+                        _propertyValues[propertyName] = property.GetValue();
+                    }
+                    else
+                    {
+                        Debug.LogWarning(
+                            $"Failed to track/find window property {propertyName}, updates to this property will be ignored."
+                        );
+                    }
+                }
+            }
+#endif
+
+            RefreshStaticState(force: _resetStateOnInit);
         }
 
         private void OnEnable()
@@ -340,6 +423,9 @@ namespace CommandTerminal
             }
 
             ConsumeAndLogErrors();
+#if UNITY_EDITOR
+            EditorApplication.update += CheckForChanges;
+#endif
         }
 
         private void OnDisable()
@@ -351,6 +437,9 @@ namespace CommandTerminal
             }
 
             SetState(TerminalState.Closed);
+#if UNITY_EDITOR
+            EditorApplication.update -= CheckForChanges;
+#endif
         }
 
         private void OnDestroy()
@@ -361,10 +450,6 @@ namespace CommandTerminal
             }
 
             Instance = null;
-            Buffer = null;
-            Shell = null;
-            History = null;
-            AutoComplete = null;
         }
 
         private void Start()
@@ -380,8 +465,6 @@ namespace CommandTerminal
                 Debug.LogWarning("Command Console Warning: Please assign a font.", this);
             }
 
-            _commandText = string.Empty;
-            ResetAutoComplete();
 #if !ENABLE_INPUT_SYSTEM
             _cachedCommandText = _commandText;
 #endif
@@ -402,6 +485,9 @@ namespace CommandTerminal
             SetupLabels();
             ConsumeAndLogErrors();
 
+            _commandText = string.Empty;
+            ResetAutoComplete();
+
             _started = true;
         }
 
@@ -419,6 +505,12 @@ namespace CommandTerminal
             {
                 anyChanged = true;
                 _ignoredLogTypes = new List<TerminalLogType>();
+            }
+
+            if (_completeCommandHotkeys == null)
+            {
+                anyChanged = true;
+                _completeCommandHotkeys = new ListWrapper<string>();
             }
 
             _seenLogTypes.Clear();
@@ -443,13 +535,6 @@ namespace CommandTerminal
             if (anyChanged)
             {
                 EditorUtility.SetDirty(this);
-            }
-
-            if (Application.isPlaying && enabled && gameObject.activeInHierarchy)
-            {
-                OnDisable();
-                OnEnable();
-                Start();
             }
         }
 #endif
@@ -540,6 +625,135 @@ namespace CommandTerminal
             HandleOpenness();
             _window = GUILayout.Window(88, _window, DrawConsole, string.Empty, _windowStyle);
         }
+
+        private void RefreshStaticState(bool force = false)
+        {
+            int bufferSize = Math.Max(0, _bufferSize);
+            if (force || Buffer == null)
+            {
+                Buffer = new CommandLog(bufferSize, _ignoredLogTypes);
+            }
+            else
+            {
+                if (Buffer.Capacity != bufferSize)
+                {
+                    Buffer.Resize(bufferSize);
+                }
+                if (
+                    !Buffer.ignoredLogTypes.SetEquals(
+                        _ignoredLogTypes ?? Enumerable.Empty<TerminalLogType>()
+                    )
+                )
+                {
+                    Buffer.ignoredLogTypes.Clear();
+                    Buffer.ignoredLogTypes.UnionWith(
+                        _ignoredLogTypes ?? Enumerable.Empty<TerminalLogType>()
+                    );
+                }
+            }
+
+            if (force || History == null)
+            {
+                History = new CommandHistory();
+            }
+
+            if (force || Shell == null)
+            {
+                Shell = new CommandShell(History);
+            }
+
+            if (force || AutoComplete == null)
+            {
+                AutoComplete = new CommandAutoComplete(History, Shell);
+            }
+
+            if (
+                Shell.IgnoringDefaultCommands != ignoreDefaultCommands
+                || !Shell.IgnoredCommands.SetEquals(disabledCommands ?? Enumerable.Empty<string>())
+            )
+            {
+                Shell.ClearDefaultCommands();
+                Shell.RegisterCommands(
+                    ignoredCommands: disabledCommands,
+                    ignoreDefaultCommands: ignoreDefaultCommands
+                );
+            }
+        }
+
+#if UNITY_EDITOR
+        private void CheckForChanges()
+        {
+            if (!_started)
+            {
+                return;
+            }
+
+            if (Instance != this)
+            {
+                return;
+            }
+
+            _serializedObject.Update();
+            if (CheckForRefresh(_staticStateProperties))
+            {
+                RefreshStaticState();
+            }
+
+            if (CheckForRefresh(_windowProperties))
+            {
+                SetupWindow();
+            }
+
+            if (CheckForRefresh(_windowStyleProperties))
+            {
+                SetupWindowStyle();
+            }
+
+            if (CheckForRefresh(_inputProperties))
+            {
+                SetupInput();
+            }
+
+            if (CheckForRefresh(_labelProperties))
+            {
+                SetupLabels();
+            }
+
+            if (CheckForRefresh(_logUnityMessageProperties))
+            {
+                if (_logUnityMessages && !_unityLogAttached)
+                {
+                    _unityLogAttached = true;
+                    Application.logMessageReceivedThreaded += HandleUnityLog;
+                }
+                else if (!_logUnityMessages && _unityLogAttached)
+                {
+                    Application.logMessageReceivedThreaded -= HandleUnityLog;
+                    _unityLogAttached = false;
+                }
+            }
+
+            return;
+
+            bool CheckForRefresh(List<SerializedProperty> properties)
+            {
+                bool needRefresh = false;
+                foreach (SerializedProperty property in properties)
+                {
+                    object propertyValue = property.GetValue();
+                    if (Equals(propertyValue, _propertyValues[property.name]))
+                    {
+                        continue;
+                    }
+
+                    needRefresh = true;
+                    _propertyValues[property.name] = propertyValue;
+                }
+
+                return needRefresh;
+            }
+        }
+#endif
 
         // ReSharper disable once MemberCanBePrivate.Global
         public void ToggleState(TerminalState newState)
@@ -695,22 +909,39 @@ namespace CommandTerminal
             backgroundTexture.SetPixel(0, 0, _backgroundColor);
             backgroundTexture.Apply();
 
-            _windowStyle = new GUIStyle
+            if (_windowStyle == null)
             {
-                normal = { background = backgroundTexture, textColor = _foregroundColor },
-                padding = new RectOffset(4, 4, 4, 4),
-                font = _consoleFont,
-            };
+                _windowStyle = new GUIStyle
+                {
+                    normal = { background = backgroundTexture, textColor = _foregroundColor },
+                    padding = new RectOffset(4, 4, 4, 4),
+                    font = _consoleFont,
+                };
+            }
+            else
+            {
+                _windowStyle.normal.background = backgroundTexture;
+                _windowStyle.normal.textColor = _foregroundColor;
+                _windowStyle.font = _consoleFont;
+            }
         }
 
         private void SetupLabels()
         {
-            _labelStyle = new GUIStyle
+            if (_labelStyle == null)
             {
-                font = _consoleFont,
-                normal = { textColor = _foregroundColor },
-                wordWrap = true,
-            };
+                _labelStyle = new GUIStyle
+                {
+                    font = _consoleFont,
+                    normal = { textColor = _foregroundColor },
+                    wordWrap = true,
+                };
+            }
+            else
+            {
+                _labelStyle.font = _consoleFont;
+                _labelStyle.normal.textColor = _foregroundColor;
+            }
         }
 
         private void SetupInput()
@@ -968,8 +1199,8 @@ namespace CommandTerminal
                     bool forward = true;
                     if (_previousLastCompletionIndex != null)
                     {
-                        int prev = _previousLastCompletionIndex.Value;
-                        forward = (selected == (prev + 1) % length);
+                        int previous = _previousLastCompletionIndex.Value;
+                        forward = (selected == (previous + 1) % length);
                     }
 
                     float accumulation = 0f;
@@ -1040,21 +1271,21 @@ namespace CommandTerminal
                     }
                 }
 
-                for (int i = _currentHintStartIndex; i < _lastCompletionBuffer.Length; ++i)
+                for (
+                    int i = _currentHintStartIndex;
+                    i < _lastCompletionBuffer.Length + _currentHintStartIndex;
+                    ++i
+                )
                 {
-                    GUILayout.Label(
-                        _lastCompletionBuffer[i],
-                        _lastCompletionIndex == i ? _selectedHintStyle : _unselectedHintStyle,
-                        _completionElementStyles[i]
-                    );
+                    DrawHint(i % _lastCompletionBuffer.Length);
                 }
 
-                for (int i = 0; i < _currentHintStartIndex && i < _lastCompletionBuffer.Length; ++i)
+                void DrawHint(int index)
                 {
                     GUILayout.Label(
-                        _lastCompletionBuffer[i],
-                        _lastCompletionIndex == i ? _selectedHintStyle : _unselectedHintStyle,
-                        _completionElementStyles[i]
+                        _lastCompletionBuffer[index],
+                        _lastCompletionIndex == index ? _selectedHintStyle : _unselectedHintStyle,
+                        _completionElementStyles[index]
                     );
                 }
             }
@@ -1077,10 +1308,14 @@ namespace CommandTerminal
                 }
 
                 return Keyboard.current.shiftKey.isPressed
-                    && Keyboard.current.TryGetChildControl<KeyControl>(
-                        SpecialKeyCodeMap.GetValueOrDefault(expected, expected)
-                    )
-                        is { wasPressedThisFrame: true };
+                    && (
+                        Keyboard.current.TryGetChildControl<KeyControl>(
+                            SpecialKeyCodeMap.GetValueOrDefault(expected, expected)
+                        )
+                            is { wasPressedThisFrame: true }
+                        || Keyboard.current.TryGetChildControl<KeyControl>(expected)
+                            is { wasPressedThisFrame: true }
+                    );
             }
             if (key.StartsWith("shift+", StringComparison.OrdinalIgnoreCase))
             {
@@ -1090,16 +1325,32 @@ namespace CommandTerminal
                     expected = expected.ToLowerInvariant();
                 }
                 return Keyboard.current.shiftKey.isPressed
-                    && Keyboard.current.TryGetChildControl<KeyControl>(
-                        SpecialKeyCodeMap.GetValueOrDefault(expected, expected)
-                    )
-                        is { wasPressedThisFrame: true };
+                    && (
+                        Keyboard.current.TryGetChildControl<KeyControl>(
+                            SpecialKeyCodeMap.GetValueOrDefault(expected, expected)
+                        )
+                            is { wasPressedThisFrame: true }
+                        || Keyboard.current.TryGetChildControl<KeyControl>(expected)
+                            is { wasPressedThisFrame: true }
+                    );
             }
-            else if (SpecialShiftedKeyCodeMap.TryGetValue(key, out string expected))
+            else if (
+                SpecialShiftedKeyCodeMap.TryGetValue(key, out string expected)
+                && Keyboard.current.shiftKey.isPressed
+                && Keyboard.current.TryGetChildControl<KeyControl>(expected)
+                    is { wasPressedThisFrame: true }
+            )
             {
-                return Keyboard.current.shiftKey.isPressed
-                    && Keyboard.current.TryGetChildControl<KeyControl>(expected)
-                        is { wasPressedThisFrame: true };
+                return true;
+            }
+            else if (
+                AlternativeSpecialShiftedKeyCodeMap.TryGetValue(key, out expected)
+                && Keyboard.current.shiftKey.isPressed
+                && Keyboard.current.TryGetChildControl<KeyControl>(expected)
+                    is { wasPressedThisFrame: true }
+            )
+            {
+                return true;
             }
             else if (key.Length == 1 && key.ToLowerInvariant() != key)
             {
@@ -1111,9 +1362,11 @@ namespace CommandTerminal
             else
             {
                 return Keyboard.current.TryGetChildControl<KeyControl>(
-                    SpecialKeyCodeMap.GetValueOrDefault(key, key)
-                )
-                    is { wasPressedThisFrame: true };
+                        SpecialKeyCodeMap.GetValueOrDefault(key, key)
+                    )
+                        is { wasPressedThisFrame: true }
+                    || Keyboard.current.TryGetChildControl<KeyControl>(key)
+                        is { wasPressedThisFrame: true };
             }
         }
 
@@ -1244,8 +1497,7 @@ namespace CommandTerminal
                 {
                     int completionLength = completionBuffer.Length;
                     if (
-                        _lastCompletionBuffer == null
-                        || _lastCompletionBuffer.SequenceEqual(
+                        _lastCompletionBuffer.SequenceEqual(
                             completionBuffer,
                             StringComparer.OrdinalIgnoreCase
                         )

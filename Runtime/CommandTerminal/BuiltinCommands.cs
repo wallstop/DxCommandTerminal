@@ -52,7 +52,7 @@ namespace CommandTerminal
                 return;
             }
 
-            string commandName = args[0].String ?? string.Empty;
+            string commandName = args[0].contents ?? string.Empty;
 
             if (!shell.Commands.TryGetValue(commandName, out CommandInfo info))
             {
@@ -156,7 +156,7 @@ namespace CommandTerminal
                 return;
             }
 
-            string variableName = args[0].String;
+            string variableName = args[0].contents;
 
             if (variableName[0] == '$')
             {
@@ -194,7 +194,7 @@ namespace CommandTerminal
             StringBuilder sb = new();
             for (int i = start; i < args.Length; i++)
             {
-                sb.Append(args[i].String);
+                sb.Append(args[i].contents);
 
                 if (i < args.Length - 1)
                 {
