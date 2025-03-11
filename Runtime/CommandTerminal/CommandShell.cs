@@ -52,29 +52,33 @@ namespace CommandTerminal
         });
         public IReadOnlyDictionary<string, CommandInfo> Commands => _commands;
         public IReadOnlyDictionary<string, CommandArg> Variables => _variables;
-        public IReadOnlyCollection<string> DefaultCommands => _defaultCommands;
+        public ImmutableHashSet<string> AutoRegisteredCommands => _immutableAutoRegisteredCommands;
         public ImmutableHashSet<string> IgnoredCommands => _immutableIgnoredCommands;
         public bool IgnoringDefaultCommands { get; private set; }
 
         public bool HasErrors => _errorMessages.Any();
 
-        private readonly Dictionary<string, CommandInfo> _commands = new(
+        private readonly CommandHistory _history;
+
+        private readonly SortedDictionary<string, CommandInfo> _commands = new(
             StringComparer.OrdinalIgnoreCase
         );
-        private readonly Dictionary<string, CommandArg> _variables = new(
+        private readonly SortedDictionary<string, CommandArg> _variables = new(
             StringComparer.OrdinalIgnoreCase
         );
         private readonly List<CommandArg> _arguments = new(); // Cache for performance
-
         private readonly Queue<string> _errorMessages = new();
-        private readonly CommandHistory _history;
         private readonly StringBuilder _commandBuilder = new();
         private readonly HashSet<string> _ignoredCommands = new(StringComparer.OrdinalIgnoreCase);
-        private readonly HashSet<string> _defaultCommands = new(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _autoRegisteredCommands = new(
+            StringComparer.OrdinalIgnoreCase
+        );
         private readonly Dictionary<string, MethodInfo> _rejectedCommands = new(
             StringComparer.OrdinalIgnoreCase
         );
 
+        private ImmutableHashSet<string> _immutableAutoRegisteredCommands =
+            ImmutableHashSet<string>.Empty;
         private ImmutableHashSet<string> _immutableIgnoredCommands = ImmutableHashSet<string>.Empty;
 
         public CommandShell(CommandHistory history)
@@ -89,31 +93,35 @@ namespace CommandTerminal
 
         public int ClearAllCommands()
         {
+            return ClearCustomCommands() + ClearAutoRegisteredCommands();
+        }
+
+        public int ClearCustomCommands()
+        {
             int count = _commands.Count;
             _commands.Clear();
-            count += ClearDefaultCommands();
             return count;
         }
 
-        public int ClearDefaultCommands()
+        public int ClearAutoRegisteredCommands()
         {
-            int count = _defaultCommands.Count;
-            _defaultCommands.Clear();
+            int count = _autoRegisteredCommands.Count;
+            _autoRegisteredCommands.Clear();
             return count;
         }
 
-        public void RegisterCommands(
+        public void InitializeAutoRegisteredCommands(
             IEnumerable<string> ignoredCommands = null,
             bool ignoreDefaultCommands = false
         )
         {
             IgnoringDefaultCommands = ignoreDefaultCommands;
-            foreach (string defaultCommand in _defaultCommands)
+            foreach (string defaultCommand in _autoRegisteredCommands)
             {
                 _commands.Remove(defaultCommand);
             }
 
-            ClearDefaultCommands();
+            ClearAutoRegisteredCommands();
 
             _ignoredCommands.Clear();
             _ignoredCommands.UnionWith(ignoredCommands ?? Enumerable.Empty<string>());
@@ -121,8 +129,9 @@ namespace CommandTerminal
             {
                 _commands.Remove(ignoredCommand);
             }
-            _immutableIgnoredCommands = _ignoredCommands.ToImmutableHashSet();
-
+            _immutableIgnoredCommands = _ignoredCommands.ToImmutableHashSet(
+                StringComparer.OrdinalIgnoreCase
+            );
             _rejectedCommands.Clear();
 
             foreach (
@@ -166,11 +175,22 @@ namespace CommandTerminal
                 );
                 if (success)
                 {
-                    _defaultCommands.Add(commandName);
+                    _autoRegisteredCommands.Add(commandName);
                 }
             }
 
-            HandleRejectedCommands();
+            _immutableAutoRegisteredCommands = _autoRegisteredCommands.ToImmutableHashSet(
+                StringComparer.OrdinalIgnoreCase
+            );
+
+            foreach (KeyValuePair<string, MethodInfo> command in _rejectedCommands)
+            {
+                IssueErrorMessage(
+                    $"{command.Key} has an invalid signature. "
+                        + $"Expected: {command.Value.Name}(CommandArg[]). "
+                        + $"Found: {command.Value.Name}({string.Join(",", command.Value.GetParameters().Select(p => p.ParameterType.Name))})"
+                );
+            }
         }
 
         /// <summary>
@@ -284,14 +304,14 @@ namespace CommandTerminal
                 errorMessage = command.minArgCount == command.maxArgCount ? "exactly" : "at least";
                 requiredArg = command.minArgCount;
             }
-            else if (command.maxArgCount >= 0 && argCount > command.maxArgCount)
+            else if (0 <= command.maxArgCount && command.maxArgCount < argCount)
             {
                 // Do not check max allowed number of arguments if it is -1
                 errorMessage = command.minArgCount == command.maxArgCount ? "exactly" : "at most";
                 requiredArg = command.maxArgCount;
             }
 
-            if (errorMessage != null)
+            if (!string.IsNullOrEmpty(errorMessage))
             {
                 string pluralFix = requiredArg == 1 ? "" : "s";
 
@@ -381,18 +401,6 @@ namespace CommandTerminal
                 (parameters is { Length: > 0 } ? string.Format(format, parameters) : format)
                 ?? string.Empty;
             _errorMessages.Enqueue(formattedMessage);
-        }
-
-        private void HandleRejectedCommands()
-        {
-            foreach (KeyValuePair<string, MethodInfo> command in _rejectedCommands)
-            {
-                IssueErrorMessage(
-                    $"{command.Key} has an invalid signature. "
-                        + $"Expected: {command.Value.Name}(CommandArg[]). "
-                        + $"Found: {command.Value.Name}({string.Join(",", command.Value.GetParameters().Select(p => p.ParameterType.Name))})"
-                );
-            }
         }
 
         public static bool TryEatArgument(ref string stringValue, out CommandArg arg)

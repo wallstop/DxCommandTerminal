@@ -9,8 +9,6 @@ namespace CommandTerminal
     using JetBrains.Annotations;
     using UnityEditor;
     using UnityEngine;
-    using UnityEngine.Assertions;
-    using UnityEngine.Serialization;
     using Utils;
 #if ENABLE_INPUT_SYSTEM
     using UnityEngine.InputSystem;
@@ -20,7 +18,9 @@ namespace CommandTerminal
     [DisallowMultipleComponent]
     public sealed class Terminal : MonoBehaviour
     {
-        private const string CommandControlName = "command_text_field";
+        private const string CommandControlName = "CommandTextField";
+
+        private static readonly Dictionary<string, string> CachedSubstrings = new();
 
         private static readonly Dictionary<string, string> SpecialKeyCodeMap = new(
             StringComparer.OrdinalIgnoreCase
@@ -185,6 +185,9 @@ namespace CommandTerminal
         [SerializeField]
         private bool _displayHints;
 
+        [SerializeField]
+        private bool _makeHintsClickable;
+
         [Range(0, 1)]
         [SerializeField]
         private float _unselectedHintContrast;
@@ -233,6 +236,9 @@ namespace CommandTerminal
         private Color _errorColor = Color.red;
 
         [Header("System")]
+        [SerializeField]
+        private bool _trackChangesInEditor = true;
+
         [Tooltip("Will reset static command state in `Awake()` when set to true")]
         [SerializeField]
         private bool _resetStateOnInit;
@@ -258,6 +264,7 @@ namespace CommandTerminal
         private readonly List<SerializedProperty> _inputProperties = new();
         private readonly List<SerializedProperty> _labelProperties = new();
         private readonly List<SerializedProperty> _logUnityMessageProperties = new();
+        private readonly List<SerializedProperty> _autoCompleteProperties = new();
         private SerializedObject _serializedObject;
 #endif
         private TerminalState _state;
@@ -270,9 +277,9 @@ namespace CommandTerminal
         private float _currentOpenT;
         private float _openTarget;
         private float _realWindowSize;
-        private string _commandText;
+        private string _commandText = string.Empty;
 #if !ENABLE_INPUT_SYSTEM
-        private string _cachedCommandText;
+        private string _cachedCommandText = string.Empty;
 #endif
         private Vector2 _scrollPosition;
         private GUIStyle _windowStyle;
@@ -291,6 +298,7 @@ namespace CommandTerminal
         private int? _lastHeight;
         private bool _handledInputThisFrame;
         private bool _needsFocus;
+        private bool _needsAutoCompleteReset;
 
         private string _lastKnownCommandText;
         private string[] _lastCompletionBuffer = Array.Empty<string>();
@@ -300,6 +308,9 @@ namespace CommandTerminal
         private int? _lastCompletionIndex;
         private int? _previousLastCompletionIndex;
         private int _currentHintStartIndex;
+        private string _focusedControl;
+        private int _cursorIndex;
+        private int _selectIndex;
 
         [StringFormatMethod("format")]
         public static bool Log(string format, params object[] parameters)
@@ -391,15 +402,33 @@ namespace CommandTerminal
             string[] logUnityMessagePropertiesTracked = { nameof(_logUnityMessages) };
             TrackProperties(logUnityMessagePropertiesTracked, _logUnityMessageProperties);
 
+            string[] autoCompletePropertiesTracked =
+            {
+                nameof(_displayHints),
+                nameof(disabledCommands),
+                nameof(ignoreDefaultCommands),
+            };
+            TrackProperties(autoCompletePropertiesTracked, _autoCompleteProperties);
+
             void TrackProperties(string[] properties, List<SerializedProperty> storage)
             {
                 foreach (string propertyName in properties)
                 {
                     SerializedProperty property = _serializedObject.FindProperty(propertyName);
-                    storage.Add(property);
                     if (property != null)
                     {
-                        _propertyValues[propertyName] = property.GetValue();
+                        storage.Add(property);
+                        object value = property.GetValue();
+                        switch (value)
+                        {
+                            case List<string> stringList:
+                                value = stringList.ToList();
+                                break;
+                            case List<TerminalLogType> logTypeList:
+                                value = logTypeList.ToList();
+                                break;
+                        }
+                        _propertyValues[property.name] = value;
                     }
                     else
                     {
@@ -466,14 +495,18 @@ namespace CommandTerminal
             }
 
 #if !ENABLE_INPUT_SYSTEM
-            _cachedCommandText = _commandText;
+            _cachedCommandText = _commandText ?? string.Empty;
 #endif
-            if (_useHotkeys)
-            {
-                Assert.IsFalse(
+            if (
+                _useHotkeys
+                && (
                     _completeCommandHotkeys?.list?.Exists(command =>
                         string.Equals(command, _toggleHotkey, StringComparison.OrdinalIgnoreCase)
-                    ) ?? false,
+                    ) ?? false
+                )
+            )
+            {
+                Debug.LogError(
                     $"Invalid Toggle Hotkey {_toggleHotkey} - cannot be in the set of complete command "
                         + $"hotkeys: [{string.Join(",", _completeCommandHotkeys?.list ?? Enumerable.Empty<string>())}]"
                 );
@@ -485,7 +518,6 @@ namespace CommandTerminal
             SetupLabels();
             ConsumeAndLogErrors();
 
-            _commandText = string.Empty;
             ResetAutoComplete();
 
             _started = true;
@@ -552,7 +584,7 @@ namespace CommandTerminal
                 Close();
                 _handledInputThisFrame = true;
             }
-            else if (_completeCommandHotkeys?.list?.Exists(IsKeyPressed) == true)
+            else if (_completeCommandHotkeys?.list?.Exists(key => IsKeyPressed(key)) == true)
             {
                 EnterCommand();
                 _handledInputThisFrame = true;
@@ -623,6 +655,7 @@ namespace CommandTerminal
             }
 
             HandleOpenness();
+
             _window = GUILayout.Window(88, _window, DrawConsole, string.Empty, _windowStyle);
         }
 
@@ -672,17 +705,27 @@ namespace CommandTerminal
                 || !Shell.IgnoredCommands.SetEquals(disabledCommands ?? Enumerable.Empty<string>())
             )
             {
-                Shell.ClearDefaultCommands();
-                Shell.RegisterCommands(
+                Shell.ClearAutoRegisteredCommands();
+                Shell.InitializeAutoRegisteredCommands(
                     ignoredCommands: disabledCommands,
                     ignoreDefaultCommands: ignoreDefaultCommands
                 );
+
+                if (_started)
+                {
+                    ResetAutoComplete();
+                }
             }
         }
 
 #if UNITY_EDITOR
         private void CheckForChanges()
         {
+            if (!_trackChangesInEditor)
+            {
+                return;
+            }
+
             if (!_started)
             {
                 return;
@@ -733,6 +776,11 @@ namespace CommandTerminal
                 }
             }
 
+            if (CheckForRefresh(_autoCompleteProperties))
+            {
+                ResetAutoComplete();
+            }
+
             return;
 
             bool CheckForRefresh(List<SerializedProperty> properties)
@@ -741,7 +789,35 @@ namespace CommandTerminal
                 foreach (SerializedProperty property in properties)
                 {
                     object propertyValue = property.GetValue();
-                    if (Equals(propertyValue, _propertyValues[property.name]))
+                    object previousValue = _propertyValues[property.name];
+                    if (
+                        propertyValue is List<string> currentStringList
+                        && previousValue is List<string> previousStringList
+                    )
+                    {
+                        if (!currentStringList.SequenceEqual(previousStringList))
+                        {
+                            needRefresh = true;
+                            _propertyValues[property.name] = currentStringList.ToList();
+                        }
+
+                        continue;
+                    }
+                    if (
+                        propertyValue is List<TerminalLogType> currentLogTypeList
+                        && previousValue is List<TerminalLogType> previousLogTypeList
+                    )
+                    {
+                        if (!currentLogTypeList.SequenceEqual(previousLogTypeList))
+                        {
+                            needRefresh = true;
+                            _propertyValues[property.name] = currentLogTypeList.ToList();
+                        }
+
+                        continue;
+                    }
+
+                    if (Equals(propertyValue, previousValue))
                     {
                         continue;
                     }
@@ -772,7 +848,7 @@ namespace CommandTerminal
                 _needsFocus = true;
             }
 #if !ENABLE_INPUT_SYSTEM
-            _cachedCommandText = _commandText;
+            _cachedCommandText = _commandText ?? string.Empty;
 #endif
             _commandText = string.Empty;
             ResetAutoComplete();
@@ -828,7 +904,7 @@ namespace CommandTerminal
 
         private void ResetAutoComplete()
         {
-            _lastKnownCommandText = _commandText;
+            _lastKnownCommandText = _commandText ?? string.Empty;
             _lastCompletionIndex = null;
             _currentHintStartIndex = 0;
             if (_displayHints)
@@ -1052,6 +1128,11 @@ namespace CommandTerminal
 
         private void DrawConsole(int window2D)
         {
+            if (Event.current.type == EventType.Layout)
+            {
+                _focusedControl = GUI.GetNameOfFocusedControl();
+            }
+
             GUILayout.BeginVertical();
             try
             {
@@ -1106,6 +1187,12 @@ namespace CommandTerminal
                     CompleteCommand();
                 }
 #endif
+                string focusedControl = string.Empty;
+                if (Event.current.type == EventType.Repaint)
+                {
+                    focusedControl = GUI.GetNameOfFocusedControl();
+                }
+
                 if (_lastCompletionBuffer is { Length: > 0 })
                 {
                     RenderCompletionHints();
@@ -1118,51 +1205,93 @@ namespace CommandTerminal
                     {
                         GUILayout.Label(_inputCaret, _inputCaretStyle, _inputCaretOptions);
                     }
-
                     GUI.SetNextControlName(CommandControlName);
                     string newCommandText = GUILayout.TextField(_commandText, _inputStyle);
                     if (!string.Equals(newCommandText, _commandText))
                     {
                         _commandText = newCommandText;
-                        ResetAutoComplete();
+                        _needsAutoCompleteReset = true;
                     }
 
-                    if (
-                        _moveCursor
-                        && Event.current.type == EventType.Repaint
-                        && string.Equals(GUI.GetNameOfFocusedControl(), CommandControlName)
-                    )
+                    // All of this is garbage and I hate it. I've lost what's going on and it doesn't quite work.
+                    if (Event.current.type == EventType.Repaint)
                     {
+                        bool isFocused = string.Equals(focusedControl, CommandControlName);
+                        if (_needsAutoCompleteReset)
+                        {
+                            ResetAutoComplete();
+                            _needsAutoCompleteReset = false;
+                        }
+
+                        /*
+                             Some WEIRD bugs related to clickable hints, has to be something to do with rendering other
+                             interactable controls. This is too complicated for me to figure out. For some reason, when
+                             backspacing or typing, you get random selection highlights.
+                          */
                         if (
-                            GUIUtility.GetStateObject(
+                            _makeHintsClickable
+                            && !string.Equals(_focusedControl, CommandControlName)
+                            && string.IsNullOrEmpty(focusedControl)
+                            && 0 < _lastCompletionBuffer.Length
+                            && (
+                                _lastCompletionIndex == null
+                                || !string.Equals(
+                                    _lastCompletionBuffer[_lastCompletionIndex.Value],
+                                    _commandText
+                                )
+                            )
+                        )
+                        {
+                            _moveCursor = true;
+                            _needsFocus = true;
+                        }
+
+                        bool localNeedFocus =
+                            string.IsNullOrEmpty(_focusedControl)
+                            && string.IsNullOrEmpty(focusedControl)
+                            && (
+                                string.IsNullOrEmpty(_commandText)
+                                || _lastCompletionBuffer.Length == 0
+                            );
+                        localNeedFocus |=
+                            _needsFocus
+                            && string.Equals(_focusedControl, CommandControlName)
+                            && string.IsNullOrEmpty(focusedControl);
+
+                        if (localNeedFocus)
+                        {
+                            GUI.FocusControl(CommandControlName);
+                            _moveCursor = true;
+                            _needsFocus = false;
+                        }
+
+                        if (
+                            isFocused
+                            && GUIUtility.GetStateObject(
                                 typeof(TextEditor),
                                 GUIUtility.keyboardControl
                             )
-                            is TextEditor textEditor
+                                is TextEditor textEditor
                         )
                         {
-                            int textLength = _commandText.Length;
-                            textEditor.cursorIndex = textLength;
-                            textEditor.selectIndex = textLength;
+                            if (_moveCursor)
+                            {
+                                int textLength = textEditor.text.Length;
+                                textEditor.cursorIndex = textLength;
+                                textEditor.selectIndex = textLength;
+                                _moveCursor = false;
+                            }
                         }
-
-                        _moveCursor = false;
                     }
 
 #if !ENABLE_INPUT_SYSTEM
                     if (_inputFix && _commandText.Length > 0)
                     {
-                        _commandText = _cachedCommandText; // Otherwise the TextField picks up the ToggleHotkey character event
+                        _commandText = _cachedCommandText ?? string.Empty; // Otherwise the TextField picks up the ToggleHotkey character event
                         ResetAutoComplete();
                         _inputFix = false; // Prevents checking string Length every draw call
                     }
 #endif
-                    if (_needsFocus && Event.current.type == EventType.Repaint)
-                    {
-                        GUI.FocusControl(CommandControlName);
-                        _needsFocus = false;
-                    }
-
                     if (
                         _showGUIButtons && GUILayout.Button("| run", _inputStyle, _runButtonOptions)
                     )
@@ -1280,13 +1409,38 @@ namespace CommandTerminal
                     DrawHint(i % _lastCompletionBuffer.Length);
                 }
 
+                return;
+
                 void DrawHint(int index)
                 {
-                    GUILayout.Label(
-                        _lastCompletionBuffer[index],
-                        _lastCompletionIndex == index ? _selectedHintStyle : _unselectedHintStyle,
-                        _completionElementStyles[index]
-                    );
+                    if (_makeHintsClickable)
+                    {
+                        string command = _lastCompletionBuffer[index];
+                        bool clicked = GUILayout.Button(
+                            command,
+                            _lastCompletionIndex == index
+                                ? _selectedHintStyle
+                                : _unselectedHintStyle,
+                            _completionElementStyles[index]
+                        );
+
+                        if (clicked)
+                        {
+                            _commandText = command;
+                            _lastCompletionIndex = index;
+                            _moveCursor = true;
+                        }
+                    }
+                    else
+                    {
+                        GUILayout.Label(
+                            _lastCompletionBuffer[index],
+                            _lastCompletionIndex == index
+                                ? _selectedHintStyle
+                                : _unselectedHintStyle,
+                            _completionElementStyles[index]
+                        );
+                    }
                 }
             }
             finally
@@ -1301,8 +1455,13 @@ namespace CommandTerminal
         {
             if (1 < key.Length && key.StartsWith("#", StringComparison.OrdinalIgnoreCase))
             {
-                string expected = key.Substring(1);
-                if (expected.Length == 1)
+                if (!CachedSubstrings.TryGetValue(key, out string expected))
+                {
+                    expected = key.Substring(1);
+                    CachedSubstrings[key] = expected;
+                }
+
+                if (expected.Length == 1 && expected.NeedsLowerInvariantConversion())
                 {
                     expected = expected.ToLowerInvariant();
                 }
@@ -1319,11 +1478,17 @@ namespace CommandTerminal
             }
             if (key.StartsWith("shift+", StringComparison.OrdinalIgnoreCase))
             {
-                string expected = key.Substring("shift+".Length);
-                if (expected.Length == 1)
+                if (!CachedSubstrings.TryGetValue(key, out string expected))
+                {
+                    expected = key.Substring("shift+".Length);
+                    CachedSubstrings[key] = expected;
+                }
+
+                if (expected.Length == 1 && expected.NeedsLowerInvariantConversion())
                 {
                     expected = expected.ToLowerInvariant();
                 }
+
                 return Keyboard.current.shiftKey.isPressed
                     && (
                         Keyboard.current.TryGetChildControl<KeyControl>(
@@ -1352,7 +1517,7 @@ namespace CommandTerminal
             {
                 return true;
             }
-            else if (key.Length == 1 && key.ToLowerInvariant() != key)
+            else if (key.Length == 1 && key.NeedsLowerInvariantConversion())
             {
                 key = key.ToLowerInvariant();
                 return Keyboard.current.shiftKey.isPressed
@@ -1420,7 +1585,7 @@ namespace CommandTerminal
             _commandText = History?.Previous() ?? string.Empty;
             ResetAutoComplete();
             _moveCursor = true;
-            GUI.FocusControl(CommandControlName);
+            _needsFocus = true;
         }
 
         public void HandleNext()
@@ -1432,7 +1597,7 @@ namespace CommandTerminal
             _commandText = History?.Next() ?? string.Empty;
             ResetAutoComplete();
             _moveCursor = true;
-            GUI.FocusControl(CommandControlName);
+            _needsFocus = true;
         }
 
         public void Close()
@@ -1550,7 +1715,7 @@ namespace CommandTerminal
             finally
             {
                 _moveCursor = true;
-                GUI.FocusControl(CommandControlName);
+                _needsFocus = true;
             }
         }
 
