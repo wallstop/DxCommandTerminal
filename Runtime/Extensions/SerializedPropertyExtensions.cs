@@ -12,7 +12,7 @@
     {
         public static Func<object, object> CreateFieldGetter(FieldInfo field)
         {
-            var dynamicMethod = new DynamicMethod(
+            DynamicMethod dynamicMethod = new(
                 "Get" + field.Name,
                 typeof(object),
                 new[] { typeof(object) },
