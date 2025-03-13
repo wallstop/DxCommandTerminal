@@ -45,7 +45,7 @@ This is a fork of [Command Terminal](https://github.com/stillwwater/command_term
 - Minor performance benefits around using string interpolation and intelligent checking of parameters to only force `string.Format` when relevant in logging paths
 - Better invalid command identification and error messages
 - All string comparisons are now `OrdinalIgnoreCase` instead of relying on CurrentCulture
-- `Terminal` has been made to be Editor-Aware. If the Editor is in Play mode, changes to the current terminal will take effect immediately. If the terminal is open, it will be closed, to prevent bugs.
+- `Terminal` has been made to be Editor-Change-Aware. If the Editor is in Play mode, changes to the current terminal properties will take effect immediately. This functionality has a minor performance hit and can be disabled via un-checking `Track Changes In Editor` under the `System` header.
 - Extra input validation has been added on all public methods, such that user code is sanitized where appropriate, or rejected if invalid.
 - The concept of "FrontCommands" has been exterminated
 
@@ -340,3 +340,5 @@ See [Unity docs on Managed Stripping Level](https://docs.unity3d.com/2022.3/Docu
 AutoComplete has gotten a major upgrade in this fork. Completion is now not only case-insensitive, but it will now also search (unique) commands that have been executed, ignoring any irrelevant input. Pressing the complete key multiple times now selects available options in a persistent fashion. Completion can be walked both forward and backwards. Results are now presented in a new UI that intelligently adapts to screen space and current selection position. When completion is no longer relevant, the UI is disabled. However, you can opt to always show the available commands by toggling the new `Display Hints` option in the Terminal configuration. There are also several new theming options for hints, with controls over the currently selected hint v unselected hints.
 
 ![png](./Media/AutoComplete.png)
+
+**Note**: Currently, if `Make Hints Clickable` is checked, there is a minor bug where, occasionally, for ~1 frame after auto-completing or deleting a character from a completed word, the text is selected and then unselected. I think it's something to do with the Layout v Repaint events, but I've tried a lot of solutions and none of them worked. Marking this as "won't fix" for now. Open to PRs!

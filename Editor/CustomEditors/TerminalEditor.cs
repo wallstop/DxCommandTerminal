@@ -1,4 +1,4 @@
-﻿namespace DxCommandTerminal.Editor.CustomEditors
+﻿namespace CommandTerminal.Editor.CustomEditors
 {
 #if UNITY_EDITOR
     using System;

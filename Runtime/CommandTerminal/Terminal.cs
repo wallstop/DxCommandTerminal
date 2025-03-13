@@ -5,27 +5,23 @@ namespace CommandTerminal
     using System.ComponentModel;
     using System.Linq;
     using Attributes;
+    using Extensions;
     using JetBrains.Annotations;
     using UnityEditor;
     using UnityEngine;
-    using UnityEngine.Assertions;
+    using UnityEngine.Serialization;
     using Utils;
 #if ENABLE_INPUT_SYSTEM
     using UnityEngine.InputSystem;
     using UnityEngine.InputSystem.Controls;
 #endif
 
-    public enum TerminalState
-    {
-        Close,
-        OpenSmall,
-        OpenFull,
-    }
-
     [DisallowMultipleComponent]
     public sealed class Terminal : MonoBehaviour
     {
-        private const string CommandControlName = "command_text_field";
+        private const string CommandControlName = "CommandTextField";
+
+        private static readonly Dictionary<string, string> CachedSubstrings = new();
 
         private static readonly Dictionary<string, string> SpecialKeyCodeMap = new(
             StringComparer.OrdinalIgnoreCase
@@ -86,12 +82,26 @@ namespace CommandTerminal
             { "?", "slash" },
         };
 
+        private static readonly Dictionary<string, string> AlternativeSpecialShiftedKeyCodeMap =
+            new(StringComparer.OrdinalIgnoreCase)
+            {
+                { "!", "1" },
+                { "@", "2" },
+                { "#", "3" },
+                { "$", "4" },
+                { "^", "5" },
+                { "%", "6" },
+                { "&", "7" },
+                { "*", "8" },
+                { "(", "9" },
+                { ")", "0" },
+            };
+
         public static Terminal Instance { get; private set; }
 
         public static CommandLog Buffer { get; private set; }
         public static CommandShell Shell { get; private set; }
 
-        // ReSharper disable once MemberCanBePrivate.Global
         public static CommandHistory History { get; private set; }
 
         // ReSharper disable once MemberCanBePrivate.Global
@@ -99,7 +109,7 @@ namespace CommandTerminal
 
         // ReSharper disable once MemberCanBePrivate.Global
         public bool IsClosed =>
-            _state == TerminalState.Close && Mathf.Approximately(_currentOpenT, _openTarget);
+            _state == TerminalState.Closed && Mathf.Approximately(_currentOpenT, _openTarget);
 
         [Header("Window")]
         [Range(0, 1)]
@@ -115,7 +125,10 @@ namespace CommandTerminal
         private float _toggleSpeed = 360;
 
         [SerializeField]
-        private int _bufferSize = 512;
+        private int _logBufferSize = 256;
+
+        [SerializeField]
+        private int _historyBufferSize = 512;
 
         [Header("Hotkeys")]
 #if ENABLE_INPUT_SYSTEM
@@ -176,6 +189,9 @@ namespace CommandTerminal
         [SerializeField]
         private bool _displayHints;
 
+        [SerializeField]
+        private bool _makeHintsClickable;
+
         [Range(0, 1)]
         [SerializeField]
         private float _unselectedHintContrast;
@@ -225,6 +241,12 @@ namespace CommandTerminal
 
         [Header("System")]
         [SerializeField]
+        private bool _trackChangesInEditor = true;
+
+        [Tooltip("Will reset static command state in OnEnable and Start when set to true")]
+        public bool resetStateOnInit;
+
+        [SerializeField]
         public bool ignoreDefaultCommands;
 
         [SerializeField]
@@ -238,22 +260,26 @@ namespace CommandTerminal
 
 #if UNITY_EDITOR
         private readonly Dictionary<TerminalLogType, int> _seenLogTypes = new();
+        private readonly Dictionary<string, object> _propertyValues = new();
+        private readonly List<SerializedProperty> _staticStateProperties = new();
+        private readonly List<SerializedProperty> _windowProperties = new();
+        private readonly List<SerializedProperty> _windowStyleProperties = new();
+        private readonly List<SerializedProperty> _inputProperties = new();
+        private readonly List<SerializedProperty> _labelProperties = new();
+        private readonly List<SerializedProperty> _logUnityMessageProperties = new();
+        private readonly List<SerializedProperty> _autoCompleteProperties = new();
+        private SerializedObject _serializedObject;
 #endif
-
         private TerminalState _state;
         private TextEditor _editorState;
-#if !ENABLE_INPUT_SYSTEM
         private bool _inputFix;
-#endif
         private bool _moveCursor;
         private Rect _window;
         private float _currentOpenT;
         private float _openTarget;
         private float _realWindowSize;
-        private string _commandText;
-#if !ENABLE_INPUT_SYSTEM
-        private string _cachedCommandText;
-#endif
+        private string _commandText = string.Empty;
+
         private Vector2 _scrollPosition;
         private GUIStyle _windowStyle;
         private GUIStyle _labelStyle;
@@ -271,6 +297,7 @@ namespace CommandTerminal
         private int? _lastHeight;
         private bool _handledInputThisFrame;
         private bool _needsFocus;
+        private bool _needsAutoCompleteReset;
 
         private string _lastKnownCommandText;
         private string[] _lastCompletionBuffer = Array.Empty<string>();
@@ -280,6 +307,9 @@ namespace CommandTerminal
         private int? _lastCompletionIndex;
         private int? _previousLastCompletionIndex;
         private int _currentHintStartIndex;
+        private string _focusedControl;
+
+        private bool _initialResetStateOnInit;
 
         [StringFormatMethod("format")]
         public static bool Log(string format, params object[] parameters)
@@ -302,98 +332,145 @@ namespace CommandTerminal
             return buffer.HandleLog(formattedMessage, type);
         }
 
-        // ReSharper disable once MemberCanBePrivate.Global
-        public void SetState(TerminalState newState)
+        private void Awake()
         {
-#if !ENABLE_INPUT_SYSTEM
-            _inputFix = true;
-#endif
-            if (newState != TerminalState.Close)
-            {
-                _needsFocus = true;
-            }
-#if !ENABLE_INPUT_SYSTEM
-            _cachedCommandText = _commandText;
-#endif
-            _commandText = string.Empty;
-            ResetAutoComplete();
-
-            switch (newState)
-            {
-                case TerminalState.Close:
-                {
-                    _openTarget = 0;
-                    break;
-                }
-                case TerminalState.OpenSmall:
-                {
-                    _openTarget = Screen.height * _maxHeight * _smallTerminalRatio;
-                    if (_currentOpenT > _openTarget)
-                    {
-                        // Prevent resizing from OpenFull to OpenSmall if window y position
-                        // is greater than OpenSmall's target
-                        _openTarget = 0;
-                        _state = TerminalState.Close;
-                        return;
-                    }
-                    _realWindowSize = _openTarget;
-                    _scrollPosition.y = int.MaxValue;
-                    break;
-                }
-                case TerminalState.OpenFull:
-                {
-                    _realWindowSize = Screen.height * _maxHeight;
-                    _openTarget = _realWindowSize;
-                    break;
-                }
-                default:
-                {
-                    throw new InvalidEnumArgumentException(
-                        nameof(newState),
-                        (int)newState,
-                        typeof(TerminalState)
-                    );
-                }
-            }
-
-            _state = newState;
-        }
-
-        // ReSharper disable once MemberCanBePrivate.Global
-        public void ToggleState(TerminalState newState)
-        {
-            SetState(_state == newState ? TerminalState.Close : newState);
-        }
-
-        private void OnEnable()
-        {
-            switch (_bufferSize)
+            switch (_logBufferSize)
             {
                 case <= 0:
                     Debug.LogError(
-                        $"Invalid buffer size '{_bufferSize}', must be greater than zero. Defaulting to 0 (empty buffer).",
+                        $"Invalid buffer size '{_logBufferSize}', must be greater than zero. Defaulting to 0 (empty buffer).",
                         this
                     );
                     break;
                 case < 10:
                     Debug.LogWarning(
-                        $"Unsupported buffer size '{_bufferSize}', recommended size is > 10.",
+                        $"Unsupported buffer size '{_logBufferSize}', recommended size is > 10.",
+                        this
+                    );
+                    break;
+            }
+
+            switch (_historyBufferSize)
+            {
+                case <= 0:
+                    Debug.LogError(
+                        $"Invalid buffer size '{_historyBufferSize}', must be greater than zero. Defaulting to 0 (empty buffer).",
+                        this
+                    );
+                    break;
+                case < 10:
+                    Debug.LogWarning(
+                        $"Unsupported buffer size '{_historyBufferSize}', recommended size is > 10.",
                         this
                     );
                     break;
             }
 
             Instance = this;
-            Buffer = new CommandLog(Math.Max(0, _bufferSize), _ignoredLogTypes);
-            History = new CommandHistory();
-            Shell = new CommandShell(History);
-            AutoComplete = new CommandAutoComplete(History, Shell);
+
+#if UNITY_EDITOR
+            _serializedObject = new SerializedObject(this);
+
+            string[] staticStaticPropertiesTracked =
+            {
+                nameof(_logBufferSize),
+                nameof(_historyBufferSize),
+                nameof(_ignoredLogTypes),
+                nameof(disabledCommands),
+                nameof(ignoreDefaultCommands),
+            };
+            TrackProperties(staticStaticPropertiesTracked, _staticStateProperties);
+
+            string[] windowPropertiesTracked =
+            {
+                nameof(_maxHeight),
+                nameof(_smallTerminalRatio),
+                nameof(_showGUIButtons),
+            };
+            TrackProperties(windowPropertiesTracked, _windowProperties);
+
+            string[] windowStylePropertiesTracked =
+            {
+                nameof(_backgroundColor),
+                nameof(_foregroundColor),
+                nameof(_consoleFont),
+            };
+            TrackProperties(windowStylePropertiesTracked, _windowStyleProperties);
+
+            string[] inputPropertiesTracked =
+            {
+                nameof(_inputContrast),
+                nameof(_inputColor),
+                nameof(_inputAlpha),
+                nameof(_inputCaret),
+                nameof(_unselectedHintColor),
+                nameof(_unselectedHintAlpha),
+                nameof(_unselectedHintContrast),
+                nameof(_selectedHintColor),
+                nameof(_selectedHintAlpha),
+                nameof(_selectedHintContrast),
+            };
+            TrackProperties(inputPropertiesTracked, _inputProperties);
+
+            string[] labelPropertiesTracked = { nameof(_consoleFont), nameof(_foregroundColor) };
+            TrackProperties(labelPropertiesTracked, _labelProperties);
+
+            string[] logUnityMessagePropertiesTracked = { nameof(_logUnityMessages) };
+            TrackProperties(logUnityMessagePropertiesTracked, _logUnityMessageProperties);
+
+            string[] autoCompletePropertiesTracked =
+            {
+                nameof(_displayHints),
+                nameof(disabledCommands),
+                nameof(ignoreDefaultCommands),
+            };
+            TrackProperties(autoCompletePropertiesTracked, _autoCompleteProperties);
+
+            void TrackProperties(string[] properties, List<SerializedProperty> storage)
+            {
+                foreach (string propertyName in properties)
+                {
+                    SerializedProperty property = _serializedObject.FindProperty(propertyName);
+                    if (property != null)
+                    {
+                        storage.Add(property);
+                        object value = property.GetValue();
+                        switch (value)
+                        {
+                            case List<string> stringList:
+                                value = stringList.ToList();
+                                break;
+                            case List<TerminalLogType> logTypeList:
+                                value = logTypeList.ToList();
+                                break;
+                        }
+                        _propertyValues[property.name] = value;
+                    }
+                    else
+                    {
+                        Debug.LogWarning(
+                            $"Failed to track/find window property {propertyName}, updates to this property will be ignored."
+                        );
+                    }
+                }
+            }
+#endif
+        }
+
+        private void OnEnable()
+        {
+            RefreshStaticState(force: resetStateOnInit);
+            ConsumeAndLogErrors();
 
             if (_logUnityMessages && !_unityLogAttached)
             {
-                _unityLogAttached = true;
                 Application.logMessageReceivedThreaded += HandleUnityLog;
+                _unityLogAttached = true;
             }
+
+#if UNITY_EDITOR
+            EditorApplication.update += CheckForChanges;
+#endif
         }
 
         private void OnDisable()
@@ -404,18 +481,27 @@ namespace CommandTerminal
                 _unityLogAttached = false;
             }
 
+            SetState(TerminalState.Closed);
+#if UNITY_EDITOR
+            EditorApplication.update -= CheckForChanges;
+#endif
+        }
+
+        private void OnDestroy()
+        {
+            if (Instance != this)
+            {
+                return;
+            }
+
             Instance = null;
-            Buffer = null;
-            Shell = null;
-            History = null;
-            AutoComplete = null;
         }
 
         private void Start()
         {
             if (_started)
             {
-                SetState(TerminalState.Close);
+                SetState(TerminalState.Closed);
             }
 
             if (_consoleFont == null)
@@ -424,37 +510,28 @@ namespace CommandTerminal
                 Debug.LogWarning("Command Console Warning: Please assign a font.", this);
             }
 
-            _commandText = string.Empty;
-            ResetAutoComplete();
-#if !ENABLE_INPUT_SYSTEM
-            _cachedCommandText = _commandText;
-#endif
-            if (_useHotkeys)
-            {
-                Assert.IsFalse(
+            if (
+                _useHotkeys
+                && (
                     _completeCommandHotkeys?.list?.Exists(command =>
                         string.Equals(command, _toggleHotkey, StringComparison.OrdinalIgnoreCase)
-                    ) ?? false,
+                    ) ?? false
+                )
+            )
+            {
+                Debug.LogError(
                     $"Invalid Toggle Hotkey {_toggleHotkey} - cannot be in the set of complete command "
                         + $"hotkeys: [{string.Join(",", _completeCommandHotkeys?.list ?? Enumerable.Empty<string>())}]"
                 );
             }
 
+            RefreshStaticState(force: resetStateOnInit);
             SetupWindow();
             SetupWindowStyle();
             SetupInput();
             SetupLabels();
-
-            Shell.RegisterCommands(
-                ignoredCommands: disabledCommands,
-                ignoreDefaultCommands: ignoreDefaultCommands
-            );
-
-            while (Shell.TryConsumeErrorMessage(out string error))
-            {
-                Log(TerminalLogType.Error, $"Error: {error}");
-            }
-
+            ConsumeAndLogErrors();
+            ResetAutoComplete();
             _started = true;
         }
 
@@ -472,6 +549,12 @@ namespace CommandTerminal
             {
                 anyChanged = true;
                 _ignoredLogTypes = new List<TerminalLogType>();
+            }
+
+            if (_completeCommandHotkeys == null)
+            {
+                anyChanged = true;
+                _completeCommandHotkeys = new ListWrapper<string>();
             }
 
             _seenLogTypes.Clear();
@@ -497,13 +580,6 @@ namespace CommandTerminal
             {
                 EditorUtility.SetDirty(this);
             }
-
-            if (Application.isPlaying && enabled && gameObject.activeInHierarchy)
-            {
-                OnDisable();
-                OnEnable();
-                Start();
-            }
         }
 #endif
 
@@ -517,43 +593,43 @@ namespace CommandTerminal
 
             if (IsKeyPressed(_closeHotkey))
             {
+                _handledInputThisFrame = true;
                 Close();
-                _handledInputThisFrame = true;
             }
-            else if (_completeCommandHotkeys?.list?.Exists(IsKeyPressed) == true)
+            else if (_completeCommandHotkeys?.list?.Exists(key => IsKeyPressed(key)) == true)
             {
-                EnterCommand();
                 _handledInputThisFrame = true;
+                EnterCommand();
             }
             else if (IsKeyPressed(_previousHotkey))
             {
-                HandlePrevious();
                 _handledInputThisFrame = true;
+                HandlePrevious();
             }
             else if (IsKeyPressed(_nextHotkey))
             {
-                HandleNext();
                 _handledInputThisFrame = true;
+                HandleNext();
             }
             else if (IsKeyPressed(_toggleFullHotkey))
             {
-                ToggleFull();
                 _handledInputThisFrame = true;
+                ToggleFull();
             }
             else if (IsKeyPressed(_toggleHotkey))
             {
-                ToggleSmall();
                 _handledInputThisFrame = true;
+                ToggleSmall();
             }
             else if (IsKeyPressed(_reverseCompleteHotkey))
             {
-                CompleteCommand(searchForward: false);
                 _handledInputThisFrame = true;
+                CompleteCommand(searchForward: false);
             }
             else if (IsKeyPressed(_completeHotkey))
             {
-                CompleteCommand(searchForward: true);
                 _handledInputThisFrame = true;
+                CompleteCommand(searchForward: true);
             }
         }
 #endif
@@ -585,18 +661,263 @@ namespace CommandTerminal
                 DrawGUIButtons();
             }
 
-            if (IsClosed)
+            if (IsClosed || _handledInputThisFrame)
             {
                 return;
             }
 
             HandleOpenness();
+
             _window = GUILayout.Window(88, _window, DrawConsole, string.Empty, _windowStyle);
+        }
+
+        private void RefreshStaticState(bool force)
+        {
+            int logBufferSize = Math.Max(0, _logBufferSize);
+            if (force || Buffer == null)
+            {
+                Buffer = new CommandLog(logBufferSize, _ignoredLogTypes);
+            }
+            else
+            {
+                if (Buffer.Capacity != logBufferSize)
+                {
+                    Buffer.Resize(logBufferSize);
+                }
+                if (
+                    !Buffer.ignoredLogTypes.SetEquals(
+                        _ignoredLogTypes ?? Enumerable.Empty<TerminalLogType>()
+                    )
+                )
+                {
+                    Buffer.ignoredLogTypes.Clear();
+                    Buffer.ignoredLogTypes.UnionWith(
+                        _ignoredLogTypes ?? Enumerable.Empty<TerminalLogType>()
+                    );
+                }
+            }
+
+            int historyBufferSize = Math.Max(0, _historyBufferSize);
+            if (force || History == null)
+            {
+                History = new CommandHistory(historyBufferSize);
+            }
+            else if (History.Capacity != historyBufferSize)
+            {
+                History.Resize(historyBufferSize);
+            }
+
+            if (force || Shell == null)
+            {
+                Shell = new CommandShell(History);
+            }
+
+            if (force || AutoComplete == null)
+            {
+                AutoComplete = new CommandAutoComplete(History, Shell);
+            }
+
+            if (
+                Shell.IgnoringDefaultCommands != ignoreDefaultCommands
+                || Shell.Commands.Count <= 0
+                || !Shell.IgnoredCommands.SetEquals(disabledCommands ?? Enumerable.Empty<string>())
+            )
+            {
+                Shell.ClearAutoRegisteredCommands();
+                Shell.InitializeAutoRegisteredCommands(
+                    ignoredCommands: disabledCommands,
+                    ignoreDefaultCommands: ignoreDefaultCommands
+                );
+
+                if (_started)
+                {
+                    ResetAutoComplete();
+                }
+            }
+        }
+
+#if UNITY_EDITOR
+        private void CheckForChanges()
+        {
+            if (!_trackChangesInEditor)
+            {
+                return;
+            }
+
+            if (!_started)
+            {
+                return;
+            }
+
+            if (Instance != this)
+            {
+                return;
+            }
+
+            _serializedObject.Update();
+            if (CheckForRefresh(_staticStateProperties))
+            {
+                RefreshStaticState(force: false);
+            }
+
+            if (CheckForRefresh(_windowProperties))
+            {
+                SetupWindow();
+            }
+
+            if (CheckForRefresh(_windowStyleProperties))
+            {
+                SetupWindowStyle();
+            }
+
+            if (CheckForRefresh(_inputProperties))
+            {
+                SetupInput();
+            }
+
+            if (CheckForRefresh(_labelProperties))
+            {
+                SetupLabels();
+            }
+
+            if (CheckForRefresh(_logUnityMessageProperties))
+            {
+                if (_logUnityMessages && !_unityLogAttached)
+                {
+                    _unityLogAttached = true;
+                    Application.logMessageReceivedThreaded += HandleUnityLog;
+                }
+                else if (!_logUnityMessages && _unityLogAttached)
+                {
+                    Application.logMessageReceivedThreaded -= HandleUnityLog;
+                    _unityLogAttached = false;
+                }
+            }
+
+            if (CheckForRefresh(_autoCompleteProperties))
+            {
+                ResetAutoComplete();
+            }
+
+            return;
+
+            bool CheckForRefresh(List<SerializedProperty> properties)
+            {
+                bool needRefresh = false;
+                foreach (SerializedProperty property in properties)
+                {
+                    object propertyValue = property.GetValue();
+                    object previousValue = _propertyValues[property.name];
+                    if (
+                        propertyValue is List<string> currentStringList
+                        && previousValue is List<string> previousStringList
+                    )
+                    {
+                        if (!currentStringList.SequenceEqual(previousStringList))
+                        {
+                            needRefresh = true;
+                            _propertyValues[property.name] = currentStringList.ToList();
+                        }
+
+                        continue;
+                    }
+                    if (
+                        propertyValue is List<TerminalLogType> currentLogTypeList
+                        && previousValue is List<TerminalLogType> previousLogTypeList
+                    )
+                    {
+                        if (!currentLogTypeList.SequenceEqual(previousLogTypeList))
+                        {
+                            needRefresh = true;
+                            _propertyValues[property.name] = currentLogTypeList.ToList();
+                        }
+
+                        continue;
+                    }
+
+                    if (Equals(propertyValue, previousValue))
+                    {
+                        continue;
+                    }
+
+                    needRefresh = true;
+                    _propertyValues[property.name] = propertyValue;
+                }
+
+                return needRefresh;
+            }
+        }
+#endif
+
+        // ReSharper disable once MemberCanBePrivate.Global
+        public void ToggleState(TerminalState newState)
+        {
+            SetState(_state == newState ? TerminalState.Closed : newState);
+        }
+
+        // ReSharper disable once MemberCanBePrivate.Global
+        public void SetState(TerminalState newState)
+        {
+            _inputFix = true;
+            try
+            {
+                switch (newState)
+                {
+                    case TerminalState.Closed:
+                    {
+                        _openTarget = 0;
+                        break;
+                    }
+                    case TerminalState.OpenSmall:
+                    {
+                        _openTarget = Screen.height * _maxHeight * _smallTerminalRatio;
+                        _realWindowSize = Mathf.Max(_realWindowSize, _openTarget);
+                        _scrollPosition.y = int.MaxValue;
+                        break;
+                    }
+                    case TerminalState.OpenFull:
+                    {
+                        _realWindowSize = Screen.height * _maxHeight;
+                        _openTarget = _realWindowSize;
+                        break;
+                    }
+                    default:
+                    {
+                        throw new InvalidEnumArgumentException(
+                            nameof(newState),
+                            (int)newState,
+                            typeof(TerminalState)
+                        );
+                    }
+                }
+
+                _state = newState;
+            }
+            finally
+            {
+                if (_state != TerminalState.Closed)
+                {
+                    _needsFocus = true;
+                }
+                else
+                {
+                    _commandText = string.Empty;
+                    ResetAutoComplete();
+                }
+            }
+        }
+
+        private static void ConsumeAndLogErrors()
+        {
+            while (Shell?.TryConsumeErrorMessage(out string error) == true)
+            {
+                Log(TerminalLogType.Error, $"Error: {error}");
+            }
         }
 
         private void ResetAutoComplete()
         {
-            _lastKnownCommandText = _commandText;
+            _lastKnownCommandText = _commandText ?? string.Empty;
             _lastCompletionIndex = null;
             _currentHintStartIndex = 0;
             if (_displayHints)
@@ -638,16 +959,14 @@ namespace CommandTerminal
             int height = Screen.height;
             int width = Screen.width;
 
-            _realWindowSize = height * _maxHeight * _smallTerminalRatio;
-
             try
             {
                 switch (_state)
                 {
                     case TerminalState.OpenSmall:
                     {
-                        _openTarget = height * _maxHeight * _smallTerminalRatio;
-                        _realWindowSize = _openTarget;
+                        _realWindowSize = height * _maxHeight * _smallTerminalRatio;
+                        _openTarget = _realWindowSize;
                         _scrollPosition.y = int.MaxValue;
                         break;
                     }
@@ -655,6 +974,12 @@ namespace CommandTerminal
                     {
                         _realWindowSize = height * _maxHeight;
                         _openTarget = _realWindowSize;
+                        break;
+                    }
+                    default:
+                    {
+                        _realWindowSize = height * _maxHeight * _smallTerminalRatio;
+                        _openTarget = 0;
                         break;
                     }
                 }
@@ -667,7 +992,7 @@ namespace CommandTerminal
             }
 
             _runButtonOptions = _showGUIButtons
-                ? new[] { GUILayout.Width(Screen.width / 10f) }
+                ? new[] { GUILayout.Width(width / 10f) }
                 : Array.Empty<GUILayoutOption>();
         }
 
@@ -677,22 +1002,39 @@ namespace CommandTerminal
             backgroundTexture.SetPixel(0, 0, _backgroundColor);
             backgroundTexture.Apply();
 
-            _windowStyle = new GUIStyle
+            if (_windowStyle == null)
             {
-                normal = { background = backgroundTexture, textColor = _foregroundColor },
-                padding = new RectOffset(4, 4, 4, 4),
-                font = _consoleFont,
-            };
+                _windowStyle = new GUIStyle
+                {
+                    normal = { background = backgroundTexture, textColor = _foregroundColor },
+                    padding = new RectOffset(4, 4, 4, 4),
+                    font = _consoleFont,
+                };
+            }
+            else
+            {
+                _windowStyle.normal.background = backgroundTexture;
+                _windowStyle.normal.textColor = _foregroundColor;
+                _windowStyle.font = _consoleFont;
+            }
         }
 
         private void SetupLabels()
         {
-            _labelStyle = new GUIStyle
+            if (_labelStyle == null)
             {
-                font = _consoleFont,
-                normal = { textColor = _foregroundColor },
-                wordWrap = true,
-            };
+                _labelStyle = new GUIStyle
+                {
+                    font = _consoleFont,
+                    normal = { textColor = _foregroundColor },
+                    wordWrap = true,
+                };
+            }
+            else
+            {
+                _labelStyle.font = _consoleFont;
+                _labelStyle.normal.textColor = _foregroundColor;
+            }
         }
 
         private void SetupInput()
@@ -803,6 +1145,11 @@ namespace CommandTerminal
 
         private void DrawConsole(int window2D)
         {
+            if (Event.current.type == EventType.Layout)
+            {
+                _focusedControl = GUI.GetNameOfFocusedControl();
+            }
+
             GUILayout.BeginVertical();
             try
             {
@@ -857,6 +1204,12 @@ namespace CommandTerminal
                     CompleteCommand();
                 }
 #endif
+                string focusedControl = string.Empty;
+                if (Event.current.type == EventType.Repaint)
+                {
+                    focusedControl = GUI.GetNameOfFocusedControl();
+                }
+
                 if (_lastCompletionBuffer is { Length: > 0 })
                 {
                     RenderCompletionHints();
@@ -869,49 +1222,68 @@ namespace CommandTerminal
                     {
                         GUILayout.Label(_inputCaret, _inputCaretStyle, _inputCaretOptions);
                     }
-
                     GUI.SetNextControlName(CommandControlName);
                     string newCommandText = GUILayout.TextField(_commandText, _inputStyle);
-                    if (!string.Equals(newCommandText, _commandText))
+                    if (!_handledInputThisFrame && !string.Equals(newCommandText, _commandText))
                     {
                         _commandText = newCommandText;
-                        ResetAutoComplete();
+                        _needsAutoCompleteReset = true;
                     }
 
-                    if (
-                        _moveCursor
-                        && Event.current.type == EventType.Repaint
-                        && string.Equals(GUI.GetNameOfFocusedControl(), CommandControlName)
-                    )
+                    if (_inputFix && _commandText.Length > 0)
                     {
+                        _commandText = _commandText[..^1];
+                        _needsAutoCompleteReset = true;
+                        _inputFix = false;
+                    }
+
+                    /*
+                        Something is FUCKED here, I can't figure it out. When we have "Make Hints Clickable" on,
+                        back-spacing from an auto-completed word highlights the word for a few frames. I think this is
+                        an IMGUI bug where the TextEditor state / control focus is lost, I've verified through some
+                        debug logs where I track cursor / selection indexes. They get arbitrarily reset to 0.
+                        I thought it was due to focusing the control too much, but that doesn't appear to be the case,
+                        again, verified through debug logs. Anyways, oh well, maybe I'll fix it later.
+                     */
+                    if (Event.current.type == EventType.Repaint)
+                    {
+                        bool isFocused = string.Equals(focusedControl, CommandControlName);
+                        if (_needsAutoCompleteReset)
+                        {
+                            ResetAutoComplete();
+                            _needsAutoCompleteReset = false;
+                        }
+
+                        _needsFocus |=
+                            string.IsNullOrEmpty(_focusedControl)
+                            && string.IsNullOrEmpty(focusedControl)
+                            && (
+                                string.IsNullOrEmpty(_commandText)
+                                || _lastCompletionBuffer.Length == 0
+                            );
+
+                        if (_needsFocus)
+                        {
+                            GUI.FocusControl(CommandControlName);
+                            _moveCursor = true;
+                            _needsFocus = false;
+                        }
+
                         if (
-                            GUIUtility.GetStateObject(
+                            _moveCursor
+                            && isFocused
+                            && GUIUtility.GetStateObject(
                                 typeof(TextEditor),
                                 GUIUtility.keyboardControl
                             )
-                            is TextEditor textEditor
+                                is TextEditor textEditor
                         )
                         {
-                            int textLength = _commandText.Length;
+                            int textLength = textEditor.text.Length;
                             textEditor.cursorIndex = textLength;
                             textEditor.selectIndex = textLength;
+                            _moveCursor = false;
                         }
-
-                        _moveCursor = false;
-                    }
-
-#if !ENABLE_INPUT_SYSTEM
-                    if (_inputFix && _commandText.Length > 0)
-                    {
-                        _commandText = _cachedCommandText; // Otherwise the TextField picks up the ToggleHotkey character event
-                        ResetAutoComplete();
-                        _inputFix = false; // Prevents checking string Length every draw call
-                    }
-#endif
-                    if (_needsFocus && Event.current.type == EventType.Repaint)
-                    {
-                        GUI.FocusControl(CommandControlName);
-                        _needsFocus = false;
                     }
 
                     if (
@@ -950,8 +1322,8 @@ namespace CommandTerminal
                     bool forward = true;
                     if (_previousLastCompletionIndex != null)
                     {
-                        int prev = _previousLastCompletionIndex.Value;
-                        forward = (selected == (prev + 1) % length);
+                        int previous = _previousLastCompletionIndex.Value;
+                        forward = (selected == (previous + 1) % length);
                     }
 
                     float accumulation = 0f;
@@ -1022,22 +1394,47 @@ namespace CommandTerminal
                     }
                 }
 
-                for (int i = _currentHintStartIndex; i < _lastCompletionBuffer.Length; ++i)
+                for (
+                    int i = _currentHintStartIndex;
+                    i < _lastCompletionBuffer.Length + _currentHintStartIndex;
+                    ++i
+                )
                 {
-                    GUILayout.Label(
-                        _lastCompletionBuffer[i],
-                        _lastCompletionIndex == i ? _selectedHintStyle : _unselectedHintStyle,
-                        _completionElementStyles[i]
-                    );
+                    DrawHint(i % _lastCompletionBuffer.Length);
                 }
 
-                for (int i = 0; i < _currentHintStartIndex && i < _lastCompletionBuffer.Length; ++i)
+                return;
+
+                void DrawHint(int index)
                 {
-                    GUILayout.Label(
-                        _lastCompletionBuffer[i],
-                        _lastCompletionIndex == i ? _selectedHintStyle : _unselectedHintStyle,
-                        _completionElementStyles[i]
-                    );
+                    if (_makeHintsClickable)
+                    {
+                        string command = _lastCompletionBuffer[index];
+                        bool clicked = GUILayout.Button(
+                            command,
+                            _lastCompletionIndex == index
+                                ? _selectedHintStyle
+                                : _unselectedHintStyle,
+                            _completionElementStyles[index]
+                        );
+
+                        if (clicked)
+                        {
+                            _commandText = command;
+                            _lastCompletionIndex = index;
+                            _moveCursor = true;
+                        }
+                    }
+                    else
+                    {
+                        GUILayout.Label(
+                            _lastCompletionBuffer[index],
+                            _lastCompletionIndex == index
+                                ? _selectedHintStyle
+                                : _unselectedHintStyle,
+                            _completionElementStyles[index]
+                        );
+                    }
                 }
             }
             finally
@@ -1052,38 +1449,69 @@ namespace CommandTerminal
         {
             if (1 < key.Length && key.StartsWith("#", StringComparison.OrdinalIgnoreCase))
             {
-                string expected = key.Substring(1);
-                if (expected.Length == 1)
+                if (!CachedSubstrings.TryGetValue(key, out string expected))
+                {
+                    expected = key.Substring(1);
+                    CachedSubstrings[key] = expected;
+                }
+
+                if (expected.Length == 1 && expected.NeedsLowerInvariantConversion())
                 {
                     expected = expected.ToLowerInvariant();
                 }
 
                 return Keyboard.current.shiftKey.isPressed
-                    && Keyboard.current.TryGetChildControl<KeyControl>(
-                        SpecialKeyCodeMap.GetValueOrDefault(expected, expected)
-                    )
-                        is { wasPressedThisFrame: true };
+                    && (
+                        Keyboard.current.TryGetChildControl<KeyControl>(
+                            SpecialKeyCodeMap.GetValueOrDefault(expected, expected)
+                        )
+                            is { wasPressedThisFrame: true }
+                        || Keyboard.current.TryGetChildControl<KeyControl>(expected)
+                            is { wasPressedThisFrame: true }
+                    );
             }
             if (key.StartsWith("shift+", StringComparison.OrdinalIgnoreCase))
             {
-                string expected = key.Substring("shift+".Length);
-                if (expected.Length == 1)
+                if (!CachedSubstrings.TryGetValue(key, out string expected))
+                {
+                    expected = key.Substring("shift+".Length);
+                    CachedSubstrings[key] = expected;
+                }
+
+                if (expected.Length == 1 && expected.NeedsLowerInvariantConversion())
                 {
                     expected = expected.ToLowerInvariant();
                 }
+
                 return Keyboard.current.shiftKey.isPressed
-                    && Keyboard.current.TryGetChildControl<KeyControl>(
-                        SpecialKeyCodeMap.GetValueOrDefault(expected, expected)
-                    )
-                        is { wasPressedThisFrame: true };
+                    && (
+                        Keyboard.current.TryGetChildControl<KeyControl>(
+                            SpecialKeyCodeMap.GetValueOrDefault(expected, expected)
+                        )
+                            is { wasPressedThisFrame: true }
+                        || Keyboard.current.TryGetChildControl<KeyControl>(expected)
+                            is { wasPressedThisFrame: true }
+                    );
             }
-            else if (SpecialShiftedKeyCodeMap.TryGetValue(key, out string expected))
+            else if (
+                SpecialShiftedKeyCodeMap.TryGetValue(key, out string expected)
+                && Keyboard.current.shiftKey.isPressed
+                && Keyboard.current.TryGetChildControl<KeyControl>(expected)
+                    is { wasPressedThisFrame: true }
+            )
             {
-                return Keyboard.current.shiftKey.isPressed
-                    && Keyboard.current.TryGetChildControl<KeyControl>(expected)
-                        is { wasPressedThisFrame: true };
+                return true;
             }
-            else if (key.Length == 1 && key.ToLowerInvariant() != key)
+            else if (
+                AlternativeSpecialShiftedKeyCodeMap.TryGetValue(key, out expected)
+                && Keyboard.current.shiftKey.isPressed
+                && Keyboard.current.TryGetChildControl<KeyControl>(expected)
+                    is { wasPressedThisFrame: true }
+            )
+            {
+                return true;
+            }
+            else if (key.Length == 1 && key.NeedsLowerInvariantConversion())
             {
                 key = key.ToLowerInvariant();
                 return Keyboard.current.shiftKey.isPressed
@@ -1093,9 +1521,11 @@ namespace CommandTerminal
             else
             {
                 return Keyboard.current.TryGetChildControl<KeyControl>(
-                    SpecialKeyCodeMap.GetValueOrDefault(key, key)
-                )
-                    is { wasPressedThisFrame: true };
+                        SpecialKeyCodeMap.GetValueOrDefault(key, key)
+                    )
+                        is { wasPressedThisFrame: true }
+                    || Keyboard.current.TryGetChildControl<KeyControl>(key)
+                        is { wasPressedThisFrame: true };
             }
         }
 
@@ -1142,31 +1572,31 @@ namespace CommandTerminal
 
         public void HandlePrevious()
         {
-            if (_state == TerminalState.Close)
+            if (_state == TerminalState.Closed)
             {
                 return;
             }
             _commandText = History?.Previous() ?? string.Empty;
             ResetAutoComplete();
             _moveCursor = true;
-            GUI.FocusControl(CommandControlName);
+            _needsFocus = true;
         }
 
         public void HandleNext()
         {
-            if (_state == TerminalState.Close)
+            if (_state == TerminalState.Closed)
             {
                 return;
             }
             _commandText = History?.Next() ?? string.Empty;
             ResetAutoComplete();
             _moveCursor = true;
-            GUI.FocusControl(CommandControlName);
+            _needsFocus = true;
         }
 
         public void Close()
         {
-            SetState(TerminalState.Close);
+            SetState(TerminalState.Closed);
         }
 
         public void ToggleSmall()
@@ -1181,7 +1611,7 @@ namespace CommandTerminal
 
         public void EnterCommand()
         {
-            if (_state == TerminalState.Close)
+            if (_state == TerminalState.Closed)
             {
                 return;
             }
@@ -1212,7 +1642,7 @@ namespace CommandTerminal
 
         public void CompleteCommand(bool searchForward = true)
         {
-            if (_state == TerminalState.Close)
+            if (_state == TerminalState.Closed)
             {
                 return;
             }
@@ -1226,8 +1656,7 @@ namespace CommandTerminal
                 {
                     int completionLength = completionBuffer.Length;
                     if (
-                        _lastCompletionBuffer == null
-                        || _lastCompletionBuffer.SequenceEqual(
+                        _lastCompletionBuffer.SequenceEqual(
                             completionBuffer,
                             StringComparer.OrdinalIgnoreCase
                         )
@@ -1280,7 +1709,7 @@ namespace CommandTerminal
             finally
             {
                 _moveCursor = true;
-                GUI.FocusControl(CommandControlName);
+                _needsFocus = true;
             }
         }
 
@@ -1340,29 +1769,23 @@ namespace CommandTerminal
 
             if (_currentOpenT < _openTarget)
             {
-                _currentOpenT += dt;
-                if (_currentOpenT > _openTarget)
-                {
-                    _currentOpenT = _openTarget;
-                }
+                _currentOpenT = Mathf.Min(_currentOpenT + dt, _openTarget);
             }
-            else if (_currentOpenT > _openTarget)
+            else if (_openTarget < _currentOpenT)
             {
-                _currentOpenT -= dt;
-                if (_currentOpenT < _openTarget)
-                {
-                    _currentOpenT = _openTarget;
-                }
+                _currentOpenT = Mathf.Max(_currentOpenT - dt, _openTarget);
             }
             else
             {
-#if !ENABLE_INPUT_SYSTEM
                 _inputFix = false;
-#endif
-                return; // Already at target
+                return;
             }
 
-            _window = new Rect(0, _currentOpenT - _realWindowSize, Screen.width, _realWindowSize);
+            float realWindowSize =
+                _state == TerminalState.OpenSmall
+                    ? Mathf.Max(_currentOpenT, _realWindowSize)
+                    : _realWindowSize;
+            _window = new Rect(0, _currentOpenT - realWindowSize, Screen.width, realWindowSize);
         }
 
         private void HandleUnityLog(string message, string stackTrace, LogType type)

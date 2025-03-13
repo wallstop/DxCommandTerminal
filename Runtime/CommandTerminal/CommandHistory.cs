@@ -2,11 +2,20 @@ namespace CommandTerminal
 {
     using System.Collections.Generic;
     using System.Linq;
+    using DataStructures;
 
     public sealed class CommandHistory
     {
-        private readonly List<(string text, bool? success, bool? errorFree)> _history = new();
+        public int Capacity => _history.Capacity;
+
+        private readonly CyclicBuffer<(string text, bool? success, bool? errorFree)> _history;
+
         private int _position;
+
+        public CommandHistory(int capacity)
+        {
+            _history = new CyclicBuffer<(string text, bool? success, bool? errorFree)>(capacity);
+        }
 
         public IEnumerable<string> GetHistory(bool onlySuccess, bool onlyErrorFree)
         {
@@ -16,15 +25,21 @@ namespace CommandTerminal
                 .Select(value => value.text);
         }
 
-        public void Push(string commandString, bool? success, bool? errorFree)
+        public void Resize(int newCapacity)
+        {
+            _history.Resize(newCapacity);
+        }
+
+        public bool Push(string commandString, bool? success, bool? errorFree)
         {
             if (string.IsNullOrWhiteSpace(commandString))
             {
-                return;
+                return false;
             }
 
             _history.Add((commandString, success, errorFree));
             _position = _history.Count;
+            return true;
         }
 
         public string Next()
@@ -52,10 +67,12 @@ namespace CommandTerminal
             return string.Empty;
         }
 
-        public void Clear()
+        public int Clear()
         {
+            int count = _history.Count;
             _history.Clear();
             _position = 0;
+            return count;
         }
     }
 }

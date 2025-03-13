@@ -34,14 +34,16 @@ namespace CommandTerminal
     public sealed class CommandLog
     {
         public IReadOnlyList<LogItem> Logs => _logs;
+        public int Capacity => _logs.Capacity;
+
+        public readonly HashSet<TerminalLogType> ignoredLogTypes;
 
         private readonly CyclicBuffer<LogItem> _logs;
-        private readonly HashSet<TerminalLogType> _ignoredLogTypes;
 
         public CommandLog(int maxItems, IEnumerable<TerminalLogType> ignoredLogTypes = null)
         {
             _logs = new CyclicBuffer<LogItem>(maxItems);
-            _ignoredLogTypes = new HashSet<TerminalLogType>(
+            this.ignoredLogTypes = new HashSet<TerminalLogType>(
                 ignoredLogTypes ?? Enumerable.Empty<TerminalLogType>()
             );
         }
@@ -63,7 +65,7 @@ namespace CommandTerminal
 
         public bool HandleLog(string message, string stackTrace, TerminalLogType type)
         {
-            if (_ignoredLogTypes.Contains(type))
+            if (ignoredLogTypes.Contains(type))
             {
                 return false;
             }
@@ -78,6 +80,11 @@ namespace CommandTerminal
             int logCount = _logs.Count;
             _logs.Clear();
             return logCount;
+        }
+
+        public void Resize(int newCapacity)
+        {
+            _logs.Resize(newCapacity);
         }
     }
 }
