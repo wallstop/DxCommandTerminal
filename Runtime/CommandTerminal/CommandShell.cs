@@ -21,7 +21,7 @@ namespace CommandTerminal
             const BindingFlags methodFlags =
                 BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
 
-            Assembly[] ourAssembly = { typeof(CommandShell).Assembly };
+            Assembly[] ourAssembly = { typeof(BuiltInCommands).Assembly };
             foreach (
                 Type type in AppDomain
                     .CurrentDomain.GetAssemblies()
@@ -278,17 +278,20 @@ namespace CommandTerminal
 
             string line = _commandBuilder.ToString();
 
-            commandName = commandName?.Replace(
-                " ",
-                string.Empty,
-                StringComparison.OrdinalIgnoreCase
-            );
-
             if (string.IsNullOrWhiteSpace(commandName))
             {
                 IssueErrorMessage($"Invalid command name '{commandName}'");
                 // Don't log empty commands
                 return false;
+            }
+
+            if (commandName.Contains(' '))
+            {
+                commandName = commandName.Replace(
+                    " ",
+                    string.Empty,
+                    StringComparison.OrdinalIgnoreCase
+                );
             }
 
             if (!_commands.TryGetValue(commandName, out CommandInfo command))
@@ -344,7 +347,11 @@ namespace CommandTerminal
                 return false;
             }
 
-            name = name.Replace(" ", string.Empty, StringComparison.OrdinalIgnoreCase);
+            if (name.Contains(' '))
+            {
+                name = name.Replace(" ", string.Empty, StringComparison.OrdinalIgnoreCase);
+            }
+
             if (!_commands.TryAdd(name, info))
             {
                 IssueErrorMessage($"Command {name} is already defined.");
@@ -383,7 +390,11 @@ namespace CommandTerminal
                 return false;
             }
 
-            name = name.Replace(" ", string.Empty, StringComparison.OrdinalIgnoreCase);
+            if (name.Contains(' '))
+            {
+                name = name.Replace(" ", string.Empty, StringComparison.OrdinalIgnoreCase);
+            }
+
             _variables[name] = value;
             return true;
         }
@@ -391,9 +402,19 @@ namespace CommandTerminal
         // ReSharper disable once UnusedMember.Global
         public bool TryGetVariable(string name, out CommandArg variable)
         {
-            name =
-                name?.Replace(" ", string.Empty, StringComparison.OrdinalIgnoreCase)
-                ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                variable = default;
+                return false;
+            }
+
+            if (name.Contains(' '))
+            {
+                name =
+                    name.Replace(" ", string.Empty, StringComparison.OrdinalIgnoreCase)
+                    ?? string.Empty;
+            }
+
             return _variables.TryGetValue(name, out variable);
         }
 

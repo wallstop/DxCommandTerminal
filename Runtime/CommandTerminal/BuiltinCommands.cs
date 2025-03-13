@@ -8,7 +8,12 @@ namespace CommandTerminal
     // ReSharper disable once UnusedType.Global
     public static class BuiltInCommands
     {
-        [RegisterCommand(Help = "Clear the command console", MaxArgCount = 0, Default = true)]
+        [RegisterCommand(
+            Name = "clear",
+            Help = "Clear the command console",
+            MaxArgCount = 0,
+            Default = true
+        )]
         // ReSharper disable once UnusedMember.Local
         // ReSharper disable once UnusedParameter.Local
         public static void CommandClear(CommandArg[] args)
@@ -17,8 +22,8 @@ namespace CommandTerminal
         }
 
         [RegisterCommand(
-            Help = "Clear the command console's history",
             Name = "clear-history",
+            Help = "Clear the command console's history",
             MaxArgCount = 0,
             Default = true
         )]
@@ -30,6 +35,7 @@ namespace CommandTerminal
         }
 
         [RegisterCommand(
+            Name = "help",
             Help = "Display help information about a command",
             MaxArgCount = 1,
             Default = true
@@ -74,7 +80,12 @@ namespace CommandTerminal
             }
         }
 
-        [RegisterCommand(Help = "Time the execution of a command", MinArgCount = 1, Default = true)]
+        [RegisterCommand(
+            Name = "time",
+            Help = "Time the execution of a command",
+            MinArgCount = 1,
+            Default = true
+        )]
         // ReSharper disable once UnusedMember.Local
         public static void CommandTime(CommandArg[] args)
         {
@@ -90,14 +101,18 @@ namespace CommandTerminal
             Terminal.Log($"Time: {sw.ElapsedMilliseconds}ms");
         }
 
-        [RegisterCommand(Help = "Output message via Terminal.Log", Default = true)]
+        [RegisterCommand(
+            Name = "terminal-log",
+            Help = "Output message via Terminal.Log",
+            Default = true
+        )]
         // ReSharper disable once UnusedMember.Local
         public static void CommandPrint(CommandArg[] args)
         {
             Terminal.Log(JoinArguments(args));
         }
 
-        [RegisterCommand(Help = "Output message via Debug.Log", Default = true)]
+        [RegisterCommand(Name = "log", Help = "Output message via Debug.Log", Default = true)]
         // ReSharper disable once UnusedMember.Local
         public static void CommandLog(CommandArg[] args)
         {
@@ -105,6 +120,7 @@ namespace CommandTerminal
         }
 
         [RegisterCommand(
+            Name = "trace",
             Help = "Output the stack trace of the previous message",
             MaxArgCount = 0,
             Default = true
@@ -136,7 +152,11 @@ namespace CommandTerminal
             );
         }
 
-        [RegisterCommand(Help = "List all variables or set a variable value", Default = true)]
+        [RegisterCommand(
+            Name = "set",
+            Help = "List all variables or set a variable value",
+            Default = true
+        )]
         // ReSharper disable once UnusedMember.Global
         // ReSharper disable once UnusedMember.Local
         public static void CommandSet(CommandArg[] args)
@@ -169,15 +189,20 @@ namespace CommandTerminal
             shell.SetVariable(variableName, JoinArguments(args, 1));
         }
 
-        [RegisterCommand(Help = "No operation", Default = true)]
+        [RegisterCommand(Name = "no-op", Help = "No operation", Default = true)]
         // ReSharper disable once UnusedParameter.Local
         // ReSharper disable once UnusedMember.Local
-        public static void CommandNoop(CommandArg[] args)
+        public static void CommandNoOperation(CommandArg[] args)
         {
             // No-op
         }
 
-        [RegisterCommand(Help = "Quit running application", MaxArgCount = 0, Default = true)]
+        [RegisterCommand(
+            Name = "quit",
+            Help = "Quit running application",
+            MaxArgCount = 0,
+            Default = true
+        )]
         // ReSharper disable once UnusedMember.Local
         // ReSharper disable once UnusedParameter.Local
         public static void CommandQuit(CommandArg[] args)

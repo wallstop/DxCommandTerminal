@@ -1,9 +1,10 @@
-﻿namespace DataStructures
+﻿namespace CommandTerminal.DataStructures
 {
     using System;
     using System.Collections;
     using System.Collections.Generic;
     using System.Linq;
+    using Extensions;
 
     [Serializable]
     public sealed class CyclicBuffer<T> : IReadOnlyList<T>
@@ -97,10 +98,13 @@
             {
                 throw new ArgumentException(nameof(newCapacity));
             }
+
             Capacity = newCapacity;
+            _buffer.Shift(-_position);
             if (newCapacity < _buffer.Count)
             {
                 _buffer.RemoveRange(newCapacity, _buffer.Count - newCapacity);
+                _position = 0;
             }
 
             Count = Math.Min(newCapacity, Count);

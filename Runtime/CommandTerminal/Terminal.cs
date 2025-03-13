@@ -9,6 +9,7 @@ namespace CommandTerminal
     using JetBrains.Annotations;
     using UnityEditor;
     using UnityEngine;
+    using UnityEngine.Serialization;
     using Utils;
 #if ENABLE_INPUT_SYSTEM
     using UnityEngine.InputSystem;
@@ -124,7 +125,10 @@ namespace CommandTerminal
         private float _toggleSpeed = 360;
 
         [SerializeField]
-        private int _bufferSize = 512;
+        private int _logBufferSize = 256;
+
+        [SerializeField]
+        private int _historyBufferSize = 512;
 
         [Header("Hotkeys")]
 #if ENABLE_INPUT_SYSTEM
@@ -330,17 +334,33 @@ namespace CommandTerminal
 
         private void Awake()
         {
-            switch (_bufferSize)
+            switch (_logBufferSize)
             {
                 case <= 0:
                     Debug.LogError(
-                        $"Invalid buffer size '{_bufferSize}', must be greater than zero. Defaulting to 0 (empty buffer).",
+                        $"Invalid buffer size '{_logBufferSize}', must be greater than zero. Defaulting to 0 (empty buffer).",
                         this
                     );
                     break;
                 case < 10:
                     Debug.LogWarning(
-                        $"Unsupported buffer size '{_bufferSize}', recommended size is > 10.",
+                        $"Unsupported buffer size '{_logBufferSize}', recommended size is > 10.",
+                        this
+                    );
+                    break;
+            }
+
+            switch (_historyBufferSize)
+            {
+                case <= 0:
+                    Debug.LogError(
+                        $"Invalid buffer size '{_historyBufferSize}', must be greater than zero. Defaulting to 0 (empty buffer).",
+                        this
+                    );
+                    break;
+                case < 10:
+                    Debug.LogWarning(
+                        $"Unsupported buffer size '{_historyBufferSize}', recommended size is > 10.",
                         this
                     );
                     break;
@@ -353,7 +373,8 @@ namespace CommandTerminal
 
             string[] staticStaticPropertiesTracked =
             {
-                nameof(_bufferSize),
+                nameof(_logBufferSize),
+                nameof(_historyBufferSize),
                 nameof(_ignoredLogTypes),
                 nameof(disabledCommands),
                 nameof(ignoreDefaultCommands),
@@ -652,16 +673,16 @@ namespace CommandTerminal
 
         private void RefreshStaticState(bool force)
         {
-            int bufferSize = Math.Max(0, _bufferSize);
+            int logBufferSize = Math.Max(0, _logBufferSize);
             if (force || Buffer == null)
             {
-                Buffer = new CommandLog(bufferSize, _ignoredLogTypes);
+                Buffer = new CommandLog(logBufferSize, _ignoredLogTypes);
             }
             else
             {
-                if (Buffer.Capacity != bufferSize)
+                if (Buffer.Capacity != logBufferSize)
                 {
-                    Buffer.Resize(bufferSize);
+                    Buffer.Resize(logBufferSize);
                 }
                 if (
                     !Buffer.ignoredLogTypes.SetEquals(
@@ -676,9 +697,14 @@ namespace CommandTerminal
                 }
             }
 
+            int historyBufferSize = Math.Max(0, _historyBufferSize);
             if (force || History == null)
             {
-                History = new CommandHistory();
+                History = new CommandHistory(historyBufferSize);
+            }
+            else if (History.Capacity != historyBufferSize)
+            {
+                History.Resize(historyBufferSize);
             }
 
             if (force || Shell == null)
@@ -933,16 +959,14 @@ namespace CommandTerminal
             int height = Screen.height;
             int width = Screen.width;
 
-            _realWindowSize = height * _maxHeight * _smallTerminalRatio;
-
             try
             {
                 switch (_state)
                 {
                     case TerminalState.OpenSmall:
                     {
-                        _openTarget = height * _maxHeight * _smallTerminalRatio;
-                        _realWindowSize = _openTarget;
+                        _realWindowSize = height * _maxHeight * _smallTerminalRatio;
+                        _openTarget = _realWindowSize;
                         _scrollPosition.y = int.MaxValue;
                         break;
                     }
@@ -950,6 +974,12 @@ namespace CommandTerminal
                     {
                         _realWindowSize = height * _maxHeight;
                         _openTarget = _realWindowSize;
+                        break;
+                    }
+                    default:
+                    {
+                        _realWindowSize = height * _maxHeight * _smallTerminalRatio;
+                        _openTarget = 0;
                         break;
                     }
                 }
@@ -962,7 +992,7 @@ namespace CommandTerminal
             }
 
             _runButtonOptions = _showGUIButtons
-                ? new[] { GUILayout.Width(Screen.width / 10f) }
+                ? new[] { GUILayout.Width(width / 10f) }
                 : Array.Empty<GUILayoutOption>();
         }
 

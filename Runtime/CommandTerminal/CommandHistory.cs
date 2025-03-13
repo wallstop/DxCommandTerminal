@@ -1,13 +1,21 @@
 namespace CommandTerminal
 {
-    using System;
     using System.Collections.Generic;
     using System.Linq;
+    using DataStructures;
 
     public sealed class CommandHistory
     {
-        private readonly List<(string text, bool? success, bool? errorFree)> _history = new();
+        public int Capacity => _history.Capacity;
+
+        private readonly CyclicBuffer<(string text, bool? success, bool? errorFree)> _history;
+
         private int _position;
+
+        public CommandHistory(int capacity)
+        {
+            _history = new CyclicBuffer<(string text, bool? success, bool? errorFree)>(capacity);
+        }
 
         public IEnumerable<string> GetHistory(bool onlySuccess, bool onlyErrorFree)
         {
@@ -15,6 +23,11 @@ namespace CommandTerminal
                 .Where(value => !onlySuccess || value.success == true)
                 .Where(value => !onlyErrorFree || value.errorFree == true)
                 .Select(value => value.text);
+        }
+
+        public void Resize(int newCapacity)
+        {
+            _history.Resize(newCapacity);
         }
 
         public bool Push(string commandString, bool? success, bool? errorFree)
@@ -52,16 +65,6 @@ namespace CommandTerminal
 
             _position = -1;
             return string.Empty;
-        }
-
-        public int Remove(Predicate<(string text, bool? success, bool? errorFree)> acceptance)
-        {
-            if (acceptance == null)
-            {
-                throw new ArgumentNullException(nameof(acceptance));
-            }
-
-            return _history.RemoveAll(acceptance);
         }
 
         public int Clear()
