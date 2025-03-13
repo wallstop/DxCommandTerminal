@@ -5,7 +5,6 @@
     using System.Linq;
     using System.Text;
     using CommandTerminal;
-    using Components;
     using NUnit.Framework;
     using UnityEngine;
     using UnityEngine.TestTools;
@@ -25,9 +24,10 @@
         [UnityTest]
         public IEnumerator UnescapedQuotes()
         {
-            yield return SpawnTerminal();
+            yield return TerminalTests.SpawnTerminal(resetStateOnInit: true);
 
             int logCount = 0;
+            Exception exception = null;
             Action<string> assertion = null;
 
             Application.logMessageReceived += HandleMessageReceived;
@@ -40,8 +40,10 @@
 
                 int expectedLogCount = 0;
                 assertion = message => Assert.AreEqual(string.Empty, message);
-                shell.RunCommand("log '             ");
+                string command = "log '             ";
+                shell.RunCommand(command);
                 Assert.AreEqual(++expectedLogCount, logCount);
+                Assert.IsNull(exception, $"Error running {command}: {exception}");
                 string[] logs = history.GetHistory(true, true).ToArray();
                 Assert.AreEqual(
                     expectedLogCount,
@@ -54,9 +56,11 @@
                 );
 
                 string expected = "' abd      \"   ";
-                assertion = message => Assert.AreEqual(expected, message);
-                shell.RunCommand("log " + expected);
+                assertion = message => Assert.AreEqual(expected.Substring(1), message);
+                command = "log " + expected;
+                shell.RunCommand(command);
                 Assert.AreEqual(++expectedLogCount, logCount);
+                Assert.IsNull(exception, $"Error running {command}: {exception}");
                 logs = history.GetHistory(true, true).ToArray();
                 Assert.AreEqual(
                     expectedLogCount,
@@ -64,7 +68,7 @@
                     $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}"
                 );
                 Assert.IsTrue(
-                    logs.Contains("log " + expected.Substring(1)),
+                    logs.Contains("log " + expected),
                     $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}"
                 );
             }
@@ -78,16 +82,25 @@
             void HandleMessageReceived(string message, string stackTrace, LogType type)
             {
                 ++logCount;
-                assertion?.Invoke(message);
+                try
+                {
+                    assertion?.Invoke(message);
+                }
+                catch (Exception e)
+                {
+                    exception = e;
+                    throw;
+                }
             }
         }
 
         [UnityTest]
         public IEnumerator RunCommandLineNominal()
         {
-            yield return SpawnTerminal();
+            yield return TerminalTests.SpawnTerminal(resetStateOnInit: true);
 
             int logCount = 0;
+            Exception exception = null;
             Action<string> assertion = null;
 
             Application.logMessageReceived += HandleMessageReceived;
@@ -100,7 +113,9 @@
 
                 int expectedLogCount = 0;
                 assertion = message => Assert.AreEqual(string.Empty, message);
-                shell.RunCommand("log");
+                string command = "log";
+                shell.RunCommand(command);
+                Assert.IsNull(exception, $"Error running {command}: {exception}");
                 Assert.AreEqual(++expectedLogCount, logCount);
                 string[] logs = history.GetHistory(true, true).ToArray();
                 Assert.AreEqual(
@@ -114,8 +129,10 @@
                 );
 
                 assertion = message => Assert.AreEqual("test", message);
-                shell.RunCommand("log test");
+                command = "log test";
+                shell.RunCommand(command);
                 Assert.AreEqual(++expectedLogCount, logCount);
+                Assert.IsNull(exception, $"Error running {command}: {exception}");
                 logs = history.GetHistory(true, true).ToArray();
                 Assert.AreEqual(
                     expectedLogCount,
@@ -132,8 +149,10 @@
                 );
 
                 assertion = message => Assert.AreEqual("quoted argument", message);
-                shell.RunCommand("log \"quoted argument\"");
+                command = "log \"quoted argument\"";
+                shell.RunCommand(command);
                 Assert.AreEqual(++expectedLogCount, logCount);
+                Assert.IsNull(exception, $"Error running {command}: {exception}");
                 logs = history.GetHistory(true, true).ToArray();
                 Assert.AreEqual(
                     expectedLogCount,
@@ -154,8 +173,10 @@
                 );
 
                 assertion = message => Assert.AreEqual("multi argument", message);
+                command = "log multi argument";
                 shell.RunCommand("log multi argument");
                 Assert.AreEqual(++expectedLogCount, logCount);
+                Assert.IsNull(exception, $"Error running {command}: {exception}");
                 logs = history.GetHistory(true, true).ToArray();
                 Assert.AreEqual(
                     expectedLogCount,
@@ -180,8 +201,10 @@
                 );
 
                 assertion = message => Assert.AreEqual("a a a a a a aaaa aa aaa d", message);
-                shell.RunCommand("log a a a a a a aaaa aa aaa d");
+                command = "log a a a a a a aaaa aa aaa d";
+                shell.RunCommand(command);
                 Assert.AreEqual(++expectedLogCount, logCount);
+                Assert.IsNull(exception, $"Error running {command}: {exception}");
                 logs = history.GetHistory(true, true).ToArray();
                 Assert.AreEqual(
                     expectedLogCount,
@@ -222,10 +245,15 @@
                         }
 
                         expected += $" {quote}{quote} final string";
-                        assertion = message => Assert.AreEqual(expected, message);
-                        string command = "log " + expected;
+                        assertion = message =>
+                            Assert.AreEqual(
+                                expected.Replace(quote.ToString(), string.Empty),
+                                message
+                            );
+                        command = "log " + expected;
                         shell.RunCommand(command);
                         Assert.AreEqual(++expectedLogCount, logCount);
+                        Assert.IsNull(exception, $"Error running {command}: {exception}");
                         logs = history.GetHistory(true, true).ToArray();
                         Assert.AreEqual(
                             expectedLogCount,
@@ -238,10 +266,15 @@
                         );
 
                         expected = $"{quote}{quote}";
-                        assertion = message => Assert.AreEqual(expected, message);
+                        assertion = message =>
+                            Assert.AreEqual(
+                                expected.Replace(quote.ToString(), string.Empty),
+                                message
+                            );
                         command = "log " + expected;
                         shell.RunCommand(command);
                         Assert.AreEqual(++expectedLogCount, logCount);
+                        Assert.IsNull(exception, $"Error running {command}: {exception}");
                         logs = history.GetHistory(true, true).ToArray();
                         Assert.AreEqual(
                             expectedLogCount,
@@ -258,6 +291,7 @@
                         command = "log " + expected;
                         shell.RunCommand(command);
                         Assert.AreEqual(++expectedLogCount, logCount);
+                        Assert.IsNull(exception, $"Error running {command}: {exception}");
                         logs = history.GetHistory(true, true).ToArray();
                         Assert.AreEqual(
                             expectedLogCount,
@@ -302,15 +336,16 @@
             void HandleMessageReceived(string message, string stackTrace, LogType type)
             {
                 ++logCount;
-                assertion?.Invoke(message);
+                try
+                {
+                    assertion?.Invoke(message);
+                }
+                catch (Exception e)
+                {
+                    exception = e;
+                    throw;
+                }
             }
-        }
-
-        private static IEnumerator SpawnTerminal()
-        {
-            GameObject go = new("Terminal", typeof(StartTracker), typeof(Terminal));
-            StartTracker startTracker = go.GetComponent<StartTracker>();
-            yield return new WaitUntil(() => startTracker.Started);
         }
     }
 }

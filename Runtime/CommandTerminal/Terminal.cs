@@ -239,9 +239,8 @@ namespace CommandTerminal
         [SerializeField]
         private bool _trackChangesInEditor = true;
 
-        [Tooltip("Will reset static command state in `Awake()` when set to true")]
-        [SerializeField]
-        private bool _resetStateOnInit;
+        [Tooltip("Will reset static command state in OnEnable and Start when set to true")]
+        public bool resetStateOnInit;
 
         [SerializeField]
         public bool ignoreDefaultCommands;
@@ -269,18 +268,14 @@ namespace CommandTerminal
 #endif
         private TerminalState _state;
         private TextEditor _editorState;
-#if !ENABLE_INPUT_SYSTEM
         private bool _inputFix;
-#endif
         private bool _moveCursor;
         private Rect _window;
         private float _currentOpenT;
         private float _openTarget;
         private float _realWindowSize;
         private string _commandText = string.Empty;
-#if !ENABLE_INPUT_SYSTEM
-        private string _cachedCommandText = string.Empty;
-#endif
+
         private Vector2 _scrollPosition;
         private GUIStyle _windowStyle;
         private GUIStyle _labelStyle;
@@ -309,8 +304,8 @@ namespace CommandTerminal
         private int? _previousLastCompletionIndex;
         private int _currentHintStartIndex;
         private string _focusedControl;
-        private int _cursorIndex;
-        private int _selectIndex;
+
+        private bool _initialResetStateOnInit;
 
         [StringFormatMethod("format")]
         public static bool Log(string format, params object[] parameters)
@@ -439,19 +434,19 @@ namespace CommandTerminal
                 }
             }
 #endif
-
-            RefreshStaticState(force: _resetStateOnInit);
         }
 
         private void OnEnable()
         {
+            RefreshStaticState(force: resetStateOnInit);
+            ConsumeAndLogErrors();
+
             if (_logUnityMessages && !_unityLogAttached)
             {
-                _unityLogAttached = true;
                 Application.logMessageReceivedThreaded += HandleUnityLog;
+                _unityLogAttached = true;
             }
 
-            ConsumeAndLogErrors();
 #if UNITY_EDITOR
             EditorApplication.update += CheckForChanges;
 #endif
@@ -494,9 +489,6 @@ namespace CommandTerminal
                 Debug.LogWarning("Command Console Warning: Please assign a font.", this);
             }
 
-#if !ENABLE_INPUT_SYSTEM
-            _cachedCommandText = _commandText ?? string.Empty;
-#endif
             if (
                 _useHotkeys
                 && (
@@ -512,14 +504,13 @@ namespace CommandTerminal
                 );
             }
 
+            RefreshStaticState(force: resetStateOnInit);
             SetupWindow();
             SetupWindowStyle();
             SetupInput();
             SetupLabels();
             ConsumeAndLogErrors();
-
             ResetAutoComplete();
-
             _started = true;
         }
 
@@ -581,43 +572,43 @@ namespace CommandTerminal
 
             if (IsKeyPressed(_closeHotkey))
             {
-                Close();
                 _handledInputThisFrame = true;
+                Close();
             }
             else if (_completeCommandHotkeys?.list?.Exists(key => IsKeyPressed(key)) == true)
             {
-                EnterCommand();
                 _handledInputThisFrame = true;
+                EnterCommand();
             }
             else if (IsKeyPressed(_previousHotkey))
             {
-                HandlePrevious();
                 _handledInputThisFrame = true;
+                HandlePrevious();
             }
             else if (IsKeyPressed(_nextHotkey))
             {
-                HandleNext();
                 _handledInputThisFrame = true;
+                HandleNext();
             }
             else if (IsKeyPressed(_toggleFullHotkey))
             {
-                ToggleFull();
                 _handledInputThisFrame = true;
+                ToggleFull();
             }
             else if (IsKeyPressed(_toggleHotkey))
             {
-                ToggleSmall();
                 _handledInputThisFrame = true;
+                ToggleSmall();
             }
             else if (IsKeyPressed(_reverseCompleteHotkey))
             {
-                CompleteCommand(searchForward: false);
                 _handledInputThisFrame = true;
+                CompleteCommand(searchForward: false);
             }
             else if (IsKeyPressed(_completeHotkey))
             {
-                CompleteCommand(searchForward: true);
                 _handledInputThisFrame = true;
+                CompleteCommand(searchForward: true);
             }
         }
 #endif
@@ -649,7 +640,7 @@ namespace CommandTerminal
                 DrawGUIButtons();
             }
 
-            if (IsClosed)
+            if (IsClosed || _handledInputThisFrame)
             {
                 return;
             }
@@ -659,7 +650,7 @@ namespace CommandTerminal
             _window = GUILayout.Window(88, _window, DrawConsole, string.Empty, _windowStyle);
         }
 
-        private void RefreshStaticState(bool force = false)
+        private void RefreshStaticState(bool force)
         {
             int bufferSize = Math.Max(0, _bufferSize);
             if (force || Buffer == null)
@@ -702,6 +693,7 @@ namespace CommandTerminal
 
             if (
                 Shell.IgnoringDefaultCommands != ignoreDefaultCommands
+                || Shell.Commands.Count <= 0
                 || !Shell.IgnoredCommands.SetEquals(disabledCommands ?? Enumerable.Empty<string>())
             )
             {
@@ -739,7 +731,7 @@ namespace CommandTerminal
             _serializedObject.Update();
             if (CheckForRefresh(_staticStateProperties))
             {
-                RefreshStaticState();
+                RefreshStaticState(force: false);
             }
 
             if (CheckForRefresh(_windowProperties))
@@ -840,18 +832,16 @@ namespace CommandTerminal
         // ReSharper disable once MemberCanBePrivate.Global
         public void SetState(TerminalState newState)
         {
-#if !ENABLE_INPUT_SYSTEM
             _inputFix = true;
-#endif
             if (newState != TerminalState.Closed)
             {
                 _needsFocus = true;
             }
-#if !ENABLE_INPUT_SYSTEM
-            _cachedCommandText = _commandText ?? string.Empty;
-#endif
-            _commandText = string.Empty;
-            ResetAutoComplete();
+            else
+            {
+                _commandText = string.Empty;
+                ResetAutoComplete();
+            }
 
             switch (newState)
             {
@@ -894,9 +884,9 @@ namespace CommandTerminal
             _state = newState;
         }
 
-        private void ConsumeAndLogErrors()
+        private static void ConsumeAndLogErrors()
         {
-            while (Shell.TryConsumeErrorMessage(out string error))
+            while (Shell?.TryConsumeErrorMessage(out string error) == true)
             {
                 Log(TerminalLogType.Error, $"Error: {error}");
             }
@@ -1207,13 +1197,27 @@ namespace CommandTerminal
                     }
                     GUI.SetNextControlName(CommandControlName);
                     string newCommandText = GUILayout.TextField(_commandText, _inputStyle);
-                    if (!string.Equals(newCommandText, _commandText))
+                    if (!_handledInputThisFrame && !string.Equals(newCommandText, _commandText))
                     {
                         _commandText = newCommandText;
                         _needsAutoCompleteReset = true;
                     }
 
-                    // All of this is garbage and I hate it. I've lost what's going on and it doesn't quite work.
+                    if (_inputFix && _commandText.Length > 0)
+                    {
+                        _commandText = _commandText[..^1];
+                        _needsAutoCompleteReset = true;
+                        _inputFix = false;
+                    }
+
+                    /*
+                        Something is FUCKED here, I can't figure it out. When we have "Make Hints Clickable" on,
+                        back-spacing from an auto-completed word highlights the word for a few frames. I think this is
+                        an IMGUI bug where the TextEditor state / control focus is lost, I've verified through some
+                        debug logs where I track cursor / selection indexes. They get arbitrarily reset to 0.
+                        I thought it was due to focusing the control too much, but that doesn't appear to be the case,
+                        again, verified through debug logs. Anyways, oh well, maybe I'll fix it later.
+                     */
                     if (Event.current.type == EventType.Repaint)
                     {
                         bool isFocused = string.Equals(focusedControl, CommandControlName);
@@ -1223,42 +1227,15 @@ namespace CommandTerminal
                             _needsAutoCompleteReset = false;
                         }
 
-                        /*
-                             Some WEIRD bugs related to clickable hints, has to be something to do with rendering other
-                             interactable controls. This is too complicated for me to figure out. For some reason, when
-                             backspacing or typing, you get random selection highlights.
-                          */
-                        if (
-                            _makeHintsClickable
-                            && !string.Equals(_focusedControl, CommandControlName)
-                            && string.IsNullOrEmpty(focusedControl)
-                            && 0 < _lastCompletionBuffer.Length
-                            && (
-                                _lastCompletionIndex == null
-                                || !string.Equals(
-                                    _lastCompletionBuffer[_lastCompletionIndex.Value],
-                                    _commandText
-                                )
-                            )
-                        )
-                        {
-                            _moveCursor = true;
-                            _needsFocus = true;
-                        }
-
-                        bool localNeedFocus =
+                        _needsFocus |=
                             string.IsNullOrEmpty(_focusedControl)
                             && string.IsNullOrEmpty(focusedControl)
                             && (
                                 string.IsNullOrEmpty(_commandText)
                                 || _lastCompletionBuffer.Length == 0
                             );
-                        localNeedFocus |=
-                            _needsFocus
-                            && string.Equals(_focusedControl, CommandControlName)
-                            && string.IsNullOrEmpty(focusedControl);
 
-                        if (localNeedFocus)
+                        if (_needsFocus)
                         {
                             GUI.FocusControl(CommandControlName);
                             _moveCursor = true;
@@ -1266,7 +1243,8 @@ namespace CommandTerminal
                         }
 
                         if (
-                            isFocused
+                            _moveCursor
+                            && isFocused
                             && GUIUtility.GetStateObject(
                                 typeof(TextEditor),
                                 GUIUtility.keyboardControl
@@ -1274,24 +1252,13 @@ namespace CommandTerminal
                                 is TextEditor textEditor
                         )
                         {
-                            if (_moveCursor)
-                            {
-                                int textLength = textEditor.text.Length;
-                                textEditor.cursorIndex = textLength;
-                                textEditor.selectIndex = textLength;
-                                _moveCursor = false;
-                            }
+                            int textLength = textEditor.text.Length;
+                            textEditor.cursorIndex = textLength;
+                            textEditor.selectIndex = textLength;
+                            _moveCursor = false;
                         }
                     }
 
-#if !ENABLE_INPUT_SYSTEM
-                    if (_inputFix && _commandText.Length > 0)
-                    {
-                        _commandText = _cachedCommandText ?? string.Empty; // Otherwise the TextField picks up the ToggleHotkey character event
-                        ResetAutoComplete();
-                        _inputFix = false; // Prevents checking string Length every draw call
-                    }
-#endif
                     if (
                         _showGUIButtons && GUILayout.Button("| run", _inputStyle, _runButtonOptions)
                     )
@@ -1791,9 +1758,7 @@ namespace CommandTerminal
             }
             else
             {
-#if !ENABLE_INPUT_SYSTEM
                 _inputFix = false;
-#endif
                 return; // Already at target
             }
 
