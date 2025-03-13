@@ -102,10 +102,8 @@
             {
                 _buffer.RemoveRange(newCapacity, _buffer.Count - newCapacity);
             }
-            if (newCapacity < Count)
-            {
-                Count = newCapacity;
-            }
+
+            Count = Math.Min(newCapacity, Count);
         }
 
         public bool Contains(T item)

@@ -833,55 +833,52 @@ namespace CommandTerminal
         public void SetState(TerminalState newState)
         {
             _inputFix = true;
-            if (newState != TerminalState.Closed)
+            try
             {
-                _needsFocus = true;
-            }
-            else
-            {
-                _commandText = string.Empty;
-                ResetAutoComplete();
-            }
-
-            switch (newState)
-            {
-                case TerminalState.Closed:
+                switch (newState)
                 {
-                    _openTarget = 0;
-                    break;
-                }
-                case TerminalState.OpenSmall:
-                {
-                    _openTarget = Screen.height * _maxHeight * _smallTerminalRatio;
-                    if (_currentOpenT > _openTarget)
+                    case TerminalState.Closed:
                     {
-                        // Prevent resizing from OpenFull to OpenSmall if window y position
-                        // is greater than OpenSmall's target
                         _openTarget = 0;
-                        _state = TerminalState.Closed;
-                        return;
+                        break;
                     }
-                    _realWindowSize = _openTarget;
-                    _scrollPosition.y = int.MaxValue;
-                    break;
+                    case TerminalState.OpenSmall:
+                    {
+                        _openTarget = Screen.height * _maxHeight * _smallTerminalRatio;
+                        _realWindowSize = Mathf.Max(_realWindowSize, _openTarget);
+                        _scrollPosition.y = int.MaxValue;
+                        break;
+                    }
+                    case TerminalState.OpenFull:
+                    {
+                        _realWindowSize = Screen.height * _maxHeight;
+                        _openTarget = _realWindowSize;
+                        break;
+                    }
+                    default:
+                    {
+                        throw new InvalidEnumArgumentException(
+                            nameof(newState),
+                            (int)newState,
+                            typeof(TerminalState)
+                        );
+                    }
                 }
-                case TerminalState.OpenFull:
+
+                _state = newState;
+            }
+            finally
+            {
+                if (_state != TerminalState.Closed)
                 {
-                    _realWindowSize = Screen.height * _maxHeight;
-                    _openTarget = _realWindowSize;
-                    break;
+                    _needsFocus = true;
                 }
-                default:
+                else
                 {
-                    throw new InvalidEnumArgumentException(
-                        nameof(newState),
-                        (int)newState,
-                        typeof(TerminalState)
-                    );
+                    _commandText = string.Empty;
+                    ResetAutoComplete();
                 }
             }
-
-            _state = newState;
         }
 
         private static void ConsumeAndLogErrors()
@@ -1742,27 +1739,23 @@ namespace CommandTerminal
 
             if (_currentOpenT < _openTarget)
             {
-                _currentOpenT += dt;
-                if (_currentOpenT > _openTarget)
-                {
-                    _currentOpenT = _openTarget;
-                }
+                _currentOpenT = Mathf.Min(_currentOpenT + dt, _openTarget);
             }
-            else if (_currentOpenT > _openTarget)
+            else if (_openTarget < _currentOpenT)
             {
-                _currentOpenT -= dt;
-                if (_currentOpenT < _openTarget)
-                {
-                    _currentOpenT = _openTarget;
-                }
+                _currentOpenT = Mathf.Max(_currentOpenT - dt, _openTarget);
             }
             else
             {
                 _inputFix = false;
-                return; // Already at target
+                return;
             }
 
-            _window = new Rect(0, _currentOpenT - _realWindowSize, Screen.width, _realWindowSize);
+            float realWindowSize =
+                _state == TerminalState.OpenSmall
+                    ? Mathf.Max(_currentOpenT, _realWindowSize)
+                    : _realWindowSize;
+            _window = new Rect(0, _currentOpenT - realWindowSize, Screen.width, realWindowSize);
         }
 
         private void HandleUnityLog(string message, string stackTrace, LogType type)

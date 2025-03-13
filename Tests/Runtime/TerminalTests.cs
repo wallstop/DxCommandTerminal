@@ -1,6 +1,8 @@
 ﻿namespace DxCommandTerminal.Tests.Tests.Runtime
 {
     using System.Collections;
+    using System.Collections.Generic;
+    using System.Linq;
     using CommandTerminal;
     using Components;
     using NUnit.Framework;
@@ -16,6 +18,45 @@
             {
                 Object.Destroy(Terminal.Instance.gameObject);
             }
+        }
+
+        [UnityTest]
+        public IEnumerator ToggleResetsState()
+        {
+            yield return SpawnTerminal(resetStateOnInit: true);
+
+            Terminal terminal = Terminal.Instance;
+            CommandShell shell = Terminal.Shell;
+            Dictionary<string, CommandInfo> shellCommands = shell.Commands.ToDictionary(
+                kvp => kvp.Key,
+                kvp => kvp.Value
+            );
+            CommandHistory history = Terminal.History;
+            CommandLog buffer = Terminal.Buffer;
+            CommandAutoComplete autoComplete = Terminal.AutoComplete;
+
+            shell.RunCommand("log");
+
+            string[] events = history.GetHistory(onlySuccess: true, onlyErrorFree: true).ToArray();
+            Assert.AreNotEqual(0, events.Length);
+
+            terminal.enabled = false;
+            terminal.resetStateOnInit = false;
+            terminal.ignoreDefaultCommands = !terminal.ignoreDefaultCommands;
+            terminal.enabled = true;
+            Assert.AreSame(shell, Terminal.Shell);
+            Assert.AreNotEqual(shellCommands.Count, shell.Commands.Count);
+            Assert.AreSame(history, Terminal.History);
+            string[] currentEvents = history
+                .GetHistory(onlySuccess: true, onlyErrorFree: true)
+                .ToArray();
+            Assert.AreEqual(events.Length, currentEvents.Length);
+            for (int i = 0; i < events.Length; ++i)
+            {
+                Assert.AreEqual(events[i], currentEvents[i], $"History event {i} wasn't the same!");
+            }
+            Assert.AreSame(buffer, Terminal.Buffer);
+            Assert.AreSame(autoComplete, Terminal.AutoComplete);
         }
 
         [UnityTest]

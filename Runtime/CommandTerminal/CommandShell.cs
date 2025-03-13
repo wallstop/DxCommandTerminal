@@ -8,6 +8,7 @@ namespace CommandTerminal
     using System.Text;
     using Attributes;
     using JetBrains.Annotations;
+    using UnityEngine;
 
     public sealed class CommandShell
     {
@@ -93,7 +94,7 @@ namespace CommandTerminal
 
         public int ClearAllCommands()
         {
-            return ClearCustomCommands() + ClearAutoRegisteredCommands();
+            return ClearAutoRegisteredCommands() + ClearCustomCommands();
         }
 
         public int ClearCustomCommands()
@@ -106,7 +107,12 @@ namespace CommandTerminal
         public int ClearAutoRegisteredCommands()
         {
             int count = _autoRegisteredCommands.Count;
+            foreach (string command in _autoRegisteredCommands)
+            {
+                _commands.Remove(command);
+            }
             _autoRegisteredCommands.Clear();
+            _immutableAutoRegisteredCommands = ImmutableHashSet<string>.Empty;
             return count;
         }
 
@@ -116,13 +122,7 @@ namespace CommandTerminal
         )
         {
             IgnoringDefaultCommands = ignoreDefaultCommands;
-            foreach (string defaultCommand in _autoRegisteredCommands)
-            {
-                _commands.Remove(defaultCommand);
-            }
-
             ClearAutoRegisteredCommands();
-
             _ignoredCommands.Clear();
             _ignoredCommands.UnionWith(ignoredCommands ?? Enumerable.Empty<string>());
             foreach (string ignoredCommand in _ignoredCommands)
@@ -149,6 +149,11 @@ namespace CommandTerminal
                     continue;
                 }
 
+                if (attribute.EditorOnly && !Application.isEditor)
+                {
+                    continue;
+                }
+
                 ParameterInfo[] methodsParams = method.GetParameters();
                 if (
                     methodsParams.Length != 1
@@ -159,9 +164,7 @@ namespace CommandTerminal
                     continue;
                 }
 
-                // Convert MethodInfo to Action.
-                // This is essentially allows us to store a reference to the method,
-                // which makes calling the method significantly more performant than using MethodInfo.Invoke().
+                // Perf boost, much cheaper than running reflection on invoking the method
                 Action<CommandArg[]> proc =
                     (Action<CommandArg[]>)
                         Delegate.CreateDelegate(typeof(Action<CommandArg[]>), method);
