@@ -112,30 +112,7 @@ In this case the command name (`add`) will be inferred from the method name, you
 [RegisterCommand(Name = "MyAdd", Help = "Adds 2 numbers", MinArgCount = 2, MaxArgCount = 2)]
 ```
 
-### 2. Using a FrontCommand method:
-
-Here you still use the `RegisterCommand` attribute, but the arguments are handled in a separate method, prefixed with `FrontCommand`. This way, `MaxArgCount` and `MinArgCount` are automatically inferred.
-
-This also allows you to keep the argument handling `FrontCommand` methods in another file, or even generate them procedurally during a pre-build.
-
-```csharp
-[RegisterCommand(Help = "Adds 2 numbers")]
-static void CommandAdd(int a, int b) {
-    int result = a + b;
-    Terminal.Log("{0} + {1} = {2}", a, b, result);
-}
-
-static void FrontCommandAdd(CommandArg[] args) {
-    int a = args[0].Int;
-    int b = args[1].Int;
-
-    if (Terminal.IssuedError) return;
-
-    CommandAdd(a, b);
-}
-```
-
-### 3. Manually adding Commands:
+### 2. Manually adding Commands:
 
 `RegisterCommand` only works for static methods. If you want to use a non-static method, you may add the command manually.
 
