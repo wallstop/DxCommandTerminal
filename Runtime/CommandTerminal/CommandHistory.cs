@@ -1,5 +1,6 @@
 namespace CommandTerminal
 {
+    using System;
     using System.Collections.Generic;
     using System.Linq;
     using DataStructures;
@@ -42,9 +43,35 @@ namespace CommandTerminal
             return true;
         }
 
-        public string Next()
+        public string Next(bool skipSameCommands)
         {
+            int initialPosition = _position;
             _position++;
+
+            while (
+                skipSameCommands
+                && 0 <= initialPosition
+                && initialPosition < _history.Count
+                && 0 <= _position
+                && _position < _history.Count
+            )
+            {
+                if (
+                    string.Equals(
+                        _history[initialPosition].text,
+                        _history[_position].text,
+                        StringComparison.OrdinalIgnoreCase
+                    )
+                )
+                {
+                    _position++;
+                }
+                else
+                {
+                    break;
+                }
+            }
+
             if (0 <= _position && _position < _history.Count)
             {
                 return _history[_position].text;
@@ -54,9 +81,34 @@ namespace CommandTerminal
             return string.Empty;
         }
 
-        public string Previous()
+        public string Previous(bool skipSameCommands)
         {
+            int initialPosition = _position;
             _position--;
+
+            while (
+                skipSameCommands
+                && 0 <= initialPosition
+                && initialPosition < _history.Count
+                && 0 <= _position
+                && _position < _history.Count
+            )
+            {
+                if (
+                    string.Equals(
+                        _history[initialPosition].text,
+                        _history[_position].text,
+                        StringComparison.OrdinalIgnoreCase
+                    )
+                )
+                {
+                    _position--;
+                }
+                else
+                {
+                    break;
+                }
+            }
 
             if (0 <= _position && _position < _history.Count)
             {
