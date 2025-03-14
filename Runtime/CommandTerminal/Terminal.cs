@@ -247,6 +247,9 @@ namespace CommandTerminal
         public bool resetStateOnInit;
 
         [SerializeField]
+        private bool _skipSameCommandsInHistory = true;
+
+        [SerializeField]
         public bool ignoreDefaultCommands;
 
         [SerializeField]
@@ -1576,7 +1579,7 @@ namespace CommandTerminal
             {
                 return;
             }
-            _commandText = History?.Previous() ?? string.Empty;
+            _commandText = History?.Previous(_skipSameCommandsInHistory) ?? string.Empty;
             ResetAutoComplete();
             _moveCursor = true;
             _needsFocus = true;
@@ -1588,7 +1591,7 @@ namespace CommandTerminal
             {
                 return;
             }
-            _commandText = History?.Next() ?? string.Empty;
+            _commandText = History?.Next(_skipSameCommandsInHistory) ?? string.Empty;
             ResetAutoComplete();
             _moveCursor = true;
             _needsFocus = true;
