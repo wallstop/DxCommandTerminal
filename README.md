@@ -28,7 +28,7 @@ This is a fork of [Command Terminal](https://github.com/stillwwater/command_term
 5. Resolve the latest `com.wallstop-studios.dxcommandterminal`
 
 ## From Source
-Grab a copy of this repo (either `git clone` or [download a zip of the source](https://github.com/wallstop/DxCommandTerminal/archive/refs/heads/master.zip)) and copy the contents to your project's `Assets` folder
+Grab a copy of this repo (either `git clone` or [download a zip of the source](https://github.com/wallstop/DxCommandTerminal/archive/refs/heads/master.zip)) and copy the contents to your project's `Assets` folder.
 
 ## From Releases
 Check out the latest [Releases](https://github.com/wallstop/DxCommandTerminal/releases) to grab the Unity Package and import to your project.
