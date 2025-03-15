@@ -109,7 +109,9 @@ namespace CommandTerminal
 
         // ReSharper disable once MemberCanBePrivate.Global
         public bool IsClosed =>
-            _state == TerminalState.Closed && Mathf.Approximately(_currentOpenT, _openTarget);
+            _state != TerminalState.OpenFull
+            && _state != TerminalState.OpenSmall
+            && Mathf.Approximately(_currentOpenT, _openTarget);
 
         [Header("Window")]
         [Range(0, 1)]
@@ -273,7 +275,7 @@ namespace CommandTerminal
         private readonly List<SerializedProperty> _autoCompleteProperties = new();
         private SerializedObject _serializedObject;
 #endif
-        private TerminalState _state;
+        private TerminalState _state = TerminalState.Closed;
         private TextEditor _editorState;
         private bool _inputFix;
         private bool _moveCursor;
