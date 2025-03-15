@@ -86,7 +86,7 @@ Enter `help` in the console to view all available commands, use the up and down 
 
 ## Registering Commands
 
-There are 3 options to register commands to be used in the Command Terminal.
+There are 2 options to register commands to be used in the Command Terminal.
 
 ### 1. Using the RegisterCommand attribute:
 
@@ -125,7 +125,7 @@ Terminal.Shell.AddCommand("add", CommandAdd, 2, 2, "Adds 2 numbers");
 # Custom Parsing
 One change from the original Command Parser is the usage / functionality exposed for parsing the parameters to the CommandArgs themselves. The original library exposed four methods for retrieving arguments - `String`, `Float`, `Int`, and `bool`. If the input was invalid, these parsing methods would simply return the default value and log an error, making it very difficult to programmatically react to bad input.
 
-To remedy this, DxCommandTerminal exposes two methods - `String` and `TryGet`. `String` returns the original input parameters as-is. `TryGet` attempts to parse the provided input parameter as the given type, taking in an optional parser. You can also register and deregister parsers for any type, which will override the built-in ones, making use of whatever custom logic you want (JSON, for example).
+To remedy this, DxCommandTerminal exposes a single method, `TryGet`, and a readonly string field `contents`. `contents` returns the original input parameters as-is. `TryGet` attempts to parse the provided input parameter as the given type, taking in an optional parser. You can also register and deregister parsers for any type, which will override the built-in ones, making use of whatever custom logic you want (JSON, for example).
 
 ```csharp
 public bool TryGet<T>(out T parsed);
