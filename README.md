@@ -5,7 +5,19 @@ Unity Command Terminal
 
 This is a fork of [Command Terminal](https://github.com/stillwwater/command_terminal) for Unity, mainly to address usability gaps and add maintenance
 
-# To Install as Unity Package
+# Compatibility
+| Platform | Compatible |
+| --- | --- |
+| Unity 2021 | Likely, but untested |
+| Unity 2022 | &check; |
+| Unity 2023 | &check; |
+| Unity 6 | &check; |
+| URP | &check; |
+| HDRP | &check; |
+
+# Installation
+
+## To Install as Unity Package
 1. Open Unity Package Manager
 2. (Optional) Enable Pre-release packages to get the latest, cutting-edge builds
 3. Open the Advanced Package Settings
@@ -14,6 +26,12 @@ This is a fork of [Command Terminal](https://github.com/stillwwater/command_term
     - URL: `https://registry.npmjs.org`
     - Scope(s): `com.wallstop-studios.dxcommandterminal`
 5. Resolve the latest `com.wallstop-studios.dxcommandterminal`
+
+## From Source
+Grab a copy of this repo (either `git clone` or [download a zip of the source](https://github.com/wallstop/DxCommandTerminal/archive/refs/heads/master.zip)) and copy the contents to your project's `Assets` folder
+
+## From Releases
+Check out the latest [Releases](https://github.com/wallstop/DxCommandTerminal/releases) to grab the Unity Package and import to your project.
 
 ## Improvements Over Baseline
 - [Enhanced Auto-Complete + Hint system + styling](#hints)
@@ -37,6 +55,9 @@ This is a fork of [Command Terminal](https://github.com/stillwwater/command_term
 - Fixed a bug where commands run programmatically were not added to history
 - Fixed a bug where terminal line height was not being calculated correctly
 - Fixed a bug where input caret width was not being calculated correctly. Previously, long caret strings would be rendered improperly
+- Fixed a bug related to input swallowing
+- Fixed a bug where transitioning from full to small terminal would instead, close the terminal
+- Added ability to skip same commands when navigating through history
 - Unified behavior around navigating up and down through command history. Previously, navigating up as far as possible would "stick" to the up-most command, while navigating down as far as possible would result in a "blank" command. Now, walking past either end of up/down results in a blank command.
 - History is now filterable by execution success (command existence) as well as error status of the command
 - Minor performance benefits if there are terminals in multiple scenes
