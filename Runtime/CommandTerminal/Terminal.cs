@@ -9,7 +9,6 @@ namespace CommandTerminal
     using JetBrains.Annotations;
     using UnityEditor;
     using UnityEngine;
-    using UnityEngine.Serialization;
     using Utils;
 #if ENABLE_INPUT_SYSTEM
     using UnityEngine.InputSystem;
@@ -181,11 +180,33 @@ namespace CommandTerminal
         [SerializeField]
         private string _inputCaret = ">";
 
+        [Header("Buttons")]
         [SerializeField]
         private bool _showGUIButtons;
 
+        [DxShowIf(nameof(_showGUIButtons))]
         [SerializeField]
-        private bool _rightAlignButtons;
+        private Color _buttonBackgroundColor = new(0, 0, 0, 0.3f);
+
+        [DxShowIf(nameof(_showGUIButtons))]
+        [SerializeField]
+        private Color _buttonForegroundColor = Color.white;
+
+        [DxShowIf(nameof(_showGUIButtons))]
+        [SerializeField]
+        private string _runButtonText = "Run";
+
+        [DxShowIf(nameof(_showGUIButtons))]
+        [SerializeField]
+        private string _closeButtonText = "Close";
+
+        [DxShowIf(nameof(_showGUIButtons))]
+        [SerializeField]
+        private string _smallButtonText = "Small";
+
+        [DxShowIf(nameof(_showGUIButtons))]
+        [SerializeField]
+        private string _fullButtonText = "Full";
 
         [Header("Hints")]
         [SerializeField]
@@ -269,12 +290,16 @@ namespace CommandTerminal
         private readonly List<SerializedProperty> _staticStateProperties = new();
         private readonly List<SerializedProperty> _windowProperties = new();
         private readonly List<SerializedProperty> _windowStyleProperties = new();
+        private readonly List<SerializedProperty> _buttonProperties = new();
         private readonly List<SerializedProperty> _inputProperties = new();
         private readonly List<SerializedProperty> _labelProperties = new();
         private readonly List<SerializedProperty> _logUnityMessageProperties = new();
         private readonly List<SerializedProperty> _autoCompleteProperties = new();
         private SerializedObject _serializedObject;
 #endif
+        private readonly Dictionary<string, GUILayoutOption[]> _buttonTextOptions = new();
+        private readonly Dictionary<string, float> _buttonWidths = new();
+
         private TerminalState _state = TerminalState.Closed;
         private TextEditor _editorState;
         private bool _inputFix;
@@ -287,6 +312,8 @@ namespace CommandTerminal
 
         private Vector2 _scrollPosition;
         private GUIStyle _windowStyle;
+        private GUIStyle _buttonStyle;
+        private GUIStyle _runButtonStyle;
         private GUIStyle _labelStyle;
 
         private GUIStyle _inputCaretStyle;
@@ -294,7 +321,6 @@ namespace CommandTerminal
         private GUIStyle _selectedHintStyle;
         private GUIStyle _inputStyle;
         private GUILayoutOption[] _inputCaretOptions;
-        private GUILayoutOption[] _runButtonOptions;
         private bool _unityLogAttached;
         private bool _started;
 
@@ -417,6 +443,17 @@ namespace CommandTerminal
             };
             TrackProperties(inputPropertiesTracked, _inputProperties);
 
+            string[] buttonPropertiesTracked =
+            {
+                nameof(_buttonBackgroundColor),
+                nameof(_buttonForegroundColor),
+                nameof(_runButtonText),
+                nameof(_closeButtonText),
+                nameof(_smallButtonText),
+                nameof(_fullButtonText),
+            };
+            TrackProperties(buttonPropertiesTracked, _buttonProperties);
+
             string[] labelPropertiesTracked = { nameof(_consoleFont), nameof(_foregroundColor) };
             TrackProperties(labelPropertiesTracked, _labelProperties);
 
@@ -533,6 +570,7 @@ namespace CommandTerminal
             RefreshStaticState(force: resetStateOnInit);
             SetupWindow();
             SetupWindowStyle();
+            SetupButtons();
             SetupInput();
             SetupLabels();
             ConsumeAndLogErrors();
@@ -780,6 +818,11 @@ namespace CommandTerminal
                 SetupInput();
             }
 
+            if (CheckForRefresh(_buttonProperties))
+            {
+                SetupButtons();
+            }
+
             if (CheckForRefresh(_labelProperties))
             {
                 SetupLabels();
@@ -995,10 +1038,6 @@ namespace CommandTerminal
                 _lastHeight = height;
                 _lastWidth = width;
             }
-
-            _runButtonOptions = _showGUIButtons
-                ? new[] { GUILayout.Width(width / 10f) }
-                : Array.Empty<GUILayoutOption>();
         }
 
         private void SetupWindowStyle()
@@ -1040,6 +1079,58 @@ namespace CommandTerminal
                 _labelStyle.font = _consoleFont;
                 _labelStyle.normal.textColor = _foregroundColor;
             }
+        }
+
+        private void SetupButtons()
+        {
+            Texture2D backgroundTexture = new(1, 1);
+            backgroundTexture.SetPixel(0, 0, _buttonBackgroundColor);
+            backgroundTexture.Apply();
+
+            const int paddingX = 4;
+            const int paddingY = 4;
+            const int marginX = 4;
+            const int marginY = 4;
+            _buttonStyle = GenerateGUIStyle(
+                _buttonForegroundColor,
+                backgroundTexture,
+                TextAnchor.MiddleCenter,
+                paddingX,
+                paddingY,
+                marginX,
+                marginY
+            );
+
+            _runButtonStyle = GenerateGUIStyle(
+                _buttonForegroundColor,
+                backgroundTexture,
+                TextAnchor.MiddleCenter,
+                paddingX,
+                paddingY,
+                marginX,
+                marginY: 0
+            );
+            _runButtonStyle.margin.left = 0;
+
+            GUIContent runContent = new(_runButtonText);
+            Vector2 runSize = _runButtonStyle.CalcSize(runContent);
+            _buttonTextOptions[_runButtonText] = new[] { GUILayout.Width(runSize.x) };
+            _buttonWidths[_runButtonText] = runSize.x;
+
+            GUIContent closeContent = new(_closeButtonText);
+            Vector2 closeSize = _buttonStyle.CalcSize(closeContent);
+            _buttonTextOptions[_closeButtonText] = new[] { GUILayout.Width(closeSize.x) };
+            _buttonWidths[_closeButtonText] = closeSize.x;
+
+            GUIContent smallContent = new(_smallButtonText);
+            Vector2 smallSize = _buttonStyle.CalcSize(smallContent);
+            _buttonTextOptions[_smallButtonText] = new[] { GUILayout.Width(smallSize.x) };
+            _buttonWidths[_smallButtonText] = smallSize.x;
+
+            GUIContent fullContent = new(_fullButtonText);
+            Vector2 fullSize = _buttonStyle.CalcSize(fullContent);
+            _buttonTextOptions[_fullButtonText] = new[] { GUILayout.Width(fullSize.x) };
+            _buttonWidths[_fullButtonText] = fullSize.x;
         }
 
         private void SetupInput()
@@ -1123,29 +1214,27 @@ namespace CommandTerminal
                 marginX: 4,
                 marginY: 4
             );
+        }
 
-            return;
-
-            GUIStyle GenerateGUIStyle(
-                Color textColor,
-                Texture2D texture,
-                TextAnchor alignment,
-                int paddingX = 4,
-                int paddingY = 4,
-                int marginX = 0,
-                int marginY = 0
-            )
+        private GUIStyle GenerateGUIStyle(
+            Color textColor,
+            Texture2D texture,
+            TextAnchor alignment,
+            int paddingX = 4,
+            int paddingY = 4,
+            int marginX = 0,
+            int marginY = 0
+        )
+        {
+            return new GUIStyle
             {
-                return new GUIStyle
-                {
-                    padding = new RectOffset(paddingX, paddingX, paddingY, paddingY),
-                    margin = new RectOffset(marginX, marginX, marginY, marginY),
-                    font = _consoleFont,
-                    normal = { textColor = textColor, background = texture },
-                    fixedHeight = _consoleFont.lineHeight + paddingY * 2,
-                    alignment = alignment,
-                };
-            }
+                padding = new RectOffset(paddingX, paddingX, paddingY, paddingY),
+                margin = new RectOffset(marginX, marginX, marginY, marginY),
+                font = _consoleFont,
+                normal = { textColor = textColor, background = texture },
+                fixedHeight = _consoleFont.lineHeight + paddingY * 2,
+                alignment = alignment,
+            };
         }
 
         private void DrawConsole(int window2D)
@@ -1223,6 +1312,19 @@ namespace CommandTerminal
                 GUILayout.BeginHorizontal();
                 try
                 {
+                    if (
+                        _showGUIButtons
+                        && !string.IsNullOrWhiteSpace(_commandText)
+                        && GUILayout.Button(
+                            _runButtonText,
+                            _runButtonStyle,
+                            _buttonTextOptions[_runButtonText]
+                        )
+                    )
+                    {
+                        EnterCommand();
+                    }
+
                     if (!string.IsNullOrEmpty(_inputCaret))
                     {
                         GUILayout.Label(_inputCaret, _inputCaretStyle, _inputCaretOptions);
@@ -1289,13 +1391,6 @@ namespace CommandTerminal
                             textEditor.selectIndex = textLength;
                             _moveCursor = false;
                         }
-                    }
-
-                    if (
-                        _showGUIButtons && GUILayout.Button("| run", _inputStyle, _runButtonOptions)
-                    )
-                    {
-                        EnterCommand();
                     }
                 }
                 finally
@@ -1735,26 +1830,87 @@ namespace CommandTerminal
 
         private void DrawGUIButtons()
         {
-            int size = _consoleFont.fontSize;
-            float xPosition = _rightAlignButtons ? Screen.width - 7 * size : 0;
+            if (_state == TerminalState.Unknown)
+            {
+                return;
+            }
 
-            /*
-                7 is the number of chars in the button plus some padding, 2 is the line height.
-                The layout will resize according to the font size.
-             */
-            GUILayout.BeginArea(new Rect(xPosition, _currentOpenT, 7 * size, size * 2));
+            int size =
+                _consoleFont.lineHeight + _buttonStyle.padding.top + _buttonStyle.padding.bottom;
+            float xPosition = _buttonStyle.margin.left;
+
+            float width = _buttonStyle.margin.right + _buttonStyle.margin.left;
+            width *= 2;
+            switch (_state)
+            {
+                case TerminalState.Closed:
+                {
+                    width += _buttonWidths[_smallButtonText];
+                    width += _buttonWidths[_fullButtonText];
+                    break;
+                }
+                case TerminalState.OpenSmall:
+                {
+                    width += _buttonWidths[_closeButtonText];
+                    width += _buttonWidths[_fullButtonText];
+                    break;
+                }
+                case TerminalState.OpenFull:
+                {
+                    width += _buttonWidths[_closeButtonText];
+                    width += _buttonWidths[_smallButtonText];
+                    break;
+                }
+                default:
+                {
+                    throw new InvalidEnumArgumentException(
+                        nameof(_state),
+                        (int)_state,
+                        typeof(TerminalState)
+                    );
+                }
+            }
+
+            GUILayout.BeginArea(
+                new Rect(xPosition, _currentOpenT + _buttonStyle.margin.top, width, size)
+            );
             try
             {
                 GUILayout.BeginHorizontal();
                 try
                 {
-                    if (GUILayout.Button("Small", _windowStyle))
+                    if (
+                        _state != TerminalState.Closed
+                        && GUILayout.Button(
+                            _closeButtonText,
+                            _buttonStyle,
+                            _buttonTextOptions[_closeButtonText]
+                        )
+                    )
                     {
-                        ToggleState(TerminalState.OpenSmall);
+                        SetState(TerminalState.Closed);
                     }
-                    else if (GUILayout.Button("Full", _windowStyle))
+                    else if (
+                        _state != TerminalState.OpenSmall
+                        && GUILayout.Button(
+                            _smallButtonText,
+                            _buttonStyle,
+                            _buttonTextOptions[_smallButtonText]
+                        )
+                    )
                     {
-                        ToggleState(TerminalState.OpenFull);
+                        SetState(TerminalState.OpenSmall);
+                    }
+                    else if (
+                        _state != TerminalState.OpenFull
+                        && GUILayout.Button(
+                            _fullButtonText,
+                            _buttonStyle,
+                            _buttonTextOptions[_fullButtonText]
+                        )
+                    )
+                    {
+                        SetState(TerminalState.OpenFull);
                     }
                 }
                 finally
