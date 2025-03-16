@@ -1,5 +1,8 @@
-Unity Command Terminal
+DX Command Terminal
 ======================
+
+# CI/CD Status
+![Npm Publish](https://github.com/wallstop/dxcommandterminal/actions/workflows/npm-publish.yml/badge.svg)
 
 # Notice
 
