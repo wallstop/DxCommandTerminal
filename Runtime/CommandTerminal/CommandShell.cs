@@ -74,7 +74,7 @@ namespace CommandTerminal
         private readonly HashSet<string> _autoRegisteredCommands = new(
             StringComparer.OrdinalIgnoreCase
         );
-        private readonly Dictionary<string, MethodInfo> _rejectedCommands = new(
+        private readonly SortedDictionary<string, MethodInfo> _rejectedCommands = new(
             StringComparer.OrdinalIgnoreCase
         );
 

@@ -12,8 +12,11 @@
     {
         public static Func<object, object> CreateFieldGetter(FieldInfo field)
         {
+#if WEB_GL
+            return field.GetValue;
+#else
             DynamicMethod dynamicMethod = new(
-                "Get" + field.Name,
+                $"Get{field.Name}",
                 typeof(object),
                 new[] { typeof(object) },
                 field.DeclaringType,
@@ -22,7 +25,10 @@
 
             ILGenerator il = dynamicMethod.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, field.DeclaringType);
+            il.Emit(
+                field.DeclaringType.IsValueType ? OpCodes.Unbox : OpCodes.Castclass,
+                field.DeclaringType
+            );
             il.Emit(OpCodes.Ldfld, field);
             if (field.FieldType.IsValueType)
             {
@@ -30,8 +36,8 @@
             }
 
             il.Emit(OpCodes.Ret);
-
             return (Func<object, object>)dynamicMethod.CreateDelegate(typeof(Func<object, object>));
+#endif
         }
     }
 

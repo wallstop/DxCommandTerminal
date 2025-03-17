@@ -2,12 +2,12 @@
 {
     using System;
 
-    public enum TerminalState
+    public enum HintDisplayMode
     {
         [Obsolete("Use a valid value")]
         Unknown = 0,
-        Closed = 1,
-        OpenSmall = 2,
-        OpenFull = 3,
+        Always = 1,
+        AutoCompleteOnly = 2,
+        Never = 3,
     }
 }
