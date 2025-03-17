@@ -188,7 +188,7 @@ namespace CommandTerminal
 
         [DxShowIf(nameof(_showGUIButtons))]
         [SerializeField]
-        private Color _buttonBackgroundColor = new(0, 0, 0, 0.5f);
+        private Color _buttonBackground = new(0, 0, 0, 0.5f);
 
         [DxShowIf(nameof(_showGUIButtons))]
         [SerializeField]
@@ -217,39 +217,32 @@ namespace CommandTerminal
         [SerializeField]
         private bool _makeHintsClickable;
 
-        [Range(0, 1)]
         [SerializeField]
-        private float _selectedHintContrast;
-
-        [SerializeField]
-        private float _selectedHintAlpha = 0.75f;
-
-        [SerializeField]
-        private Color _unselectedHintBackgroundColor = new(0f, 0f, 0f, 0.25f);
+        private Color _unselectedHintBackground = new(0f, 0f, 0f, 0.25f);
 
         [SerializeField]
         private Color _unselectedHintTextColor = Color.grey;
 
         [SerializeField]
-        private Color _selectedHintBackgroundColor = new(0f, 0f, 0f, 0.5f);
+        private Color _selectedHintBackground = new(0f, 0f, 0f, 0.5f);
 
         [SerializeField]
         private Color _selectedHintTextColor = Color.white;
 
         [Header("Theme")]
         [SerializeField]
-        private Color _inputBackgroundColor = new(0, 0, 0, 0.5f);
+        private Color _inputBackground = new(0, 0, 0, 0.5f);
+
+        [FormerlySerializedAs("_backgroundColor")]
+        [SerializeField]
+        private Color _background = Color.black;
 
         [SerializeField]
-        private Color _backgroundColor = Color.black;
+        private Color _textColor = Color.white;
 
         [SerializeField]
-        private Color _foregroundColor = Color.white;
+        private Color _shellMessageColor = Color.white;
 
-        [SerializeField]
-        private Color _shellColor = Color.white;
-
-        [FormerlySerializedAs("_inputColor")]
         [SerializeField]
         private Color _inputTextColor = Color.cyan;
 
@@ -421,29 +414,27 @@ namespace CommandTerminal
 
             string[] windowStylePropertiesTracked =
             {
-                nameof(_backgroundColor),
-                nameof(_foregroundColor),
+                nameof(_background),
+                nameof(_textColor),
                 nameof(_consoleFont),
             };
             TrackProperties(windowStylePropertiesTracked, _windowStyleProperties);
 
             string[] inputPropertiesTracked =
             {
-                nameof(_inputBackgroundColor),
+                nameof(_inputBackground),
                 nameof(_inputTextColor),
                 nameof(_inputCaret),
-                nameof(_unselectedHintBackgroundColor),
+                nameof(_unselectedHintBackground),
                 nameof(_unselectedHintTextColor),
-                nameof(_selectedHintBackgroundColor),
+                nameof(_selectedHintBackground),
                 nameof(_selectedHintTextColor),
-                nameof(_selectedHintAlpha),
-                nameof(_selectedHintContrast),
             };
             TrackProperties(inputPropertiesTracked, _inputProperties);
 
             string[] buttonPropertiesTracked =
             {
-                nameof(_buttonBackgroundColor),
+                nameof(_buttonBackground),
                 nameof(_buttonForegroundColor),
                 nameof(_runButtonText),
                 nameof(_closeButtonText),
@@ -452,7 +443,7 @@ namespace CommandTerminal
             };
             TrackProperties(buttonPropertiesTracked, _buttonProperties);
 
-            string[] labelPropertiesTracked = { nameof(_consoleFont), nameof(_foregroundColor) };
+            string[] labelPropertiesTracked = { nameof(_consoleFont), nameof(_textColor) };
             TrackProperties(labelPropertiesTracked, _labelProperties);
 
             string[] logUnityMessagePropertiesTracked = { nameof(_logUnityMessages) };
@@ -1040,13 +1031,13 @@ namespace CommandTerminal
 
         private void SetupWindowStyle()
         {
-            Texture2D backgroundTexture = GetOrCacheTexture(_backgroundColor);
+            Texture2D backgroundTexture = GetOrCacheTexture(_background);
 
             if (_windowStyle == null)
             {
                 _windowStyle = new GUIStyle
                 {
-                    normal = { background = backgroundTexture, textColor = _foregroundColor },
+                    normal = { background = backgroundTexture, textColor = _textColor },
                     padding = new RectOffset(4, 4, 4, 4),
                     font = _consoleFont,
                 };
@@ -1054,7 +1045,7 @@ namespace CommandTerminal
             else
             {
                 _windowStyle.normal.background = backgroundTexture;
-                _windowStyle.normal.textColor = _foregroundColor;
+                _windowStyle.normal.textColor = _textColor;
                 _windowStyle.font = _consoleFont;
             }
         }
@@ -1066,20 +1057,20 @@ namespace CommandTerminal
                 _labelStyle = new GUIStyle
                 {
                     font = _consoleFont,
-                    normal = { textColor = _foregroundColor },
+                    normal = { textColor = _textColor },
                     wordWrap = true,
                 };
             }
             else
             {
                 _labelStyle.font = _consoleFont;
-                _labelStyle.normal.textColor = _foregroundColor;
+                _labelStyle.normal.textColor = _textColor;
             }
         }
 
         private void SetupButtons()
         {
-            Texture2D backgroundTexture = GetOrCacheTexture(_buttonBackgroundColor);
+            Texture2D backgroundTexture = GetOrCacheTexture(_buttonBackground);
 
             const int paddingX = 4;
             const int paddingY = 4;
@@ -1129,7 +1120,7 @@ namespace CommandTerminal
 
         private void SetupInput()
         {
-            Texture2D inputBackgroundTexture = GetOrCacheTexture(_inputBackgroundColor);
+            Texture2D inputBackgroundTexture = GetOrCacheTexture(_inputBackground);
 
             _inputStyle = GenerateGUIStyle(
                 _inputTextColor,
@@ -1156,7 +1147,7 @@ namespace CommandTerminal
             }
 
             Texture2D unselectedHintBackgroundTexture = GetOrCacheTexture(
-                _unselectedHintBackgroundColor
+                _unselectedHintBackground
             );
 
             _unselectedHintStyle = GenerateGUIStyle(
@@ -1180,9 +1171,7 @@ namespace CommandTerminal
             );
             _firstUnselectedHintStyle.margin.left = 0;
 
-            Texture2D selectedHintBackgroundTexture = GetOrCacheTexture(
-                _selectedHintBackgroundColor
-            );
+            Texture2D selectedHintBackgroundTexture = GetOrCacheTexture(_selectedHintBackground);
 
             _selectedHintStyle = GenerateGUIStyle(
                 _selectedHintTextColor,
@@ -2001,10 +1990,10 @@ namespace CommandTerminal
         {
             return type switch
             {
-                TerminalLogType.Message => _foregroundColor,
+                TerminalLogType.Message => _textColor,
                 TerminalLogType.Warning => _warningColor,
                 TerminalLogType.Input => _inputTextColor,
-                TerminalLogType.ShellMessage => _shellColor,
+                TerminalLogType.ShellMessage => _shellMessageColor,
                 _ => _errorColor,
             };
         }
