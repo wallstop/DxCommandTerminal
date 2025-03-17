@@ -9,6 +9,7 @@ namespace CommandTerminal
     using JetBrains.Annotations;
     using UnityEditor;
     using UnityEngine;
+    using UnityEngine.Serialization;
     using Utils;
 #if ENABLE_INPUT_SYSTEM
     using UnityEngine.InputSystem;
@@ -21,6 +22,7 @@ namespace CommandTerminal
         private const string CommandControlName = "CommandTextField";
 
         private static readonly Dictionary<string, string> CachedSubstrings = new();
+        private static readonly Dictionary<Color, Texture2D> CachedTextures = new();
 
         private static readonly Dictionary<string, string> SpecialKeyCodeMap = new(
             StringComparer.OrdinalIgnoreCase
@@ -186,7 +188,7 @@ namespace CommandTerminal
 
         [DxShowIf(nameof(_showGUIButtons))]
         [SerializeField]
-        private Color _buttonBackgroundColor = new(0, 0, 0, 0.3f);
+        private Color _buttonBackground = new(0, 0, 0, 0.5f);
 
         [DxShowIf(nameof(_showGUIButtons))]
         [SerializeField]
@@ -194,67 +196,55 @@ namespace CommandTerminal
 
         [DxShowIf(nameof(_showGUIButtons))]
         [SerializeField]
-        private string _runButtonText = "Run";
+        private string _runButtonText = "run";
 
         [DxShowIf(nameof(_showGUIButtons))]
         [SerializeField]
-        private string _closeButtonText = "Close";
+        private string _closeButtonText = "close";
 
         [DxShowIf(nameof(_showGUIButtons))]
         [SerializeField]
-        private string _smallButtonText = "Small";
+        private string _smallButtonText = "small";
 
         [DxShowIf(nameof(_showGUIButtons))]
         [SerializeField]
-        private string _fullButtonText = "Full";
+        private string _fullButtonText = "full";
 
         [Header("Hints")]
         [SerializeField]
-        private bool _displayHints;
+        private HintDisplayMode _hintDisplayMode = HintDisplayMode.AutoCompleteOnly;
 
         [SerializeField]
         private bool _makeHintsClickable;
 
-        [Range(0, 1)]
         [SerializeField]
-        private float _unselectedHintContrast;
-
-        [Range(0, 1)]
-        [SerializeField]
-        private float _selectedHintContrast;
+        private Color _unselectedHintBackground = new(0f, 0f, 0f, 0.25f);
 
         [SerializeField]
-        private float _unselectedHintAlpha = 0.25f;
+        private Color _unselectedHintTextColor = Color.grey;
 
         [SerializeField]
-        private float _selectedHintAlpha = 0.75f;
+        private Color _selectedHintBackground = new(0f, 0f, 0f, 0.5f);
 
         [SerializeField]
-        private Color _unselectedHintColor = Color.grey;
-
-        [SerializeField]
-        private Color _selectedHintColor = Color.white;
+        private Color _selectedHintTextColor = Color.white;
 
         [Header("Theme")]
-        [Range(0, 1)]
         [SerializeField]
-        private float _inputContrast;
+        private Color _inputBackground = new(0, 0, 0, 0.5f);
 
-        [Range(0, 1)]
+        [FormerlySerializedAs("_backgroundColor")]
         [SerializeField]
-        private float _inputAlpha = 0.5f;
-
-        [SerializeField]
-        private Color _backgroundColor = Color.black;
+        private Color _background = Color.black;
 
         [SerializeField]
-        private Color _foregroundColor = Color.white;
+        private Color _textColor = Color.white;
 
         [SerializeField]
-        private Color _shellColor = Color.white;
+        private Color _shellMessageColor = Color.white;
 
         [SerializeField]
-        private Color _inputColor = Color.cyan;
+        private Color _inputTextColor = Color.cyan;
 
         [SerializeField]
         private Color _warningColor = Color.yellow;
@@ -318,7 +308,9 @@ namespace CommandTerminal
 
         private GUIStyle _inputCaretStyle;
         private GUIStyle _unselectedHintStyle;
+        private GUIStyle _firstUnselectedHintStyle;
         private GUIStyle _selectedHintStyle;
+        private GUIStyle _firstSelectedHintStyle;
         private GUIStyle _inputStyle;
         private GUILayoutOption[] _inputCaretOptions;
         private bool _unityLogAttached;
@@ -422,30 +414,27 @@ namespace CommandTerminal
 
             string[] windowStylePropertiesTracked =
             {
-                nameof(_backgroundColor),
-                nameof(_foregroundColor),
+                nameof(_background),
+                nameof(_textColor),
                 nameof(_consoleFont),
             };
             TrackProperties(windowStylePropertiesTracked, _windowStyleProperties);
 
             string[] inputPropertiesTracked =
             {
-                nameof(_inputContrast),
-                nameof(_inputColor),
-                nameof(_inputAlpha),
+                nameof(_inputBackground),
+                nameof(_inputTextColor),
                 nameof(_inputCaret),
-                nameof(_unselectedHintColor),
-                nameof(_unselectedHintAlpha),
-                nameof(_unselectedHintContrast),
-                nameof(_selectedHintColor),
-                nameof(_selectedHintAlpha),
-                nameof(_selectedHintContrast),
+                nameof(_unselectedHintBackground),
+                nameof(_unselectedHintTextColor),
+                nameof(_selectedHintBackground),
+                nameof(_selectedHintTextColor),
             };
             TrackProperties(inputPropertiesTracked, _inputProperties);
 
             string[] buttonPropertiesTracked =
             {
-                nameof(_buttonBackgroundColor),
+                nameof(_buttonBackground),
                 nameof(_buttonForegroundColor),
                 nameof(_runButtonText),
                 nameof(_closeButtonText),
@@ -454,7 +443,7 @@ namespace CommandTerminal
             };
             TrackProperties(buttonPropertiesTracked, _buttonProperties);
 
-            string[] labelPropertiesTracked = { nameof(_consoleFont), nameof(_foregroundColor) };
+            string[] labelPropertiesTracked = { nameof(_consoleFont), nameof(_textColor) };
             TrackProperties(labelPropertiesTracked, _labelProperties);
 
             string[] logUnityMessagePropertiesTracked = { nameof(_logUnityMessages) };
@@ -462,7 +451,7 @@ namespace CommandTerminal
 
             string[] autoCompletePropertiesTracked =
             {
-                nameof(_displayHints),
+                nameof(_hintDisplayMode),
                 nameof(disabledCommands),
                 nameof(ignoreDefaultCommands),
             };
@@ -968,7 +957,7 @@ namespace CommandTerminal
             _lastKnownCommandText = _commandText ?? string.Empty;
             _lastCompletionIndex = null;
             _currentHintStartIndex = 0;
-            if (_displayHints)
+            if (_hintDisplayMode == HintDisplayMode.Always)
             {
                 _lastCompletionBuffer =
                     AutoComplete?.Complete(_lastKnownCommandText) ?? Array.Empty<string>();
@@ -1042,15 +1031,13 @@ namespace CommandTerminal
 
         private void SetupWindowStyle()
         {
-            Texture2D backgroundTexture = new(1, 1);
-            backgroundTexture.SetPixel(0, 0, _backgroundColor);
-            backgroundTexture.Apply();
+            Texture2D backgroundTexture = GetOrCacheTexture(_background);
 
             if (_windowStyle == null)
             {
                 _windowStyle = new GUIStyle
                 {
-                    normal = { background = backgroundTexture, textColor = _foregroundColor },
+                    normal = { background = backgroundTexture, textColor = _textColor },
                     padding = new RectOffset(4, 4, 4, 4),
                     font = _consoleFont,
                 };
@@ -1058,7 +1045,7 @@ namespace CommandTerminal
             else
             {
                 _windowStyle.normal.background = backgroundTexture;
-                _windowStyle.normal.textColor = _foregroundColor;
+                _windowStyle.normal.textColor = _textColor;
                 _windowStyle.font = _consoleFont;
             }
         }
@@ -1070,22 +1057,20 @@ namespace CommandTerminal
                 _labelStyle = new GUIStyle
                 {
                     font = _consoleFont,
-                    normal = { textColor = _foregroundColor },
+                    normal = { textColor = _textColor },
                     wordWrap = true,
                 };
             }
             else
             {
                 _labelStyle.font = _consoleFont;
-                _labelStyle.normal.textColor = _foregroundColor;
+                _labelStyle.normal.textColor = _textColor;
             }
         }
 
         private void SetupButtons()
         {
-            Texture2D backgroundTexture = new(1, 1);
-            backgroundTexture.SetPixel(0, 0, _buttonBackgroundColor);
-            backgroundTexture.Apply();
+            Texture2D backgroundTexture = GetOrCacheTexture(_buttonBackground);
 
             const int paddingX = 4;
             const int paddingY = 4;
@@ -1135,20 +1120,10 @@ namespace CommandTerminal
 
         private void SetupInput()
         {
-            Color darkBackground = new()
-            {
-                r = _backgroundColor.r - _inputContrast,
-                g = _backgroundColor.g - _inputContrast,
-                b = _backgroundColor.b - _inputContrast,
-                a = _inputAlpha,
-            };
-
-            Texture2D inputBackgroundTexture = new(1, 1);
-            inputBackgroundTexture.SetPixel(0, 0, darkBackground);
-            inputBackgroundTexture.Apply();
+            Texture2D inputBackgroundTexture = GetOrCacheTexture(_inputBackground);
 
             _inputStyle = GenerateGUIStyle(
-                _inputColor,
+                _inputTextColor,
                 inputBackgroundTexture,
                 TextAnchor.MiddleLeft
             );
@@ -1156,7 +1131,7 @@ namespace CommandTerminal
             if (!string.IsNullOrEmpty(_inputCaret))
             {
                 _inputCaretStyle = GenerateGUIStyle(
-                    _inputColor,
+                    _inputTextColor,
                     inputBackgroundTexture,
                     TextAnchor.MiddleRight
                 );
@@ -1171,20 +1146,12 @@ namespace CommandTerminal
                 _inputCaretOptions = Array.Empty<GUILayoutOption>();
             }
 
-            Color unselectedHintBackground = new()
-            {
-                r = _backgroundColor.r - _unselectedHintContrast,
-                g = _backgroundColor.g - _unselectedHintContrast,
-                b = _backgroundColor.b - _unselectedHintContrast,
-                a = _unselectedHintAlpha,
-            };
-
-            Texture2D unselectedHintBackgroundTexture = new(1, 1);
-            unselectedHintBackgroundTexture.SetPixel(0, 0, unselectedHintBackground);
-            unselectedHintBackgroundTexture.Apply();
+            Texture2D unselectedHintBackgroundTexture = GetOrCacheTexture(
+                _unselectedHintBackground
+            );
 
             _unselectedHintStyle = GenerateGUIStyle(
-                _unselectedHintColor,
+                _unselectedHintTextColor,
                 unselectedHintBackgroundTexture,
                 TextAnchor.MiddleCenter,
                 paddingX: 4,
@@ -1193,20 +1160,21 @@ namespace CommandTerminal
                 marginY: 4
             );
 
-            Color selectedHintBackground = new()
-            {
-                r = _backgroundColor.r - _selectedHintContrast,
-                g = _backgroundColor.g - _selectedHintContrast,
-                b = _backgroundColor.b - _selectedHintContrast,
-                a = _selectedHintAlpha,
-            };
+            _firstUnselectedHintStyle = GenerateGUIStyle(
+                _unselectedHintTextColor,
+                unselectedHintBackgroundTexture,
+                TextAnchor.MiddleCenter,
+                paddingX: 4,
+                paddingY: 0,
+                marginX: 4,
+                marginY: 4
+            );
+            _firstUnselectedHintStyle.margin.left = 0;
 
-            Texture2D selectedHintBackgroundTexture = new(1, 1);
-            selectedHintBackgroundTexture.SetPixel(0, 0, selectedHintBackground);
-            selectedHintBackgroundTexture.Apply();
+            Texture2D selectedHintBackgroundTexture = GetOrCacheTexture(_selectedHintBackground);
 
             _selectedHintStyle = GenerateGUIStyle(
-                _selectedHintColor,
+                _selectedHintTextColor,
                 selectedHintBackgroundTexture,
                 TextAnchor.MiddleCenter,
                 paddingX: 4,
@@ -1214,6 +1182,17 @@ namespace CommandTerminal
                 marginX: 4,
                 marginY: 4
             );
+
+            _firstSelectedHintStyle = GenerateGUIStyle(
+                _selectedHintTextColor,
+                selectedHintBackgroundTexture,
+                TextAnchor.MiddleCenter,
+                paddingX: 4,
+                paddingY: 0,
+                marginX: 4,
+                marginY: 4
+            );
+            _firstSelectedHintStyle.margin.left = 0;
         }
 
         private GUIStyle GenerateGUIStyle(
@@ -1304,7 +1283,14 @@ namespace CommandTerminal
                     focusedControl = GUI.GetNameOfFocusedControl();
                 }
 
-                if (_lastCompletionBuffer is { Length: > 0 })
+                if (
+                    _lastCompletionBuffer is { Length: > 0 }
+                    && (
+                        _hintDisplayMode
+                        is HintDisplayMode.Always
+                            or HintDisplayMode.AutoCompleteOnly
+                    )
+                )
                 {
                     RenderCompletionHints();
                 }
@@ -1315,6 +1301,7 @@ namespace CommandTerminal
                     if (
                         _showGUIButtons
                         && !string.IsNullOrWhiteSpace(_commandText)
+                        && !string.IsNullOrWhiteSpace(_runButtonText)
                         && GUILayout.Button(
                             _runButtonText,
                             _runButtonStyle,
@@ -1350,7 +1337,7 @@ namespace CommandTerminal
                         an IMGUI bug where the TextEditor state / control focus is lost, I've verified through some
                         debug logs where I track cursor / selection indexes. They get arbitrarily reset to 0.
                         I thought it was due to focusing the control too much, but that doesn't appear to be the case,
-                        again, verified through debug logs. Anyways, oh well, maybe I'll fix it later.
+                        again, verified through debug logs. Anyway, oh well, maybe I'll fix it later.
                      */
                     if (Event.current.type == EventType.Repaint)
                     {
@@ -1500,47 +1487,49 @@ namespace CommandTerminal
                     ++i
                 )
                 {
-                    DrawHint(i % _lastCompletionBuffer.Length);
-                }
-
-                return;
-
-                void DrawHint(int index)
-                {
-                    if (_makeHintsClickable)
-                    {
-                        string command = _lastCompletionBuffer[index];
-                        bool clicked = GUILayout.Button(
-                            command,
-                            _lastCompletionIndex == index
-                                ? _selectedHintStyle
-                                : _unselectedHintStyle,
-                            _completionElementStyles[index]
-                        );
-
-                        if (clicked)
-                        {
-                            _commandText = command;
-                            _lastCompletionIndex = index;
-                            _moveCursor = true;
-                        }
-                    }
-                    else
-                    {
-                        GUILayout.Label(
-                            _lastCompletionBuffer[index],
-                            _lastCompletionIndex == index
-                                ? _selectedHintStyle
-                                : _unselectedHintStyle,
-                            _completionElementStyles[index]
-                        );
-                    }
+                    DrawHint(i == _currentHintStartIndex, i % _lastCompletionBuffer.Length);
                 }
             }
             finally
             {
                 GUILayout.EndHorizontal();
                 _previousLastCompletionIndex = _lastCompletionIndex;
+            }
+        }
+
+        private void DrawHint(bool isFirst, int index)
+        {
+            GUIStyle style;
+            if (isFirst)
+            {
+                style =
+                    _lastCompletionIndex == index
+                        ? _firstSelectedHintStyle
+                        : _firstUnselectedHintStyle;
+            }
+            else
+            {
+                style = _lastCompletionIndex == index ? _selectedHintStyle : _unselectedHintStyle;
+            }
+
+            if (_makeHintsClickable)
+            {
+                string command = _lastCompletionBuffer[index];
+                bool clicked = GUILayout.Button(command, style, _completionElementStyles[index]);
+                if (clicked)
+                {
+                    _commandText = command;
+                    _lastCompletionIndex = index;
+                    _moveCursor = true;
+                }
+            }
+            else
+            {
+                GUILayout.Label(
+                    _lastCompletionBuffer[index],
+                    style,
+                    _completionElementStyles[index]
+                );
             }
         }
 
@@ -1552,12 +1541,12 @@ namespace CommandTerminal
                 if (!CachedSubstrings.TryGetValue(key, out string expected))
                 {
                     expected = key.Substring(1);
-                    CachedSubstrings[key] = expected;
-                }
+                    if (expected.Length == 1 && expected.NeedsLowerInvariantConversion())
+                    {
+                        expected = expected.ToLowerInvariant();
+                    }
 
-                if (expected.Length == 1 && expected.NeedsLowerInvariantConversion())
-                {
-                    expected = expected.ToLowerInvariant();
+                    CachedSubstrings[key] = expected;
                 }
 
                 return Keyboard.current.shiftKey.isPressed
@@ -1570,17 +1559,22 @@ namespace CommandTerminal
                             is { wasPressedThisFrame: true }
                     );
             }
-            if (key.StartsWith("shift+", StringComparison.OrdinalIgnoreCase))
+
+            const string shiftModifier = "shift+";
+            if (
+                shiftModifier.Length < key.Length
+                && key.StartsWith(shiftModifier, StringComparison.OrdinalIgnoreCase)
+            )
             {
                 if (!CachedSubstrings.TryGetValue(key, out string expected))
                 {
-                    expected = key.Substring("shift+".Length);
-                    CachedSubstrings[key] = expected;
-                }
+                    expected = key.Substring(shiftModifier.Length);
+                    if (expected.Length == 1 && expected.NeedsLowerInvariantConversion())
+                    {
+                        expected = expected.ToLowerInvariant();
+                    }
 
-                if (expected.Length == 1 && expected.NeedsLowerInvariantConversion())
-                {
-                    expected = expected.ToLowerInvariant();
+                    CachedSubstrings[key] = expected;
                 }
 
                 return Keyboard.current.shiftKey.isPressed
@@ -1830,7 +1824,11 @@ namespace CommandTerminal
 
         private void DrawGUIButtons()
         {
-            if (_state == TerminalState.Unknown)
+            if (
+                _state != TerminalState.Closed
+                && _state != TerminalState.OpenFull
+                && _state != TerminalState.OpenSmall
+            )
             {
                 return;
             }
@@ -1839,26 +1837,46 @@ namespace CommandTerminal
                 _consoleFont.lineHeight + _buttonStyle.padding.top + _buttonStyle.padding.bottom;
             float xPosition = _buttonStyle.margin.left;
 
-            float width = _buttonStyle.margin.right + _buttonStyle.margin.left;
-            width *= 2;
+            float width = 0f;
             switch (_state)
             {
                 case TerminalState.Closed:
                 {
-                    width += _buttonWidths[_smallButtonText];
-                    width += _buttonWidths[_fullButtonText];
+                    if (!string.IsNullOrWhiteSpace(_smallButtonText))
+                    {
+                        width += _buttonWidths[_smallButtonText];
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(_fullButtonText))
+                    {
+                        width += _buttonWidths[_fullButtonText];
+                    }
+
                     break;
                 }
                 case TerminalState.OpenSmall:
                 {
-                    width += _buttonWidths[_closeButtonText];
-                    width += _buttonWidths[_fullButtonText];
+                    if (!string.IsNullOrWhiteSpace(_closeButtonText))
+                    {
+                        width += _buttonWidths[_closeButtonText];
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(_fullButtonText))
+                    {
+                        width += _buttonWidths[_fullButtonText];
+                    }
                     break;
                 }
                 case TerminalState.OpenFull:
                 {
-                    width += _buttonWidths[_closeButtonText];
-                    width += _buttonWidths[_smallButtonText];
+                    if (!string.IsNullOrWhiteSpace(_closeButtonText))
+                    {
+                        width += _buttonWidths[_closeButtonText];
+                    }
+                    if (!string.IsNullOrWhiteSpace(_smallButtonText))
+                    {
+                        width += _buttonWidths[_smallButtonText];
+                    }
                     break;
                 }
                 default:
@@ -1871,6 +1889,13 @@ namespace CommandTerminal
                 }
             }
 
+            if (width <= 0f)
+            {
+                return;
+            }
+
+            width += 2 * (_buttonStyle.margin.right + _buttonStyle.margin.left);
+
             GUILayout.BeginArea(
                 new Rect(xPosition, _currentOpenT + _buttonStyle.margin.top, width, size)
             );
@@ -1881,6 +1906,7 @@ namespace CommandTerminal
                 {
                     if (
                         _state != TerminalState.Closed
+                        && !string.IsNullOrWhiteSpace(_closeButtonText)
                         && GUILayout.Button(
                             _closeButtonText,
                             _buttonStyle,
@@ -1892,6 +1918,7 @@ namespace CommandTerminal
                     }
                     else if (
                         _state != TerminalState.OpenSmall
+                        && !string.IsNullOrWhiteSpace(_smallButtonText)
                         && GUILayout.Button(
                             _smallButtonText,
                             _buttonStyle,
@@ -1903,6 +1930,7 @@ namespace CommandTerminal
                     }
                     else if (
                         _state != TerminalState.OpenFull
+                        && !string.IsNullOrWhiteSpace(_fullButtonText)
                         && GUILayout.Button(
                             _fullButtonText,
                             _buttonStyle,
@@ -1962,12 +1990,26 @@ namespace CommandTerminal
         {
             return type switch
             {
-                TerminalLogType.Message => _foregroundColor,
+                TerminalLogType.Message => _textColor,
                 TerminalLogType.Warning => _warningColor,
-                TerminalLogType.Input => _inputColor,
-                TerminalLogType.ShellMessage => _shellColor,
+                TerminalLogType.Input => _inputTextColor,
+                TerminalLogType.ShellMessage => _shellMessageColor,
                 _ => _errorColor,
             };
+        }
+
+        private static Texture2D GetOrCacheTexture(Color color)
+        {
+            if (CachedTextures.TryGetValue(color, out Texture2D texture))
+            {
+                return texture;
+            }
+
+            texture = new Texture2D(1, 1);
+            texture.SetPixel(0, 0, color);
+            texture.Apply();
+            CachedTextures[color] = texture;
+            return texture;
         }
     }
 }
