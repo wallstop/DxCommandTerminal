@@ -74,7 +74,7 @@
             }
             _intermediateResults.ExceptWith(terminal.disabledCommands);
 
-            if (_intermediateResults.Any())
+            if (0 < _intermediateResults.Count)
             {
                 string[] ignorableCommands = _intermediateResults.ToArray();
                 Array.Sort(ignorableCommands);

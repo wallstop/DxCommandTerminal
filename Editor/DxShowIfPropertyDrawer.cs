@@ -1,7 +1,9 @@
 ﻿namespace CommandTerminal.Editor
 {
 #if UNITY_EDITOR
+    using System.Reflection;
     using Attributes;
+    using Extensions;
     using UnityEngine;
     using UnityEditor;
 
@@ -23,18 +25,38 @@
 
         private bool ShouldShow(SerializedProperty property)
         {
-            DxShowIfAttribute dxShowIf = (DxShowIfAttribute)attribute;
-            SerializedProperty conditionProperty = property.serializedObject.FindProperty(
-                dxShowIf.conditionField
-            );
-            if (conditionProperty is { propertyType: SerializedPropertyType.Boolean })
+            if (attribute is not DxShowIfAttribute showIf)
             {
-                bool condition = conditionProperty.boolValue;
-                return dxShowIf.inverse ? !condition : condition;
+                return true;
             }
-            return true;
+
+            SerializedProperty conditionProperty = property.serializedObject.FindProperty(
+                showIf.conditionField
+            );
+            if (conditionProperty is not { propertyType: SerializedPropertyType.Boolean })
+            {
+                if (conditionProperty != null)
+                {
+                    return true;
+                }
+
+                object enclosingObject = property.GetEnclosingObject(out _);
+                FieldInfo conditionField = enclosingObject
+                    ?.GetType()
+                    .GetField(
+                        showIf.conditionField,
+                        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic
+                    );
+                if (conditionField?.GetValue(enclosingObject) is bool maybeCondition)
+                {
+                    return showIf.inverse ? !maybeCondition : maybeCondition;
+                }
+                return true;
+            }
+
+            bool condition = conditionProperty.boolValue;
+            return showIf.inverse ? !condition : condition;
         }
     }
-
 #endif
 }

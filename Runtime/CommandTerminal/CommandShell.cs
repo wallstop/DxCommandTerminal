@@ -57,7 +57,7 @@ namespace CommandTerminal
         public ImmutableHashSet<string> IgnoredCommands => _immutableIgnoredCommands;
         public bool IgnoringDefaultCommands { get; private set; }
 
-        public bool HasErrors => _errorMessages.Any();
+        public bool HasErrors => 0 < _errorMessages.Count;
 
         private readonly CommandHistory _history;
 

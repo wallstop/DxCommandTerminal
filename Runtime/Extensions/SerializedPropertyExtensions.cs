@@ -153,6 +153,75 @@
             }
         }
 
+        /// <summary>
+        /// Gets the instance object that contains the given SerializedProperty.
+        /// </summary>
+        /// <param name="property">The SerializedProperty.</param>
+        /// <param name="fieldInfo">Outputs the FieldInfo of the referenced field.</param>
+        /// <returns>The instance object that owns the field.</returns>
+        public static object GetEnclosingObject(
+            this SerializedProperty property,
+            out FieldInfo fieldInfo
+        )
+        {
+            fieldInfo = null;
+            object obj = property.serializedObject.targetObject;
+            if (obj == null)
+            {
+                return null;
+            }
+            Type type = obj.GetType();
+            string[] pathParts = property.propertyPath.Split('.');
+
+            // Traverse the path but stop at the second-to-last field
+            for (int i = 0; i < pathParts.Length - 1; ++i)
+            {
+                string fieldName = pathParts[i];
+
+                if (fieldName == "Array")
+                {
+                    // Move to "data[i]"
+                    ++i;
+                    if (pathParts.Length <= i)
+                    {
+                        break;
+                    }
+
+                    int index = int.Parse(pathParts[i].Replace("data[", "").Replace("]", ""));
+                    obj = GetElementAtIndex(obj, index);
+                    type = obj?.GetType();
+                    continue;
+                }
+
+                fieldInfo = type?.GetField(
+                    fieldName,
+                    BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance
+                );
+                if (fieldInfo == null)
+                {
+                    return null;
+                }
+
+                // Move deeper but stop before the last property in the path
+                if (i < pathParts.Length - 2)
+                {
+                    obj = fieldInfo.GetValue(obj);
+                    type = fieldInfo.FieldType;
+                }
+            }
+
+            return obj;
+        }
+
+        private static object GetElementAtIndex(object obj, int index)
+        {
+            if (obj is System.Collections.IList list && index >= 0 && index < list.Count)
+            {
+                return list[index];
+            }
+            return null;
+        }
+
         // Special handling for Gradients, since Unity doesn't expose gradientValue in SerializedProperty
         private static Gradient GetGradientValue(SerializedProperty property)
         {
