@@ -1224,6 +1224,7 @@
             _terminalContainer.style.width = new StyleLength(Screen.width);
             _terminalContainer.style.height = new StyleLength(_realWindowSize);
             _terminalContainer.style.backgroundColor = _background;
+            _terminalContainer.style.flexDirection = FlexDirection.Column;
             root.Add(_terminalContainer);
 
             _logScrollView = new ScrollView();
@@ -1234,14 +1235,16 @@
             _autoCompleteContainer = new VisualElement();
             _autoCompleteContainer.name = "AutoCompleteContainer";
             _autoCompleteContainer.style.flexDirection = FlexDirection.Row;
+            _autoCompleteContainer.style.flexShrink = 0;
             _terminalContainer.Add(_autoCompleteContainer);
 
             _inputContainer = new VisualElement();
             _inputContainer.name = "InputContainer";
             _inputContainer.style.flexDirection = FlexDirection.Row;
             _inputContainer.style.alignItems = Align.Center;
-            _inputContainer.style.paddingTop = 4;
-            _inputContainer.style.paddingBottom = 4;
+            _inputContainer.style.flexShrink = 0;
+            // _inputContainer.style.paddingTop = 4;
+            // _inputContainer.style.paddingBottom = 4;
             _terminalContainer.Add(_inputContainer);
 
             if (
@@ -1269,30 +1272,37 @@
 
             _commandInput = new TextField();
             _commandInput.name = CommandControlName;
+            _commandInput.pickingMode = PickingMode.Position;
             _commandInput.value = _commandText;
             _commandInput.style.flexGrow = 1;
-            _commandInput.RegisterCallback<ChangeEvent<string>>(evt =>
-            {
-                _commandText = evt.newValue;
-                _needsAutoCompleteReset = true;
-                /*
-                    Something is FUCKED here, I can't figure it out. When we have "Make Hints Clickable" on,
-                    back-spacing from an auto-completed word highlights the word for a few frames. I think this is
-                    an IMGUI bug where the TextEditor state / control focus is lost, I've verified through some
-                    debug logs where I track cursor / selection indexes. They get arbitrarily reset to 0.
-                    I thought it was due to focusing the control too much, but that doesn't appear to be the case,
-                    again, verified through debug logs. Anyway, oh well, maybe I'll fix it later.
-                 */
-                ResetAutoComplete();
-            });
-            _commandInput.RegisterCallback<KeyDownEvent>(evt =>
-            {
-                if (evt.keyCode == KeyCode.Return || evt.keyCode == KeyCode.KeypadEnter)
+            _commandInput.RegisterCallback<ChangeEvent<string>>(
+                evt =>
                 {
-                    EnterCommand();
-                    evt.StopPropagation();
-                }
-            });
+                    _commandText = evt.newValue;
+                    //_needsAutoCompleteReset = true;
+                    /*
+                        Something is FUCKED here, I can't figure it out. When we have "Make Hints Clickable" on,
+                        back-spacing from an auto-completed word highlights the word for a few frames. I think this is
+                        an IMGUI bug where the TextEditor state / control focus is lost, I've verified through some
+                        debug logs where I track cursor / selection indexes. They get arbitrarily reset to 0.
+                        I thought it was due to focusing the control too much, but that doesn't appear to be the case,
+                        again, verified through debug logs. Anyway, oh well, maybe I'll fix it later.
+                     */
+                    //ResetAutoComplete();
+                },
+                TrickleDown.TrickleDown
+            );
+            _commandInput.RegisterCallback<KeyDownEvent>(
+                evt =>
+                {
+                    if (evt.keyCode == KeyCode.Return || evt.keyCode == KeyCode.KeypadEnter)
+                    {
+                        EnterCommand();
+                        this.ExecuteFunctionAfterDelay(() => _commandInput.Focus(), 0.3f);
+                    }
+                },
+                TrickleDown.TrickleDown
+            );
             _inputContainer.Add(_commandInput);
 
             _stateButtonContainer = new VisualElement();
@@ -1318,8 +1328,9 @@
             {
                 _commandInput.value = _commandText;
             }
-            if (_needsFocus)
+            else if (_needsFocus && _commandInput.focusable)
             {
+                _commandInput.schedule.Execute(() => _commandInput.Focus()).ExecuteLater(16);
                 _commandInput.Focus();
                 _moveCursor = true;
                 _needsFocus = false;
@@ -1682,10 +1693,13 @@
 
                 _commandText = string.Empty;
                 _scrollPosition.y = int.MaxValue;
+                _needsFocus = true;
             }
             finally
             {
                 ResetAutoComplete();
+                //.schedule.Execute(() => _commandInput.Focus()).ExecuteLater(1_000);
+                //_commandInput.Focus();
             }
         }
 
