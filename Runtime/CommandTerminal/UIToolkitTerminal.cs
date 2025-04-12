@@ -12,6 +12,7 @@
     using UnityEngine.Serialization;
     using UnityEngine.UIElements;
     using Utils;
+    using Button = UnityEngine.UIElements.Button;
 #if ENABLE_INPUT_SYSTEM
     using UnityEngine.InputSystem;
     using UnityEngine.InputSystem.Controls;
@@ -343,6 +344,7 @@
         private TextField _commandInput;
         private Button _runButton;
         private VisualElement _stateButtonContainer;
+        private VisualElement _textInput;
 
         [StringFormatMethod("format")]
         public static bool Log(string format, params object[] parameters)
@@ -1221,7 +1223,7 @@
             _terminalContainer.name = "TerminalContainer";
             _terminalContainer.style.position = Position.Absolute;
             _terminalContainer.style.left = 0;
-            _terminalContainer.style.width = new StyleLength(Screen.width);
+            _terminalContainer.style.width = new StyleLength(Length.Percent(100));
             _terminalContainer.style.height = new StyleLength(_realWindowSize);
             _terminalContainer.style.backgroundColor = _background;
             _terminalContainer.style.flexDirection = FlexDirection.Column;
@@ -1298,12 +1300,14 @@
                     if (evt.keyCode == KeyCode.Return || evt.keyCode == KeyCode.KeypadEnter)
                     {
                         EnterCommand();
-                        this.ExecuteFunctionAfterDelay(() => _commandInput.Focus(), 0.3f);
+                        evt.StopPropagation();
+                        evt.PreventDefault();
                     }
                 },
                 TrickleDown.TrickleDown
             );
             _inputContainer.Add(_commandInput);
+            _textInput = _commandInput.Q<VisualElement>("unity-text-input");
 
             _stateButtonContainer = new VisualElement();
             _stateButtonContainer.name = "StateButtonContainer";
@@ -1328,10 +1332,10 @@
             {
                 _commandInput.value = _commandText;
             }
-            else if (_needsFocus && _commandInput.focusable)
+            else if (_needsFocus && _textInput.focusable)
             {
-                _commandInput.schedule.Execute(() => _commandInput.Focus()).ExecuteLater(16);
-                _commandInput.Focus();
+                _textInput.schedule.Execute(() => _textInput.Focus()).ExecuteLater(0);
+                _textInput.Focus();
                 _moveCursor = true;
                 _needsFocus = false;
             }
@@ -1352,6 +1356,15 @@
                 foreach (LogItem log in logs)
                 {
                     Label logLabel = new Label(log.message);
+                    // TODO: Apply via USS
+                    logLabel.style.marginBottom = 0;
+                    logLabel.style.marginTop = 0;
+                    logLabel.style.marginLeft = 0;
+                    logLabel.style.marginRight = 0;
+                    logLabel.style.paddingBottom = 0;
+                    logLabel.style.paddingTop = 0;
+                    logLabel.style.paddingLeft = 0;
+                    logLabel.style.paddingRight = 0;
                     logLabel.style.color = GetLogColor(log.type);
                     content.Add(logLabel);
                 }
@@ -1698,8 +1711,6 @@
             finally
             {
                 ResetAutoComplete();
-                //.schedule.Execute(() => _commandInput.Focus()).ExecuteLater(1_000);
-                //_commandInput.Focus();
             }
         }
 
