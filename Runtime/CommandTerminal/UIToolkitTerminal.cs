@@ -1308,6 +1308,8 @@
             );
             _inputContainer.Add(_commandInput);
             _textInput = _commandInput.Q<VisualElement>("unity-text-input");
+            _textInput.style.backgroundColor = _inputBackground;
+            _textInput.style.color = _inputTextColor;
 
             _stateButtonContainer = new VisualElement();
             _stateButtonContainer.name = "StateButtonContainer";
