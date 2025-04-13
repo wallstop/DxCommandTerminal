@@ -98,6 +98,8 @@
 
 .terminal-output-label {
     white-space: normal;
+    margin: 0;
+    padding: 0;
 }
 
 .terminal-button {

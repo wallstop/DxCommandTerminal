@@ -1434,7 +1434,7 @@
 
             if (!shouldDisplay)
             {
-                if (_autoCompleteContainer.childCount > 0)
+                if (0 < _autoCompleteContainer.childCount)
                 {
                     _autoCompleteContainer.Clear();
                 }

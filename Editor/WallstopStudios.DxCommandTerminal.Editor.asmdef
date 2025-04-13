@@ -1,6 +1,6 @@
 {
     "name": "WallstopStudios.DxCommandTerminal.Editor",
-    "rootNamespace": "",
+    "rootNamespace": "CommandTerminal",
     "references": [
         "WallstopStudios.DxCommandTerminal"
     ],
