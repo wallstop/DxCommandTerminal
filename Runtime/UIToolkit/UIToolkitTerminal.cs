@@ -342,6 +342,7 @@
         private Button _runButton;
         private VisualElement _stateButtonContainer;
         private VisualElement _textInput;
+        private long? _lastSeenBufferVersion;
 
         [StringFormatMethod("format")]
         public static bool Log(string format, params object[] parameters)
@@ -1367,6 +1368,7 @@
             {
                 return;
             }
+
             VisualElement content = _logScrollView.contentContainer;
             if (content.childCount != logs.Count)
             {
@@ -1374,11 +1376,14 @@
                 foreach (LogItem log in logs)
                 {
                     Label logLabel = new Label(log.message);
+                    logLabel.AddToClassList("terminal-output-label");
                     SetupLabel(logLabel, log);
                     content.Add(logLabel);
                 }
+                _logScrollView.scrollOffset = new Vector2(0, int.MaxValue);
+                _lastSeenBufferVersion = Buffer.Version;
             }
-            else
+            else if (_lastSeenBufferVersion != Buffer.Version)
             {
                 for (int i = 0; i < logs.Count; i++)
                 {
@@ -1389,51 +1394,35 @@
                         logLabel.text = logs[i].message;
                     }
                 }
+                _lastSeenBufferVersion = Buffer.Version;
             }
-            _logScrollView.scrollOffset = new Vector2(0, int.MaxValue);
+            return;
 
             void SetupLabel(Label label, LogItem log)
             {
-                label.ClearClassList();
-                label.AddToClassList("terminal-output-label"); // Base class
-                switch (log.type)
-                {
-                    case TerminalLogType.ShellMessage:
-                    {
-                        label.AddToClassList("terminal-output-label--shell"); // Modifier class
-                        break;
-                    }
-                    case TerminalLogType.Exception:
-                    case TerminalLogType.Assert:
-                    case TerminalLogType.Error:
-                    {
-                        label.AddToClassList("terminal-output-label--error"); // Modifier class
-                        break;
-                    }
-                    case TerminalLogType.Warning:
-                    {
-                        label.AddToClassList("terminal-output-label--warning"); // Modifier class
-                        break;
-                    }
-                    case TerminalLogType.Message:
-                    {
-                        label.AddToClassList("terminal-output-label--message"); // Modifier class
-                        break;
-                    }
-                    case TerminalLogType.Input:
-                    {
-                        label.AddToClassList("terminal-output-label--input"); // Modifier class
-                        break;
-                    }
-                    default:
-                    {
-                        throw new InvalidEnumArgumentException(
-                            nameof(log.type),
-                            (int)log.type,
-                            typeof(TerminalLogType)
-                        );
-                    }
-                }
+                label.EnableInClassList(
+                    "terminal-output-label--shell",
+                    log.type == TerminalLogType.ShellMessage
+                );
+                label.EnableInClassList(
+                    "terminal-output-label--error",
+                    log.type
+                        is TerminalLogType.Exception
+                            or TerminalLogType.Error
+                            or TerminalLogType.Assert
+                );
+                label.EnableInClassList(
+                    "terminal-output-label--warning",
+                    log.type == TerminalLogType.Warning
+                );
+                label.EnableInClassList(
+                    "terminal-output-label--message",
+                    log.type == TerminalLogType.Message
+                );
+                label.EnableInClassList(
+                    "terminal-output-label--input",
+                    log.type == TerminalLogType.Input
+                );
             }
         }
 
@@ -1499,7 +1488,7 @@
             {
                 for (int i = 0; i < currentChildCount; i++)
                 {
-                    VisualElement hintElement = _autoCompleteContainer.ElementAt(i);
+                    VisualElement hintElement = _autoCompleteContainer[i];
 
                     bool isSelected = (i == _lastCompletionIndex);
 
@@ -1536,8 +1525,8 @@
             }
             else
             {
-                firstButton = _stateButtonContainer.ElementAt(0) as Button;
-                secondButton = _stateButtonContainer.ElementAt(1) as Button;
+                firstButton = _stateButtonContainer[0] as Button;
+                secondButton = _stateButtonContainer[1] as Button;
             }
 
             switch (_state)

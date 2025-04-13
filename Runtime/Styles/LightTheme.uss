@@ -17,18 +17,16 @@
     --text-error: rgba(220, 20, 60, 1.0);
 }
 
+.light-theme .log-scroll-view .unity-scroller .unity-scroller__dragger {
+    background-color: var(--text-shell);
+}
+
 .light-theme .terminal-container {
     background-color: var(--terminal-bg);
-    position: absolute;
-    left: 0;
-    width: 100%;
-    flex-direction: column;
 }
 
 .light-theme .autocomplete-popup {
     background-color: var(--popup-bg);
-    flex-direction: row;
-    flex-shrink: 0;
 }
 
 .light-theme .autocomplete-item {
@@ -47,29 +45,16 @@
 
 .light-theme .terminal-input-caret {
     color: var(--caret-color);
-    background-color: var(--input-field-bg); 
-    flex-grow: 1;
-    align-items: center;
-    padding: 2px 0;
-    margin: 0;
+    background-color: var(--input-field-bg);
 }
 
 .light-theme .terminal-input-field {
     background-color: var(--input-field-bg);
-    flex-grow: 1;
-    padding: 0;
-    margin: 0;
 }
 
 .light-theme .terminal-input-field > #unity-text-input {
     color: var(--input-text-color);
     background-color: var(--input-field-bg);
-    border-top-width: 0;
-    border-bottom-width: 0;
-    border-left-width: 0;
-    border-right-width: 0;
-    padding: 2px 0;
-    margin: 0;
 }
 
 .light-theme .terminal-input-field > #unity-text-input > .unity-text-element {

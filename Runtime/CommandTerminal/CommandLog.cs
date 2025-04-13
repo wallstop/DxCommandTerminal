@@ -35,10 +35,13 @@ namespace CommandTerminal
     {
         public IReadOnlyList<LogItem> Logs => _logs;
         public int Capacity => _logs.Capacity;
+        public long Version => _version;
 
         public readonly HashSet<TerminalLogType> ignoredLogTypes;
 
         private readonly CyclicBuffer<LogItem> _logs;
+
+        private long _version;
 
         public CommandLog(int maxItems, IEnumerable<TerminalLogType> ignoredLogTypes = null)
         {
@@ -70,6 +73,7 @@ namespace CommandTerminal
                 return false;
             }
 
+            _version++;
             LogItem log = new(type, message, stackTrace);
             _logs.Add(log);
             return true;
@@ -79,11 +83,16 @@ namespace CommandTerminal
         {
             int logCount = _logs.Count;
             _logs.Clear();
+            _version++;
             return logCount;
         }
 
         public void Resize(int newCapacity)
         {
+            if (newCapacity < _logs.Count)
+            {
+                _version++;
+            }
             _logs.Resize(newCapacity);
         }
     }
