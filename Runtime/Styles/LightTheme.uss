@@ -1,14 +1,14 @@
 ﻿/* LightTheme.uss */
 .light-theme {
     --terminal-bg: rgba(245, 245, 245, 0.85);
-    --popup-bg: rgba(235, 235, 235, 0.90);
+    --popup-bg: rgba(235, 235, 235, 0.70);
     --popup-text: #333333;
     --button-accent-bg: #4682B4;
     --button-accent-text: #FFFFFF;
     --caret-color: #000000;
     --input-field-bg: rgba(255, 255, 255, 0.70);
     --input-text-color: #000000;
-    --button-toggle-bg: rgba(220, 220, 220, 0.90);
+    --button-toggle-bg: rgba(220, 220, 220, 0.70);
     --button-toggle-text: #333333;
     --text-message: #333333;
     --text-warning: #E69500;
@@ -103,12 +103,15 @@
 .light-theme .terminal-button-toggle {
     background-color: var(--button-toggle-bg);
     color: var(--button-toggle-text);
+    padding: 0 2;
+    margin: 0 1;
+    border-radius: 5px;
 }
 
 .light-theme .state-button-container {
     position: absolute;
     flex-direction: row;
-    left: 4px;
+    left: 2px;
 }
 
 .light-theme .terminal-output-label {

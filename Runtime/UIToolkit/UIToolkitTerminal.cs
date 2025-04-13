@@ -1453,79 +1453,62 @@
 
         private void RefreshStateButtons()
         {
-            _stateButtonContainer.Clear();
             if (!_showGUIButtons)
             {
+                _stateButtonContainer.Clear();
                 return;
             }
-            Button firstButton = null;
-            Button secondButton = null;
+
+            Button firstButton;
+            Button secondButton;
+            if (_stateButtonContainer.childCount == 0)
+            {
+                firstButton = new Button(FirstClicked);
+                firstButton.name = "StateButton1";
+                firstButton.AddToClassList("terminal-button-toggle");
+                _stateButtonContainer.Add(firstButton);
+
+                secondButton = new Button(SecondClicked);
+                secondButton.name = "StateButton2";
+                secondButton.AddToClassList("terminal-button-toggle");
+                _stateButtonContainer.Add(secondButton);
+            }
+            else
+            {
+                firstButton = _stateButtonContainer.Q<Button>("StateButton1");
+                secondButton = _stateButtonContainer.Q<Button>("StateButton2");
+            }
+
             switch (_state)
             {
                 case TerminalState.Closed:
                     if (!string.IsNullOrWhiteSpace(_smallButtonText))
                     {
-                        firstButton = new Button(() =>
-                        {
-                            SetState(TerminalState.OpenSmall);
-                        })
-                        {
-                            text = _smallButtonText,
-                        };
+                        firstButton.text = _smallButtonText;
                     }
                     if (!string.IsNullOrWhiteSpace(_fullButtonText))
                     {
-                        secondButton = new Button(() =>
-                        {
-                            SetState(TerminalState.OpenFull);
-                        })
-                        {
-                            text = _fullButtonText,
-                        };
+                        secondButton.text = _fullButtonText;
                     }
                     break;
                 case TerminalState.OpenSmall:
                     if (!string.IsNullOrWhiteSpace(_closeButtonText))
                     {
-                        firstButton = new Button(() =>
-                        {
-                            SetState(TerminalState.Closed);
-                        })
-                        {
-                            text = _closeButtonText,
-                        };
+                        firstButton.text = _closeButtonText;
                     }
                     if (!string.IsNullOrWhiteSpace(_fullButtonText))
                     {
-                        secondButton = new Button(() =>
-                        {
-                            SetState(TerminalState.OpenFull);
-                        })
-                        {
-                            text = _fullButtonText,
-                        };
+                        secondButton.text = _fullButtonText;
                     }
                     break;
                 case TerminalState.OpenFull:
                     if (!string.IsNullOrWhiteSpace(_closeButtonText))
                     {
-                        firstButton = new Button(() =>
-                        {
-                            SetState(TerminalState.Closed);
-                        })
-                        {
-                            text = _closeButtonText,
-                        };
+                        firstButton.text = _closeButtonText;
                     }
                     if (!string.IsNullOrWhiteSpace(_smallButtonText))
                     {
-                        secondButton = new Button(() =>
-                        {
-                            SetState(TerminalState.OpenSmall);
-                        })
-                        {
-                            text = _smallButtonText,
-                        };
+                        secondButton.text = _smallButtonText;
                     }
                     break;
                 default:
@@ -1535,19 +1518,64 @@
                         typeof(TerminalState)
                     );
             }
-            if (firstButton != null)
-            {
-                firstButton.name = "StateButton1";
-                firstButton.AddToClassList("terminal-button-toggle");
-                _stateButtonContainer.Add(firstButton);
-            }
-            if (secondButton != null)
-            {
-                secondButton.name = "StateButton2";
-                secondButton.AddToClassList("terminal-button-toggle");
-                _stateButtonContainer.Add(secondButton);
-            }
             _stateButtonContainer.style.top = _currentOpenT + 4;
+            return;
+
+            void FirstClicked()
+            {
+                switch (_state)
+                {
+                    case TerminalState.Closed:
+                        if (!string.IsNullOrWhiteSpace(_smallButtonText))
+                        {
+                            SetState(TerminalState.OpenSmall);
+                        }
+
+                        break;
+                    case TerminalState.OpenSmall:
+                    case TerminalState.OpenFull:
+                        if (!string.IsNullOrWhiteSpace(_closeButtonText))
+                        {
+                            SetState(TerminalState.Closed);
+                        }
+
+                        break;
+                    default:
+                        throw new InvalidEnumArgumentException(
+                            nameof(_state),
+                            (int)_state,
+                            typeof(TerminalState)
+                        );
+                }
+            }
+
+            void SecondClicked()
+            {
+                switch (_state)
+                {
+                    case TerminalState.Closed:
+                    case TerminalState.OpenSmall:
+
+                        if (!string.IsNullOrWhiteSpace(_fullButtonText))
+                        {
+                            SetState(TerminalState.OpenFull);
+                        }
+                        break;
+                    case TerminalState.OpenFull:
+
+                        if (!string.IsNullOrWhiteSpace(_smallButtonText))
+                        {
+                            SetState(TerminalState.OpenSmall);
+                        }
+                        break;
+                    default:
+                        throw new InvalidEnumArgumentException(
+                            nameof(_state),
+                            (int)_state,
+                            typeof(TerminalState)
+                        );
+                }
+            }
         }
 
 #if ENABLE_INPUT_SYSTEM
