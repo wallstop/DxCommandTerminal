@@ -1,28 +1,26 @@
-﻿namespace CommandTerminal
+﻿namespace CommandTerminal.UIToolkit
 {
     using System;
     using System.Collections.Generic;
     using System.ComponentModel;
     using System.Linq;
     using Attributes;
-    using Extensions;
+    using CommandTerminal;
+    using CommandTerminal.Extensions;
+    using CommandTerminal.Utils;
     using JetBrains.Annotations;
     using UnityEditor;
     using UnityEngine;
-    using UnityEngine.Serialization;
-    using UnityEngine.UIElements;
-    using Utils;
-    using Button = UnityEngine.UIElements.Button;
-#if ENABLE_INPUT_SYSTEM
     using UnityEngine.InputSystem;
     using UnityEngine.InputSystem.Controls;
-#endif
+    using UnityEngine.Serialization;
+    using UnityEngine.UIElements;
+    using Button = UnityEngine.UIElements.Button;
 
     [DisallowMultipleComponent]
+    [RequireComponent(typeof(TerminalThemeSwitcher))]
     public sealed class UIToolkitTerminal : MonoBehaviour
     {
-        private const string CommandControlName = "CommandTextField";
-
         private static readonly Dictionary<string, string> CachedSubstrings = new();
         private static readonly Dictionary<Color, Texture2D> CachedTextures = new();
 
@@ -1211,42 +1209,31 @@
                 // TODO: Handle this better
                 uiDoc = gameObject.AddComponent<UIDocument>();
             }
-            VisualElement root = uiDoc.rootVisualElement;
-            root.style.flexGrow = 1;
-            root.style.position = Position.Absolute;
-            root.style.top = 0;
-            root.style.left = 0;
-            root.style.width = new StyleLength(Length.Percent(100));
-            root.style.height = new StyleLength(Length.Percent(100));
+            VisualElement uiRoot = uiDoc.rootVisualElement;
+            VisualElement root = new();
+            uiRoot.Add(root);
+            root.name = "TerminalRoot";
+            root.AddToClassList("terminal-root");
 
             _terminalContainer = new VisualElement();
             _terminalContainer.name = "TerminalContainer";
-            _terminalContainer.style.position = Position.Absolute;
-            _terminalContainer.style.left = 0;
-            _terminalContainer.style.width = new StyleLength(Length.Percent(100));
+            _terminalContainer.AddToClassList("terminal-container");
             _terminalContainer.style.height = new StyleLength(_realWindowSize);
-            _terminalContainer.style.backgroundColor = _background;
-            _terminalContainer.style.flexDirection = FlexDirection.Column;
             root.Add(_terminalContainer);
 
             _logScrollView = new ScrollView();
             _logScrollView.name = "LogScrollView";
-            _logScrollView.style.flexGrow = 1;
+            _logScrollView.AddToClassList("log-scroll-view");
             _terminalContainer.Add(_logScrollView);
 
             _autoCompleteContainer = new VisualElement();
-            _autoCompleteContainer.name = "AutoCompleteContainer";
-            _autoCompleteContainer.style.flexDirection = FlexDirection.Row;
-            _autoCompleteContainer.style.flexShrink = 0;
+            _autoCompleteContainer.name = "AutoCompletePopup";
+            _autoCompleteContainer.AddToClassList("autocomplete-popup");
             _terminalContainer.Add(_autoCompleteContainer);
 
             _inputContainer = new VisualElement();
             _inputContainer.name = "InputContainer";
-            _inputContainer.style.flexDirection = FlexDirection.Row;
-            _inputContainer.style.alignItems = Align.Center;
-            _inputContainer.style.flexShrink = 0;
-            // _inputContainer.style.paddingTop = 4;
-            // _inputContainer.style.paddingBottom = 4;
+            _inputContainer.AddToClassList("input-container");
             _terminalContainer.Add(_inputContainer);
 
             if (
@@ -1262,6 +1249,8 @@
                 {
                     text = _runButtonText,
                 };
+                _runButton.name = "RunCommandButton";
+                _runButton.AddToClassList("terminal-button-run");
                 _inputContainer.Add(_runButton);
             }
 
@@ -1269,14 +1258,15 @@
             {
                 Label caretLabel = new Label(_inputCaret);
                 caretLabel.name = "InputCaret";
+                caretLabel.AddToClassList("terminal-input-caret");
                 _inputContainer.Add(caretLabel);
             }
 
             _commandInput = new TextField();
-            _commandInput.name = CommandControlName;
+            _commandInput.name = "CommandInput";
+            _commandInput.AddToClassList("terminal-input-field");
             _commandInput.pickingMode = PickingMode.Position;
             _commandInput.value = _commandText;
-            _commandInput.style.flexGrow = 1;
             _commandInput.RegisterCallback<ChangeEvent<string>>(
                 evt =>
                 {
@@ -1308,13 +1298,10 @@
             );
             _inputContainer.Add(_commandInput);
             _textInput = _commandInput.Q<VisualElement>("unity-text-input");
-            _textInput.style.backgroundColor = _inputBackground;
-            _textInput.style.color = _inputTextColor;
 
             _stateButtonContainer = new VisualElement();
             _stateButtonContainer.name = "StateButtonContainer";
-            _stateButtonContainer.style.position = Position.Absolute;
-            _stateButtonContainer.style.left = 4;
+            _stateButtonContainer.AddToClassList("state-button-container");
             root.Add(_stateButtonContainer);
             RefreshStateButtons();
         }
@@ -1367,7 +1354,7 @@
                     logLabel.style.paddingTop = 0;
                     logLabel.style.paddingLeft = 0;
                     logLabel.style.paddingRight = 0;
-                    logLabel.style.color = GetLogColor(log.type);
+                    SetupLabel(logLabel, log);
                     content.Add(logLabel);
                 }
             }
@@ -1378,12 +1365,57 @@
                     Label logLabel = content[i] as Label;
                     if (logLabel != null)
                     {
+                        LogItem logItem = logs[i];
+                        SetupLabel(logLabel, logItem);
                         logLabel.text = logs[i].message;
                         logLabel.style.color = GetLogColor(logs[i].type);
                     }
                 }
             }
             _logScrollView.scrollOffset = new Vector2(0, int.MaxValue);
+
+            void SetupLabel(Label label, LogItem log)
+            {
+                label.AddToClassList("terminal-output-label"); // Base class
+                switch (log.type)
+                {
+                    case TerminalLogType.ShellMessage:
+                    {
+                        label.AddToClassList("terminal-output-label--shell"); // Modifier class
+                        break;
+                    }
+                    case TerminalLogType.Exception:
+                    case TerminalLogType.Assert:
+                    case TerminalLogType.Error:
+                    {
+                        label.AddToClassList("terminal-output-label--error"); // Modifier class
+                        break;
+                    }
+                    case TerminalLogType.Warning:
+                    {
+                        label.AddToClassList("terminal-output-label--warning"); // Modifier class
+                        break;
+                    }
+                    case TerminalLogType.Message:
+                    {
+                        label.AddToClassList("terminal-output-label--message"); // Modifier class
+                        break;
+                    }
+                    case TerminalLogType.Input:
+                    {
+                        label.AddToClassList("terminal-output-label--input"); // Modifier class
+                        break;
+                    }
+                    default:
+                    {
+                        throw new InvalidEnumArgumentException(
+                            nameof(log.type),
+                            (int)log.type,
+                            typeof(TerminalLogType)
+                        );
+                    }
+                }
+            }
         }
 
         private void RefreshAutoCompleteHints()
@@ -1401,6 +1433,7 @@
                 for (int i = 0; i < _lastCompletionBuffer.Length; i++)
                 {
                     string hint = _lastCompletionBuffer[i];
+                    VisualElement hintElement;
                     if (_makeHintsClickable)
                     {
                         Button hintButton = new Button(() =>
@@ -1412,13 +1445,18 @@
                         {
                             text = hint,
                         };
+                        hintElement = hintButton;
                         _autoCompleteContainer.Add(hintButton);
                     }
                     else
                     {
                         Label hintLabel = new Label(hint);
+                        hintElement = hintLabel;
                         _autoCompleteContainer.Add(hintLabel);
                     }
+
+                    hintElement.name = $"SuggestionText{i}";
+                    hintElement.AddToClassList("autocomplete-item");
                 }
             }
         }
@@ -1426,6 +1464,10 @@
         private void RefreshStateButtons()
         {
             _stateButtonContainer.Clear();
+            if (!_showGUIButtons)
+            {
+                return;
+            }
             Button firstButton = null;
             Button secondButton = null;
             switch (_state)
@@ -1505,10 +1547,14 @@
             }
             if (firstButton != null)
             {
+                firstButton.name = "StateButton1";
+                firstButton.AddToClassList("terminal-button-toggle");
                 _stateButtonContainer.Add(firstButton);
             }
             if (secondButton != null)
             {
+                secondButton.name = "StateButton2";
+                secondButton.AddToClassList("terminal-button-toggle");
                 _stateButtonContainer.Add(secondButton);
             }
             _stateButtonContainer.style.top = _currentOpenT + 4;

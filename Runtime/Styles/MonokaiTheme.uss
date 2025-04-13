@@ -1,0 +1,82 @@
+﻿/* MonokaiTheme.uss */
+.monokai-theme {
+    --terminal-bg: rgba(39, 40, 34, 0.85); /* #272822 */
+    --popup-bg: rgba(55, 56, 50, 0.90);
+    --popup-text: #F8F8F2;
+    --button-accent-bg: #AE81FF; /* purple */
+    --button-accent-text: #F8F8F2;
+    --caret-color: #A6E22E; /* green */
+    --input-field-bg: rgba(55, 56, 50, 0.90);
+    --input-text-color: #A6E22E; /* green */
+    --button-toggle-bg: rgba(75, 71, 58, 0.90); /* #4B473A */
+    --button-toggle-text: #F8F8F2;
+    --text-message: #F8F8F2; /* off white */
+    --text-warning: #E6DB74; /* yellow */
+    --text-input-echo: #66D9EF; /* cyan/blue */
+    --text-shell: #75715E; /* grey */
+    --text-error: #F92672; /* pink/red */
+}
+
+.monokai-theme .terminal-container {
+    background-color: var(--terminal-bg);
+    flex-grow: 1;
+}
+
+.monokai-theme .autocomplete-popup {
+    background-color: var(--popup-bg);
+}
+
+.monokai-theme .autocomplete-item {
+    color: var(--popup-text);
+}
+.monokai-theme .autocomplete-item Button {
+    background-color: transparent;
+    color: var(--popup-text);
+    border-width: 0;
+}
+
+.monokai-theme .terminal-button-run {
+    background-color: var(--button-accent-bg);
+    color: var(--button-accent-text);
+}
+
+.monokai-theme .terminal-input-caret {
+    color: var(--caret-color);
+}
+
+.monokai-theme .terminal-input-field {
+    background-color: var(--input-field-bg);
+}
+
+.monokai-theme .terminal-input-field > .unity-text-input {
+    color: var(--input-text-color);
+}
+
+.monokai-theme .terminal-button-toggle {
+    background-color: var(--button-toggle-bg);
+    color: var(--button-toggle-text);
+}
+
+.monokai-theme .terminal-output-label {
+    white-space: normal;
+}
+
+.monokai-theme .terminal-output-label--message {
+    color: var(--text-message);
+}
+
+.monokai-theme .terminal-output-label--warning {
+    color: var(--text-warning);
+}
+
+.monokai-theme .terminal-output-label--input {
+    color: var(--text-input-echo);
+}
+
+.monokai-theme .terminal-output-label--shell {
+    color: var(--text-shell);
+}
+
+.monokai-theme .terminal-output-label--error {
+    color: var(--text-error);
+}
