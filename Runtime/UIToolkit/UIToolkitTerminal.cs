@@ -6,15 +6,14 @@
     using System.Linq;
     using Attributes;
     using CommandTerminal;
-    using CommandTerminal.Extensions;
-    using CommandTerminal.Utils;
+    using Extensions;
     using JetBrains.Annotations;
     using UnityEditor;
     using UnityEngine;
     using UnityEngine.InputSystem;
     using UnityEngine.InputSystem.Controls;
-    using UnityEngine.Serialization;
     using UnityEngine.UIElements;
+    using Utils;
     using Button = UnityEngine.UIElements.Button;
 
     [DisallowMultipleComponent]
@@ -22,7 +21,6 @@
     public sealed class UIToolkitTerminal : MonoBehaviour
     {
         private static readonly Dictionary<string, string> CachedSubstrings = new();
-        private static readonly Dictionary<Color, Texture2D> CachedTextures = new();
 
         private static readonly Dictionary<string, string> SpecialKeyCodeMap = new(
             StringComparer.OrdinalIgnoreCase
@@ -188,10 +186,6 @@
 
         [DxShowIf(nameof(_showGUIButtons))]
         [SerializeField]
-        private Color _buttonBackground = new(0, 0, 0, 0.5f);
-
-        [DxShowIf(nameof(_showGUIButtons))]
-        [SerializeField]
         private Color _buttonForegroundColor = Color.white;
 
         [DxShowIf(nameof(_showGUIButtons))]
@@ -216,41 +210,6 @@
 
         [SerializeField]
         private bool _makeHintsClickable;
-
-        [SerializeField]
-        private Color _unselectedHintBackground = new(0f, 0f, 0f, 0.25f);
-
-        [SerializeField]
-        private Color _unselectedHintTextColor = Color.grey;
-
-        [SerializeField]
-        private Color _selectedHintBackground = new(0f, 0f, 0f, 0.5f);
-
-        [SerializeField]
-        private Color _selectedHintTextColor = Color.white;
-
-        [Header("Theme")]
-        [SerializeField]
-        private Color _inputBackground = new(0, 0, 0, 0.5f);
-
-        [FormerlySerializedAs("_backgroundColor")]
-        [SerializeField]
-        private Color _background = Color.black;
-
-        [SerializeField]
-        private Color _textColor = Color.white;
-
-        [SerializeField]
-        private Color _shellMessageColor = Color.white;
-
-        [SerializeField]
-        private Color _inputTextColor = Color.cyan;
-
-        [SerializeField]
-        private Color _warningColor = Color.yellow;
-
-        [SerializeField]
-        private Color _errorColor = Color.red;
 
         [Header("System")]
         [SerializeField]
@@ -287,31 +246,14 @@
         private readonly List<SerializedProperty> _autoCompleteProperties = new();
         private SerializedObject _serializedObject;
 #endif
-        private readonly Dictionary<string, GUILayoutOption[]> _buttonTextOptions = new();
-        private readonly Dictionary<string, float> _buttonWidths = new();
 
         private TerminalState _state = TerminalState.Closed;
         private TextEditor _editorState;
         private bool _inputFix;
-        private Rect _window;
         private float _currentOpenT;
         private float _openTarget;
         private float _realWindowSize;
         private string _commandText = string.Empty;
-
-        private Vector2 _scrollPosition;
-        private GUIStyle _windowStyle;
-        private GUIStyle _buttonStyle;
-        private GUIStyle _runButtonStyle;
-        private GUIStyle _labelStyle;
-
-        private GUIStyle _inputCaretStyle;
-        private GUIStyle _unselectedHintStyle;
-        private GUIStyle _firstUnselectedHintStyle;
-        private GUIStyle _selectedHintStyle;
-        private GUIStyle _firstSelectedHintStyle;
-        private GUIStyle _inputStyle;
-        private GUILayoutOption[] _inputCaretOptions;
         private bool _unityLogAttached;
         private bool _started;
 
@@ -319,16 +261,13 @@
         private int? _lastHeight;
         private bool _handledInputThisFrame;
         private bool _needsFocus;
+        private bool _needsScrollToEnd;
         private bool _needsAutoCompleteReset;
 
         private string _lastKnownCommandText;
         private string[] _lastCompletionBuffer = Array.Empty<string>();
-        private float[] _completionElementWidthBuffer = Array.Empty<float>();
-        private GUILayoutOption[][] _completionElementStyles = Array.Empty<GUILayoutOption[]>();
-        private readonly List<int> _completionIndexWindow = new();
         private int? _lastCompletionIndex;
         private int? _previousLastCompletionIndex;
-        private int _currentHintStartIndex;
         private string _focusedControl;
 
         private bool _initialResetStateOnInit;
@@ -422,29 +361,14 @@
             };
             TrackProperties(windowPropertiesTracked, _windowProperties);
 
-            string[] windowStylePropertiesTracked =
-            {
-                nameof(_background),
-                nameof(_textColor),
-                nameof(_consoleFont),
-            };
+            string[] windowStylePropertiesTracked = { nameof(_consoleFont) };
             TrackProperties(windowStylePropertiesTracked, _windowStyleProperties);
 
-            string[] inputPropertiesTracked =
-            {
-                nameof(_inputBackground),
-                nameof(_inputTextColor),
-                nameof(_inputCaret),
-                nameof(_unselectedHintBackground),
-                nameof(_unselectedHintTextColor),
-                nameof(_selectedHintBackground),
-                nameof(_selectedHintTextColor),
-            };
+            string[] inputPropertiesTracked = { nameof(_inputCaret) };
             TrackProperties(inputPropertiesTracked, _inputProperties);
 
             string[] buttonPropertiesTracked =
             {
-                nameof(_buttonBackground),
                 nameof(_buttonForegroundColor),
                 nameof(_runButtonText),
                 nameof(_closeButtonText),
@@ -453,7 +377,7 @@
             };
             TrackProperties(buttonPropertiesTracked, _buttonProperties);
 
-            string[] labelPropertiesTracked = { nameof(_consoleFont), nameof(_textColor) };
+            string[] labelPropertiesTracked = { nameof(_consoleFont) };
             TrackProperties(labelPropertiesTracked, _labelProperties);
 
             string[] logUnityMessagePropertiesTracked = { nameof(_logUnityMessages) };
@@ -569,10 +493,6 @@
 
             RefreshStaticState(force: resetStateOnInit);
             SetupWindow();
-            SetupWindowStyle();
-            SetupButtons();
-            SetupInput();
-            SetupLabels();
             ConsumeAndLogErrors();
             ResetAutoComplete();
             _started = true;
@@ -783,26 +703,6 @@
                 SetupWindow();
             }
 
-            if (CheckForRefresh(_windowStyleProperties))
-            {
-                SetupWindowStyle();
-            }
-
-            if (CheckForRefresh(_inputProperties))
-            {
-                SetupInput();
-            }
-
-            if (CheckForRefresh(_buttonProperties))
-            {
-                SetupButtons();
-            }
-
-            if (CheckForRefresh(_labelProperties))
-            {
-                SetupLabels();
-            }
-
             if (CheckForRefresh(_logUnityMessageProperties))
             {
                 if (_logUnityMessages && !_unityLogAttached)
@@ -893,7 +793,6 @@
                     {
                         _openTarget = Screen.height * _maxHeight * _smallTerminalRatio;
                         _realWindowSize = Mathf.Max(_realWindowSize, _openTarget);
-                        _scrollPosition.y = int.MaxValue;
                         break;
                     }
                     case TerminalState.OpenFull:
@@ -940,7 +839,6 @@
         {
             _lastKnownCommandText = _commandText ?? string.Empty;
             _lastCompletionIndex = null;
-            _currentHintStartIndex = 0;
             if (_hintDisplayMode == HintDisplayMode.Always)
             {
                 _lastCompletionBuffer =
@@ -949,29 +847,6 @@
             else
             {
                 _lastCompletionBuffer = Array.Empty<string>();
-            }
-            CalculateAutoCompleteHintSize();
-        }
-
-        private void CalculateAutoCompleteHintSize()
-        {
-            _completionElementWidthBuffer =
-                _lastCompletionBuffer.Length == 0
-                    ? Array.Empty<float>()
-                    : new float[_lastCompletionBuffer.Length];
-            _completionElementStyles =
-                _lastCompletionBuffer.Length == 0
-                    ? Array.Empty<GUILayoutOption[]>()
-                    : new GUILayoutOption[_lastCompletionBuffer.Length][];
-            for (int i = 0; i < _lastCompletionBuffer.Length; ++i)
-            {
-                string completion = _lastCompletionBuffer[i];
-                GUIContent completionContent = new(completion);
-                GUIStyle style =
-                    _lastCompletionIndex == i ? _selectedHintStyle : _unselectedHintStyle;
-                Vector2 size = style.CalcSize(completionContent);
-                _completionElementWidthBuffer[i] = size.x + style.margin.left + style.margin.right;
-                _completionElementStyles[i] = new[] { GUILayout.Width(size.x) };
             }
         }
 
@@ -988,7 +863,6 @@
                     {
                         _realWindowSize = height * _maxHeight * _smallTerminalRatio;
                         _openTarget = _realWindowSize;
-                        _scrollPosition.y = int.MaxValue;
                         break;
                     }
                     case TerminalState.OpenFull:
@@ -1007,197 +881,9 @@
             }
             finally
             {
-                _window = new Rect(0, _currentOpenT - _realWindowSize, width, _realWindowSize);
                 _lastHeight = height;
                 _lastWidth = width;
             }
-        }
-
-        private void SetupWindowStyle()
-        {
-            Texture2D backgroundTexture = GetOrCacheTexture(_background);
-
-            if (_windowStyle == null)
-            {
-                _windowStyle = new GUIStyle
-                {
-                    normal = { background = backgroundTexture, textColor = _textColor },
-                    padding = new RectOffset(4, 4, 4, 4),
-                    font = _consoleFont,
-                };
-            }
-            else
-            {
-                _windowStyle.normal.background = backgroundTexture;
-                _windowStyle.normal.textColor = _textColor;
-                _windowStyle.font = _consoleFont;
-            }
-        }
-
-        private void SetupLabels()
-        {
-            if (_labelStyle == null)
-            {
-                _labelStyle = new GUIStyle
-                {
-                    font = _consoleFont,
-                    normal = { textColor = _textColor },
-                    wordWrap = true,
-                };
-            }
-            else
-            {
-                _labelStyle.font = _consoleFont;
-                _labelStyle.normal.textColor = _textColor;
-            }
-        }
-
-        private void SetupButtons()
-        {
-            Texture2D backgroundTexture = GetOrCacheTexture(_buttonBackground);
-
-            const int paddingX = 4;
-            const int paddingY = 4;
-            const int marginX = 4;
-            const int marginY = 4;
-            _buttonStyle = GenerateGUIStyle(
-                _buttonForegroundColor,
-                backgroundTexture,
-                TextAnchor.MiddleCenter,
-                paddingX,
-                paddingY,
-                marginX,
-                marginY
-            );
-
-            _runButtonStyle = GenerateGUIStyle(
-                _buttonForegroundColor,
-                backgroundTexture,
-                TextAnchor.MiddleCenter,
-                paddingX,
-                paddingY,
-                marginX,
-                marginY: 0
-            );
-            _runButtonStyle.margin.left = 0;
-
-            GUIContent runContent = new(_runButtonText);
-            Vector2 runSize = _runButtonStyle.CalcSize(runContent);
-            _buttonTextOptions[_runButtonText] = new[] { GUILayout.Width(runSize.x) };
-            _buttonWidths[_runButtonText] = runSize.x;
-
-            GUIContent closeContent = new(_closeButtonText);
-            Vector2 closeSize = _buttonStyle.CalcSize(closeContent);
-            _buttonTextOptions[_closeButtonText] = new[] { GUILayout.Width(closeSize.x) };
-            _buttonWidths[_closeButtonText] = closeSize.x;
-
-            GUIContent smallContent = new(_smallButtonText);
-            Vector2 smallSize = _buttonStyle.CalcSize(smallContent);
-            _buttonTextOptions[_smallButtonText] = new[] { GUILayout.Width(smallSize.x) };
-            _buttonWidths[_smallButtonText] = smallSize.x;
-
-            GUIContent fullContent = new(_fullButtonText);
-            Vector2 fullSize = _buttonStyle.CalcSize(fullContent);
-            _buttonTextOptions[_fullButtonText] = new[] { GUILayout.Width(fullSize.x) };
-            _buttonWidths[_fullButtonText] = fullSize.x;
-        }
-
-        private void SetupInput()
-        {
-            Texture2D inputBackgroundTexture = GetOrCacheTexture(_inputBackground);
-
-            _inputStyle = GenerateGUIStyle(
-                _inputTextColor,
-                inputBackgroundTexture,
-                TextAnchor.MiddleLeft
-            );
-
-            if (!string.IsNullOrEmpty(_inputCaret))
-            {
-                _inputCaretStyle = GenerateGUIStyle(
-                    _inputTextColor,
-                    inputBackgroundTexture,
-                    TextAnchor.MiddleRight
-                );
-                _inputCaretStyle.padding.right = 0;
-
-                GUIContent inputCaretContent = new(_inputCaret);
-                Vector2 size = _inputCaretStyle.CalcSize(inputCaretContent);
-                _inputCaretOptions = new[] { GUILayout.Width(size.x) };
-            }
-            else
-            {
-                _inputCaretOptions = Array.Empty<GUILayoutOption>();
-            }
-
-            Texture2D unselectedHintBackgroundTexture = GetOrCacheTexture(
-                _unselectedHintBackground
-            );
-
-            _unselectedHintStyle = GenerateGUIStyle(
-                _unselectedHintTextColor,
-                unselectedHintBackgroundTexture,
-                TextAnchor.MiddleCenter,
-                paddingX: 4,
-                paddingY: 0,
-                marginX: 4,
-                marginY: 4
-            );
-
-            _firstUnselectedHintStyle = GenerateGUIStyle(
-                _unselectedHintTextColor,
-                unselectedHintBackgroundTexture,
-                TextAnchor.MiddleCenter,
-                paddingX: 4,
-                paddingY: 0,
-                marginX: 4,
-                marginY: 4
-            );
-            _firstUnselectedHintStyle.margin.left = 0;
-
-            Texture2D selectedHintBackgroundTexture = GetOrCacheTexture(_selectedHintBackground);
-
-            _selectedHintStyle = GenerateGUIStyle(
-                _selectedHintTextColor,
-                selectedHintBackgroundTexture,
-                TextAnchor.MiddleCenter,
-                paddingX: 4,
-                paddingY: 0,
-                marginX: 4,
-                marginY: 4
-            );
-
-            _firstSelectedHintStyle = GenerateGUIStyle(
-                _selectedHintTextColor,
-                selectedHintBackgroundTexture,
-                TextAnchor.MiddleCenter,
-                paddingX: 4,
-                paddingY: 0,
-                marginX: 4,
-                marginY: 4
-            );
-            _firstSelectedHintStyle.margin.left = 0;
-        }
-
-        private GUIStyle GenerateGUIStyle(
-            Color textColor,
-            Texture2D texture,
-            TextAnchor alignment,
-            int paddingX = 4,
-            int paddingY = 4,
-            int marginX = 0,
-            int marginY = 0
-        )
-        {
-            return new GUIStyle
-            {
-                padding = new RectOffset(paddingX, paddingX, paddingY, paddingY),
-                margin = new RectOffset(marginX, marginX, marginY, marginY),
-                font = _consoleFont,
-                normal = { textColor = textColor, background = texture },
-                fixedHeight = _consoleFont.lineHeight + paddingY * 2,
-                alignment = alignment,
-            };
         }
 
         // UI Toolkit setup
@@ -1349,6 +1035,11 @@
                 }
 
                 _needsFocus = false;
+            }
+            else if (_needsScrollToEnd)
+            {
+                _logScrollView.verticalScroller.value = _logScrollView.verticalScroller.highValue;
+                _needsScrollToEnd = false;
             }
             RefreshStateButtons();
         }
@@ -1819,8 +1510,8 @@
                 }
 
                 _commandText = string.Empty;
-                _scrollPosition.y = int.MaxValue;
                 _needsFocus = true;
+                _needsScrollToEnd = true;
             }
             finally
             {
@@ -1891,7 +1582,6 @@
                 finally
                 {
                     _lastCompletionBuffer = completionBuffer;
-                    CalculateAutoCompleteHintSize();
                 }
             }
             finally
@@ -1915,49 +1605,12 @@
             else
             {
                 _inputFix = false;
-                return;
-            }
-
-            float realWindowSize =
-                _state == TerminalState.OpenSmall
-                    ? Mathf.Max(_currentOpenT, _realWindowSize)
-                    : _realWindowSize;
-            _window = new Rect(0, _currentOpenT - realWindowSize, Screen.width, realWindowSize);
-        }
-
-        private void HandleUnityLog(string message, string stackTrace, LogType type)
-        {
-            bool? handled = Buffer?.HandleLog(message, stackTrace, (TerminalLogType)type);
-            if (handled == true)
-            {
-                _scrollPosition.y = int.MaxValue;
             }
         }
 
-        private Color GetLogColor(TerminalLogType type)
+        private static void HandleUnityLog(string message, string stackTrace, LogType type)
         {
-            return type switch
-            {
-                TerminalLogType.Message => _textColor,
-                TerminalLogType.Warning => _warningColor,
-                TerminalLogType.Input => _inputTextColor,
-                TerminalLogType.ShellMessage => _shellMessageColor,
-                _ => _errorColor,
-            };
-        }
-
-        private static Texture2D GetOrCacheTexture(Color color)
-        {
-            if (CachedTextures.TryGetValue(color, out Texture2D texture))
-            {
-                return texture;
-            }
-
-            texture = new Texture2D(1, 1);
-            texture.SetPixel(0, 0, color);
-            texture.Apply();
-            CachedTextures[color] = texture;
-            return texture;
+            Buffer?.HandleLog(message, stackTrace, (TerminalLogType)type);
         }
     }
 }

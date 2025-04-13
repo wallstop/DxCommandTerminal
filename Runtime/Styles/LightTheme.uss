@@ -7,6 +7,10 @@
     --popup-selected-text: rgba(235, 235, 235, 1);
     --popup-hover-bg: rgba(100, 100, 100, 0.7);
     --popup-hover-text: rgba(235, 235, 235, 1);
+    --scroll-bg: rgba(188, 188, 188, 1);
+    --scroll-color: rgba(24, 24, 24, 1);
+    --scroll-hover-bg: rgba(100, 100, 100, 1.0);
+    --scroll-active-bg: rgba(80, 80, 80, 1.0);
     --button-accent-bg: rgba(70, 130, 180, 1.0);
     --button-accent-text: rgba(255, 255, 255, 1.0);
     --caret-color: rgba(0, 0, 0, 1.0);
@@ -21,8 +25,40 @@
     --text-error: rgba(220, 20, 60, 1.0);
 }
 
+.log-scroll-view .unity-scroller--vertical .unity-base-slider--vertical {
+    border-color: transparent;
+}
+
 .light-theme .log-scroll-view .unity-scroller .unity-scroller__dragger {
-    background-color: var(--text-shell);
+    background-color: var(--terminal-bg);
+}
+
+.light-theme .log-scroll-view .unity-scroller .unity-base-slider__tracker {
+    background-color: transparent;
+    transition: background-color 0.1s ease;
+}
+
+.log-scroll-view .unity-scroller .unity-base-slider__dragger,
+.log-scroll-view .unity-scroller .unity-base-slider__tracker {
+    background-color: var(--scroll-color);
+    transition: background-color 0.1s ease;
+}
+
+.log-scroll-view .unity-scroller .unity-base-slider__dragger:hover,
+.log-scroll-view .unity-scroller .unity-base-slider__tracker:hover {
+    background-color: var(--scroll-hover-bg);
+}
+
+.log-scroll-view .unity-scroller .unity-base-slider__dragger:active,
+.log-scroll-view .unity-scroller .unity-base-slider__tracker:active {
+    background-color: var(--scroll-active-bg);
+}
+
+.log-scroll-view .unity-scroller .unity-base-slider__dragger.tracker-hovered,
+.log-scroll-view .unity-scroller .unity-base-slider__dragger.tracker-active,
+.log-scroll-view .unity-scroller .unity-base-slider__tracker.dragger-hovered,
+.log-scroll-view .unity-scroller .unity-base-slider__tracker.dragger-active {
+    background-color: transparent;
 }
 
 .light-theme .terminal-container {
