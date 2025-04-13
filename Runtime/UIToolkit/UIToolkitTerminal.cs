@@ -293,7 +293,6 @@
         private TerminalState _state = TerminalState.Closed;
         private TextEditor _editorState;
         private bool _inputFix;
-        private bool _moveCursor;
         private Rect _window;
         private float _currentOpenT;
         private float _openTarget;
@@ -1263,6 +1262,7 @@
             }
 
             _commandInput = new TextField();
+            ScheduleBlinkingCursor(_commandInput);
             _commandInput.name = "CommandInput";
             _commandInput.AddToClassList("terminal-input-field");
             _commandInput.pickingMode = PickingMode.Position;
@@ -1306,6 +1306,24 @@
             RefreshStateButtons();
         }
 
+        private static void ScheduleBlinkingCursor(TextField textField)
+        {
+            const string className = "transparent-cursor";
+            textField
+                .schedule.Execute(() =>
+                {
+                    if (textField.ClassListContains(className))
+                    {
+                        textField.RemoveFromClassList(className);
+                    }
+                    else
+                    {
+                        textField.AddToClassList(className);
+                    }
+                })
+                .Every(666);
+        }
+
         private void RefreshUI()
         {
             if (_terminalContainer == null)
@@ -1323,12 +1341,23 @@
             }
             else if (_needsFocus && _textInput.focusable)
             {
-                _textInput.schedule.Execute(() => _textInput.Focus()).ExecuteLater(0);
-                _textInput.Focus();
-                _moveCursor = true;
+                if (_textInput.focusController.focusedElement != _textInput)
+                {
+                    _textInput.schedule.Execute(FocusInput).ExecuteLater(0);
+                    FocusInput();
+                }
+
                 _needsFocus = false;
             }
             RefreshStateButtons();
+        }
+
+        private void FocusInput()
+        {
+            _textInput.Focus();
+            int textEndPosition = _commandInput.value.Length;
+            _commandInput.cursorIndex = textEndPosition;
+            _commandInput.selectIndex = textEndPosition;
         }
 
         private void RefreshLogs()
@@ -1410,43 +1439,72 @@
 
         private void RefreshAutoCompleteHints()
         {
-            _autoCompleteContainer.Clear();
-            if (
-                _lastCompletionBuffer != null
-                && _lastCompletionBuffer.Length > 0
-                && (
-                    _hintDisplayMode == HintDisplayMode.Always
-                    || _hintDisplayMode == HintDisplayMode.AutoCompleteOnly
-                )
-            )
+            bool shouldDisplay =
+                _lastCompletionBuffer is { Length: > 0 }
+                && _hintDisplayMode is HintDisplayMode.Always or HintDisplayMode.AutoCompleteOnly;
+
+            if (!shouldDisplay)
             {
-                for (int i = 0; i < _lastCompletionBuffer.Length; i++)
+                if (_autoCompleteContainer.childCount > 0)
+                {
+                    _autoCompleteContainer.Clear();
+                }
+                return;
+            }
+
+            int bufferLength = _lastCompletionBuffer.Length;
+            int currentChildCount = _autoCompleteContainer.childCount;
+
+            if (currentChildCount != bufferLength)
+            {
+                _autoCompleteContainer.Clear();
+
+                // Rebuild the list
+                for (int i = 0; i < bufferLength; i++)
                 {
                     string hint = _lastCompletionBuffer[i];
                     VisualElement hintElement;
+
                     if (_makeHintsClickable)
                     {
+                        int currentIndex = i;
+                        string currentHint = hint;
                         Button hintButton = new Button(() =>
                         {
-                            _commandText = hint;
-                            _lastCompletionIndex = i;
-                            _moveCursor = true;
+                            _commandText = currentHint;
+                            _lastCompletionIndex = currentIndex;
+                            _needsFocus = true;
                         })
                         {
                             text = hint,
                         };
                         hintElement = hintButton;
-                        _autoCompleteContainer.Add(hintButton);
                     }
                     else
                     {
                         Label hintLabel = new Label(hint);
                         hintElement = hintLabel;
-                        _autoCompleteContainer.Add(hintLabel);
                     }
 
                     hintElement.name = $"SuggestionText{i}";
-                    hintElement.AddToClassList("autocomplete-item");
+                    _autoCompleteContainer.Add(hintElement);
+
+                    bool isSelected = (i == _lastCompletionIndex);
+                    hintElement.EnableInClassList("autocomplete-item-selected", isSelected);
+                    hintElement.EnableInClassList("autocomplete-item", !isSelected);
+                    hintElement.AddToClassList("terminal-button");
+                }
+            }
+            else
+            {
+                for (int i = 0; i < currentChildCount; i++)
+                {
+                    VisualElement hintElement = _autoCompleteContainer.ElementAt(i);
+
+                    bool isSelected = (i == _lastCompletionIndex);
+
+                    hintElement.EnableInClassList("autocomplete-item-selected", isSelected);
+                    hintElement.EnableInClassList("autocomplete-item", !isSelected);
                 }
             }
         }
@@ -1466,17 +1524,20 @@
                 firstButton = new Button(FirstClicked);
                 firstButton.name = "StateButton1";
                 firstButton.AddToClassList("terminal-button-toggle");
+                firstButton.AddToClassList("terminal-button");
                 _stateButtonContainer.Add(firstButton);
 
                 secondButton = new Button(SecondClicked);
                 secondButton.name = "StateButton2";
                 secondButton.AddToClassList("terminal-button-toggle");
+                secondButton.AddToClassList("terminal-button");
+                ;
                 _stateButtonContainer.Add(secondButton);
             }
             else
             {
-                firstButton = _stateButtonContainer.Q<Button>("StateButton1");
-                secondButton = _stateButtonContainer.Q<Button>("StateButton2");
+                firstButton = _stateButtonContainer.ElementAt(0) as Button;
+                secondButton = _stateButtonContainer.ElementAt(1) as Button;
             }
 
             switch (_state)
@@ -1717,7 +1778,6 @@
             }
             _commandText = History?.Previous(_skipSameCommandsInHistory) ?? string.Empty;
             ResetAutoComplete();
-            _moveCursor = true;
             _needsFocus = true;
         }
 
@@ -1729,7 +1789,6 @@
             }
             _commandText = History?.Next(_skipSameCommandsInHistory) ?? string.Empty;
             ResetAutoComplete();
-            _moveCursor = true;
             _needsFocus = true;
         }
 
@@ -1848,7 +1907,6 @@
             }
             finally
             {
-                _moveCursor = true;
                 _needsFocus = true;
             }
         }
