@@ -1345,15 +1345,6 @@
                 foreach (LogItem log in logs)
                 {
                     Label logLabel = new Label(log.message);
-                    // TODO: Apply via USS
-                    logLabel.style.marginBottom = 0;
-                    logLabel.style.marginTop = 0;
-                    logLabel.style.marginLeft = 0;
-                    logLabel.style.marginRight = 0;
-                    logLabel.style.paddingBottom = 0;
-                    logLabel.style.paddingTop = 0;
-                    logLabel.style.paddingLeft = 0;
-                    logLabel.style.paddingRight = 0;
                     SetupLabel(logLabel, log);
                     content.Add(logLabel);
                 }
@@ -1362,13 +1353,11 @@
             {
                 for (int i = 0; i < logs.Count; i++)
                 {
-                    Label logLabel = content[i] as Label;
-                    if (logLabel != null)
+                    if (content[i] is Label logLabel)
                     {
                         LogItem logItem = logs[i];
                         SetupLabel(logLabel, logItem);
                         logLabel.text = logs[i].message;
-                        logLabel.style.color = GetLogColor(logs[i].type);
                     }
                 }
             }
@@ -1376,6 +1365,7 @@
 
             void SetupLabel(Label label, LogItem log)
             {
+                label.ClearClassList();
                 label.AddToClassList("terminal-output-label"); // Base class
                 switch (log.type)
                 {

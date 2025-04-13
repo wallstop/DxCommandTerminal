@@ -6,7 +6,7 @@
     --button-accent-bg: #4682B4;
     --button-accent-text: #FFFFFF;
     --caret-color: #000000;
-    --input-field-bg: rgba(255, 255, 255, 0.90);
+    --input-field-bg: rgba(255, 255, 255, 0.70);
     --input-text-color: #000000;
     --button-toggle-bg: rgba(220, 220, 220, 0.90);
     --button-toggle-text: #333333;
@@ -70,13 +70,15 @@
 
 .light-theme .terminal-input-caret {
     color: var(--caret-color);
+    background-color: var(--input-field-bg);
+    flex-grow: 1;
+    align-items: center;
     padding: 0;
     margin: 0;
 }
 
 .light-theme .terminal-input-field {
     background-color: var(--input-field-bg);
-    border-color: #AAAAAA; /* Add subtle border for light theme */
     flex-grow: 1;
     padding: 0;
     margin: 0;
