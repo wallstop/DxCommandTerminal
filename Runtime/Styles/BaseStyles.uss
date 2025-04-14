@@ -28,12 +28,13 @@
 }
 
 .log-scroll-view .unity-scroller--vertical {
-    width: 16px;
+    width: 12px;
     min-width: 0;
 }
 
 .log-scroll-view .unity-scroller--vertical .unity-base-slider--vertical {
-    width: 16px;
+    border-color: transparent;
+    width: 10px;
     min-width: 0;
     border-top-width: 5px;
     border-bottom-width: 5px;
@@ -53,6 +54,7 @@
     border-width: 0;
     min-width: 0;
     width: 10px;
+    left: 0;
 }
 
 .log-scroll-view .unity-scroller .unity-scroller__low-button,
@@ -61,10 +63,21 @@
     border-width: 0;
 }
 
+.log-scroll-view .unity-scroller .unity-base-slider__tracker {
+    background-color: transparent;
+    transition: background-color 0.1s ease;
+}
+
+.log-scroll-view .unity-scroller .unity-base-slider__tracker.dragger-hovered,
+.log-scroll-view .unity-scroller .unity-base-slider__tracker.dragger-active {
+    background-color: transparent;
+}
+
 .autocomplete-popup {
     background-color: transparent;
     flex-direction: row;
     flex-shrink: 0;
+    left: 4px;
 }
 
 .input-container {

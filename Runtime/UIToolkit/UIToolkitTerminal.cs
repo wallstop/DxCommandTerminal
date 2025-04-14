@@ -20,6 +20,13 @@
     [RequireComponent(typeof(TerminalThemeSwitcher))]
     public sealed class UIToolkitTerminal : MonoBehaviour
     {
+        private enum ScrollBarCaptureState
+        {
+            None = 0,
+            DraggerActive = 1,
+            TrackerActive = 2,
+        }
+
         private static readonly Dictionary<string, string> CachedSubstrings = new();
 
         private static readonly Dictionary<string, string> SpecialKeyCodeMap = new(
@@ -908,6 +915,7 @@
             root.Add(_terminalContainer);
 
             _logScrollView = new ScrollView();
+            InitializeScrollView(_logScrollView);
             _logScrollView.name = "LogScrollView";
             _logScrollView.AddToClassList("log-scroll-view");
             _terminalContainer.Add(_logScrollView);
@@ -1009,6 +1017,111 @@
                     }
                 })
                 .Every(666);
+        }
+
+        private static void InitializeScrollView(ScrollView scrollView)
+        {
+            VisualElement parent = scrollView.Q<VisualElement>(
+                className: "unity-scroller--vertical"
+            );
+            if (parent == null)
+            {
+                scrollView.RegisterCallback<GeometryChangedEvent>(ReInitialize);
+                return;
+
+                void ReInitialize(GeometryChangedEvent evt)
+                {
+                    InitializeScrollView(scrollView);
+                    scrollView.UnregisterCallback<GeometryChangedEvent>(ReInitialize);
+                }
+            }
+            VisualElement trackerElement = parent.Q<VisualElement>(
+                className: "unity-base-slider__tracker"
+            );
+            VisualElement draggerElement = parent.Q<VisualElement>(
+                className: "unity-base-slider__dragger"
+            );
+
+            ScrollBarCaptureState scrollBarCaptureState = ScrollBarCaptureState.None;
+
+            RegisterCallbacks();
+            return;
+
+            void RegisterCallbacks()
+            {
+                // Hover Events
+                trackerElement.RegisterCallback<MouseEnterEvent>(OnTrackerMouseEnter);
+                trackerElement.RegisterCallback<MouseLeaveEvent>(OnTrackerMouseLeave);
+                draggerElement.RegisterCallback<MouseEnterEvent>(OnDraggerMouseEnter);
+                draggerElement.RegisterCallback<MouseLeaveEvent>(OnDraggerMouseLeave);
+
+                trackerElement.RegisterCallback<PointerDownEvent>(OnTrackerPointerDown);
+                trackerElement.RegisterCallback<PointerUpEvent>(OnTrackerPointerUp);
+                draggerElement.RegisterCallback<PointerDownEvent>(OnDraggerPointerDown);
+                parent.RegisterCallback<PointerCaptureOutEvent>(OnDraggerPointerCaptureOut);
+            }
+
+            void OnTrackerPointerDown(PointerDownEvent evt)
+            {
+                scrollBarCaptureState = ScrollBarCaptureState.TrackerActive;
+                draggerElement.AddToClassList("tracker-active");
+                draggerElement.RemoveFromClassList("tracker-hovered");
+            }
+
+            void OnTrackerPointerUp(PointerUpEvent evt)
+            {
+                scrollBarCaptureState = ScrollBarCaptureState.None;
+                draggerElement.RemoveFromClassList("tracker-active");
+            }
+
+            void OnDraggerPointerDown(PointerDownEvent evt)
+            {
+                Debug.Log($"Pointer down event: {evt}");
+                scrollBarCaptureState = ScrollBarCaptureState.DraggerActive;
+                trackerElement.AddToClassList("dragger-active");
+                draggerElement.AddToClassList("dragger-active");
+                trackerElement.RemoveFromClassList("dragger-hovered");
+            }
+
+            void OnDraggerPointerCaptureOut(PointerCaptureOutEvent evt)
+            {
+                scrollBarCaptureState = ScrollBarCaptureState.None;
+                trackerElement.RemoveFromClassList("dragger-active");
+                draggerElement.RemoveFromClassList("tracker-active");
+                draggerElement.RemoveFromClassList("dragger-active");
+            }
+
+            void OnTrackerMouseEnter(MouseEnterEvent evt)
+            {
+                if (scrollBarCaptureState == ScrollBarCaptureState.None)
+                {
+                    draggerElement.AddToClassList("tracker-hovered");
+                }
+            }
+
+            void OnTrackerMouseLeave(MouseLeaveEvent evt)
+            {
+                if (scrollBarCaptureState == ScrollBarCaptureState.None)
+                {
+                    draggerElement.RemoveFromClassList("tracker-hovered");
+                }
+            }
+
+            void OnDraggerMouseEnter(MouseEnterEvent evt)
+            {
+                if (scrollBarCaptureState == ScrollBarCaptureState.None)
+                {
+                    trackerElement.AddToClassList("dragger-hovered");
+                }
+            }
+
+            void OnDraggerMouseLeave(MouseLeaveEvent evt)
+            {
+                if (scrollBarCaptureState == ScrollBarCaptureState.None)
+                {
+                    trackerElement.RemoveFromClassList("dragger-hovered");
+                }
+            }
         }
 
         private void RefreshUI()
@@ -1170,9 +1283,9 @@
                     _autoCompleteContainer.Add(hintElement);
 
                     bool isSelected = (i == _lastCompletionIndex);
+                    hintElement.AddToClassList("terminal-button");
                     hintElement.EnableInClassList("autocomplete-item-selected", isSelected);
                     hintElement.EnableInClassList("autocomplete-item", !isSelected);
-                    hintElement.AddToClassList("terminal-button");
                 }
             }
             else
@@ -1203,13 +1316,11 @@
             {
                 firstButton = new Button(FirstClicked);
                 firstButton.name = "StateButton1";
-                firstButton.AddToClassList("terminal-button-toggle");
                 firstButton.AddToClassList("terminal-button");
                 _stateButtonContainer.Add(firstButton);
 
                 secondButton = new Button(SecondClicked);
                 secondButton.name = "StateButton2";
-                secondButton.AddToClassList("terminal-button-toggle");
                 secondButton.AddToClassList("terminal-button");
                 ;
                 _stateButtonContainer.Add(secondButton);
