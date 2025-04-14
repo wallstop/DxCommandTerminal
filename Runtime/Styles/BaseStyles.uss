@@ -82,6 +82,12 @@
     left: 4px;
 }
 
+.autocomplete-popup #unity-low-button,
+.autocomplete-popup #unity-high-button,
+.autocomplete-popup #unity-slider {
+    display: none;
+}
+
 .input-container {
     flex-direction: row;
     flex-shrink: 0;
@@ -129,7 +135,7 @@
     margin: 0;
 }
 
-.terminal-input-field > #unity-text-input{
+.terminal-input-field > #unity-text-input {
     border-top-width: 0;
     border-bottom-width: 0;
     border-left-width: 0;
@@ -178,6 +184,7 @@
     background-color: var(--button-selected-bg);
     color: var(--button-selected-text);
 }
+
 .autocomplete-item-selected:hover {
     background-color: var(--button-hover-bg);
     color: var(--button-hover-text);
@@ -198,7 +205,7 @@
 }
 
 .terminal-input-field > #unity-text-input,
-.terminal-input-field > #unity-text-input > .unity-text-element{
+.terminal-input-field > #unity-text-input > .unity-text-element {
     color: var(--input-text-color);
     background-color: var(--input-field-bg);
 }

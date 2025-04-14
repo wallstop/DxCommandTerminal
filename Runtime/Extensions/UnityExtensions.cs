@@ -1,32 +1,53 @@
 ﻿namespace CommandTerminal.Extensions
 {
-    using System;
-    using System.Collections;
     using UnityEngine;
+    using UnityEngine.UIElements;
 
     public static class UnityExtensions
     {
-        public static Coroutine ExecuteFunctionAfterDelay(
-            this MonoBehaviour monoBehaviour,
-            Action action,
-            float delay
+        public static void MoveElementToIndex(
+            this VisualElement child,
+            VisualElement parent,
+            int targetIndex
         )
         {
-            return monoBehaviour.StartCoroutine(FunctionDelayAsCoroutine(action, delay));
-        }
-
-        private static IEnumerator FunctionDelayAsCoroutine(Action action, float delay)
-        {
-            float startTime = Time.time;
-            while (!HasEnoughTimePassed(startTime, delay))
+            if (parent == null || child == null || child.parent != parent)
             {
-                yield return null;
+                return;
             }
 
-            action();
+            int currentIndex = parent.IndexOf(child);
+            if (currentIndex < 0)
+            {
+                return;
+            }
+
+            targetIndex = Mathf.Clamp(targetIndex, 0, parent.childCount);
+
+            int effectiveTargetIndex = targetIndex;
+            if (currentIndex < targetIndex)
+            {
+                effectiveTargetIndex = targetIndex - 1;
+            }
+
+            if (currentIndex == effectiveTargetIndex)
+            {
+                return;
+            }
+
+            parent.Remove(child);
+            targetIndex = Mathf.Clamp(targetIndex, 0, parent.childCount);
+            parent.Insert(targetIndex, child);
         }
 
-        public static bool HasEnoughTimePassed(float timestamp, float desiredDuration) =>
-            timestamp + desiredDuration < Time.time;
+        public static void BringToFront(this VisualElement child, VisualElement parent)
+        {
+            child.MoveElementToIndex(parent, parent.childCount);
+        }
+
+        public static void SendToBack(this VisualElement child, VisualElement parent)
+        {
+            child.MoveElementToIndex(parent, 0);
+        }
     }
 }

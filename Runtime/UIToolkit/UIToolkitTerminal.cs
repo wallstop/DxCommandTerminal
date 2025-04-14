@@ -193,12 +193,14 @@
 
         private VisualElement _terminalContainer;
         private ScrollView _logScrollView;
-        private VisualElement _autoCompleteContainer;
+        private ScrollView _autoCompleteContainer;
         private VisualElement _inputContainer;
         private TextField _commandInput;
         private Button _runButton;
         private VisualElement _stateButtonContainer;
         private VisualElement _textInput;
+
+        private readonly List<VisualElement> _autoCompleteChildren = new();
 
         private void Awake()
         {
@@ -390,6 +392,13 @@
             RefreshStaticState(force: resetStateOnInit);
             SetupWindow();
             ConsumeAndLogErrors();
+
+            for (int i = 1; i <= 20; ++i)
+            {
+                string command = $"log {new string(Enumerable.Repeat('a', i).ToArray())}";
+                Terminal.History.Push(command, true, true);
+            }
+
             ResetAutoComplete();
             _started = true;
         }
@@ -746,6 +755,7 @@
                 if (buffer == null || buffer.Length != _lastCompletionBuffer.Length)
                 {
                     _lastCompletionIndex = null;
+                    _previousLastCompletionIndex = null;
                 }
                 else
                 {
@@ -754,6 +764,7 @@
                         if (!string.Equals(buffer[i], _lastCompletionBuffer[i]))
                         {
                             _lastCompletionIndex = null;
+                            _previousLastCompletionIndex = null;
                             break;
                         }
                     }
@@ -762,6 +773,7 @@
             else
             {
                 _lastCompletionIndex = null;
+                _previousLastCompletionIndex = null;
                 _lastCompletionBuffer = Array.Empty<string>();
             }
         }
@@ -828,7 +840,10 @@
             _logScrollView.AddToClassList("log-scroll-view");
             _terminalContainer.Add(_logScrollView);
 
-            _autoCompleteContainer = new VisualElement { name = "AutoCompletePopup" };
+            _autoCompleteContainer = new ScrollView(ScrollViewMode.Horizontal)
+            {
+                name = "AutoCompletePopup",
+            };
             _autoCompleteContainer.AddToClassList("autocomplete-popup");
             _terminalContainer.Add(_autoCompleteContainer);
 
@@ -1035,6 +1050,7 @@
             {
                 return;
             }
+
             _terminalContainer.style.top = _currentOpenT - _realWindowSize;
             _terminalContainer.style.height = _realWindowSize;
             _terminalContainer.style.width = Screen.width;
@@ -1171,63 +1187,210 @@
                 {
                     _autoCompleteContainer.Clear();
                 }
+
+                _previousLastCompletionIndex = null;
                 return;
             }
 
             int bufferLength = _lastCompletionBuffer.Length;
             int currentChildCount = _autoCompleteContainer.childCount;
 
-            if (currentChildCount != bufferLength)
+            bool dirty = _lastCompletionIndex != _previousLastCompletionIndex;
+            bool contentsChanged = currentChildCount != bufferLength;
+            if (contentsChanged)
             {
-                _autoCompleteContainer.Clear();
-
-                // Rebuild the list
-                for (int i = 0; i < bufferLength; i++)
+                dirty = true;
+                if (currentChildCount < bufferLength)
                 {
-                    string hint = _lastCompletionBuffer[i];
-                    VisualElement hintElement;
-
-                    if (_makeHintsClickable)
+                    for (int i = currentChildCount; i < bufferLength; ++i)
                     {
-                        int currentIndex = i;
-                        string currentHint = hint;
-                        Button hintButton = new Button(() =>
-                        {
-                            _commandText = currentHint;
-                            _lastCompletionIndex = currentIndex;
-                            _needsFocus = true;
-                        })
-                        {
-                            text = hint,
-                        };
-                        hintElement = hintButton;
-                    }
-                    else
-                    {
-                        Label hintLabel = new(hint);
-                        hintElement = hintLabel;
-                    }
+                        string hint = _lastCompletionBuffer[i];
+                        VisualElement hintElement;
 
-                    hintElement.name = $"SuggestionText{i}";
-                    _autoCompleteContainer.Add(hintElement);
+                        if (_makeHintsClickable)
+                        {
+                            int currentIndex = i;
+                            string currentHint = hint;
+                            Button hintButton = new(() =>
+                            {
+                                _commandText = currentHint;
+                                _lastCompletionIndex = currentIndex;
+                                _needsFocus = true;
+                            })
+                            {
+                                text = hint,
+                            };
+                            hintElement = hintButton;
+                        }
+                        else
+                        {
+                            Label hintLabel = new(hint);
+                            hintElement = hintLabel;
+                        }
 
-                    bool isSelected = (i == _lastCompletionIndex);
-                    hintElement.AddToClassList("terminal-button");
-                    hintElement.EnableInClassList("autocomplete-item-selected", isSelected);
-                    hintElement.EnableInClassList("autocomplete-item", !isSelected);
+                        hintElement.name = $"SuggestionText{i}";
+                        _autoCompleteContainer.Add(hintElement);
+
+                        bool isSelected = i == _lastCompletionIndex;
+                        hintElement.AddToClassList("terminal-button");
+                        hintElement.EnableInClassList("autocomplete-item-selected", isSelected);
+                        hintElement.EnableInClassList("autocomplete-item", !isSelected);
+                    }
                 }
+                else if (bufferLength < currentChildCount)
+                {
+                    for (int i = currentChildCount - 1; bufferLength <= i; --i)
+                    {
+                        _autoCompleteContainer.RemoveAt(i);
+                    }
+                }
+            }
+
+            try
+            {
+                if (_autoCompleteContainer.childCount == bufferLength)
+                {
+                    UpdateAutoCompleteView();
+                }
+
+                if (dirty)
+                {
+                    for (int i = 0; i < _autoCompleteContainer.childCount && i < bufferLength; ++i)
+                    {
+                        VisualElement hintElement = _autoCompleteContainer[i];
+                        if (contentsChanged)
+                        {
+                            switch (hintElement)
+                            {
+                                case Button button:
+                                    button.text = _lastCompletionBuffer[i];
+                                    break;
+                                case Label label:
+                                    label.text = _lastCompletionBuffer[i];
+                                    break;
+                            }
+                        }
+
+                        bool isSelected = i == _lastCompletionIndex;
+
+                        hintElement.EnableInClassList("autocomplete-item-selected", isSelected);
+                        hintElement.EnableInClassList("autocomplete-item", !isSelected);
+                    }
+                }
+            }
+            finally
+            {
+                _previousLastCompletionIndex = _lastCompletionIndex;
+            }
+        }
+
+        private void UpdateAutoCompleteView()
+        {
+            if (_lastCompletionIndex == null)
+            {
+                return;
+            }
+
+            if (_autoCompleteContainer?.contentContainer == null)
+            {
+                return;
+            }
+
+            int childCount = _autoCompleteContainer.childCount;
+            if (childCount == 0)
+            {
+                return;
+            }
+
+            if (childCount <= _lastCompletionIndex)
+            {
+                _lastCompletionIndex =
+                    (_lastCompletionIndex % childCount + childCount) % childCount;
+            }
+
+            if (_previousLastCompletionIndex == _lastCompletionIndex)
+            {
+                return;
+            }
+
+            VisualElement current = _autoCompleteContainer[_lastCompletionIndex.Value];
+            float viewportWidth = _autoCompleteContainer.contentViewport.resolvedStyle.width;
+            float currentScrollOffset = _autoCompleteContainer.scrollOffset.x;
+
+            // Use layout properties relative to the content container
+            float targetElementLeft = current.layout.x;
+            float targetElementWidth = current.layout.width;
+            float targetElementRight = targetElementLeft + targetElementWidth;
+
+            const float epsilon = 0.01f;
+
+            bool isFullyVisible =
+                targetElementLeft >= currentScrollOffset - epsilon
+                && targetElementRight <= currentScrollOffset + viewportWidth + epsilon;
+
+            if (isFullyVisible)
+            {
+                return;
+            }
+
+            bool isIncrementing;
+            if (_previousLastCompletionIndex == childCount - 1 && _lastCompletionIndex == 0)
+            {
+                isIncrementing = true;
+            }
+            else if (_previousLastCompletionIndex == 0 && _lastCompletionIndex == childCount - 1)
+            {
+                isIncrementing = false;
             }
             else
             {
-                for (int i = 0; i < currentChildCount; i++)
+                isIncrementing = _previousLastCompletionIndex < _lastCompletionIndex;
+            }
+
+            _autoCompleteChildren.Clear();
+            for (int i = 0; i < childCount; ++i)
+            {
+                _autoCompleteChildren.Add(_autoCompleteContainer[i]);
+            }
+
+            int shiftAmount;
+            if (isIncrementing)
+            {
+                shiftAmount = -1 * _lastCompletionIndex.Value;
+                _lastCompletionIndex = 0;
+            }
+            else
+            {
+                shiftAmount = 0;
+                float accumulatedWidth = 0;
+                for (int i = 1; i <= childCount; ++i)
                 {
-                    VisualElement hintElement = _autoCompleteContainer[i];
+                    shiftAmount++;
+                    int index = -i % childCount;
+                    index = (index + childCount) % childCount;
+                    VisualElement element = _autoCompleteChildren[index];
+                    accumulatedWidth += element.layout.width;
+                    if (viewportWidth < accumulatedWidth)
+                    {
+                        if (element != current)
+                        {
+                            --shiftAmount;
+                        }
 
-                    bool isSelected = (i == _lastCompletionIndex);
-
-                    hintElement.EnableInClassList("autocomplete-item-selected", isSelected);
-                    hintElement.EnableInClassList("autocomplete-item", !isSelected);
+                        break;
+                    }
                 }
+
+                _lastCompletionIndex = (shiftAmount - 1 + childCount) % childCount;
+            }
+
+            _autoCompleteChildren.Shift(shiftAmount);
+            _lastCompletionBuffer.Shift(shiftAmount);
+
+            _autoCompleteContainer.Clear();
+            foreach (VisualElement element in _autoCompleteChildren)
+            {
+                _autoCompleteContainer.Add(element);
             }
         }
 
@@ -1417,6 +1580,7 @@
             {
                 return;
             }
+
             _commandText = Terminal.History?.Previous(_skipSameCommandsInHistory) ?? string.Empty;
             ResetAutoComplete();
             _needsFocus = true;
@@ -1428,6 +1592,7 @@
             {
                 return;
             }
+
             _commandText = Terminal.History?.Next(_skipSameCommandsInHistory) ?? string.Empty;
             ResetAutoComplete();
             _needsFocus = true;
@@ -1489,9 +1654,19 @@
 
             try
             {
-                _lastKnownCommandText ??= _commandText;
-                string[] completionBuffer =
-                    Terminal.AutoComplete?.Complete(_lastKnownCommandText) ?? Array.Empty<string>();
+                string[] completionBuffer;
+                if (_lastKnownCommandText == null)
+                {
+                    _lastKnownCommandText = _commandText;
+                    completionBuffer =
+                        Terminal.AutoComplete?.Complete(_lastKnownCommandText)
+                        ?? Array.Empty<string>();
+                }
+                else
+                {
+                    completionBuffer = _lastCompletionBuffer;
+                }
+
                 try
                 {
                     int completionLength = completionBuffer.Length;
