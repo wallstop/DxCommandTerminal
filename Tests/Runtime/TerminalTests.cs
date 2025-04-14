@@ -14,9 +14,9 @@
         [TearDown]
         public void TearDown()
         {
-            if (Terminal.Instance != null)
+            if (ImGuiTerminal.Instance != null)
             {
-                Object.Destroy(Terminal.Instance.gameObject);
+                Object.Destroy(ImGuiTerminal.Instance.gameObject);
             }
         }
 
@@ -25,7 +25,7 @@
         {
             yield return SpawnTerminal(resetStateOnInit: true);
 
-            Terminal terminal = Terminal.Instance;
+            ImGuiTerminal terminal = ImGuiTerminal.Instance;
             CommandShell shell = Terminal.Shell;
             Dictionary<string, CommandInfo> shellCommands = shell.Commands.ToDictionary(
                 kvp => kvp.Key,
@@ -64,7 +64,7 @@
         {
             yield return SpawnTerminal(resetStateOnInit: true);
 
-            Terminal terminal1 = Terminal.Instance;
+            ImGuiTerminal terminal1 = ImGuiTerminal.Instance;
             Assert.IsNotNull(terminal1);
             CommandShell shell = Terminal.Shell;
             Assert.IsNotNull(shell);
@@ -77,9 +77,9 @@
 
             yield return SpawnTerminal(resetStateOnInit: false);
 
-            Terminal terminal2 = Terminal.Instance;
-            Assert.IsNotNull(Terminal.Instance);
-            Assert.AreNotSame(terminal1, Terminal.Instance);
+            ImGuiTerminal terminal2 = ImGuiTerminal.Instance;
+            Assert.IsNotNull(ImGuiTerminal.Instance);
+            Assert.AreNotSame(terminal1, ImGuiTerminal.Instance);
             Assert.AreSame(shell, Terminal.Shell);
             Assert.AreSame(history, Terminal.History);
             Assert.AreSame(buffer, Terminal.Buffer);
@@ -87,9 +87,9 @@
 
             yield return SpawnTerminal(resetStateOnInit: true);
 
-            Assert.IsNotNull(Terminal.Instance);
-            Assert.AreNotSame(terminal2, Terminal.Instance);
-            Assert.AreNotSame(terminal1, Terminal.Instance);
+            Assert.IsNotNull(ImGuiTerminal.Instance);
+            Assert.AreNotSame(terminal2, ImGuiTerminal.Instance);
+            Assert.AreNotSame(terminal1, ImGuiTerminal.Instance);
             Assert.AreNotSame(shell, Terminal.Shell);
             Assert.AreNotSame(shell, Terminal.Shell);
             Assert.IsNotNull(Terminal.Shell);
@@ -103,8 +103,8 @@
 
         internal static IEnumerator SpawnTerminal(bool resetStateOnInit)
         {
-            GameObject go = new("Terminal", typeof(StartTracker), typeof(Terminal));
-            Terminal terminal = go.GetComponent<Terminal>();
+            GameObject go = new("Terminal", typeof(StartTracker), typeof(ImGuiTerminal));
+            ImGuiTerminal terminal = go.GetComponent<ImGuiTerminal>();
             terminal.resetStateOnInit = resetStateOnInit;
             StartTracker startTracker = go.GetComponent<StartTracker>();
             yield return new WaitUntil(() => startTracker.Started);

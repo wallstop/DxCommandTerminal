@@ -15,9 +15,9 @@
         [TearDown]
         public void TearDown()
         {
-            if (Terminal.Instance != null)
+            if (ImGuiTerminal.Instance != null)
             {
-                UnityEngine.Object.Destroy(Terminal.Instance.gameObject);
+                UnityEngine.Object.Destroy(ImGuiTerminal.Instance.gameObject);
             }
         }
 

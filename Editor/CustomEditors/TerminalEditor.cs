@@ -8,7 +8,7 @@
     using UnityEditor;
     using UnityEngine;
 
-    [CustomEditor(typeof(Terminal))]
+    [CustomEditor(typeof(ImGuiTerminal))]
     public sealed class TerminalEditor : Editor
     {
         private int _commandIndex;
@@ -28,7 +28,7 @@
         {
             base.OnInspectorGUI();
 
-            Terminal terminal = target as Terminal;
+            ImGuiTerminal terminal = target as ImGuiTerminal;
             if (terminal == null)
             {
                 return;

@@ -7,7 +7,6 @@
     using Attributes;
     using CommandTerminal;
     using Extensions;
-    using JetBrains.Annotations;
     using UnityEditor;
     using UnityEngine;
     using UnityEngine.InputSystem;
@@ -29,89 +28,7 @@
 
         private static readonly Dictionary<string, string> CachedSubstrings = new();
 
-        private static readonly Dictionary<string, string> SpecialKeyCodeMap = new(
-            StringComparer.OrdinalIgnoreCase
-        )
-        {
-            { "`", "backquote" },
-            { "-", "minus" },
-            { "=", "equals" },
-            { "[", "leftBracket" },
-            { "]", "rightBracket" },
-            { ";", "semicolon" },
-            { "'", "quote" },
-            { "\\", "backslash" },
-            { ",", "comma" },
-            { ".", "period" },
-            { "/", "slash" },
-            { "1", "digit1" },
-            { "2", "digit2" },
-            { "3", "digit3" },
-            { "4", "digit4" },
-            { "5", "digit5" },
-            { "6", "digit6" },
-            { "7", "digit7" },
-            { "8", "digit8" },
-            { "9", "digit9" },
-            { "0", "digit0" },
-            { "up", "upArrow" },
-            { "left", "leftArrow" },
-            { "right", "rightArrow" },
-            { "down", "downArrow" },
-            { " ", "space" },
-        };
-
-        private static readonly Dictionary<string, string> SpecialShiftedKeyCodeMap = new(
-            StringComparer.OrdinalIgnoreCase
-        )
-        {
-            { "~", "backquote" },
-            { "!", "digit1" },
-            { "@", "digit2" },
-            { "#", "digit3" },
-            { "$", "digit4" },
-            { "^", "digit6" },
-            { "%", "digit5" },
-            { "&", "digit7" },
-            { "*", "digit8" },
-            { "(", "digit9" },
-            { ")", "digit0" },
-            { "_", "minus" },
-            { "+", "equals" },
-            { "{", "leftBracket" },
-            { "}", "rightBracket" },
-            { ":", "semicolon" },
-            { "\"", "quote" },
-            { "|", "backslash" },
-            { "<", "comma" },
-            { ">", "period" },
-            { "?", "slash" },
-        };
-
-        private static readonly Dictionary<string, string> AlternativeSpecialShiftedKeyCodeMap =
-            new(StringComparer.OrdinalIgnoreCase)
-            {
-                { "!", "1" },
-                { "@", "2" },
-                { "#", "3" },
-                { "$", "4" },
-                { "^", "5" },
-                { "%", "6" },
-                { "&", "7" },
-                { "*", "8" },
-                { "(", "9" },
-                { ")", "0" },
-            };
-
         public static UIToolkitTerminal Instance { get; private set; }
-
-        public static CommandLog Buffer { get; private set; }
-        public static CommandShell Shell { get; private set; }
-
-        public static CommandHistory History { get; private set; }
-
-        // ReSharper disable once MemberCanBePrivate.Global
-        public static CommandAutoComplete AutoComplete { get; private set; }
 
         // ReSharper disable once MemberCanBePrivate.Global
         public bool IsClosed =>
@@ -289,27 +206,6 @@
         private VisualElement _stateButtonContainer;
         private VisualElement _textInput;
         private long? _lastSeenBufferVersion;
-
-        [StringFormatMethod("format")]
-        public static bool Log(string format, params object[] parameters)
-        {
-            return Log(TerminalLogType.ShellMessage, format, parameters);
-        }
-
-        [StringFormatMethod("format")]
-        public static bool Log(TerminalLogType type, string format, params object[] parameters)
-        {
-            CommandLog buffer = Buffer;
-            if (buffer == null)
-            {
-                return false;
-            }
-
-            string formattedMessage = parameters is { Length: > 0 }
-                ? string.Format(format, parameters)
-                : format;
-            return buffer.HandleLog(formattedMessage, type);
-        }
 
         private void Awake()
         {
@@ -619,57 +515,59 @@
         private void RefreshStaticState(bool force)
         {
             int logBufferSize = Math.Max(0, _logBufferSize);
-            if (force || Buffer == null)
+            if (force || Terminal.Buffer == null)
             {
-                Buffer = new CommandLog(logBufferSize, _ignoredLogTypes);
+                Terminal.Buffer = new CommandLog(logBufferSize, _ignoredLogTypes);
             }
             else
             {
-                if (Buffer.Capacity != logBufferSize)
+                if (Terminal.Buffer.Capacity != logBufferSize)
                 {
-                    Buffer.Resize(logBufferSize);
+                    Terminal.Buffer.Resize(logBufferSize);
                 }
                 if (
-                    !Buffer.ignoredLogTypes.SetEquals(
+                    !Terminal.Buffer.ignoredLogTypes.SetEquals(
                         _ignoredLogTypes ?? Enumerable.Empty<TerminalLogType>()
                     )
                 )
                 {
-                    Buffer.ignoredLogTypes.Clear();
-                    Buffer.ignoredLogTypes.UnionWith(
+                    Terminal.Buffer.ignoredLogTypes.Clear();
+                    Terminal.Buffer.ignoredLogTypes.UnionWith(
                         _ignoredLogTypes ?? Enumerable.Empty<TerminalLogType>()
                     );
                 }
             }
 
             int historyBufferSize = Math.Max(0, _historyBufferSize);
-            if (force || History == null)
+            if (force || Terminal.History == null)
             {
-                History = new CommandHistory(historyBufferSize);
+                Terminal.History = new CommandHistory(historyBufferSize);
             }
-            else if (History.Capacity != historyBufferSize)
+            else if (Terminal.History.Capacity != historyBufferSize)
             {
-                History.Resize(historyBufferSize);
-            }
-
-            if (force || Shell == null)
-            {
-                Shell = new CommandShell(History);
+                Terminal.History.Resize(historyBufferSize);
             }
 
-            if (force || AutoComplete == null)
+            if (force || Terminal.Shell == null)
             {
-                AutoComplete = new CommandAutoComplete(History, Shell);
+                Terminal.Shell = new CommandShell(Terminal.History);
+            }
+
+            if (force || Terminal.AutoComplete == null)
+            {
+                Terminal.AutoComplete = new CommandAutoComplete(Terminal.History, Terminal.Shell);
             }
 
             if (
-                Shell.IgnoringDefaultCommands != ignoreDefaultCommands
-                || Shell.Commands.Count <= 0
-                || !Shell.IgnoredCommands.SetEquals(disabledCommands ?? Enumerable.Empty<string>())
+                Terminal.Shell.IgnoringDefaultCommands != ignoreDefaultCommands
+                || Terminal.Shell.Commands.Count <= 0
+                || !Terminal.Shell.IgnoredCommands.SetEquals(
+                    disabledCommands ?? Enumerable.Empty<string>()
+                )
             )
             {
-                Shell.ClearAutoRegisteredCommands();
-                Shell.InitializeAutoRegisteredCommands(
+                Terminal.Shell.ClearAutoRegisteredCommands();
+                Terminal.Shell.InitializeAutoRegisteredCommands(
                     ignoredCommands: disabledCommands,
                     ignoreDefaultCommands: ignoreDefaultCommands
                 );
@@ -836,9 +734,9 @@
 
         private static void ConsumeAndLogErrors()
         {
-            while (Shell?.TryConsumeErrorMessage(out string error) == true)
+            while (Terminal.Shell?.TryConsumeErrorMessage(out string error) == true)
             {
-                Log(TerminalLogType.Error, $"Error: {error}");
+                Terminal.Log(TerminalLogType.Error, $"Error: {error}");
             }
         }
 
@@ -849,7 +747,7 @@
             if (_hintDisplayMode == HintDisplayMode.Always)
             {
                 _lastCompletionBuffer =
-                    AutoComplete?.Complete(_lastKnownCommandText) ?? Array.Empty<string>();
+                    Terminal.AutoComplete?.Complete(_lastKnownCommandText) ?? Array.Empty<string>();
             }
             else
             {
@@ -1173,7 +1071,7 @@
 
         private void RefreshLogs()
         {
-            IReadOnlyList<LogItem> logs = Buffer?.Logs;
+            IReadOnlyList<LogItem> logs = Terminal.Buffer?.Logs;
             if (logs == null)
             {
                 return;
@@ -1191,9 +1089,9 @@
                     content.Add(logLabel);
                 }
                 _logScrollView.scrollOffset = new Vector2(0, int.MaxValue);
-                _lastSeenBufferVersion = Buffer.Version;
+                _lastSeenBufferVersion = Terminal.Buffer.Version;
             }
-            else if (_lastSeenBufferVersion != Buffer.Version)
+            else if (_lastSeenBufferVersion != Terminal.Buffer.Version)
             {
                 for (int i = 0; i < logs.Count; i++)
                 {
@@ -1204,7 +1102,7 @@
                         logLabel.text = logs[i].message;
                     }
                 }
-                _lastSeenBufferVersion = Buffer.Version;
+                _lastSeenBufferVersion = Terminal.Buffer.Version;
             }
             return;
 
@@ -1455,7 +1353,7 @@
                 return Keyboard.current.shiftKey.isPressed
                     && (
                         Keyboard.current.TryGetChildControl<KeyControl>(
-                            SpecialKeyCodeMap.GetValueOrDefault(expected, expected)
+                            Terminal.SpecialKeyCodes.GetValueOrDefault(expected, expected)
                         )
                             is { wasPressedThisFrame: true }
                         || Keyboard.current.TryGetChildControl<KeyControl>(expected)
@@ -1483,7 +1381,7 @@
                 return Keyboard.current.shiftKey.isPressed
                     && (
                         Keyboard.current.TryGetChildControl<KeyControl>(
-                            SpecialKeyCodeMap.GetValueOrDefault(expected, expected)
+                            Terminal.SpecialKeyCodes.GetValueOrDefault(expected, expected)
                         )
                             is { wasPressedThisFrame: true }
                         || Keyboard.current.TryGetChildControl<KeyControl>(expected)
@@ -1491,7 +1389,7 @@
                     );
             }
             else if (
-                SpecialShiftedKeyCodeMap.TryGetValue(key, out string expected)
+                Terminal.SpecialShiftedKeyCodes.TryGetValue(key, out string expected)
                 && Keyboard.current.shiftKey.isPressed
                 && Keyboard.current.TryGetChildControl<KeyControl>(expected)
                     is { wasPressedThisFrame: true }
@@ -1500,7 +1398,7 @@
                 return true;
             }
             else if (
-                AlternativeSpecialShiftedKeyCodeMap.TryGetValue(key, out expected)
+                Terminal.AlternativeSpecialShiftedKeyCodes.TryGetValue(key, out expected)
                 && Keyboard.current.shiftKey.isPressed
                 && Keyboard.current.TryGetChildControl<KeyControl>(expected)
                     is { wasPressedThisFrame: true }
@@ -1518,7 +1416,7 @@
             else
             {
                 return Keyboard.current.TryGetChildControl<KeyControl>(
-                        SpecialKeyCodeMap.GetValueOrDefault(key, key)
+                        Terminal.SpecialKeyCodes.GetValueOrDefault(key, key)
                     )
                         is { wasPressedThisFrame: true }
                     || Keyboard.current.TryGetChildControl<KeyControl>(key)
@@ -1573,7 +1471,7 @@
             {
                 return;
             }
-            _commandText = History?.Previous(_skipSameCommandsInHistory) ?? string.Empty;
+            _commandText = Terminal.History?.Previous(_skipSameCommandsInHistory) ?? string.Empty;
             ResetAutoComplete();
             _needsFocus = true;
         }
@@ -1584,7 +1482,7 @@
             {
                 return;
             }
-            _commandText = History?.Next(_skipSameCommandsInHistory) ?? string.Empty;
+            _commandText = Terminal.History?.Next(_skipSameCommandsInHistory) ?? string.Empty;
             ResetAutoComplete();
             _needsFocus = true;
         }
@@ -1619,11 +1517,11 @@
                     return;
                 }
 
-                Log(TerminalLogType.Input, _commandText);
-                Shell?.RunCommand(_commandText);
-                while (Shell?.TryConsumeErrorMessage(out string error) == true)
+                Terminal.Log(TerminalLogType.Input, _commandText);
+                Terminal.Shell?.RunCommand(_commandText);
+                while (Terminal.Shell?.TryConsumeErrorMessage(out string error) == true)
                 {
-                    Log(TerminalLogType.Error, $"Error: {error}");
+                    Terminal.Log(TerminalLogType.Error, $"Error: {error}");
                 }
 
                 _commandText = string.Empty;
@@ -1647,7 +1545,7 @@
             {
                 _lastKnownCommandText ??= _commandText;
                 string[] completionBuffer =
-                    AutoComplete?.Complete(_lastKnownCommandText) ?? Array.Empty<string>();
+                    Terminal.AutoComplete?.Complete(_lastKnownCommandText) ?? Array.Empty<string>();
                 try
                 {
                     int completionLength = completionBuffer.Length;
@@ -1727,7 +1625,7 @@
 
         private static void HandleUnityLog(string message, string stackTrace, LogType type)
         {
-            Buffer?.HandleLog(message, stackTrace, (TerminalLogType)type);
+            Terminal.Buffer?.HandleLog(message, stackTrace, (TerminalLogType)type);
         }
     }
 }
