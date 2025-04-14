@@ -1151,7 +1151,13 @@
             }
             else if (_needsScrollToEnd)
             {
-                _logScrollView.verticalScroller.value = _logScrollView.verticalScroller.highValue;
+                if (0 < _logScrollView.verticalScroller.highValue)
+                {
+                    _logScrollView.verticalScroller.value = _logScrollView
+                        .verticalScroller
+                        .highValue;
+                }
+
                 _needsScrollToEnd = false;
             }
             RefreshStateButtons();
