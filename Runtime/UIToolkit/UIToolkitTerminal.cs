@@ -9,11 +9,11 @@
     using Extensions;
     using UnityEditor;
     using UnityEngine;
-    using UnityEngine.InputSystem;
-    using UnityEngine.InputSystem.Controls;
     using UnityEngine.UIElements;
     using Utils;
-    using Button = UnityEngine.UIElements.Button;
+#if ENABLE_INPUT_SYSTEM
+    using UnityEngine.InputSystem;
+#endif
 
     [DisallowMultipleComponent]
     [RequireComponent(typeof(TerminalThemeSwitcher))]
@@ -25,8 +25,6 @@
             DraggerActive = 1,
             TrackerActive = 2,
         }
-
-        private static readonly Dictionary<string, string> CachedSubstrings = new();
 
         public static UIToolkitTerminal Instance { get; private set; }
 
@@ -172,31 +170,27 @@
 #endif
 
         private TerminalState _state = TerminalState.Closed;
-        private TextEditor _editorState;
-        private bool _inputFix;
         private float _currentOpenT;
         private float _openTarget;
         private float _realWindowSize;
         private string _commandText = string.Empty;
         private bool _unityLogAttached;
         private bool _started;
-
         private int? _lastWidth;
         private int? _lastHeight;
         private bool _handledInputThisFrame;
         private bool _needsFocus;
         private bool _needsScrollToEnd;
         private bool _needsAutoCompleteReset;
-
+        private long? _lastSeenBufferVersion;
         private string _lastKnownCommandText;
         private string[] _lastCompletionBuffer = Array.Empty<string>();
         private int? _lastCompletionIndex;
         private int? _previousLastCompletionIndex;
         private string _focusedControl;
-
+        private bool _isCommandFromCode;
         private bool _initialResetStateOnInit;
 
-        // UI Toolkit fields
         private VisualElement _terminalContainer;
         private ScrollView _logScrollView;
         private VisualElement _autoCompleteContainer;
@@ -205,7 +199,6 @@
         private Button _runButton;
         private VisualElement _stateButtonContainer;
         private VisualElement _textInput;
-        private long? _lastSeenBufferVersion;
 
         private void Awake()
         {
@@ -457,42 +450,45 @@
                 return;
             }
 
-            if (IsKeyPressed(_closeHotkey))
+            if (Terminal.IsKeyPressed(_closeHotkey))
             {
                 _handledInputThisFrame = true;
                 Close();
             }
-            else if (_completeCommandHotkeys?.list?.Exists(key => IsKeyPressed(key)) == true)
+            else if (
+                // ReSharper disable once ConvertClosureToMethodGroup
+                _completeCommandHotkeys?.list?.Exists(key => Terminal.IsKeyPressed(key)) == true
+            )
             {
                 _handledInputThisFrame = true;
                 EnterCommand();
             }
-            else if (IsKeyPressed(_previousHotkey))
+            else if (Terminal.IsKeyPressed(_previousHotkey))
             {
                 _handledInputThisFrame = true;
                 HandlePrevious();
             }
-            else if (IsKeyPressed(_nextHotkey))
+            else if (Terminal.IsKeyPressed(_nextHotkey))
             {
                 _handledInputThisFrame = true;
                 HandleNext();
             }
-            else if (IsKeyPressed(_toggleFullHotkey))
+            else if (Terminal.IsKeyPressed(_toggleFullHotkey))
             {
                 _handledInputThisFrame = true;
                 ToggleFull();
             }
-            else if (IsKeyPressed(_toggleHotkey))
+            else if (Terminal.IsKeyPressed(_toggleHotkey))
             {
                 _handledInputThisFrame = true;
                 ToggleSmall();
             }
-            else if (IsKeyPressed(_reverseCompleteHotkey))
+            else if (Terminal.IsKeyPressed(_reverseCompleteHotkey))
             {
                 _handledInputThisFrame = true;
                 CompleteCommand(searchForward: false);
             }
-            else if (IsKeyPressed(_completeHotkey))
+            else if (Terminal.IsKeyPressed(_completeHotkey))
             {
                 _handledInputThisFrame = true;
                 CompleteCommand(searchForward: true);
@@ -684,7 +680,6 @@
 
         public void SetState(TerminalState newState)
         {
-            _inputFix = true;
             try
             {
                 switch (newState)
@@ -743,14 +738,30 @@
         private void ResetAutoComplete()
         {
             _lastKnownCommandText = _commandText ?? string.Empty;
-            _lastCompletionIndex = null;
             if (_hintDisplayMode == HintDisplayMode.Always)
             {
+                string[] buffer = _lastCompletionBuffer;
                 _lastCompletionBuffer =
                     Terminal.AutoComplete?.Complete(_lastKnownCommandText) ?? Array.Empty<string>();
+                if (buffer == null || buffer.Length != _lastCompletionBuffer.Length)
+                {
+                    _lastCompletionIndex = null;
+                }
+                else
+                {
+                    for (int i = 0; i < buffer.Length; ++i)
+                    {
+                        if (!string.Equals(buffer[i], _lastCompletionBuffer[i]))
+                        {
+                            _lastCompletionIndex = null;
+                            break;
+                        }
+                    }
+                }
             }
             else
             {
+                _lastCompletionIndex = null;
                 _lastCompletionBuffer = Array.Empty<string>();
             }
         }
@@ -806,8 +817,7 @@
             root.name = "TerminalRoot";
             root.AddToClassList("terminal-root");
 
-            _terminalContainer = new VisualElement();
-            _terminalContainer.name = "TerminalContainer";
+            _terminalContainer = new VisualElement { name = "TerminalContainer" };
             _terminalContainer.AddToClassList("terminal-container");
             _terminalContainer.style.height = new StyleLength(_realWindowSize);
             root.Add(_terminalContainer);
@@ -818,38 +828,34 @@
             _logScrollView.AddToClassList("log-scroll-view");
             _terminalContainer.Add(_logScrollView);
 
-            _autoCompleteContainer = new VisualElement();
-            _autoCompleteContainer.name = "AutoCompletePopup";
+            _autoCompleteContainer = new VisualElement { name = "AutoCompletePopup" };
             _autoCompleteContainer.AddToClassList("autocomplete-popup");
             _terminalContainer.Add(_autoCompleteContainer);
 
-            _inputContainer = new VisualElement();
-            _inputContainer.name = "InputContainer";
+            _inputContainer = new VisualElement { name = "InputContainer" };
             _inputContainer.AddToClassList("input-container");
             _terminalContainer.Add(_inputContainer);
 
-            if (
-                _showGUIButtons
-                && !string.IsNullOrWhiteSpace(_commandText)
-                && !string.IsNullOrWhiteSpace(_runButtonText)
-            )
+            if (_showGUIButtons)
             {
-                _runButton = new Button(() =>
-                {
-                    EnterCommand();
-                })
+                _runButton = new Button(EnterCommand)
                 {
                     text = _runButtonText,
+                    name = "RunCommandButton",
                 };
-                _runButton.name = "RunCommandButton";
+                _runButton.AddToClassList("terminal-button");
                 _runButton.AddToClassList("terminal-button-run");
+                _runButton.style.display = DisplayStyle.None;
+                _runButton.style.marginLeft = 6;
+                _runButton.style.marginRight = 4;
+                _runButton.style.paddingTop = 2;
+                _runButton.style.paddingBottom = 2;
                 _inputContainer.Add(_runButton);
             }
 
             if (!string.IsNullOrEmpty(_inputCaret))
             {
-                Label caretLabel = new Label(_inputCaret);
-                caretLabel.name = "InputCaret";
+                Label caretLabel = new(_inputCaret) { name = "InputCaret" };
                 caretLabel.AddToClassList("terminal-input-caret");
                 _inputContainer.Add(caretLabel);
             }
@@ -860,40 +866,42 @@
             _commandInput.AddToClassList("terminal-input-field");
             _commandInput.pickingMode = PickingMode.Position;
             _commandInput.value = _commandText;
-            _commandInput.RegisterCallback<ChangeEvent<string>>(
-                evt =>
+            _commandInput.RegisterCallback<ChangeEvent<string>, UIToolkitTerminal>(
+                (evt, context) =>
                 {
-                    _commandText = evt.newValue;
-                    //_needsAutoCompleteReset = true;
-                    /*
-                        Something is FUCKED here, I can't figure it out. When we have "Make Hints Clickable" on,
-                        back-spacing from an auto-completed word highlights the word for a few frames. I think this is
-                        an IMGUI bug where the TextEditor state / control focus is lost, I've verified through some
-                        debug logs where I track cursor / selection indexes. They get arbitrarily reset to 0.
-                        I thought it was due to focusing the control too much, but that doesn't appear to be the case,
-                        again, verified through debug logs. Anyway, oh well, maybe I'll fix it later.
-                     */
-                    //ResetAutoComplete();
+                    context._commandText = evt.newValue;
+                    context._runButton.style.display =
+                        !string.IsNullOrWhiteSpace(context._commandText)
+                        && !string.IsNullOrWhiteSpace(context._runButtonText)
+                            ? DisplayStyle.Flex
+                            : DisplayStyle.None;
+                    if (!context._isCommandFromCode)
+                    {
+                        context.ResetAutoComplete();
+                    }
+
+                    context._isCommandFromCode = false;
                 },
-                TrickleDown.TrickleDown
+                userArgs: this,
+                useTrickleDown: TrickleDown.TrickleDown
             );
-            _commandInput.RegisterCallback<KeyDownEvent>(
-                evt =>
+            _commandInput.RegisterCallback<KeyDownEvent, UIToolkitTerminal>(
+                (evt, context) =>
                 {
                     if (evt.keyCode == KeyCode.Return || evt.keyCode == KeyCode.KeypadEnter)
                     {
-                        EnterCommand();
+                        context.EnterCommand();
                         evt.StopPropagation();
                         evt.PreventDefault();
                     }
                 },
-                TrickleDown.TrickleDown
+                userArgs: this,
+                useTrickleDown: TrickleDown.TrickleDown
             );
             _inputContainer.Add(_commandInput);
             _textInput = _commandInput.Q<VisualElement>("unity-text-input");
 
-            _stateButtonContainer = new VisualElement();
-            _stateButtonContainer.name = "StateButtonContainer";
+            _stateButtonContainer = new VisualElement { name = "StateButtonContainer" };
             _stateButtonContainer.AddToClassList("state-button-container");
             root.Add(_stateButtonContainer);
             RefreshStateButtons();
@@ -974,7 +982,6 @@
 
             void OnDraggerPointerDown(PointerDownEvent evt)
             {
-                Debug.Log($"Pointer down event: {evt}");
                 scrollBarCaptureState = ScrollBarCaptureState.DraggerActive;
                 trackerElement.AddToClassList("dragger-active");
                 draggerElement.AddToClassList("dragger-active");
@@ -1035,6 +1042,7 @@
             RefreshAutoCompleteHints();
             if (_commandInput.value != _commandText)
             {
+                _isCommandFromCode = true;
                 _commandInput.value = _commandText;
             }
             else if (_needsFocus && _textInput.focusable)
@@ -1049,13 +1057,7 @@
             }
             else if (_needsScrollToEnd)
             {
-                if (0 < _logScrollView.verticalScroller.highValue)
-                {
-                    _logScrollView.verticalScroller.value = _logScrollView
-                        .verticalScroller
-                        .highValue;
-                }
-
+                ScrollToEnd();
                 _needsScrollToEnd = false;
             }
             RefreshStateButtons();
@@ -1078,35 +1080,47 @@
             }
 
             VisualElement content = _logScrollView.contentContainer;
+            bool dirty = _lastSeenBufferVersion != Terminal.Buffer.Version;
             if (content.childCount != logs.Count)
             {
-                content.Clear();
-                foreach (LogItem log in logs)
+                dirty = true;
+                if (content.childCount < logs.Count)
                 {
-                    Label logLabel = new Label(log.message);
-                    logLabel.AddToClassList("terminal-output-label");
-                    SetupLabel(logLabel, log);
-                    content.Add(logLabel);
+                    for (int i = 0; i < logs.Count - content.childCount; ++i)
+                    {
+                        Label logLabel = new();
+                        logLabel.AddToClassList("terminal-output-label");
+                        content.Add(logLabel);
+                    }
                 }
-                _logScrollView.scrollOffset = new Vector2(0, int.MaxValue);
+                else if (logs.Count < content.childCount)
+                {
+                    for (int i = content.childCount - 1; logs.Count <= i; --i)
+                    {
+                        content.RemoveAt(i);
+                    }
+                }
+
+                _needsScrollToEnd = true;
                 _lastSeenBufferVersion = Terminal.Buffer.Version;
             }
-            else if (_lastSeenBufferVersion != Terminal.Buffer.Version)
+
+            if (dirty)
             {
-                for (int i = 0; i < logs.Count; i++)
+                for (int i = 0; i < logs.Count && i < content.childCount; ++i)
                 {
                     if (content[i] is Label logLabel)
                     {
                         LogItem logItem = logs[i];
                         SetupLabel(logLabel, logItem);
-                        logLabel.text = logs[i].message;
+                        logLabel.text = logItem.message;
                     }
                 }
                 _lastSeenBufferVersion = Terminal.Buffer.Version;
             }
             return;
 
-            void SetupLabel(Label label, LogItem log)
+            static void SetupLabel(Label label, LogItem log)
             {
                 label.EnableInClassList(
                     "terminal-output-label--shell",
@@ -1131,6 +1145,14 @@
                     "terminal-output-label--input",
                     log.type == TerminalLogType.Input
                 );
+            }
+        }
+
+        private void ScrollToEnd()
+        {
+            if (0 < _logScrollView.verticalScroller.highValue)
+            {
+                _logScrollView.verticalScroller.value = _logScrollView.verticalScroller.highValue;
             }
         }
 
@@ -1210,7 +1232,11 @@
         {
             if (!_showGUIButtons)
             {
-                _stateButtonContainer.Clear();
+                if (0 < _stateButtonContainer.childCount)
+                {
+                    _stateButtonContainer.Clear();
+                }
+
                 return;
             }
 
@@ -1218,21 +1244,26 @@
             Button secondButton;
             if (_stateButtonContainer.childCount == 0)
             {
-                firstButton = new Button(FirstClicked);
-                firstButton.name = "StateButton1";
+                firstButton = new Button(FirstClicked) { name = "StateButton1" };
                 firstButton.AddToClassList("terminal-button");
                 _stateButtonContainer.Add(firstButton);
 
-                secondButton = new Button(SecondClicked);
-                secondButton.name = "StateButton2";
+                secondButton = new Button(SecondClicked) { name = "StateButton2" };
                 secondButton.AddToClassList("terminal-button");
-                ;
                 _stateButtonContainer.Add(secondButton);
             }
             else
             {
                 firstButton = _stateButtonContainer[0] as Button;
+                if (firstButton == null)
+                {
+                    return;
+                }
                 secondButton = _stateButtonContainer[1] as Button;
+                if (secondButton == null)
+                {
+                    return;
+                }
             }
 
             switch (_state)
@@ -1335,95 +1366,6 @@
         }
 
 #if ENABLE_INPUT_SYSTEM
-        private static bool IsKeyPressed(string key)
-        {
-            if (1 < key.Length && key.StartsWith("#", StringComparison.OrdinalIgnoreCase))
-            {
-                if (!CachedSubstrings.TryGetValue(key, out string expected))
-                {
-                    expected = key.Substring(1);
-                    if (expected.Length == 1 && expected.NeedsLowerInvariantConversion())
-                    {
-                        expected = expected.ToLowerInvariant();
-                    }
-
-                    CachedSubstrings[key] = expected;
-                }
-
-                return Keyboard.current.shiftKey.isPressed
-                    && (
-                        Keyboard.current.TryGetChildControl<KeyControl>(
-                            Terminal.SpecialKeyCodes.GetValueOrDefault(expected, expected)
-                        )
-                            is { wasPressedThisFrame: true }
-                        || Keyboard.current.TryGetChildControl<KeyControl>(expected)
-                            is { wasPressedThisFrame: true }
-                    );
-            }
-
-            const string shiftModifier = "shift+";
-            if (
-                shiftModifier.Length < key.Length
-                && key.StartsWith(shiftModifier, StringComparison.OrdinalIgnoreCase)
-            )
-            {
-                if (!CachedSubstrings.TryGetValue(key, out string expected))
-                {
-                    expected = key.Substring(shiftModifier.Length);
-                    if (expected.Length == 1 && expected.NeedsLowerInvariantConversion())
-                    {
-                        expected = expected.ToLowerInvariant();
-                    }
-
-                    CachedSubstrings[key] = expected;
-                }
-
-                return Keyboard.current.shiftKey.isPressed
-                    && (
-                        Keyboard.current.TryGetChildControl<KeyControl>(
-                            Terminal.SpecialKeyCodes.GetValueOrDefault(expected, expected)
-                        )
-                            is { wasPressedThisFrame: true }
-                        || Keyboard.current.TryGetChildControl<KeyControl>(expected)
-                            is { wasPressedThisFrame: true }
-                    );
-            }
-            else if (
-                Terminal.SpecialShiftedKeyCodes.TryGetValue(key, out string expected)
-                && Keyboard.current.shiftKey.isPressed
-                && Keyboard.current.TryGetChildControl<KeyControl>(expected)
-                    is { wasPressedThisFrame: true }
-            )
-            {
-                return true;
-            }
-            else if (
-                Terminal.AlternativeSpecialShiftedKeyCodes.TryGetValue(key, out expected)
-                && Keyboard.current.shiftKey.isPressed
-                && Keyboard.current.TryGetChildControl<KeyControl>(expected)
-                    is { wasPressedThisFrame: true }
-            )
-            {
-                return true;
-            }
-            else if (key.Length == 1 && key.NeedsLowerInvariantConversion())
-            {
-                key = key.ToLowerInvariant();
-                return Keyboard.current.shiftKey.isPressed
-                    && Keyboard.current.TryGetChildControl<KeyControl>(key)
-                        is { wasPressedThisFrame: true };
-            }
-            else
-            {
-                return Keyboard.current.TryGetChildControl<KeyControl>(
-                        Terminal.SpecialKeyCodes.GetValueOrDefault(key, key)
-                    )
-                        is { wasPressedThisFrame: true }
-                    || Keyboard.current.TryGetChildControl<KeyControl>(key)
-                        is { wasPressedThisFrame: true };
-            }
-        }
-
         public void OnHandlePrevious(InputValue inputValue)
         {
             HandlePrevious();
@@ -1616,10 +1558,6 @@
             else if (_openTarget < _currentOpenT)
             {
                 _currentOpenT = Mathf.Max(_currentOpenT - dt, _openTarget);
-            }
-            else
-            {
-                _inputFix = false;
             }
         }
 

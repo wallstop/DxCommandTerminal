@@ -6,14 +6,12 @@ namespace CommandTerminal
     using System.Linq;
     using Attributes;
     using Extensions;
-    using JetBrains.Annotations;
     using UnityEditor;
     using UnityEngine;
     using UnityEngine.Serialization;
     using Utils;
 #if ENABLE_INPUT_SYSTEM
     using UnityEngine.InputSystem;
-    using UnityEngine.InputSystem.Controls;
 #endif
 
     [DisallowMultipleComponent]
@@ -21,7 +19,6 @@ namespace CommandTerminal
     {
         private const string CommandControlName = "CommandTextField";
 
-        private static readonly Dictionary<string, string> CachedSubstrings = new();
         private static readonly Dictionary<Color, Texture2D> CachedTextures = new();
 
         public static ImGuiTerminal Instance { get; private set; }
@@ -520,42 +517,44 @@ namespace CommandTerminal
                 return;
             }
 
-            if (IsKeyPressed(_closeHotkey))
+            if (Terminal.IsKeyPressed(_closeHotkey))
             {
                 _handledInputThisFrame = true;
                 Close();
             }
-            else if (_completeCommandHotkeys?.list?.Exists(key => IsKeyPressed(key)) == true)
+            else if (
+                _completeCommandHotkeys?.list?.Exists(key => Terminal.IsKeyPressed(key)) == true
+            )
             {
                 _handledInputThisFrame = true;
                 EnterCommand();
             }
-            else if (IsKeyPressed(_previousHotkey))
+            else if (Terminal.IsKeyPressed(_previousHotkey))
             {
                 _handledInputThisFrame = true;
                 HandlePrevious();
             }
-            else if (IsKeyPressed(_nextHotkey))
+            else if (Terminal.IsKeyPressed(_nextHotkey))
             {
                 _handledInputThisFrame = true;
                 HandleNext();
             }
-            else if (IsKeyPressed(_toggleFullHotkey))
+            else if (Terminal.IsKeyPressed(_toggleFullHotkey))
             {
                 _handledInputThisFrame = true;
                 ToggleFull();
             }
-            else if (IsKeyPressed(_toggleHotkey))
+            else if (Terminal.IsKeyPressed(_toggleHotkey))
             {
                 _handledInputThisFrame = true;
                 ToggleSmall();
             }
-            else if (IsKeyPressed(_reverseCompleteHotkey))
+            else if (Terminal.IsKeyPressed(_reverseCompleteHotkey))
             {
                 _handledInputThisFrame = true;
                 CompleteCommand(searchForward: false);
             }
-            else if (IsKeyPressed(_completeHotkey))
+            else if (Terminal.IsKeyPressed(_completeHotkey))
             {
                 _handledInputThisFrame = true;
                 CompleteCommand(searchForward: true);
@@ -1433,95 +1432,6 @@ namespace CommandTerminal
         }
 
 #if ENABLE_INPUT_SYSTEM
-        private static bool IsKeyPressed(string key)
-        {
-            if (1 < key.Length && key.StartsWith("#", StringComparison.OrdinalIgnoreCase))
-            {
-                if (!CachedSubstrings.TryGetValue(key, out string expected))
-                {
-                    expected = key.Substring(1);
-                    if (expected.Length == 1 && expected.NeedsLowerInvariantConversion())
-                    {
-                        expected = expected.ToLowerInvariant();
-                    }
-
-                    CachedSubstrings[key] = expected;
-                }
-
-                return Keyboard.current.shiftKey.isPressed
-                    && (
-                        Keyboard.current.TryGetChildControl<KeyControl>(
-                            Terminal.SpecialKeyCodes.GetValueOrDefault(expected, expected)
-                        )
-                            is { wasPressedThisFrame: true }
-                        || Keyboard.current.TryGetChildControl<KeyControl>(expected)
-                            is { wasPressedThisFrame: true }
-                    );
-            }
-
-            const string shiftModifier = "shift+";
-            if (
-                shiftModifier.Length < key.Length
-                && key.StartsWith(shiftModifier, StringComparison.OrdinalIgnoreCase)
-            )
-            {
-                if (!CachedSubstrings.TryGetValue(key, out string expected))
-                {
-                    expected = key.Substring(shiftModifier.Length);
-                    if (expected.Length == 1 && expected.NeedsLowerInvariantConversion())
-                    {
-                        expected = expected.ToLowerInvariant();
-                    }
-
-                    CachedSubstrings[key] = expected;
-                }
-
-                return Keyboard.current.shiftKey.isPressed
-                    && (
-                        Keyboard.current.TryGetChildControl<KeyControl>(
-                            Terminal.SpecialKeyCodes.GetValueOrDefault(expected, expected)
-                        )
-                            is { wasPressedThisFrame: true }
-                        || Keyboard.current.TryGetChildControl<KeyControl>(expected)
-                            is { wasPressedThisFrame: true }
-                    );
-            }
-            else if (
-                Terminal.SpecialShiftedKeyCodes.TryGetValue(key, out string expected)
-                && Keyboard.current.shiftKey.isPressed
-                && Keyboard.current.TryGetChildControl<KeyControl>(expected)
-                    is { wasPressedThisFrame: true }
-            )
-            {
-                return true;
-            }
-            else if (
-                Terminal.AlternativeSpecialShiftedKeyCodes.TryGetValue(key, out expected)
-                && Keyboard.current.shiftKey.isPressed
-                && Keyboard.current.TryGetChildControl<KeyControl>(expected)
-                    is { wasPressedThisFrame: true }
-            )
-            {
-                return true;
-            }
-            else if (key.Length == 1 && key.NeedsLowerInvariantConversion())
-            {
-                key = key.ToLowerInvariant();
-                return Keyboard.current.shiftKey.isPressed
-                    && Keyboard.current.TryGetChildControl<KeyControl>(key)
-                        is { wasPressedThisFrame: true };
-            }
-            else
-            {
-                return Keyboard.current.TryGetChildControl<KeyControl>(
-                        Terminal.SpecialKeyCodes.GetValueOrDefault(key, key)
-                    )
-                        is { wasPressedThisFrame: true }
-                    || Keyboard.current.TryGetChildControl<KeyControl>(key)
-                        is { wasPressedThisFrame: true };
-            }
-        }
-
         public void OnHandlePrevious(InputValue inputValue)
         {
             HandlePrevious();

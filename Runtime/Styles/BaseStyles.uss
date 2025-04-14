@@ -111,14 +111,20 @@
 }
 
 .terminal-input-caret {
-    flex-grow: 1;
+    border-top-left-radius: 4px;
+    border-bottom-left-radius: 4px;
+    flex-grow: 0;
+    flex-shrink: 0;
     align-items: center;
     padding: 2px 0;
     margin: 0;
 }
 
 .terminal-input-field {
+    border-top-right-radius: 4px;
+    border-bottom-right-radius: 4px;
     flex-grow: 1;
+    flex-shrink: 1;
     padding: 0;
     margin: 0;
 }
@@ -130,4 +136,99 @@
     border-right-width: 0;
     padding: 2px 0;
     margin: 0;
+}
+
+/* -- Theming -- */
+
+.terminal-container,
+.log-scroll-view .unity-scroller .unity-scroller__dragger {
+    background-color: var(--terminal-bg);
+}
+
+.log-scroll-view .unity-scroller .unity-base-slider__dragger {
+    background-color: var(--scroll-color);
+    transition: background-color 0.1s ease;
+}
+
+.log-scroll-view .unity-scroller .unity-base-slider__dragger:hover,
+.log-scroll-view .unity-scroller .unity-base-slider__tracker:hover,
+.log-scroll-view .unity-scroller .unity-base-slider__dragger:active,
+.log-scroll-view .unity-scroller .unity-base-slider__tracker:active,
+.log-scroll-view .unity-scroller .unity-base-slider__dragger.dragger-active {
+    background-color: var(--scroll-active-bg);
+}
+
+.log-scroll-view .unity-scroller .unity-base-slider__dragger.tracker-hovered,
+.log-scroll-view .unity-scroller .unity-base-slider__dragger.tracker-active {
+    background-color: var(--scroll-inverse-bg);
+}
+
+.autocomplete-item {
+    background-color: var(--button-bg);
+    transition: background-color 0.1s ease;
+    color: var(--button-text);
+}
+
+.autocomplete-item:hover {
+    background-color: var(--button-hover-bg);
+    color: var(--button-hover-text);
+}
+
+.autocomplete-item-selected {
+    background-color: var(--button-selected-bg);
+    color: var(--button-selected-text);
+}
+.autocomplete-item-selected:hover {
+    background-color: var(--button-hover-bg);
+    color: var(--button-hover-text);
+}
+
+.terminal-button-run {
+    background-color: var(--button-bg);
+    color: var(--button-text);
+}
+
+.terminal-input-caret {
+    color: var(--caret-color);
+    background-color: var(--input-field-bg);
+}
+
+.terminal-input-field {
+    background-color: var(--input-field-bg);
+}
+
+.terminal-input-field > #unity-text-input,
+.terminal-input-field > #unity-text-input > .unity-text-element{
+    color: var(--input-text-color);
+    background-color: var(--input-field-bg);
+}
+
+.state-button-container .terminal-button {
+    background-color: var(--button-bg);
+    color: var(--button-text);
+}
+
+.state-button-container .terminal-button:hover {
+    background-color: var(--button-selected-bg);
+    color: var(--button-selected-text);
+}
+
+.terminal-output-label--message {
+    color: var(--text-message);
+}
+
+.terminal-output-label--warning {
+    color: var(--text-warning);
+}
+
+.terminal-output-label--input {
+    color: var(--text-input-echo);
+}
+
+.terminal-output-label--shell {
+    color: var(--text-shell);
+}
+
+.terminal-output-label--error {
+    color: var(--text-error);
 }

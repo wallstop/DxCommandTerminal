@@ -2,6 +2,7 @@
 {
 #if UNITY_EDITOR
     using System;
+    using System.Collections;
     using System.Collections.Generic;
     using System.Reflection;
     using System.Reflection.Emit;
@@ -215,10 +216,41 @@
 
         private static object GetElementAtIndex(object obj, int index)
         {
-            if (obj is System.Collections.IList list && index >= 0 && index < list.Count)
+            if (index < 0)
             {
-                return list[index];
+                return null;
             }
+
+            switch (obj)
+            {
+                case IList list when index < list.Count:
+                    return list[index];
+                case IEnumerable enumerable:
+                {
+                    int count = 0;
+                    IEnumerator enumerator = enumerable.GetEnumerator();
+                    try
+                    {
+                        while (enumerator.MoveNext())
+                        {
+                            if (index == count++)
+                            {
+                                return enumerator.Current;
+                            }
+                        }
+                    }
+                    finally
+                    {
+                        if (enumerator is IDisposable disposable)
+                        {
+                            disposable.Dispose();
+                        }
+                    }
+
+                    break;
+                }
+            }
+
             return null;
         }
 
