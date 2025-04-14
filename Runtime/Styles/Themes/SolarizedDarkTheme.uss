@@ -1,0 +1,26 @@
+﻿.solarized-dark-theme {
+    /* Backgrounds */
+    --terminal-bg: rgba(0, 43, 54, 0.9);
+    --button-bg: rgba(7, 54, 66, 1);
+    --input-field-bg: rgba(0, 30, 38, 0.8);
+    --button-selected-bg: rgba(181, 137, 0, 0.85);
+    --button-hover-bg: rgba(12, 70, 86, 1);
+    --scroll-bg: rgba(7, 54, 66, 1);
+    --scroll-inverse-bg: rgba(88, 110, 117, 1);
+    --scroll-active-bg: rgba(101, 123, 131, 1);
+
+    /* Text & Foreground */
+    --button-text: rgba(131, 148, 150, 0.9);
+    --button-selected-text: rgba(0, 43, 54, 1);
+    --button-hover-text: rgba(147, 161, 161, 1);
+    --input-text-color: rgba(131, 148, 150, 1.0);
+    --text-message: rgba(131, 148, 150, 1);
+    --text-warning: rgba(203, 75, 22, 1);
+    --text-input-echo: rgba(38, 139, 210, 1);
+    --text-shell: rgba(88, 110, 117, 1);
+    --text-error: rgba(220, 50, 47, 1);
+
+    /* Other UI Elements */
+    --scroll-color: rgba(131, 148, 150, 1);
+    --caret-color: rgba(147, 161, 161, 1.0);
+}

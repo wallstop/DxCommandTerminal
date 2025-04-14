@@ -155,9 +155,12 @@
         [SerializeField]
         public List<string> disabledCommands = new();
 
+        public UIDocument uiDocument;
+
 #if UNITY_EDITOR
         private readonly Dictionary<TerminalLogType, int> _seenLogTypes = new();
         private readonly Dictionary<string, object> _propertyValues = new();
+        private readonly List<SerializedProperty> _uiProperties = new();
         private readonly List<SerializedProperty> _staticStateProperties = new();
         private readonly List<SerializedProperty> _windowProperties = new();
         private readonly List<SerializedProperty> _windowStyleProperties = new();
@@ -241,6 +244,9 @@
 #if UNITY_EDITOR
             _serializedObject = new SerializedObject(this);
 
+            string[] upPropertiesTracked = { nameof(uiDocument) };
+            TrackProperties(upPropertiesTracked, _uiProperties);
+
             string[] staticStaticPropertiesTracked =
             {
                 nameof(_logBufferSize),
@@ -251,12 +257,7 @@
             };
             TrackProperties(staticStaticPropertiesTracked, _staticStateProperties);
 
-            string[] windowPropertiesTracked =
-            {
-                nameof(_maxHeight),
-                nameof(_smallTerminalRatio),
-                nameof(_showGUIButtons),
-            };
+            string[] windowPropertiesTracked = { nameof(_maxHeight), nameof(_smallTerminalRatio) };
             TrackProperties(windowPropertiesTracked, _windowProperties);
 
             string[] windowStylePropertiesTracked = { nameof(_consoleFont) };
@@ -286,6 +287,7 @@
                 nameof(_hintDisplayMode),
                 nameof(disabledCommands),
                 nameof(ignoreDefaultCommands),
+                nameof(_makeHintsClickable),
             };
             TrackProperties(autoCompletePropertiesTracked, _autoCompleteProperties);
 
@@ -392,13 +394,6 @@
             RefreshStaticState(force: resetStateOnInit);
             SetupWindow();
             ConsumeAndLogErrors();
-
-            for (int i = 1; i <= 20; ++i)
-            {
-                string command = $"log {new string(Enumerable.Repeat('a', i).ToArray())}";
-                Terminal.History.Push(command, true, true);
-            }
-
             ResetAutoComplete();
             _started = true;
         }
@@ -603,6 +598,11 @@
             }
 
             _serializedObject.Update();
+            if (CheckForRefresh(_uiProperties))
+            {
+                SetupUI();
+            }
+
             if (CheckForRefresh(_staticStateProperties))
             {
                 RefreshStaticState(force: false);
@@ -629,6 +629,7 @@
 
             if (CheckForRefresh(_autoCompleteProperties))
             {
+                _autoCompleteContainer?.Clear();
                 ResetAutoComplete();
             }
 
@@ -761,7 +762,13 @@
                 {
                     for (int i = 0; i < buffer.Length; ++i)
                     {
-                        if (!string.Equals(buffer[i], _lastCompletionBuffer[i]))
+                        if (
+                            !string.Equals(
+                                buffer[i],
+                                _lastCompletionBuffer[i],
+                                StringComparison.OrdinalIgnoreCase
+                            )
+                        )
                         {
                             _lastCompletionIndex = null;
                             _previousLastCompletionIndex = null;
@@ -814,16 +821,46 @@
             }
         }
 
+        // private void OnRootReady(GeometryChangedEvent evt)
+        // {
+        //     // We only need to run this query once after the geometry is first computed.
+        //     uiDocument.rootVisualElement.UnregisterCallback<GeometryChangedEvent>(OnRootReady);
+        //
+        //     terminalRoot = uiDocument.rootVisualElement.Q<VisualElement>(terminalRootElementName);
+        //
+        //     if (terminalRoot == null)
+        //     {
+        //         Debug.LogError(
+        //             $"{nameof(TerminalThemeSwitcher)}: Could not find VisualElement with name '{terminalRootElementName}' in the UIDocument.",
+        //             this
+        //         );
+        //         this.enabled = false; // Disable script if element not found
+        //     }
+        //     else
+        //     {
+        //         // Apply the default theme if no theme is currently set
+        //         if (!themeClasses.Any(c => terminalRoot.ClassListContains(c)))
+        //         {
+        //             SetTheme(defaultTheme);
+        //         }
+        //         Debug.Log(
+        //             $"{nameof(TerminalThemeSwitcher)}: Found terminal root '{terminalRootElementName}' and initialized theme.",
+        //             this
+        //         );
+        //     }
+        // }
+
         // UI Toolkit setup
         private void SetupUI()
         {
-            UIDocument uiDoc = GetComponent<UIDocument>();
-            if (uiDoc == null)
+            if (uiDocument == null)
             {
-                // TODO: Handle this better
-                uiDoc = gameObject.AddComponent<UIDocument>();
+                Debug.LogError("No UIDocument assigned, cannot setup UI.");
+                return;
             }
-            VisualElement uiRoot = uiDoc.rootVisualElement;
+
+            VisualElement uiRoot = uiDocument.rootVisualElement;
+            uiRoot.Clear();
             VisualElement root = new();
             uiRoot.Add(root);
             root.name = "TerminalRoot";
@@ -851,22 +888,19 @@
             _inputContainer.AddToClassList("input-container");
             _terminalContainer.Add(_inputContainer);
 
-            if (_showGUIButtons)
+            _runButton = new Button(EnterCommand)
             {
-                _runButton = new Button(EnterCommand)
-                {
-                    text = _runButtonText,
-                    name = "RunCommandButton",
-                };
-                _runButton.AddToClassList("terminal-button");
-                _runButton.AddToClassList("terminal-button-run");
-                _runButton.style.display = DisplayStyle.None;
-                _runButton.style.marginLeft = 6;
-                _runButton.style.marginRight = 4;
-                _runButton.style.paddingTop = 2;
-                _runButton.style.paddingBottom = 2;
-                _inputContainer.Add(_runButton);
-            }
+                text = _runButtonText,
+                name = "RunCommandButton",
+            };
+            _runButton.AddToClassList("terminal-button");
+            _runButton.AddToClassList("terminal-button-run");
+            _runButton.style.display = DisplayStyle.None;
+            _runButton.style.marginLeft = 6;
+            _runButton.style.marginRight = 4;
+            _runButton.style.paddingTop = 2;
+            _runButton.style.paddingBottom = 2;
+            _inputContainer.Add(_runButton);
 
             if (!string.IsNullOrEmpty(_inputCaret))
             {
@@ -886,7 +920,8 @@
                 {
                     context._commandText = evt.newValue;
                     context._runButton.style.display =
-                        !string.IsNullOrWhiteSpace(context._commandText)
+                        _showGUIButtons
+                        && !string.IsNullOrWhiteSpace(context._commandText)
                         && !string.IsNullOrWhiteSpace(context._runButtonText)
                             ? DisplayStyle.Flex
                             : DisplayStyle.None;
@@ -1315,7 +1350,6 @@
 
             VisualElement current = _autoCompleteContainer[_lastCompletionIndex.Value];
             float viewportWidth = _autoCompleteContainer.contentViewport.resolvedStyle.width;
-            float currentScrollOffset = _autoCompleteContainer.scrollOffset.x;
 
             // Use layout properties relative to the content container
             float targetElementLeft = current.layout.x;
@@ -1325,8 +1359,7 @@
             const float epsilon = 0.01f;
 
             bool isFullyVisible =
-                targetElementLeft >= currentScrollOffset - epsilon
-                && targetElementRight <= currentScrollOffset + viewportWidth + epsilon;
+                epsilon <= targetElementLeft && targetElementRight <= viewportWidth + epsilon;
 
             if (isFullyVisible)
             {
@@ -1396,13 +1429,14 @@
 
         private void RefreshStateButtons()
         {
+            for (int i = 0; i < _stateButtonContainer.childCount; ++i)
+            {
+                VisualElement child = _stateButtonContainer[i];
+                child.style.display = _showGUIButtons ? DisplayStyle.Flex : DisplayStyle.None;
+            }
+
             if (!_showGUIButtons)
             {
-                if (0 < _stateButtonContainer.childCount)
-                {
-                    _stateButtonContainer.Clear();
-                }
-
                 return;
             }
 
@@ -1414,10 +1448,14 @@
             {
                 firstButton = new Button(FirstClicked) { name = "StateButton1" };
                 firstButton.AddToClassList("terminal-button");
+                firstButton.style.display = _showGUIButtons ? DisplayStyle.Flex : DisplayStyle.None;
                 _stateButtonContainer.Add(firstButton);
 
                 secondButton = new Button(SecondClicked) { name = "StateButton2" };
                 secondButton.AddToClassList("terminal-button");
+                secondButton.style.display = _showGUIButtons
+                    ? DisplayStyle.Flex
+                    : DisplayStyle.None;
                 _stateButtonContainer.Add(secondButton);
             }
             else

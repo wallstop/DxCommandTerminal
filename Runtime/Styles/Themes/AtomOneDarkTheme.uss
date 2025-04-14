@@ -1,0 +1,26 @@
+﻿.atom-one-dark-theme {
+    /* Backgrounds */
+    --terminal-bg: rgba(40, 44, 52, 0.9);
+    --button-bg: rgba(48, 52, 60, 1);
+    --input-field-bg: rgba(33, 37, 43, 0.8);
+    --button-selected-bg: rgba(97, 175, 239, 0.85);
+    --button-hover-bg: rgba(58, 63, 72, 1);
+    --scroll-bg: rgba(48, 52, 60, 1);
+    --scroll-inverse-bg: rgba(76, 82, 91, 1);
+    --scroll-active-bg: rgba(91, 98, 109, 1);
+
+    /* Text & Foreground */
+    --button-text: rgba(171, 178, 191, 0.9);
+    --button-selected-text: rgba(40, 44, 52, 1);
+    --button-hover-text: rgba(200, 207, 219, 1);
+    --input-text-color: rgba(171, 178, 191, 1.0);
+    --text-message: rgba(171, 178, 191, 1);
+    --text-warning: rgba(229, 192, 123, 1);
+    --text-input-echo: rgba(198, 120, 221, 1);
+    --text-shell: rgba(92, 99, 112, 1);
+    --text-error: rgba(224, 108, 117, 1);
+
+    /* Other UI Elements */
+    --scroll-color: rgba(171, 178, 191, 1);
+    --caret-color: rgba(86, 182, 194, 1.0);
+}

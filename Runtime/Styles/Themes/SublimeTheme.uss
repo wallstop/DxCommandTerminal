@@ -1,0 +1,26 @@
+﻿.sublime-theme {
+    /* Backgrounds */
+    --terminal-bg: rgba(41, 42, 36, 0.9);
+    --button-bg: rgba(58, 59, 52, 1);
+    --input-field-bg: rgba(35, 36, 31, 0.8);
+    --button-selected-bg: rgba(253, 151, 31, 0.85);
+    --button-hover-bg: rgba(75, 76, 69, 1);
+    --scroll-bg: rgba(58, 59, 52, 1);
+    --scroll-inverse-bg: rgba(95, 97, 88, 1);
+    --scroll-active-bg: rgba(115, 117, 106, 1);
+
+    /* Text & Foreground */
+    --button-text: rgba(248, 248, 242, 0.9);
+    --button-selected-text: rgba(41, 42, 36, 1);
+    --button-hover-text: rgba(248, 248, 242, 1);
+    --input-text-color: rgba(248, 248, 242, 1.0);
+    --text-message: rgba(248, 248, 242, 1);
+    --text-warning: rgba(230, 219, 116, 1);
+    --text-input-echo: rgba(102, 217, 239, 1);
+    --text-shell: rgba(117, 113, 94, 1);
+    --text-error: rgba(249, 38, 114, 1);
+
+    /* Other UI Elements */
+    --scroll-color: rgba(248, 248, 242, 1);
+    --caret-color: rgba(248, 248, 242, 1.0);
+}
