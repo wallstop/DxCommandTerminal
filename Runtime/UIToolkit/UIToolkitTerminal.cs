@@ -1102,7 +1102,6 @@
                 }
 
                 _needsScrollToEnd = true;
-                _lastSeenBufferVersion = Terminal.Buffer.Version;
             }
 
             if (dirty)
@@ -1116,7 +1115,11 @@
                         logLabel.text = logItem.message;
                     }
                 }
-                _lastSeenBufferVersion = Terminal.Buffer.Version;
+
+                if (logs.Count == content.childCount)
+                {
+                    _lastSeenBufferVersion = Terminal.Buffer.Version;
+                }
             }
             return;
 
@@ -1201,7 +1204,7 @@
                     }
                     else
                     {
-                        Label hintLabel = new Label(hint);
+                        Label hintLabel = new(hint);
                         hintElement = hintLabel;
                     }
 
@@ -1239,6 +1242,8 @@
 
                 return;
             }
+
+            _stateButtonContainer.style.top = _currentOpenT + 4;
 
             Button firstButton;
             Button secondButton;
@@ -1305,7 +1310,6 @@
                         typeof(TerminalState)
                     );
             }
-            _stateButtonContainer.style.top = _currentOpenT + 4;
             return;
 
             void FirstClicked()
@@ -1491,12 +1495,27 @@
                 try
                 {
                     int completionLength = completionBuffer.Length;
-                    if (
-                        _lastCompletionBuffer.SequenceEqual(
-                            completionBuffer,
-                            StringComparer.OrdinalIgnoreCase
-                        )
-                    )
+                    bool equivalentBuffers =
+                        _lastCompletionBuffer != null
+                        && _lastCompletionBuffer.Length == completionBuffer.Length;
+                    if (equivalentBuffers)
+                    {
+                        for (int i = 0; i < completionLength; i++)
+                        {
+                            if (
+                                !string.Equals(
+                                    completionBuffer[i],
+                                    _lastCompletionBuffer[i],
+                                    StringComparison.OrdinalIgnoreCase
+                                )
+                            )
+                            {
+                                equivalentBuffers = false;
+                                break;
+                            }
+                        }
+                    }
+                    if (equivalentBuffers)
                     {
                         if (0 < completionLength)
                         {
