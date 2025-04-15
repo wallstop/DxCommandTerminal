@@ -206,6 +206,9 @@ namespace CommandTerminal.UIToolkit
         private VisualElement _textInput;
         private Label _inputCaretLabel;
 
+        private float _inputContainerHeight;
+        private float _commandInputHeight;
+
         private readonly List<VisualElement> _autoCompleteChildren = new();
         private readonly Action _focusInput;
 
@@ -894,6 +897,7 @@ namespace CommandTerminal.UIToolkit
 
             _inputContainer = new VisualElement { name = "InputContainer" };
             _inputContainer.AddToClassList("input-container");
+            _inputContainerHeight = _inputContainer.layout.height;
             _terminalContainer.Add(_inputContainer);
 
             _runButton = new Button(EnterCommand)
@@ -960,6 +964,8 @@ namespace CommandTerminal.UIToolkit
                 userArgs: this,
                 useTrickleDown: TrickleDown.TrickleDown
             );
+            _commandInputHeight = _commandInput.layout.height;
+
             _inputContainer.Add(_commandInput);
             _textInput = _commandInput.Q<VisualElement>("unity-text-input");
 
@@ -1105,10 +1111,10 @@ namespace CommandTerminal.UIToolkit
 
             _terminalContainer.style.height = _currentWindowHeight;
             _terminalContainer.style.width = Screen.width;
-            _inputContainer.style.height = Mathf.Min(_currentWindowHeight, 30);
-            _commandInput.style.height = Mathf.Min(_currentWindowHeight, 24);
+            _inputContainer.style.height = Mathf.Min(_currentWindowHeight, _inputContainerHeight);
+            _commandInput.style.height = Mathf.Min(_currentWindowHeight, _commandInputHeight);
             _inputCaretLabel.style.display =
-                _currentWindowHeight < 24 ? DisplayStyle.None : DisplayStyle.Flex;
+                _currentWindowHeight < _commandInputHeight ? DisplayStyle.None : DisplayStyle.Flex;
 
             RefreshLogs();
             RefreshAutoCompleteHints();
@@ -1467,6 +1473,7 @@ namespace CommandTerminal.UIToolkit
                 return;
             }
 
+            _stateButtonContainer.style.top = _currentWindowHeight;
             DisplayStyle displayStyle = _showGUIButtons ? DisplayStyle.Flex : DisplayStyle.None;
 
             for (int i = 0; i < _stateButtonContainer.childCount; ++i)
@@ -1479,8 +1486,6 @@ namespace CommandTerminal.UIToolkit
             {
                 return;
             }
-
-            _stateButtonContainer.style.top = _currentWindowHeight + 4;
 
             Button firstButton;
             Button secondButton;

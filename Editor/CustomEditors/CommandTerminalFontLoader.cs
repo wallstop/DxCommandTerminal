@@ -14,12 +14,9 @@
 
         private static string GetCallerScriptDirectory([CallerFilePath] string sourceFilePath = "")
         {
-            if (string.IsNullOrWhiteSpace(sourceFilePath))
-            {
-                return string.Empty;
-            }
-
-            return Path.GetDirectoryName(sourceFilePath);
+            return string.IsNullOrWhiteSpace(sourceFilePath)
+                ? string.Empty
+                : Path.GetDirectoryName(sourceFilePath);
         }
 
         private static string FindPackageRootPath(string startDirectory)
@@ -76,6 +73,7 @@
                 {
                     break;
                 }
+
                 currentPath = parentPath;
             }
 
@@ -164,18 +162,18 @@
             if (absolutePath.StartsWith(projectRoot, StringComparison.OrdinalIgnoreCase))
             {
                 // +1 to remove the leading slash only if projectRoot doesn't end with one
-                int startIndex = projectRoot.EndsWith("/")
+                int startIndex = projectRoot.EndsWith("/", StringComparison.OrdinalIgnoreCase)
                     ? projectRoot.Length
                     : projectRoot.Length + 1;
-                return absolutePath.Length > startIndex ? absolutePath[startIndex..] : "";
+                return absolutePath.Length > startIndex ? absolutePath[startIndex..] : string.Empty;
             }
             string assetsPath = Application.dataPath.Replace('\\', '/');
             if (absolutePath.StartsWith(assetsPath, StringComparison.OrdinalIgnoreCase))
             {
-                int startIndex = assetsPath.EndsWith("/")
+                int startIndex = assetsPath.EndsWith("/", StringComparison.OrdinalIgnoreCase)
                     ? assetsPath.Length
                     : assetsPath.Length + 1;
-                if (absolutePath.Length > startIndex)
+                if (startIndex < absolutePath.Length)
                 {
                     return "Assets/" + absolutePath[startIndex..];
                 }

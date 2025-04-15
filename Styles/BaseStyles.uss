@@ -79,7 +79,7 @@
     background-color: transparent;
     flex-direction: row;
     flex-shrink: 0;
-    left: 4px;
+    left: 2px;
 }
 
 .autocomplete-popup #unity-low-button,
@@ -110,7 +110,7 @@
 }
 
 .terminal-button {
-    margin: 0 2px;
+    margin: 4px 2px;
     padding: 0 4px;
     border-radius: 4px;
     border-width: 0;
