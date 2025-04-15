@@ -143,7 +143,7 @@
 
             if (_fontsByPrefix.Count == 0)
             {
-                Font[] fonts = FontLoader.LoadFonts();
+                Font[] fonts = CommandTerminalFontLoader.LoadFonts();
                 foreach (Font font in fonts)
                 {
                     string fontName = font.name;
@@ -185,7 +185,7 @@
 
             if (_fontsByPrefix is { Count: > 0 })
             {
-                if (_fontKey < 0 && _secondFontKey < 0)
+                if (_fontKey < 0 && _secondFontKey < 0 && terminal._consoleFont != null)
                 {
                     int keyIndex = 0;
                     foreach (

@@ -8,7 +8,7 @@
     using UnityEngine;
 
 #if UNITY_EDITOR
-    public static class FontLoader
+    public static class CommandTerminalFontLoader
     {
         private const string FontPath = "Fonts";
 
