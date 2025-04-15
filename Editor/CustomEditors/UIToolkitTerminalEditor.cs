@@ -25,6 +25,12 @@
             StringComparer.OrdinalIgnoreCase
         );
 
+        private readonly SortedDictionary<string, SortedDictionary<string, Font>> _fontsByPrefix =
+            new(StringComparer.OrdinalIgnoreCase);
+
+        private int _fontKey = -1;
+        private int _secondFontKey = -1;
+
         public override void OnInspectorGUI()
         {
             base.OnInspectorGUI();
@@ -80,19 +86,28 @@
                 string[] ignorableCommands = _intermediateResults.ToArray();
                 Array.Sort(ignorableCommands);
 
-                EditorGUILayout.Space();
-                EditorGUILayout.LabelField("Ignorable Commands");
-
-                _commandIndex = EditorGUILayout.Popup(_commandIndex, ignorableCommands);
-                if (
-                    0 <= _commandIndex
-                    && _commandIndex < ignorableCommands.Length
-                    && GUILayout.Button("Ignore Command")
-                )
+                EditorGUILayout.BeginHorizontal();
+                try
                 {
-                    string command = ignorableCommands[_commandIndex];
-                    terminal.disabledCommands.Add(command);
-                    anyChanged = true;
+                    _commandIndex = EditorGUILayout.Popup(
+                        "Commands",
+                        _commandIndex,
+                        ignorableCommands
+                    );
+                    if (
+                        0 <= _commandIndex
+                        && _commandIndex < ignorableCommands.Length
+                        && GUILayout.Button("Ignore Command")
+                    )
+                    {
+                        string command = ignorableCommands[_commandIndex];
+                        terminal.disabledCommands.Add(command);
+                        anyChanged = true;
+                    }
+                }
+                finally
+                {
+                    EditorGUILayout.EndHorizontal();
                 }
             }
 
@@ -123,6 +138,145 @@
                             anyChanged = true;
                         }
                     }
+                }
+            }
+
+            if (_fontsByPrefix.Count == 0)
+            {
+                Font[] fonts = FontLoader.LoadFonts();
+                foreach (Font font in fonts)
+                {
+                    string fontName = font.name;
+                    int indexOfSplit = fontName.IndexOf('-', StringComparison.OrdinalIgnoreCase);
+                    if (indexOfSplit < 0)
+                    {
+                        indexOfSplit = fontName.IndexOf('_', StringComparison.OrdinalIgnoreCase);
+                    }
+
+                    string key;
+                    string secondKey;
+                    if (0 <= indexOfSplit)
+                    {
+                        key = fontName[..indexOfSplit];
+                        secondKey = fontName[Mathf.Min(indexOfSplit + 1, fontName.Length)..];
+                    }
+                    else
+                    {
+                        key = fontName;
+                        secondKey = string.Empty;
+                    }
+
+                    if (
+                        !_fontsByPrefix.TryGetValue(
+                            key,
+                            out SortedDictionary<string, Font> fontMapping
+                        )
+                    )
+                    {
+                        fontMapping = new SortedDictionary<string, Font>(
+                            StringComparer.OrdinalIgnoreCase
+                        );
+                        _fontsByPrefix[key] = fontMapping;
+                    }
+
+                    fontMapping[secondKey] = font;
+                }
+            }
+
+            if (_fontsByPrefix is { Count: > 0 })
+            {
+                if (_fontKey < 0 && _secondFontKey < 0)
+                {
+                    int keyIndex = 0;
+                    foreach (
+                        KeyValuePair<
+                            string,
+                            SortedDictionary<string, Font>
+                        > prefixEntry in _fontsByPrefix
+                    )
+                    {
+                        int subKeyIndex = 0;
+                        foreach (KeyValuePair<string, Font> subEntry in prefixEntry.Value)
+                        {
+                            if (subEntry.Value == terminal._consoleFont)
+                            {
+                                _fontKey = keyIndex;
+                                _secondFontKey = subKeyIndex;
+                                break;
+                            }
+                            subKeyIndex++;
+                        }
+
+                        if (0 <= _secondFontKey)
+                        {
+                            break;
+                        }
+
+                        keyIndex++;
+                    }
+                }
+
+                GUILayout.BeginHorizontal();
+                try
+                {
+                    GUILayout.FlexibleSpace();
+                    GUILayout.Label("Font Selection");
+                    GUILayout.FlexibleSpace();
+                }
+                finally
+                {
+                    GUILayout.EndHorizontal();
+                }
+
+                int currentFontKey = _fontKey;
+                EditorGUILayout.BeginHorizontal();
+                try
+                {
+                    string[] fontKeys = _fontsByPrefix.Keys.ToArray();
+                    _fontKey = EditorGUILayout.Popup(_fontKey, fontKeys);
+                    if (currentFontKey != _fontKey)
+                    {
+                        _secondFontKey = -1;
+                    }
+
+                    if (0 <= _fontKey && _fontKey < fontKeys.Length)
+                    {
+                        string selectedFontKey = fontKeys[_fontKey];
+                        SortedDictionary<string, Font> availableFonts = _fontsByPrefix[
+                            selectedFontKey
+                        ];
+                        string[] secondFontKeys = availableFonts.Keys.ToArray();
+                        switch (secondFontKeys.Length)
+                        {
+                            case > 1:
+                            {
+                                _secondFontKey = EditorGUILayout.Popup(
+                                    _secondFontKey,
+                                    secondFontKeys
+                                );
+                                if (0 <= _secondFontKey && _secondFontKey < secondFontKeys.Length)
+                                {
+                                    if (GUILayout.Button("Set Font"))
+                                    {
+                                        terminal._consoleFont = availableFonts[
+                                            secondFontKeys[_secondFontKey]
+                                        ];
+                                    }
+                                }
+
+                                break;
+                            }
+                            case 1 when GUILayout.Button("Set Font"):
+                            {
+                                terminal._consoleFont = availableFonts.Values.Single();
+                                break;
+                            }
+                        }
+                    }
+                }
+                finally
+                {
+                    GUILayout.EndHorizontal();
                 }
             }
 

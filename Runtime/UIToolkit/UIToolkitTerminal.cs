@@ -1,4 +1,8 @@
-﻿namespace CommandTerminal.UIToolkit
+﻿using System.Runtime.CompilerServices;
+
+[assembly: InternalsVisibleTo("WallstopStudios.DxCommandTerminal.Editor")]
+
+namespace CommandTerminal.UIToolkit
 {
     using System;
     using System.Collections.Generic;
@@ -36,6 +40,10 @@
             _state != TerminalState.OpenFull
             && _state != TerminalState.OpenSmall
             && Mathf.Approximately(_currentWindowHeight, _targetWindowHeight);
+
+        [Header("Absolutely Required")]
+        [SerializeField]
+        private UIDocument _uiDocument;
 
         [Header("Window")]
         [Range(0, 1)]
@@ -100,7 +108,7 @@
 
         [Header("Input")]
         [SerializeField]
-        private Font _consoleFont;
+        internal Font _consoleFont;
 
         [SerializeField]
         private string _inputCaret = ">";
@@ -153,9 +161,6 @@
 
         [SerializeField]
         public List<string> disabledCommands = new();
-
-        [SerializeField]
-        private UIDocument _uiDocument;
 
 #if UNITY_EDITOR
         private readonly Dictionary<TerminalLogType, int> _seenLogTypes = new();
