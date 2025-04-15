@@ -17,7 +17,7 @@
                 FontPath
             );
 
-            if (string.IsNullOrEmpty(fontDirectoryRelativePath))
+            if (string.IsNullOrWhiteSpace(fontDirectoryRelativePath))
             {
                 return Array.Empty<Font>();
             }
@@ -32,7 +32,7 @@
                 string assetPath = AssetDatabase.GUIDToAssetPath(guid);
 
                 if (
-                    !string.IsNullOrEmpty(assetPath)
+                    !string.IsNullOrWhiteSpace(assetPath)
                     && assetPath.StartsWith(
                         fontDirectoryRelativePath,
                         StringComparison.OrdinalIgnoreCase

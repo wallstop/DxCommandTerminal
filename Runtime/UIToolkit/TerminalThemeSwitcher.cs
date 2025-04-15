@@ -43,12 +43,16 @@
             // Ensure we have the UIDocument reference
             if (uiDocument == null)
             {
-                Debug.LogError(
-                    $"{nameof(TerminalThemeSwitcher)}: UIDocument is not assigned in the Inspector.",
-                    this
-                );
-                this.enabled = false; // Disable script if setup is incorrect
-                return;
+                uiDocument = GetComponent<UIDocument>();
+                if (uiDocument == null)
+                {
+                    Debug.LogError(
+                        $"{nameof(TerminalThemeSwitcher)}: UIDocument is not assigned in the Inspector.",
+                        this
+                    );
+                    this.enabled = false; // Disable script if setup is incorrect
+                    return;
+                }
             }
 
             // The rootVisualElement might not be ready in OnEnable,

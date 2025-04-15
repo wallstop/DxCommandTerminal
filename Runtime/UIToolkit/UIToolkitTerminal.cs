@@ -11,9 +11,9 @@ namespace CommandTerminal.UIToolkit
     using Attributes;
     using CommandTerminal;
     using Extensions;
+    using Helper;
     using UnityEditor;
     using UnityEngine;
-    using UnityEngine.Serialization;
     using UnityEngine.UIElements;
     using Utils;
 #if ENABLE_INPUT_SYSTEM
@@ -42,9 +42,9 @@ namespace CommandTerminal.UIToolkit
             && _state != TerminalState.OpenSmall
             && Mathf.Approximately(_currentWindowHeight, _targetWindowHeight);
 
-        [Header("Absolutely Required")]
         [SerializeField]
-        private UIDocument _uiDocument;
+        [HideInInspector]
+        internal UIDocument _uiDocument;
 
         [Header("Window")]
         [Range(0, 1)]
@@ -74,7 +74,7 @@ namespace CommandTerminal.UIToolkit
 
         [DxShowIf(nameof(_useHotkeys))]
         [SerializeField]
-        private string _toggleHotkey = "`";
+        internal string _toggleHotkey = "`";
 
         [DxShowIf(nameof(_useHotkeys))]
         [SerializeField]
@@ -94,7 +94,7 @@ namespace CommandTerminal.UIToolkit
 
         [DxShowIf(nameof(_useHotkeys))]
         [SerializeField]
-        private ListWrapper<string> _completeCommandHotkeys = new()
+        internal ListWrapper<string> _completeCommandHotkeys = new()
         {
             list = { "enter", "return" },
         };
@@ -158,7 +158,7 @@ namespace CommandTerminal.UIToolkit
         private bool _logUnityMessages = true;
 
         [SerializeField]
-        private List<TerminalLogType> _ignoredLogTypes = new();
+        internal List<TerminalLogType> _ignoredLogTypes = new();
 
         [SerializeField]
         internal List<string> _disabledCommands = new();
@@ -168,7 +168,6 @@ namespace CommandTerminal.UIToolkit
         internal List<Font> _loadedFonts = new();
 
 #if UNITY_EDITOR
-        private readonly Dictionary<TerminalLogType, int> _seenLogTypes = new();
         private readonly Dictionary<string, object> _propertyValues = new();
         private readonly List<SerializedProperty> _uiProperties = new();
         private readonly List<SerializedProperty> _fontProperties = new();
@@ -212,7 +211,6 @@ namespace CommandTerminal.UIToolkit
         private Label _inputCaretLabel;
 
         private float _inputContainerHeight;
-        private float _commandInputHeight;
 
         private readonly List<VisualElement> _autoCompleteChildren = new();
         private readonly Action _focusInput;
@@ -402,65 +400,6 @@ namespace CommandTerminal.UIToolkit
             _started = true;
         }
 
-#if UNITY_EDITOR
-        private void OnValidate()
-        {
-            bool anyChanged = false;
-            if (_toggleHotkey == null)
-            {
-                anyChanged = true;
-                _toggleHotkey = string.Empty;
-            }
-
-            if (_uiDocument == null)
-            {
-                if (!TryGetComponent(out _uiDocument))
-                {
-                    _uiDocument = gameObject.AddComponent<UIDocument>();
-                }
-
-                anyChanged = true;
-            }
-
-            if (_ignoredLogTypes == null)
-            {
-                anyChanged = true;
-                _ignoredLogTypes = new List<TerminalLogType>();
-            }
-
-            if (_completeCommandHotkeys == null)
-            {
-                anyChanged = true;
-                _completeCommandHotkeys = new ListWrapper<string>();
-            }
-
-            _seenLogTypes.Clear();
-            for (int i = _ignoredLogTypes.Count - 1; 0 <= i; --i)
-            {
-                TerminalLogType logType = _ignoredLogTypes[i];
-                int count = 0;
-                if (
-                    Enum.IsDefined(typeof(TerminalLogType), logType)
-                    && (!_seenLogTypes.TryGetValue(logType, out count) || count <= 1)
-                )
-                {
-                    _seenLogTypes[logType] = count + 1;
-                    continue;
-                }
-
-                _seenLogTypes[logType] = count + 1;
-                anyChanged = true;
-                _ignoredLogTypes.RemoveAt(i);
-            }
-
-            if (anyChanged)
-            {
-                EditorUtility.SetDirty(this);
-            }
-        }
-#endif
-
-#if ENABLE_INPUT_SYSTEM
         private void Update()
         {
             if (!_useHotkeys || _handledInputThisFrame)
@@ -512,7 +451,6 @@ namespace CommandTerminal.UIToolkit
                 CompleteCommand(searchForward: true);
             }
         }
-#endif
 
         private void LateUpdate()
         {
@@ -974,7 +912,6 @@ namespace CommandTerminal.UIToolkit
                 userArgs: this,
                 useTrickleDown: TrickleDown.TrickleDown
             );
-            _commandInputHeight = _commandInput.layout.height;
 
             _inputContainer.Add(_commandInput);
             _textInput = _commandInput.Q<VisualElement>("unity-text-input");
@@ -983,6 +920,15 @@ namespace CommandTerminal.UIToolkit
             _stateButtonContainer.AddToClassList("state-button-container");
             root.Add(_stateButtonContainer);
             RefreshStateButtons();
+
+            _inputContainer.RegisterCallback<CustomStyleResolvedEvent, UIToolkitTerminal>(
+                (_, context) =>
+                {
+                    context._inputContainerHeight = context._inputContainer.layout.height;
+                },
+                userArgs: this,
+                useTrickleDown: TrickleDown.TrickleDown
+            );
         }
 
         private static void ScheduleBlinkingCursor(TextField textField)
@@ -1122,9 +1068,10 @@ namespace CommandTerminal.UIToolkit
             _terminalContainer.style.height = _currentWindowHeight;
             _terminalContainer.style.width = Screen.width;
             _inputContainer.style.height = Mathf.Min(_currentWindowHeight, _inputContainerHeight);
-            _commandInput.style.height = Mathf.Min(_currentWindowHeight, _commandInputHeight);
-            _inputCaretLabel.style.display =
-                _currentWindowHeight < _commandInputHeight ? DisplayStyle.None : DisplayStyle.Flex;
+            DisplayStyle commandInputStyle =
+                _currentWindowHeight < 14 ? DisplayStyle.None : DisplayStyle.Flex;
+            _commandInput.style.display = commandInputStyle;
+            _inputCaretLabel.style.display = commandInputStyle;
 
             RefreshLogs();
             RefreshAutoCompleteHints();

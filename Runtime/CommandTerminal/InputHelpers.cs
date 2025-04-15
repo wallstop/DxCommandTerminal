@@ -4,6 +4,7 @@
     using System.Collections.Generic;
     using Extensions;
 #if ENABLE_INPUT_SYSTEM
+    using UnityEngine;
     using UnityEngine.InputSystem;
     using UnityEngine.InputSystem.Controls;
 #endif
@@ -16,6 +17,8 @@
 
         public static IReadOnlyDictionary<string, string> AlternativeSpecialShiftedKeyCodes =>
             AlternativeSpecialShiftedKeyCodeMap;
+
+        private static readonly string[] ShiftModifiers = { "shift+", "shift +", "#" };
 
         private static readonly Dictionary<string, string> CachedSubstrings = new();
 
@@ -93,96 +96,78 @@
                 { ")", "0" },
             };
 
-#if ENABLE_INPUT_SYSTEM
         public static bool IsKeyPressed(string key)
         {
-            if (1 < key.Length && key.StartsWith("#", StringComparison.OrdinalIgnoreCase))
+            if (string.IsNullOrEmpty(key))
             {
-                if (!CachedSubstrings.TryGetValue(key, out string expected))
+                return false;
+            }
+
+            bool shiftRequired = false;
+            string keyName = key;
+            int startIndex = 0;
+
+            foreach (string shiftModifier in ShiftModifiers)
+            {
+                if (key.StartsWith(shiftModifier, StringComparison.OrdinalIgnoreCase))
                 {
-                    expected = key.Substring(1);
-                    if (expected.Length == 1 && expected.NeedsLowerInvariantConversion())
-                    {
-                        expected = expected.ToLowerInvariant();
-                    }
-
-                    CachedSubstrings[key] = expected;
+                    shiftRequired = true;
+                    startIndex = shiftModifier.Length;
+                    break;
                 }
+            }
 
-                return Keyboard.current.shiftKey.isPressed
+            if (!shiftRequired && key.Length == 1)
+            {
+                char keyChar = key[0];
+                if (char.IsUpper(keyChar) && char.IsLower(keyChar))
+                {
+                    shiftRequired = true;
+                }
+            }
+
+            if (0 < startIndex)
+            {
+                if (CachedSubstrings.TryGetValue(key, out keyName))
+                {
+                    keyName = key.Substring(startIndex).Trim();
+                    if (keyName.Length == 1 && keyName.NeedsLowerInvariantConversion())
+                    {
+                        keyName = keyName.ToLowerInvariant();
+                    }
+                    CachedSubstrings[key] = keyName;
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(keyName))
+            {
+                return false;
+            }
+
+#if !ENABLE_INPUT_SYSTEM
+            if (Enum.TryParse(keyName, ignoreCase: true, out KeyCode keyCode))
+            {
+                return Input.GetKey(keyCode)
                     && (
-                        Keyboard.current.TryGetChildControl<KeyControl>(
-                            SpecialKeyCodes.GetValueOrDefault(expected, expected)
-                        )
-                            is { wasPressedThisFrame: true }
-                        || Keyboard.current.TryGetChildControl<KeyControl>(expected)
-                            is { wasPressedThisFrame: true }
+                        !shiftRequired
+                        || Input.GetKey(KeyCode.LeftShift)
+                        || Input.GetKey(KeyCode.RightShift)
                     );
             }
 
-            const string shiftModifier = "shift+";
-            if (
-                shiftModifier.Length < key.Length
-                && key.StartsWith(shiftModifier, StringComparison.OrdinalIgnoreCase)
-            )
-            {
-                if (!CachedSubstrings.TryGetValue(key, out string expected))
-                {
-                    expected = key.Substring(shiftModifier.Length);
-                    if (expected.Length == 1 && expected.NeedsLowerInvariantConversion())
-                    {
-                        expected = expected.ToLowerInvariant();
-                    }
-
-                    CachedSubstrings[key] = expected;
-                }
-
-                return Keyboard.current.shiftKey.isPressed
-                    && (
-                        Keyboard.current.TryGetChildControl<KeyControl>(
-                            SpecialKeyCodes.GetValueOrDefault(expected, expected)
-                        )
-                            is { wasPressedThisFrame: true }
-                        || Keyboard.current.TryGetChildControl<KeyControl>(expected)
-                            is { wasPressedThisFrame: true }
-                    );
-            }
-            else if (
-                SpecialShiftedKeyCodes.TryGetValue(key, out string expected)
-                && Keyboard.current.shiftKey.isPressed
-                && Keyboard.current.TryGetChildControl<KeyControl>(expected)
-                    is { wasPressedThisFrame: true }
-            )
-            {
-                return true;
-            }
-            else if (
-                AlternativeSpecialShiftedKeyCodes.TryGetValue(key, out expected)
-                && Keyboard.current.shiftKey.isPressed
-                && Keyboard.current.TryGetChildControl<KeyControl>(expected)
-                    is { wasPressedThisFrame: true }
-            )
-            {
-                return true;
-            }
-            else if (key.Length == 1 && key.NeedsLowerInvariantConversion())
-            {
-                key = key.ToLowerInvariant();
-                return Keyboard.current.shiftKey.isPressed
-                    && Keyboard.current.TryGetChildControl<KeyControl>(key)
-                        is { wasPressedThisFrame: true };
-            }
-            else
-            {
-                return Keyboard.current.TryGetChildControl<KeyControl>(
-                        SpecialKeyCodes.GetValueOrDefault(key, key)
+            return false;
+#else
+            Keyboard currentKeyboard = Keyboard.current;
+            return (!shiftRequired || currentKeyboard.shiftKey.isPressed)
+                && (
+                    currentKeyboard.TryGetChildControl<KeyControl>(
+                        SpecialKeyCodes.GetValueOrDefault(keyName, keyName)
                     )
                         is { wasPressedThisFrame: true }
-                    || Keyboard.current.TryGetChildControl<KeyControl>(key)
-                        is { wasPressedThisFrame: true };
-            }
-        }
-
+                    || currentKeyboard.TryGetChildControl<KeyControl>(keyName)
+                        is { wasPressedThisFrame: true }
+                );
 #endif
+        }
     }
 }
