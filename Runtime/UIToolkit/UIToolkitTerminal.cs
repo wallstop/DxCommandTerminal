@@ -359,7 +359,10 @@
             if (_consoleFont == null)
             {
                 _consoleFont = Font.CreateDynamicFontFromOSFont("Courier New", 16);
-                Debug.LogWarning("Command Console Warning: Please assign a font.", this);
+                Debug.LogWarning(
+                    "Command Console Warning: Please assign a font. Defaulting to Courier New",
+                    this
+                );
             }
 
             if (
@@ -724,6 +727,7 @@
                 if (_state != TerminalState.Closed)
                 {
                     _needsFocus = true;
+                    // TODO FIXME When full terminal is toggled, events disappear when going back to short terminal
                 }
                 else
                 {
@@ -762,9 +766,7 @@
                 return;
             }
 
-            Debug.Log($"Setting font to {_consoleFont.name}.");
-            root.style.unityFont = _consoleFont;
-            root.MarkDirtyRepaint();
+            root.style.unityFontDefinition = new StyleFontDefinition(_consoleFont);
         }
 
         private void ResetAutoComplete()
@@ -858,6 +860,7 @@
                 return;
             }
 
+            SetFont();
             uiRoot.Clear();
             VisualElement root = new();
             uiRoot.Add(root);
@@ -913,7 +916,14 @@
             _commandInput.RegisterCallback<ChangeEvent<string>, UIToolkitTerminal>(
                 (evt, context) =>
                 {
+                    if (_handledInputThisFrame)
+                    {
+                        evt.StopImmediatePropagation();
+                        return;
+                    }
+
                     context._commandText = evt.newValue;
+
                     context._runButton.style.display =
                         _showGUIButtons
                         && !string.IsNullOrWhiteSpace(context._commandText)
