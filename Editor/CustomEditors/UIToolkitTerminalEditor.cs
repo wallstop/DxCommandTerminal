@@ -5,6 +5,7 @@
     using System.Collections.Generic;
     using System.Linq;
     using CommandTerminal;
+    using CommandTerminal.Helper;
     using Helper;
     using UIToolkit;
     using UnityEditor;
@@ -101,6 +102,12 @@
             CollectFonts();
             bool fontsUpdated = RenderSelectableFonts(terminal);
             anyChanged |= fontsUpdated;
+
+            _ = EditorGUILayout.Popup(
+                "Themes",
+                0,
+                StyleSheetHelper.GetAvailableThemes(terminal._uiDocument)
+            );
 
             if (anyChanged)
             {
