@@ -517,44 +517,44 @@ namespace CommandTerminal
                 return;
             }
 
-            if (Terminal.IsKeyPressed(_closeHotkey))
+            if (InputHelpers.IsKeyPressed(_closeHotkey))
             {
                 _handledInputThisFrame = true;
                 Close();
             }
             else if (
-                _completeCommandHotkeys?.list?.Exists(key => Terminal.IsKeyPressed(key)) == true
+                _completeCommandHotkeys?.list?.Exists(key => InputHelpers.IsKeyPressed(key)) == true
             )
             {
                 _handledInputThisFrame = true;
                 EnterCommand();
             }
-            else if (Terminal.IsKeyPressed(_previousHotkey))
+            else if (InputHelpers.IsKeyPressed(_previousHotkey))
             {
                 _handledInputThisFrame = true;
                 HandlePrevious();
             }
-            else if (Terminal.IsKeyPressed(_nextHotkey))
+            else if (InputHelpers.IsKeyPressed(_nextHotkey))
             {
                 _handledInputThisFrame = true;
                 HandleNext();
             }
-            else if (Terminal.IsKeyPressed(_toggleFullHotkey))
+            else if (InputHelpers.IsKeyPressed(_toggleFullHotkey))
             {
                 _handledInputThisFrame = true;
                 ToggleFull();
             }
-            else if (Terminal.IsKeyPressed(_toggleHotkey))
+            else if (InputHelpers.IsKeyPressed(_toggleHotkey))
             {
                 _handledInputThisFrame = true;
                 ToggleSmall();
             }
-            else if (Terminal.IsKeyPressed(_reverseCompleteHotkey))
+            else if (InputHelpers.IsKeyPressed(_reverseCompleteHotkey))
             {
                 _handledInputThisFrame = true;
                 CompleteCommand(searchForward: false);
             }
-            else if (Terminal.IsKeyPressed(_completeHotkey))
+            else if (InputHelpers.IsKeyPressed(_completeHotkey))
             {
                 _handledInputThisFrame = true;
                 CompleteCommand(searchForward: true);
