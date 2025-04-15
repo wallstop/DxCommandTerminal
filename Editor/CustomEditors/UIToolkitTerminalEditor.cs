@@ -16,7 +16,7 @@
     [CustomEditor(typeof(UIToolkitTerminal))]
     public sealed class UIToolkitTerminalEditor : Editor
     {
-        private int _commandIndex = -1;
+        private int _commandIndex;
         private UIToolkitTerminal _lastSeen;
 
         private readonly HashSet<string> _allCommands = new(StringComparer.OrdinalIgnoreCase);
@@ -89,6 +89,8 @@
 
             bool uiDocumentChanged = CheckForUIDocumentProblems(terminal);
             anyChanged |= uiDocumentChanged;
+
+            RenderCommandManipulationHeader();
 
             bool ignoredCommandsUpdated = CheckForIgnoredCommandUpdates(terminal);
             anyChanged |= ignoredCommandsUpdated;
@@ -201,6 +203,21 @@
             }
 
             return anyChanged;
+        }
+
+        private void RenderCommandManipulationHeader()
+        {
+            EditorGUILayout.BeginHorizontal();
+            try
+            {
+                GUILayout.FlexibleSpace();
+                GUILayout.Label("Command Manipulation");
+                GUILayout.FlexibleSpace();
+            }
+            finally
+            {
+                EditorGUILayout.EndHorizontal();
+            }
         }
 
         private bool CheckForIgnoredCommandUpdates(UIToolkitTerminal terminal)

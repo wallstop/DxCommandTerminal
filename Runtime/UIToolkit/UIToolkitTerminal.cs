@@ -11,7 +11,6 @@ namespace CommandTerminal.UIToolkit
     using Attributes;
     using CommandTerminal;
     using Extensions;
-    using Helper;
     using UnityEditor;
     using UnityEngine;
     using UnityEngine.UIElements;
@@ -143,6 +142,9 @@ namespace CommandTerminal.UIToolkit
 
         [Header("System")]
         [SerializeField]
+        private int _cursorBlinkRateMilliseconds = 666;
+
+        [SerializeField]
         private bool _trackChangesInEditor = true;
 
         [Tooltip("Will reset static command state in OnEnable and Start when set to true")]
@@ -199,6 +201,7 @@ namespace CommandTerminal.UIToolkit
         private string _focusedControl;
         private bool _isCommandFromCode;
         private bool _initialResetStateOnInit;
+        private float _inputContainerHeight;
 
         private VisualElement _terminalContainer;
         private ScrollView _logScrollView;
@@ -210,9 +213,9 @@ namespace CommandTerminal.UIToolkit
         private VisualElement _textInput;
         private Label _inputCaretLabel;
 
-        private float _inputContainerHeight;
-
         private readonly List<VisualElement> _autoCompleteChildren = new();
+
+        // Cached for performance (avoids allocations)
         private readonly Action _focusInput;
 
         public UIToolkitTerminal()
@@ -259,7 +262,11 @@ namespace CommandTerminal.UIToolkit
 #if UNITY_EDITOR
             _serializedObject = new SerializedObject(this);
 
-            string[] uiPropertiesTracked = { nameof(_uiDocument) };
+            string[] uiPropertiesTracked =
+            {
+                nameof(_uiDocument),
+                nameof(_cursorBlinkRateMilliseconds),
+            };
             TrackProperties(uiPropertiesTracked, _uiProperties);
 
             string[] fontPropertiesTracked = { nameof(_consoleFont) };
@@ -272,6 +279,7 @@ namespace CommandTerminal.UIToolkit
                 nameof(_ignoredLogTypes),
                 nameof(_disabledCommands),
                 nameof(ignoreDefaultCommands),
+                nameof(_loadedFonts),
             };
             TrackProperties(staticStaticPropertiesTracked, _staticStateProperties);
 
@@ -306,6 +314,9 @@ namespace CommandTerminal.UIToolkit
                                 break;
                             case List<TerminalLogType> logTypeList:
                                 value = logTypeList.ToList();
+                                break;
+                            case List<Font> fontList:
+                                value = fontList.ToList();
                                 break;
                         }
                         _propertyValues[property.name] = value;
@@ -508,6 +519,11 @@ namespace CommandTerminal.UIToolkit
             if (force || Terminal.AutoComplete == null)
             {
                 Terminal.AutoComplete = new CommandAutoComplete(Terminal.History, Terminal.Shell);
+            }
+
+            if (force || !Terminal.AvailableFonts.SequenceEqual(_loadedFonts))
+            {
+                Terminal.AvailableFonts = _loadedFonts;
             }
 
             if (
@@ -931,22 +947,16 @@ namespace CommandTerminal.UIToolkit
             );
         }
 
-        private static void ScheduleBlinkingCursor(TextField textField)
+        private void ScheduleBlinkingCursor(TextField textField)
         {
-            const string className = "transparent-cursor";
+            bool shouldRenderCursor = true;
             textField
                 .schedule.Execute(() =>
                 {
-                    if (textField.ClassListContains(className))
-                    {
-                        textField.RemoveFromClassList(className);
-                    }
-                    else
-                    {
-                        textField.AddToClassList(className);
-                    }
+                    textField.EnableInClassList("transparent-cursor", shouldRenderCursor);
+                    shouldRenderCursor = !shouldRenderCursor;
                 })
-                .Every(666);
+                .Every(_cursorBlinkRateMilliseconds);
         }
 
         private static void InitializeScrollView(ScrollView scrollView)
@@ -1070,6 +1080,13 @@ namespace CommandTerminal.UIToolkit
             _inputContainer.style.height = Mathf.Min(_currentWindowHeight, _inputContainerHeight);
             DisplayStyle commandInputStyle =
                 _currentWindowHeight < 14 ? DisplayStyle.None : DisplayStyle.Flex;
+            if (
+                _commandInput.style.display != commandInputStyle
+                && commandInputStyle == DisplayStyle.Flex
+            )
+            {
+                _needsFocus = true;
+            }
             _commandInput.style.display = commandInputStyle;
             _inputCaretLabel.style.display = commandInputStyle;
 
