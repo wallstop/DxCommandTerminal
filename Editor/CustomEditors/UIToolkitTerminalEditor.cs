@@ -98,6 +98,7 @@
             bool commandsUpdated = CheckForDisabledCommandProblems(terminal);
             anyChanged |= commandsUpdated;
 
+            EditorGUILayout.Space();
             CollectFonts();
             bool fontsUpdated = RenderSelectableFonts(terminal);
             anyChanged |= fontsUpdated;
@@ -151,7 +152,7 @@
             return anyChanged;
         }
 
-        private bool CheckForUIDocumentProblems(UIToolkitTerminal terminal)
+        private static bool CheckForUIDocumentProblems(UIToolkitTerminal terminal)
         {
             bool anyChanged = false;
             if (terminal._uiDocument == null)
@@ -205,14 +206,14 @@
             return anyChanged;
         }
 
-        private void RenderCommandManipulationHeader()
+        private static void RenderCommandManipulationHeader()
         {
+            EditorGUILayout.Space();
             EditorGUILayout.BeginHorizontal();
             try
             {
                 GUILayout.FlexibleSpace();
                 GUILayout.Label("Command Manipulation");
-                GUILayout.FlexibleSpace();
             }
             finally
             {
@@ -238,11 +239,10 @@
                 EditorGUILayout.BeginHorizontal();
                 try
                 {
+                    GUILayout.FlexibleSpace();
                     if (0 <= _commandIndex && _commandIndex < ignorableCommands.Length)
                     {
-                        GUILayoutOption width = GUILayout.Width(
-                            ignorableCommands[_commandIndex].Length * 7f + 14f
-                        );
+                        GUILayoutOption width = GenerateWidth(ignorableCommands[_commandIndex]);
                         _commandIndex = EditorGUILayout.Popup(
                             _commandIndex,
                             ignorableCommands,
@@ -408,7 +408,6 @@
                 {
                     GUILayout.FlexibleSpace();
                     GUILayout.Label("Font Selection");
-                    GUILayout.FlexibleSpace();
                 }
                 finally
                 {
@@ -419,8 +418,18 @@
                 EditorGUILayout.BeginHorizontal();
                 try
                 {
+                    GUILayout.FlexibleSpace();
                     string[] fontKeys = _fontsByPrefix.Keys.ToArray();
-                    _fontKey = EditorGUILayout.Popup(_fontKey, fontKeys);
+                    if (0 <= _fontKey && _fontKey < fontKeys.Length)
+                    {
+                        GUILayoutOption width = GenerateWidth(fontKeys[_fontKey]);
+                        _fontKey = EditorGUILayout.Popup(_fontKey, fontKeys, width);
+                    }
+                    else
+                    {
+                        _fontKey = EditorGUILayout.Popup(_fontKey, fontKeys);
+                    }
+
                     if (currentFontKey != _fontKey)
                     {
                         _secondFontKey = -1;
@@ -438,10 +447,25 @@
                         {
                             case > 1:
                             {
-                                _secondFontKey = EditorGUILayout.Popup(
-                                    _secondFontKey,
-                                    secondFontKeys
-                                );
+                                if (0 <= _secondFontKey && _secondFontKey < secondFontKeys.Length)
+                                {
+                                    GUILayoutOption width = GenerateWidth(
+                                        secondFontKeys[_secondFontKey]
+                                    );
+                                    _secondFontKey = EditorGUILayout.Popup(
+                                        _secondFontKey,
+                                        secondFontKeys,
+                                        width
+                                    );
+                                }
+                                else
+                                {
+                                    _secondFontKey = EditorGUILayout.Popup(
+                                        _secondFontKey,
+                                        secondFontKeys
+                                    );
+                                }
+
                                 if (0 <= _secondFontKey && _secondFontKey < secondFontKeys.Length)
                                 {
                                     selectedFont = availableFonts[secondFontKeys[_secondFontKey]];
@@ -514,6 +538,11 @@
             }
 
             return anyChanged;
+        }
+
+        private static GUILayoutOption GenerateWidth(string input)
+        {
+            return GUILayout.Width(input.Length * 8f + 16f);
         }
     }
 #endif
