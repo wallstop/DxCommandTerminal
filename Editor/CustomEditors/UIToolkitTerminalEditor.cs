@@ -5,6 +5,7 @@
     using System.Collections.Generic;
     using System.Linq;
     using CommandTerminal;
+    using NUnit.Framework.Constraints;
     using UIToolkit;
     using UnityEditor;
     using UnityEngine;
@@ -12,8 +13,8 @@
     [CustomEditor(typeof(UIToolkitTerminal))]
     public sealed class UIToolkitTerminalEditor : Editor
     {
-        private int _commandIndex;
-        private bool _initialized;
+        private int _commandIndex = -1;
+        private UIToolkitTerminal _lastSeen;
 
         private readonly HashSet<string> _allCommands = new(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _defaultCommands = new(StringComparer.OrdinalIgnoreCase);
@@ -21,7 +22,7 @@
             StringComparer.OrdinalIgnoreCase
         );
         private readonly HashSet<string> _seenCommands = new(StringComparer.OrdinalIgnoreCase);
-        private readonly HashSet<string> _intermediateResults = new(
+        private readonly SortedSet<string> _intermediateResults = new(
             StringComparer.OrdinalIgnoreCase
         );
 
@@ -41,7 +42,12 @@
                 return;
             }
 
-            if (!_initialized)
+            if (
+                _lastSeen != terminal
+                || _allCommands.Count == 0
+                || _defaultCommands.Count == 0
+                || _nonDefaultCommands.Count == 0
+            )
             {
                 _allCommands.Clear();
                 _allCommands.UnionWith(
@@ -63,14 +69,14 @@
                         .Where(tuple => !tuple.Default)
                         .Select(attribute => attribute.Name)
                 );
-                _initialized = true;
+                _lastSeen = terminal;
             }
 
             bool anyChanged = false;
-            if (terminal.disabledCommands == null)
+            if (terminal._disabledCommands == null)
             {
                 anyChanged = true;
-                terminal.disabledCommands = new List<string>();
+                terminal._disabledCommands = new List<string>();
             }
 
             _intermediateResults.Clear();
@@ -79,30 +85,43 @@
             {
                 _intermediateResults.UnionWith(_defaultCommands);
             }
-            _intermediateResults.ExceptWith(terminal.disabledCommands);
+            _intermediateResults.ExceptWith(terminal._disabledCommands);
 
             if (0 < _intermediateResults.Count)
             {
                 string[] ignorableCommands = _intermediateResults.ToArray();
-                Array.Sort(ignorableCommands);
 
                 EditorGUILayout.BeginHorizontal();
                 try
                 {
-                    _commandIndex = EditorGUILayout.Popup(
-                        "Commands",
-                        _commandIndex,
-                        ignorableCommands
-                    );
-                    if (
-                        0 <= _commandIndex
-                        && _commandIndex < ignorableCommands.Length
-                        && GUILayout.Button("Ignore Command")
-                    )
+                    if (0 <= _commandIndex && _commandIndex < ignorableCommands.Length)
                     {
-                        string command = ignorableCommands[_commandIndex];
-                        terminal.disabledCommands.Add(command);
-                        anyChanged = true;
+                        GUILayoutOption width = GUILayout.Width(
+                            ignorableCommands[_commandIndex].Length * 7f + 14f
+                        );
+                        _commandIndex = EditorGUILayout.Popup(
+                            _commandIndex,
+                            ignorableCommands,
+                            width
+                        );
+                    }
+                    else
+                    {
+                        _commandIndex = EditorGUILayout.Popup(_commandIndex, ignorableCommands);
+                    }
+
+                    if (0 <= _commandIndex && _commandIndex < ignorableCommands.Length)
+                    {
+                        GUIContent ignoreContent = new(
+                            "Ignore Command",
+                            $"Ignores the {ignorableCommands[_commandIndex]} command"
+                        );
+                        if (GUILayout.Button(ignoreContent))
+                        {
+                            string command = ignorableCommands[_commandIndex];
+                            terminal._disabledCommands.Add(command);
+                            anyChanged = true;
+                        }
                     }
                 }
                 finally
@@ -112,32 +131,42 @@
             }
 
             _seenCommands.Clear();
-            _seenCommands.UnionWith(terminal.disabledCommands);
+            _seenCommands.UnionWith(terminal._disabledCommands);
 
             if (
-                _seenCommands.Count != terminal.disabledCommands.Count
-                || terminal.disabledCommands.Exists(command => !_allCommands.Contains(command))
+                _seenCommands.Count != terminal._disabledCommands.Count
+                || terminal._disabledCommands.Exists(command => !_allCommands.Contains(command))
             )
             {
-                if (GUILayout.Button("Cleanup Disabled Commands"))
+                EditorGUILayout.BeginHorizontal();
+                try
                 {
-                    _seenCommands.Clear();
-                    for (int i = terminal.disabledCommands.Count - 1; 0 <= i; --i)
+                    GUILayout.FlexibleSpace();
+                    if (GUILayout.Button("Cleanup Disabled Commands"))
                     {
-                        string command = terminal.disabledCommands[i];
-                        if (!_seenCommands.Add(command))
+                        _seenCommands.Clear();
+                        for (int i = terminal._disabledCommands.Count - 1; 0 <= i; --i)
                         {
-                            terminal.disabledCommands.RemoveAt(i);
-                            anyChanged = true;
-                            continue;
-                        }
+                            string command = terminal._disabledCommands[i];
+                            if (!_seenCommands.Add(command))
+                            {
+                                terminal._disabledCommands.RemoveAt(i);
+                                anyChanged = true;
+                                continue;
+                            }
 
-                        if (!_allCommands.Contains(command))
-                        {
-                            terminal.disabledCommands.RemoveAt(i);
-                            anyChanged = true;
+                            if (!_allCommands.Contains(command))
+                            {
+                                terminal._disabledCommands.RemoveAt(i);
+                                anyChanged = true;
+                            }
                         }
                     }
+                    GUILayout.FlexibleSpace();
+                }
+                finally
+                {
+                    EditorGUILayout.EndHorizontal();
                 }
             }
 
@@ -246,6 +275,7 @@
                             selectedFontKey
                         ];
                         string[] secondFontKeys = availableFonts.Keys.ToArray();
+                        Font selectedFont = null;
                         switch (secondFontKeys.Length)
                         {
                             case > 1:
@@ -256,20 +286,28 @@
                                 );
                                 if (0 <= _secondFontKey && _secondFontKey < secondFontKeys.Length)
                                 {
-                                    if (GUILayout.Button("Set Font"))
-                                    {
-                                        terminal._consoleFont = availableFonts[
-                                            secondFontKeys[_secondFontKey]
-                                        ];
-                                    }
+                                    selectedFont = availableFonts[secondFontKeys[_secondFontKey]];
                                 }
 
                                 break;
                             }
-                            case 1 when GUILayout.Button("Set Font"):
+                            case 1:
                             {
-                                terminal._consoleFont = availableFonts.Values.Single();
+                                selectedFont = availableFonts.Values.Single();
                                 break;
+                            }
+                        }
+
+                        if (selectedFont != null)
+                        {
+                            GUIContent setFontContent = new(
+                                "Set Font",
+                                $"Update the terminal's font to {selectedFont.name}"
+                            );
+                            if (GUILayout.Button(setFontContent))
+                            {
+                                terminal._consoleFont = selectedFont;
+                                anyChanged = true;
                             }
                         }
                     }
@@ -277,6 +315,43 @@
                 finally
                 {
                     GUILayout.EndHorizontal();
+                }
+
+                bool needUpdate =
+                    terminal._loadedFonts == null
+                    || terminal._loadedFonts.Count == 0
+                    || terminal._loadedFonts.Exists(font => font == null);
+                if (needUpdate)
+                {
+                    terminal._loadedFonts ??= new List<Font>();
+                    terminal._loadedFonts.Clear();
+                    terminal._loadedFonts.AddRange(
+                        _fontsByPrefix.SelectMany(kvp => kvp.Value).Select(kvp => kvp.Value)
+                    );
+                    anyChanged = true;
+                }
+                else
+                {
+                    Font[] availableFonts = _fontsByPrefix
+                        .SelectMany(kvp => kvp.Value)
+                        .Select(kvp => kvp.Value)
+                        .ToArray();
+                    if (!terminal._loadedFonts.ToHashSet().SetEquals(availableFonts))
+                    {
+                        GUIContent buttonContent = new(
+                            "Serialize Fonts",
+                            $"Takes all loaded fonts ({availableFonts.Length}) and stores them for use at runtime in the Terminal"
+                        );
+                        if (GUILayout.Button(buttonContent))
+                        {
+                            terminal._loadedFonts ??= new List<Font>();
+                            terminal._loadedFonts.Clear();
+                            terminal._loadedFonts.AddRange(
+                                _fontsByPrefix.SelectMany(kvp => kvp.Value).Select(kvp => kvp.Value)
+                            );
+                            anyChanged = true;
+                        }
+                    }
                 }
             }
 

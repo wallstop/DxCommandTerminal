@@ -13,6 +13,7 @@ namespace CommandTerminal.UIToolkit
     using Extensions;
     using UnityEditor;
     using UnityEngine;
+    using UnityEngine.Serialization;
     using UnityEngine.UIElements;
     using Utils;
 #if ENABLE_INPUT_SYSTEM
@@ -160,7 +161,11 @@ namespace CommandTerminal.UIToolkit
         private List<TerminalLogType> _ignoredLogTypes = new();
 
         [SerializeField]
-        public List<string> disabledCommands = new();
+        internal List<string> _disabledCommands = new();
+
+        [SerializeField]
+        [HideInInspector]
+        internal List<Font> _loadedFonts = new();
 
 #if UNITY_EDITOR
         private readonly Dictionary<TerminalLogType, int> _seenLogTypes = new();
@@ -267,7 +272,7 @@ namespace CommandTerminal.UIToolkit
                 nameof(_logBufferSize),
                 nameof(_historyBufferSize),
                 nameof(_ignoredLogTypes),
-                nameof(disabledCommands),
+                nameof(_disabledCommands),
                 nameof(ignoreDefaultCommands),
             };
             TrackProperties(staticStaticPropertiesTracked, _staticStateProperties);
@@ -281,7 +286,7 @@ namespace CommandTerminal.UIToolkit
             string[] autoCompletePropertiesTracked =
             {
                 nameof(_hintDisplayMode),
-                nameof(disabledCommands),
+                nameof(_disabledCommands),
                 nameof(ignoreDefaultCommands),
                 nameof(_makeHintsClickable),
             };
@@ -409,7 +414,12 @@ namespace CommandTerminal.UIToolkit
 
             if (_uiDocument == null)
             {
-                anyChanged = TryGetComponent(out _uiDocument);
+                if (!TryGetComponent(out _uiDocument))
+                {
+                    _uiDocument = gameObject.AddComponent<UIDocument>();
+                }
+
+                anyChanged = true;
             }
 
             if (_ignoredLogTypes == null)
@@ -566,13 +576,13 @@ namespace CommandTerminal.UIToolkit
                 Terminal.Shell.IgnoringDefaultCommands != ignoreDefaultCommands
                 || Terminal.Shell.Commands.Count <= 0
                 || !Terminal.Shell.IgnoredCommands.SetEquals(
-                    disabledCommands ?? Enumerable.Empty<string>()
+                    _disabledCommands ?? Enumerable.Empty<string>()
                 )
             )
             {
                 Terminal.Shell.ClearAutoRegisteredCommands();
                 Terminal.Shell.InitializeAutoRegisteredCommands(
-                    ignoredCommands: disabledCommands,
+                    ignoredCommands: _disabledCommands,
                     ignoreDefaultCommands: ignoreDefaultCommands
                 );
 
