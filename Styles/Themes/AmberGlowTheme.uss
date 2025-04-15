@@ -1,0 +1,26 @@
+﻿.amber-glow-theme {
+    /* Backgrounds */
+    --terminal-bg: rgba(25, 15, 5, 0.8);
+    --button-bg: rgba(40, 25, 10, 1);
+    --input-field-bg: rgba(20, 10, 0, 0.7);
+    --button-selected-bg: rgba(255, 176, 0, 0.85);
+    --button-hover-bg: rgba(60, 40, 20, 0.7);
+    --scroll-bg: rgba(68, 48, 28, 1);
+    --scroll-inverse-bg: rgba(59, 39, 19, 1);
+    --scroll-active-bg: rgba(100, 80, 60, 1);
+
+    /* Text & Foreground */
+    --button-text: rgba(255, 176, 0, 0.9);
+    --button-selected-text: rgba(25, 15, 5, 1);
+    --button-hover-text: rgba(255, 196, 40, 1);
+    --input-text-color: rgba(255, 176, 0, 1.0);
+    --text-message: rgba(255, 176, 0, 1);
+    --text-warning: rgba(255, 216, 0, 1);
+    --text-input-echo: rgba(255, 200, 100, 1);
+    --text-shell: rgba(200, 140, 0, 1);
+    --text-error: rgba(255, 80, 80, 1);
+
+    /* Other UI Elements */
+    --scroll-color: rgba(255, 160, 0, 1);
+    --caret-color: rgba(255, 176, 0, 1.0);
+}

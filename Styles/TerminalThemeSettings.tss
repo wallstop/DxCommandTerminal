@@ -32,6 +32,21 @@
 @import url("Themes/Synthwave84Theme.uss");
 @import url("Themes/TokyoNightTheme.uss");
 @import url("Themes/VS2019DarkTheme.uss");
+@import url("Themes/AmberGlowTheme.uss");
+@import url("Themes/ArcticWhiteTheme.uss");
+@import url("Themes/ClassicGreenTheme.uss");
+@import url("Themes/CoolBlueTheme.uss");
+@import url("Themes/DeepForestTheme.uss");
+@import url("Themes/DesertNightTheme.uss");
+@import url("Themes/HackerMatrixTheme.uss");
+@import url("Themes/HotPinkNeonTheme.uss");
+@import url("Themes/MignightCityTheme.uss");
+@import url("Themes/OceanDeepTheme.uss");
+@import url("Themes/PaperWhiteTheme.uss");
+@import url("Themes/PurpleHazeTheme.uss");
+@import url("Themes/RedAlertTheme.uss");
+@import url("Themes/SubtleGreyTheme.uss");
+
 
 
 

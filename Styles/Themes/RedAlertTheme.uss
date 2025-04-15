@@ -1,0 +1,26 @@
+﻿.red-alert-theme {
+    /* Backgrounds */
+    --terminal-bg: rgba(40, 10, 10, 0.8);
+    --button-bg: rgba(60, 20, 20, 1);
+    --input-field-bg: rgba(30, 5, 5, 0.7);
+    --button-selected-bg: rgba(255, 50, 50, 0.85);
+    --button-hover-bg: rgba(80, 40, 40, 0.7);
+    --scroll-bg: rgba(88, 48, 48, 1);
+    --scroll-inverse-bg: rgba(79, 39, 39, 1);
+    --scroll-active-bg: rgba(120, 80, 80, 1);
+
+    /* Text & Foreground */
+    --button-text: rgba(255, 180, 180, 0.9);
+    --button-selected-text: rgba(40, 10, 10, 1);
+    --button-hover-text: rgba(255, 210, 210, 1);
+    --input-text-color: rgba(255, 200, 200, 1.0);
+    --text-message: rgba(255, 200, 200, 1);
+    --text-warning: rgba(255, 220, 100, 1);
+    --text-input-echo: rgba(255, 150, 150, 1);
+    --text-shell: rgba(210, 150, 150, 1);
+    --text-error: rgba(255, 255, 255, 1);
+
+    /* Other UI Elements */
+    --scroll-color: rgba(255, 50, 50, 1);
+    --caret-color: rgba(255, 200, 200, 1.0);
+}
