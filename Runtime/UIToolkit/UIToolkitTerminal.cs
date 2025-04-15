@@ -35,7 +35,7 @@
         public bool IsClosed =>
             _state != TerminalState.OpenFull
             && _state != TerminalState.OpenSmall
-            && Mathf.Approximately(_currentOpenT, _openTarget);
+            && Mathf.Approximately(_currentWindowHeight, _targetWindowHeight);
 
         [Header("Window")]
         [Range(0, 1)]
@@ -44,7 +44,7 @@
 
         [SerializeField]
         [Range(0, 1)]
-        private float _smallTerminalRatio = 0.33f;
+        private float _smallTerminalRatio = 0.4714285f;
 
         [Range(100, 1000)]
         [SerializeField]
@@ -111,10 +111,6 @@
 
         [DxShowIf(nameof(_showGUIButtons))]
         [SerializeField]
-        private Color _buttonForegroundColor = Color.white;
-
-        [DxShowIf(nameof(_showGUIButtons))]
-        [SerializeField]
         private string _runButtonText = "run";
 
         [DxShowIf(nameof(_showGUIButtons))]
@@ -174,9 +170,9 @@
 #endif
 
         private TerminalState _state = TerminalState.Closed;
-        private float _currentOpenT;
-        private float _openTarget;
-        private float _realWindowSize;
+        private float _currentWindowHeight;
+        private float _targetWindowHeight;
+        private float _realWindowHeight;
         private string _commandText = string.Empty;
         private bool _unityLogAttached;
         private bool _started;
@@ -206,6 +202,12 @@
         private Label _inputCaretLabel;
 
         private readonly List<VisualElement> _autoCompleteChildren = new();
+        private readonly Action _focusInput;
+
+        public UIToolkitTerminal()
+        {
+            _focusInput = FocusInput;
+        }
 
         private void Awake()
         {
@@ -508,7 +510,7 @@
 
         private void RefreshStaticState(bool force)
         {
-            int logBufferSize = Math.Max(0, _logBufferSize);
+            int logBufferSize = Mathf.Max(0, _logBufferSize);
             if (force || Terminal.Buffer == null)
             {
                 Terminal.Buffer = new CommandLog(logBufferSize, _ignoredLogTypes);
@@ -532,7 +534,7 @@
                 }
             }
 
-            int historyBufferSize = Math.Max(0, _historyBufferSize);
+            int historyBufferSize = Mathf.Max(0, _historyBufferSize);
             if (force || Terminal.History == null)
             {
                 Terminal.History = new CommandHistory(historyBufferSize);
@@ -695,19 +697,19 @@
                 {
                     case TerminalState.Closed:
                     {
-                        _openTarget = 0;
+                        _targetWindowHeight = 0;
                         break;
                     }
                     case TerminalState.OpenSmall:
                     {
-                        _openTarget = Screen.height * _maxHeight * _smallTerminalRatio;
-                        _realWindowSize = Mathf.Max(_realWindowSize, _openTarget);
+                        _targetWindowHeight = Screen.height * _maxHeight * _smallTerminalRatio;
+                        _realWindowHeight = _targetWindowHeight;
                         break;
                     }
                     case TerminalState.OpenFull:
                     {
-                        _realWindowSize = Screen.height * _maxHeight;
-                        _openTarget = _realWindowSize;
+                        _realWindowHeight = Screen.height * _maxHeight;
+                        _targetWindowHeight = _realWindowHeight;
                         break;
                     }
                     default:
@@ -820,20 +822,20 @@
                 {
                     case TerminalState.OpenSmall:
                     {
-                        _realWindowSize = height * _maxHeight * _smallTerminalRatio;
-                        _openTarget = _realWindowSize;
+                        _realWindowHeight = height * _maxHeight * _smallTerminalRatio;
+                        _targetWindowHeight = _realWindowHeight;
                         break;
                     }
                     case TerminalState.OpenFull:
                     {
-                        _realWindowSize = height * _maxHeight;
-                        _openTarget = _realWindowSize;
+                        _realWindowHeight = height * _maxHeight;
+                        _targetWindowHeight = _realWindowHeight;
                         break;
                     }
                     default:
                     {
-                        _realWindowSize = height * _maxHeight * _smallTerminalRatio;
-                        _openTarget = 0;
+                        _realWindowHeight = height * _maxHeight * _smallTerminalRatio;
+                        _targetWindowHeight = 0;
                         break;
                     }
                 }
@@ -869,7 +871,7 @@
 
             _terminalContainer = new VisualElement { name = "TerminalContainer" };
             _terminalContainer.AddToClassList("terminal-container");
-            _terminalContainer.style.height = new StyleLength(_realWindowSize);
+            _terminalContainer.style.height = new StyleLength(_realWindowHeight);
             root.Add(_terminalContainer);
 
             _logScrollView = new ScrollView();
@@ -1091,9 +1093,18 @@
                 return;
             }
 
-            _terminalContainer.style.top = _currentOpenT - _realWindowSize;
-            _terminalContainer.style.height = _realWindowSize;
+            if (_handledInputThisFrame)
+            {
+                return;
+            }
+
+            _terminalContainer.style.height = _currentWindowHeight;
             _terminalContainer.style.width = Screen.width;
+            _inputContainer.style.height = Mathf.Min(_currentWindowHeight, 30);
+            _commandInput.style.height = Mathf.Min(_currentWindowHeight, 24);
+            _inputCaretLabel.style.display =
+                _currentWindowHeight < 24 ? DisplayStyle.None : DisplayStyle.Flex;
+
             RefreshLogs();
             RefreshAutoCompleteHints();
             if (_commandInput.value != _commandText)
@@ -1105,7 +1116,7 @@
             {
                 if (_textInput.focusController.focusedElement != _textInput)
                 {
-                    _textInput.schedule.Execute(FocusInput).ExecuteLater(0);
+                    _textInput.schedule.Execute(_focusInput).ExecuteLater(0);
                     FocusInput();
                 }
 
@@ -1464,7 +1475,7 @@
                 return;
             }
 
-            _stateButtonContainer.style.top = _currentOpenT + 4;
+            _stateButtonContainer.style.top = _currentWindowHeight + 4;
 
             Button firstButton;
             Button secondButton;
@@ -1801,15 +1812,21 @@
 
         private void HandleOpenness()
         {
-            float dt = _toggleSpeed * Time.unscaledDeltaTime;
+            float heightChangeThisFrame = _toggleSpeed * Time.unscaledDeltaTime;
 
-            if (_currentOpenT < _openTarget)
+            if (_currentWindowHeight < _targetWindowHeight)
             {
-                _currentOpenT = Mathf.Min(_currentOpenT + dt, _openTarget);
+                _currentWindowHeight = Mathf.Min(
+                    _currentWindowHeight + heightChangeThisFrame,
+                    _targetWindowHeight
+                );
             }
-            else if (_openTarget < _currentOpenT)
+            else if (_targetWindowHeight < _currentWindowHeight)
             {
-                _currentOpenT = Mathf.Max(_currentOpenT - dt, _openTarget);
+                _currentWindowHeight = Mathf.Max(
+                    _currentWindowHeight - heightChangeThisFrame,
+                    _targetWindowHeight
+                );
             }
         }
 
