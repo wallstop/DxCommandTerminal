@@ -26,6 +26,9 @@
             TrackerActive = 2,
         }
 
+        // Cache log callback to reduce allocations
+        private static readonly Application.LogCallback UnityLogCallback = HandleUnityLog;
+
         public static UIToolkitTerminal Instance { get; private set; }
 
         // ReSharper disable once MemberCanBePrivate.Global
@@ -155,18 +158,16 @@
         [SerializeField]
         public List<string> disabledCommands = new();
 
-        public UIDocument uiDocument;
+        [SerializeField]
+        private UIDocument _uiDocument;
 
 #if UNITY_EDITOR
         private readonly Dictionary<TerminalLogType, int> _seenLogTypes = new();
         private readonly Dictionary<string, object> _propertyValues = new();
         private readonly List<SerializedProperty> _uiProperties = new();
+        private readonly List<SerializedProperty> _fontProperties = new();
         private readonly List<SerializedProperty> _staticStateProperties = new();
         private readonly List<SerializedProperty> _windowProperties = new();
-        private readonly List<SerializedProperty> _windowStyleProperties = new();
-        private readonly List<SerializedProperty> _buttonProperties = new();
-        private readonly List<SerializedProperty> _inputProperties = new();
-        private readonly List<SerializedProperty> _labelProperties = new();
         private readonly List<SerializedProperty> _logUnityMessageProperties = new();
         private readonly List<SerializedProperty> _autoCompleteProperties = new();
         private SerializedObject _serializedObject;
@@ -202,6 +203,7 @@
         private Button _runButton;
         private VisualElement _stateButtonContainer;
         private VisualElement _textInput;
+        private Label _inputCaretLabel;
 
         private readonly List<VisualElement> _autoCompleteChildren = new();
 
@@ -244,8 +246,11 @@
 #if UNITY_EDITOR
             _serializedObject = new SerializedObject(this);
 
-            string[] upPropertiesTracked = { nameof(uiDocument) };
-            TrackProperties(upPropertiesTracked, _uiProperties);
+            string[] uiPropertiesTracked = { nameof(_uiDocument) };
+            TrackProperties(uiPropertiesTracked, _uiProperties);
+
+            string[] fontPropertiesTracked = { nameof(_consoleFont) };
+            TrackProperties(fontPropertiesTracked, _fontProperties);
 
             string[] staticStaticPropertiesTracked =
             {
@@ -259,25 +264,6 @@
 
             string[] windowPropertiesTracked = { nameof(_maxHeight), nameof(_smallTerminalRatio) };
             TrackProperties(windowPropertiesTracked, _windowProperties);
-
-            string[] windowStylePropertiesTracked = { nameof(_consoleFont) };
-            TrackProperties(windowStylePropertiesTracked, _windowStyleProperties);
-
-            string[] inputPropertiesTracked = { nameof(_inputCaret) };
-            TrackProperties(inputPropertiesTracked, _inputProperties);
-
-            string[] buttonPropertiesTracked =
-            {
-                nameof(_buttonForegroundColor),
-                nameof(_runButtonText),
-                nameof(_closeButtonText),
-                nameof(_smallButtonText),
-                nameof(_fullButtonText),
-            };
-            TrackProperties(buttonPropertiesTracked, _buttonProperties);
-
-            string[] labelPropertiesTracked = { nameof(_consoleFont) };
-            TrackProperties(labelPropertiesTracked, _labelProperties);
 
             string[] logUnityMessagePropertiesTracked = { nameof(_logUnityMessages) };
             TrackProperties(logUnityMessagePropertiesTracked, _logUnityMessageProperties);
@@ -329,7 +315,7 @@
 
             if (_logUnityMessages && !_unityLogAttached)
             {
-                Application.logMessageReceivedThreaded += HandleUnityLog;
+                Application.logMessageReceivedThreaded += UnityLogCallback;
                 _unityLogAttached = true;
             }
 
@@ -343,7 +329,7 @@
         {
             if (_unityLogAttached)
             {
-                Application.logMessageReceivedThreaded -= HandleUnityLog;
+                Application.logMessageReceivedThreaded -= UnityLogCallback;
                 _unityLogAttached = false;
             }
 
@@ -406,6 +392,11 @@
             {
                 anyChanged = true;
                 _toggleHotkey = string.Empty;
+            }
+
+            if (_uiDocument == null)
+            {
+                anyChanged = TryGetComponent(out _uiDocument);
             }
 
             if (_ignoredLogTypes == null)
@@ -603,6 +594,11 @@
                 SetupUI();
             }
 
+            if (CheckForRefresh(_fontProperties))
+            {
+                SetFont();
+            }
+
             if (CheckForRefresh(_staticStateProperties))
             {
                 RefreshStaticState(force: false);
@@ -745,6 +741,32 @@
             }
         }
 
+        private void SetFont()
+        {
+            if (_uiDocument == null)
+            {
+                Debug.LogError("Cannot set font, no UIDocument assigned.");
+                return;
+            }
+
+            if (_consoleFont == null)
+            {
+                Debug.LogError("Cannot set font, no console font assigned.");
+                return;
+            }
+
+            VisualElement root = _uiDocument.rootVisualElement;
+            if (root == null)
+            {
+                Debug.LogError("Cannot set font, UI root element does not exist.");
+                return;
+            }
+
+            Debug.Log($"Setting font to {_consoleFont.name}.");
+            root.style.unityFont = _consoleFont;
+            root.MarkDirtyRepaint();
+        }
+
         private void ResetAutoComplete()
         {
             _lastKnownCommandText = _commandText ?? string.Empty;
@@ -821,45 +843,21 @@
             }
         }
 
-        // private void OnRootReady(GeometryChangedEvent evt)
-        // {
-        //     // We only need to run this query once after the geometry is first computed.
-        //     uiDocument.rootVisualElement.UnregisterCallback<GeometryChangedEvent>(OnRootReady);
-        //
-        //     terminalRoot = uiDocument.rootVisualElement.Q<VisualElement>(terminalRootElementName);
-        //
-        //     if (terminalRoot == null)
-        //     {
-        //         Debug.LogError(
-        //             $"{nameof(TerminalThemeSwitcher)}: Could not find VisualElement with name '{terminalRootElementName}' in the UIDocument.",
-        //             this
-        //         );
-        //         this.enabled = false; // Disable script if element not found
-        //     }
-        //     else
-        //     {
-        //         // Apply the default theme if no theme is currently set
-        //         if (!themeClasses.Any(c => terminalRoot.ClassListContains(c)))
-        //         {
-        //             SetTheme(defaultTheme);
-        //         }
-        //         Debug.Log(
-        //             $"{nameof(TerminalThemeSwitcher)}: Found terminal root '{terminalRootElementName}' and initialized theme.",
-        //             this
-        //         );
-        //     }
-        // }
-
-        // UI Toolkit setup
         private void SetupUI()
         {
-            if (uiDocument == null)
+            if (_uiDocument == null)
             {
                 Debug.LogError("No UIDocument assigned, cannot setup UI.");
                 return;
             }
 
-            VisualElement uiRoot = uiDocument.rootVisualElement;
+            VisualElement uiRoot = _uiDocument.rootVisualElement;
+            if (uiRoot == null)
+            {
+                Debug.LogError("No UI root element assigned, cannot setup UI.");
+                return;
+            }
+
             uiRoot.Clear();
             VisualElement root = new();
             uiRoot.Add(root);
@@ -902,12 +900,9 @@
             _runButton.style.paddingBottom = 2;
             _inputContainer.Add(_runButton);
 
-            if (!string.IsNullOrEmpty(_inputCaret))
-            {
-                Label caretLabel = new(_inputCaret) { name = "InputCaret" };
-                caretLabel.AddToClassList("terminal-input-caret");
-                _inputContainer.Add(caretLabel);
-            }
+            _inputCaretLabel = new Label(_inputCaret) { name = "InputCaret" };
+            _inputCaretLabel.AddToClassList("terminal-input-caret");
+            _inputContainer.Add(_inputCaretLabel);
 
             _commandInput = new TextField();
             ScheduleBlinkingCursor(_commandInput);
@@ -1116,6 +1111,11 @@
 
         private void FocusInput()
         {
+            if (_textInput == null)
+            {
+                return;
+            }
+
             _textInput.Focus();
             int textEndPosition = _commandInput.value.Length;
             _commandInput.cursorIndex = textEndPosition;
@@ -1126,6 +1126,11 @@
         {
             IReadOnlyList<LogItem> logs = Terminal.Buffer?.Logs;
             if (logs == null)
+            {
+                return;
+            }
+
+            if (_logScrollView == null)
             {
                 return;
             }
@@ -1204,7 +1209,7 @@
 
         private void ScrollToEnd()
         {
-            if (0 < _logScrollView.verticalScroller.highValue)
+            if (0 < _logScrollView?.verticalScroller.highValue)
             {
                 _logScrollView.verticalScroller.value = _logScrollView.verticalScroller.highValue;
             }
@@ -1214,11 +1219,12 @@
         {
             bool shouldDisplay =
                 _lastCompletionBuffer is { Length: > 0 }
-                && _hintDisplayMode is HintDisplayMode.Always or HintDisplayMode.AutoCompleteOnly;
+                && _hintDisplayMode is HintDisplayMode.Always or HintDisplayMode.AutoCompleteOnly
+                && _autoCompleteContainer != null;
 
             if (!shouldDisplay)
             {
-                if (0 < _autoCompleteContainer.childCount)
+                if (0 < _autoCompleteContainer?.childCount)
                 {
                     _autoCompleteContainer.Clear();
                 }
@@ -1293,17 +1299,18 @@
                     for (int i = 0; i < _autoCompleteContainer.childCount && i < bufferLength; ++i)
                     {
                         VisualElement hintElement = _autoCompleteContainer[i];
-                        if (contentsChanged)
+                        // if (contentsChanged)
+                        // {
+                        // }
+
+                        switch (hintElement)
                         {
-                            switch (hintElement)
-                            {
-                                case Button button:
-                                    button.text = _lastCompletionBuffer[i];
-                                    break;
-                                case Label label:
-                                    label.text = _lastCompletionBuffer[i];
-                                    break;
-                            }
+                            case Button button:
+                                button.text = _lastCompletionBuffer[i];
+                                break;
+                            case Label label:
+                                label.text = _lastCompletionBuffer[i];
+                                break;
                         }
 
                         bool isSelected = i == _lastCompletionIndex;
@@ -1429,10 +1436,17 @@
 
         private void RefreshStateButtons()
         {
+            if (_stateButtonContainer == null)
+            {
+                return;
+            }
+
+            DisplayStyle displayStyle = _showGUIButtons ? DisplayStyle.Flex : DisplayStyle.None;
+
             for (int i = 0; i < _stateButtonContainer.childCount; ++i)
             {
                 VisualElement child = _stateButtonContainer[i];
-                child.style.display = _showGUIButtons ? DisplayStyle.Flex : DisplayStyle.None;
+                child.style.display = displayStyle;
             }
 
             if (!_showGUIButtons)
@@ -1448,14 +1462,12 @@
             {
                 firstButton = new Button(FirstClicked) { name = "StateButton1" };
                 firstButton.AddToClassList("terminal-button");
-                firstButton.style.display = _showGUIButtons ? DisplayStyle.Flex : DisplayStyle.None;
+                firstButton.style.display = displayStyle;
                 _stateButtonContainer.Add(firstButton);
 
                 secondButton = new Button(SecondClicked) { name = "StateButton2" };
                 secondButton.AddToClassList("terminal-button");
-                secondButton.style.display = _showGUIButtons
-                    ? DisplayStyle.Flex
-                    : DisplayStyle.None;
+                secondButton.style.display = displayStyle;
                 _stateButtonContainer.Add(secondButton);
             }
             else
@@ -1471,6 +1483,8 @@
                     return;
                 }
             }
+
+            _inputCaretLabel.text = _inputCaret;
 
             switch (_state)
             {
@@ -1522,7 +1536,6 @@
                         {
                             SetState(TerminalState.OpenSmall);
                         }
-
                         break;
                     case TerminalState.OpenSmall:
                     case TerminalState.OpenFull:
@@ -1530,7 +1543,6 @@
                         {
                             SetState(TerminalState.Closed);
                         }
-
                         break;
                     default:
                         throw new InvalidEnumArgumentException(
@@ -1547,14 +1559,12 @@
                 {
                     case TerminalState.Closed:
                     case TerminalState.OpenSmall:
-
                         if (!string.IsNullOrWhiteSpace(_fullButtonText))
                         {
                             SetState(TerminalState.OpenFull);
                         }
                         break;
                     case TerminalState.OpenFull:
-
                         if (!string.IsNullOrWhiteSpace(_smallButtonText))
                         {
                             SetState(TerminalState.OpenSmall);
@@ -1658,7 +1668,7 @@
                 return;
             }
 
-            _commandText = _commandText.Trim();
+            _commandText = _commandText?.Trim();
             try
             {
                 if (string.IsNullOrWhiteSpace(_commandText))
@@ -1695,14 +1705,14 @@
                 string[] completionBuffer;
                 if (_lastKnownCommandText == null)
                 {
-                    _lastKnownCommandText = _commandText;
+                    _lastKnownCommandText = _commandText ?? string.Empty;
                     completionBuffer =
                         Terminal.AutoComplete?.Complete(_lastKnownCommandText)
                         ?? Array.Empty<string>();
                 }
                 else
                 {
-                    completionBuffer = _lastCompletionBuffer;
+                    completionBuffer = _lastCompletionBuffer ?? Array.Empty<string>();
                 }
 
                 try
