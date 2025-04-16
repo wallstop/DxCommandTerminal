@@ -1,0 +1,26 @@
+﻿.iceberg-light-theme {
+    /* Backgrounds */
+    --terminal-bg: rgba(235, 240, 242, 0.9);
+    --button-bg: rgba(220, 225, 228, 1);
+    --input-field-bg: rgba(228, 233, 235, 0.8);
+    --button-selected-bg: rgba(86, 140, 186, 0.85);
+    --button-hover-bg: rgba(210, 215, 218, 1);
+    --scroll-bg: rgba(220, 225, 228, 1);
+    --scroll-inverse-bg: rgba(245, 250, 252, 1);
+    --scroll-active-bg: rgba(156, 163, 168, 1);
+
+    /* Text & Foreground */
+    --button-text: rgba(48, 52, 57, 0.9);
+    --button-selected-text: rgba(255, 255, 255, 1);
+    --button-hover-text: rgba(28, 32, 37, 1);
+    --input-text-color: rgba(48, 52, 57, 1);
+    --text-message: rgba(48, 52, 57, 1);
+    --text-warning: rgba(164, 121, 81, 1);
+    --text-input-echo: rgba(100, 140, 127, 1);
+    --text-shell: rgba(156, 163, 168, 1);
+    --text-error: rgba(172, 77, 81, 1);
+
+    /* Other UI Elements */
+    --scroll-color: rgba(48, 52, 57, 1);
+    --caret-color: rgba(48, 52, 57, 1);
+}

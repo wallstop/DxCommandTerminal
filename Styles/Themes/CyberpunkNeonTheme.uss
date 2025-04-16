@@ -1,0 +1,26 @@
+﻿.cyberpunk-neon-theme {
+    /* Backgrounds */
+    --terminal-bg: rgba(21, 21, 31, 0.9);
+    --button-bg: rgba(41, 41, 61, 1);
+    --input-field-bg: rgba(31, 31, 51, 0.8);
+    --button-selected-bg: rgba(236, 0, 140, 0.85);
+    --button-hover-bg: rgba(61, 61, 81, 1);
+    --scroll-bg: rgba(41, 41, 61, 1);
+    --scroll-inverse-bg: rgba(11, 11, 21, 1);
+    --scroll-active-bg: rgba(0, 255, 255, 1);
+
+    /* Text & Foreground */
+    --button-text: rgba(0, 255, 255, 0.9);
+    --button-selected-text: rgba(255, 255, 255, 1);
+    --button-hover-text: rgba(80, 255, 255, 1);
+    --input-text-color: rgba(0, 255, 255, 1);
+    --text-message: rgba(220, 220, 230, 1);
+    --text-warning: rgba(255, 232, 31, 1);
+    --text-input-echo: rgba(80, 255, 255, 1);
+    --text-shell: rgba(150, 150, 180, 1);
+    --text-error: rgba(255, 0, 80, 1);
+
+    /* Other UI Elements */
+    --scroll-color: rgba(0, 255, 255, 1);
+    --caret-color: rgba(236, 0, 140, 1);
+}

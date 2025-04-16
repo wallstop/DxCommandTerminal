@@ -90,6 +90,43 @@
 @import url("Themes/VaporwaveTheme.uss");
 @import url("Themes/VolcanoTheme.uss");
 @import url("Themes/WinterSkyTheme.uss");
+@import url("Themes/AyuLightTheme.uss");
+@import url("Themes/BlackboardTheme.uss");
+@import url("Themes/BreathOfTheWildTheme.uss");
+@import url("Themes/BrogrammerTheme.uss");
+@import url("Themes/CyberpunkNeonTheme.uss");
+@import url("Themes/DesertOasisTheme.uss");
+@import url("Themes/DoomEternalTheme.uss");
+@import url("Themes/FlatUITheme.uss");
+@import url("Themes/ForestNightTheme.uss");
+@import url("Themes/GithubLightTheme.uss");
+@import url("Themes/HighContrastBlackTheme.uss");
+@import url("Themes/IcebergDarkTheme.uss");
+@import url("Themes/IcebergLightTheme.uss");
+@import url("Themes/KimbieDarkTheme.uss");
+@import url("Themes/MolokaiTheme.uss");
+@import url("Themes/OneLightTheme.uss");
+@import url("Themes/OutrunElectricTheme.uss");
+@import url("Themes/PaleNightTheme.uss");
+@import url("Themes/PipBoyTheme.uss");
+@import url("Themes/PortalTheme.uss");
+@import url("Themes/RedmondTheme.uss");
+@import url("Themes/SlimeTheme.uss");
+@import url("Themes/StardewValleyTheme.uss");
+@import url("Themes/TomorrowLightTheme.uss");
+@import url("Themes/TomorrowNightTheme.uss");
+@import url("Themes/UbuntuTheme.uss");
+@import url("Themes/VisualStudioDarkTheme.uss");
+@import url("Themes/VisualStudioLightTheme.uss");
+@import url("Themes/ZenBurnTheme.uss");
+
+
+
+
+
+
+
+
 
 
 

@@ -55,38 +55,54 @@ namespace CommandTerminal
         private bool _useHotkeys = true;
 #endif
 
+#if ENABLE_INPUT_SYSTEM
         [DxShowIf(nameof(_useHotkeys))]
+#endif
         [SerializeField]
         private string _toggleHotkey = "`";
 
+#if ENABLE_INPUT_SYSTEM
         [DxShowIf(nameof(_useHotkeys))]
+#endif
         [SerializeField]
         private string _toggleFullHotkey = "#`";
 
+#if ENABLE_INPUT_SYSTEM
         [DxShowIf(nameof(_useHotkeys))]
+#endif
         [SerializeField]
         private string _completeHotkey = "tab";
 
+#if ENABLE_INPUT_SYSTEM
         [DxShowIf(nameof(_useHotkeys))]
+#endif
         [SerializeField]
         private string _reverseCompleteHotkey = "#tab";
 
+#if ENABLE_INPUT_SYSTEM
         [DxShowIf(nameof(_useHotkeys))]
+#endif
         [SerializeField]
         private string _previousHotkey = "up";
 
+#if ENABLE_INPUT_SYSTEM
         [DxShowIf(nameof(_useHotkeys))]
+#endif
         [SerializeField]
         private ListWrapper<string> _completeCommandHotkeys = new()
         {
             list = { "enter", "return" },
         };
 
+#if ENABLE_INPUT_SYSTEM
         [DxShowIf(nameof(_useHotkeys))]
+#endif
         [SerializeField]
         private string _closeHotkey = "escape";
 
+#if ENABLE_INPUT_SYSTEM
         [DxShowIf(nameof(_useHotkeys))]
+#endif
         [SerializeField]
         private string _nextHotkey = "down";
 
@@ -1230,7 +1246,7 @@ namespace CommandTerminal
                     }
 
                     /*
-                        Something is FUCKED here, I can't figure it out. When we have "Make Hints Clickable" on,
+                        Something is very wrong here, I can't figure it out. When we have "Make Hints Clickable" on,
                         back-spacing from an auto-completed word highlights the word for a few frames. I think this is
                         an IMGUI bug where the TextEditor state / control focus is lost, I've verified through some
                         debug logs where I track cursor / selection indexes. They get arbitrarily reset to 0.

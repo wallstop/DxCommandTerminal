@@ -43,7 +43,7 @@ namespace CommandTerminal
 
         [SerializeField]
         [HideInInspector]
-        internal string _currentTheme = "dark";
+        internal string _currentTheme = "dark-theme";
 
         [Header("Window")]
         [Range(0, 1)]
@@ -70,39 +70,54 @@ namespace CommandTerminal
         [Tooltip("If you are binding your own input actions, this needs to be set to false.")]
         private bool _useHotkeys = true;
 #endif
-
+#if ENABLE_INPUT_SYSTEM
         [DxShowIf(nameof(_useHotkeys))]
+#endif
         [SerializeField]
         internal string _toggleHotkey = "`";
 
+#if ENABLE_INPUT_SYSTEM
         [DxShowIf(nameof(_useHotkeys))]
+#endif
         [SerializeField]
         private string _toggleFullHotkey = "#`";
 
+#if ENABLE_INPUT_SYSTEM
         [DxShowIf(nameof(_useHotkeys))]
+#endif
         [SerializeField]
         private string _completeHotkey = "tab";
 
+#if ENABLE_INPUT_SYSTEM
         [DxShowIf(nameof(_useHotkeys))]
+#endif
         [SerializeField]
         private string _reverseCompleteHotkey = "#tab";
 
+#if ENABLE_INPUT_SYSTEM
         [DxShowIf(nameof(_useHotkeys))]
+#endif
         [SerializeField]
         private string _previousHotkey = "up";
 
+#if ENABLE_INPUT_SYSTEM
         [DxShowIf(nameof(_useHotkeys))]
+#endif
         [SerializeField]
         internal ListWrapper<string> _completeCommandHotkeys = new()
         {
             list = { "enter", "return" },
         };
 
+#if ENABLE_INPUT_SYSTEM
         [DxShowIf(nameof(_useHotkeys))]
+#endif
         [SerializeField]
         private string _closeHotkey = "escape";
 
+#if ENABLE_INPUT_SYSTEM
         [DxShowIf(nameof(_useHotkeys))]
+#endif
         [SerializeField]
         private string _nextHotkey = "down";
 
@@ -138,7 +153,7 @@ namespace CommandTerminal
         private HintDisplayMode _hintDisplayMode = HintDisplayMode.AutoCompleteOnly;
 
         [SerializeField]
-        private bool _makeHintsClickable;
+        private bool _makeHintsClickable = true;
 
         [Header("System")]
         [SerializeField]
@@ -157,7 +172,7 @@ namespace CommandTerminal
         public bool ignoreDefaultCommands;
 
         [SerializeField]
-        private bool _logUnityMessages = true;
+        private bool _logUnityMessages;
 
         [SerializeField]
         internal List<TerminalLogType> _ignoredLogTypes = new();

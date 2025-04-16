@@ -80,6 +80,7 @@
                 );
                 _themes.Clear();
                 _themes.AddRange(StyleSheetHelper.GetAvailableThemes(terminal._uiDocument));
+                Debug.Log($"Found {_themes.Count} themes.");
                 if (
                     !_themes
                         .ToHashSet()
@@ -142,11 +143,9 @@
                     _themeIndex,
                     _themes
                         .Select(theme =>
-                            theme.Replace(
-                                "-theme",
-                                string.Empty,
-                                StringComparison.OrdinalIgnoreCase
-                            )
+                            theme
+                                .Replace("-theme", string.Empty, StringComparison.OrdinalIgnoreCase)
+                                .Replace("theme-", string.Empty, StringComparison.OrdinalIgnoreCase)
                         )
                         .ToArray()
                 );
