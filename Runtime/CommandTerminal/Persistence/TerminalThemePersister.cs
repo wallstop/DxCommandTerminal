@@ -113,14 +113,6 @@
                     yield break;
                 }
 
-                TerminalThemeConfiguration? maybeCurrentConfiguration = GetConfiguration();
-                if (maybeCurrentConfiguration == null)
-                {
-                    yield break;
-                }
-
-                TerminalThemeConfiguration currentConfiguration = maybeCurrentConfiguration.Value;
-
                 string themeFile = ThemeFile;
                 string directoryPath = Path.GetDirectoryName(themeFile);
                 if (!string.IsNullOrWhiteSpace(directoryPath))
@@ -180,7 +172,8 @@
                         );
                         if (0 <= fontIndex)
                         {
-                            terminal.SetFont(terminal._loadedFonts[fontIndex], persist: true);
+                            _lastSeenFont = terminal._loadedFonts[fontIndex];
+                            terminal.SetFont(_lastSeenFont, persist: true);
                         }
                         else
                         {
@@ -199,7 +192,8 @@
                         );
                         if (0 <= themeIndex)
                         {
-                            terminal.SetTheme(terminal._loadedThemes[themeIndex], persist: true);
+                            _lastSeenTheme = terminal._loadedThemes[themeIndex];
+                            terminal.SetTheme(_lastSeenTheme, persist: true);
                         }
                         else
                         {
@@ -219,7 +213,18 @@
                         );
                     }
                 }
-                configurations.AddOrUpdate(currentConfiguration);
+
+                TerminalThemeConfiguration? maybeCurrentConfiguration = GetConfiguration();
+                if (maybeCurrentConfiguration == null)
+                {
+                    yield break;
+                }
+
+                TerminalThemeConfiguration currentConfiguration = maybeCurrentConfiguration.Value;
+                if (!configurations.AddOrUpdate(currentConfiguration))
+                {
+                    yield break;
+                }
 
                 string outputJson = JsonUtility.ToJson(configurations, prettyPrint: true);
                 Debug.Log(

@@ -51,7 +51,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             );
         }
 
-        public bool HandleLog(string message, TerminalLogType type, bool includeStackTrace = false)
+        public bool HandleLog(string message, TerminalLogType type, bool includeStackTrace = true)
         {
             string stackTrace;
             if (includeStackTrace)

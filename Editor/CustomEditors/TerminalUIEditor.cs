@@ -44,6 +44,7 @@
         private int _secondFontKey = -1;
         private bool _isCyclingThemes;
         private bool _isCyclingFonts;
+        private bool _persistThemeChanges;
 
         private TimeSpan? _lastFontCycleTime;
         private TimeSpan? _lastThemeCycleTime;
@@ -162,7 +163,10 @@
                 {
                     int newThemeIndex = (_themeIndex + 1) % _themes.Count;
                     newThemeIndex = (newThemeIndex + _themes.Count) % _themes.Count;
-                    terminal.SetTheme(terminal._loadedThemes[newThemeIndex]);
+                    terminal.SetTheme(
+                        terminal._loadedThemes[newThemeIndex],
+                        persist: _persistThemeChanges
+                    );
                     _themeIndex = newThemeIndex;
                 }
 
@@ -183,7 +187,7 @@
                     int fontIndex = terminal._loadedFonts.IndexOf(currentFont);
                     int newFontIndex = (fontIndex + 1) % terminal._loadedFonts.Count;
                     Font newFont = terminal._loadedFonts[newFontIndex];
-                    terminal.SetFont(newFont);
+                    terminal.SetFont(newFont, persist: _persistThemeChanges);
                     TrySetFontKeysFromFont(newFont);
                 }
 
@@ -236,8 +240,9 @@
 
             if (_lastSeen != terminal || _themes.Count == 0)
             {
-                _isCyclingFonts = false;
-                _isCyclingThemes = false;
+                _persistThemeChanges = false;
+                StopCyclingFonts();
+                StopCyclingThemes();
                 _themeIndex = -1;
                 _fontKey = -1;
                 _secondFontKey = -1;
@@ -309,7 +314,26 @@
         private void RenderCyclingPreviews()
         {
             EditorGUILayout.Space(10);
-            EditorGUILayout.LabelField("Preview", EditorStyles.boldLabel);
+            EditorGUILayout.BeginHorizontal();
+            try
+            {
+                EditorGUILayout.LabelField("Preview", EditorStyles.boldLabel);
+                bool oldPersistThemeChanges = _persistThemeChanges;
+                _persistThemeChanges = GUILayout.Toggle(
+                    _persistThemeChanges,
+                    "Persist Theme Changes"
+                );
+
+                if (oldPersistThemeChanges != _persistThemeChanges)
+                {
+                    StopCyclingFonts();
+                    StopCyclingThemes();
+                }
+            }
+            finally
+            {
+                EditorGUILayout.EndHorizontal();
+            }
 
             if (Application.isPlaying)
             {
@@ -346,7 +370,11 @@
                 return;
             }
 
-            if (GUILayout.Button("Set Random Theme", _impactButtonStyle))
+            bool clicked = _persistThemeChanges
+                ? GUILayout.Button("Set Random Theme", _impactButtonStyle)
+                : GUILayout.Button("Set Random Theme ");
+
+            if (clicked)
             {
                 TerminalUI terminal = target as TerminalUI;
                 if (terminal != null && terminal._loadedThemes is { Count: > 0 })
@@ -356,7 +384,10 @@
                     {
                         newThemeIndex = _random.Next(terminal._loadedThemes.Count);
                     } while (newThemeIndex == _themeIndex && terminal._loadedThemes.Count != 1);
-                    terminal.SetTheme(terminal._loadedThemes[newThemeIndex]);
+                    terminal.SetTheme(
+                        terminal._loadedThemes[newThemeIndex],
+                        persist: _persistThemeChanges
+                    );
                     _themeIndex = newThemeIndex;
                 }
             }
@@ -369,7 +400,11 @@
                 return;
             }
 
-            if (GUILayout.Button("Set Random Font", _impactButtonStyle))
+            bool clicked = _persistThemeChanges
+                ? GUILayout.Button("Set Random Font", _impactButtonStyle)
+                : GUILayout.Button("Set Random Font ");
+
+            if (clicked)
             {
                 TerminalUI terminal = target as TerminalUI;
                 if (terminal != null && terminal._loadedFonts is { Count: > 0 })
@@ -383,7 +418,7 @@
                     } while (newFontIndex == oldFontIndex && terminal._loadedFonts.Count != 1);
 
                     Font newFont = terminal._loadedFonts[newFontIndex];
-                    terminal.SetFont(newFont);
+                    terminal.SetFont(newFont, persist: _persistThemeChanges);
                     TrySetFontKeysFromFont(newFont);
                 }
             }
@@ -400,7 +435,10 @@
             }
             else
             {
-                if (GUILayout.Button("Start Cycling Fonts"))
+                bool clicked = _persistThemeChanges
+                    ? GUILayout.Button("Start Cycling Fonts", _impactButtonStyle)
+                    : GUILayout.Button("Start Cycling Fonts");
+                if (clicked)
                 {
                     StartCyclingFonts();
                 }
@@ -433,7 +471,10 @@
             }
             else
             {
-                if (GUILayout.Button("Start Cycling Themes"))
+                bool clicked = _persistThemeChanges
+                    ? GUILayout.Button("Start Cycling Themes", _impactButtonStyle)
+                    : GUILayout.Button("Start Cycling Themes");
+                if (clicked)
                 {
                     StartCyclingThemes();
                 }

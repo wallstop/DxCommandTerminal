@@ -166,7 +166,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
         private string _focusedControl;
         private bool _isCommandFromCode;
         private bool _initialResetStateOnInit;
-        private float _inputContainerHeight;
         private bool _commandIssuedThisFrame;
 
         private VisualElement _terminalContainer;
@@ -788,7 +787,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             _inputContainer = new VisualElement { name = "InputContainer" };
             _inputContainer.AddToClassList("input-container");
-            _inputContainerHeight = _inputContainer.layout.height;
             _terminalContainer.Add(_inputContainer);
 
             _runButton = new Button(EnterCommand)
@@ -863,15 +861,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
             _stateButtonContainer.AddToClassList("state-button-container");
             root.Add(_stateButtonContainer);
             RefreshStateButtons();
-
-            _inputContainer.RegisterCallback<CustomStyleResolvedEvent, TerminalUI>(
-                (_, context) =>
-                {
-                    context._inputContainerHeight = context._inputContainer.layout.height;
-                },
-                userArgs: this,
-                useTrickleDown: TrickleDown.TrickleDown
-            );
         }
 
         private void ScheduleBlinkingCursor()
@@ -1013,15 +1002,13 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             _terminalContainer.style.height = _currentWindowHeight;
             _terminalContainer.style.width = Screen.width;
-            _inputContainer.style.height = Mathf.Min(_currentWindowHeight, _inputContainerHeight);
             DisplayStyle commandInputStyle =
-                _currentWindowHeight <= 16 ? DisplayStyle.None : DisplayStyle.Flex;
+                _currentWindowHeight <= 30 ? DisplayStyle.None : DisplayStyle.Flex;
 
             _needsFocus |=
-                _commandInput.resolvedStyle.display != commandInputStyle
+                _inputContainer.resolvedStyle.display != commandInputStyle
                 && commandInputStyle == DisplayStyle.Flex;
-            _commandInput.style.display = commandInputStyle;
-            _inputCaretLabel.style.display = commandInputStyle;
+            _inputContainer.style.display = commandInputStyle;
 
             RefreshLogs();
             RefreshAutoCompleteHints();

@@ -18,10 +18,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         private static readonly System.Random Random = new();
 
         [RegisterCommand(
+            isDefault: true,
             Name = "list-themes",
             Help = "Lists all currently available themes",
-            MaxArgCount = 0,
-            Default = true
+            MaxArgCount = 0
         )]
         public static void CommandListThemes(CommandArg[] args)
         {
@@ -37,10 +37,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         }
 
         [RegisterCommand(
+            isDefault: true,
             Name = "list-fonts",
             Help = "Lists all currently available fonts",
-            MaxArgCount = 0,
-            Default = true
+            MaxArgCount = 0
         )]
         public static void CommandListFonts(CommandArg[] args)
         {
@@ -59,11 +59,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         }
 
         [RegisterCommand(
+            isDefault: true,
             Name = "set-theme",
             Help = "Sets the current Terminal UI theme",
             MinArgCount = 1,
-            MaxArgCount = 1,
-            Default = true
+            MaxArgCount = 1
         )]
         public static void CommandSetTheme(CommandArg[] args)
         {
@@ -94,11 +94,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         }
 
         [RegisterCommand(
+            isDefault: true,
             Name = "set-random-theme",
             Help = "Sets the current Terminal UI theme to a randomly selected one",
             MinArgCount = 0,
-            MaxArgCount = 0,
-            Default = true
+            MaxArgCount = 0
         )]
         public static void CommandSetRandomTheme(CommandArg[] args)
         {
@@ -130,11 +130,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         }
 
         [RegisterCommand(
+            isDefault: true,
             Name = "set-font",
             Help = "Sets the current Terminal UI font",
             MinArgCount = 1,
-            MaxArgCount = 1,
-            Default = true
+            MaxArgCount = 1
         )]
         public static void CommandSetFont(CommandArg[] args)
         {
@@ -163,11 +163,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         }
 
         [RegisterCommand(
+            isDefault: true,
             Name = "set-random-font",
             Help = "Sets the current Terminal UI font to a randomly selected one",
             MinArgCount = 0,
-            MaxArgCount = 0,
-            Default = true
+            MaxArgCount = 0
         )]
         public static void CommandSetRandomFont(CommandArg[] args)
         {
@@ -192,10 +192,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         }
 
         [RegisterCommand(
+            isDefault: true,
             Name = "clear",
             Help = "Clear the command console",
-            MaxArgCount = 0,
-            Default = true
+            MaxArgCount = 0
         )]
         public static void CommandClear(CommandArg[] args)
         {
@@ -203,10 +203,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         }
 
         [RegisterCommand(
+            isDefault: true,
             Name = "clear-history",
             Help = "Clear the command console's history",
-            MaxArgCount = 0,
-            Default = true
+            MaxArgCount = 0
         )]
         public static void CommandClearHistory(CommandArg[] args)
         {
@@ -214,10 +214,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         }
 
         [RegisterCommand(
+            isDefault: true,
             Name = "help",
             Help = "Display help information about a command",
-            MaxArgCount = 1,
-            Default = true
+            MaxArgCount = 1
         )]
         public static void CommandHelp(CommandArg[] args)
         {
@@ -259,10 +259,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         }
 
         [RegisterCommand(
+            isDefault: true,
             Name = "time",
             Help = "Time the execution of a command",
-            MinArgCount = 1,
-            Default = true
+            MinArgCount = 1
         )]
         public static void CommandTime(CommandArg[] args)
         {
@@ -279,26 +279,26 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         }
 
         [RegisterCommand(
+            isDefault: true,
             Name = "terminal-log",
-            Help = "Output message via Terminal.Log",
-            Default = true
+            Help = "Output message via Terminal.Log"
         )]
         public static void CommandPrint(CommandArg[] args)
         {
             Terminal.Log(JoinArguments(args));
         }
 
-        [RegisterCommand(Name = "log", Help = "Output message via Debug.Log", Default = true)]
+        [RegisterCommand(isDefault: true, Name = "log", Help = "Output message via Debug.Log")]
         public static void CommandLog(CommandArg[] args)
         {
             UnityEngine.Debug.Log(JoinArguments(args));
         }
 
         [RegisterCommand(
+            isDefault: true,
             Name = "trace",
             Help = "Output the stack trace of the previous message",
-            MaxArgCount = 0,
-            Default = true
+            MaxArgCount = 0
         )]
         public static void CommandTrace(CommandArg[] args)
         {
@@ -326,9 +326,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         }
 
         [RegisterCommand(
+            isDefault: true,
             Name = "set",
-            Help = "List all variables or set a variable value",
-            Default = true
+            Help = "List all variables or set a variable value"
         )]
         public static void CommandSet(CommandArg[] args)
         {
@@ -360,17 +360,17 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             shell.SetVariable(variableName, JoinArguments(args, 1));
         }
 
-        [RegisterCommand(Name = "no-op", Help = "No operation", Default = true)]
+        [RegisterCommand(isDefault: true, Name = "no-op", Help = "No operation")]
         public static void CommandNoOperation(CommandArg[] args)
         {
             // No-op
         }
 
         [RegisterCommand(
+            isDefault: true,
             Name = "quit",
             Help = "Quit running application",
-            MaxArgCount = 0,
-            Default = true
+            MaxArgCount = 0
         )]
         public static void CommandQuit(CommandArg[] args)
         {

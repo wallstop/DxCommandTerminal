@@ -13,7 +13,7 @@ namespace WallstopStudios.DxCommandTerminal.Attributes
         public string Hint { get; set; }
 
         // Should not be used by client code - internal flag to indicate that this is a "Default", or in-built command
-        public bool Default { get; set; }
+        internal bool Default { get; set; }
 
         public bool EditorOnly { get; set; }
 
@@ -24,6 +24,9 @@ namespace WallstopStudios.DxCommandTerminal.Attributes
             commandName = commandName?.Replace(" ", string.Empty).Trim();
             Name = commandName;
         }
+
+        internal RegisterCommandAttribute(bool isDefault)
+            : this(string.Empty) { }
 
         public void NormalizeName(MethodInfo method)
         {
