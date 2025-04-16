@@ -425,7 +425,7 @@
 
         private void TryMatchExistingFont(UIToolkitTerminal terminal)
         {
-            if ((0 <= _fontKey && 0 <= _secondFontKey) || terminal._consoleFont == null)
+            if ((0 <= _fontKey || 0 <= _secondFontKey) || terminal._consoleFont == null)
             {
                 return;
             }

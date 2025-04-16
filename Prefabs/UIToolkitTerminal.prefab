@@ -11,7 +11,6 @@ GameObject:
   - component: {fileID: 7902191435527555454}
   - component: {fileID: 1464898098683261140}
   - component: {fileID: 645875836393750079}
-  - component: {fileID: 273437263211880064}
   - component: {fileID: 4771280446748905526}
   m_Layer: 5
   m_Name: UIToolkitTerminal
@@ -48,6 +47,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _uiDocument: {fileID: 4771280446748905526}
+  _currentTheme: dark-theme
   _maxHeight: 0.7
   _smallTerminalRatio: 0.4714285
   _toggleSpeed: 360
@@ -72,7 +72,7 @@ MonoBehaviour:
   _closeButtonText: close
   _smallButtonText: small
   _fullButtonText: full
-  _hintDisplayMode: 1
+  _hintDisplayMode: 2
   _makeHintsClickable: 1
   _cursorBlinkRateMilliseconds: 666
   _trackChangesInEditor: 1
@@ -502,6 +502,124 @@ MonoBehaviour:
   - {fileID: 12800000, guid: db57ac7a1474a437b905cb5771524a76, type: 3}
   - {fileID: 12800000, guid: 374bec37932d9464bb29c1879c507aa7, type: 3}
   - {fileID: 12800000, guid: 1f8353cede471f14f8e2b410e38dd338, type: 3}
+  _loadedThemes:
+  - alien-jungle-theme
+  - amber-glow-theme
+  - arctic-night-theme
+  - arctic-white-theme
+  - atom-one-dark-theme
+  - aurora-theme
+  - autumn-leaves-theme
+  - ayu-light-theme
+  - ayu-mirage-theme
+  - base16-tomorrow-night-theme
+  - berry-smoothie-theme
+  - biohazard-theme
+  - blackboard-theme
+  - blueprint-theme
+  - botw-theme
+  - brogrammer-theme
+  - brushed-metal-theme
+  - bubblegum-theme
+  - carbon-fiber-theme
+  - catppuccin-theme
+  - classic-green-theme
+  - cobalt2-theme
+  - coffee-shop-theme
+  - commodore64-theme
+  - cool-blue-theme
+  - coral-reef-theme
+  - cream-theme
+  - cyberpunk-neon-theme
+  - darcula-theme
+  - dark-theme
+  - deep-forest-theme
+  - desert-night-theme
+  - desert-oasis-theme
+  - dimmed-theme
+  - doom-eternal-theme
+  - dracula-theme
+  - dusk-theme
+  - eldritch-horror-theme
+  - everforest-dark-theme
+  - flat-ui-light-theme
+  - forest-floor-theme
+  - forest-night-theme
+  - github-dark-theme
+  - github-light-theme
+  - glitch-theme
+  - graphite-theme
+  - gruvbox-dark-theme
+  - gruvbox-light-theme
+  - hacker-matrix-theme
+  - high-contrast-black-theme
+  - high-contrast-light-theme
+  - holo-interface-theme
+  - hotpink-neon-theme
+  - iceberg-dark-theme
+  - iceberg-light-theme
+  - jungle-theme
+  - kimbie-dark-theme
+  - light-theme
+  - linen-theme
+  - matcha-theme
+  - material-darker-theme
+  - material-oceanic-theme
+  - material-palenight-theme
+  - midnight-city-theme
+  - molokai-theme
+  - monokai-theme
+  - mountain-peak-theme
+  - neon-noir-theme
+  - night-owl-theme
+  - nord-theme
+  - oblivion-theme
+  - obsidian-theme
+  - ocean-deep-theme
+  - oceanic-next-theme
+  - old-paper-theme
+  - one-dark-theme
+  - one-light-theme
+  - outrun-electric-theme
+  - palenight-theme
+  - panda-syntax-theme
+  - paper-white-theme
+  - pastel-dreams-theme
+  - pip-boy-theme
+  - portal-theme
+  - pure-black-white-theme
+  - purple-haze-theme
+  - red-alert-theme
+  - redmond-theme
+  - redwood-theme
+  - rose-pine-theme
+  - savanna-theme
+  - sepia-theme
+  - shades-of-purple-theme
+  - slate-theme
+  - slime-theme
+  - solarized-dark-theme
+  - solarized-light-theme
+  - stardew-valley-theme
+  - starfield-theme
+  - steampunk-theme
+  - sublime-theme
+  - subtle-gray-theme
+  - sunset-theme
+  - swamp-theme
+  - synthwave84-theme
+  - tokyo-night-theme
+  - tomorrow-light-theme
+  - tomorrow-night-theme
+  - ubuntu-theme
+  - underwater-theme
+  - vaporwave-theme
+  - volcano-theme
+  - vs-dark-theme
+  - vs-light-theme
+  - vs2019-dark-theme
+  - winter-sky-theme
+  - zenburn-theme
 --- !u!114 &645875836393750079
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -532,21 +650,6 @@ MonoBehaviour:
   m_DefaultActionMap: TerminalActions
   m_SplitScreenIndex: -1
   m_Camera: {fileID: 0}
---- !u!114 &273437263211880064
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3008719767072291571}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5b75b1bf391e4bc98b6a584a00b2e75e, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  uiDocument: {fileID: 0}
-  terminalRootElementName: TerminalRoot
-  defaultTheme: 1
 --- !u!114 &4771280446748905526
 MonoBehaviour:
   m_ObjectHideFlags: 0
