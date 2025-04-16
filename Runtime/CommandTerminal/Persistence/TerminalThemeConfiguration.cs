@@ -5,6 +5,8 @@
     [Serializable]
     public struct TerminalThemeConfiguration : IEquatable<TerminalThemeConfiguration>
     {
+        public const int HashBase = 397;
+
         public string terminalId;
         public string font;
         public string theme;
@@ -28,15 +30,18 @@
 
         public override int GetHashCode()
         {
+            // Auto generated garbage
             unchecked
             {
                 int hashCode = (
                     terminalId != null ? terminalId.ToLowerInvariant().GetHashCode() : 0
                 );
                 hashCode =
-                    (hashCode * 397) ^ (font != null ? font.ToLowerInvariant().GetHashCode() : 0);
+                    (hashCode * HashBase)
+                    ^ (font != null ? font.ToLowerInvariant().GetHashCode() : 0);
                 hashCode =
-                    (hashCode * 397) ^ (theme != null ? theme.ToLowerInvariant().GetHashCode() : 0);
+                    (hashCode * HashBase)
+                    ^ (theme != null ? theme.ToLowerInvariant().GetHashCode() : 0);
                 return hashCode;
             }
         }

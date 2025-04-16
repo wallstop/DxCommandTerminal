@@ -2,7 +2,6 @@
 {
     using System;
     using System.Collections;
-    using System.Collections.Generic;
     using System.IO;
     using System.Threading.Tasks;
     using Attributes;
@@ -56,7 +55,7 @@
 
             string themeFile = ThemeFile;
             Debug.Log($"Attempting to initialize from {themeFile}...", this);
-            yield return CheckAndPersistAnyChanges();
+            yield return CheckAndPersistAnyChanges(hydrate: true);
         }
 
         protected virtual void Update()
@@ -99,10 +98,10 @@
                 return;
             }
 
-            _persistence = StartCoroutine(CheckAndPersistAnyChanges());
+            _persistence = StartCoroutine(CheckAndPersistAnyChanges(hydrate: false));
         }
 
-        protected virtual IEnumerator CheckAndPersistAnyChanges()
+        protected virtual IEnumerator CheckAndPersistAnyChanges(bool hydrate)
         {
             _lastSeenFont = terminal._font;
             _lastSeenTheme = terminal._currentTheme;
@@ -129,7 +128,7 @@
                     Directory.CreateDirectory(directoryPath);
                 }
 
-                List<TerminalThemeConfiguration> configurations;
+                TerminalThemeConfigurations configurations;
                 if (File.Exists(themeFile))
                 {
                     Task<string> readerTask = File.ReadAllTextAsync(themeFile);
@@ -151,39 +150,7 @@
 
                     string inputJson = readerTask.Result;
 
-                    configurations = JsonUtility.FromJson<List<TerminalThemeConfiguration>>(
-                        inputJson
-                    );
-                    int existingIndex = configurations.FindIndex(config =>
-                        string.Equals(terminal.id, config.terminalId)
-                    );
-                    if (0 <= existingIndex)
-                    {
-                        TerminalThemeConfiguration configuration = configurations[existingIndex];
-                        if (configuration.Equals(currentConfiguration))
-                        {
-                            Debug.Log(
-                                $"Theme file {themeFile} already matches current configuration.",
-                                this
-                            );
-                            yield break;
-                        }
-
-                        Debug.Log(
-                            $"Updating theme file {themeFile} for terminal {terminal.id} ...",
-                            this
-                        );
-                        ;
-                        configurations[existingIndex] = currentConfiguration;
-                    }
-                    else
-                    {
-                        Debug.Log(
-                            $"Adding new theme file {themeFile} for terminal {terminal.id} ...",
-                            this
-                        );
-                        configurations.Add(currentConfiguration);
-                    }
+                    configurations = JsonUtility.FromJson<TerminalThemeConfigurations>(inputJson);
                 }
                 else
                 {
@@ -192,10 +159,73 @@
                         this
                     );
                     ;
-                    configurations = new List<TerminalThemeConfiguration> { currentConfiguration };
+                    configurations = new TerminalThemeConfigurations();
                 }
 
-                string outputJson = JsonUtility.ToJson(configurations);
+                if (hydrate)
+                {
+                    if (
+                        configurations.TryGetConfiguration(
+                            terminal,
+                            out TerminalThemeConfiguration existingConfiguration
+                        )
+                    )
+                    {
+                        int fontIndex = terminal._loadedFonts.FindIndex(font =>
+                            string.Equals(
+                                font.name,
+                                existingConfiguration.font,
+                                StringComparison.OrdinalIgnoreCase
+                            )
+                        );
+                        if (0 <= fontIndex)
+                        {
+                            terminal.SetFont(terminal._loadedFonts[fontIndex], persist: true);
+                        }
+                        else
+                        {
+                            Debug.LogWarning(
+                                $"Failed to find persisted font {existingConfiguration.font} for terminal {terminal.id} while hydrating.",
+                                this
+                            );
+                        }
+
+                        int themeIndex = terminal._loadedThemes.FindIndex(theme =>
+                            string.Equals(
+                                theme,
+                                existingConfiguration.theme,
+                                StringComparison.OrdinalIgnoreCase
+                            )
+                        );
+                        if (0 <= themeIndex)
+                        {
+                            terminal.SetTheme(terminal._loadedThemes[themeIndex], persist: true);
+                        }
+                        else
+                        {
+                            Debug.LogWarning(
+                                $"Failed to find persisted theme {existingConfiguration.theme} for terminal {terminal.id} while hydrating.",
+                                this
+                            );
+                        }
+
+                        yield break;
+                    }
+                    else
+                    {
+                        Debug.Log(
+                            $"Failed to find persisted configuration for terminal {terminal.id} while hydrating, defaulting to Prefab configuration.",
+                            this
+                        );
+                    }
+                }
+                configurations.AddOrUpdate(currentConfiguration);
+
+                string outputJson = JsonUtility.ToJson(configurations, prettyPrint: true);
+                Debug.Log(
+                    $"Writing theme file {themeFile} with contents:{Environment.NewLine}{outputJson}",
+                    this
+                );
                 Task writerTask = File.WriteAllTextAsync(themeFile, outputJson);
                 while (!writerTask.IsCompleted)
                 {

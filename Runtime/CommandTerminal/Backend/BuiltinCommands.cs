@@ -1,21 +1,202 @@
 namespace WallstopStudios.DxCommandTerminal.Backend
 {
+    using System;
     using System.Collections.Generic;
     using System.Diagnostics;
+    using System.Linq;
     using System.Text;
     using Attributes;
+    using UI;
+    using UnityEngine;
 
     // ReSharper disable once UnusedType.Global
     public static class BuiltInCommands
     {
+        private const string BulkSeparator = "    ";
+
+        private static readonly StringBuilder StringBuilder = new();
+        private static readonly System.Random Random = new();
+
+        [RegisterCommand(
+            Name = "list-themes",
+            Help = "Lists all currently available themes",
+            MaxArgCount = 0,
+            Default = true
+        )]
+        public static void CommandListThemes(CommandArg[] args)
+        {
+            TerminalUI terminal = TerminalUI.Instance;
+            if (terminal == null)
+            {
+                Terminal.Log(TerminalLogType.Warning, "No Terminal UI found.");
+                return;
+            }
+
+            string themes = string.Join(BulkSeparator, terminal._loadedThemes);
+            Terminal.Log(TerminalLogType.Message, themes);
+        }
+
+        [RegisterCommand(
+            Name = "list-fonts",
+            Help = "Lists all currently available fonts",
+            MaxArgCount = 0,
+            Default = true
+        )]
+        public static void CommandListFonts(CommandArg[] args)
+        {
+            TerminalUI terminal = TerminalUI.Instance;
+            if (terminal == null)
+            {
+                Terminal.Log(TerminalLogType.Warning, "No Terminal UI found.");
+                return;
+            }
+
+            string themes = string.Join(
+                BulkSeparator,
+                terminal._loadedFonts.Select(font => font.name)
+            );
+            Terminal.Log(TerminalLogType.Message, themes);
+        }
+
+        [RegisterCommand(
+            Name = "set-theme",
+            Help = "Sets the current Terminal UI theme",
+            MinArgCount = 1,
+            MaxArgCount = 1,
+            Default = true
+        )]
+        public static void CommandSetTheme(CommandArg[] args)
+        {
+            TerminalUI terminal = TerminalUI.Instance;
+            if (terminal == null)
+            {
+                Terminal.Log(TerminalLogType.Warning, "No Terminal UI found.");
+                return;
+            }
+
+            string theme = args[0].contents;
+
+            if (string.Equals(theme, terminal._currentTheme, StringComparison.OrdinalIgnoreCase))
+            {
+                Terminal.Log(TerminalLogType.Message, $"Theme '{theme}' is already set.");
+                return;
+            }
+
+            int newThemeIndex = terminal._loadedThemes.IndexOf(theme);
+            if (newThemeIndex < 0)
+            {
+                Terminal.Log(TerminalLogType.Warning, $"Theme '{theme}' not found.");
+                return;
+            }
+
+            terminal.SetTheme(theme, persist: true);
+            Terminal.Log(TerminalLogType.Message, $"Theme '{theme}' set.");
+        }
+
+        [RegisterCommand(
+            Name = "set-random-theme",
+            Help = "Sets the current Terminal UI theme to a randomly selected one",
+            MinArgCount = 0,
+            MaxArgCount = 0,
+            Default = true
+        )]
+        public static void CommandSetRandomTheme(CommandArg[] args)
+        {
+            TerminalUI terminal = TerminalUI.Instance;
+            if (terminal == null)
+            {
+                Terminal.Log(TerminalLogType.Warning, "No Terminal UI found.");
+                return;
+            }
+
+            if (terminal._loadedThemes.Count == 0)
+            {
+                Terminal.Log(TerminalLogType.Warning, "No themes found.");
+                return;
+            }
+
+            int currentThemeIndex = terminal._loadedThemes.IndexOf(terminal._currentTheme);
+
+            int newThemeIndex;
+            do
+            {
+                newThemeIndex = Random.Next(terminal._loadedThemes.Count);
+            } while (currentThemeIndex == newThemeIndex && terminal._loadedThemes.Count != 1);
+
+            string theme = terminal._loadedThemes[newThemeIndex];
+
+            terminal.SetTheme(theme, persist: true);
+            Terminal.Log(TerminalLogType.Message, $"Randomly selected and set Theme '{theme}'.");
+        }
+
+        [RegisterCommand(
+            Name = "set-font",
+            Help = "Sets the current Terminal UI font",
+            MinArgCount = 1,
+            MaxArgCount = 1,
+            Default = true
+        )]
+        public static void CommandSetFont(CommandArg[] args)
+        {
+            TerminalUI terminal = TerminalUI.Instance;
+            if (terminal == null)
+            {
+                Terminal.Log(TerminalLogType.Warning, "No Terminal UI found.");
+                return;
+            }
+
+            string fontName = args[0].contents;
+
+            int newFontIndex = terminal._loadedFonts.FindIndex(font =>
+                string.Equals(font.name, fontName, StringComparison.OrdinalIgnoreCase)
+            );
+            if (newFontIndex < 0)
+            {
+                Terminal.Log(TerminalLogType.Warning, $"Font '{fontName}' not found.");
+                return;
+            }
+
+            Font font = terminal._loadedFonts[newFontIndex];
+
+            terminal.SetFont(font, persist: true);
+            Terminal.Log(TerminalLogType.Message, $"Font '{font.name}' set.");
+        }
+
+        [RegisterCommand(
+            Name = "set-random-font",
+            Help = "Sets the current Terminal UI font to a randomly selected one",
+            MinArgCount = 0,
+            MaxArgCount = 0,
+            Default = true
+        )]
+        public static void CommandSetRandomFont(CommandArg[] args)
+        {
+            TerminalUI terminal = TerminalUI.Instance;
+            if (terminal == null)
+            {
+                Terminal.Log(TerminalLogType.Warning, "No Terminal UI found.");
+                return;
+            }
+
+            int currentFontIndex = terminal._loadedFonts.IndexOf(terminal._font);
+
+            int newFontIndex;
+            do
+            {
+                newFontIndex = Random.Next(terminal._loadedFonts.Count);
+            } while (currentFontIndex == newFontIndex && terminal._loadedFonts.Count != 1);
+
+            Font font = terminal._loadedFonts[newFontIndex];
+            terminal.SetFont(font, persist: true);
+            Terminal.Log(TerminalLogType.Message, $"Randomly selected and set Font '{font.name}'.");
+        }
+
         [RegisterCommand(
             Name = "clear",
             Help = "Clear the command console",
             MaxArgCount = 0,
             Default = true
         )]
-        // ReSharper disable once UnusedMember.Local
-        // ReSharper disable once UnusedParameter.Local
         public static void CommandClear(CommandArg[] args)
         {
             Terminal.Buffer?.Clear();
@@ -27,8 +208,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             MaxArgCount = 0,
             Default = true
         )]
-        // ReSharper disable once UnusedMember.Local
-        // ReSharper disable once UnusedParameter.Local
         public static void CommandClearHistory(CommandArg[] args)
         {
             Terminal.History?.Clear();
@@ -40,7 +219,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             MaxArgCount = 1,
             Default = true
         )]
-        // ReSharper disable once UnusedMember.Local
         public static void CommandHelp(CommandArg[] args)
         {
             CommandShell shell = Terminal.Shell;
@@ -86,7 +264,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             MinArgCount = 1,
             Default = true
         )]
-        // ReSharper disable once UnusedMember.Local
         public static void CommandTime(CommandArg[] args)
         {
             CommandShell shell = Terminal.Shell;
@@ -106,14 +283,12 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             Help = "Output message via Terminal.Log",
             Default = true
         )]
-        // ReSharper disable once UnusedMember.Local
         public static void CommandPrint(CommandArg[] args)
         {
             Terminal.Log(JoinArguments(args));
         }
 
         [RegisterCommand(Name = "log", Help = "Output message via Debug.Log", Default = true)]
-        // ReSharper disable once UnusedMember.Local
         public static void CommandLog(CommandArg[] args)
         {
             UnityEngine.Debug.Log(JoinArguments(args));
@@ -125,8 +300,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             MaxArgCount = 0,
             Default = true
         )]
-        // ReSharper disable once UnusedMember.Local
-        // ReSharper disable once UnusedParameter.Local
         public static void CommandTrace(CommandArg[] args)
         {
             CommandLog buffer = Terminal.Buffer;
@@ -139,7 +312,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
             if (logCount - 2 < 0)
             {
-                Terminal.Log("Nothing to trace.");
+                Terminal.Log(TerminalLogType.Warning, "Nothing to trace.");
                 return;
             }
 
@@ -157,8 +330,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             Help = "List all variables or set a variable value",
             Default = true
         )]
-        // ReSharper disable once UnusedMember.Global
-        // ReSharper disable once UnusedMember.Local
         public static void CommandSet(CommandArg[] args)
         {
             CommandShell shell = Terminal.Shell;
@@ -190,8 +361,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         }
 
         [RegisterCommand(Name = "no-op", Help = "No operation", Default = true)]
-        // ReSharper disable once UnusedParameter.Local
-        // ReSharper disable once UnusedMember.Local
         public static void CommandNoOperation(CommandArg[] args)
         {
             // No-op
@@ -203,8 +372,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             MaxArgCount = 0,
             Default = true
         )]
-        // ReSharper disable once UnusedMember.Local
-        // ReSharper disable once UnusedParameter.Local
         public static void CommandQuit(CommandArg[] args)
         {
 #if UNITY_EDITOR
@@ -216,18 +383,18 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         private static string JoinArguments(CommandArg[] args, int start = 0)
         {
-            StringBuilder sb = new();
+            StringBuilder.Clear();
             for (int i = start; i < args.Length; i++)
             {
-                sb.Append(args[i].contents);
+                StringBuilder.Append(args[i].contents);
 
                 if (i < args.Length - 1)
                 {
-                    sb.Append(" ");
+                    StringBuilder.Append(' ');
                 }
             }
 
-            return sb.ToString();
+            return StringBuilder.ToString();
         }
     }
 }
