@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 3582569734140004161}
   - component: {fileID: 3570056587590855099}
   - component: {fileID: 2638065628856389739}
+  - component: {fileID: 6712114483040104943}
   m_Layer: 0
   m_Name: Terminal
   m_TagString: Untagged
@@ -46,6 +47,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e7d3b3291a9649b3ad77dd07a532b854, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  id: 621e355f-29ef-4b79-bb41-c4d77b6afed2
   _uiDocument: {fileID: 3570056587590855099}
   _currentTheme: dark-theme
   _maxHeight: 0.7
@@ -54,7 +56,7 @@ MonoBehaviour:
   _logBufferSize: 256
   _historyBufferSize: 512
   _font: {fileID: 12800000, guid: af8ca43d617b047a58bc1f06adfdb789, type: 3}
-  _inputCaret: '>'
+  _inputCaret: "\u03BB\xBB"
   _showGUIButtons: 0
   _runButtonText: run
   _closeButtonText: close
@@ -649,3 +651,18 @@ MonoBehaviour:
   closeHotkey: escape
   nextHotkey: down
   _controlOrder: 0100000002000000030000000400000005000000060000000800000007000000
+--- !u!114 &6712114483040104943
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7046523385998542400}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 10871694e6e9460f9b8357954ae83ad1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  terminal: {fileID: 3582569734140004161}
+  savePeriodically: 1
+  savePeriod: 1

@@ -12,6 +12,7 @@
     using UnityEngine.UIElements;
     using Helper;
     using Input;
+    using Persistence;
     using UI;
     using Random = System.Random;
 
@@ -59,37 +60,61 @@
 
         private static void HandleComponentAdded(Component addedComponent)
         {
-            if (addedComponent is not TerminalUI terminal || terminal == null)
+            if (addedComponent is TerminalUI terminal && terminal != null)
             {
-                return;
-            }
+                CheckForUIDocumentProblems(terminal);
 
-            CheckForUIDocumentProblems(terminal);
+                HashSet<string> themes = new(StringComparer.OrdinalIgnoreCase);
+                themes.UnionWith(StyleSheetHelper.GetAvailableThemes(terminal._uiDocument));
+                terminal._loadedThemes ??= new List<string>();
+                terminal._loadedThemes.Clear();
+                terminal._loadedThemes.AddRange(themes);
 
-            HashSet<string> themes = new(StringComparer.OrdinalIgnoreCase);
-            themes.UnionWith(StyleSheetHelper.GetAvailableThemes(terminal._uiDocument));
-            terminal._loadedThemes ??= new List<string>();
-            terminal._loadedThemes.Clear();
-            terminal._loadedThemes.AddRange(themes);
+                SortedDictionary<string, SortedDictionary<string, Font>> fontsByPrefix = new(
+                    StringComparer.OrdinalIgnoreCase
+                );
+                CollectFonts(fontsByPrefix);
 
-            SortedDictionary<string, SortedDictionary<string, Font>> fontsByPrefix = new(
-                StringComparer.OrdinalIgnoreCase
-            );
-            CollectFonts(fontsByPrefix);
+                terminal._loadedFonts ??= new List<Font>();
+                terminal._loadedFonts.Clear();
+                terminal._loadedFonts.AddRange(
+                    fontsByPrefix.SelectMany(kvp => kvp.Value).Select(kvp => kvp.Value)
+                );
 
-            terminal._loadedFonts ??= new List<Font>();
-            terminal._loadedFonts.Clear();
-            terminal._loadedFonts.AddRange(
-                fontsByPrefix.SelectMany(kvp => kvp.Value).Select(kvp => kvp.Value)
-            );
+                _ = TrySetupDefaultFont(terminal);
 
-            _ = TrySetupDefaultFont(terminal);
-
-            TerminalKeyboardController keyboardController =
                 terminal.gameObject.AddComponent<TerminalKeyboardController>();
-            keyboardController.terminal = terminal;
+                terminal.gameObject.AddComponent<TerminalThemePersister>();
 
-            EditorUtility.SetDirty(terminal);
+                EditorUtility.SetDirty(terminal);
+            }
+            else
+            {
+                switch (addedComponent)
+                {
+                    case TerminalKeyboardController keyboardController
+                        when keyboardController != null:
+                    {
+                        if (keyboardController.TryGetComponent(out terminal))
+                        {
+                            keyboardController.terminal = terminal;
+                            EditorUtility.SetDirty(keyboardController);
+                        }
+
+                        break;
+                    }
+                    case TerminalThemePersister themePersister when themePersister != null:
+                    {
+                        if (themePersister.TryGetComponent(out terminal))
+                        {
+                            themePersister.terminal = terminal;
+                            EditorUtility.SetDirty(themePersister);
+                        }
+
+                        break;
+                    }
+                }
+            }
         }
 
         private void OnEnable()
@@ -310,6 +335,8 @@
             {
                 EditorGUILayout.EndHorizontal();
             }
+
+            EditorGUILayout.Space();
         }
 
         private void TrySetRandomTheme()

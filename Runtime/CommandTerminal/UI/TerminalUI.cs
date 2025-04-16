@@ -38,6 +38,10 @@ namespace WallstopStudios.DxCommandTerminal.UI
             && Mathf.Approximately(_currentWindowHeight, _targetWindowHeight);
 
         [SerializeField]
+        [Tooltip("Unique Id for this terminal, mainly for use with persisted configuration")]
+        internal string id = Guid.NewGuid().ToString();
+
+        [SerializeField]
         [HideInInspector]
         internal UIDocument _uiDocument;
 
@@ -69,7 +73,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
         internal Font _font;
 
         [SerializeField]
-        private string _inputCaret = ">";
+        private string _inputCaret = "λ»";
 
         [Header("Buttons")]
         [SerializeField]
@@ -298,7 +302,8 @@ namespace WallstopStudios.DxCommandTerminal.UI
                     else
                     {
                         Debug.LogWarning(
-                            $"Failed to track/find window property {propertyName}, updates to this property will be ignored."
+                            $"Failed to track/find window property {propertyName}, updates to this property will be ignored.",
+                            this
                         );
                     }
                 }
@@ -718,14 +723,14 @@ namespace WallstopStudios.DxCommandTerminal.UI
         {
             if (_uiDocument == null)
             {
-                Debug.LogError("No UIDocument assigned, cannot setup UI.");
+                Debug.LogError("No UIDocument assigned, cannot setup UI.", this);
                 return;
             }
 
             VisualElement uiRoot = _uiDocument.rootVisualElement;
             if (uiRoot == null)
             {
-                Debug.LogError("No UI root element assigned, cannot setup UI.");
+                Debug.LogError("No UI root element assigned, cannot setup UI.", this);
                 return;
             }
 
@@ -1525,7 +1530,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
         }
 
-        public void SetFont(Font font)
+        public void SetFont(Font font, bool persist = false)
         {
             if (_font == font)
             {
@@ -1552,6 +1557,11 @@ namespace WallstopStudios.DxCommandTerminal.UI
                     : $"Changing font from {currentFont.name} to {font}."
             );
 
+            if (persist)
+            {
+                _font = font;
+            }
+
             if (Application.isPlaying)
             {
                 VisualElement root = _uiDocument.rootVisualElement;
@@ -1568,7 +1578,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
         }
 
-        public void SetTheme(string theme)
+        public void SetTheme(string theme, bool persist = false)
         {
             if (string.Equals(theme, _currentTheme, StringComparison.OrdinalIgnoreCase))
             {
@@ -1587,6 +1597,11 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             string currentTheme = _currentTheme;
             Debug.Log($"Changing theme from {currentTheme} to {theme}.");
+            if (persist)
+            {
+                _currentTheme = theme;
+            }
+
             if (Application.isPlaying)
             {
                 if (_uiDocument == null)
