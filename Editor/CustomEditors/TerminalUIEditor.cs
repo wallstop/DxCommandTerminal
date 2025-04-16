@@ -1,21 +1,27 @@
-﻿namespace CommandTerminal.Editor.CustomEditors
+﻿namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
 {
 #if UNITY_EDITOR
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics;
     using System.Linq;
-    using CommandTerminal.Helper;
-    using Helper;
+    using Backend;
+    using DxCommandTerminal.Helper;
     using UnityEditor;
     using UnityEngine;
     using UnityEngine.UIElements;
-    using Utils;
+    using Helper;
+    using Input;
+    using UI;
+    using Random = System.Random;
 
-    [CustomEditor(typeof(UIToolkitTerminal))]
-    public sealed class UIToolkitTerminalEditor : Editor
+    [CustomEditor(typeof(TerminalUI))]
+    public sealed class TerminalUIEditor : Editor
     {
+        private static readonly TimeSpan CycleInterval = TimeSpan.FromSeconds(0.75);
+
         private int _commandIndex;
-        private UIToolkitTerminal _lastSeen;
+        private TerminalUI _lastSeen;
 
         private readonly HashSet<string> _allCommands = new(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _defaultCommands = new(StringComparer.OrdinalIgnoreCase);
@@ -35,10 +41,154 @@
         private int _themeIndex = -1;
         private int _fontKey = -1;
         private int _secondFontKey = -1;
+        private bool _isCyclingThemes;
+        private bool _isCyclingFonts;
+
+        private TimeSpan? _lastFontCycleTime;
+        private TimeSpan? _lastThemeCycleTime;
+
+        private readonly Stopwatch _timer = Stopwatch.StartNew();
+        private readonly Random _random = new();
+
+        static TerminalUIEditor()
+        {
+            ObjectFactory.componentWasAdded += HandleComponentAdded;
+        }
+
+        private static void HandleComponentAdded(Component addedComponent)
+        {
+            if (addedComponent is not TerminalUI terminal || terminal == null)
+            {
+                return;
+            }
+
+            CheckForUIDocumentProblems(terminal);
+
+            HashSet<string> themes = new(StringComparer.OrdinalIgnoreCase);
+            themes.UnionWith(StyleSheetHelper.GetAvailableThemes(terminal._uiDocument));
+            terminal._loadedThemes ??= new List<string>();
+            terminal._loadedThemes.Clear();
+            terminal._loadedThemes.AddRange(themes);
+
+            SortedDictionary<string, SortedDictionary<string, Font>> fontsByPrefix = new(
+                StringComparer.OrdinalIgnoreCase
+            );
+            CollectFonts(fontsByPrefix);
+
+            terminal._loadedFonts ??= new List<Font>();
+            terminal._loadedFonts.Clear();
+            terminal._loadedFonts.AddRange(
+                fontsByPrefix.SelectMany(kvp => kvp.Value).Select(kvp => kvp.Value)
+            );
+
+            _ = TrySetupDefaultFont(terminal);
+
+            TerminalKeyboardController keyboardController =
+                terminal.gameObject.AddComponent<TerminalKeyboardController>();
+            keyboardController.terminal = terminal;
+
+            EditorUtility.SetDirty(terminal);
+        }
+
+        private void OnEnable()
+        {
+            _allCommands.Clear();
+            _allCommands.UnionWith(
+                CommandShell
+                    .RegisteredCommands.Value.Select(tuple => tuple.attribute)
+                    .Select(attribute => attribute.Name)
+            );
+            _defaultCommands.Clear();
+            _defaultCommands.UnionWith(
+                CommandShell
+                    .RegisteredCommands.Value.Select(tuple => tuple.attribute)
+                    .Where(tuple => tuple.Default)
+                    .Select(attribute => attribute.Name)
+            );
+            _nonDefaultCommands.Clear();
+            _nonDefaultCommands.UnionWith(
+                CommandShell
+                    .RegisteredCommands.Value.Select(tuple => tuple.attribute)
+                    .Where(tuple => !tuple.Default)
+                    .Select(attribute => attribute.Name)
+            );
+
+            EditorApplication.update += EditorUpdate;
+        }
+
+        private void OnDisable()
+        {
+            EditorApplication.update -= EditorUpdate;
+        }
+
+        private void EditorUpdate()
+        {
+            if (_isCyclingThemes)
+            {
+                if (_timer.Elapsed < _lastThemeCycleTime + CycleInterval)
+                {
+                    return;
+                }
+
+                TerminalUI terminal = target as TerminalUI;
+                if (terminal != null && terminal._loadedThemes is { Count: > 0 })
+                {
+                    int newThemeIndex = (_themeIndex + 1) % _themes.Count;
+                    newThemeIndex = (newThemeIndex + _themes.Count) % _themes.Count;
+                    terminal.SetTheme(terminal._loadedThemes[newThemeIndex]);
+                    _themeIndex = newThemeIndex;
+                }
+
+                _lastThemeCycleTime = _timer.Elapsed;
+            }
+
+            if (_isCyclingFonts)
+            {
+                if (_timer.Elapsed < _lastFontCycleTime + CycleInterval)
+                {
+                    return;
+                }
+
+                TerminalUI terminal = target as TerminalUI;
+                if (terminal != null && terminal._loadedFonts is { Count: > 0 })
+                {
+                    Font currentFont = GetCurrentlySelectedFont(terminal);
+                    int fontIndex = terminal._loadedFonts.IndexOf(currentFont);
+                    int newFontIndex = (fontIndex + 1) % terminal._loadedFonts.Count;
+                    Font newFont = terminal._loadedFonts[newFontIndex];
+                    terminal.SetFont(newFont);
+                    TrySetFontKeysFromFont(newFont);
+                }
+
+                _lastFontCycleTime = _timer.Elapsed;
+            }
+        }
+
+        private Font GetCurrentlySelectedFont(TerminalUI terminal)
+        {
+            if (_fontKey < 0 || _secondFontKey < 0)
+            {
+                return terminal._font;
+            }
+
+            try
+            {
+                return _fontsByPrefix.ToArray()[_fontKey].Value.ToArray()[_secondFontKey].Value;
+            }
+            catch
+            {
+                return terminal._font;
+            }
+        }
 
         public override void OnInspectorGUI()
         {
-            UIToolkitTerminal terminal = target as UIToolkitTerminal;
+            if (_allCommands.Count == 0 || _defaultCommands.Count == 0)
+            {
+                HydrateCommandCaches();
+            }
+
+            TerminalUI terminal = target as TerminalUI;
             if (terminal == null)
             {
                 return;
@@ -47,40 +197,19 @@
             serializedObject.Update();
 
             bool anyChanged = false;
-            if (
-                _lastSeen != terminal
-                || _allCommands.Count == 0
-                || _defaultCommands.Count == 0
-                || _nonDefaultCommands.Count == 0
-                || _themes.Count == 0
-            )
+
+            bool uiDocumentChanged = CheckForUIDocumentProblems(terminal);
+            anyChanged |= uiDocumentChanged;
+
+            if (_lastSeen != terminal || _themes.Count == 0)
             {
+                _isCyclingFonts = false;
+                _isCyclingThemes = false;
                 _themeIndex = -1;
                 _fontKey = -1;
                 _secondFontKey = -1;
-                _allCommands.Clear();
-                _allCommands.UnionWith(
-                    CommandShell
-                        .RegisteredCommands.Value.Select(tuple => tuple.attribute)
-                        .Select(attribute => attribute.Name)
-                );
-                _defaultCommands.Clear();
-                _defaultCommands.UnionWith(
-                    CommandShell
-                        .RegisteredCommands.Value.Select(tuple => tuple.attribute)
-                        .Where(tuple => tuple.Default)
-                        .Select(attribute => attribute.Name)
-                );
-                _nonDefaultCommands.Clear();
-                _nonDefaultCommands.UnionWith(
-                    CommandShell
-                        .RegisteredCommands.Value.Select(tuple => tuple.attribute)
-                        .Where(tuple => !tuple.Default)
-                        .Select(attribute => attribute.Name)
-                );
                 _themes.Clear();
                 _themes.AddRange(StyleSheetHelper.GetAvailableThemes(terminal._uiDocument));
-                Debug.Log($"Found {_themes.Count} themes.");
                 if (
                     !_themes
                         .ToHashSet()
@@ -95,11 +224,10 @@
                 _lastSeen = terminal;
             }
 
-            bool uiDocumentChanged = CheckForUIDocumentProblems(terminal);
-            anyChanged |= uiDocumentChanged;
-
             bool themesChanged = CheckForThemingAndFontChanges(terminal);
             anyChanged |= themesChanged;
+
+            RenderCyclingPreviews();
 
             DrawPropertiesExcluding(serializedObject, "m_Script");
 
@@ -121,7 +249,210 @@
             }
         }
 
-        private bool CheckForThemingAndFontChanges(UIToolkitTerminal terminal)
+        private void HydrateCommandCaches()
+        {
+            _allCommands.Clear();
+            _allCommands.UnionWith(
+                CommandShell
+                    .RegisteredCommands.Value.Select(tuple => tuple.attribute)
+                    .Select(attribute => attribute.Name)
+            );
+            _defaultCommands.Clear();
+            _defaultCommands.UnionWith(
+                CommandShell
+                    .RegisteredCommands.Value.Select(tuple => tuple.attribute)
+                    .Where(tuple => tuple.Default)
+                    .Select(attribute => attribute.Name)
+            );
+            _nonDefaultCommands.Clear();
+            _nonDefaultCommands.UnionWith(
+                CommandShell
+                    .RegisteredCommands.Value.Select(tuple => tuple.attribute)
+                    .Where(tuple => !tuple.Default)
+                    .Select(attribute => attribute.Name)
+            );
+        }
+
+        private void RenderCyclingPreviews()
+        {
+            if (!Application.isPlaying)
+            {
+                return;
+            }
+
+            EditorGUILayout.Space(10);
+            EditorGUILayout.LabelField("Preview:", EditorStyles.boldLabel);
+            EditorGUILayout.BeginHorizontal();
+            try
+            {
+                TryCyclingThemes();
+                TryCyclingFonts();
+            }
+            finally
+            {
+                EditorGUILayout.EndHorizontal();
+            }
+            EditorGUILayout.BeginHorizontal();
+            try
+            {
+                TrySetRandomTheme();
+                TrySetRandomFont();
+            }
+            finally
+            {
+                EditorGUILayout.EndHorizontal();
+            }
+        }
+
+        private void TrySetRandomTheme()
+        {
+            if (_isCyclingThemes)
+            {
+                return;
+            }
+
+            if (GUILayout.Button("Set Random Theme"))
+            {
+                TerminalUI terminal = target as TerminalUI;
+                if (terminal != null && terminal._loadedThemes is { Count: > 0 })
+                {
+                    int newThemeIndex;
+                    do
+                    {
+                        newThemeIndex = _random.Next(terminal._loadedThemes.Count);
+                    } while (newThemeIndex == _themeIndex && terminal._loadedThemes.Count != 1);
+                    terminal.SetTheme(terminal._loadedThemes[newThemeIndex]);
+                    _themeIndex = newThemeIndex;
+                }
+            }
+        }
+
+        private void TrySetRandomFont()
+        {
+            if (_isCyclingFonts)
+            {
+                return;
+            }
+
+            if (GUILayout.Button("Set Random Font"))
+            {
+                TerminalUI terminal = target as TerminalUI;
+                if (terminal != null && terminal._loadedFonts is { Count: > 0 })
+                {
+                    Font currentlySelectedFont = GetCurrentlySelectedFont(terminal);
+                    int oldFontIndex = terminal._loadedFonts.IndexOf(currentlySelectedFont);
+                    int newFontIndex;
+                    do
+                    {
+                        newFontIndex = _random.Next(terminal._loadedFonts.Count);
+                    } while (newFontIndex == oldFontIndex && terminal._loadedFonts.Count != 1);
+
+                    Font newFont = terminal._loadedFonts[newFontIndex];
+                    terminal.SetFont(newFont);
+                    TrySetFontKeysFromFont(newFont);
+                }
+            }
+        }
+
+        private void TryCyclingFonts()
+        {
+            if (_isCyclingFonts)
+            {
+                if (GUILayout.Button("Stop Cycling Fonts"))
+                {
+                    StopCyclingFonts();
+                }
+            }
+            else
+            {
+                if (GUILayout.Button("Start Cycling Fonts"))
+                {
+                    StartCyclingFonts();
+                }
+            }
+        }
+
+        private void StartCyclingFonts()
+        {
+            if (_isCyclingFonts)
+            {
+                return;
+            }
+            _isCyclingFonts = true;
+            _lastFontCycleTime = null;
+        }
+
+        private void StopCyclingFonts()
+        {
+            _isCyclingFonts = false;
+        }
+
+        private void TryCyclingThemes()
+        {
+            if (_isCyclingThemes)
+            {
+                if (GUILayout.Button("Stop Cycling Themes"))
+                {
+                    StopCyclingThemes();
+                }
+            }
+            else
+            {
+                if (GUILayout.Button("Start Cycling Themes"))
+                {
+                    StartCyclingThemes();
+                }
+            }
+        }
+
+        private void StartCyclingThemes()
+        {
+            if (_isCyclingThemes)
+            {
+                return;
+            }
+
+            _isCyclingThemes = true;
+            _lastThemeCycleTime = null;
+        }
+
+        private void StopCyclingThemes()
+        {
+            _isCyclingThemes = false;
+        }
+
+        private void TrySetFontKeysFromFont(Font font)
+        {
+            int firstIndex = 0;
+            bool foundFont = false;
+            foreach (
+                KeyValuePair<string, SortedDictionary<string, Font>> fontKeyEntry in _fontsByPrefix
+            )
+            {
+                int secondIndex = 0;
+                foreach (KeyValuePair<string, Font> secondFontKeyEntry in fontKeyEntry.Value)
+                {
+                    if (secondFontKeyEntry.Value == font)
+                    {
+                        _fontKey = firstIndex;
+                        _secondFontKey = secondIndex;
+                        foundFont = true;
+                        break;
+                    }
+
+                    ++secondIndex;
+                }
+
+                if (foundFont)
+                {
+                    break;
+                }
+
+                ++firstIndex;
+            }
+        }
+
+        private bool CheckForThemingAndFontChanges(TerminalUI terminal)
         {
             bool anyChanged = false;
             EditorGUILayout.Space(10);
@@ -169,29 +500,18 @@
                 EditorGUILayout.EndHorizontal();
             }
 
-            CollectFonts();
+            CollectFonts(_fontsByPrefix);
             bool fontsUpdated = RenderSelectableFonts(terminal);
             return anyChanged || fontsUpdated;
         }
 
-        private bool CheckForSimpleProperties(UIToolkitTerminal terminal)
+        private bool CheckForSimpleProperties(TerminalUI terminal)
         {
             bool anyChanged = false;
-            if (terminal._toggleHotkey == null)
-            {
-                terminal._toggleHotkey = string.Empty;
-                anyChanged = true;
-            }
 
             if (terminal._ignoredLogTypes == null)
             {
                 terminal._ignoredLogTypes = new List<TerminalLogType>();
-                anyChanged = true;
-            }
-
-            if (terminal._completeCommandHotkeys == null)
-            {
-                terminal._completeCommandHotkeys = new ListWrapper<string>();
                 anyChanged = true;
             }
 
@@ -229,7 +549,7 @@
             return anyChanged;
         }
 
-        private static bool CheckForUIDocumentProblems(UIToolkitTerminal terminal)
+        private static bool CheckForUIDocumentProblems(TerminalUI terminal)
         {
             bool anyChanged = false;
             if (terminal._uiDocument == null)
@@ -238,45 +558,42 @@
                 anyChanged = true;
             }
 
-            if (terminal._uiDocument.panelSettings == null)
+            if (terminal._uiDocument.panelSettings != null)
             {
-                string absoluteStylesPath = DirectoryHelper.FindAbsolutePathToDirectory("Styles");
-                if (!string.IsNullOrWhiteSpace(absoluteStylesPath))
+                return anyChanged;
+            }
+
+            string absoluteStylesPath = DirectoryHelper.FindAbsolutePathToDirectory("Styles");
+            if (!string.IsNullOrWhiteSpace(absoluteStylesPath))
+            {
+                string[] panelSettingGuids = AssetDatabase.FindAssets(
+                    "t:PanelSettings",
+                    new[] { absoluteStylesPath }
+                );
+                foreach (string guid in panelSettingGuids)
                 {
-                    string[] panelSettingGuids = AssetDatabase.FindAssets(
-                        "t:PanelSettings",
-                        new[] { absoluteStylesPath }
-                    );
-                    foreach (string guid in panelSettingGuids)
+                    string assetPath = AssetDatabase.GUIDToAssetPath(guid);
+                    if (string.IsNullOrWhiteSpace(assetPath))
                     {
-                        string assetPath = AssetDatabase.GUIDToAssetPath(guid);
-                        if (string.IsNullOrWhiteSpace(assetPath))
-                        {
-                            continue;
-                        }
-
-                        if (
-                            !assetPath.Contains(
-                                "TerminalSettings",
-                                StringComparison.OrdinalIgnoreCase
-                            )
-                        )
-                        {
-                            continue;
-                        }
-
-                        PanelSettings panelSettings = AssetDatabase.LoadAssetAtPath<PanelSettings>(
-                            assetPath
-                        );
-                        if (panelSettings == null)
-                        {
-                            continue;
-                        }
-
-                        terminal._uiDocument.panelSettings = panelSettings;
-                        anyChanged = true;
-                        break;
+                        continue;
                     }
+
+                    if (!assetPath.Contains("TerminalSettings", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    PanelSettings panelSettings = AssetDatabase.LoadAssetAtPath<PanelSettings>(
+                        assetPath
+                    );
+                    if (panelSettings == null)
+                    {
+                        continue;
+                    }
+
+                    terminal._uiDocument.panelSettings = panelSettings;
+                    anyChanged = true;
+                    break;
                 }
             }
 
@@ -290,7 +607,7 @@
             EditorGUILayout.LabelField("Command Manipulation", EditorStyles.boldLabel);
         }
 
-        private bool CheckForIgnoredCommandUpdates(UIToolkitTerminal terminal)
+        private bool CheckForIgnoredCommandUpdates(TerminalUI terminal)
         {
             bool anyChanged = false;
             _intermediateResults.Clear();
@@ -333,7 +650,7 @@
             return anyChanged;
         }
 
-        private bool CheckForDisabledCommandProblems(UIToolkitTerminal terminal)
+        private bool CheckForDisabledCommandProblems(TerminalUI terminal)
         {
             bool anyChanged = false;
             _seenCommands.Clear();
@@ -379,9 +696,11 @@
             return anyChanged;
         }
 
-        private void CollectFonts()
+        private static void CollectFonts(
+            SortedDictionary<string, SortedDictionary<string, Font>> fontsByPrefix
+        )
         {
-            if (_fontsByPrefix.Count != 0)
+            if (fontsByPrefix.Count != 0)
             {
                 return;
             }
@@ -409,56 +728,31 @@
                     secondKey = string.Empty;
                 }
 
-                if (
-                    !_fontsByPrefix.TryGetValue(key, out SortedDictionary<string, Font> fontMapping)
-                )
+                if (!fontsByPrefix.TryGetValue(key, out SortedDictionary<string, Font> fontMapping))
                 {
                     fontMapping = new SortedDictionary<string, Font>(
                         StringComparer.OrdinalIgnoreCase
                     );
-                    _fontsByPrefix[key] = fontMapping;
+                    fontsByPrefix[key] = fontMapping;
                 }
 
                 fontMapping[secondKey] = font;
             }
         }
 
-        private void TryMatchExistingFont(UIToolkitTerminal terminal)
+        private void TryMatchExistingFont(TerminalUI terminal)
         {
-            if ((0 <= _fontKey || 0 <= _secondFontKey) || terminal._consoleFont == null)
+            if (0 <= _fontKey || 0 <= _secondFontKey || terminal._font == null)
             {
                 return;
             }
 
-            int keyIndex = 0;
-            foreach (
-                KeyValuePair<string, SortedDictionary<string, Font>> prefixEntry in _fontsByPrefix
-            )
-            {
-                int subKeyIndex = 0;
-                foreach (KeyValuePair<string, Font> subEntry in prefixEntry.Value)
-                {
-                    if (subEntry.Value == terminal._consoleFont)
-                    {
-                        _fontKey = keyIndex;
-                        _secondFontKey = subKeyIndex;
-                        break;
-                    }
-                    subKeyIndex++;
-                }
-
-                if (0 <= _secondFontKey)
-                {
-                    break;
-                }
-
-                keyIndex++;
-            }
+            TrySetFontKeysFromFont(terminal._font);
         }
 
-        private bool TrySetupDefaultFont(UIToolkitTerminal terminal)
+        private static bool TrySetupDefaultFont(TerminalUI terminal)
         {
-            if (terminal._consoleFont != null || terminal._loadedFonts is not { Count: > 0 })
+            if (terminal._font != null || terminal._loadedFonts is not { Count: > 0 })
             {
                 return false;
             }
@@ -474,18 +768,34 @@
                     && font.name.Contains("Regular", StringComparison.OrdinalIgnoreCase)
                 );
             }
-            terminal._consoleFont = defaultFont;
+            if (defaultFont == null)
+            {
+                defaultFont = terminal._loadedFonts.FirstOrDefault(font =>
+                    font.name.Contains("Mono", StringComparison.OrdinalIgnoreCase)
+                );
+            }
+            if (defaultFont == null)
+            {
+                defaultFont = terminal._loadedFonts.FirstOrDefault(font =>
+                    font.name.Contains("Regular", StringComparison.OrdinalIgnoreCase)
+                );
+            }
+            if (defaultFont == null)
+            {
+                defaultFont = terminal._loadedFonts.FirstOrDefault();
+            }
+            terminal._font = defaultFont;
             return true;
         }
 
-        private bool RenderSelectableFonts(UIToolkitTerminal terminal)
+        private bool RenderSelectableFonts(TerminalUI terminal)
         {
             if (_fontsByPrefix is not { Count: > 0 })
             {
                 return false;
             }
 
-            TrySetupDefaultFont(terminal);
+            _ = TrySetupDefaultFont(terminal);
             TryMatchExistingFont(terminal);
 
             bool anyChanged = false;
@@ -540,7 +850,7 @@
                         );
                         if (GUILayout.Button(setFontContent))
                         {
-                            terminal._consoleFont = selectedFont;
+                            terminal._font = selectedFont;
                             anyChanged = true;
                         }
                     }

@@ -1,6 +1,6 @@
 {
     "name": "WallstopStudios.DxCommandTerminal.Tests.Runtime",
-    "rootNamespace": "DxCommandTerminal.Tests",
+    "rootNamespace": "WallstopStudios.DxCommandTerminal.Tests",
     "references": [
         "WallstopStudios.DxCommandTerminal",
         "UnityEngine.TestRunner"

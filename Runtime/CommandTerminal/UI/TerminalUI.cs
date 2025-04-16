@@ -2,22 +2,22 @@
 
 [assembly: InternalsVisibleTo("WallstopStudios.DxCommandTerminal.Editor")]
 
-namespace CommandTerminal
+namespace WallstopStudios.DxCommandTerminal.UI
 {
     using System;
     using System.Collections.Generic;
     using System.ComponentModel;
     using System.Linq;
     using Attributes;
+    using Backend;
     using Extensions;
+    using Input;
     using UnityEditor;
     using UnityEngine;
-    using UnityEngine.InputSystem;
     using UnityEngine.UIElements;
-    using Utils;
 
     [DisallowMultipleComponent]
-    public sealed class UIToolkitTerminal : MonoBehaviour
+    public sealed class TerminalUI : MonoBehaviour
     {
         private enum ScrollBarCaptureState
         {
@@ -29,7 +29,7 @@ namespace CommandTerminal
         // Cache log callback to reduce allocations
         private static readonly Application.LogCallback UnityLogCallback = HandleUnityLog;
 
-        public static UIToolkitTerminal Instance { get; private set; }
+        public static TerminalUI Instance { get; private set; }
 
         // ReSharper disable once MemberCanBePrivate.Global
         public bool IsClosed =>
@@ -64,66 +64,9 @@ namespace CommandTerminal
         [SerializeField]
         private int _historyBufferSize = 512;
 
-        [Header("Hotkeys")]
-#if ENABLE_INPUT_SYSTEM
-        [SerializeField]
-        [Tooltip("If you are binding your own input actions, this needs to be set to false.")]
-        private bool _useHotkeys = true;
-#endif
-#if ENABLE_INPUT_SYSTEM
-        [DxShowIf(nameof(_useHotkeys))]
-#endif
-        [SerializeField]
-        internal string _toggleHotkey = "`";
-
-#if ENABLE_INPUT_SYSTEM
-        [DxShowIf(nameof(_useHotkeys))]
-#endif
-        [SerializeField]
-        private string _toggleFullHotkey = "#`";
-
-#if ENABLE_INPUT_SYSTEM
-        [DxShowIf(nameof(_useHotkeys))]
-#endif
-        [SerializeField]
-        private string _completeHotkey = "tab";
-
-#if ENABLE_INPUT_SYSTEM
-        [DxShowIf(nameof(_useHotkeys))]
-#endif
-        [SerializeField]
-        private string _reverseCompleteHotkey = "#tab";
-
-#if ENABLE_INPUT_SYSTEM
-        [DxShowIf(nameof(_useHotkeys))]
-#endif
-        [SerializeField]
-        private string _previousHotkey = "up";
-
-#if ENABLE_INPUT_SYSTEM
-        [DxShowIf(nameof(_useHotkeys))]
-#endif
-        [SerializeField]
-        internal ListWrapper<string> _completeCommandHotkeys = new()
-        {
-            list = { "enter", "return" },
-        };
-
-#if ENABLE_INPUT_SYSTEM
-        [DxShowIf(nameof(_useHotkeys))]
-#endif
-        [SerializeField]
-        private string _closeHotkey = "escape";
-
-#if ENABLE_INPUT_SYSTEM
-        [DxShowIf(nameof(_useHotkeys))]
-#endif
-        [SerializeField]
-        private string _nextHotkey = "down";
-
         [Header("Input")]
         [SerializeField]
-        internal Font _consoleFont;
+        internal Font _font;
 
         [SerializeField]
         private string _inputCaret = ">";
@@ -203,12 +146,10 @@ namespace CommandTerminal
         private float _currentWindowHeight;
         private float _targetWindowHeight;
         private float _realWindowHeight;
-        private string _commandText = string.Empty;
         private bool _unityLogAttached;
         private bool _started;
         private int? _lastWidth;
         private int? _lastHeight;
-        private bool _handledInputThisFrame;
         private bool _needsFocus;
         private bool _needsScrollToEnd;
         private bool _needsAutoCompleteReset;
@@ -221,6 +162,7 @@ namespace CommandTerminal
         private bool _isCommandFromCode;
         private bool _initialResetStateOnInit;
         private float _inputContainerHeight;
+        private bool _commandIssuedThisFrame;
 
         private VisualElement _terminalContainer;
         private ScrollView _logScrollView;
@@ -236,8 +178,9 @@ namespace CommandTerminal
 
         // Cached for performance (avoids allocations)
         private readonly Action _focusInput;
+        private ITerminalInput _input;
 
-        public UIToolkitTerminal()
+        public TerminalUI()
         {
             _focusInput = FocusInput;
         }
@@ -276,6 +219,11 @@ namespace CommandTerminal
                     break;
             }
 
+            if (!TryGetComponent(out _input))
+            {
+                _input = DefaultTerminalInput.Instance;
+            }
+
             Instance = this;
 
 #if UNITY_EDITOR
@@ -288,7 +236,7 @@ namespace CommandTerminal
             };
             TrackProperties(uiPropertiesTracked, _uiProperties);
 
-            string[] fontPropertiesTracked = { nameof(_consoleFont) };
+            string[] fontPropertiesTracked = { nameof(_font) };
             TrackProperties(fontPropertiesTracked, _fontProperties);
 
             string[] staticStaticPropertiesTracked =
@@ -399,28 +347,13 @@ namespace CommandTerminal
                 SetState(TerminalState.Closed);
             }
 
-            if (_consoleFont == null)
+            if (_font == null)
             {
-                _consoleFont = Font.CreateDynamicFontFromOSFont("Courier New", 16);
-                Debug.LogWarning(
+                Debug.LogError(
                     "Command Console Warning: Please assign a font. Defaulting to Courier New",
                     this
                 );
-            }
-
-            if (
-                _useHotkeys
-                && (
-                    _completeCommandHotkeys?.list?.Exists(command =>
-                        string.Equals(command, _toggleHotkey, StringComparison.OrdinalIgnoreCase)
-                    ) ?? false
-                )
-            )
-            {
-                Debug.LogError(
-                    $"Invalid Toggle Hotkey {_toggleHotkey} - cannot be in the set of complete command "
-                        + $"hotkeys: [{string.Join(",", _completeCommandHotkeys?.list ?? Enumerable.Empty<string>())}]"
-                );
+                _font = Font.CreateDynamicFontFromOSFont("Courier New", 16);
             }
 
             RefreshStaticState(force: resetStateOnInit);
@@ -430,58 +363,6 @@ namespace CommandTerminal
             _started = true;
         }
 
-        private void Update()
-        {
-            if (!_useHotkeys || _handledInputThisFrame)
-            {
-                return;
-            }
-
-            if (InputHelpers.IsKeyPressed(_closeHotkey))
-            {
-                _handledInputThisFrame = true;
-                Close();
-            }
-            else if (
-                // ReSharper disable once ConvertClosureToMethodGroup
-                _completeCommandHotkeys?.list?.Exists(key => InputHelpers.IsKeyPressed(key)) == true
-            )
-            {
-                _handledInputThisFrame = true;
-                EnterCommand();
-            }
-            else if (InputHelpers.IsKeyPressed(_previousHotkey))
-            {
-                _handledInputThisFrame = true;
-                HandlePrevious();
-            }
-            else if (InputHelpers.IsKeyPressed(_nextHotkey))
-            {
-                _handledInputThisFrame = true;
-                HandleNext();
-            }
-            else if (InputHelpers.IsKeyPressed(_toggleFullHotkey))
-            {
-                _handledInputThisFrame = true;
-                ToggleFull();
-            }
-            else if (InputHelpers.IsKeyPressed(_toggleHotkey))
-            {
-                _handledInputThisFrame = true;
-                ToggleSmall();
-            }
-            else if (InputHelpers.IsKeyPressed(_reverseCompleteHotkey))
-            {
-                _handledInputThisFrame = true;
-                CompleteCommand(searchForward: false);
-            }
-            else if (InputHelpers.IsKeyPressed(_completeHotkey))
-            {
-                _handledInputThisFrame = true;
-                CompleteCommand(searchForward: true);
-            }
-        }
-
         private void LateUpdate()
         {
             if (_lastHeight != Screen.height || _lastWidth != Screen.width)
@@ -489,7 +370,7 @@ namespace CommandTerminal
                 SetupWindow();
             }
 
-            _handledInputThisFrame = false;
+            _commandIssuedThisFrame = false;
             HandleOpenness();
             RefreshUI();
         }
@@ -592,7 +473,7 @@ namespace CommandTerminal
 
             if (CheckForRefresh(_fontProperties))
             {
-                SetFont();
+                SetFont(_font);
             }
 
             if (CheckForRefresh(_staticStateProperties))
@@ -682,6 +563,7 @@ namespace CommandTerminal
 
         public void SetState(TerminalState newState)
         {
+            _commandIssuedThisFrame = true;
             try
             {
                 switch (newState)
@@ -724,7 +606,7 @@ namespace CommandTerminal
                 }
                 else
                 {
-                    _commandText = string.Empty;
+                    _input.CommandText = string.Empty;
                     ResetAutoComplete();
                 }
             }
@@ -738,33 +620,9 @@ namespace CommandTerminal
             }
         }
 
-        private void SetFont()
-        {
-            if (_uiDocument == null)
-            {
-                Debug.LogError("Cannot set font, no UIDocument assigned.");
-                return;
-            }
-
-            if (_consoleFont == null)
-            {
-                Debug.LogError("Cannot set font, no console font assigned.");
-                return;
-            }
-
-            VisualElement root = _uiDocument.rootVisualElement;
-            if (root == null)
-            {
-                Debug.LogError("Cannot set font, UI root element does not exist.");
-                return;
-            }
-
-            root.style.unityFontDefinition = new StyleFontDefinition(_consoleFont);
-        }
-
         private void ResetAutoComplete()
         {
-            _lastKnownCommandText = _commandText ?? string.Empty;
+            _lastKnownCommandText = _input.CommandText ?? string.Empty;
             if (_hintDisplayMode == HintDisplayMode.Always)
             {
                 string[] buffer = _lastCompletionBuffer;
@@ -853,7 +711,7 @@ namespace CommandTerminal
                 return;
             }
 
-            SetFont();
+            SetFont(_font);
             uiRoot.Clear();
             VisualElement root = new();
             uiRoot.Add(root);
@@ -933,21 +791,21 @@ namespace CommandTerminal
             _commandInput.name = "CommandInput";
             _commandInput.AddToClassList("terminal-input-field");
             _commandInput.pickingMode = PickingMode.Position;
-            _commandInput.value = _commandText;
-            _commandInput.RegisterCallback<ChangeEvent<string>, UIToolkitTerminal>(
+            _commandInput.value = _input.CommandText;
+            _commandInput.RegisterCallback<ChangeEvent<string>, TerminalUI>(
                 (evt, context) =>
                 {
-                    if (_handledInputThisFrame)
+                    if (_commandIssuedThisFrame)
                     {
                         evt.StopImmediatePropagation();
                         return;
                     }
 
-                    context._commandText = evt.newValue;
+                    context._input.CommandText = evt.newValue;
 
                     context._runButton.style.display =
                         _showGUIButtons
-                        && !string.IsNullOrWhiteSpace(context._commandText)
+                        && !string.IsNullOrWhiteSpace(context._input.CommandText)
                         && !string.IsNullOrWhiteSpace(context._runButtonText)
                             ? DisplayStyle.Flex
                             : DisplayStyle.None;
@@ -961,7 +819,7 @@ namespace CommandTerminal
                 userArgs: this,
                 useTrickleDown: TrickleDown.TrickleDown
             );
-            _commandInput.RegisterCallback<KeyDownEvent, UIToolkitTerminal>(
+            _commandInput.RegisterCallback<KeyDownEvent, TerminalUI>(
                 (evt, context) =>
                 {
                     if (evt.keyCode == KeyCode.Return || evt.keyCode == KeyCode.KeypadEnter)
@@ -983,7 +841,7 @@ namespace CommandTerminal
             root.Add(_stateButtonContainer);
             RefreshStateButtons();
 
-            _inputContainer.RegisterCallback<CustomStyleResolvedEvent, UIToolkitTerminal>(
+            _inputContainer.RegisterCallback<CustomStyleResolvedEvent, TerminalUI>(
                 (_, context) =>
                 {
                     context._inputContainerHeight = context._inputContainer.layout.height;
@@ -1117,7 +975,7 @@ namespace CommandTerminal
                 return;
             }
 
-            if (_handledInputThisFrame)
+            if (_commandIssuedThisFrame)
             {
                 return;
             }
@@ -1139,10 +997,11 @@ namespace CommandTerminal
 
             RefreshLogs();
             RefreshAutoCompleteHints();
-            if (_commandInput.value != _commandText)
+            string commandInput = _input.CommandText;
+            if (string.Equals(_commandInput.value, commandInput))
             {
                 _isCommandFromCode = true;
-                _commandInput.value = _commandText;
+                _commandInput.value = commandInput;
             }
             else if (_needsFocus && _textInput.focusable)
             {
@@ -1307,7 +1166,7 @@ namespace CommandTerminal
                             string currentHint = hint;
                             Button hintButton = new(() =>
                             {
-                                _commandText = currentHint;
+                                _input.CommandText = currentHint;
                                 _lastCompletionIndex = currentIndex;
                                 _needsFocus = true;
                             })
@@ -1632,50 +1491,56 @@ namespace CommandTerminal
             }
         }
 
-#if ENABLE_INPUT_SYSTEM
-        public void OnHandlePrevious(InputValue inputValue)
+        public void SetFont(Font font)
         {
-            HandlePrevious();
-        }
+            if (_font == font)
+            {
+                return;
+            }
 
-        public void OnHandleNext(InputValue inputValue)
-        {
-            HandleNext();
-        }
+            if (font == null)
+            {
+                Debug.LogError("Cannot set null font.");
+                return;
+            }
 
-        public void OnClose(InputValue inputValue)
-        {
-            Close();
-        }
+            if (_uiDocument == null)
+            {
+                Debug.LogError("Cannot set font, no UIDocument assigned.");
+                return;
+            }
 
-        public void OnToggleSmall(InputValue inputValue)
-        {
-            ToggleSmall();
-        }
+            Font currentFont = _font;
 
-        public void OnToggleFull(InputValue inputValue)
-        {
-            ToggleFull();
-        }
+            Debug.Log(
+                currentFont == null
+                    ? $"Setting font to {currentFont.name}."
+                    : $"Changing font from {currentFont.name} to {font}."
+            );
 
-        public void OnCompleteCommand(InputValue input)
-        {
-            CompleteCommand(searchForward: true);
-        }
+            if (Application.isPlaying)
+            {
+                VisualElement root = _uiDocument.rootVisualElement;
+                if (root == null)
+                {
+                    return;
+                }
 
-        public void OnReverseCompleteCommand(InputValue input)
-        {
-            CompleteCommand(searchForward: false);
+                root.style.unityFontDefinition = new StyleFontDefinition(font);
+            }
+            else
+            {
+                _font = font;
+            }
         }
-
-        public void OnEnterCommand(InputValue inputValue)
-        {
-            EnterCommand();
-        }
-#endif
 
         public void SetTheme(string theme)
         {
+            if (string.Equals(theme, _currentTheme, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
             if (string.IsNullOrWhiteSpace(theme))
             {
                 return;
@@ -1688,7 +1553,6 @@ namespace CommandTerminal
 
             string currentTheme = _currentTheme;
             Debug.Log($"Changing theme from {currentTheme} to {theme}.");
-            _currentTheme = theme;
             if (Application.isPlaying)
             {
                 if (_uiDocument == null)
@@ -1704,8 +1568,24 @@ namespace CommandTerminal
                     return;
                 }
 
-                terminalRoot.EnableInClassList(currentTheme, false);
-                terminalRoot.EnableInClassList(_currentTheme, true);
+                string[] loadedThemes = terminalRoot
+                    .GetClasses()
+                    .Where(className =>
+                        className.Contains("-theme", StringComparison.OrdinalIgnoreCase)
+                        || className.Contains("theme-", StringComparison.OrdinalIgnoreCase)
+                    )
+                    .ToArray();
+
+                foreach (string loadedTheme in loadedThemes)
+                {
+                    terminalRoot.RemoveFromClassList(loadedTheme);
+                }
+
+                terminalRoot.AddToClassList(theme);
+            }
+            else
+            {
+                _currentTheme = theme;
             }
         }
 
@@ -1716,7 +1596,8 @@ namespace CommandTerminal
                 return;
             }
 
-            _commandText = Terminal.History?.Previous(_skipSameCommandsInHistory) ?? string.Empty;
+            _input.CommandText =
+                Terminal.History?.Previous(_skipSameCommandsInHistory) ?? string.Empty;
             ResetAutoComplete();
             _needsFocus = true;
         }
@@ -1728,7 +1609,7 @@ namespace CommandTerminal
                 return;
             }
 
-            _commandText = Terminal.History?.Next(_skipSameCommandsInHistory) ?? string.Empty;
+            _input.CommandText = Terminal.History?.Next(_skipSameCommandsInHistory) ?? string.Empty;
             ResetAutoComplete();
             _needsFocus = true;
         }
@@ -1755,22 +1636,23 @@ namespace CommandTerminal
                 return;
             }
 
-            _commandText = _commandText?.Trim();
+            string commandText = _input.CommandText?.Trim() ?? string.Empty;
+            _input.CommandText = commandText;
             try
             {
-                if (string.IsNullOrWhiteSpace(_commandText))
+                if (string.IsNullOrWhiteSpace(commandText))
                 {
                     return;
                 }
 
-                Terminal.Log(TerminalLogType.Input, _commandText);
-                Terminal.Shell?.RunCommand(_commandText);
+                Terminal.Log(TerminalLogType.Input, commandText);
+                Terminal.Shell?.RunCommand(commandText);
                 while (Terminal.Shell?.TryConsumeErrorMessage(out string error) == true)
                 {
                     Terminal.Log(TerminalLogType.Error, $"Error: {error}");
                 }
 
-                _commandText = string.Empty;
+                _input.CommandText = string.Empty;
                 _needsFocus = true;
                 _needsScrollToEnd = true;
             }
@@ -1792,7 +1674,7 @@ namespace CommandTerminal
                 string[] completionBuffer;
                 if (_lastKnownCommandText == null)
                 {
-                    _lastKnownCommandText = _commandText ?? string.Empty;
+                    _lastKnownCommandText = _input.CommandText ?? string.Empty;
                     completionBuffer =
                         Terminal.AutoComplete?.Complete(_lastKnownCommandText)
                         ?? Array.Empty<string>();
@@ -1845,7 +1727,7 @@ namespace CommandTerminal
                                     % completionLength;
                             }
 
-                            _commandText = completionBuffer[_lastCompletionIndex.Value];
+                            _input.CommandText = completionBuffer[_lastCompletionIndex.Value];
                         }
                         else
                         {
@@ -1857,7 +1739,7 @@ namespace CommandTerminal
                         if (0 < completionLength)
                         {
                             _lastCompletionIndex = 0;
-                            _commandText = completionBuffer[0];
+                            _input.CommandText = completionBuffer[0];
                         }
                         else
                         {

@@ -1,11 +1,12 @@
-﻿namespace DxCommandTerminal.Tests.Tests.Runtime
+﻿namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 {
     using System;
     using System.Collections;
     using System.Linq;
     using System.Text;
-    using CommandTerminal;
+    using Backend;
     using NUnit.Framework;
+    using UI;
     using UnityEngine;
     using UnityEngine.TestTools;
     using Application = UnityEngine.Device.Application;
@@ -15,9 +16,9 @@
         [TearDown]
         public void TearDown()
         {
-            if (ImGuiTerminal.Instance != null)
+            if (TerminalUI.Instance != null)
             {
-                UnityEngine.Object.Destroy(ImGuiTerminal.Instance.gameObject);
+                UnityEngine.Object.Destroy(TerminalUI.Instance.gameObject);
             }
         }
 

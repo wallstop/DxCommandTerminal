@@ -1,16 +1,15 @@
-﻿namespace CommandTerminal
+﻿namespace WallstopStudios.DxCommandTerminal.Input
 {
     using System;
     using System.Collections.Generic;
     using Extensions;
-#if ENABLE_INPUT_SYSTEM
+    using UnityEngine;
     using UnityEngine.InputSystem;
     using UnityEngine.InputSystem.Controls;
-#endif
 
     public static class InputHelpers
     {
-        private static readonly string[] ShiftModifiers = { "shift+", "shift +", "#" };
+        private static readonly string[] ShiftModifiers = { "shift+", "#" };
 
         private static readonly Dictionary<string, string> CachedSubstrings = new();
 
@@ -88,8 +87,15 @@
                 { ")", "0" },
             };
 
-        public static bool IsKeyPressed(string key)
+        public static bool IsKeyPressed(string key, InputMode inputMode)
         {
+#pragma warning disable CS0612 // Type or member is obsolete
+            if (inputMode == InputMode.None)
+#pragma warning restore CS0612 // Type or member is obsolete
+            {
+                return false;
+            }
+
             if (string.IsNullOrEmpty(key))
             {
                 return false;
@@ -119,9 +125,9 @@
                 {
                     shiftRequired = true;
                 }
-#if !ENABLE_INPUT_SYSTEM
                 else if (
-                    AlternativeSpecialShiftedKeyCodeMap.TryGetValue(
+                    inputMode == InputMode.LegacyInputSystem
+                    && AlternativeSpecialShiftedKeyCodeMap.TryGetValue(
                         key,
                         out string legacyShiftedKeyName
                     )
@@ -130,7 +136,6 @@
                     shiftRequired = true;
                     keyName = legacyShiftedKeyName;
                 }
-#endif
             }
 
             if (0 < startIndex)
@@ -151,19 +156,22 @@
                 return false;
             }
 
-#if !ENABLE_INPUT_SYSTEM
-            if (Enum.TryParse(keyName, ignoreCase: true, out KeyCode keyCode))
+            if (inputMode == InputMode.LegacyInputSystem)
             {
-                return Input.GetKey(keyCode)
-                    && (
-                        !shiftRequired
-                        || Input.GetKey(KeyCode.LeftShift)
-                        || Input.GetKey(KeyCode.RightShift)
-                    );
+                if (Enum.TryParse(keyName, ignoreCase: true, out KeyCode keyCode))
+                {
+                    return Input.GetKey(keyCode)
+                        && (
+                            !shiftRequired
+                            || Input.GetKey(KeyCode.LeftShift)
+                            || Input.GetKey(KeyCode.RightShift)
+                        );
+                }
+
+                return false;
             }
 
-            return false;
-#else
+#if ENABLE_INPUT_SYSTEM
             if (
                 !shiftRequired
                 && (
@@ -189,6 +197,7 @@
                         is { wasPressedThisFrame: true }
                 );
 #endif
+            return false;
         }
     }
 }

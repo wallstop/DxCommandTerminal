@@ -1,4 +1,4 @@
-namespace CommandTerminal
+namespace WallstopStudios.DxCommandTerminal.Backend
 {
     using System;
     using System.Collections.Generic;
@@ -46,7 +46,7 @@ namespace CommandTerminal
         public string Next(bool skipSameCommands)
         {
             int initialPosition = _position;
-            _position++;
+            ++_position;
 
             while (
                 skipSameCommands
@@ -64,7 +64,7 @@ namespace CommandTerminal
                     )
                 )
                 {
-                    _position++;
+                    ++_position;
                 }
                 else
                 {
@@ -84,7 +84,7 @@ namespace CommandTerminal
         public string Previous(bool skipSameCommands)
         {
             int initialPosition = _position;
-            _position--;
+            --_position;
 
             while (
                 skipSameCommands
@@ -102,7 +102,7 @@ namespace CommandTerminal
                     )
                 )
                 {
-                    _position--;
+                    --_position;
                 }
                 else
                 {

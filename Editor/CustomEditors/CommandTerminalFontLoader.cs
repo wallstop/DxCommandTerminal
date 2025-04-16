@@ -1,8 +1,8 @@
-﻿namespace CommandTerminal.Editor.CustomEditors
+﻿namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
 {
     using System;
     using System.Collections.Generic;
-    using CommandTerminal.Helper;
+    using DxCommandTerminal.Helper;
     using UnityEditor;
     using UnityEngine;
 

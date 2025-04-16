@@ -1,4 +1,4 @@
-﻿namespace CommandTerminal.Extensions
+﻿namespace WallstopStudios.DxCommandTerminal.Extensions
 {
     using System.Collections.Generic;
 

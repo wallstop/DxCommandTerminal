@@ -1,4 +1,4 @@
-namespace CommandTerminal
+namespace WallstopStudios.DxCommandTerminal.Backend
 {
     using System.Collections.Generic;
     using System.Diagnostics;

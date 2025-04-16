@@ -1,6 +1,6 @@
 {
     "name": "WallstopStudios.DxCommandTerminal",
-    "rootNamespace": "CommandTerminal",
+    "rootNamespace": "WallstopStudios.DxCommandTerminal",
     "references": [
         "Unity.InputSystem"
     ],

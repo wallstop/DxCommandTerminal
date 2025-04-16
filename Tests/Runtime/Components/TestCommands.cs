@@ -1,10 +1,10 @@
-﻿namespace DxCommandTerminal.Tests.Tests.Runtime.Components
+﻿namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Components
 {
     using System;
     using System.Diagnostics;
     using System.Linq;
     using Attributes;
-    using CommandTerminal;
+    using Backend;
 
     public static class TestCommands
     {

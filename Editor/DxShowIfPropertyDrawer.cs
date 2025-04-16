@@ -1,11 +1,11 @@
-﻿namespace CommandTerminal.Editor
+﻿namespace WallstopStudios.DxCommandTerminal.Editor
 {
 #if UNITY_EDITOR
     using System.Reflection;
     using Attributes;
     using Extensions;
-    using UnityEngine;
     using UnityEditor;
+    using UnityEngine;
 
     [CustomPropertyDrawer(typeof(DxShowIfAttribute))]
     public sealed class DxShowIfPropertyDrawer : PropertyDrawer

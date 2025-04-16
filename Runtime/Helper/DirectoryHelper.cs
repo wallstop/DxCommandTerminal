@@ -1,4 +1,4 @@
-﻿namespace CommandTerminal.Helper
+﻿namespace WallstopStudios.DxCommandTerminal.Helper
 {
     using System;
     using System.IO;

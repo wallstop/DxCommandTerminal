@@ -1,12 +1,13 @@
-namespace CommandTerminal
+namespace WallstopStudios.DxCommandTerminal.Backend
 {
     using System;
     using System.Collections.Generic;
     using System.Linq;
+    using Extensions;
 
     public sealed class CommandAutoComplete
     {
-        private readonly HashSet<string> _knownWords = new(StringComparer.OrdinalIgnoreCase);
+        private readonly SortedSet<string> _knownWords = new(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _duplicateBuffer = new(StringComparer.OrdinalIgnoreCase);
         private readonly List<string> _buffer = new();
 
@@ -24,29 +25,33 @@ namespace CommandTerminal
             _knownWords.UnionWith(commands ?? Enumerable.Empty<string>());
         }
 
-        public void Register(string word)
-        {
-            _knownWords.Add(word);
-        }
-
-        public void Clear()
-        {
-            _knownWords.Clear();
-        }
-
         public string[] Complete(string text)
         {
-            _duplicateBuffer.Clear();
-            _buffer.Clear();
-            WalkHistory(text.Trim(), onlySuccess: true, onlyErrorFree: false);
-            return 0 == _buffer.Count ? Array.Empty<string>() : _buffer.ToArray();
+            return Complete(text: text, buffer: _buffer).ToArray();
         }
 
-        private void WalkHistory(string input, bool onlySuccess, bool onlyErrorFree)
+        public List<string> Complete(string text, List<string> buffer)
         {
+            WalkHistory(text.Trim(), onlySuccess: true, onlyErrorFree: false, buffer: buffer);
+            return buffer;
+        }
+
+        private void WalkHistory(
+            string input,
+            bool onlySuccess,
+            bool onlyErrorFree,
+            List<string> buffer
+        )
+        {
+            _duplicateBuffer.Clear();
+            buffer.Clear();
             foreach (
                 string known in _shell
-                    .Commands.Keys.Select(command => command.ToLowerInvariant())
+                    .Commands.Keys.Select(command =>
+                        command.NeedsLowerInvariantConversion()
+                            ? command.ToLowerInvariant()
+                            : command
+                    )
                     .Concat(_knownWords)
                     .Concat(
                         _history.GetHistory(onlySuccess: onlySuccess, onlyErrorFree: onlyErrorFree)
@@ -56,7 +61,7 @@ namespace CommandTerminal
             {
                 if (_duplicateBuffer.Add(known))
                 {
-                    _buffer.Add(known);
+                    buffer.Add(known);
                 }
             }
         }

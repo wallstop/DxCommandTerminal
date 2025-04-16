@@ -1,14 +1,13 @@
-﻿namespace DxCommandTerminal.Tests.Tests.Runtime
+﻿namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 {
     using System;
     using System.Collections.Generic;
     using System.Globalization;
     using System.Linq;
-    using CommandTerminal;
+    using Backend;
     using JetBrains.Annotations;
     using NUnit.Framework;
     using UnityEngine;
-    using Random = System.Random;
 
     public sealed class CommandArgTests
     {
@@ -84,7 +83,7 @@
 
         private const int NumTries = 5_000;
 
-        private readonly Random _random = new();
+        private readonly System.Random _random = new();
 
         private readonly List<string> _prepend = new() { "(", "[", "<", "{" };
         private readonly List<string> _append = new() { ")", "]", ">", "}" };

@@ -1,14 +1,14 @@
-﻿namespace CommandTerminal.Editor.Helper
+﻿namespace WallstopStudios.DxCommandTerminal.Editor.Helper
 {
 #if UNITY_EDITOR
     using System;
-    using UnityEngine;
-    using UnityEngine.UIElements;
-    using UnityEditor;
     using System.Collections.Generic;
     using System.IO;
-    using System.Text.RegularExpressions;
     using System.Linq;
+    using System.Text.RegularExpressions;
+    using UnityEditor;
+    using UnityEngine;
+    using UnityEngine.UIElements;
 
     public static class StyleSheetHelper
     {
