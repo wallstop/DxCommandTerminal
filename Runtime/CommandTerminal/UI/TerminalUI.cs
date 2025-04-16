@@ -134,6 +134,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
 #if UNITY_EDITOR
         private readonly Dictionary<string, object> _propertyValues = new();
         private readonly List<SerializedProperty> _uiProperties = new();
+        private readonly List<SerializedProperty> _cursorBlinkProperties = new();
         private readonly List<SerializedProperty> _fontProperties = new();
         private readonly List<SerializedProperty> _staticStateProperties = new();
         private readonly List<SerializedProperty> _windowProperties = new();
@@ -173,16 +174,24 @@ namespace WallstopStudios.DxCommandTerminal.UI
         private VisualElement _stateButtonContainer;
         private VisualElement _textInput;
         private Label _inputCaretLabel;
+        private bool _lastKnownHintsClickable;
+        private IVisualElementScheduledItem _cursorBlinkSchedule;
 
         private readonly List<VisualElement> _autoCompleteChildren = new();
 
         // Cached for performance (avoids allocations)
         private readonly Action _focusInput;
+#if UNITY_EDITOR
+        private readonly EditorApplication.CallbackFunction _checkForChanges;
+#endif
         private ITerminalInput _input;
 
         public TerminalUI()
         {
             _focusInput = FocusInput;
+#if UNITY_EDITOR
+            _checkForChanges = CheckForChanges;
+#endif
         }
 
         private void Awake()
@@ -229,12 +238,11 @@ namespace WallstopStudios.DxCommandTerminal.UI
 #if UNITY_EDITOR
             _serializedObject = new SerializedObject(this);
 
-            string[] uiPropertiesTracked =
-            {
-                nameof(_uiDocument),
-                nameof(_cursorBlinkRateMilliseconds),
-            };
+            string[] uiPropertiesTracked = { nameof(_uiDocument) };
             TrackProperties(uiPropertiesTracked, _uiProperties);
+
+            string[] cursorBlinkPropertiesTracked = { nameof(_cursorBlinkRateMilliseconds) };
+            TrackProperties(cursorBlinkPropertiesTracked, _cursorBlinkProperties);
 
             string[] fontPropertiesTracked = { nameof(_font) };
             TrackProperties(fontPropertiesTracked, _fontProperties);
@@ -261,7 +269,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 nameof(_hintDisplayMode),
                 nameof(_disabledCommands),
                 nameof(ignoreDefaultCommands),
-                nameof(_makeHintsClickable),
             };
             TrackProperties(autoCompletePropertiesTracked, _autoCompleteProperties);
 
@@ -310,14 +317,23 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 _unityLogAttached = true;
             }
 
-#if UNITY_EDITOR
-            EditorApplication.update += CheckForChanges;
-#endif
             SetupUI();
+
+#if UNITY_EDITOR
+            EditorApplication.update += _checkForChanges;
+#endif
         }
 
         private void OnDisable()
         {
+#if UNITY_EDITOR
+            EditorApplication.update -= _checkForChanges;
+#endif
+            if (_uiDocument != null)
+            {
+                _uiDocument.rootVisualElement?.Clear();
+            }
+
             if (_unityLogAttached)
             {
                 Application.logMessageReceivedThreaded -= UnityLogCallback;
@@ -325,9 +341,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
 
             SetState(TerminalState.Closed);
-#if UNITY_EDITOR
-            EditorApplication.update -= CheckForChanges;
-#endif
         }
 
         private void OnDestroy()
@@ -361,6 +374,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             ConsumeAndLogErrors();
             ResetAutoComplete();
             _started = true;
+            _lastKnownHintsClickable = _makeHintsClickable;
         }
 
         private void LateUpdate()
@@ -370,9 +384,9 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 SetupWindow();
             }
 
-            _commandIssuedThisFrame = false;
             HandleOpenness();
             RefreshUI();
+            _commandIssuedThisFrame = false;
         }
 
         private void RefreshStaticState(bool force)
@@ -469,6 +483,11 @@ namespace WallstopStudios.DxCommandTerminal.UI
             if (CheckForRefresh(_uiProperties))
             {
                 SetupUI();
+            }
+
+            if (CheckForRefresh(_cursorBlinkProperties))
+            {
+                ScheduleBlinkingCursor();
             }
 
             if (CheckForRefresh(_fontProperties))
@@ -602,7 +621,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 if (_state != TerminalState.Closed)
                 {
                     _needsFocus = true;
-                    // TODO FIXME When full terminal is toggled, events disappear when going back to short terminal
                 }
                 else
                 {
@@ -787,7 +805,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             _inputContainer.Add(_inputCaretLabel);
 
             _commandInput = new TextField();
-            ScheduleBlinkingCursor(_commandInput);
+            ScheduleBlinkingCursor();
             _commandInput.name = "CommandInput";
             _commandInput.AddToClassList("terminal-input-field");
             _commandInput.pickingMode = PickingMode.Position;
@@ -851,14 +869,22 @@ namespace WallstopStudios.DxCommandTerminal.UI
             );
         }
 
-        private void ScheduleBlinkingCursor(TextField textField)
+        private void ScheduleBlinkingCursor()
         {
+            _cursorBlinkSchedule?.Pause();
+            _cursorBlinkSchedule = null;
+
+            if (_commandInput == null)
+            {
+                return;
+            }
+
             bool shouldRenderCursor = true;
-            textField
+            _cursorBlinkSchedule = _commandInput
                 .schedule.Execute(() =>
                 {
-                    textField.EnableInClassList("transparent-cursor", shouldRenderCursor);
-                    textField.EnableInClassList("styled-cursor", !shouldRenderCursor);
+                    _commandInput.EnableInClassList("transparent-cursor", shouldRenderCursor);
+                    _commandInput.EnableInClassList("styled-cursor", !shouldRenderCursor);
                     shouldRenderCursor = !shouldRenderCursor;
                 })
                 .Every(_cursorBlinkRateMilliseconds);
@@ -984,26 +1010,28 @@ namespace WallstopStudios.DxCommandTerminal.UI
             _terminalContainer.style.width = Screen.width;
             _inputContainer.style.height = Mathf.Min(_currentWindowHeight, _inputContainerHeight);
             DisplayStyle commandInputStyle =
-                _currentWindowHeight < 14 ? DisplayStyle.None : DisplayStyle.Flex;
-            if (
-                _commandInput.style.display != commandInputStyle
-                && commandInputStyle == DisplayStyle.Flex
-            )
-            {
-                _needsFocus = true;
-            }
+                _currentWindowHeight <= 16 ? DisplayStyle.None : DisplayStyle.Flex;
+
+            _needsFocus |=
+                _commandInput.resolvedStyle.display != commandInputStyle
+                && commandInputStyle == DisplayStyle.Flex;
             _commandInput.style.display = commandInputStyle;
             _inputCaretLabel.style.display = commandInputStyle;
 
             RefreshLogs();
             RefreshAutoCompleteHints();
             string commandInput = _input.CommandText;
-            if (string.Equals(_commandInput.value, commandInput))
+            if (!string.Equals(_commandInput.value, commandInput))
             {
                 _isCommandFromCode = true;
                 _commandInput.value = commandInput;
             }
-            else if (_needsFocus && _textInput.focusable)
+            else if (
+                _needsFocus
+                && _textInput.focusable
+                && _textInput.resolvedStyle.display != DisplayStyle.None
+                && _commandInput.resolvedStyle.display != DisplayStyle.None
+            )
             {
                 if (_textInput.focusController.focusedElement != _textInput)
                 {
@@ -1013,7 +1041,11 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
                 _needsFocus = false;
             }
-            else if (_needsScrollToEnd)
+            else if (
+                _needsScrollToEnd
+                && _logScrollView != null
+                && _logScrollView.style.display != DisplayStyle.None
+            )
             {
                 ScrollToEnd();
                 _needsScrollToEnd = false;
@@ -1146,6 +1178,12 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
 
             int bufferLength = _lastCompletionBuffer.Length;
+            if (_lastKnownHintsClickable != _makeHintsClickable)
+            {
+                _autoCompleteContainer.Clear();
+                _lastKnownHintsClickable = _makeHintsClickable;
+            }
+
             int currentChildCount = _autoCompleteContainer.childCount;
 
             bool dirty = _lastCompletionIndex != _previousLastCompletionIndex;
@@ -1211,10 +1249,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
                     for (int i = 0; i < _autoCompleteContainer.childCount && i < bufferLength; ++i)
                     {
                         VisualElement hintElement = _autoCompleteContainer[i];
-                        // if (contentsChanged)
-                        // {
-                        // }
-
                         switch (hintElement)
                         {
                             case Button button:
@@ -1671,18 +1705,9 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             try
             {
-                string[] completionBuffer;
-                if (_lastKnownCommandText == null)
-                {
-                    _lastKnownCommandText = _input.CommandText ?? string.Empty;
-                    completionBuffer =
-                        Terminal.AutoComplete?.Complete(_lastKnownCommandText)
-                        ?? Array.Empty<string>();
-                }
-                else
-                {
-                    completionBuffer = _lastCompletionBuffer ?? Array.Empty<string>();
-                }
+                _lastKnownCommandText ??= _input.CommandText ?? string.Empty;
+                string[] completionBuffer =
+                    Terminal.AutoComplete?.Complete(_lastKnownCommandText) ?? Array.Empty<string>();
 
                 try
                 {
@@ -1750,6 +1775,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 finally
                 {
                     _lastCompletionBuffer = completionBuffer;
+                    _previousLastCompletionIndex ??= _lastCompletionIndex;
                 }
             }
             finally

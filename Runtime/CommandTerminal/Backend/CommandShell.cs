@@ -154,6 +154,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                     continue;
                 }
 
+                if (attribute.DevelopmentOnly && !Application.isEditor && !Debug.isDebugBuild)
+                {
+                    continue;
+                }
+
                 ParameterInfo[] methodsParams = method.GetParameters();
                 if (
                     methodsParams.Length != 1
@@ -220,7 +225,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                     }
                     if (argumentString.StartsWith('$'))
                     {
-                        string variableName = argumentString.Substring(1);
+                        string variableName = argumentString[1..];
 
                         if (_variables.TryGetValue(variableName, out CommandArg variable))
                         {
@@ -240,7 +245,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
 
             string commandName = _arguments[0].contents ?? string.Empty;
-            _arguments.RemoveAt(0); // Remove command name from arguments
+            // Remove command name from arguments
+            _arguments.RemoveAt(0);
 
             return RunCommand(
                 commandName,

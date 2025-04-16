@@ -50,6 +50,8 @@
         private readonly Stopwatch _timer = Stopwatch.StartNew();
         private readonly Random _random = new();
 
+        private GUIStyle _impactButtonStyle;
+
         static TerminalUIEditor()
         {
             ObjectFactory.componentWasAdded += HandleComponentAdded;
@@ -183,6 +185,12 @@
 
         public override void OnInspectorGUI()
         {
+            _impactButtonStyle ??= new GUIStyle(GUI.skin.button)
+            {
+                normal = { textColor = Color.yellow },
+                fontStyle = FontStyle.Bold,
+            };
+
             if (_allCommands.Count == 0 || _defaultCommands.Count == 0)
             {
                 HydrateCommandCaches();
@@ -275,23 +283,23 @@
 
         private void RenderCyclingPreviews()
         {
-            if (!Application.isPlaying)
+            EditorGUILayout.Space(10);
+            EditorGUILayout.LabelField("Preview", EditorStyles.boldLabel);
+
+            if (Application.isPlaying)
             {
-                return;
+                EditorGUILayout.BeginHorizontal();
+                try
+                {
+                    TryCyclingThemes();
+                    TryCyclingFonts();
+                }
+                finally
+                {
+                    EditorGUILayout.EndHorizontal();
+                }
             }
 
-            EditorGUILayout.Space(10);
-            EditorGUILayout.LabelField("Preview:", EditorStyles.boldLabel);
-            EditorGUILayout.BeginHorizontal();
-            try
-            {
-                TryCyclingThemes();
-                TryCyclingFonts();
-            }
-            finally
-            {
-                EditorGUILayout.EndHorizontal();
-            }
             EditorGUILayout.BeginHorizontal();
             try
             {
@@ -311,7 +319,7 @@
                 return;
             }
 
-            if (GUILayout.Button("Set Random Theme"))
+            if (GUILayout.Button("Set Random Theme", _impactButtonStyle))
             {
                 TerminalUI terminal = target as TerminalUI;
                 if (terminal != null && terminal._loadedThemes is { Count: > 0 })
@@ -334,7 +342,7 @@
                 return;
             }
 
-            if (GUILayout.Button("Set Random Font"))
+            if (GUILayout.Button("Set Random Font", _impactButtonStyle))
             {
                 TerminalUI terminal = target as TerminalUI;
                 if (terminal != null && terminal._loadedFonts is { Count: > 0 })
@@ -488,7 +496,7 @@
                         "Set Theme",
                         $"Will set the current theme to {selectedTheme}"
                     );
-                    if (GUILayout.Button(setThemeContent))
+                    if (GUILayout.Button(setThemeContent, _impactButtonStyle))
                     {
                         terminal.SetTheme(selectedTheme);
                         anyChanged = true;
@@ -848,7 +856,7 @@
                             "Set Font",
                             $"Update the terminal's font to {selectedFont.name}"
                         );
-                        if (GUILayout.Button(setFontContent))
+                        if (GUILayout.Button(setFontContent, _impactButtonStyle))
                         {
                             terminal._font = selectedFont;
                             anyChanged = true;

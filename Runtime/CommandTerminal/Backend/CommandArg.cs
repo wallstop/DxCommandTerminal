@@ -3,8 +3,14 @@
     using System;
     using System.Collections.Generic;
     using System.Linq;
+    using System.Net;
+    using System.Numerics;
     using System.Reflection;
     using UnityEngine;
+    using Quaternion = UnityEngine.Quaternion;
+    using Vector2 = UnityEngine.Vector2;
+    using Vector3 = UnityEngine.Vector3;
+    using Vector4 = UnityEngine.Vector4;
 
     public delegate bool CommandArgParser<T>(string input, out T parsed);
 
@@ -184,6 +190,22 @@
             if (type == typeof(decimal))
             {
                 return InnerParse<decimal>(stringValue, decimal.TryParse, out parsed);
+            }
+            if (type == typeof(BigInteger))
+            {
+                return InnerParse<BigInteger>(stringValue, BigInteger.TryParse, out parsed);
+            }
+            if (type == typeof(TimeSpan))
+            {
+                return InnerParse<TimeSpan>(stringValue, TimeSpan.TryParse, out parsed);
+            }
+            if (type == typeof(Version))
+            {
+                return InnerParse<Version>(stringValue, Version.TryParse, out parsed);
+            }
+            if (type == typeof(IPAddress))
+            {
+                return InnerParse<IPAddress>(stringValue, IPAddress.TryParse, out parsed);
             }
             if (type.IsEnum)
             {

@@ -20,6 +20,9 @@ This is a fork of [Command Terminal](https://github.com/stillwwater/command_term
 
 # Installation
 
+## From Releases
+Check out the latest [Releases](https://github.com/wallstop/DxCommandTerminal/releases) to grab the Unity Package and import to your project.
+
 ## To Install as Unity Package
 1. Open Unity Package Manager
 2. (Optional) Enable Pre-release packages to get the latest, cutting-edge builds
@@ -32,9 +35,6 @@ This is a fork of [Command Terminal](https://github.com/stillwwater/command_term
 
 ## From Source
 Grab a copy of this repo (either `git clone` or [download a zip of the source](https://github.com/wallstop/DxCommandTerminal/archive/refs/heads/master.zip)) and copy the contents to your project's `Assets` folder.
-
-## From Releases
-Check out the latest [Releases](https://github.com/wallstop/DxCommandTerminal/releases) to grab the Unity Package and import to your project.
 
 ## Improvements Over Baseline
 - [Enhanced Auto-Complete + Hint system + styling](#hints)
@@ -89,10 +89,11 @@ More improvements coming soon, stick around :)
 
 Planned improvements:
 - Command Groups
-- Background not being rendered bug
 - Ensure working in Mobile builds
 - Smarter auto complete
 - Ensure HTML color coding works
+- More parsing (Bounds, Matrix4x4, Plane, Ray, BoundsInt, Pose, LayerMask, Color32)
+- More documentation
 
 ---
 

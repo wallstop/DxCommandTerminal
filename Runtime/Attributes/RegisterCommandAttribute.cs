@@ -17,9 +17,11 @@ namespace WallstopStudios.DxCommandTerminal.Attributes
 
         public bool EditorOnly { get; set; }
 
+        public bool DevelopmentOnly { get; set; }
+
         public RegisterCommandAttribute(string commandName = null)
         {
-            commandName = commandName?.Replace(" ", string.Empty)?.Trim();
+            commandName = commandName?.Replace(" ", string.Empty).Trim();
             Name = commandName;
         }
 

@@ -126,8 +126,7 @@
                     shiftRequired = true;
                 }
                 else if (
-                    inputMode == InputMode.LegacyInputSystem
-                    && AlternativeSpecialShiftedKeyCodeMap.TryGetValue(
+                    AlternativeSpecialShiftedKeyCodeMap.TryGetValue(
                         key,
                         out string legacyShiftedKeyName
                     )
@@ -140,7 +139,7 @@
 
             if (0 < startIndex)
             {
-                if (CachedSubstrings.TryGetValue(key, out keyName))
+                if (!CachedSubstrings.TryGetValue(key, out keyName))
                 {
                     keyName = key[startIndex..].Trim();
                     if (keyName.Length == 1 && keyName.NeedsLowerInvariantConversion())
@@ -196,8 +195,9 @@
                     || currentKeyboard.TryGetChildControl<KeyControl>(keyName)
                         is { wasPressedThisFrame: true }
                 );
-#endif
+#else
             return false;
+#endif
         }
     }
 }
