@@ -39,13 +39,41 @@
 
         public override void OnInspectorGUI()
         {
-            base.OnInspectorGUI();
-
             UIToolkitTerminal terminal = target as UIToolkitTerminal;
             if (terminal == null)
             {
                 return;
             }
+
+            bool anyChanged = false;
+
+            string[] availableThemes = StyleSheetHelper.GetAvailableThemes(terminal._uiDocument);
+            EditorGUILayout.Space(10);
+            EditorGUILayout.LabelField("Theming", EditorStyles.boldLabel);
+            EditorGUILayout.BeginHorizontal();
+            try
+            {
+                _ = EditorGUILayout.Popup(0, availableThemes);
+                GUIContent setThemeContent = new(
+                    "Set Theme",
+                    $"Will set the current theme to <NULL>"
+                );
+                if (GUILayout.Button(setThemeContent))
+                {
+                    // TODO
+                }
+            }
+            finally
+            {
+                EditorGUILayout.EndHorizontal();
+            }
+
+            CollectFonts();
+            bool fontsUpdated = RenderSelectableFonts(terminal);
+            anyChanged |= fontsUpdated;
+
+            EditorGUILayout.Space();
+            base.OnInspectorGUI();
 
             if (
                 _lastSeen != terminal
@@ -77,7 +105,6 @@
                 _lastSeen = terminal;
             }
 
-            bool anyChanged = false;
             if (terminal._disabledCommands == null)
             {
                 anyChanged = true;
@@ -97,15 +124,6 @@
 
             bool commandsUpdated = CheckForDisabledCommandProblems(terminal);
             anyChanged |= commandsUpdated;
-
-            EditorGUILayout.Space();
-            CollectFonts();
-            bool fontsUpdated = RenderSelectableFonts(terminal);
-            anyChanged |= fontsUpdated;
-
-            string[] availableThemes = StyleSheetHelper.GetAvailableThemes(terminal._uiDocument);
-            Debug.Log($"Found {availableThemes.Length} available themes.");
-            _ = EditorGUILayout.Popup("Themes", 0, availableThemes);
 
             if (anyChanged)
             {
@@ -407,22 +425,10 @@
                     }
                 }
 
-                GUILayout.BeginHorizontal();
-                try
-                {
-                    GUILayout.FlexibleSpace();
-                    GUILayout.Label("Font Selection");
-                }
-                finally
-                {
-                    GUILayout.EndHorizontal();
-                }
-
                 int currentFontKey = _fontKey;
                 EditorGUILayout.BeginHorizontal();
                 try
                 {
-                    GUILayout.FlexibleSpace();
                     string[] fontKeys = _fontsByPrefix.Keys.ToArray();
                     if (0 <= _fontKey && _fontKey < fontKeys.Length)
                     {
