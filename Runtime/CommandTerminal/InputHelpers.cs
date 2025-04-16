@@ -4,20 +4,12 @@
     using System.Collections.Generic;
     using Extensions;
 #if ENABLE_INPUT_SYSTEM
-    using UnityEngine;
     using UnityEngine.InputSystem;
     using UnityEngine.InputSystem.Controls;
 #endif
 
     public static class InputHelpers
     {
-        public static IReadOnlyDictionary<string, string> SpecialKeyCodes => SpecialKeyCodeMap;
-        public static IReadOnlyDictionary<string, string> SpecialShiftedKeyCodes =>
-            SpecialShiftedKeyCodeMap;
-
-        public static IReadOnlyDictionary<string, string> AlternativeSpecialShiftedKeyCodes =>
-            AlternativeSpecialShiftedKeyCodeMap;
-
         private static readonly string[] ShiftModifiers = { "shift+", "shift +", "#" };
 
         private static readonly Dictionary<string, string> CachedSubstrings = new();
@@ -109,7 +101,10 @@
 
             foreach (string shiftModifier in ShiftModifiers)
             {
-                if (key.StartsWith(shiftModifier, StringComparison.OrdinalIgnoreCase))
+                if (
+                    key.StartsWith(shiftModifier, StringComparison.OrdinalIgnoreCase)
+                    && key != shiftModifier
+                )
                 {
                     shiftRequired = true;
                     startIndex = shiftModifier.Length;
@@ -120,17 +115,29 @@
             if (!shiftRequired && key.Length == 1)
             {
                 char keyChar = key[0];
-                if (char.IsUpper(keyChar) && char.IsLower(keyChar))
+                if (char.IsUpper(keyChar) && char.IsLetter(keyChar))
                 {
                     shiftRequired = true;
                 }
+#if !ENABLE_INPUT_SYSTEM
+                else if (
+                    AlternativeSpecialShiftedKeyCodeMap.TryGetValue(
+                        key,
+                        out string legacyShiftedKeyName
+                    )
+                )
+                {
+                    shiftRequired = true;
+                    keyName = legacyShiftedKeyName;
+                }
+#endif
             }
 
             if (0 < startIndex)
             {
                 if (CachedSubstrings.TryGetValue(key, out keyName))
                 {
-                    keyName = key.Substring(startIndex).Trim();
+                    keyName = key[startIndex..].Trim();
                     if (keyName.Length == 1 && keyName.NeedsLowerInvariantConversion())
                     {
                         keyName = keyName.ToLowerInvariant();
@@ -157,11 +164,25 @@
 
             return false;
 #else
+            if (
+                !shiftRequired
+                && (
+                    AlternativeSpecialShiftedKeyCodeMap.TryGetValue(
+                        keyName,
+                        out string shiftedKeyName
+                    ) || SpecialShiftedKeyCodeMap.TryGetValue(keyName, out shiftedKeyName)
+                )
+            )
+            {
+                shiftRequired = true;
+                keyName = shiftedKeyName;
+            }
+
             Keyboard currentKeyboard = Keyboard.current;
             return (!shiftRequired || currentKeyboard.shiftKey.isPressed)
                 && (
                     currentKeyboard.TryGetChildControl<KeyControl>(
-                        SpecialKeyCodes.GetValueOrDefault(keyName, keyName)
+                        SpecialKeyCodeMap.GetValueOrDefault(keyName, keyName)
                     )
                         is { wasPressedThisFrame: true }
                     || currentKeyboard.TryGetChildControl<KeyControl>(keyName)

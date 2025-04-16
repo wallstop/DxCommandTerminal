@@ -31,26 +31,39 @@
             {
                 string assetPath = AssetDatabase.GUIDToAssetPath(guid);
 
+                if (string.IsNullOrWhiteSpace(assetPath))
+                {
+                    continue;
+                }
+
                 if (
-                    !string.IsNullOrWhiteSpace(assetPath)
-                    && assetPath.StartsWith(
+                    !assetPath.StartsWith(
                         fontDirectoryRelativePath,
                         StringComparison.OrdinalIgnoreCase
                     )
-                    && (
-                        assetPath.EndsWith(".ttf", StringComparison.OrdinalIgnoreCase)
-                        || assetPath.EndsWith(".otf", StringComparison.OrdinalIgnoreCase)
-                    )
                 )
                 {
-                    Font fontAsset = AssetDatabase.LoadAssetAtPath<Font>(assetPath);
-                    if (fontAsset != null)
-                    {
-                        foundFonts.Add(fontAsset);
-                    }
+                    continue;
+                }
+
+                if (
+                    !assetPath.EndsWith(".ttf", StringComparison.OrdinalIgnoreCase)
+                    && !assetPath.EndsWith(".otf", StringComparison.OrdinalIgnoreCase)
+                )
+                {
+                    continue;
+                }
+
+                Font fontAsset = AssetDatabase.LoadAssetAtPath<Font>(assetPath);
+                if (fontAsset != null)
+                {
+                    foundFonts.Add(fontAsset);
                 }
             }
 
+            foundFonts.Sort(
+                (a, b) => string.Compare(a.name, b.name, StringComparison.OrdinalIgnoreCase)
+            );
             return foundFonts.ToArray();
         }
     }

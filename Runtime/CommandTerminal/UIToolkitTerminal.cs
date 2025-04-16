@@ -2,25 +2,21 @@
 
 [assembly: InternalsVisibleTo("WallstopStudios.DxCommandTerminal.Editor")]
 
-namespace CommandTerminal.UIToolkit
+namespace CommandTerminal
 {
     using System;
     using System.Collections.Generic;
     using System.ComponentModel;
     using System.Linq;
     using Attributes;
-    using CommandTerminal;
     using Extensions;
     using UnityEditor;
     using UnityEngine;
+    using UnityEngine.InputSystem;
     using UnityEngine.UIElements;
     using Utils;
-#if ENABLE_INPUT_SYSTEM
-    using UnityEngine.InputSystem;
-#endif
 
     [DisallowMultipleComponent]
-    [RequireComponent(typeof(TerminalThemeSwitcher))]
     public sealed class UIToolkitTerminal : MonoBehaviour
     {
         private enum ScrollBarCaptureState
@@ -44,6 +40,10 @@ namespace CommandTerminal.UIToolkit
         [SerializeField]
         [HideInInspector]
         internal UIDocument _uiDocument;
+
+        [SerializeField]
+        [HideInInspector]
+        internal string _currentTheme = "dark";
 
         [Header("Window")]
         [Range(0, 1)]
@@ -168,6 +168,10 @@ namespace CommandTerminal.UIToolkit
         [SerializeField]
         [HideInInspector]
         internal List<Font> _loadedFonts = new();
+
+        [SerializeField]
+        [HideInInspector]
+        internal List<string> _loadedThemes = new();
 
 #if UNITY_EDITOR
         private readonly Dictionary<string, object> _propertyValues = new();
@@ -840,6 +844,33 @@ namespace CommandTerminal.UIToolkit
             uiRoot.Add(root);
             root.name = "TerminalRoot";
             root.AddToClassList("terminal-root");
+            if (!string.IsNullOrWhiteSpace(_currentTheme))
+            {
+                if (
+                    _loadedThemes is { Count: > 0 }
+                    && !_loadedThemes.Contains(_currentTheme, StringComparer.OrdinalIgnoreCase)
+                )
+                {
+                    string defaultTheme = _loadedThemes[0];
+                    Debug.Log($"Failed to find current theme, defaulting to {defaultTheme}.");
+                    _currentTheme = defaultTheme;
+                }
+            }
+            else if (_loadedThemes is { Count: > 0 })
+            {
+                string defaultTheme = _loadedThemes[0];
+                Debug.Log($"No theme specified, defaulting to {defaultTheme}.");
+                _currentTheme = defaultTheme;
+            }
+
+            if (!string.IsNullOrWhiteSpace(_currentTheme))
+            {
+                root.AddToClassList(_currentTheme);
+            }
+            else
+            {
+                Debug.LogError("Failed to load any themes!");
+            }
 
             _terminalContainer = new VisualElement { name = "TerminalContainer" };
             _terminalContainer.AddToClassList("terminal-container");
@@ -954,6 +985,7 @@ namespace CommandTerminal.UIToolkit
                 .schedule.Execute(() =>
                 {
                     textField.EnableInClassList("transparent-cursor", shouldRenderCursor);
+                    textField.EnableInClassList("styled-cursor", !shouldRenderCursor);
                     shouldRenderCursor = !shouldRenderCursor;
                 })
                 .Every(_cursorBlinkRateMilliseconds);
@@ -1626,6 +1658,41 @@ namespace CommandTerminal.UIToolkit
             EnterCommand();
         }
 #endif
+
+        public void SetTheme(string theme)
+        {
+            if (string.IsNullOrWhiteSpace(theme))
+            {
+                return;
+            }
+
+            if (!_loadedThemes.Contains(theme))
+            {
+                return;
+            }
+
+            string currentTheme = _currentTheme;
+            Debug.Log($"Changing theme from {currentTheme} to {theme}.");
+            _currentTheme = theme;
+            if (Application.isPlaying)
+            {
+                if (_uiDocument == null)
+                {
+                    return;
+                }
+
+                VisualElement terminalRoot = _uiDocument.rootVisualElement?.Q<VisualElement>(
+                    "TerminalRoot"
+                );
+                if (terminalRoot == null)
+                {
+                    return;
+                }
+
+                terminalRoot.EnableInClassList(currentTheme, false);
+                terminalRoot.EnableInClassList(_currentTheme, true);
+            }
+        }
 
         public void HandlePrevious()
         {

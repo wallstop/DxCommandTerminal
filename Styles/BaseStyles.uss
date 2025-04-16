@@ -1,5 +1,5 @@
 ﻿.transparent-cursor {
-    --unity-cursor-color: rgba(0, 0, 0, 0);
+    --unity-cursor-color: transparent;
 }
 
 .terminal-root {
@@ -137,6 +137,7 @@
 }
 
 .terminal-input-field > #unity-text-input {
+    background-color: var(--input-field-bg);
     border-top-width: 0;
     border-bottom-width: 0;
     border-left-width: 0;
@@ -146,6 +147,10 @@
 }
 
 /* -- Theming -- */
+
+.styled-cursor {
+    --unity-cursor-color: var(--input-text-color);
+}
 
 .terminal-container,
 .log-scroll-view .unity-scroller .unity-scroller__dragger {
@@ -197,7 +202,7 @@
 }
 
 .terminal-input-caret {
-    color: var(--caret-color);
+    color: var(--input-text-color);
     background-color: var(--input-field-bg);
 }
 
