@@ -1,0 +1,26 @@
+﻿.bubblegum-theme {
+    /* Backgrounds */
+    --terminal-bg: rgba(255, 190, 210, 0.75);
+    --button-bg: rgba(240, 170, 190, 1);
+    --input-field-bg: rgba(255, 210, 230, 0.7);
+    --button-selected-bg: rgba(50, 150, 220, 0.85);
+    --button-hover-bg: rgba(220, 150, 170, 0.7);
+    --scroll-bg: rgba(230, 160, 180, 1);
+    --scroll-inverse-bg: rgba(240, 170, 190, 1);
+    --scroll-active-bg: rgba(180, 120, 140, 1);
+
+    /* Text & Foreground */
+    --button-text: rgba(80, 40, 60, 0.9);
+    --button-selected-text: rgba(240, 250, 255, 1);
+    --button-hover-text: rgba(60, 20, 40, 1);
+    --input-text-color: rgba(80, 40, 60, 1.0);
+    --text-message: rgba(80, 40, 60, 1);
+    --text-warning: rgba(255, 230, 100, 1);
+    --text-input-echo: rgba(150, 220, 255, 1);
+    --text-shell: rgba(150, 90, 110, 1);
+    --text-error: rgba(180, 30, 50, 1);
+
+    /* Other UI Elements */
+    --scroll-color: rgba(50, 150, 220, 1);
+    --caret-color: rgba(80, 40, 60, 1.0);
+}

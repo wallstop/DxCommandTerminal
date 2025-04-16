@@ -46,6 +46,60 @@
 @import url("Themes/PurpleHazeTheme.uss");
 @import url("Themes/RedAlertTheme.uss");
 @import url("Themes/SubtleGreyTheme.uss");
+@import url("Themes/AlienJungleTheme.uss");
+@import url("Themes/ArcticNightTheme.uss");
+@import url("Themes/AuroraTheme.uss");
+@import url("Themes/AutumnLeavesTheme.uss");
+@import url("Themes/BerrySmoothieTheme.uss");
+@import url("Themes/BiohazardTheme.uss");
+@import url("Themes/BlueprintTheme.uss");
+@import url("Themes/BrushedMetalTheme.uss");
+@import url("Themes/BubbleGumTheme.uss");
+@import url("Themes/CarbonFiberTheme.uss");
+@import url("Themes/CoffeeShopTheme.uss");
+@import url("Themes/Comodore64Theme.uss");
+@import url("Themes/CoralReefTheme.uss");
+@import url("Themes/CreamTheme.uss");
+@import url("Themes/DimmedTheme.uss");
+@import url("Themes/DuskTheme.uss");
+@import url("Themes/EldritchHorrorTheme.uss");
+@import url("Themes/ForestFloorTheme.uss");
+@import url("Themes/GlitchTheme.uss");
+@import url("Themes/GraphiteTheme.uss");
+@import url("Themes/HighContrastLightTheme.uss");
+@import url("Themes/HoloInterfaceTheme.uss");
+@import url("Themes/JungleTheme.uss");
+@import url("Themes/LinenTheme.uss");
+@import url("Themes/MatchaTheme.uss");
+@import url("Themes/MaterialOceanicTheme.uss");
+@import url("Themes/MountainPeakTheme.uss");
+@import url("Themes/NeonNoirTheme.uss");
+@import url("Themes/OldPaperTheme.uss");
+@import url("Themes/OneDarkTheme.uss");
+@import url("Themes/PastelDreamsTheme.uss");
+@import url("Themes/PureBlackWhiteTheme.uss");
+@import url("Themes/RedwoodTheme.uss");
+@import url("Themes/SavannaTheme.uss");
+@import url("Themes/SepiaTheme.uss");
+@import url("Themes/SlateTheme.uss");
+@import url("Themes/StarfieldTheme.uss");
+@import url("Themes/SteampunkTheme.uss");
+@import url("Themes/SunsetTheme.uss");
+@import url("Themes/SwampTheme.uss");
+@import url("Themes/UnderwaterTheme.uss");
+@import url("Themes/VaporwaveTheme.uss");
+@import url("Themes/VolcanoTheme.uss");
+@import url("Themes/WinterSkyTheme.uss");
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -1,0 +1,26 @@
+﻿.dusk-theme {
+    /* Backgrounds */
+    --terminal-bg: rgba(30, 30, 60, 0.9);
+    --button-bg: rgba(50, 50, 80, 1);
+    --input-field-bg: rgba(20, 20, 50, 0.7);
+    --button-selected-bg: rgba(255, 160, 100, 0.85);
+    --button-hover-bg: rgba(70, 70, 100, 0.7);
+    --scroll-bg: rgba(60, 60, 90, 1);
+    --scroll-inverse-bg: rgba(50, 50, 80, 1);
+    --scroll-active-bg: rgba(90, 90, 120, 1);
+
+    /* Text & Foreground */
+    --button-text: rgba(220, 180, 240, 0.9);
+    --button-selected-text: rgba(30, 30, 60, 1);
+    --button-hover-text: rgba(240, 210, 255, 1);
+    --input-text-color: rgba(220, 180, 240, 1.0);
+    --text-message: rgba(220, 180, 240, 1);
+    --text-warning: rgba(255, 200, 140, 1);
+    --text-input-echo: rgba(180, 150, 210, 1);
+    --text-shell: rgba(140, 120, 170, 1);
+    --text-error: rgba(255, 120, 140, 1);
+
+    /* Other UI Elements */
+    --scroll-color: rgba(255, 160, 100, 1);
+    --caret-color: rgba(220, 180, 240, 1.0);
+}

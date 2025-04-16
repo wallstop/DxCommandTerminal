@@ -103,11 +103,9 @@
             bool fontsUpdated = RenderSelectableFonts(terminal);
             anyChanged |= fontsUpdated;
 
-            _ = EditorGUILayout.Popup(
-                "Themes",
-                0,
-                StyleSheetHelper.GetAvailableThemes(terminal._uiDocument)
-            );
+            string[] availableThemes = StyleSheetHelper.GetAvailableThemes(terminal._uiDocument);
+            Debug.Log($"Found {availableThemes.Length} available themes.");
+            _ = EditorGUILayout.Popup("Themes", 0, availableThemes);
 
             if (anyChanged)
             {

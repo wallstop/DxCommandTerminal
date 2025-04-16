@@ -1,0 +1,26 @@
+﻿.eldritch-horror-theme {
+    /* Backgrounds */
+    --terminal-bg: rgba(30, 45, 40, 0.92);
+    --button-bg: rgba(45, 65, 55, 1);
+    --input-field-bg: rgba(20, 35, 30, 0.7);
+    --button-selected-bg: rgba(100, 40, 60, 0.85);
+    --button-hover-bg: rgba(60, 80, 70, 0.7);
+    --scroll-bg: rgba(55, 75, 65, 1);
+    --scroll-inverse-bg: rgba(45, 65, 55, 1);
+    --scroll-active-bg: rgba(80, 100, 90, 1);
+
+    /* Text & Foreground */
+    --button-text: rgba(160, 180, 170, 0.9);
+    --button-selected-text: rgba(210, 190, 200, 1);
+    --button-hover-text: rgba(190, 210, 200, 1);
+    --input-text-color: rgba(160, 180, 170, 1.0);
+    --text-message: rgba(160, 180, 170, 1);
+    --text-warning: rgba(140, 120, 160, 1);
+    --text-input-echo: rgba(110, 130, 120, 1);
+    --text-shell: rgba(90, 110, 100, 1);
+    --text-error: rgba(180, 60, 80, 1);
+
+    /* Other UI Elements */
+    --scroll-color: rgba(100, 40, 60, 1);
+    --caret-color: rgba(140, 120, 160, 1.0);
+}

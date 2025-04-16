@@ -52,7 +52,7 @@
                     return Array.Empty<string>();
                 }
 
-                List<string> availableThemes = new();
+                SortedSet<string> availableThemes = new(StringComparer.OrdinalIgnoreCase);
                 for (int i = 0; i < themesListProperty.arraySize; ++i)
                 {
                     SerializedProperty themeProperty = themesListProperty.GetArrayElementAtIndex(i);
@@ -79,7 +79,7 @@
                             continue;
                         }
 
-                        availableThemes.AddRange(GetAvailableThemes(styleSheet));
+                        availableThemes.UnionWith(GetAvailableThemes(styleSheet));
                     }
                     finally
                     {
@@ -87,7 +87,6 @@
                     }
                 }
 
-                availableThemes.Sort();
                 return availableThemes.ToArray();
             }
             finally
