@@ -1390,15 +1390,24 @@ namespace WallstopStudios.DxCommandTerminal.UI
                     int index = -i % childCount;
                     index = (index + childCount) % childCount;
                     VisualElement element = _autoCompleteChildren[index];
-                    accumulatedWidth += element.layout.width;
-                    if (viewportWidth < accumulatedWidth)
+                    accumulatedWidth +=
+                        element.resolvedStyle.width
+                        + element.resolvedStyle.marginLeft
+                        + element.resolvedStyle.marginRight
+                        + element.resolvedStyle.borderLeftWidth
+                        + element.resolvedStyle.borderRightWidth;
+
+                    if (accumulatedWidth <= viewportWidth)
                     {
-                        if (element != current)
-                        {
-                            --shiftAmount;
-                        }
-                        break;
+                        continue;
                     }
+
+                    if (element != current)
+                    {
+                        --shiftAmount;
+                    }
+
+                    break;
                 }
 
                 _lastCompletionIndex = (shiftAmount - 1 + childCount) % childCount;
