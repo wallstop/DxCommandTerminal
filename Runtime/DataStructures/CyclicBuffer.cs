@@ -20,7 +20,7 @@
             {
                 _buffer = buffer;
                 _index = -1;
-                _current = default!;
+                _current = default;
             }
 
             public bool MoveNext()
@@ -42,7 +42,7 @@
             public void Reset()
             {
                 _index = -1;
-                _current = default!;
+                _current = default;
             }
 
             public void Dispose() { }
