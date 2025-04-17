@@ -2,7 +2,8 @@
     "name": "WallstopStudios.DxCommandTerminal.Editor",
     "rootNamespace": "WallstopStudios.DxCommandTerminal",
     "references": [
-        "WallstopStudios.DxCommandTerminal"
+        "WallstopStudios.DxCommandTerminal",
+        "Unity.InputSystem"
     ],
     "includePlatforms": [
         "Editor"

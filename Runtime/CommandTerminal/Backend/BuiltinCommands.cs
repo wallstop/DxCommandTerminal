@@ -95,6 +95,46 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         [RegisterCommand(
             isDefault: true,
+            Name = "get-theme",
+            Help = "Gets the current Terminal UI theme"
+        )]
+        public static void CommandGetTheme(CommandArg[] args)
+        {
+            TerminalUI terminal = TerminalUI.Instance;
+            if (terminal == null)
+            {
+                Terminal.Log(TerminalLogType.Warning, "No Terminal UI found.");
+                return;
+            }
+
+            Terminal.Log(
+                TerminalLogType.Message,
+                $"Current terminal theme is '{terminal._currentTheme}'."
+            );
+        }
+
+        [RegisterCommand(
+            isDefault: true,
+            Name = "get-font",
+            Help = "Gets the current Terminal UI font"
+        )]
+        public static void CommandGetFont(CommandArg[] args)
+        {
+            TerminalUI terminal = TerminalUI.Instance;
+            if (terminal == null)
+            {
+                Terminal.Log(TerminalLogType.Warning, "No Terminal UI found.");
+                return;
+            }
+
+            Terminal.Log(
+                TerminalLogType.Message,
+                $"Current terminal font is '{(terminal._font == null ? "null" : terminal._font.name)}'."
+            );
+        }
+
+        [RegisterCommand(
+            isDefault: true,
             Name = "set-random-theme",
             Help = "Sets the current Terminal UI theme to a randomly selected one",
             MinArgCount = 0,

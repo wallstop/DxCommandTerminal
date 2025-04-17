@@ -14,6 +14,9 @@
     using Input;
     using Persistence;
     using UI;
+#if ENABLE_INPUT_SYSTEM
+    using UnityEngine.InputSystem;
+#endif
     using Random = System.Random;
 
     [CustomEditor(typeof(TerminalUI))]
@@ -88,6 +91,7 @@
                 terminal.gameObject.AddComponent<TerminalThemePersister>();
 
                 EditorUtility.SetDirty(terminal);
+                EditorUtility.SetDirty(terminal.gameObject);
             }
             else
             {
@@ -114,6 +118,24 @@
 
                         break;
                     }
+#if ENABLE_INPUT_SYSTEM
+                    case PlayerInput playerInput when playerInput != null:
+                    {
+                        if (
+                            playerInput.TryGetComponent(out terminal)
+                            && !playerInput.TryGetComponent(
+                                out TerminalPlayerInputController playerInputController
+                            )
+                        )
+                        {
+                            playerInput.gameObject.AddComponent<TerminalPlayerInputController>();
+                            EditorUtility.SetDirty(playerInput.gameObject);
+                        }
+
+                        break;
+                    }
+
+#endif
                 }
             }
         }
