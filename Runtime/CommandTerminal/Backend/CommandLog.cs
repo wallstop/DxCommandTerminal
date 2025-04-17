@@ -1,7 +1,6 @@
 namespace WallstopStudios.DxCommandTerminal.Backend
 {
     using System.Collections.Generic;
-    using System.Diagnostics;
     using System.Linq;
     using DataStructures;
     using UnityEngine;
@@ -53,16 +52,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         public bool HandleLog(string message, TerminalLogType type, bool includeStackTrace = true)
         {
-            string stackTrace;
-            if (includeStackTrace)
-            {
-                StackTrace stack = new();
-                stackTrace = stack.ToString();
-            }
-            else
-            {
-                stackTrace = string.Empty;
-            }
+            string stackTrace = includeStackTrace
+                ? StackTraceUtility.ExtractStackTrace()
+                : string.Empty;
             return HandleLog(message, stackTrace, type);
         }
 
