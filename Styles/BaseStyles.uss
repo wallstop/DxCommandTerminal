@@ -109,6 +109,13 @@
     padding: 0;
 }
 
+.terminal-output-label #unity-text-input {
+    background-color: transparent;
+    margin: 0;
+    border-width: 0;
+    padding: 0;
+}
+
 .terminal-button {
     margin: 4px 2px;
     padding: 0 4px;

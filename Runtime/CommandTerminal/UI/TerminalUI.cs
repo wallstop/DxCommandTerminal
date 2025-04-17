@@ -181,6 +181,9 @@ namespace WallstopStudios.DxCommandTerminal.UI
         private IVisualElementScheduledItem _cursorBlinkSchedule;
 
         private readonly List<VisualElement> _autoCompleteChildren = new();
+        private readonly HashSet<string> _completionBufferCache = new(
+            StringComparer.OrdinalIgnoreCase
+        );
 
         // Cached for performance (avoids allocations)
         private readonly Action _focusInput;
@@ -1080,9 +1083,9 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 {
                     for (int i = 0; i < logs.Count - content.childCount; ++i)
                     {
-                        Label logLabel = new();
-                        logLabel.AddToClassList("terminal-output-label");
-                        content.Add(logLabel);
+                        Label logText = new();
+                        logText.AddToClassList("terminal-output-label");
+                        content.Add(logText);
                     }
                 }
                 else if (logs.Count < content.childCount)
@@ -1100,11 +1103,30 @@ namespace WallstopStudios.DxCommandTerminal.UI
             {
                 for (int i = 0; i < logs.Count && i < content.childCount; ++i)
                 {
-                    if (content[i] is Label logLabel)
+                    VisualElement item = content[i];
+                    switch (item)
                     {
-                        LogItem logItem = logs[i];
-                        SetupLabel(logLabel, logItem);
-                        logLabel.text = logItem.message;
+                        case TextField logText:
+                        {
+                            LogItem logItem = logs[i];
+                            SetupLogText(logText, logItem);
+                            logText.value = logItem.message;
+                            break;
+                        }
+                        case Label logLabel:
+                        {
+                            LogItem logItem = logs[i];
+                            SetupLogText(logLabel, logItem);
+                            logLabel.text = logItem.message;
+                            break;
+                        }
+                        case Button button:
+                        {
+                            LogItem logItem = logs[i];
+                            SetupLogText(button, logItem);
+                            button.text = logItem.message;
+                            break;
+                        }
                     }
                 }
 
@@ -1115,28 +1137,28 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
             return;
 
-            static void SetupLabel(Label label, LogItem log)
+            static void SetupLogText(VisualElement logText, LogItem log)
             {
-                label.EnableInClassList(
+                logText.EnableInClassList(
                     "terminal-output-label--shell",
                     log.type == TerminalLogType.ShellMessage
                 );
-                label.EnableInClassList(
+                logText.EnableInClassList(
                     "terminal-output-label--error",
                     log.type
                         is TerminalLogType.Exception
                             or TerminalLogType.Error
                             or TerminalLogType.Assert
                 );
-                label.EnableInClassList(
+                logText.EnableInClassList(
                     "terminal-output-label--warning",
                     log.type == TerminalLogType.Warning
                 );
-                label.EnableInClassList(
+                logText.EnableInClassList(
                     "terminal-output-label--message",
                     log.type == TerminalLogType.Message
                 );
-                label.EnableInClassList(
+                logText.EnableInClassList(
                     "terminal-output-label--input",
                     log.type == TerminalLogType.Input
                 );
@@ -1207,8 +1229,8 @@ namespace WallstopStudios.DxCommandTerminal.UI
                         }
                         else
                         {
-                            Label hintLabel = new(hint);
-                            hintElement = hintLabel;
+                            Label hintText = new(hint);
+                            hintElement = hintText;
                         }
 
                         hintElement.name = $"SuggestionText{i}";
@@ -1229,9 +1251,11 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 }
             }
 
+            bool shouldUpdateCompletionIndex = false;
             try
             {
-                if (_autoCompleteContainer.childCount == bufferLength)
+                shouldUpdateCompletionIndex = _autoCompleteContainer.childCount == bufferLength;
+                if (shouldUpdateCompletionIndex)
                 {
                     UpdateAutoCompleteView();
                 }
@@ -1249,6 +1273,9 @@ namespace WallstopStudios.DxCommandTerminal.UI
                             case Label label:
                                 label.text = _lastCompletionBuffer[i];
                                 break;
+                            case TextField textField:
+                                textField.value = _lastCompletionBuffer[i];
+                                break;
                         }
 
                         bool isSelected = i == _lastCompletionIndex;
@@ -1260,7 +1287,10 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
             finally
             {
-                _previousLastCompletionIndex = _lastCompletionIndex;
+                if (shouldUpdateCompletionIndex)
+                {
+                    _previousLastCompletionIndex = _lastCompletionIndex;
+                }
             }
         }
 
@@ -1710,24 +1740,24 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 _lastKnownCommandText ??= _input.CommandText ?? string.Empty;
                 string[] completionBuffer =
                     Terminal.AutoComplete?.Complete(_lastKnownCommandText) ?? Array.Empty<string>();
-
+                bool equivalentBuffers = false;
                 try
                 {
                     int completionLength = completionBuffer.Length;
-                    bool equivalentBuffers =
+                    equivalentBuffers =
                         _lastCompletionBuffer != null
                         && _lastCompletionBuffer.Length == completionBuffer.Length;
                     if (equivalentBuffers)
                     {
-                        for (int i = 0; i < completionLength; i++)
+                        _completionBufferCache.Clear();
+                        for (int i = 0; i < completionLength; ++i)
                         {
-                            if (
-                                !string.Equals(
-                                    completionBuffer[i],
-                                    _lastCompletionBuffer[i],
-                                    StringComparison.OrdinalIgnoreCase
-                                )
-                            )
+                            _completionBufferCache.Add(_lastCompletionBuffer[i]);
+                        }
+
+                        foreach (var newCompletionItem in completionBuffer)
+                        {
+                            if (!_completionBufferCache.Contains(newCompletionItem))
                             {
                                 equivalentBuffers = false;
                                 break;
@@ -1776,7 +1806,11 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 }
                 finally
                 {
-                    _lastCompletionBuffer = completionBuffer;
+                    if (!equivalentBuffers)
+                    {
+                        _lastCompletionBuffer = completionBuffer;
+                    }
+
                     _previousLastCompletionIndex ??= _lastCompletionIndex;
                 }
             }
