@@ -128,13 +128,15 @@
                             )
                         )
                         {
-                            playerInput.gameObject.AddComponent<TerminalPlayerInputController>();
+                            playerInputController =
+                                playerInput.gameObject.AddComponent<TerminalPlayerInputController>();
+                            playerInputController.terminal = terminal;
+                            EditorUtility.SetDirty(playerInputController);
                             EditorUtility.SetDirty(playerInput.gameObject);
                         }
 
                         break;
                     }
-
 #endif
                 }
             }
