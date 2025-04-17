@@ -235,7 +235,7 @@
         {
             if (_fontKey < 0 || _secondFontKey < 0)
             {
-                return terminal._font;
+                return terminal.CurrentFont;
             }
 
             try
@@ -244,7 +244,7 @@
             }
             catch
             {
-                return terminal._font;
+                return terminal.CurrentFont;
             }
         }
 
@@ -574,7 +574,7 @@
             {
                 if (_themeIndex < 0)
                 {
-                    _themeIndex = _themes.IndexOf(terminal._currentTheme);
+                    _themeIndex = _themes.IndexOf(terminal.CurrentTheme);
                 }
 
                 if (_themeIndex < 0)
@@ -602,7 +602,7 @@
                     );
                     if (GUILayout.Button(setThemeContent, _impactButtonStyle))
                     {
-                        terminal.SetTheme(selectedTheme);
+                        terminal.SetTheme(selectedTheme, persist: true);
                         anyChanged = true;
                     }
                 }
@@ -854,17 +854,17 @@
 
         private void TryMatchExistingFont(TerminalUI terminal)
         {
-            if (0 <= _fontKey || 0 <= _secondFontKey || terminal._font == null)
+            if (0 <= _fontKey || 0 <= _secondFontKey || terminal.CurrentFont == null)
             {
                 return;
             }
 
-            TrySetFontKeysFromFont(terminal._font);
+            TrySetFontKeysFromFont(terminal.CurrentFont);
         }
 
         private static bool TrySetupDefaultFont(TerminalUI terminal)
         {
-            if (terminal._font != null || terminal._loadedFonts is not { Count: > 0 })
+            if (terminal.CurrentFont != null || terminal._loadedFonts is not { Count: > 0 })
             {
                 return false;
             }
@@ -896,7 +896,8 @@
             {
                 defaultFont = terminal._loadedFonts.FirstOrDefault();
             }
-            terminal._font = defaultFont;
+
+            terminal.SetFont(defaultFont, persist: true);
             return true;
         }
 
@@ -962,7 +963,7 @@
                         );
                         if (GUILayout.Button(setFontContent, _impactButtonStyle))
                         {
-                            terminal._font = selectedFont;
+                            terminal.SetFont(selectedFont, persist: true);
                             anyChanged = true;
                         }
                     }

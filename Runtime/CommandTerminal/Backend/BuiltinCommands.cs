@@ -15,7 +15,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         private const string BulkSeparator = "    ";
 
         private static readonly StringBuilder StringBuilder = new();
-        private static readonly System.Random Random = new();
 
         [RegisterCommand(
             isDefault: true,
@@ -76,7 +75,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
             string theme = args[0].contents;
 
-            if (string.Equals(theme, terminal._currentTheme, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(theme, terminal.CurrentTheme, StringComparison.OrdinalIgnoreCase))
             {
                 Terminal.Log(TerminalLogType.Message, $"Theme '{theme}' is already set.");
                 return;
@@ -89,7 +88,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return;
             }
 
-            terminal.SetTheme(theme, persist: true);
+            terminal.SetTheme(theme);
             Terminal.Log(TerminalLogType.Message, $"Theme '{theme}' set.");
         }
 
@@ -109,7 +108,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
             Terminal.Log(
                 TerminalLogType.Message,
-                $"Current terminal theme is '{terminal._currentTheme}'."
+                $"Current terminal theme is '{terminal.CurrentTheme}'."
             );
         }
 
@@ -127,9 +126,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return;
             }
 
+            Font currentFont = terminal.CurrentFont;
             Terminal.Log(
                 TerminalLogType.Message,
-                $"Current terminal font is '{(terminal._font == null ? "null" : terminal._font.name)}'."
+                $"Current terminal font is '{(currentFont == null ? "null" : currentFont.name)}'."
             );
         }
 
@@ -149,24 +149,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return;
             }
 
-            if (terminal._loadedThemes.Count == 0)
-            {
-                Terminal.Log(TerminalLogType.Warning, "No themes found.");
-                return;
-            }
-
-            int currentThemeIndex = terminal._loadedThemes.IndexOf(terminal._currentTheme);
-
-            int newThemeIndex;
-            do
-            {
-                newThemeIndex = Random.Next(terminal._loadedThemes.Count);
-            } while (currentThemeIndex == newThemeIndex && terminal._loadedThemes.Count != 1);
-
-            string theme = terminal._loadedThemes[newThemeIndex];
-
-            terminal.SetTheme(theme, persist: true);
-            Terminal.Log(TerminalLogType.Message, $"Randomly selected and set Theme '{theme}'.");
+            string newTheme = terminal.SetRandomTheme();
+            Terminal.Log(
+                TerminalLogType.Message,
+                $"Randomly selected and set theme to '{newTheme}'."
+            );
         }
 
         [RegisterCommand(
@@ -198,7 +185,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
             Font font = terminal._loadedFonts[newFontIndex];
 
-            terminal.SetFont(font, persist: true);
+            terminal.SetFont(font);
             Terminal.Log(TerminalLogType.Message, $"Font '{font.name}' set.");
         }
 
@@ -218,17 +205,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return;
             }
 
-            int currentFontIndex = terminal._loadedFonts.IndexOf(terminal._font);
-
-            int newFontIndex;
-            do
-            {
-                newFontIndex = Random.Next(terminal._loadedFonts.Count);
-            } while (currentFontIndex == newFontIndex && terminal._loadedFonts.Count != 1);
-
-            Font font = terminal._loadedFonts[newFontIndex];
-            terminal.SetFont(font, persist: true);
-            Terminal.Log(TerminalLogType.Message, $"Randomly selected and set Font '{font.name}'.");
+            Font font = terminal.SetRandomFont();
+            Terminal.Log(
+                TerminalLogType.Message,
+                $"Randomly selected and set font to '{font.name}'."
+            );
         }
 
         [RegisterCommand(

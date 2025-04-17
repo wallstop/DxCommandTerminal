@@ -23,18 +23,15 @@
         [DxShowIf(nameof(savePeriodically))]
         public float savePeriod = 1f;
 
-        protected string _storagePath;
+        protected Font _lastSeenFont;
+        protected string _lastSeenTheme;
+        protected float? _nextUpdateTime;
 
-        private Font _lastSeenFont;
-        private string _lastSeenTheme;
-        private float? _nextUpdateTime;
+        protected bool _persisting;
+        protected Coroutine _persistence;
 
-        private bool _persisting;
-        private Coroutine _persistence;
-
-        private protected virtual void Awake()
+        protected virtual void Awake()
         {
-            _storagePath = Application.persistentDataPath;
             if (terminal != null)
             {
                 return;
@@ -76,10 +73,10 @@
             }
 
             if (
-                _lastSeenFont == terminal._font
+                _lastSeenFont == terminal.CurrentFont
                 && string.Equals(
                     _lastSeenTheme,
-                    terminal._currentTheme,
+                    terminal.CurrentTheme,
                     StringComparison.OrdinalIgnoreCase
                 )
             )
@@ -103,8 +100,8 @@
 
         protected virtual IEnumerator CheckAndPersistAnyChanges(bool hydrate)
         {
-            _lastSeenFont = terminal._font;
-            _lastSeenTheme = terminal._currentTheme;
+            _lastSeenFont = terminal.CurrentFont;
+            _lastSeenTheme = terminal.CurrentTheme;
             _persisting = true;
             try
             {
@@ -141,8 +138,20 @@
                     }
 
                     string inputJson = readerTask.Result;
-
-                    configurations = JsonUtility.FromJson<TerminalThemeConfigurations>(inputJson);
+                    try
+                    {
+                        configurations = JsonUtility.FromJson<TerminalThemeConfigurations>(
+                            inputJson
+                        );
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.LogError(
+                            $"Failed to parse theme file {themeFile}, defaulting to empty theme file: {e}",
+                            this
+                        );
+                        configurations = new TerminalThemeConfigurations();
+                    }
                 }
                 else
                 {
@@ -150,7 +159,6 @@
                         $"Creating new theme file {themeFile} for terminal {terminal.id} ...",
                         this
                     );
-                    ;
                     configurations = new TerminalThemeConfigurations();
                 }
 
@@ -271,11 +279,11 @@
                 return null;
             }
 
-            return new TerminalThemeConfiguration()
+            return new TerminalThemeConfiguration
             {
                 terminalId = terminal.id,
-                font = (terminal._font == null ? string.Empty : terminal._font.name),
-                theme = terminal._currentTheme ?? string.Empty,
+                font = terminal.CurrentFont == null ? string.Empty : terminal.CurrentFont.name,
+                theme = terminal.CurrentTheme ?? string.Empty,
             };
         }
     }

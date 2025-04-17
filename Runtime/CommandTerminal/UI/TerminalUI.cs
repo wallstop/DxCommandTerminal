@@ -11,9 +11,11 @@ namespace WallstopStudios.DxCommandTerminal.UI
     using Attributes;
     using Backend;
     using Extensions;
+    using Helper;
     using Input;
     using UnityEditor;
     using UnityEngine;
+    using UnityEngine.Serialization;
     using UnityEngine.UIElements;
 
     [DisallowMultipleComponent]
@@ -37,6 +39,11 @@ namespace WallstopStudios.DxCommandTerminal.UI
             && _state != TerminalState.OpenSmall
             && Mathf.Approximately(_currentWindowHeight, _targetWindowHeight);
 
+        public string CurrentTheme =>
+            !string.IsNullOrWhiteSpace(_runtimeTheme) ? _runtimeTheme : _persistedTheme;
+
+        public Font CurrentFont => _runtimeFont != null ? _runtimeFont : _persistedFont;
+
         [SerializeField]
         [Tooltip("Unique Id for this terminal, mainly for use with persisted configuration")]
         internal string id = Guid.NewGuid().ToString();
@@ -47,16 +54,15 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         [SerializeField]
         [HideInInspector]
-        internal string _currentTheme = "dark-theme";
+        internal string _persistedTheme = "dark-theme";
 
         [Header("Window")]
         [Range(0, 1)]
-        [SerializeField]
-        private float _maxHeight = 0.7f;
+        public float maxHeight = 0.7f;
 
         [SerializeField]
         [Range(0, 1)]
-        private float _smallTerminalRatio = 0.4714285f;
+        public float smallTerminalRatio = 0.4714285f;
 
         [Range(100, 1000)]
         [SerializeField]
@@ -70,50 +76,45 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         [Header("Input")]
         [SerializeField]
-        internal Font _font;
+        internal Font _persistedFont;
 
         [SerializeField]
-        private string _inputCaret = "λ»";
+        private string _inputCaret = ">";
 
         [Header("Buttons")]
-        [SerializeField]
-        private bool _showGUIButtons;
+        public bool showGUIButtons;
 
-        [DxShowIf(nameof(_showGUIButtons))]
-        [SerializeField]
-        private string _runButtonText = "run";
+        [DxShowIf(nameof(showGUIButtons))]
+        public string runButtonText = "run";
 
-        [DxShowIf(nameof(_showGUIButtons))]
+        [DxShowIf(nameof(showGUIButtons))]
         [SerializeField]
-        private string _closeButtonText = "close";
+        public string closeButtonText = "close";
 
-        [DxShowIf(nameof(_showGUIButtons))]
-        [SerializeField]
-        private string _smallButtonText = "small";
+        [DxShowIf(nameof(showGUIButtons))]
+        public string smallButtonText = "small";
 
-        [DxShowIf(nameof(_showGUIButtons))]
-        [SerializeField]
-        private string _fullButtonText = "full";
+        [DxShowIf(nameof(showGUIButtons))]
+        public string fullButtonText = "full";
 
         [Header("Hints")]
-        [SerializeField]
-        private HintDisplayMode _hintDisplayMode = HintDisplayMode.AutoCompleteOnly;
+        public HintDisplayMode hintDisplayMode = HintDisplayMode.AutoCompleteOnly;
 
-        [SerializeField]
-        private bool _makeHintsClickable = true;
+        public bool makeHintsClickable = true;
 
         [Header("System")]
         [SerializeField]
         private int _cursorBlinkRateMilliseconds = 666;
 
+#if UNITY_EDITOR
         [SerializeField]
         private bool _trackChangesInEditor = true;
+#endif
 
         [Tooltip("Will reset static command state in OnEnable and Start when set to true")]
         public bool resetStateOnInit;
 
-        [SerializeField]
-        private bool _skipSameCommandsInHistory = true;
+        public bool skipSameCommandsInHistory = true;
 
         [SerializeField]
         public bool ignoreDefaultCommands;
@@ -153,8 +154,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
         private float _realWindowHeight;
         private bool _unityLogAttached;
         private bool _started;
-        private int? _lastWidth;
-        private int? _lastHeight;
         private bool _needsFocus;
         private bool _needsScrollToEnd;
         private bool _needsAutoCompleteReset;
@@ -167,6 +166,8 @@ namespace WallstopStudios.DxCommandTerminal.UI
         private bool _isCommandFromCode;
         private bool _initialResetStateOnInit;
         private bool _commandIssuedThisFrame;
+        private string _runtimeTheme;
+        private Font _runtimeFont;
 
         private VisualElement _terminalContainer;
         private ScrollView _logScrollView;
@@ -250,7 +251,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             string[] cursorBlinkPropertiesTracked = { nameof(_cursorBlinkRateMilliseconds) };
             TrackProperties(cursorBlinkPropertiesTracked, _cursorBlinkProperties);
 
-            string[] fontPropertiesTracked = { nameof(_font) };
+            string[] fontPropertiesTracked = { nameof(_persistedFont) };
             TrackProperties(fontPropertiesTracked, _fontProperties);
 
             string[] staticStaticPropertiesTracked =
@@ -264,7 +265,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             };
             TrackProperties(staticStaticPropertiesTracked, _staticStateProperties);
 
-            string[] windowPropertiesTracked = { nameof(_maxHeight), nameof(_smallTerminalRatio) };
+            string[] windowPropertiesTracked = { nameof(maxHeight), nameof(smallTerminalRatio) };
             TrackProperties(windowPropertiesTracked, _windowProperties);
 
             string[] logUnityMessagePropertiesTracked = { nameof(_logUnityMessages) };
@@ -272,7 +273,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             string[] autoCompletePropertiesTracked =
             {
-                nameof(_hintDisplayMode),
+                nameof(hintDisplayMode),
                 nameof(_disabledCommands),
                 nameof(ignoreDefaultCommands),
             };
@@ -367,29 +368,17 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 SetState(TerminalState.Closed);
             }
 
-            if (_font == null)
-            {
-                Debug.LogError(
-                    "Command Console Warning: Please assign a font. Defaulting to Courier New",
-                    this
-                );
-                _font = Font.CreateDynamicFontFromOSFont("Courier New", 16);
-            }
-
             RefreshStaticState(force: resetStateOnInit);
-            SetupWindow();
+            ResetWindowIdempotent();
             ConsumeAndLogErrors();
             ResetAutoComplete();
             _started = true;
-            _lastKnownHintsClickable = _makeHintsClickable;
+            _lastKnownHintsClickable = makeHintsClickable;
         }
 
         private void LateUpdate()
         {
-            if (_lastHeight != Screen.height || _lastWidth != Screen.width)
-            {
-                SetupWindow();
-            }
+            ResetWindowIdempotent();
 
             HandleOpenness();
             RefreshUI();
@@ -499,7 +488,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             if (CheckForRefresh(_fontProperties))
             {
-                SetFont(_font);
+                SetFont(_persistedFont);
             }
 
             if (CheckForRefresh(_staticStateProperties))
@@ -509,7 +498,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             if (CheckForRefresh(_windowProperties))
             {
-                SetupWindow();
+                ResetWindowIdempotent();
             }
 
             if (CheckForRefresh(_logUnityMessageProperties))
@@ -590,50 +579,16 @@ namespace WallstopStudios.DxCommandTerminal.UI
         public void SetState(TerminalState newState)
         {
             _commandIssuedThisFrame = true;
-            try
+            _state = newState;
+            ResetWindowIdempotent();
+            if (_state != TerminalState.Closed)
             {
-                switch (newState)
-                {
-                    case TerminalState.Closed:
-                    {
-                        _targetWindowHeight = 0;
-                        break;
-                    }
-                    case TerminalState.OpenSmall:
-                    {
-                        _targetWindowHeight = Screen.height * _maxHeight * _smallTerminalRatio;
-                        _realWindowHeight = _targetWindowHeight;
-                        break;
-                    }
-                    case TerminalState.OpenFull:
-                    {
-                        _realWindowHeight = Screen.height * _maxHeight;
-                        _targetWindowHeight = _realWindowHeight;
-                        break;
-                    }
-                    default:
-                    {
-                        throw new InvalidEnumArgumentException(
-                            nameof(newState),
-                            (int)newState,
-                            typeof(TerminalState)
-                        );
-                    }
-                }
-
-                _state = newState;
+                _needsFocus = true;
             }
-            finally
+            else
             {
-                if (_state != TerminalState.Closed)
-                {
-                    _needsFocus = true;
-                }
-                else
-                {
-                    _input.CommandText = string.Empty;
-                    ResetAutoComplete();
-                }
+                _input.CommandText = string.Empty;
+                ResetAutoComplete();
             }
         }
 
@@ -648,7 +603,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
         private void ResetAutoComplete()
         {
             _lastKnownCommandText = _input.CommandText ?? string.Empty;
-            if (_hintDisplayMode == HintDisplayMode.Always)
+            if (hintDisplayMode == HintDisplayMode.Always)
             {
                 string[] buffer = _lastCompletionBuffer;
                 _lastCompletionBuffer =
@@ -685,39 +640,29 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
         }
 
-        private void SetupWindow()
+        private void ResetWindowIdempotent()
         {
             int height = Screen.height;
-            int width = Screen.width;
-
-            try
+            switch (_state)
             {
-                switch (_state)
+                case TerminalState.OpenSmall:
                 {
-                    case TerminalState.OpenSmall:
-                    {
-                        _realWindowHeight = height * _maxHeight * _smallTerminalRatio;
-                        _targetWindowHeight = _realWindowHeight;
-                        break;
-                    }
-                    case TerminalState.OpenFull:
-                    {
-                        _realWindowHeight = height * _maxHeight;
-                        _targetWindowHeight = _realWindowHeight;
-                        break;
-                    }
-                    default:
-                    {
-                        _realWindowHeight = height * _maxHeight * _smallTerminalRatio;
-                        _targetWindowHeight = 0;
-                        break;
-                    }
+                    _realWindowHeight = height * maxHeight * smallTerminalRatio;
+                    _targetWindowHeight = _realWindowHeight;
+                    break;
                 }
-            }
-            finally
-            {
-                _lastHeight = height;
-                _lastWidth = width;
+                case TerminalState.OpenFull:
+                {
+                    _realWindowHeight = height * maxHeight;
+                    _targetWindowHeight = _realWindowHeight;
+                    break;
+                }
+                default:
+                {
+                    _realWindowHeight = height * maxHeight * smallTerminalRatio;
+                    _targetWindowHeight = 0;
+                    break;
+                }
             }
         }
 
@@ -736,38 +681,23 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 return;
             }
 
-            SetFont(_font);
+            SetFont(_persistedFont);
             uiRoot.Clear();
             VisualElement root = new();
             uiRoot.Add(root);
             root.name = "TerminalRoot";
             root.AddToClassList("terminal-root");
-            if (!string.IsNullOrWhiteSpace(_currentTheme))
-            {
-                if (
-                    _loadedThemes is { Count: > 0 }
-                    && !_loadedThemes.Contains(_currentTheme, StringComparer.OrdinalIgnoreCase)
-                )
-                {
-                    string defaultTheme = _loadedThemes[0];
-                    Debug.Log($"Failed to find current theme, defaulting to {defaultTheme}.");
-                    _currentTheme = defaultTheme;
-                }
-            }
-            else if (_loadedThemes is { Count: > 0 })
-            {
-                string defaultTheme = _loadedThemes[0];
-                Debug.Log($"No theme specified, defaulting to {defaultTheme}.");
-                _currentTheme = defaultTheme;
-            }
 
-            if (!string.IsNullOrWhiteSpace(_currentTheme))
+            InitializeTheme();
+            InitializeFont();
+
+            if (!string.IsNullOrWhiteSpace(_runtimeTheme))
             {
-                root.AddToClassList(_currentTheme);
+                root.AddToClassList(_runtimeTheme);
             }
             else
             {
-                Debug.LogError("Failed to load any themes!");
+                Debug.LogError("Failed to load any themes!", this);
             }
 
             _terminalContainer = new VisualElement { name = "TerminalContainer" };
@@ -794,7 +724,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             _runButton = new Button(EnterCommand)
             {
-                text = _runButtonText,
+                text = runButtonText,
                 name = "RunCommandButton",
             };
             _runButton.AddToClassList("terminal-button");
@@ -828,9 +758,9 @@ namespace WallstopStudios.DxCommandTerminal.UI
                     context._input.CommandText = evt.newValue;
 
                     context._runButton.style.display =
-                        _showGUIButtons
+                        showGUIButtons
                         && !string.IsNullOrWhiteSpace(context._input.CommandText)
-                        && !string.IsNullOrWhiteSpace(context._runButtonText)
+                        && !string.IsNullOrWhiteSpace(context.runButtonText)
                             ? DisplayStyle.Flex
                             : DisplayStyle.None;
                     if (!context._isCommandFromCode)
@@ -864,6 +794,80 @@ namespace WallstopStudios.DxCommandTerminal.UI
             _stateButtonContainer.AddToClassList("state-button-container");
             root.Add(_stateButtonContainer);
             RefreshStateButtons();
+        }
+
+        private void InitializeTheme()
+        {
+            _runtimeTheme = _persistedTheme;
+            if (_loadedThemes.Contains(_runtimeTheme))
+            {
+                return;
+            }
+
+            if (_loadedThemes is { Count: > 0 })
+            {
+                _runtimeTheme = _loadedThemes.FirstOrDefault(theme =>
+                    theme.Contains("dark", StringComparison.OrdinalIgnoreCase)
+                );
+                if (_runtimeTheme == null)
+                {
+                    _runtimeTheme = _loadedThemes.FirstOrDefault(theme =>
+                        theme.Contains("light", StringComparison.OrdinalIgnoreCase)
+                    );
+                }
+                if (_runtimeTheme == null)
+                {
+                    _runtimeTheme = _loadedThemes.FirstOrDefault();
+                }
+                Debug.LogWarning($"Persisted theme not found, defaulting to '{_runtimeTheme}'.");
+            }
+            else
+            {
+                Debug.LogError("No available terminal themes.", this);
+            }
+        }
+
+        private void InitializeFont()
+        {
+            _runtimeFont = _persistedFont;
+            if (_runtimeFont != null)
+            {
+                return;
+            }
+
+            if (_loadedFonts is { Count: > 0 })
+            {
+                _runtimeFont = _loadedFonts.FirstOrDefault(font =>
+                    font.name.Contains("Mono", StringComparison.OrdinalIgnoreCase)
+                    && font.name.Contains("Regular", StringComparison.OrdinalIgnoreCase)
+                );
+                if (_runtimeFont == null)
+                {
+                    _runtimeFont = _loadedFonts.FirstOrDefault(font =>
+                        font.name.Contains("Mono", StringComparison.OrdinalIgnoreCase)
+                    );
+                }
+                if (_runtimeFont == null)
+                {
+                    _runtimeFont = _loadedFonts.FirstOrDefault(font =>
+                        font.name.Contains("Regular", StringComparison.OrdinalIgnoreCase)
+                    );
+                }
+                if (_runtimeFont == null)
+                {
+                    _runtimeFont = _loadedFonts.FirstOrDefault();
+                }
+            }
+
+            if (_runtimeFont == null)
+            {
+                Debug.LogError("No font assigned, defaulting to Courier New 16pt", this);
+                _runtimeFont = Font.CreateDynamicFontFromOSFont("Courier New", 16);
+            }
+            else
+            {
+                Debug.LogWarning($"No font assigned, defaulting to {_runtimeFont.name}.", this);
+            }
         }
 
         private void ScheduleBlinkingCursor()
@@ -1177,7 +1181,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
         {
             bool shouldDisplay =
                 _lastCompletionBuffer is { Length: > 0 }
-                && _hintDisplayMode is HintDisplayMode.Always or HintDisplayMode.AutoCompleteOnly
+                && hintDisplayMode is HintDisplayMode.Always or HintDisplayMode.AutoCompleteOnly
                 && _autoCompleteContainer != null;
 
             if (!shouldDisplay)
@@ -1192,10 +1196,10 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
 
             int bufferLength = _lastCompletionBuffer.Length;
-            if (_lastKnownHintsClickable != _makeHintsClickable)
+            if (_lastKnownHintsClickable != makeHintsClickable)
             {
                 _autoCompleteContainer.Clear();
-                _lastKnownHintsClickable = _makeHintsClickable;
+                _lastKnownHintsClickable = makeHintsClickable;
             }
 
             int currentChildCount = _autoCompleteContainer.childCount;
@@ -1212,7 +1216,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                         string hint = _lastCompletionBuffer[i];
                         VisualElement hintElement;
 
-                        if (_makeHintsClickable)
+                        if (makeHintsClickable)
                         {
                             int currentIndex = i;
                             string currentHint = hint;
@@ -1410,7 +1414,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
 
             _stateButtonContainer.style.top = _currentWindowHeight;
-            DisplayStyle displayStyle = _showGUIButtons ? DisplayStyle.Flex : DisplayStyle.None;
+            DisplayStyle displayStyle = showGUIButtons ? DisplayStyle.Flex : DisplayStyle.None;
 
             for (int i = 0; i < _stateButtonContainer.childCount; ++i)
             {
@@ -1418,7 +1422,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 child.style.display = displayStyle;
             }
 
-            if (!_showGUIButtons)
+            if (!showGUIButtons)
             {
                 return;
             }
@@ -1456,33 +1460,33 @@ namespace WallstopStudios.DxCommandTerminal.UI
             switch (_state)
             {
                 case TerminalState.Closed:
-                    if (!string.IsNullOrWhiteSpace(_smallButtonText))
+                    if (!string.IsNullOrWhiteSpace(smallButtonText))
                     {
-                        firstButton.text = _smallButtonText;
+                        firstButton.text = smallButtonText;
                     }
-                    if (!string.IsNullOrWhiteSpace(_fullButtonText))
+                    if (!string.IsNullOrWhiteSpace(fullButtonText))
                     {
-                        secondButton.text = _fullButtonText;
+                        secondButton.text = fullButtonText;
                     }
                     break;
                 case TerminalState.OpenSmall:
-                    if (!string.IsNullOrWhiteSpace(_closeButtonText))
+                    if (!string.IsNullOrWhiteSpace(closeButtonText))
                     {
-                        firstButton.text = _closeButtonText;
+                        firstButton.text = closeButtonText;
                     }
-                    if (!string.IsNullOrWhiteSpace(_fullButtonText))
+                    if (!string.IsNullOrWhiteSpace(fullButtonText))
                     {
-                        secondButton.text = _fullButtonText;
+                        secondButton.text = fullButtonText;
                     }
                     break;
                 case TerminalState.OpenFull:
-                    if (!string.IsNullOrWhiteSpace(_closeButtonText))
+                    if (!string.IsNullOrWhiteSpace(closeButtonText))
                     {
-                        firstButton.text = _closeButtonText;
+                        firstButton.text = closeButtonText;
                     }
-                    if (!string.IsNullOrWhiteSpace(_smallButtonText))
+                    if (!string.IsNullOrWhiteSpace(smallButtonText))
                     {
-                        secondButton.text = _smallButtonText;
+                        secondButton.text = smallButtonText;
                     }
                     break;
                 default:
@@ -1499,14 +1503,14 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 switch (_state)
                 {
                     case TerminalState.Closed:
-                        if (!string.IsNullOrWhiteSpace(_smallButtonText))
+                        if (!string.IsNullOrWhiteSpace(smallButtonText))
                         {
                             SetState(TerminalState.OpenSmall);
                         }
                         break;
                     case TerminalState.OpenSmall:
                     case TerminalState.OpenFull:
-                        if (!string.IsNullOrWhiteSpace(_closeButtonText))
+                        if (!string.IsNullOrWhiteSpace(closeButtonText))
                         {
                             SetState(TerminalState.Closed);
                         }
@@ -1526,13 +1530,13 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 {
                     case TerminalState.Closed:
                     case TerminalState.OpenSmall:
-                        if (!string.IsNullOrWhiteSpace(_fullButtonText))
+                        if (!string.IsNullOrWhiteSpace(fullButtonText))
                         {
                             SetState(TerminalState.OpenFull);
                         }
                         break;
                     case TerminalState.OpenFull:
-                        if (!string.IsNullOrWhiteSpace(_smallButtonText))
+                        if (!string.IsNullOrWhiteSpace(smallButtonText))
                         {
                             SetState(TerminalState.OpenSmall);
                         }
@@ -1547,16 +1551,36 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
         }
 
+        public Font SetRandomFont(bool persist = false)
+        {
+            if (_loadedFonts is not { Count: > 0 })
+            {
+                return _runtimeFont;
+            }
+
+            int currentFontIndex = _loadedFonts.IndexOf(_runtimeFont);
+
+            int newFontIndex;
+            do
+            {
+                newFontIndex = ThreadLocalRandom.Instance.Next(_loadedFonts.Count);
+            } while (newFontIndex == currentFontIndex && _loadedFonts.Count != 1);
+
+            Font newFont = _loadedFonts[newFontIndex];
+            SetFont(newFont, persist);
+            return newFont;
+        }
+
         public void SetFont(Font font, bool persist = false)
         {
-            if (_font == font)
+            if (!persist && CurrentFont == font)
             {
                 return;
             }
 
             if (font == null)
             {
-                Debug.LogError("Cannot set null font.");
+                Debug.LogError("Cannot set null font.", this);
                 return;
             }
 
@@ -1566,17 +1590,19 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 return;
             }
 
-            Font currentFont = _font;
+            Font currentFont = _persistedFont;
 
+            _runtimeFont = font;
             Debug.Log(
                 currentFont == null
-                    ? $"Setting font to {currentFont.name}."
-                    : $"Changing font from {currentFont.name} to {font}."
+                    ? $"Setting font to {font.name}."
+                    : $"Changing font from {currentFont.name} to {font.name}.",
+                this
             );
 
             if (persist)
             {
-                _font = font;
+                _persistedFont = font;
             }
 
             if (Application.isPlaying)
@@ -1589,15 +1615,31 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
                 root.style.unityFontDefinition = new StyleFontDefinition(font);
             }
-            else
+        }
+
+        public string SetRandomTheme(bool persist = false)
+        {
+            if (_loadedThemes is not { Count: > 0 })
             {
-                _font = font;
+                return _runtimeTheme;
             }
+
+            int currentThemeIndex = _loadedThemes.IndexOf(_runtimeTheme);
+
+            int newThemeIndex;
+            do
+            {
+                newThemeIndex = ThreadLocalRandom.Instance.Next(_loadedThemes.Count);
+            } while (newThemeIndex == currentThemeIndex && _loadedThemes.Count != 1);
+
+            string newTheme = _loadedThemes[newThemeIndex];
+            SetTheme(newTheme, persist);
+            return newTheme;
         }
 
         public void SetTheme(string theme, bool persist = false)
         {
-            if (string.Equals(theme, _currentTheme, StringComparison.OrdinalIgnoreCase))
+            if (!persist && string.Equals(theme, CurrentTheme, StringComparison.OrdinalIgnoreCase))
             {
                 return;
             }
@@ -1612,11 +1654,12 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 return;
             }
 
-            string currentTheme = _currentTheme;
-            Debug.Log($"Changing theme from {currentTheme} to {theme}.");
+            string currentTheme = _persistedTheme;
+            _runtimeTheme = theme;
+            Debug.Log($"Changing theme from {currentTheme} to {theme}.", this);
             if (persist)
             {
-                _currentTheme = theme;
+                _persistedTheme = theme;
             }
 
             if (Application.isPlaying)
@@ -1649,10 +1692,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
                 terminalRoot.AddToClassList(theme);
             }
-            else
-            {
-                _currentTheme = theme;
-            }
         }
 
         public void HandlePrevious()
@@ -1663,7 +1702,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
 
             _input.CommandText =
-                Terminal.History?.Previous(_skipSameCommandsInHistory) ?? string.Empty;
+                Terminal.History?.Previous(skipSameCommandsInHistory) ?? string.Empty;
             ResetAutoComplete();
             _needsFocus = true;
         }
@@ -1675,7 +1714,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 return;
             }
 
-            _input.CommandText = Terminal.History?.Next(_skipSameCommandsInHistory) ?? string.Empty;
+            _input.CommandText = Terminal.History?.Next(skipSameCommandsInHistory) ?? string.Empty;
             ResetAutoComplete();
             _needsFocus = true;
         }

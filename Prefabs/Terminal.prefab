@@ -1,6 +1,6 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
---- !u!1 &7046523385998542400
+--- !u!1 &6313713159245746586
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -8,11 +8,11 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 5763344186370883839}
-  - component: {fileID: 3582569734140004161}
-  - component: {fileID: 3570056587590855099}
-  - component: {fileID: 2638065628856389739}
-  - component: {fileID: 6712114483040104943}
+  - component: {fileID: 5556119262960349924}
+  - component: {fileID: 1715430555125022178}
+  - component: {fileID: 6698975275872788525}
+  - component: {fileID: 3015002662346126535}
+  - component: {fileID: 2106693276254352669}
   m_Layer: 0
   m_Name: Terminal
   m_TagString: Untagged
@@ -20,13 +20,13 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!4 &5763344186370883839
+--- !u!4 &5556119262960349924
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7046523385998542400}
+  m_GameObject: {fileID: 6313713159245746586}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
@@ -35,39 +35,39 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &3582569734140004161
+--- !u!114 &1715430555125022178
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7046523385998542400}
+  m_GameObject: {fileID: 6313713159245746586}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: e7d3b3291a9649b3ad77dd07a532b854, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  id: 621e355f-29ef-4b79-bb41-c4d77b6afed2
-  _uiDocument: {fileID: 3570056587590855099}
-  _currentTheme: dark-theme
-  _maxHeight: 0.7
-  _smallTerminalRatio: 0.4714285
+  id: d1d634f1-ebee-40eb-a301-9bb4721f2c12
+  _uiDocument: {fileID: 6698975275872788525}
+  _persistedTheme: dark-theme
+  maxHeight: 0.7
+  smallTerminalRatio: 0.4714285
   _toggleSpeed: 360
   _logBufferSize: 256
   _historyBufferSize: 512
-  _font: {fileID: 12800000, guid: af8ca43d617b047a58bc1f06adfdb789, type: 3}
-  _inputCaret: "\u03BB\xBB"
-  _showGUIButtons: 0
-  _runButtonText: run
-  _closeButtonText: close
-  _smallButtonText: small
-  _fullButtonText: full
-  _hintDisplayMode: 2
-  _makeHintsClickable: 1
+  _persistedFont: {fileID: 12800000, guid: af8ca43d617b047a58bc1f06adfdb789, type: 3}
+  _inputCaret: '>'
+  showGUIButtons: 0
+  runButtonText: run
+  closeButtonText: close
+  smallButtonText: small
+  fullButtonText: full
+  hintDisplayMode: 2
+  makeHintsClickable: 1
   _cursorBlinkRateMilliseconds: 666
   _trackChangesInEditor: 1
   resetStateOnInit: 0
-  _skipSameCommandsInHistory: 1
+  skipSameCommandsInHistory: 1
   ignoreDefaultCommands: 0
   _logUnityMessages: 0
   _ignoredLogTypes: 
@@ -610,13 +610,13 @@ MonoBehaviour:
   - vs2019-dark-theme
   - winter-sky-theme
   - zenburn-theme
---- !u!114 &3570056587590855099
+--- !u!114 &6698975275872788525
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7046523385998542400}
+  m_GameObject: {fileID: 6313713159245746586}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 19102, guid: 0000000000000000e000000000000000, type: 0}
@@ -626,20 +626,20 @@ MonoBehaviour:
   m_ParentUI: {fileID: 0}
   sourceAsset: {fileID: 0}
   m_SortingOrder: 0
---- !u!114 &2638065628856389739
+--- !u!114 &3015002662346126535
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7046523385998542400}
+  m_GameObject: {fileID: 6313713159245746586}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 93eba456dde44bc89e51394a2f9ead63, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   inputMode: 2
-  terminal: {fileID: 3582569734140004161}
+  terminal: {fileID: 1715430555125022178}
   toggleHotkey: '`'
   toggleFullHotkey: '#`'
   completeHotkey: tab
@@ -651,18 +651,18 @@ MonoBehaviour:
   closeHotkey: escape
   nextHotkey: down
   _controlOrder: 0100000002000000030000000400000005000000060000000800000007000000
---- !u!114 &6712114483040104943
+--- !u!114 &2106693276254352669
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7046523385998542400}
+  m_GameObject: {fileID: 6313713159245746586}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 10871694e6e9460f9b8357954ae83ad1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  terminal: {fileID: 3582569734140004161}
+  terminal: {fileID: 1715430555125022178}
   savePeriodically: 1
   savePeriod: 1
