@@ -121,18 +121,30 @@
 #if ENABLE_INPUT_SYSTEM
                     case PlayerInput playerInput when playerInput != null:
                     {
-                        if (
-                            playerInput.TryGetComponent(out terminal)
-                            && !playerInput.TryGetComponent(
-                                out TerminalPlayerInputController playerInputController
-                            )
-                        )
+                        if (playerInput.TryGetComponent(out terminal))
                         {
-                            playerInputController =
-                                playerInput.gameObject.AddComponent<TerminalPlayerInputController>();
-                            playerInputController.terminal = terminal;
-                            EditorUtility.SetDirty(playerInputController);
-                            EditorUtility.SetDirty(playerInput.gameObject);
+                            if (
+                                !playerInput.TryGetComponent(
+                                    out TerminalPlayerInputController playerInputController
+                                )
+                            )
+                            {
+                                playerInputController =
+                                    playerInput.gameObject.AddComponent<TerminalPlayerInputController>();
+                                playerInputController.terminal = terminal;
+                                EditorUtility.SetDirty(playerInputController);
+                                EditorUtility.SetDirty(playerInput.gameObject);
+                            }
+
+                            if (
+                                playerInput.TryGetComponent(
+                                    out TerminalKeyboardController keyboardController
+                                )
+                            )
+                            {
+                                keyboardController.enabled = false;
+                                EditorUtility.SetDirty(keyboardController);
+                            }
                         }
 
                         break;

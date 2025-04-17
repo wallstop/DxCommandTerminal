@@ -5,6 +5,7 @@
     using UnityEngine;
     using UnityEngine.InputSystem;
 
+    [DisallowMultipleComponent]
     public class TerminalPlayerInputController : MonoBehaviour
     {
         [Header("System")]
@@ -12,7 +13,9 @@
 
         public TerminalUI terminal;
 
-        private void Awake()
+        protected bool _enabled;
+
+        protected virtual void Awake()
         {
             if (enableWarnings && !TryGetComponent(out PlayerInput _))
             {
@@ -32,8 +35,22 @@
             }
         }
 
+        protected virtual void OnEnable()
+        {
+            _enabled = true;
+        }
+
+        protected virtual void OnDisable()
+        {
+            _enabled = false;
+        }
+
         public virtual void OnHandlePrevious(InputValue inputValue)
         {
+            if (!_enabled)
+            {
+                return;
+            }
             if (terminal == null)
             {
                 return;
@@ -43,6 +60,10 @@
 
         public virtual void OnHandleNext(InputValue inputValue)
         {
+            if (!_enabled)
+            {
+                return;
+            }
             if (terminal == null)
             {
                 return;
@@ -52,6 +73,10 @@
 
         public virtual void OnClose(InputValue inputValue)
         {
+            if (!_enabled)
+            {
+                return;
+            }
             if (terminal == null)
             {
                 return;
@@ -61,6 +86,10 @@
 
         public virtual void OnToggleSmall(InputValue inputValue)
         {
+            if (!_enabled)
+            {
+                return;
+            }
             if (terminal == null)
             {
                 return;
@@ -70,6 +99,10 @@
 
         public virtual void OnToggleFull(InputValue inputValue)
         {
+            if (!_enabled)
+            {
+                return;
+            }
             if (terminal == null)
             {
                 return;
@@ -79,6 +112,10 @@
 
         public virtual void OnCompleteCommand(InputValue input)
         {
+            if (!_enabled)
+            {
+                return;
+            }
             if (terminal == null)
             {
                 return;
@@ -88,6 +125,10 @@
 
         public virtual void OnReverseCompleteCommand(InputValue input)
         {
+            if (!_enabled)
+            {
+                return;
+            }
             if (terminal == null)
             {
                 return;
@@ -97,6 +138,10 @@
 
         public virtual void OnEnterCommand(InputValue inputValue)
         {
+            if (!_enabled)
+            {
+                return;
+            }
             if (terminal == null)
             {
                 return;
