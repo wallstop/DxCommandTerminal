@@ -32,7 +32,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         public List<string> Complete(string text, List<string> buffer)
         {
-            WalkHistory(text.Trim(), onlySuccess: true, onlyErrorFree: false, buffer: buffer);
+            WalkHistory(text, onlySuccess: true, onlyErrorFree: false, buffer: buffer);
             return buffer;
         }
 
@@ -43,6 +43,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             List<string> buffer
         )
         {
+            if (input.NeedsTrim())
+            {
+                input = input.Trim();
+            }
             _duplicateBuffer.Clear();
             buffer.Clear();
             foreach (
@@ -56,9 +60,13 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                     .Concat(
                         _history.GetHistory(onlySuccess: onlySuccess, onlyErrorFree: onlyErrorFree)
                     )
-                    .Where(known => known.StartsWith(input, StringComparison.OrdinalIgnoreCase))
             )
             {
+                if (!known.StartsWith(input, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
                 if (_duplicateBuffer.Add(known))
                 {
                     buffer.Add(known);

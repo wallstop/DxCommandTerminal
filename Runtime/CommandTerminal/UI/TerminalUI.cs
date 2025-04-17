@@ -15,7 +15,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
     using Input;
     using UnityEditor;
     using UnityEngine;
-    using UnityEngine.Serialization;
     using UnityEngine.UIElements;
 
     [DisallowMultipleComponent]
@@ -159,7 +158,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
         private bool _needsAutoCompleteReset;
         private long? _lastSeenBufferVersion;
         private string _lastKnownCommandText;
-        private string[] _lastCompletionBuffer = Array.Empty<string>();
         private int? _lastCompletionIndex;
         private int? _previousLastCompletionIndex;
         private string _focusedControl;
@@ -181,10 +179,12 @@ namespace WallstopStudios.DxCommandTerminal.UI
         private bool _lastKnownHintsClickable;
         private IVisualElementScheduledItem _cursorBlinkSchedule;
 
-        private readonly List<VisualElement> _autoCompleteChildren = new();
-        private readonly HashSet<string> _completionBufferCache = new(
+        private readonly List<string> _lastCompletionBuffer = new();
+        private readonly List<string> _lastCompletionBufferTempCache = new();
+        private readonly HashSet<string> _lastCompletionBufferTempSet = new(
             StringComparer.OrdinalIgnoreCase
         );
+        private readonly List<VisualElement> _autoCompleteChildren = new();
 
         // Cached for performance (avoids allocations)
         private readonly Action _focusInput;
@@ -605,30 +605,39 @@ namespace WallstopStudios.DxCommandTerminal.UI
             _lastKnownCommandText = _input.CommandText ?? string.Empty;
             if (hintDisplayMode == HintDisplayMode.Always)
             {
-                string[] buffer = _lastCompletionBuffer;
-                _lastCompletionBuffer =
-                    Terminal.AutoComplete?.Complete(_lastKnownCommandText) ?? Array.Empty<string>();
-                if (buffer == null || buffer.Length != _lastCompletionBuffer.Length)
+                _lastCompletionBufferTempCache.Clear();
+                Terminal.AutoComplete?.Complete(
+                    _lastKnownCommandText,
+                    _lastCompletionBufferTempCache
+                );
+                bool equivalent =
+                    _lastCompletionBufferTempCache.Count == _lastCompletionBuffer.Count;
+                if (equivalent)
+                {
+                    _lastCompletionBufferTempSet.Clear();
+                    foreach (string completion in _lastCompletionBuffer)
+                    {
+                        _lastCompletionBufferTempSet.Add(completion);
+                    }
+
+                    foreach (string completion in _lastCompletionBufferTempCache)
+                    {
+                        if (!_lastCompletionBufferTempSet.Contains(completion))
+                        {
+                            equivalent = false;
+                            break;
+                        }
+                    }
+                }
+
+                if (!equivalent)
                 {
                     _lastCompletionIndex = null;
                     _previousLastCompletionIndex = null;
-                }
-                else
-                {
-                    for (int i = 0; i < buffer.Length; ++i)
+                    _lastCompletionBuffer.Clear();
+                    foreach (string completion in _lastCompletionBufferTempCache)
                     {
-                        if (
-                            !string.Equals(
-                                buffer[i],
-                                _lastCompletionBuffer[i],
-                                StringComparison.OrdinalIgnoreCase
-                            )
-                        )
-                        {
-                            _lastCompletionIndex = null;
-                            _previousLastCompletionIndex = null;
-                            break;
-                        }
+                        _lastCompletionBuffer.Add(completion);
                     }
                 }
             }
@@ -636,7 +645,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             {
                 _lastCompletionIndex = null;
                 _previousLastCompletionIndex = null;
-                _lastCompletionBuffer = Array.Empty<string>();
+                _lastCompletionBuffer.Clear();
             }
         }
 
@@ -1180,7 +1189,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
         private void RefreshAutoCompleteHints()
         {
             bool shouldDisplay =
-                _lastCompletionBuffer is { Length: > 0 }
+                0 < _lastCompletionBuffer.Count
                 && hintDisplayMode is HintDisplayMode.Always or HintDisplayMode.AutoCompleteOnly
                 && _autoCompleteContainer != null;
 
@@ -1195,7 +1204,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 return;
             }
 
-            int bufferLength = _lastCompletionBuffer.Length;
+            int bufferLength = _lastCompletionBuffer.Count;
             if (_lastKnownHintsClickable != makeHintsClickable)
             {
                 _autoCompleteContainer.Clear();
@@ -1388,7 +1397,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
                         {
                             --shiftAmount;
                         }
-
                         break;
                     }
                 }
@@ -1741,7 +1749,12 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 return;
             }
 
-            string commandText = _input.CommandText?.Trim() ?? string.Empty;
+            string commandText = _input.CommandText ?? string.Empty;
+            if (commandText.NeedsTrim())
+            {
+                commandText = commandText.Trim();
+            }
+
             _input.CommandText = commandText;
             try
             {
@@ -1777,26 +1790,28 @@ namespace WallstopStudios.DxCommandTerminal.UI
             try
             {
                 _lastKnownCommandText ??= _input.CommandText ?? string.Empty;
-                string[] completionBuffer =
-                    Terminal.AutoComplete?.Complete(_lastKnownCommandText) ?? Array.Empty<string>();
-                bool equivalentBuffers = false;
+                _lastCompletionBufferTempCache.Clear();
+                Terminal.AutoComplete?.Complete(
+                    _lastKnownCommandText,
+                    _lastCompletionBufferTempCache
+                );
+                bool equivalentBuffers = true;
                 try
                 {
-                    int completionLength = completionBuffer.Length;
+                    int completionLength = _lastCompletionBufferTempCache.Count;
                     equivalentBuffers =
-                        _lastCompletionBuffer != null
-                        && _lastCompletionBuffer.Length == completionBuffer.Length;
+                        _lastCompletionBuffer.Count == _lastCompletionBufferTempCache.Count;
                     if (equivalentBuffers)
                     {
-                        _completionBufferCache.Clear();
-                        for (int i = 0; i < completionLength; ++i)
+                        _lastCompletionBufferTempSet.Clear();
+                        foreach (string item in _lastCompletionBuffer)
                         {
-                            _completionBufferCache.Add(_lastCompletionBuffer[i]);
+                            _lastCompletionBufferTempSet.Add(item);
                         }
 
-                        foreach (var newCompletionItem in completionBuffer)
+                        foreach (string newCompletionItem in _lastCompletionBufferTempCache)
                         {
-                            if (!_completionBufferCache.Contains(newCompletionItem))
+                            if (!_lastCompletionBufferTempSet.Contains(newCompletionItem))
                             {
                                 equivalentBuffers = false;
                                 break;
@@ -1823,7 +1838,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                                     % completionLength;
                             }
 
-                            _input.CommandText = completionBuffer[_lastCompletionIndex.Value];
+                            _input.CommandText = _lastCompletionBuffer[_lastCompletionIndex.Value];
                         }
                         else
                         {
@@ -1835,7 +1850,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                         if (0 < completionLength)
                         {
                             _lastCompletionIndex = 0;
-                            _input.CommandText = completionBuffer[0];
+                            _input.CommandText = _lastCompletionBufferTempCache[0];
                         }
                         else
                         {
@@ -1847,7 +1862,12 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 {
                     if (!equivalentBuffers)
                     {
-                        _lastCompletionBuffer = completionBuffer;
+                        _lastCompletionBuffer.Clear();
+                        foreach (string item in _lastCompletionBufferTempCache)
+                        {
+                            _lastCompletionBuffer.Add(item);
+                        }
+                        _previousLastCompletionIndex = null;
                     }
 
                     _previousLastCompletionIndex ??= _lastCompletionIndex;

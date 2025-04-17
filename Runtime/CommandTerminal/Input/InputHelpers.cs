@@ -141,7 +141,11 @@
             {
                 if (!CachedSubstrings.TryGetValue(key, out keyName))
                 {
-                    keyName = key[startIndex..].Trim();
+                    keyName = key[startIndex..];
+                    if (keyName.NeedsTrim())
+                    {
+                        keyName = keyName.Trim();
+                    }
                     if (keyName.Length == 1 && keyName.NeedsLowerInvariantConversion())
                     {
                         keyName = keyName.ToLowerInvariant();
