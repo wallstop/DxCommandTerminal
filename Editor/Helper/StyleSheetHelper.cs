@@ -12,6 +12,29 @@
 
     public static class StyleSheetHelper
     {
+        private static readonly List<string> RequiredVariables = new()
+        {
+            "--terminal-bg",
+            "--button-bg",
+            "--input-field-bg",
+            "--button-selected-bg",
+            "--button-hover-bg",
+            "--scroll-bg",
+            "--scroll-inverse-bg",
+            "--scroll-active-bg",
+            "--button-text",
+            "--button-selected-text",
+            "--button-hover-text",
+            "--input-text-color",
+            "--text-message",
+            "--text-warning",
+            "--text-input-echo",
+            "--text-shell",
+            "--text-error",
+            "--scroll-color",
+            "--caret-color",
+        };
+
         public static string[] GetAvailableThemes(UIDocument uiDocument)
         {
             if (uiDocument == null)
@@ -116,6 +139,14 @@
             try
             {
                 string ussContent = File.ReadAllText(assetPath);
+                if (
+                    RequiredVariables.Exists(requiredVariable =>
+                        !ussContent.Contains(requiredVariable, StringComparison.OrdinalIgnoreCase)
+                    )
+                )
+                {
+                    return Array.Empty<string>();
+                }
 
                 // Remove block comments /* ... */
                 ussContent = Regex.Replace(

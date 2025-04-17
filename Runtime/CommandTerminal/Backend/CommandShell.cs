@@ -104,6 +104,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             return count;
         }
 
+        //public bool RemoveCommand
+
         public int ClearAutoRegisteredCommands()
         {
             int count = _autoRegisteredCommands.Count;

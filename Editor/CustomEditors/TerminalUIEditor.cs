@@ -17,7 +17,6 @@
 #if ENABLE_INPUT_SYSTEM
     using UnityEngine.InputSystem;
 #endif
-    using Random = System.Random;
 
     [CustomEditor(typeof(TerminalUI))]
     public sealed class TerminalUIEditor : Editor
@@ -53,7 +52,6 @@
         private TimeSpan? _lastThemeCycleTime;
 
         private readonly Stopwatch _timer = Stopwatch.StartNew();
-        private readonly Random _random = new();
 
         private GUIStyle _impactButtonStyle;
 
@@ -418,7 +416,9 @@
                     int newThemeIndex;
                     do
                     {
-                        newThemeIndex = _random.Next(terminal._loadedThemes.Count);
+                        newThemeIndex = ThreadLocalRandom.Instance.Next(
+                            terminal._loadedThemes.Count
+                        );
                     } while (newThemeIndex == _themeIndex && terminal._loadedThemes.Count != 1);
                     terminal.SetTheme(
                         terminal._loadedThemes[newThemeIndex],
@@ -450,7 +450,7 @@
                     int newFontIndex;
                     do
                     {
-                        newFontIndex = _random.Next(terminal._loadedFonts.Count);
+                        newFontIndex = ThreadLocalRandom.Instance.Next(terminal._loadedFonts.Count);
                     } while (newFontIndex == oldFontIndex && terminal._loadedFonts.Count != 1);
 
                     Font newFont = terminal._loadedFonts[newFontIndex];

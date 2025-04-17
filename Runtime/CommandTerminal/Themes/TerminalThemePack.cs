@@ -6,7 +6,8 @@
 
     [CreateAssetMenu(
         menuName = "DxCommandTerminal/Theme Pack",
-        fileName = nameof(TerminalThemePack)
+        fileName = nameof(TerminalThemePack),
+        order = 1_111_123
     )]
     public class TerminalThemePack : ScriptableObject
     {
