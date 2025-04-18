@@ -21,6 +21,8 @@ namespace WallstopStudios.DxCommandTerminal.UI
     [DisallowMultipleComponent]
     public sealed class TerminalUI : MonoBehaviour
     {
+        private const string TerminalRootName = "TerminalRoot";
+
         private enum ScrollBarCaptureState
         {
             None = 0,
@@ -139,6 +141,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
 #if UNITY_EDITOR
         private readonly Dictionary<string, object> _propertyValues = new();
         private readonly List<SerializedProperty> _uiProperties = new();
+        private readonly List<SerializedProperty> _themeProperties = new();
         private readonly List<SerializedProperty> _cursorBlinkProperties = new();
         private readonly List<SerializedProperty> _fontProperties = new();
         private readonly List<SerializedProperty> _staticStateProperties = new();
@@ -248,6 +251,9 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             string[] uiPropertiesTracked = { nameof(_uiDocument) };
             TrackProperties(uiPropertiesTracked, _uiProperties);
+
+            string[] themePropertiesTracked = { nameof(_themePack) };
+            TrackProperties(themePropertiesTracked, _themeProperties);
 
             string[] cursorBlinkPropertiesTracked = { nameof(_cursorBlinkRateMilliseconds) };
             TrackProperties(cursorBlinkPropertiesTracked, _cursorBlinkProperties);
@@ -477,6 +483,16 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 SetupUI();
             }
 
+            if (CheckForRefresh(_themeProperties))
+            {
+                if (_uiDocument != null)
+                {
+                    InitializeTheme(
+                        _uiDocument.rootVisualElement?.Q<VisualElement>(TerminalRootName)
+                    );
+                }
+            }
+
             if (CheckForRefresh(_cursorBlinkProperties))
             {
                 ScheduleBlinkingCursor();
@@ -690,10 +706,10 @@ namespace WallstopStudios.DxCommandTerminal.UI
             uiRoot.Clear();
             VisualElement root = new();
             uiRoot.Add(root);
-            root.name = "TerminalRoot";
+            root.name = TerminalRootName;
             root.AddToClassList("terminal-root");
 
-            InitializeTheme();
+            InitializeTheme(root);
             InitializeFont();
 
             if (!string.IsNullOrWhiteSpace(_runtimeTheme))
@@ -801,12 +817,44 @@ namespace WallstopStudios.DxCommandTerminal.UI
             RefreshStateButtons();
         }
 
-        private void InitializeTheme()
+        private void InitializeTheme(VisualElement root)
         {
             if (_themePack == null)
             {
                 Debug.LogError("No theme pack assigned, cannot initialize theme.", this);
                 return;
+            }
+
+            if (root != null)
+            {
+                for (int i = root.styleSheets.count - 1; 0 <= i; --i)
+                {
+                    StyleSheet styleSheet = root.styleSheets[i];
+                    if (
+                        styleSheet == null
+                        || styleSheet.name.Contains("Theme", StringComparison.OrdinalIgnoreCase)
+                    )
+                    {
+                        root.styleSheets.Remove(styleSheet);
+                    }
+                }
+
+                foreach (StyleSheet styleSheet in _themePack._themes)
+                {
+                    if (styleSheet == null)
+                    {
+                        continue;
+                    }
+
+                    root.styleSheets.Add(styleSheet);
+                }
+            }
+            else
+            {
+                Debug.LogWarning(
+                    "No root element assigned, theme initialization may be broken.",
+                    this
+                );
             }
 
             _runtimeTheme = _persistedTheme;
@@ -1715,7 +1763,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 }
 
                 VisualElement terminalRoot = _uiDocument.rootVisualElement?.Q<VisualElement>(
-                    "TerminalRoot"
+                    TerminalRootName
                 );
                 if (terminalRoot == null)
                 {

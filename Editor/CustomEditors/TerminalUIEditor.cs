@@ -8,7 +8,6 @@
     using System.Linq;
     using Backend;
     using DxCommandTerminal.Helper;
-    using Helper;
     using UnityEditor;
     using UnityEngine;
     using UnityEngine.UIElements;
@@ -247,16 +246,22 @@
             }
             TerminalAssetPackPostProcessor.NewFontPacks.Clear();
 
+            if (!_fontPacks.Any())
+            {
+                _fontPacks.Clear();
+                _fontPacks.AddRange(LoadAll<TerminalFontPack>());
+            }
+
+            if (!_themePacks.Any())
+            {
+                _themePacks.Clear();
+                _themePacks.AddRange(LoadAll<TerminalThemePack>());
+            }
+
             if (_lastSeen == target)
             {
                 return;
             }
-
-            _fontPacks.Clear();
-            _fontPacks.AddRange(LoadAll<TerminalFontPack>());
-
-            _themePacks.Clear();
-            _themePacks.AddRange(LoadAll<TerminalThemePack>());
 
             _persistThemeChanges = false;
             StopCyclingFonts();
@@ -664,6 +669,11 @@
                         _themePackIndex = _themePacks.IndexOf(terminal._themePack);
                     }
 
+                    if (_themePackIndex < 0)
+                    {
+                        GUILayout.Label("Select Theme Pack:");
+                    }
+
                     _themePackIndex = EditorGUILayout.Popup(
                         _themePackIndex,
                         _themePacks.Select(themePack => themePack.name).ToArray()
@@ -672,15 +682,7 @@
                     {
                         if (GUILayout.Button("Set Theme Pack", _impactButtonStyle))
                         {
-                            StyleSheet[] styleSheets = StyleSheetHelper.GetTerminalThemeStyleSheets(
-                                terminal._uiDocument
-                            );
-                            StyleSheetHelper.ClearStyleSheets(terminal._uiDocument, styleSheets);
                             terminal._themePack = _themePacks[_themePackIndex];
-                            StyleSheetHelper.AddStyleSheets(
-                                terminal._uiDocument,
-                                terminal._themePack._themes
-                            );
                             anyChanged = true;
                         }
                     }
@@ -705,6 +707,11 @@
                         _fontPackIndex = _fontPacks.IndexOf(terminal._fontPack);
                     }
 
+                    if (_fontPackIndex < 0)
+                    {
+                        GUILayout.Label("Select Font Pack:");
+                    }
+
                     _fontPackIndex = EditorGUILayout.Popup(
                         _fontPackIndex,
                         _fontPacks.Select(fontPack => fontPack.name).ToArray()
@@ -727,11 +734,7 @@
             EditorGUILayout.BeginHorizontal();
             try
             {
-                if (terminal._themePack == null)
-                {
-                    GUILayout.Label("NO THEME PACK", _impactLabelStyle);
-                }
-                else
+                if (terminal._themePack != null)
                 {
                     if (_themeIndex < 0)
                     {
@@ -892,82 +895,13 @@
                     PanelSettings panelSettings = AssetDatabase.LoadAssetAtPath<PanelSettings>(
                         assetPath
                     );
+
                     if (panelSettings == null)
                     {
                         continue;
                     }
 
-                    PanelSettings copiedSettings = AssetCreator.CreateAssetSafe(
-                        panelSettings,
-                        $"TerminalSettings-{terminal.id}"
-                    );
-
-                    if (copiedSettings == null)
-                    {
-                        continue;
-                    }
-
-                    ThemeStyleSheet themeStyleSheet = panelSettings.themeStyleSheet;
-                    if (themeStyleSheet != null)
-                    {
-                        List<StyleSheet> copiedStyleSheets = new();
-                        StyleSheet[] initialStyleSheets = StyleSheetHelper.GetStyleSheets(
-                            themeStyleSheet
-                        );
-                        int count = 0;
-                        foreach (StyleSheet styleSheet in initialStyleSheets)
-                        {
-                            if (
-                                styleSheet.name.Contains(
-                                    "UnityDefaultRuntimeTheme",
-                                    StringComparison.OrdinalIgnoreCase
-                                )
-                            )
-                            {
-                                copiedStyleSheets.Add(styleSheet);
-                                continue;
-                            }
-
-                            StyleSheet copy = AssetCreator.CreateAssetSafe(
-                                styleSheet,
-                                $"StyleSheet-{styleSheet.name}-{count++}",
-                                "Assets/Packages/WallstopStudios.DxCommandTerminal/Styles"
-                            );
-                            if (copy != null)
-                            {
-                                copiedStyleSheets.Add(copy);
-                            }
-                        }
-
-                        StyleSheetHelper.ClearStyleSheets(themeStyleSheet, initialStyleSheets);
-                        try
-                        {
-                            StyleSheetHelper.AddStyleSheets(themeStyleSheet, copiedStyleSheets);
-                            try
-                            {
-                                ThemeStyleSheet copiedStyleSheet = AssetCreator.CreateAssetSafe(
-                                    themeStyleSheet,
-                                    $"TerminalTheme-{terminal.id}"
-                                );
-
-                                copiedSettings.themeStyleSheet =
-                                    copiedStyleSheet != null ? copiedStyleSheet : null;
-                            }
-                            finally
-                            {
-                                StyleSheetHelper.ClearStyleSheets(
-                                    themeStyleSheet,
-                                    copiedStyleSheets
-                                );
-                            }
-                        }
-                        finally
-                        {
-                            StyleSheetHelper.AddStyleSheets(themeStyleSheet, initialStyleSheets);
-                        }
-                    }
-
-                    terminal._uiDocument.panelSettings = copiedSettings;
+                    terminal._uiDocument.panelSettings = panelSettings;
                     anyChanged = true;
                     return;
                 }
@@ -1187,11 +1121,7 @@
             EditorGUILayout.BeginHorizontal();
             try
             {
-                if (terminal._fontPack == null)
-                {
-                    GUILayout.Label("NO FONT PACK", _impactLabelStyle);
-                }
-                else
+                if (terminal._fontPack != null)
                 {
                     if (_fontKey < 0 || _secondFontKey < 0)
                     {
