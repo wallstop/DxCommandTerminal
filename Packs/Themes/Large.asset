@@ -10,7 +10,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 607c3df0e4d44d3bbafa28e73f136540, type: 3}
-  m_Name: Medium
+  m_Name: Large
   m_EditorClassIdentifier: 
   _themes:
   - {fileID: 7433441132597879392, guid: cb65b3a1abe848dda5b21712ee282f06, type: 3}
