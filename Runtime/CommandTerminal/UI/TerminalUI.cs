@@ -44,6 +44,8 @@ namespace WallstopStudios.DxCommandTerminal.UI
         public string CurrentTheme =>
             !string.IsNullOrWhiteSpace(_runtimeTheme) ? _runtimeTheme : _persistedTheme;
 
+        public string CurrentFriendlyTheme => ThemeNameHelper.GetFriendlyThemeName(CurrentTheme);
+
         public Font CurrentFont => _runtimeFont != null ? _runtimeFont : _persistedFont;
 
         [SerializeField]
@@ -51,11 +53,9 @@ namespace WallstopStudios.DxCommandTerminal.UI
         internal string id = Guid.NewGuid().ToString();
 
         [SerializeField]
-        [HideInInspector]
         internal UIDocument _uiDocument;
 
         [SerializeField]
-        [HideInInspector]
         internal string _persistedTheme = "dark-theme";
 
         [Header("Window")]
@@ -131,11 +131,9 @@ namespace WallstopStudios.DxCommandTerminal.UI
         internal List<string> _disabledCommands = new();
 
         [SerializeField]
-        [HideInInspector]
         internal TerminalFontPack _fontPack;
 
         [SerializeField]
-        [HideInInspector]
         internal TerminalThemePack _themePack;
 
 #if UNITY_EDITOR
@@ -1654,6 +1652,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         public void SetFont(Font font, bool persist = false)
         {
+            SetRuntimeFont(font);
             if (!persist && CurrentFont == font)
             {
                 return;
@@ -1672,7 +1671,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
 
             Font currentFont = _persistedFont;
-
             _runtimeFont = font;
             Debug.Log(
                 currentFont == null
@@ -1686,15 +1684,32 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 _persistedFont = font;
             }
 
-            if (Application.isPlaying)
+            return;
+
+            void SetRuntimeFont(Font toSet)
             {
+                if (toSet == null)
+                {
+                    return;
+                }
+
+                if (!Application.isPlaying)
+                {
+                    return;
+                }
+
+                if (_uiDocument == null)
+                {
+                    return;
+                }
+
                 VisualElement root = _uiDocument.rootVisualElement;
                 if (root == null)
                 {
                     return;
                 }
 
-                root.style.unityFontDefinition = new StyleFontDefinition(font);
+                root.style.unityFontDefinition = new StyleFontDefinition(toSet);
             }
         }
 
@@ -1726,37 +1741,75 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         public void SetTheme(string theme, bool persist = false)
         {
-            if (!persist && string.Equals(theme, CurrentTheme, StringComparison.OrdinalIgnoreCase))
+            string friendlyThemeName = ThemeNameHelper.GetFriendlyThemeName(theme);
+            SetRuntimeTheme();
+            if (
+                !persist
+                && string.Equals(
+                    friendlyThemeName,
+                    CurrentFriendlyTheme,
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
             {
                 return;
             }
 
-            if (string.IsNullOrWhiteSpace(theme))
+            if (!IsValidTheme(out string validatedTheme))
             {
                 return;
             }
 
-            if (_themePack == null)
-            {
-                return;
-            }
-
-            List<string> themeNames = _themePack._themeNames;
-            if (!themeNames.Contains(theme))
-            {
-                return;
-            }
-
-            string currentTheme = _persistedTheme;
-            _runtimeTheme = theme;
-            Debug.Log($"Changing theme from {currentTheme} to {theme}.", this);
+            string currentTheme = ThemeNameHelper.GetFriendlyThemeName(CurrentTheme);
+            _runtimeTheme = validatedTheme;
+            Debug.Log($"Changing theme from {currentTheme} to {friendlyThemeName}.", this);
             if (persist)
             {
-                _persistedTheme = theme;
+                _persistedTheme = validatedTheme;
             }
 
-            if (Application.isPlaying)
+            return;
+
+            bool IsValidTheme(out string validTheme)
             {
+                if (string.IsNullOrWhiteSpace(theme) || _themePack == null)
+                {
+                    validTheme = default;
+                    return false;
+                }
+
+                List<string> themeNames = _themePack._themeNames;
+                if (themeNames.Contains(theme, StringComparer.OrdinalIgnoreCase))
+                {
+                    validTheme = theme;
+                    return true;
+                }
+
+                foreach (string themeName in ThemeNameHelper.GetPossibleThemeNames(theme))
+                {
+                    if (themeNames.Contains(themeName, StringComparer.OrdinalIgnoreCase))
+                    {
+                        validTheme = themeName;
+                        return true;
+                    }
+                }
+
+                validTheme = default;
+                return false;
+            }
+
+            void SetRuntimeTheme()
+            {
+                if (!Application.isPlaying)
+                {
+                    return;
+                }
+
+                if (!IsValidTheme(out validatedTheme))
+                {
+                    return;
+                }
+
                 if (_uiDocument == null)
                 {
                     return;
@@ -1772,10 +1825,8 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
                 string[] loadedThemes = terminalRoot
                     .GetClasses()
-                    .Where(className =>
-                        className.Contains("-theme", StringComparison.OrdinalIgnoreCase)
-                        || className.Contains("theme-", StringComparison.OrdinalIgnoreCase)
-                    )
+                    // ReSharper disable once ConvertClosureToMethodGroup
+                    .Where(className => ThemeNameHelper.IsThemeName(className))
                     .ToArray();
 
                 foreach (string loadedTheme in loadedThemes)
@@ -1783,7 +1834,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                     terminalRoot.RemoveFromClassList(loadedTheme);
                 }
 
-                terminalRoot.AddToClassList(theme);
+                terminalRoot.AddToClassList(validatedTheme);
             }
         }
 

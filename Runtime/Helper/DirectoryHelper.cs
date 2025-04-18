@@ -16,12 +16,23 @@
 
         public static string FindPackageRootPath(string startDirectory)
         {
+            return FindRootPath(
+                startDirectory,
+                path => File.Exists(Path.Combine(path, "package.json"))
+            );
+        }
+
+        public static string FindRootPath(
+            string startDirectory,
+            Func<string, bool> terminalCondition
+        )
+        {
             string currentPath = startDirectory;
-            while (!string.IsNullOrEmpty(currentPath))
+            while (!string.IsNullOrWhiteSpace(currentPath))
             {
-                if (File.Exists(Path.Combine(currentPath, "package.json")))
+                try
                 {
-                    try
+                    if (terminalCondition(currentPath))
                     {
                         DirectoryInfo directoryInfo = new(currentPath);
                         if (!directoryInfo.Exists)
@@ -29,47 +40,28 @@
                             return currentPath;
                         }
 
-                        while (directoryInfo != null)
-                        {
-                            try
-                            {
-                                if (
-                                    File.Exists(
-                                        Path.Combine(directoryInfo.FullName, "package.json")
-                                    )
-                                )
-                                {
-                                    return directoryInfo.FullName;
-                                }
-                            }
-                            catch
-                            {
-                                return currentPath;
-                            }
-
-                            try
-                            {
-                                directoryInfo = directoryInfo.Parent;
-                            }
-                            catch
-                            {
-                                return currentPath;
-                            }
-                        }
-                    }
-                    catch
-                    {
-                        return currentPath;
+                        return directoryInfo.FullName;
                     }
                 }
-
-                string parentPath = Path.GetDirectoryName(currentPath);
-                if (parentPath == currentPath)
+                catch
                 {
-                    break;
+                    return currentPath;
                 }
 
-                currentPath = parentPath;
+                try
+                {
+                    string parentPath = Path.GetDirectoryName(currentPath);
+                    if (string.Equals(parentPath, currentPath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        break;
+                    }
+
+                    currentPath = parentPath;
+                }
+                catch
+                {
+                    return currentPath;
+                }
             }
 
             return string.Empty;
@@ -121,12 +113,11 @@
                     : projectRoot.Length + 1;
                 return absolutePath.Length > startIndex ? absolutePath[startIndex..] : string.Empty;
             }
-            string assetsPath = Application.dataPath.Replace('\\', '/');
-            if (absolutePath.StartsWith(assetsPath, StringComparison.OrdinalIgnoreCase))
+            if (absolutePath.StartsWith(projectRoot, StringComparison.OrdinalIgnoreCase))
             {
-                int startIndex = assetsPath.EndsWith("/", StringComparison.OrdinalIgnoreCase)
-                    ? assetsPath.Length
-                    : assetsPath.Length + 1;
+                int startIndex = projectRoot.EndsWith("/", StringComparison.OrdinalIgnoreCase)
+                    ? projectRoot.Length
+                    : projectRoot.Length + 1;
                 if (startIndex < absolutePath.Length)
                 {
                     return "Assets/" + absolutePath[startIndex..];

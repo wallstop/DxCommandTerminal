@@ -12,6 +12,7 @@
     using UnityEditor;
     using UnityEngine;
     using UnityEngine.UIElements;
+    using Object = UnityEngine.Object;
 
     [CustomEditor(typeof(TerminalThemePack))]
     public sealed class TerminalThemePackEditor : Editor
@@ -35,8 +36,13 @@
                 fontStyle = FontStyle.Bold,
             };
 
+            serializedObject.Update();
             TerminalThemePack themePack = target as TerminalThemePack;
-            base.OnInspectorGUI();
+            DrawPropertiesExcluding(
+                serializedObject,
+                "m_Script",
+                nameof(TerminalThemePack._themeNames)
+            );
 
             if (themePack == null)
             {
@@ -84,12 +90,43 @@
                 }
             }
 
-            if (GUILayout.Button("Load From Current Directory"))
+            Object activeObject = Selection.activeObject;
+            if (activeObject == null)
             {
-                string assetPath = AssetDatabase.GetAssetPath(themePack);
+                activeObject = themePack;
+            }
+
+            string assetPath = AssetDatabase.GetAssetPath(activeObject);
+            string dataPath = Application.dataPath;
+            if (
+                dataPath.EndsWith("/", StringComparison.OrdinalIgnoreCase)
+                || dataPath.EndsWith("\\", StringComparison.OrdinalIgnoreCase)
+            )
+            {
+                dataPath = dataPath.Substring(0, dataPath.Length - 1);
+            }
+            if (dataPath.EndsWith("Assets", StringComparison.OrdinalIgnoreCase))
+            {
+                dataPath = dataPath.Substring(0, dataPath.Length - "Assets".Length);
+            }
+
+            if (!Directory.Exists(Path.Combine(dataPath, assetPath)))
+            {
+                assetPath = Path.GetDirectoryName(assetPath) ?? assetPath;
+            }
+
+            assetPath = assetPath.Replace('\\', '/');
+
+            GUIContent loadFromCurrentDirectoryContent = new(
+                "Load From Current Directory",
+                $"Loads all themes from '{assetPath}'"
+            );
+
+            if (GUILayout.Button(loadFromCurrentDirectoryContent))
+            {
                 UpdateFromDirectory(assetPath);
             }
-            else if (GUILayout.Button("Load From Directory"))
+            else if (GUILayout.Button("Load From Directory (Select)"))
             {
                 _lastSelectedDirectory = EditorUtility.OpenFolderPanel(
                     "Select Directory",
@@ -107,10 +144,12 @@
                     !themePack._themes.IsSorted(UnityObjectNameComparer.Instance)
                     && GUILayout.Button("Sort Themes")
                 )
+                || (themePack._themes.Count != themePack._themeNames.Count)
             )
             {
                 SortThemes();
                 EditorUtility.SetDirty(themePack);
+                serializedObject.ApplyModifiedProperties();
             }
 
             return;
@@ -143,20 +182,23 @@
                 string[] fontGuids = AssetDatabase.FindAssets("t:StyleSheet", new[] { directory });
                 foreach (string guid in fontGuids)
                 {
-                    string assetPath = AssetDatabase.GUIDToAssetPath(guid);
+                    string styleAssetPath = AssetDatabase.GUIDToAssetPath(guid);
 
-                    if (string.IsNullOrWhiteSpace(assetPath))
+                    if (string.IsNullOrWhiteSpace(styleAssetPath))
                     {
                         continue;
                     }
 
-                    StyleSheet styleSheet = AssetDatabase.LoadAssetAtPath<StyleSheet>(assetPath);
+                    StyleSheet styleSheet = AssetDatabase.LoadAssetAtPath<StyleSheet>(
+                        styleAssetPath
+                    );
                     if (
                         styleSheet != null
                         && TerminalThemeStyleSheetHelper.GetAvailableThemes(styleSheet).Any()
                         && _styleCache.Add(styleSheet)
                     )
                     {
+                        anyChanged = true;
                         themePack._themes.Add(styleSheet);
                     }
                 }

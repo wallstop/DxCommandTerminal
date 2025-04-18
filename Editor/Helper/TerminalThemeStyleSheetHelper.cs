@@ -6,6 +6,7 @@
     using System.IO;
     using System.Linq;
     using System.Text.RegularExpressions;
+    using Themes;
     using UnityEditor;
     using UnityEngine;
     using UnityEngine.UIElements;
@@ -109,16 +110,7 @@
                                 continue;
                             }
 
-                            if (
-                                trimmedSelector.Contains(
-                                    "-theme",
-                                    StringComparison.OrdinalIgnoreCase
-                                )
-                                || trimmedSelector.Contains(
-                                    "theme-",
-                                    StringComparison.OrdinalIgnoreCase
-                                )
-                            )
+                            if (ThemeNameHelper.IsThemeName(trimmedSelector))
                             {
                                 int nextObjectBraceIndex = ussContent.IndexOf('}', braceIndex + 1);
                                 if (nextObjectBraceIndex < 0)

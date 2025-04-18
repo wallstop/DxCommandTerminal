@@ -8,7 +8,6 @@
     using System.Linq;
     using Backend;
     using DxCommandTerminal.Helper;
-    using Extensions;
     using UnityEditor;
     using UnityEngine;
     using UnityEngine.UIElements;
@@ -70,15 +69,67 @@
 
         private static void HandleComponentAdded(Component addedComponent)
         {
+            bool anyChange = false;
             if (addedComponent is TerminalUI terminal && terminal != null)
             {
                 CheckForUIDocumentProblems(terminal);
+
+                if (terminal._themePack == null)
+                {
+                    TerminalThemePack[] themePacks = LoadAll<TerminalThemePack>();
+                    int themePackIndex = Array.FindIndex(
+                        themePacks,
+                        themePack =>
+                            string.Equals(
+                                themePack.name,
+                                "Minimal",
+                                StringComparison.OrdinalIgnoreCase
+                            )
+                    );
+                    if (themePackIndex < 0)
+                    {
+                        themePackIndex = themePacks.Length - 1;
+                    }
+
+                    if (0 <= themePackIndex && themePackIndex < themePacks.Length)
+                    {
+                        TerminalThemePack themePack = themePacks[themePackIndex];
+                        terminal._themePack = themePack;
+                        _ = TrySetupDefaultTheme(terminal);
+                    }
+                }
+
+                if (terminal._fontPack == null)
+                {
+                    TerminalFontPack[] fontPacks = LoadAll<TerminalFontPack>();
+                    int fontPackIndex = Array.FindIndex(
+                        fontPacks,
+                        fontPack =>
+                            string.Equals(
+                                fontPack.name,
+                                "Minimal",
+                                StringComparison.OrdinalIgnoreCase
+                            )
+                    );
+                    if (fontPackIndex < 0)
+                    {
+                        fontPackIndex = fontPacks.Length - 1;
+                    }
+
+                    if (0 <= fontPackIndex && fontPackIndex < fontPacks.Length)
+                    {
+                        TerminalFontPack fontPack = fontPacks[fontPackIndex];
+                        terminal._fontPack = fontPack;
+                        _ = TrySetupDefaultFont(terminal);
+                    }
+                }
 
                 terminal.gameObject.AddComponent<TerminalKeyboardController>();
                 terminal.gameObject.AddComponent<TerminalThemePersister>();
 
                 EditorUtility.SetDirty(terminal);
                 EditorUtility.SetDirty(terminal.gameObject);
+                anyChange = true;
             }
             else
             {
@@ -91,6 +142,7 @@
                         {
                             keyboardController.terminal = terminal;
                             EditorUtility.SetDirty(keyboardController);
+                            anyChange = true;
                         }
 
                         break;
@@ -101,6 +153,7 @@
                         {
                             themePersister.terminal = terminal;
                             EditorUtility.SetDirty(themePersister);
+                            anyChange = true;
                         }
 
                         break;
@@ -121,6 +174,7 @@
                                 playerInputController.terminal = terminal;
                                 EditorUtility.SetDirty(playerInputController);
                                 EditorUtility.SetDirty(playerInput.gameObject);
+                                anyChange = true;
                             }
 
                             if (
@@ -131,6 +185,7 @@
                             {
                                 keyboardController.enabled = false;
                                 EditorUtility.SetDirty(keyboardController);
+                                anyChange = true;
                             }
                         }
 
@@ -138,6 +193,11 @@
                     }
 #endif
                 }
+            }
+
+            if (anyChange)
+            {
+                AssetDatabase.SaveAssets();
             }
         }
 
@@ -165,7 +225,7 @@
             );
             _fontsByPrefix.Clear();
 
-            ResetStateIdempotent();
+            ResetStateIdempotent(force: true);
 
             if (!_editorUpdateAttached)
             {
@@ -185,7 +245,8 @@
                 DirectoryInfo directoryInfo = new(directory);
                 if (directoryInfo.Exists)
                 {
-                    directory = DirectoryHelper.AbsoluteToUnityRelativePath(directoryInfo.FullName);
+                    directory = DirectoryHelper.FindPackageRootPath(directory);
+                    directory = DirectoryHelper.AbsoluteToUnityRelativePath(directory);
                     directories.Add(directory);
                 }
             }
@@ -202,12 +263,13 @@
 
             directories.Add("Assets");
 
-            SortedSet<T> loaded = new(UnityObjectNameComparer.Instance);
-            string[] fontGuids = AssetDatabase.FindAssets(
+            HashSet<T> unique = new();
+            List<T> ordered = new();
+            string[] assetGuids = AssetDatabase.FindAssets(
                 $"t:{typeof(T).Name}",
                 directories.ToArray()
             );
-            foreach (string guid in fontGuids)
+            foreach (string guid in assetGuids)
             {
                 string assetPath = AssetDatabase.GUIDToAssetPath(guid);
 
@@ -217,12 +279,12 @@
                 }
 
                 T item = AssetDatabase.LoadAssetAtPath<T>(assetPath);
-                if (item != null)
+                if (item != null && unique.Add(item))
                 {
-                    loaded.Add(item);
+                    ordered.Add(item);
                 }
             }
-            return loaded.ToArray();
+            return ordered.ToArray();
         }
 
         private void OnDisable()
@@ -234,7 +296,7 @@
             }
         }
 
-        private void ResetStateIdempotent()
+        private void ResetStateIdempotent(bool force)
         {
             foreach (TerminalThemePack themePack in TerminalAssetPackPostProcessor.NewThemePacks)
             {
@@ -259,10 +321,14 @@
                 _themePacks.AddRange(LoadAll<TerminalThemePack>());
             }
 
-            if (_lastSeen == target)
+            TerminalUI terminal = target as TerminalUI;
+            if (!force && _lastSeen == terminal)
             {
                 return;
             }
+
+            _fontsByPrefix.Clear();
+            CollectFonts(terminal, _fontsByPrefix);
 
             _persistThemeChanges = false;
             StopCyclingFonts();
@@ -270,7 +336,7 @@
             _themeIndex = -1;
             _fontKey = -1;
             _secondFontKey = -1;
-            _lastSeen = target as TerminalUI;
+            _lastSeen = terminal;
         }
 
         private void EditorUpdate()
@@ -363,7 +429,7 @@
             }
 
             serializedObject.Update();
-            ResetStateIdempotent();
+            ResetStateIdempotent(force: false);
 
             bool anyChanged = false;
 
@@ -375,7 +441,14 @@
 
             RenderCyclingPreviews();
 
-            DrawPropertiesExcluding(serializedObject, "m_Script");
+            DrawPropertiesExcluding(
+                serializedObject,
+                "m_Script",
+                nameof(TerminalUI._themePack),
+                nameof(TerminalUI._fontPack),
+                nameof(TerminalUI._persistedTheme),
+                nameof(TerminalUI._uiDocument)
+            );
 
             bool propertiesDirty = CheckForSimpleProperties(terminal);
             anyChanged |= propertiesDirty;
@@ -679,12 +752,22 @@
                         _themePackIndex,
                         _themePacks.Select(themePack => themePack.name).ToArray()
                     );
-                    if (0 <= _themePackIndex)
+                    if (0 <= _themePackIndex && _themePackIndex < _themePacks.Count)
                     {
                         if (GUILayout.Button("Set Theme Pack", _impactButtonStyle))
                         {
-                            terminal._themePack = _themePacks[_themePackIndex];
-                            anyChanged = true;
+                            TerminalThemePack themePack = _themePacks[_themePackIndex];
+                            if (themePack != terminal._themePack)
+                            {
+                                terminal._themePack = themePack;
+                                _themeIndex = themePack._themeNames.IndexOf(terminal.CurrentTheme);
+                                if (_themeIndex < 0)
+                                {
+                                    terminal._persistedTheme = string.Empty;
+                                }
+
+                                anyChanged = true;
+                            }
                         }
                     }
                 }
@@ -703,7 +786,7 @@
                 }
                 else
                 {
-                    if (0 < _fontPackIndex)
+                    if (_fontPackIndex < 0)
                     {
                         _fontPackIndex = _fontPacks.IndexOf(terminal._fontPack);
                     }
@@ -717,12 +800,24 @@
                         _fontPackIndex,
                         _fontPacks.Select(fontPack => fontPack.name).ToArray()
                     );
-                    if (0 <= _fontPackIndex)
+                    if (0 <= _fontPackIndex && _fontPackIndex < _fontPacks.Count)
                     {
                         if (GUILayout.Button("Set Font Pack", _impactButtonStyle))
                         {
-                            terminal._fontPack = _fontPacks[_themePackIndex];
-                            anyChanged = true;
+                            TerminalFontPack fontPack = _fontPacks[_fontPackIndex];
+                            if (fontPack != terminal._fontPack)
+                            {
+                                _fontsByPrefix.Clear();
+                                _fontKey = -1;
+                                _secondFontKey = -1;
+                                terminal._fontPack = fontPack;
+                                if (!terminal._fontPack._fonts.Contains(terminal.CurrentFont))
+                                {
+                                    terminal._persistedFont = null;
+                                }
+
+                                anyChanged = true;
+                            }
                         }
                     }
                 }
@@ -788,7 +883,7 @@
                 EditorGUILayout.EndHorizontal();
             }
 
-            CollectFonts(_fontsByPrefix);
+            CollectFonts(terminal, _fontsByPrefix);
             bool fontsUpdated = RenderSelectableFonts(terminal);
             return anyChanged || fontsUpdated;
         }
@@ -1006,16 +1101,25 @@
         }
 
         private static void CollectFonts(
+            TerminalUI terminal,
             SortedDictionary<string, SortedDictionary<string, Font>> fontsByPrefix
         )
         {
+            if (
+                terminal == null
+                || terminal._fontPack == null
+                || terminal._fontPack._fonts is not { Count: > 0 }
+            )
+            {
+                return;
+            }
+
             if (fontsByPrefix.Count != 0)
             {
                 return;
             }
 
-            Font[] fonts = CommandTerminalFontLoader.LoadFonts();
-            foreach (Font font in fonts)
+            foreach (Font font in terminal._fontPack._fonts)
             {
                 string fontName = font.name;
                 int indexOfSplit = fontName.IndexOf('-', StringComparison.OrdinalIgnoreCase);
@@ -1057,6 +1161,44 @@
             }
 
             TrySetFontKeysFromFont(terminal.CurrentFont);
+        }
+
+        private static bool TrySetupDefaultTheme(TerminalUI terminal)
+        {
+            if (
+                !string.IsNullOrWhiteSpace(terminal.CurrentTheme)
+                && terminal._themePack != null
+                && terminal._themePack._themeNames.Contains(
+                    terminal.CurrentTheme,
+                    StringComparer.OrdinalIgnoreCase
+                )
+            )
+            {
+                return false;
+            }
+
+            if (terminal._themePack == null || terminal._themePack._themeNames.Count == 0)
+            {
+                return false;
+            }
+
+            string defaultTheme = terminal._themePack._themeNames.FirstOrDefault(theme =>
+                theme.Contains("Dark", StringComparison.OrdinalIgnoreCase)
+            );
+            if (string.IsNullOrWhiteSpace(defaultTheme))
+            {
+                defaultTheme = terminal._themePack._themeNames.FirstOrDefault(theme =>
+                    theme.Contains("Light", StringComparison.OrdinalIgnoreCase)
+                );
+            }
+
+            if (string.IsNullOrWhiteSpace(defaultTheme))
+            {
+                defaultTheme = terminal._themePack._themeNames.FirstOrDefault();
+            }
+
+            terminal.SetTheme(defaultTheme, persist: true);
+            return true;
         }
 
         private static bool TrySetupDefaultFont(TerminalUI terminal)
@@ -1114,7 +1256,6 @@
                 return false;
             }
 
-            _ = TrySetupDefaultFont(terminal);
             TryMatchExistingFont(terminal);
 
             bool anyChanged = false;

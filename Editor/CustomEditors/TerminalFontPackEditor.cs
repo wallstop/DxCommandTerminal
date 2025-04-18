@@ -9,6 +9,7 @@
     using Themes;
     using UnityEditor;
     using UnityEngine;
+    using Object = UnityEngine.Object;
 
     [CustomEditor(typeof(TerminalFontPack))]
     public sealed class TerminalFontPackEditor : Editor
@@ -47,7 +48,7 @@
             CondensedSemiBold = 1 << 27,
             CondensedThin = 1 << 28,
             VariableFont_wght = 1 << 29,
-            VariableFont_width = 1 << 29,
+            VariableFont_width = 1 << 30,
         }
 
         private readonly HashSet<Font> _fontCache = new();
@@ -70,6 +71,7 @@
                 fontStyle = FontStyle.Bold,
             };
 
+            serializedObject.Update();
             TerminalFontPack fontPack = target as TerminalFontPack;
             base.OnInspectorGUI();
 
@@ -145,12 +147,43 @@
             try
             {
                 _fontAdditionType = (FontType)EditorGUILayout.EnumFlagsField(_fontAdditionType);
-                if (GUILayout.Button("Load From Current Directory"))
+                Object activeObject = Selection.activeObject;
+                if (activeObject == null)
                 {
-                    string assetPath = AssetDatabase.GetAssetPath(fontPack);
+                    activeObject = fontPack;
+                }
+
+                string assetPath = AssetDatabase.GetAssetPath(activeObject);
+                string dataPath = Application.dataPath;
+                if (
+                    dataPath.EndsWith("/", StringComparison.OrdinalIgnoreCase)
+                    || dataPath.EndsWith("\\", StringComparison.OrdinalIgnoreCase)
+                )
+                {
+                    dataPath = dataPath.Substring(0, dataPath.Length - 1);
+                }
+                if (dataPath.EndsWith("Assets", StringComparison.OrdinalIgnoreCase))
+                {
+                    dataPath = dataPath.Substring(0, dataPath.Length - "Assets".Length);
+                }
+
+                if (!Directory.Exists(Path.Combine(dataPath, assetPath)))
+                {
+                    assetPath = Path.GetDirectoryName(assetPath) ?? assetPath;
+                }
+
+                assetPath = assetPath.Replace('\\', '/');
+
+                GUIContent loadFromCurrentDirectoryContent = new(
+                    "Load From Current Directory",
+                    $"Loads all fonts from '{assetPath}'"
+                );
+
+                if (GUILayout.Button(loadFromCurrentDirectoryContent))
+                {
                     UpdateFromDirectory(assetPath);
                 }
-                else if (GUILayout.Button("Load From Directory"))
+                else if (GUILayout.Button("Load From Directory (Select)"))
                 {
                     _lastSelectedDirectory = EditorUtility.OpenFolderPanel(
                         "Select Directory",
@@ -177,6 +210,7 @@
             {
                 fontPack._fonts.SortByName();
                 EditorUtility.SetDirty(fontPack);
+                serializedObject.ApplyModifiedProperties();
             }
 
             return;
@@ -209,6 +243,7 @@
                     Font font = AssetDatabase.LoadAssetAtPath<Font>(assetPath);
                     if (Matches(font, _fontAdditionType) && _fontCache.Add(font))
                     {
+                        anyChanged = true;
                         fontPack._fonts.Add(font);
                     }
                 }

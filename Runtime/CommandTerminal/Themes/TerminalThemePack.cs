@@ -18,7 +18,6 @@
         protected internal List<StyleSheet> _themes = new();
 
         [SerializeField]
-        [HideInInspector]
         protected internal List<string> _themeNames = new();
     }
 }

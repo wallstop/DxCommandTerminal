@@ -6,6 +6,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     using System.Linq;
     using System.Text;
     using Attributes;
+    using Themes;
     using UI;
     using UnityEngine;
 
@@ -37,7 +38,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return;
             }
 
-            string themes = string.Join(BulkSeparator, terminal._themePack._themeNames);
+            string themes = string.Join(
+                BulkSeparator,
+                terminal._themePack._themeNames.Select(ThemeNameHelper.GetFriendlyThemeName)
+            );
             Terminal.Log(TerminalLogType.Message, themes);
         }
 
@@ -86,14 +90,32 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
 
             string theme = args[0].contents;
+            string friendlyThemeName = ThemeNameHelper.GetFriendlyThemeName(theme);
 
-            if (string.Equals(theme, terminal.CurrentTheme, StringComparison.OrdinalIgnoreCase))
+            if (
+                string.Equals(
+                    friendlyThemeName,
+                    terminal.CurrentFriendlyTheme,
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
             {
                 Terminal.Log(TerminalLogType.Message, $"Theme '{theme}' is already set.");
                 return;
             }
 
-            int newThemeIndex = terminal._themePack._themeNames.IndexOf(theme);
+            int newThemeIndex = -1;
+            foreach (string themeName in ThemeNameHelper.GetPossibleThemeNames(theme))
+            {
+                newThemeIndex = terminal._themePack._themeNames.FindIndex(existingTheme =>
+                    string.Equals(existingTheme, themeName, StringComparison.OrdinalIgnoreCase)
+                );
+                if (0 <= newThemeIndex)
+                {
+                    break;
+                }
+            }
+
             if (newThemeIndex < 0)
             {
                 Terminal.Log(TerminalLogType.Warning, $"Theme '{theme}' not found.");
@@ -120,7 +142,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
             Terminal.Log(
                 TerminalLogType.Message,
-                $"Current terminal theme is '{terminal.CurrentTheme}'."
+                $"Current terminal theme is '{terminal.CurrentFriendlyTheme}'."
             );
         }
 

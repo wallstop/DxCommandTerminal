@@ -20,7 +20,6 @@ MonoBehaviour:
   - {fileID: 7433441132597879392, guid: 2f6f52baf8c5460888429da03a0e5dac, type: 3}
   - {fileID: 7433441132597879392, guid: afdb0a1747a944ac8af61e72051886b6, type: 3}
   _themeNames:
-  - darcula-theme
   - dark-theme
   - light-theme
   - monokai-theme
