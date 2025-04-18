@@ -389,6 +389,22 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             return SetVariable(name, new CommandArg(value));
         }
 
+        public bool ClearVariable(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                IssueErrorMessage($"Invalid Variable Name: {name}");
+                return false;
+            }
+
+            if (name.Contains(' '))
+            {
+                name = name.Replace(" ", string.Empty, StringComparison.OrdinalIgnoreCase);
+            }
+
+            return _variables.Remove(name);
+        }
+
         // ReSharper disable once MemberCanBePrivate.Global
         public bool SetVariable(string name, CommandArg value)
         {

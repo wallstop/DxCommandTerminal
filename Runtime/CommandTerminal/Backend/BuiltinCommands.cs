@@ -254,11 +254,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         [RegisterCommand(
             isDefault: true,
-            Name = "clear",
+            Name = "clear-console",
             Help = "Clear the command console",
             MaxArgCount = 0
         )]
-        public static void CommandClear(CommandArg[] args)
+        public static void CommandClearConsole(CommandArg[] args)
         {
             Terminal.Buffer?.Clear();
         }
@@ -341,10 +341,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         [RegisterCommand(
             isDefault: true,
-            Name = "terminal-log",
+            Name = "log-terminal",
             Help = "Output message via Terminal.Log"
         )]
-        public static void CommandPrint(CommandArg[] args)
+        public static void CommandLogTerminal(CommandArg[] args)
         {
             Terminal.Log(JoinArguments(args));
         }
@@ -395,10 +395,12 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         [RegisterCommand(
             isDefault: true,
-            Name = "set",
-            Help = "List all variables or set a variable value"
+            Name = "clear-variable",
+            Help = "Clears a variable value",
+            MinArgCount = 1,
+            MaxArgCount = 1
         )]
-        public static void CommandSet(CommandArg[] args)
+        public static void CommandClearVariable(CommandArg[] args)
         {
             CommandShell shell = Terminal.Shell;
             if (shell == null)
@@ -406,26 +408,148 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return;
             }
 
-            if (args.Length == 0)
+            string variableName = args[0].contents;
+            bool cleared = shell.ClearVariable(variableName);
+            if (cleared)
             {
-                foreach (KeyValuePair<string, CommandArg> kv in shell.Variables)
-                {
-                    Terminal.Log($"{kv.Key, -16}: {kv.Value}");
-                }
+                Terminal.Log($"Variable '{variableName}' cleared successfully.");
+            }
+            else
+            {
+                Terminal.Log(
+                    TerminalLogType.Warning,
+                    $"Warning: Variable '{variableName}' not found."
+                );
+            }
+        }
+
+        [RegisterCommand(
+            isDefault: true,
+            Name = "clear-all-variables",
+            Help = "Clears all variable values",
+            MinArgCount = 0,
+            MaxArgCount = 0
+        )]
+        public static void CommandClearAllVariable(CommandArg[] args)
+        {
+            CommandShell shell = Terminal.Shell;
+            if (shell == null)
+            {
+                return;
+            }
+
+            int variableCount = shell.Variables.Count;
+            foreach (string variable in shell.Variables.Keys.ToArray())
+            {
+                shell.ClearVariable(variable);
+            }
+
+            Terminal.Log(
+                variableCount == 0
+                    ? "No variables found - nothing to clear."
+                    : $"Cleared {variableCount} variables."
+            );
+        }
+
+        [RegisterCommand(
+            isDefault: true,
+            Name = "set-variable",
+            Help = "Sets a variable value",
+            MinArgCount = 2,
+            MaxArgCount = 2
+        )]
+        public static void CommandSetVariable(CommandArg[] args)
+        {
+            CommandShell shell = Terminal.Shell;
+            if (shell == null)
+            {
                 return;
             }
 
             string variableName = args[0].contents;
 
-            if (variableName[0] == '$')
+            if (string.IsNullOrWhiteSpace(variableName) || variableName.StartsWith('$'))
             {
                 Terminal.Log(
                     TerminalLogType.Warning,
-                    $"Warning: Variable name starts with '$', '${variableName}'."
+                    $"Warning: Possibly invalid variable name '{variableName}'."
                 );
             }
 
-            shell.SetVariable(variableName, JoinArguments(args, 1));
+            string variableValue = JoinArguments(args, 1);
+            bool set = shell.SetVariable(variableName, variableValue);
+            if (set)
+            {
+                Terminal.Log($"Variable '{variableName}' set to '{variableValue}' successfully.");
+            }
+            else if (shell.Variables.TryGetValue(variableName, out CommandArg existingVariable))
+            {
+                Terminal.Log(
+                    TerminalLogType.Warning,
+                    $"Variable '{variableName}' failed to set. Existing value: {existingVariable}."
+                );
+            }
+            else
+            {
+                Terminal.Log(
+                    TerminalLogType.Warning,
+                    $"Variable '{variableName}' failed to set. No existing value found."
+                );
+            }
+        }
+
+        [RegisterCommand(
+            isDefault: true,
+            Name = "get-variable",
+            Help = "Gets a variable value",
+            MinArgCount = 1,
+            MaxArgCount = 1
+        )]
+        public static void CommandGetVariable(CommandArg[] args)
+        {
+            CommandShell shell = Terminal.Shell;
+            if (shell == null)
+            {
+                return;
+            }
+
+            string variableName = args[0].contents;
+
+            if (shell.Variables.TryGetValue(variableName, out CommandArg variable))
+            {
+                Terminal.Log($"Variable '{variableName}' is set to '{variable}'.");
+            }
+            else
+            {
+                Terminal.Log(TerminalLogType.Warning, $"Variable '{variableName}' not found.");
+            }
+        }
+
+        [RegisterCommand(
+            isDefault: true,
+            Name = "list-variables",
+            Help = "Gets all variables and their associated values",
+            MinArgCount = 0,
+            MaxArgCount = 0
+        )]
+        public static void CommandGetAllVariables(CommandArg[] args)
+        {
+            CommandShell shell = Terminal.Shell;
+            if (shell == null)
+            {
+                return;
+            }
+
+            if (!shell.Variables.Any())
+            {
+                Terminal.Log(TerminalLogType.Warning, "No variables found.");
+                return;
+            }
+
+            foreach (KeyValuePair<string, CommandArg> entry in shell.Variables)
+            {
+                Terminal.Log($"Variable '{entry.Key}' is set to '{entry.Value}'.");
+            }
         }
 
         [RegisterCommand(isDefault: true, Name = "no-op", Help = "No operation")]
