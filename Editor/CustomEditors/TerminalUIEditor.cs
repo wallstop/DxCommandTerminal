@@ -727,7 +727,7 @@
         {
             bool anyChanged = false;
             EditorGUILayout.Space(10);
-            EditorGUILayout.LabelField("Theming", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("Pack Selection", EditorStyles.boldLabel);
 
             EditorGUILayout.BeginHorizontal();
             try
@@ -826,6 +826,9 @@
             {
                 EditorGUILayout.EndHorizontal();
             }
+
+            EditorGUILayout.Space(10);
+            EditorGUILayout.LabelField("Theming", EditorStyles.boldLabel);
 
             EditorGUILayout.BeginHorizontal();
             try

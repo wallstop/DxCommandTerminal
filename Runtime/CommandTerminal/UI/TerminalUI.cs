@@ -66,10 +66,25 @@ namespace WallstopStudios.DxCommandTerminal.UI
         [Range(0, 1)]
         public float smallTerminalRatio = 0.4714285f;
 
-        [Range(100, 1000)]
-        [SerializeField]
-        private float _toggleSpeed = 360;
+        [Tooltip("Curve the console follows to go from closed -> open")]
+        public AnimationCurve easeOutCurve = new()
+        {
+            keys = new[] { new Keyframe(0, 0), new Keyframe(1, 1) },
+        };
 
+        [Tooltip("Duration for the ease-out animation in seconds")]
+        public float easeOutTime = 0.5f;
+
+        [Tooltip("Curve the console follows to go from open -> closed")]
+        public AnimationCurve easeInCurve = new()
+        {
+            keys = new[] { new Keyframe(0, 0), new Keyframe(1, 1) },
+        };
+
+        [Tooltip("Duration for the ease-in animation in seconds")]
+        public float easeInTime = 0.5f;
+
+        [Header("System")]
         [SerializeField]
         private int _logBufferSize = 256;
 
@@ -168,6 +183,9 @@ namespace WallstopStudios.DxCommandTerminal.UI
         private bool _commandIssuedThisFrame;
         private string _runtimeTheme;
         private Font _runtimeFont;
+        private float _initialWindowHeight;
+        private float _animationTimer;
+        private bool _isAnimating;
 
         private VisualElement _terminalContainer;
         private ScrollView _logScrollView;
@@ -384,8 +402,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
         private void LateUpdate()
         {
             ResetWindowIdempotent();
-
-            HandleOpenness();
+            HandleHeightAnimation();
             RefreshUI();
             _commandIssuedThisFrame = false;
         }
@@ -662,25 +679,37 @@ namespace WallstopStudios.DxCommandTerminal.UI
         private void ResetWindowIdempotent()
         {
             int height = Screen.height;
-            switch (_state)
+            float oldTargetHeight = _targetWindowHeight;
+            try
             {
-                case TerminalState.OpenSmall:
+                switch (_state)
                 {
-                    _realWindowHeight = height * maxHeight * smallTerminalRatio;
-                    _targetWindowHeight = _realWindowHeight;
-                    break;
+                    case TerminalState.OpenSmall:
+                    {
+                        _realWindowHeight = height * maxHeight * smallTerminalRatio;
+                        _targetWindowHeight = _realWindowHeight;
+                        break;
+                    }
+                    case TerminalState.OpenFull:
+                    {
+                        _realWindowHeight = height * maxHeight;
+                        _targetWindowHeight = _realWindowHeight;
+                        break;
+                    }
+                    default:
+                    {
+                        _realWindowHeight = height * maxHeight * smallTerminalRatio;
+                        _targetWindowHeight = 0;
+                        break;
+                    }
                 }
-                case TerminalState.OpenFull:
+            }
+            finally
+            {
+                // ReSharper disable once CompareOfFloatsByEqualityOperator
+                if (oldTargetHeight != _targetWindowHeight)
                 {
-                    _realWindowHeight = height * maxHeight;
-                    _targetWindowHeight = _realWindowHeight;
-                    break;
-                }
-                default:
-                {
-                    _realWindowHeight = height * maxHeight * smallTerminalRatio;
-                    _targetWindowHeight = 0;
-                    break;
+                    StartHeightAnimation();
                 }
             }
         }
@@ -2015,23 +2044,84 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
         }
 
-        private void HandleOpenness()
+        private void StartHeightAnimation()
         {
-            float heightChangeThisFrame = _toggleSpeed * Time.unscaledDeltaTime;
-
-            if (_currentWindowHeight < _targetWindowHeight)
+            if (Mathf.Approximately(_currentWindowHeight, _targetWindowHeight))
             {
-                _currentWindowHeight = Mathf.Min(
-                    _currentWindowHeight + heightChangeThisFrame,
+                _isAnimating = false;
+                return;
+            }
+
+            _initialWindowHeight = _currentWindowHeight;
+            _animationTimer = 0f;
+            _isAnimating = true;
+        }
+
+        private void HandleHeightAnimation()
+        {
+            if (!_isAnimating)
+            {
+                return;
+            }
+
+            _animationTimer += Time.unscaledDeltaTime;
+
+            AnimationCurve selectedCurve;
+            float animationDuration;
+            bool isExpanding = _targetWindowHeight > _initialWindowHeight;
+
+            if (isExpanding)
+            {
+                selectedCurve = easeOutCurve;
+                animationDuration = easeOutTime;
+            }
+            else
+            {
+                selectedCurve = easeInCurve;
+                animationDuration = easeInTime;
+            }
+
+            if (animationDuration <= 0f)
+            {
+                _currentWindowHeight = _targetWindowHeight;
+                _isAnimating = false;
+                return;
+            }
+
+            float normalizedTime = Mathf.Clamp01(_animationTimer / animationDuration);
+
+            float curveValue = selectedCurve.Evaluate(normalizedTime);
+
+            _currentWindowHeight = Mathf.LerpUnclamped(
+                _initialWindowHeight,
+                _targetWindowHeight,
+                curveValue
+            );
+
+            if (isExpanding)
+            {
+                _currentWindowHeight = Mathf.Clamp(
+                    _currentWindowHeight,
+                    _initialWindowHeight,
                     _targetWindowHeight
                 );
             }
-            else if (_targetWindowHeight < _currentWindowHeight)
+            else
             {
-                _currentWindowHeight = Mathf.Max(
-                    _currentWindowHeight - heightChangeThisFrame,
-                    _targetWindowHeight
+                _currentWindowHeight = Mathf.Clamp(
+                    _currentWindowHeight,
+                    _targetWindowHeight,
+                    _initialWindowHeight
                 );
+            }
+
+            if (
+                Mathf.Approximately(_currentWindowHeight, _targetWindowHeight)
+                || animationDuration <= _animationTimer
+            )
+            {
+                _currentWindowHeight = _targetWindowHeight;
+                _isAnimating = false;
             }
         }
 
