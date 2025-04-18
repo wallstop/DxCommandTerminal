@@ -1,6 +1,35 @@
-﻿namespace CommandTerminal.Extensions
+﻿namespace WallstopStudios.DxCommandTerminal.Extensions
 {
+    using System;
     using System.Collections.Generic;
+    using Object = UnityEngine.Object;
+
+    public sealed class UnityObjectNameComparer : IComparer<Object>
+    {
+        public static readonly UnityObjectNameComparer Instance = new();
+
+        private UnityObjectNameComparer() { }
+
+        public int Compare(Object x, Object y)
+        {
+            if (x == y)
+            {
+                return 0;
+            }
+
+            if (y == null)
+            {
+                return 1;
+            }
+
+            if (x == null)
+            {
+                return -1;
+            }
+
+            return string.Compare(x.name, y.name, StringComparison.OrdinalIgnoreCase);
+        }
+    }
 
     public static class IListExtensions
     {
@@ -34,6 +63,34 @@
                 start++;
                 end--;
             }
+        }
+
+        public static void SortByName<T>(this List<T> list)
+            where T : Object
+        {
+            list.Sort(UnityObjectNameComparer.Instance);
+        }
+
+        public static bool IsSorted<T>(this IList<T> list, IComparer<T> comparer = null)
+        {
+            if (list.Count <= 1)
+            {
+                return true;
+            }
+
+            comparer ??= Comparer<T>.Default;
+
+            T previous = list[0];
+            for (int i = 1; i < list.Count; ++i)
+            {
+                T current = list[i];
+                if (comparer.Compare(previous, current) > 0)
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
     }
 }

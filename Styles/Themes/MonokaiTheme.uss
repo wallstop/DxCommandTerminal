@@ -1,0 +1,26 @@
+﻿.monokai-theme {
+    /* Backgrounds */
+    --terminal-bg: rgba(39, 40, 34, 0.9);
+    --button-bg: rgba(55, 56, 50, 1);
+    --input-field-bg: rgba(30, 31, 27, 0.8);
+    --button-selected-bg: rgba(166, 226, 46, 0.85);
+    --button-hover-bg: rgba(75, 77, 69, 1);
+    --scroll-bg: rgba(55, 56, 50, 1);
+    --scroll-inverse-bg: rgba(90, 92, 84, 1);
+    --scroll-active-bg: rgba(110, 112, 102, 1);
+
+    /* Text & Foreground */
+    --button-text: rgba(248, 248, 242, 0.9);
+    --button-selected-text: rgba(39, 40, 34, 1);
+    --button-hover-text: rgba(248, 248, 242, 1);
+    --input-text-color: rgba(248, 248, 242, 1.0);
+    --text-message: rgba(248, 248, 242, 1);
+    --text-warning: rgba(253, 151, 31, 1);
+    --text-input-echo: rgba(102, 217, 239, 1);
+    --text-shell: rgba(117, 113, 94, 1);
+    --text-error: rgba(249, 38, 114, 1);
+
+    /* Other UI Elements */
+    --scroll-color: rgba(248, 248, 242, 1);
+    --caret-color: rgba(248, 248, 242, 1.0);
+}

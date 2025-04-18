@@ -1,0 +1,26 @@
+﻿.coral-reef-theme {
+    /* Backgrounds */
+    --terminal-bg: rgba(180, 240, 255, 0.7);
+    --button-bg: rgba(150, 210, 230, 1);
+    --input-field-bg: rgba(210, 250, 255, 0.7);
+    --button-selected-bg: rgba(255, 110, 140, 0.85);
+    --button-hover-bg: rgba(120, 180, 200, 0.7);
+    --scroll-bg: rgba(140, 200, 220, 1);
+    --scroll-inverse-bg: rgba(150, 210, 230, 1);
+    --scroll-active-bg: rgba(100, 150, 170, 1);
+
+    /* Text & Foreground */
+    --button-text: rgba(0, 80, 100, 0.9);
+    --button-selected-text: rgba(255, 240, 240, 1);
+    --button-hover-text: rgba(0, 60, 80, 1);
+    --input-text-color: rgba(0, 80, 100, 1.0);
+    --text-message: rgba(0, 80, 100, 1);
+    --text-warning: rgba(255, 200, 50, 1);
+    --text-input-echo: rgba(80, 150, 200, 1);
+    --text-shell: rgba(50, 120, 150, 1);
+    --text-error: rgba(200, 50, 80, 1);
+
+    /* Other UI Elements */
+    --scroll-color: rgba(255, 110, 140, 1);
+    --caret-color: rgba(0, 80, 100, 1.0);
+}

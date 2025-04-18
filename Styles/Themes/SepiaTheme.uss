@@ -1,0 +1,26 @@
+﻿.sepia-theme {
+    /* Backgrounds */
+    --terminal-bg: rgba(90, 70, 50, 0.8);
+    --button-bg: rgba(110, 90, 70, 1);
+    --input-field-bg: rgba(80, 60, 40, 0.7);
+    --button-selected-bg: rgba(240, 230, 210, 0.85);
+    --button-hover-bg: rgba(130, 110, 90, 0.7);
+    --scroll-bg: rgba(120, 100, 80, 1);
+    --scroll-inverse-bg: rgba(110, 90, 70, 1);
+    --scroll-active-bg: rgba(150, 130, 110, 1);
+
+    /* Text & Foreground */
+    --button-text: rgba(240, 230, 210, 0.9);
+    --button-selected-text: rgba(90, 70, 50, 1);
+    --button-hover-text: rgba(250, 245, 230, 1);
+    --input-text-color: rgba(240, 230, 210, 1.0);
+    --text-message: rgba(240, 230, 210, 1);
+    --text-warning: rgba(200, 150, 100, 1);
+    --text-input-echo: rgba(180, 160, 140, 1);
+    --text-shell: rgba(160, 140, 120, 1);
+    --text-error: rgba(180, 90, 90, 1);
+
+    /* Other UI Elements */
+    --scroll-color: rgba(160, 140, 120, 1);
+    --caret-color: rgba(240, 230, 210, 1.0);
+}

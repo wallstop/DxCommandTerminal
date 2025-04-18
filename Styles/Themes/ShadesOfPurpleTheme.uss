@@ -1,0 +1,26 @@
+﻿.shades-of-purple-theme {
+    /* Backgrounds */
+    --terminal-bg: rgba(45, 33, 87, 0.9);
+    --button-bg: rgba(60, 45, 110, 1);
+    --input-field-bg: rgba(38, 28, 74, 0.8);
+    --button-selected-bg: rgba(173, 255, 47, 0.85);
+    --button-hover-bg: rgba(75, 56, 138, 1);
+    --scroll-bg: rgba(60, 45, 110, 1);
+    --scroll-inverse-bg: rgba(90, 68, 165, 1);
+    --scroll-active-bg: rgba(105, 80, 193, 1);
+
+    /* Text & Foreground */
+    --button-text: rgba(160, 134, 255, 0.9);
+    --button-selected-text: rgba(45, 33, 87, 1);
+    --button-hover-text: rgba(180, 150, 255, 1);
+    --input-text-color: rgba(160, 134, 255, 1.0);
+    --text-message: rgba(160, 134, 255, 1);
+    --text-warning: rgba(255, 216, 102, 1);
+    --text-input-echo: rgba(46, 196, 255, 1);
+    --text-shell: rgba(128, 107, 204, 1);
+    --text-error: rgba(255, 102, 102, 1);
+
+    /* Other UI Elements */
+    --scroll-color: rgba(160, 134, 255, 1);
+    --caret-color: rgba(173, 255, 47, 1.0);
+}

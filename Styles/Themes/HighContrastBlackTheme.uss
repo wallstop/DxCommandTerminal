@@ -1,0 +1,26 @@
+﻿.high-contrast-black-theme {
+    /* Backgrounds */
+    --terminal-bg: rgba(0, 0, 0, 0.95);
+    --button-bg: rgba(20, 20, 20, 1);
+    --input-field-bg: rgba(10, 10, 10, 0.8);
+    --button-selected-bg: rgba(0, 120, 215, 0.9);
+    --button-hover-bg: rgba(40, 40, 40, 1);
+    --scroll-bg: rgba(20, 20, 20, 1);
+    --scroll-inverse-bg: rgba(0, 0, 0, 1);
+    --scroll-active-bg: rgba(60, 60, 60, 1);
+
+    /* Text & Foreground */
+    --button-text: rgba(255, 255, 255, 0.95);
+    --button-selected-text: rgba(255, 255, 255, 1);
+    --button-hover-text: rgba(255, 255, 255, 1);
+    --input-text-color: rgba(255, 255, 255, 1);
+    --text-message: rgba(255, 255, 255, 1);
+    --text-warning: rgba(255, 255, 0, 1);
+    --text-input-echo: rgba(0, 255, 255, 1);
+    --text-shell: rgba(200, 200, 200, 1);
+    --text-error: rgba(255, 80, 80, 1);
+
+    /* Other UI Elements */
+    --scroll-color: rgba(255, 255, 255, 1);
+    --caret-color: rgba(255, 255, 255, 1);
+}

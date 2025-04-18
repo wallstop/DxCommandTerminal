@@ -1,7 +1,8 @@
-﻿namespace CommandTerminal.Extensions
+﻿namespace WallstopStudios.DxCommandTerminal.Extensions
 {
 #if UNITY_EDITOR
     using System;
+    using System.Collections;
     using System.Collections.Generic;
     using System.Reflection;
     using System.Reflection.Emit;
@@ -151,6 +152,106 @@
                 default:
                     return null;
             }
+        }
+
+        /// <summary>
+        /// Gets the instance object that contains the given SerializedProperty.
+        /// </summary>
+        /// <param name="property">The SerializedProperty.</param>
+        /// <param name="fieldInfo">Outputs the FieldInfo of the referenced field.</param>
+        /// <returns>The instance object that owns the field.</returns>
+        public static object GetEnclosingObject(
+            this SerializedProperty property,
+            out FieldInfo fieldInfo
+        )
+        {
+            fieldInfo = null;
+            object obj = property.serializedObject.targetObject;
+            if (obj == null)
+            {
+                return null;
+            }
+            Type type = obj.GetType();
+            string[] pathParts = property.propertyPath.Split('.');
+
+            // Traverse the path but stop at the second-to-last field
+            for (int i = 0; i < pathParts.Length - 1; ++i)
+            {
+                string fieldName = pathParts[i];
+
+                if (fieldName == "Array")
+                {
+                    // Move to "data[i]"
+                    ++i;
+                    if (pathParts.Length <= i)
+                    {
+                        break;
+                    }
+
+                    int index = int.Parse(pathParts[i].Replace("data[", "").Replace("]", ""));
+                    obj = GetElementAtIndex(obj, index);
+                    type = obj?.GetType();
+                    continue;
+                }
+
+                fieldInfo = type?.GetField(
+                    fieldName,
+                    BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance
+                );
+                if (fieldInfo == null)
+                {
+                    return null;
+                }
+
+                // Move deeper but stop before the last property in the path
+                if (i < pathParts.Length - 2)
+                {
+                    obj = fieldInfo.GetValue(obj);
+                    type = fieldInfo.FieldType;
+                }
+            }
+
+            return obj;
+        }
+
+        private static object GetElementAtIndex(object obj, int index)
+        {
+            if (index < 0)
+            {
+                return null;
+            }
+
+            switch (obj)
+            {
+                case IList list when index < list.Count:
+                    return list[index];
+                case IEnumerable enumerable:
+                {
+                    int count = 0;
+                    IEnumerator enumerator = enumerable.GetEnumerator();
+                    try
+                    {
+                        while (enumerator.MoveNext())
+                        {
+                            if (index == count++)
+                            {
+                                return enumerator.Current;
+                            }
+                        }
+                    }
+                    finally
+                    {
+                        if (enumerator is IDisposable disposable)
+                        {
+                            disposable.Dispose();
+                        }
+                    }
+
+                    break;
+                }
+            }
+
+            return null;
         }
 
         // Special handling for Gradients, since Unity doesn't expose gradientValue in SerializedProperty

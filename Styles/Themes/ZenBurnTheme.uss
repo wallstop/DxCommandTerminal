@@ -1,0 +1,26 @@
+﻿.zenburn-theme {
+    /* Backgrounds */
+    --terminal-bg: rgba(63, 63, 63, 0.9);
+    --button-bg: rgba(79, 79, 79, 1);
+    --input-field-bg: rgba(71, 71, 71, 0.8);
+    --button-selected-bg: rgba(128, 159, 118, 0.85);
+    --button-hover-bg: rgba(95, 95, 95, 1);
+    --scroll-bg: rgba(79, 79, 79, 1);
+    --scroll-inverse-bg: rgba(47, 47, 47, 1);
+    --scroll-active-bg: rgba(127, 127, 127, 1);
+
+    /* Text & Foreground */
+    --button-text: rgba(220, 220, 190, 0.9);
+    --button-selected-text: rgba(63, 63, 63, 1);
+    --button-hover-text: rgba(240, 240, 210, 1);
+    --input-text-color: rgba(220, 220, 190, 1);
+    --text-message: rgba(220, 220, 190, 1);
+    --text-warning: rgba(223, 175, 143, 1);
+    --text-input-echo: rgba(143, 191, 171, 1);
+    --text-shell: rgba(127, 127, 127, 1);
+    --text-error: rgba(204, 136, 136, 1);
+
+    /* Other UI Elements */
+    --scroll-color: rgba(220, 220, 190, 1);
+    --caret-color: rgba(220, 220, 190, 1);
+}

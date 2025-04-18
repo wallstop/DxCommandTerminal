@@ -1,4 +1,4 @@
-﻿namespace CommandTerminal.Extensions
+﻿namespace WallstopStudios.DxCommandTerminal.Extensions
 {
     public static class StringExtensions
     {
@@ -13,6 +13,16 @@
             }
 
             return false;
+        }
+
+        public static bool NeedsTrim(this string input)
+        {
+            if (string.IsNullOrEmpty(input))
+            {
+                return false;
+            }
+
+            return char.IsWhiteSpace(input[0]) || char.IsWhiteSpace(input[^1]);
         }
     }
 }

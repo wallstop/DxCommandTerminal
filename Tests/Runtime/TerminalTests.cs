@@ -1,11 +1,12 @@
-﻿namespace DxCommandTerminal.Tests.Tests.Runtime
+﻿namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 {
     using System.Collections;
     using System.Collections.Generic;
     using System.Linq;
-    using CommandTerminal;
+    using Backend;
     using Components;
     using NUnit.Framework;
+    using UI;
     using UnityEngine;
     using UnityEngine.TestTools;
 
@@ -14,9 +15,9 @@
         [TearDown]
         public void TearDown()
         {
-            if (Terminal.Instance != null)
+            if (TerminalUI.Instance != null)
             {
-                Object.Destroy(Terminal.Instance.gameObject);
+                Object.Destroy(TerminalUI.Instance.gameObject);
             }
         }
 
@@ -25,7 +26,7 @@
         {
             yield return SpawnTerminal(resetStateOnInit: true);
 
-            Terminal terminal = Terminal.Instance;
+            TerminalUI terminal = TerminalUI.Instance;
             CommandShell shell = Terminal.Shell;
             Dictionary<string, CommandInfo> shellCommands = shell.Commands.ToDictionary(
                 kvp => kvp.Key,
@@ -64,7 +65,7 @@
         {
             yield return SpawnTerminal(resetStateOnInit: true);
 
-            Terminal terminal1 = Terminal.Instance;
+            TerminalUI terminal1 = TerminalUI.Instance;
             Assert.IsNotNull(terminal1);
             CommandShell shell = Terminal.Shell;
             Assert.IsNotNull(shell);
@@ -77,9 +78,9 @@
 
             yield return SpawnTerminal(resetStateOnInit: false);
 
-            Terminal terminal2 = Terminal.Instance;
-            Assert.IsNotNull(Terminal.Instance);
-            Assert.AreNotSame(terminal1, Terminal.Instance);
+            TerminalUI terminal2 = TerminalUI.Instance;
+            Assert.IsNotNull(TerminalUI.Instance);
+            Assert.AreNotSame(terminal1, TerminalUI.Instance);
             Assert.AreSame(shell, Terminal.Shell);
             Assert.AreSame(history, Terminal.History);
             Assert.AreSame(buffer, Terminal.Buffer);
@@ -87,9 +88,9 @@
 
             yield return SpawnTerminal(resetStateOnInit: true);
 
-            Assert.IsNotNull(Terminal.Instance);
-            Assert.AreNotSame(terminal2, Terminal.Instance);
-            Assert.AreNotSame(terminal1, Terminal.Instance);
+            Assert.IsNotNull(TerminalUI.Instance);
+            Assert.AreNotSame(terminal2, TerminalUI.Instance);
+            Assert.AreNotSame(terminal1, TerminalUI.Instance);
             Assert.AreNotSame(shell, Terminal.Shell);
             Assert.AreNotSame(shell, Terminal.Shell);
             Assert.IsNotNull(Terminal.Shell);
@@ -103,8 +104,8 @@
 
         internal static IEnumerator SpawnTerminal(bool resetStateOnInit)
         {
-            GameObject go = new("Terminal", typeof(StartTracker), typeof(Terminal));
-            Terminal terminal = go.GetComponent<Terminal>();
+            GameObject go = new("Terminal", typeof(StartTracker), typeof(TerminalUI));
+            TerminalUI terminal = go.GetComponent<TerminalUI>();
             terminal.resetStateOnInit = resetStateOnInit;
             StartTracker startTracker = go.GetComponent<StartTracker>();
             yield return new WaitUntil(() => startTracker.Started);

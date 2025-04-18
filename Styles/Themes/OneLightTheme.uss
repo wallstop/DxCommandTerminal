@@ -1,0 +1,26 @@
+﻿.one-light-theme {
+    /* Backgrounds */
+    --terminal-bg: rgba(250, 250, 250, 0.9);
+    --button-bg: rgba(240, 240, 240, 1);
+    --input-field-bg: rgba(250, 250, 250, 0.8);
+    --button-selected-bg: rgba(80, 118, 179, 0.85);
+    --button-hover-bg: rgba(230, 230, 230, 1);
+    --scroll-bg: rgba(240, 240, 240, 1);
+    --scroll-inverse-bg: rgba(220, 220, 220, 1);
+    --scroll-active-bg: rgba(160, 161, 167, 1);
+
+    /* Text & Foreground */
+    --button-text: rgba(58, 62, 67, 0.9);
+    --button-selected-text: rgba(255, 255, 255, 1);
+    --button-hover-text: rgba(38, 42, 47, 1);
+    --input-text-color: rgba(58, 62, 67, 1);
+    --text-message: rgba(58, 62, 67, 1);
+    --text-warning: rgba(197, 142, 22, 1);
+    --text-input-echo: rgba(6, 126, 150, 1);
+    --text-shell: rgba(160, 161, 167, 1);
+    --text-error: rgba(228, 86, 73, 1);
+
+    /* Other UI Elements */
+    --scroll-color: rgba(58, 62, 67, 1);
+    --caret-color: rgba(80, 118, 179, 1);
+}
