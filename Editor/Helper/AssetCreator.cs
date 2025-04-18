@@ -18,79 +18,42 @@ using UnityEditor;
 
 public static class UIAssetCreator
 {
-    /// <summary>
-    /// Creates a .uss file at the given path (inside your Assets folder) by writing raw text
-    /// and then calls ImportAsset so Unity runs its USS importer.
-    /// </summary>
-    public static void CreateUSS(string relativePathInProject, string ussText)
-    {
-        // make sure path ends with .uss
-        if (!relativePathInProject.EndsWith(".uss", System.StringComparison.OrdinalIgnoreCase))
-            relativePathInProject += ".uss";
 
-        var fullDiskPath = Path.Combine(Application.dataPath.Substring(0, Application.dataPath.Length - 6),
-                                        relativePathInProject);
-
-        // 1) write the file
-        Directory.CreateDirectory(Path.GetDirectoryName(fullDiskPath));
-        File.WriteAllText(fullDiskPath, ussText);
-
-        // 2) import it so Unity creates the StyleSheet asset
-        AssetDatabase.ImportAsset(relativePathInProject);
-        AssetDatabase.Refresh();
-    }
-
-    /// <summary>
-    /// Same for UXML files.
-    /// </summary>
-    public static void CreateUXML(string relativePathInProject, string uxmlText)
-    {
-        if (!relativePathInProject.EndsWith(".uxml", System.StringComparison.OrdinalIgnoreCase))
-            relativePathInProject += ".uxml";
-
-        var fullDiskPath = Path.Combine(Application.dataPath.Substring(0, Application.dataPath.Length - 6),
-                                        relativePathInProject);
-
-        Directory.CreateDirectory(Path.GetDirectoryName(fullDiskPath));
-        File.WriteAllText(fullDiskPath, uxmlText);
-
-        AssetDatabase.ImportAsset(relativePathInProject);
-        AssetDatabase.Refresh();
-    }
 }
 
      */
 
     public static class AssetCreator
     {
-        private static readonly Dictionary<Type, string> TypesToExtend = new()
+        private static readonly List<(Type, string)> TypesToExtend = new()
         {
-            // Core Unity assets
-            { typeof(GameObject), ".prefab" },
-            { typeof(SceneAsset), ".unity" },
-            { typeof(Material), ".mat" },
-            { typeof(Shader), ".shader" },
-            { typeof(ComputeShader), ".compute" },
-            { typeof(TextAsset), ".txt" },
-            { typeof(MonoScript), ".cs" },
-            { typeof(AnimationClip), ".anim" },
-            { typeof(RuntimeAnimatorController), ".controller" },
-            { typeof(AnimatorController), ".controller" },
-            { typeof(AnimatorOverrideController), ".overrideController" },
-            { typeof(AvatarMask), ".mask" },
-            { typeof(PhysicMaterial), ".physicMaterial" },
-            { typeof(PhysicsMaterial2D), ".physicsMaterial2D" },
-            { typeof(RenderTexture), ".renderTexture" },
-            { typeof(ShaderVariantCollection), ".shadervariants" },
-            { typeof(Cubemap), ".cubemap" },
-            { typeof(CubemapArray), ".cubemaparray" },
-            { typeof(NavMeshData), ".navmesh" },
-            { typeof(AssetBundleManifest), ".manifest" },
-            { typeof(TerrainData), ".asset" },
-            { typeof(PlayableAsset), ".playable" },
-            { typeof(VisualEffectAsset), ".vfx" },
-            { typeof(StyleSheet), ".uss" },
-            { typeof(VisualTreeAsset), ".uxml" },
+            (typeof(GameObject), ".prefab"),
+            (typeof(SceneAsset), ".unity"),
+            (typeof(Material), ".mat"),
+            (typeof(Shader), ".shader"),
+            (typeof(ComputeShader), ".compute"),
+            (typeof(TextAsset), ".txt"),
+            (typeof(MonoScript), ".cs"),
+            (typeof(MonoBehaviour), ".cs"),
+            (typeof(AnimationClip), ".anim"),
+            (typeof(RuntimeAnimatorController), ".controller"),
+            (typeof(AnimatorController), ".controller"),
+            (typeof(AnimatorOverrideController), ".overrideController"),
+            (typeof(AvatarMask), ".mask"),
+            (typeof(PhysicMaterial), ".physicMaterial"),
+            (typeof(PhysicsMaterial2D), ".physicsMaterial2D"),
+            (typeof(RenderTexture), ".renderTexture"),
+            (typeof(ShaderVariantCollection), ".shadervariants"),
+            (typeof(Cubemap), ".cubemap"),
+            (typeof(CubemapArray), ".cubemaparray"),
+            (typeof(NavMeshData), ".navmesh"),
+            (typeof(AssetBundleManifest), ".manifest"),
+            (typeof(TerrainData), ".asset"),
+            (typeof(PlayableAsset), ".playable"),
+            (typeof(VisualEffectAsset), ".vfx"),
+            (typeof(ThemeStyleSheet), ".tss"),
+            (typeof(StyleSheet), ".uss"),
+            (typeof(VisualTreeAsset), ".uxml"),
         };
 
         public static T CreateAssetSafe<T>(
@@ -110,14 +73,14 @@ public static class UIAssetCreator
             string existingAssetPath = AssetDatabase.GetAssetPath(objectToSave);
             if (string.IsNullOrWhiteSpace(existingAssetPath))
             {
-                foreach (KeyValuePair<Type, string> typeToExtend in TypesToExtend)
+                foreach ((Type type, string extension) in TypesToExtend)
                 {
-                    if (!typeToExtend.Key.IsAssignableFrom(objectToSave.GetType()))
+                    if (!type.IsAssignableFrom(objectToSave.GetType()))
                     {
                         continue;
                     }
 
-                    fileExtension = typeToExtend.Value;
+                    fileExtension = extension;
                     break;
                 }
             }
@@ -153,47 +116,48 @@ public static class UIAssetCreator
             }
 
             string uniquePath = AssetDatabase.GenerateUniqueAssetPath(fullPath);
-            if (uniquePath != fullPath)
-            {
-                Debug.LogWarning(
-                    $"An asset already exists at {fullPath}. Saving to {uniquePath} instead."
-                );
-            }
-            else
-            {
-                uniquePath = fullPath;
-            }
 
             try
             {
-                if (string.IsNullOrEmpty(existingAssetPath))
+                if (string.IsNullOrWhiteSpace(existingAssetPath))
                 {
-                    if (string.Equals(fileExtension, ".uss", StringComparison.OrdinalIgnoreCase))
-                    {
-                        AssetDatabase.ImportAsset(uniquePath);
-                    }
                     AssetDatabase.CreateAsset(objectToSave, uniquePath);
                 }
                 else
                 {
-                    bool copyOk = AssetDatabase.CopyAsset(existingAssetPath, uniquePath);
-                    if (!copyOk)
+                    if (
+                        string.Equals(fileExtension, ".uss", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(fileExtension, ".tss", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(fileExtension, ".uxml", StringComparison.OrdinalIgnoreCase)
+                    )
                     {
-                        Debug.LogError(
-                            $"Failed to copy asset from path {existingAssetPath} to {uniquePath}"
-                        );
-                        return null;
+                        // Can't copy StyleSheets for some unknown reason
+                        string fileContents = File.ReadAllText(existingAssetPath);
+                        File.WriteAllText(uniquePath, fileContents);
+                    }
+                    else
+                    {
+                        bool copyOk = AssetDatabase.CopyAsset(existingAssetPath, uniquePath);
+                        if (!copyOk)
+                        {
+                            Debug.LogError(
+                                $"Failed to copy asset from path {existingAssetPath} to {uniquePath}."
+                            );
+                            return null;
+                        }
                     }
                 }
 
-                Debug.Log($"Successfully created asset at: {uniquePath}");
+                Debug.Log(
+                    $"Successfully created asset at: {uniquePath} with extension '{fileExtension}'."
+                );
 
                 AssetDatabase.SaveAssets();
                 AssetDatabase.Refresh();
 
                 return AssetDatabase.LoadAssetAtPath<T>(uniquePath);
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
                 Debug.LogError($"Failed to create asset at {uniquePath}: {ex}");
                 return null;

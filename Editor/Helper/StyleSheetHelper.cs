@@ -2,9 +2,11 @@
 {
 #if UNITY_EDITOR
     using System;
+    using System.Collections;
     using System.Collections.Generic;
     using System.IO;
     using System.Linq;
+    using System.Reflection;
     using System.Text.RegularExpressions;
     using UnityEditor;
     using UnityEngine;
@@ -68,7 +70,7 @@
             {
                 return;
             }
-            ClearStyleSheets(panelSettings.themeStyleSheet, styleSheets);
+            AddStyleSheets(panelSettings.themeStyleSheet, styleSheets);
         }
 
         public static void AddStyleSheets(
@@ -76,13 +78,11 @@
             IEnumerable<StyleSheet> styleSheets
         )
         {
-            HashSet<StyleSheet> uniqueStyleSheets = new(
-                styleSheets ?? Enumerable.Empty<StyleSheet>()
-            );
+            List<StyleSheet> uniqueStyleSheets = (styleSheets ?? Enumerable.Empty<StyleSheet>())
+                .Distinct()
+                .ToList();
             using SerializedObject serializedThemeSettings = new(themeSettingsAsset);
-            SerializedProperty themesListProperty = serializedThemeSettings.FindProperty(
-                "m_FlattenedImportedStyleSheets"
-            );
+            SerializedProperty themesListProperty = serializedThemeSettings.FindProperty("imports");
 
             if (themesListProperty == null)
             {
@@ -99,15 +99,46 @@
                 foreach (StyleSheet styleSheet in uniqueStyleSheets)
                 {
                     themesListProperty.InsertArrayElementAtIndex(themesListProperty.arraySize);
-                    SerializedProperty themeProperty = themesListProperty.GetArrayElementAtIndex(
-                        themesListProperty.arraySize - 1
-                    );
-                    themeProperty.objectReferenceValue = styleSheet;
-                    themeProperty.serializedObject.ApplyModifiedPropertiesWithoutUndo();
                 }
+                int beginningIndex = themesListProperty.arraySize - uniqueStyleSheets.Count;
+                IList imports =
+                    typeof(ThemeStyleSheet)
+                        .GetField(
+                            "imports",
+                            BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public
+                        )
+                        ?.GetValue(themeSettingsAsset) as IList;
+                if (imports == null)
+                {
+                    return;
+                }
+                Type styleSheetType = typeof(StyleSheet);
+                Type importStructType = styleSheetType.GetNestedType(
+                    "ImportStruct",
+                    BindingFlags.Instance
+                        | BindingFlags.Static
+                        | BindingFlags.Public
+                        | BindingFlags.NonPublic
+                );
+                for (int i = 0; i < uniqueStyleSheets.Count; ++i)
+                {
+                    StyleSheet styleSheet = uniqueStyleSheets[i];
+                    object importStruct = Activator.CreateInstance(importStructType);
+                    importStruct
+                        .GetType()
+                        .GetField(
+                            "styleSheet",
+                            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic
+                        )
+                        .SetValue(importStruct, styleSheet);
+                    imports[beginningIndex + i] = importStruct;
+                }
+
+                themesListProperty.serializedObject.ApplyModifiedProperties();
             }
             finally
             {
+                serializedThemeSettings.ApplyModifiedProperties();
                 themesListProperty.Dispose();
             }
         }
@@ -145,9 +176,7 @@
                 styleSheets ?? Enumerable.Empty<StyleSheet>()
             );
             using SerializedObject serializedThemeSettings = new(themeSettingsAsset);
-            SerializedProperty themesListProperty = serializedThemeSettings.FindProperty(
-                "m_FlattenedImportedStyleSheets"
-            );
+            SerializedProperty themesListProperty = serializedThemeSettings.FindProperty("imports");
 
             if (themesListProperty == null)
             {
@@ -172,7 +201,8 @@
 
                     try
                     {
-                        StyleSheet styleSheet = themeProperty.objectReferenceValue as StyleSheet;
+                        StyleSheet styleSheet =
+                            themeProperty.serializedObject?.targetObject as StyleSheet;
                         if (
                             styleSheet == null
                             || string.IsNullOrWhiteSpace(styleSheet.name)
@@ -190,7 +220,8 @@
             }
             finally
             {
-                serializedThemeSettings.ApplyModifiedPropertiesWithoutUndo();
+                themesListProperty.serializedObject.ApplyModifiedProperties();
+                serializedThemeSettings.ApplyModifiedProperties();
                 themesListProperty.Dispose();
             }
         }
@@ -217,9 +248,7 @@
             }
 
             using SerializedObject serializedThemeSettings = new(themeSettingsAsset);
-            SerializedProperty themesListProperty = serializedThemeSettings.FindProperty(
-                "m_FlattenedImportedStyleSheets"
-            );
+            SerializedProperty themesListProperty = serializedThemeSettings.FindProperty("imports");
 
             if (themesListProperty == null)
             {
@@ -244,7 +273,8 @@
 
                     try
                     {
-                        StyleSheet styleSheet = themeProperty.objectReferenceValue as StyleSheet;
+                        StyleSheet styleSheet =
+                            themeProperty.serializedObject?.targetObject as StyleSheet;
                         if (styleSheet == null)
                         {
                             continue;

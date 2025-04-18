@@ -917,9 +917,20 @@
                         int count = 0;
                         foreach (StyleSheet styleSheet in initialStyleSheets)
                         {
+                            if (
+                                styleSheet.name.Contains(
+                                    "UnityDefaultRuntimeTheme",
+                                    StringComparison.OrdinalIgnoreCase
+                                )
+                            )
+                            {
+                                copiedStyleSheets.Add(styleSheet);
+                                continue;
+                            }
+
                             StyleSheet copy = AssetCreator.CreateAssetSafe(
                                 styleSheet,
-                                $"StyleSheet-{terminal.id}-{count++}",
+                                $"StyleSheet-{styleSheet.name}-{count++}",
                                 "Assets/Packages/WallstopStudios.DxCommandTerminal/Styles"
                             );
                             if (copy != null)
@@ -928,22 +939,31 @@
                             }
                         }
 
-                        ThemeStyleSheet themeCopy = Instantiate(themeStyleSheet);
+                        StyleSheetHelper.ClearStyleSheets(themeStyleSheet, initialStyleSheets);
                         try
                         {
-                            StyleSheetHelper.ClearStyleSheets(themeCopy, initialStyleSheets);
-                            StyleSheetHelper.AddStyleSheets(themeCopy, copiedStyleSheets);
-                            ThemeStyleSheet copiedStyleSheet = AssetCreator.CreateAssetSafe(
-                                themeCopy,
-                                $"TerminalTheme-{terminal.id}"
-                            );
+                            StyleSheetHelper.AddStyleSheets(themeStyleSheet, copiedStyleSheets);
+                            try
+                            {
+                                ThemeStyleSheet copiedStyleSheet = AssetCreator.CreateAssetSafe(
+                                    themeStyleSheet,
+                                    $"TerminalTheme-{terminal.id}"
+                                );
 
-                            copiedSettings.themeStyleSheet =
-                                copiedStyleSheet != null ? copiedStyleSheet : null;
+                                copiedSettings.themeStyleSheet =
+                                    copiedStyleSheet != null ? copiedStyleSheet : null;
+                            }
+                            finally
+                            {
+                                StyleSheetHelper.ClearStyleSheets(
+                                    themeStyleSheet,
+                                    copiedStyleSheets
+                                );
+                            }
                         }
                         finally
                         {
-                            DestroyImmediate(themeCopy);
+                            StyleSheetHelper.AddStyleSheets(themeStyleSheet, initialStyleSheets);
                         }
                     }
 
