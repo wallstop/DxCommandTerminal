@@ -754,9 +754,13 @@
                     );
                     if (0 <= _themePackIndex && _themePackIndex < _themePacks.Count)
                     {
-                        if (GUILayout.Button("Set Theme Pack", _impactButtonStyle))
+                        TerminalThemePack themePack = _themePacks[_themePackIndex];
+                        bool clicked =
+                            themePack != terminal._themePack
+                                ? GUILayout.Button("Set Theme Pack", _impactButtonStyle)
+                                : GUILayout.Button("Set Theme Pack");
+                        if (clicked)
                         {
-                            TerminalThemePack themePack = _themePacks[_themePackIndex];
                             if (themePack != terminal._themePack)
                             {
                                 terminal._themePack = themePack;
@@ -802,9 +806,13 @@
                     );
                     if (0 <= _fontPackIndex && _fontPackIndex < _fontPacks.Count)
                     {
-                        if (GUILayout.Button("Set Font Pack", _impactButtonStyle))
+                        TerminalFontPack fontPack = _fontPacks[_fontPackIndex];
+                        bool clicked =
+                            fontPack != terminal._fontPack
+                                ? GUILayout.Button("Set Font Pack", _impactButtonStyle)
+                                : GUILayout.Button("Set Font Pack");
+                        if (clicked)
                         {
-                            TerminalFontPack fontPack = _fontPacks[_fontPackIndex];
                             if (fontPack != terminal._fontPack)
                             {
                                 _fontsByPrefix.Clear();
@@ -873,7 +881,14 @@
                             "Set Theme",
                             $"Will set the current theme to {selectedTheme}"
                         );
-                        if (GUILayout.Button(setThemeContent, _impactButtonStyle))
+                        bool clicked = !string.Equals(
+                            selectedTheme,
+                            terminal._persistedTheme,
+                            StringComparison.OrdinalIgnoreCase
+                        )
+                            ? GUILayout.Button(setThemeContent, _impactButtonStyle)
+                            : GUILayout.Button(setThemeContent);
+                        if (clicked)
                         {
                             terminal.SetTheme(selectedTheme, persist: true);
                             anyChanged = true;
@@ -1318,7 +1333,11 @@
                                 "Set Font",
                                 $"Update the terminal's font to {selectedFont.name}"
                             );
-                            if (GUILayout.Button(setFontContent, _impactButtonStyle))
+                            bool clicked =
+                                selectedFont != terminal._persistedFont
+                                    ? GUILayout.Button(setFontContent, _impactButtonStyle)
+                                    : GUILayout.Button(setFontContent);
+                            if (clicked)
                             {
                                 terminal.SetFont(selectedFont, persist: true);
                                 anyChanged = true;

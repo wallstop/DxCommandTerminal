@@ -821,19 +821,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 userArgs: this,
                 useTrickleDown: TrickleDown.TrickleDown
             );
-            _commandInput.RegisterCallback<KeyDownEvent, TerminalUI>(
-                (evt, context) =>
-                {
-                    if (evt.keyCode == KeyCode.Return || evt.keyCode == KeyCode.KeypadEnter)
-                    {
-                        context.EnterCommand();
-                        evt.StopPropagation();
-                        evt.PreventDefault();
-                    }
-                },
-                userArgs: this,
-                useTrickleDown: TrickleDown.TrickleDown
-            );
 
             _inputContainer.Add(_commandInput);
             _textInput = _commandInput.Q<VisualElement>("unity-text-input");
@@ -1854,8 +1841,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
                 string[] loadedThemes = terminalRoot
                     .GetClasses()
-                    // ReSharper disable once ConvertClosureToMethodGroup
-                    .Where(className => ThemeNameHelper.IsThemeName(className))
+                    .Where(ThemeNameHelper.IsThemeName)
                     .ToArray();
 
                 foreach (string loadedTheme in loadedThemes)

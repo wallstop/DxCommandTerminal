@@ -1,5 +1,6 @@
 namespace WallstopStudios.DxCommandTerminal.Backend
 {
+    using System;
     using System.Collections.Generic;
     using System.Linq;
     using DataStructures;
@@ -32,6 +33,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
     public sealed class CommandLog
     {
+        private static readonly string[] NewlineSeparators = { "\r\n", "\n", "\r" };
+        private static readonly string JoinSeparator = Environment.NewLine;
+
         public IReadOnlyList<LogItem> Logs => _logs;
         public int Capacity => _logs.Capacity;
         public long Version => _version;
@@ -52,10 +56,36 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         public bool HandleLog(string message, TerminalLogType type, bool includeStackTrace = true)
         {
-            string stackTrace = includeStackTrace
-                ? StackTraceUtility.ExtractStackTrace()
-                : string.Empty;
+            string stackTrace = includeStackTrace ? GetAccurateStackTrace() : string.Empty;
             return HandleLog(message, stackTrace, type);
+        }
+
+        private static string GetAccurateStackTrace()
+        {
+            string fullStackTrace = StackTraceUtility.ExtractStackTrace();
+            if (string.IsNullOrWhiteSpace(fullStackTrace))
+            {
+                return fullStackTrace;
+            }
+
+            string[] lines = fullStackTrace.Split(NewlineSeparators, StringSplitOptions.None);
+
+            int startIndex = 1;
+            while (
+                startIndex < lines.Length
+                && lines[startIndex]
+                    .Contains(
+                        "WallstopStudios.DxCommandTerminal",
+                        StringComparison.OrdinalIgnoreCase
+                    )
+            )
+            {
+                ++startIndex;
+            }
+
+            return lines.Length <= startIndex
+                ? string.Empty
+                : string.Join(JoinSeparator, lines, startIndex, lines.Length - startIndex);
         }
 
         public bool HandleLog(string message, string stackTrace, TerminalLogType type)
