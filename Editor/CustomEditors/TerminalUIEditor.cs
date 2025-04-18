@@ -8,6 +8,7 @@
     using System.Linq;
     using Backend;
     using DxCommandTerminal.Helper;
+    using Extensions;
     using UnityEditor;
     using UnityEngine;
     using UnityEngine.UIElements;
@@ -201,7 +202,7 @@
 
             directories.Add("Assets");
 
-            HashSet<T> loaded = new();
+            SortedSet<T> loaded = new(UnityObjectNameComparer.Instance);
             string[] fontGuids = AssetDatabase.FindAssets(
                 $"t:{typeof(T).Name}",
                 directories.ToArray()

@@ -5,6 +5,7 @@
     using System.Collections.Generic;
     using System.IO;
     using DxCommandTerminal.Helper;
+    using Extensions;
     using Themes;
     using UnityEditor;
     using UnityEngine;
@@ -50,14 +51,15 @@
         }
 
         private readonly HashSet<Font> _fontCache = new();
-        private FontType _fontType = FontType.None;
+        private FontType _fontRemovalType = FontType.None;
+        private FontType _fontAdditionType = FontType.None;
         private string _lastSelectedDirectory;
         private GUIStyle _impactButtonStyle;
 
         private void OnEnable()
         {
             _fontCache.Clear();
-            _fontType = FontType.None;
+            _fontRemovalType = FontType.None;
         }
 
         public override void OnInspectorGUI()
@@ -121,21 +123,13 @@
                 EditorGUILayout.BeginHorizontal();
                 try
                 {
-                    _fontType = (FontType)EditorGUILayout.EnumFlagsField(_fontType);
+                    _fontRemovalType = (FontType)EditorGUILayout.EnumFlagsField(_fontRemovalType);
                     if (GUILayout.Button("Remove Fonts Of Type", _impactButtonStyle))
                     {
                         foreach (FontType fontType in Enum.GetValues(typeof(FontType)))
                         {
-                            if (fontType == FontType.None || (fontType & _fontType) == 0)
-                            {
-                                continue;
-                            }
-
                             int removed = fontPack._fonts.RemoveAll(font =>
-                                font.name.EndsWith(
-                                    fontType.ToString(),
-                                    StringComparison.OrdinalIgnoreCase
-                                )
+                                Matches(font, fontType)
                             );
                             anyChanged |= removed != 0;
                         }
@@ -147,50 +141,41 @@
                 }
             }
 
-            if (GUILayout.Button("Load From Current Directory"))
+            EditorGUILayout.BeginHorizontal();
+            try
             {
-                string assetPath = AssetDatabase.GetAssetPath(fontPack);
-                UpdateFromDirectory(assetPath);
+                _fontAdditionType = (FontType)EditorGUILayout.EnumFlagsField(_fontAdditionType);
+                if (GUILayout.Button("Load From Current Directory"))
+                {
+                    string assetPath = AssetDatabase.GetAssetPath(fontPack);
+                    UpdateFromDirectory(assetPath);
+                }
+                else if (GUILayout.Button("Load From Directory"))
+                {
+                    _lastSelectedDirectory = EditorUtility.OpenFolderPanel(
+                        "Select Directory",
+                        string.IsNullOrWhiteSpace(_lastSelectedDirectory)
+                            ? Application.dataPath
+                            : _lastSelectedDirectory,
+                        string.Empty
+                    );
+                    UpdateFromDirectory(_lastSelectedDirectory);
+                }
             }
-            else if (GUILayout.Button("Load From Directory"))
+            finally
             {
-                _lastSelectedDirectory = EditorUtility.OpenFolderPanel(
-                    "Select Directory",
-                    string.IsNullOrWhiteSpace(_lastSelectedDirectory)
-                        ? Application.dataPath
-                        : _lastSelectedDirectory,
-                    string.Empty
-                );
-                UpdateFromDirectory(_lastSelectedDirectory);
+                EditorGUILayout.EndHorizontal();
             }
 
-            if (anyChanged)
+            if (
+                anyChanged
+                || (
+                    !fontPack._fonts.IsSorted(UnityObjectNameComparer.Instance)
+                    && GUILayout.Button("Sort Fonts")
+                )
+            )
             {
-                fontPack._fonts.Sort(
-                    (lhs, rhs) =>
-                    {
-                        if (lhs == rhs)
-                        {
-                            return 0;
-                        }
-
-                        if (lhs == null)
-                        {
-                            return 1;
-                        }
-
-                        if (rhs == null)
-                        {
-                            return -1;
-                        }
-
-                        return string.Compare(
-                            lhs.name,
-                            rhs.name,
-                            StringComparison.OrdinalIgnoreCase
-                        );
-                    }
-                );
+                fontPack._fonts.SortByName();
                 EditorUtility.SetDirty(fontPack);
             }
 
@@ -222,12 +207,40 @@
                     }
 
                     Font font = AssetDatabase.LoadAssetAtPath<Font>(assetPath);
-                    if (font != null && _fontCache.Add(font))
+                    if (Matches(font, _fontAdditionType) && _fontCache.Add(font))
                     {
                         fontPack._fonts.Add(font);
                     }
                 }
             }
+        }
+
+        private static bool Matches(Font font, FontType toCheck)
+        {
+            if (font == null)
+            {
+                return false;
+            }
+
+            if (toCheck == FontType.None)
+            {
+                return false;
+            }
+
+            foreach (FontType fontType in Enum.GetValues(typeof(FontType)))
+            {
+                if ((fontType & toCheck) == 0)
+                {
+                    continue;
+                }
+
+                if (font.name.EndsWith(fontType.ToString(), StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 #endif

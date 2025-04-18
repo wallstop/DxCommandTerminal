@@ -6,6 +6,7 @@
     using System.IO;
     using System.Linq;
     using DxCommandTerminal.Helper;
+    using Extensions;
     using Helper;
     using Themes;
     using UnityEditor;
@@ -60,7 +61,7 @@
                     continue;
                 }
                 _styleCache.Add(theme);
-                if (!StyleSheetHelper.GetAvailableThemes(theme).Any())
+                if (!TerminalThemeStyleSheetHelper.GetAvailableThemes(theme).Any())
                 {
                     _invalidStyles.Add(theme);
                 }
@@ -78,9 +79,8 @@
                 if (GUILayout.Button("Fix Invalid Themes", _impactButtonStyle))
                 {
                     anyChanged = true;
-                    themePack._themes.RemoveAll(theme =>
-                        theme == null || _styleCache.Contains(theme)
-                    );
+                    _styleCache.Clear();
+                    themePack._themes.RemoveAll(theme => theme == null || !_styleCache.Add(theme));
                 }
             }
 
@@ -101,43 +101,29 @@
                 UpdateFromDirectory(_lastSelectedDirectory);
             }
 
-            if (anyChanged)
+            if (
+                anyChanged
+                || (
+                    !themePack._themes.IsSorted(UnityObjectNameComparer.Instance)
+                    && GUILayout.Button("Sort Themes")
+                )
+            )
             {
-                themePack._themeNames ??= new List<string>();
-                themePack._themeNames.Clear();
-                themePack._themes.Sort(
-                    (lhs, rhs) =>
-                    {
-                        if (lhs == rhs)
-                        {
-                            return 0;
-                        }
-
-                        if (lhs == null)
-                        {
-                            return 1;
-                        }
-
-                        if (rhs == null)
-                        {
-                            return -1;
-                        }
-
-                        return string.Compare(
-                            lhs.name,
-                            rhs.name,
-                            StringComparison.OrdinalIgnoreCase
-                        );
-                    }
-                );
-                themePack._themeNames.AddRange(
-                    themePack._themes.SelectMany(StyleSheetHelper.GetAvailableThemes)
-                );
-
+                SortThemes();
                 EditorUtility.SetDirty(themePack);
             }
 
             return;
+
+            void SortThemes()
+            {
+                themePack._themes.SortByName();
+                themePack._themeNames ??= new List<string>();
+                themePack._themeNames.Clear();
+                themePack._themeNames.AddRange(
+                    themePack._themes.SelectMany(TerminalThemeStyleSheetHelper.GetAvailableThemes)
+                );
+            }
 
             void UpdateFromDirectory(string directory)
             {
@@ -165,7 +151,11 @@
                     }
 
                     StyleSheet styleSheet = AssetDatabase.LoadAssetAtPath<StyleSheet>(assetPath);
-                    if (styleSheet != null && _styleCache.Add(styleSheet))
+                    if (
+                        styleSheet != null
+                        && TerminalThemeStyleSheetHelper.GetAvailableThemes(styleSheet).Any()
+                        && _styleCache.Add(styleSheet)
+                    )
                     {
                         themePack._themes.Add(styleSheet);
                     }

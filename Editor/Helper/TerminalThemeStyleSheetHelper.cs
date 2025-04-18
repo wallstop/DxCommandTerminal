@@ -10,7 +10,7 @@
     using UnityEngine;
     using UnityEngine.UIElements;
 
-    public static class StyleSheetHelper
+    public static class TerminalThemeStyleSheetHelper
     {
         private static readonly List<string> RequiredVariables = new()
         {
