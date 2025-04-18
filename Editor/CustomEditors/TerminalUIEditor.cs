@@ -20,6 +20,7 @@
     using UnityEngine.InputSystem;
 #endif
 
+    [InitializeOnLoad]
     [CustomEditor(typeof(TerminalUI))]
     public sealed class TerminalUIEditor : Editor
     {
