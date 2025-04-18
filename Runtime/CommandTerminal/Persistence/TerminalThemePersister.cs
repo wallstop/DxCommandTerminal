@@ -171,16 +171,25 @@
                         )
                     )
                     {
-                        int fontIndex = terminal._loadedFonts.FindIndex(font =>
-                            string.Equals(
-                                font.name,
-                                existingConfiguration.font,
-                                StringComparison.OrdinalIgnoreCase
-                            )
-                        );
+                        int fontIndex;
+                        if (terminal._fontPack == null)
+                        {
+                            fontIndex = -1;
+                        }
+                        else
+                        {
+                            fontIndex = terminal._fontPack._fonts.FindIndex(font =>
+                                string.Equals(
+                                    font.name,
+                                    existingConfiguration.font,
+                                    StringComparison.OrdinalIgnoreCase
+                                )
+                            );
+                        }
+
                         if (0 <= fontIndex)
                         {
-                            _lastSeenFont = terminal._loadedFonts[fontIndex];
+                            _lastSeenFont = terminal._fontPack._fonts[fontIndex];
                             terminal.SetFont(_lastSeenFont, persist: true);
                         }
                         else
@@ -191,16 +200,25 @@
                             );
                         }
 
-                        int themeIndex = terminal._loadedThemes.FindIndex(theme =>
-                            string.Equals(
-                                theme,
-                                existingConfiguration.theme,
-                                StringComparison.OrdinalIgnoreCase
-                            )
-                        );
+                        int themeIndex;
+                        if (terminal._themePack == null)
+                        {
+                            themeIndex = -1;
+                        }
+                        else
+                        {
+                            themeIndex = terminal._themePack._themeNames.FindIndex(theme =>
+                                string.Equals(
+                                    theme,
+                                    existingConfiguration.theme,
+                                    StringComparison.OrdinalIgnoreCase
+                                )
+                            );
+                        }
+
                         if (0 <= themeIndex)
                         {
-                            _lastSeenTheme = terminal._loadedThemes[themeIndex];
+                            _lastSeenTheme = terminal._themePack._themeNames[themeIndex];
                             terminal.SetTheme(_lastSeenTheme, persist: true);
                         }
                         else

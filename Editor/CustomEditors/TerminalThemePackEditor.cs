@@ -103,6 +103,8 @@
 
             if (anyChanged)
             {
+                themePack._themeNames ??= new List<string>();
+                themePack._themeNames.Clear();
                 themePack._themes.Sort(
                     (lhs, rhs) =>
                     {
@@ -128,6 +130,10 @@
                         );
                     }
                 );
+                themePack._themeNames.AddRange(
+                    themePack._themes.SelectMany(StyleSheetHelper.GetAvailableThemes)
+                );
+
                 EditorUtility.SetDirty(themePack);
             }
 

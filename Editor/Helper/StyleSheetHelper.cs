@@ -47,11 +47,173 @@
                 : GetAvailableThemes(uiDocument.panelSettings.themeStyleSheet);
         }
 
-        public static string[] GetAvailableThemes(ThemeStyleSheet themeSettingsAsset)
+        public static void AddStyleSheets(
+            UIDocument uiDocument,
+            IEnumerable<StyleSheet> styleSheets
+        )
+        {
+            if (uiDocument == null)
+            {
+                return;
+            }
+            AddStyleSheets(uiDocument.panelSettings, styleSheets);
+        }
+
+        public static void AddStyleSheets(
+            PanelSettings panelSettings,
+            IEnumerable<StyleSheet> styleSheets
+        )
+        {
+            if (panelSettings == null)
+            {
+                return;
+            }
+            ClearStyleSheets(panelSettings.themeStyleSheet, styleSheets);
+        }
+
+        public static void AddStyleSheets(
+            ThemeStyleSheet themeSettingsAsset,
+            IEnumerable<StyleSheet> styleSheets
+        )
+        {
+            HashSet<StyleSheet> uniqueStyleSheets = new(
+                styleSheets ?? Enumerable.Empty<StyleSheet>()
+            );
+            using SerializedObject serializedThemeSettings = new(themeSettingsAsset);
+            SerializedProperty themesListProperty = serializedThemeSettings.FindProperty(
+                "m_FlattenedImportedStyleSheets"
+            );
+
+            if (themesListProperty == null)
+            {
+                return;
+            }
+
+            try
+            {
+                if (!themesListProperty.isArray)
+                {
+                    return;
+                }
+
+                foreach (StyleSheet styleSheet in uniqueStyleSheets)
+                {
+                    themesListProperty.InsertArrayElementAtIndex(themesListProperty.arraySize);
+                    SerializedProperty themeProperty = themesListProperty.GetArrayElementAtIndex(
+                        themesListProperty.arraySize - 1
+                    );
+                    themeProperty.objectReferenceValue = styleSheet;
+                    themeProperty.serializedObject.ApplyModifiedPropertiesWithoutUndo();
+                }
+            }
+            finally
+            {
+                themesListProperty.Dispose();
+            }
+        }
+
+        public static void ClearStyleSheets(
+            UIDocument uiDocument,
+            IEnumerable<StyleSheet> styleSheets
+        )
+        {
+            if (uiDocument == null)
+            {
+                return;
+            }
+            ClearStyleSheets(uiDocument.panelSettings, styleSheets);
+        }
+
+        public static void ClearStyleSheets(
+            PanelSettings panelSettings,
+            IEnumerable<StyleSheet> styleSheets
+        )
+        {
+            if (panelSettings == null)
+            {
+                return;
+            }
+            ClearStyleSheets(panelSettings.themeStyleSheet, styleSheets);
+        }
+
+        public static void ClearStyleSheets(
+            ThemeStyleSheet themeSettingsAsset,
+            IEnumerable<StyleSheet> styleSheets
+        )
+        {
+            HashSet<StyleSheet> uniqueStyleSheets = new(
+                styleSheets ?? Enumerable.Empty<StyleSheet>()
+            );
+            using SerializedObject serializedThemeSettings = new(themeSettingsAsset);
+            SerializedProperty themesListProperty = serializedThemeSettings.FindProperty(
+                "m_FlattenedImportedStyleSheets"
+            );
+
+            if (themesListProperty == null)
+            {
+                return;
+            }
+
+            try
+            {
+                if (!themesListProperty.isArray || themesListProperty.arraySize == 0)
+                {
+                    return;
+                }
+
+                for (int i = themesListProperty.arraySize - 1; 0 <= i; --i)
+                {
+                    SerializedProperty themeProperty = themesListProperty.GetArrayElementAtIndex(i);
+                    if (themeProperty == null)
+                    {
+                        themesListProperty.DeleteArrayElementAtIndex(i);
+                        continue;
+                    }
+
+                    try
+                    {
+                        StyleSheet styleSheet = themeProperty.objectReferenceValue as StyleSheet;
+                        if (
+                            styleSheet == null
+                            || string.IsNullOrWhiteSpace(styleSheet.name)
+                            || uniqueStyleSheets.Contains(styleSheet)
+                        )
+                        {
+                            themesListProperty.DeleteArrayElementAtIndex(i);
+                        }
+                    }
+                    finally
+                    {
+                        themeProperty.Dispose();
+                    }
+                }
+            }
+            finally
+            {
+                serializedThemeSettings.ApplyModifiedPropertiesWithoutUndo();
+                themesListProperty.Dispose();
+            }
+        }
+
+        public static StyleSheet[] GetTerminalThemeStyleSheets(UIDocument uiDocument)
+        {
+            return uiDocument == null
+                ? Array.Empty<StyleSheet>()
+                : GetTerminalThemeStyleSheets(uiDocument.panelSettings);
+        }
+
+        public static StyleSheet[] GetTerminalThemeStyleSheets(PanelSettings panelSettings)
+        {
+            return panelSettings == null
+                ? Array.Empty<StyleSheet>()
+                : GetTerminalThemeStyleSheets(panelSettings.themeStyleSheet);
+        }
+
+        public static StyleSheet[] GetStyleSheets(ThemeStyleSheet themeSettingsAsset)
         {
             if (themeSettingsAsset == null)
             {
-                return Array.Empty<string>();
+                return Array.Empty<StyleSheet>();
             }
 
             using SerializedObject serializedThemeSettings = new(themeSettingsAsset);
@@ -61,21 +223,79 @@
 
             if (themesListProperty == null)
             {
-                return Array.Empty<string>();
+                return Array.Empty<StyleSheet>();
             }
 
             try
             {
-                if (!themesListProperty.isArray)
+                if (!themesListProperty.isArray || themesListProperty.arraySize == 0)
                 {
-                    return Array.Empty<string>();
-                }
-                if (themesListProperty.arraySize == 0)
-                {
-                    return Array.Empty<string>();
+                    return Array.Empty<StyleSheet>();
                 }
 
-                SortedSet<string> availableThemes = new(StringComparer.OrdinalIgnoreCase);
+                HashSet<StyleSheet> availableThemes = new();
+                for (int i = 0; i < themesListProperty.arraySize; ++i)
+                {
+                    SerializedProperty themeProperty = themesListProperty.GetArrayElementAtIndex(i);
+                    if (themeProperty == null)
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        StyleSheet styleSheet = themeProperty.objectReferenceValue as StyleSheet;
+                        if (styleSheet == null)
+                        {
+                            continue;
+                        }
+
+                        if (string.IsNullOrWhiteSpace(styleSheet.name))
+                        {
+                            continue;
+                        }
+
+                        availableThemes.Add(styleSheet);
+                    }
+                    finally
+                    {
+                        themeProperty.Dispose();
+                    }
+                }
+
+                return availableThemes.ToArray();
+            }
+            finally
+            {
+                themesListProperty.Dispose();
+            }
+        }
+
+        public static StyleSheet[] GetTerminalThemeStyleSheets(ThemeStyleSheet themeSettingsAsset)
+        {
+            if (themeSettingsAsset == null)
+            {
+                return Array.Empty<StyleSheet>();
+            }
+
+            using SerializedObject serializedThemeSettings = new(themeSettingsAsset);
+            SerializedProperty themesListProperty = serializedThemeSettings.FindProperty(
+                "m_FlattenedImportedStyleSheets"
+            );
+
+            if (themesListProperty == null)
+            {
+                return Array.Empty<StyleSheet>();
+            }
+
+            try
+            {
+                if (!themesListProperty.isArray || themesListProperty.arraySize == 0)
+                {
+                    return Array.Empty<StyleSheet>();
+                }
+
+                HashSet<StyleSheet> availableThemes = new();
                 for (int i = 0; i < themesListProperty.arraySize; ++i)
                 {
                     SerializedProperty themeProperty = themesListProperty.GetArrayElementAtIndex(i);
@@ -102,7 +322,7 @@
                             continue;
                         }
 
-                        availableThemes.UnionWith(GetAvailableThemes(styleSheet));
+                        availableThemes.Add(styleSheet);
                     }
                     finally
                     {
@@ -118,6 +338,14 @@
             }
         }
 
+        public static string[] GetAvailableThemes(ThemeStyleSheet themeSettingsAsset)
+        {
+            return GetTerminalThemeStyleSheets(themeSettingsAsset)
+                .SelectMany(GetAvailableThemes)
+                .OrderBy(theme => theme)
+                .ToArray();
+        }
+
         public static string[] GetAvailableThemes(StyleSheet styleSheetAsset)
         {
             if (styleSheetAsset == null)
@@ -126,12 +354,10 @@
             }
 
             string assetPath = AssetDatabase.GetAssetPath(styleSheetAsset);
-            if (string.IsNullOrWhiteSpace(assetPath))
-            {
-                return Array.Empty<string>();
-            }
-
-            if (!assetPath.EndsWith(".uss", StringComparison.OrdinalIgnoreCase))
+            if (
+                string.IsNullOrWhiteSpace(assetPath)
+                || !assetPath.EndsWith(".uss", StringComparison.OrdinalIgnoreCase)
+            )
             {
                 return Array.Empty<string>();
             }
@@ -139,14 +365,6 @@
             try
             {
                 string ussContent = File.ReadAllText(assetPath);
-                if (
-                    RequiredVariables.Exists(requiredVariable =>
-                        !ussContent.Contains(requiredVariable, StringComparison.OrdinalIgnoreCase)
-                    )
-                )
-                {
-                    return Array.Empty<string>();
-                }
 
                 // Remove block comments /* ... */
                 ussContent = Regex.Replace(
@@ -209,6 +427,28 @@
                                 )
                             )
                             {
+                                int nextObjectBraceIndex = ussContent.IndexOf('}', braceIndex + 1);
+                                if (nextObjectBraceIndex < 0)
+                                {
+                                    nextObjectBraceIndex = ussContent.Length;
+                                }
+                                string objectContents = ussContent.Substring(
+                                    selectorStartIndex,
+                                    nextObjectBraceIndex - selectorStartIndex
+                                );
+
+                                if (
+                                    RequiredVariables.Exists(requiredVariable =>
+                                        !objectContents.Contains(
+                                            requiredVariable,
+                                            StringComparison.OrdinalIgnoreCase
+                                        )
+                                    )
+                                )
+                                {
+                                    return Array.Empty<string>();
+                                }
+
                                 selectors.Add(trimmedSelector);
                             }
                         }

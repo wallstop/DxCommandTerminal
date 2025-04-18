@@ -13,6 +13,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
     using Extensions;
     using Helper;
     using Input;
+    using Themes;
     using UnityEditor;
     using UnityEngine;
     using UnityEngine.UIElements;
@@ -129,11 +130,11 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         [SerializeField]
         [HideInInspector]
-        internal List<Font> _loadedFonts = new();
+        internal TerminalFontPack _fontPack;
 
         [SerializeField]
         [HideInInspector]
-        internal List<string> _loadedThemes = new();
+        internal TerminalThemePack _themePack;
 
 #if UNITY_EDITOR
         private readonly Dictionary<string, object> _propertyValues = new();
@@ -261,7 +262,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 nameof(_ignoredLogTypes),
                 nameof(_disabledCommands),
                 nameof(ignoreDefaultCommands),
-                nameof(_loadedFonts),
+                nameof(_fontPack),
             };
             TrackProperties(staticStaticPropertiesTracked, _staticStateProperties);
 
@@ -429,11 +430,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
             if (force || Terminal.AutoComplete == null)
             {
                 Terminal.AutoComplete = new CommandAutoComplete(Terminal.History, Terminal.Shell);
-            }
-
-            if (force || !Terminal.AvailableFonts.SequenceEqual(_loadedFonts))
-            {
-                Terminal.AvailableFonts = _loadedFonts;
             }
 
             if (
@@ -807,26 +803,33 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         private void InitializeTheme()
         {
+            if (_themePack == null)
+            {
+                Debug.LogError("No theme pack assigned, cannot initialize theme.", this);
+                return;
+            }
+
             _runtimeTheme = _persistedTheme;
-            if (_loadedThemes.Contains(_runtimeTheme))
+            List<string> themeNames = _themePack._themeNames;
+            if (themeNames.Contains(_runtimeTheme))
             {
                 return;
             }
 
-            if (_loadedThemes is { Count: > 0 })
+            if (themeNames is { Count: > 0 })
             {
-                _runtimeTheme = _loadedThemes.FirstOrDefault(theme =>
+                _runtimeTheme = themeNames.FirstOrDefault(theme =>
                     theme.Contains("dark", StringComparison.OrdinalIgnoreCase)
                 );
                 if (_runtimeTheme == null)
                 {
-                    _runtimeTheme = _loadedThemes.FirstOrDefault(theme =>
+                    _runtimeTheme = themeNames.FirstOrDefault(theme =>
                         theme.Contains("light", StringComparison.OrdinalIgnoreCase)
                     );
                 }
                 if (_runtimeTheme == null)
                 {
-                    _runtimeTheme = _loadedThemes.FirstOrDefault();
+                    _runtimeTheme = themeNames.FirstOrDefault();
                 }
                 Debug.LogWarning($"Persisted theme not found, defaulting to '{_runtimeTheme}'.");
             }
@@ -838,33 +841,40 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         private void InitializeFont()
         {
+            if (_fontPack == null)
+            {
+                Debug.LogError("No font pack assigned, cannot initialize font.", this);
+                return;
+            }
+
             _runtimeFont = _persistedFont;
             if (_runtimeFont != null)
             {
                 return;
             }
 
-            if (_loadedFonts is { Count: > 0 })
+            List<Font> loadedFonts = _fontPack._fonts;
+            if (loadedFonts is { Count: > 0 })
             {
-                _runtimeFont = _loadedFonts.FirstOrDefault(font =>
+                _runtimeFont = loadedFonts.FirstOrDefault(font =>
                     font.name.Contains("Mono", StringComparison.OrdinalIgnoreCase)
                     && font.name.Contains("Regular", StringComparison.OrdinalIgnoreCase)
                 );
                 if (_runtimeFont == null)
                 {
-                    _runtimeFont = _loadedFonts.FirstOrDefault(font =>
+                    _runtimeFont = loadedFonts.FirstOrDefault(font =>
                         font.name.Contains("Mono", StringComparison.OrdinalIgnoreCase)
                     );
                 }
                 if (_runtimeFont == null)
                 {
-                    _runtimeFont = _loadedFonts.FirstOrDefault(font =>
+                    _runtimeFont = loadedFonts.FirstOrDefault(font =>
                         font.name.Contains("Regular", StringComparison.OrdinalIgnoreCase)
                     );
                 }
                 if (_runtimeFont == null)
                 {
-                    _runtimeFont = _loadedFonts.FirstOrDefault();
+                    _runtimeFont = loadedFonts.FirstOrDefault();
                 }
             }
 
@@ -1570,20 +1580,26 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         public Font SetRandomFont(bool persist = false)
         {
-            if (_loadedFonts is not { Count: > 0 })
+            if (_fontPack == null)
             {
                 return _runtimeFont;
             }
 
-            int currentFontIndex = _loadedFonts.IndexOf(_runtimeFont);
+            List<Font> loadedFonts = _fontPack._fonts;
+            if (loadedFonts is not { Count: > 0 })
+            {
+                return _runtimeFont;
+            }
+
+            int currentFontIndex = loadedFonts.IndexOf(_runtimeFont);
 
             int newFontIndex;
             do
             {
-                newFontIndex = ThreadLocalRandom.Instance.Next(_loadedFonts.Count);
-            } while (newFontIndex == currentFontIndex && _loadedFonts.Count != 1);
+                newFontIndex = ThreadLocalRandom.Instance.Next(loadedFonts.Count);
+            } while (newFontIndex == currentFontIndex && loadedFonts.Count != 1);
 
-            Font newFont = _loadedFonts[newFontIndex];
+            Font newFont = loadedFonts[newFontIndex];
             SetFont(newFont, persist);
             return newFont;
         }
@@ -1636,20 +1652,26 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         public string SetRandomTheme(bool persist = false)
         {
-            if (_loadedThemes is not { Count: > 0 })
+            if (_themePack == null)
             {
                 return _runtimeTheme;
             }
 
-            int currentThemeIndex = _loadedThemes.IndexOf(_runtimeTheme);
+            List<string> loadedThemes = _themePack._themeNames;
+            if (loadedThemes is not { Count: > 0 })
+            {
+                return _runtimeTheme;
+            }
+
+            int currentThemeIndex = loadedThemes.IndexOf(_runtimeTheme);
 
             int newThemeIndex;
             do
             {
-                newThemeIndex = ThreadLocalRandom.Instance.Next(_loadedThemes.Count);
-            } while (newThemeIndex == currentThemeIndex && _loadedThemes.Count != 1);
+                newThemeIndex = ThreadLocalRandom.Instance.Next(loadedThemes.Count);
+            } while (newThemeIndex == currentThemeIndex && loadedThemes.Count != 1);
 
-            string newTheme = _loadedThemes[newThemeIndex];
+            string newTheme = loadedThemes[newThemeIndex];
             SetTheme(newTheme, persist);
             return newTheme;
         }
@@ -1666,7 +1688,13 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 return;
             }
 
-            if (!_loadedThemes.Contains(theme))
+            if (_themePack == null)
+            {
+                return;
+            }
+
+            List<string> themeNames = _themePack._themeNames;
+            if (!themeNames.Contains(theme))
             {
                 return;
             }

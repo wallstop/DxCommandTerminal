@@ -12,8 +12,13 @@
     public class TerminalThemePack : ScriptableObject
     {
         public virtual IReadOnlyList<StyleSheet> Themes => _themes;
+        public virtual IReadOnlyList<string> ThemeNames => _themeNames;
 
         [SerializeField]
         protected internal List<StyleSheet> _themes = new();
+
+        [SerializeField]
+        [HideInInspector]
+        protected internal List<string> _themeNames = new();
     }
 }

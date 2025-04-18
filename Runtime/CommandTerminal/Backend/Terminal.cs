@@ -1,8 +1,6 @@
 ﻿namespace WallstopStudios.DxCommandTerminal.Backend
 {
-    using System.Collections.Generic;
     using JetBrains.Annotations;
-    using UnityEngine;
 
     public static class Terminal
     {
@@ -10,8 +8,6 @@
         public static CommandShell Shell { get; internal set; }
         public static CommandHistory History { get; internal set; }
         public static CommandAutoComplete AutoComplete { get; internal set; }
-
-        public static IReadOnlyList<Font> AvailableFonts { get; internal set; } = new List<Font>();
 
         [StringFormatMethod("format")]
         public static bool Log(string format, params object[] parameters)

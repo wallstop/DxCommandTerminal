@@ -31,7 +31,13 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return;
             }
 
-            string themes = string.Join(BulkSeparator, terminal._loadedThemes);
+            if (terminal._themePack == null)
+            {
+                Terminal.Log(TerminalLogType.Warning, "No theme pack found.");
+                return;
+            }
+
+            string themes = string.Join(BulkSeparator, terminal._themePack._themeNames);
             Terminal.Log(TerminalLogType.Message, themes);
         }
 
@@ -50,9 +56,15 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return;
             }
 
+            if (terminal._fontPack == null)
+            {
+                Terminal.Log(TerminalLogType.Warning, "No font pack found.");
+                return;
+            }
+
             string themes = string.Join(
                 BulkSeparator,
-                terminal._loadedFonts.Select(font => font.name)
+                terminal._fontPack._fonts.Select(font => font.name)
             );
             Terminal.Log(TerminalLogType.Message, themes);
         }
@@ -81,7 +93,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return;
             }
 
-            int newThemeIndex = terminal._loadedThemes.IndexOf(theme);
+            int newThemeIndex = terminal._themePack._themeNames.IndexOf(theme);
             if (newThemeIndex < 0)
             {
                 Terminal.Log(TerminalLogType.Warning, $"Theme '{theme}' not found.");
@@ -172,9 +184,15 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return;
             }
 
+            if (terminal._fontPack == null)
+            {
+                Terminal.Log(TerminalLogType.Warning, "No font pack found.");
+                return;
+            }
+
             string fontName = args[0].contents;
 
-            int newFontIndex = terminal._loadedFonts.FindIndex(font =>
+            int newFontIndex = terminal._fontPack._fonts.FindIndex(font =>
                 string.Equals(font.name, fontName, StringComparison.OrdinalIgnoreCase)
             );
             if (newFontIndex < 0)
@@ -183,7 +201,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return;
             }
 
-            Font font = terminal._loadedFonts[newFontIndex];
+            Font font = terminal._fontPack._fonts[newFontIndex];
 
             terminal.SetFont(font);
             Terminal.Log(TerminalLogType.Message, $"Font '{font.name}' set.");
