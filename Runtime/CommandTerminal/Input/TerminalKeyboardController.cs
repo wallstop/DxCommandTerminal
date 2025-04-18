@@ -7,7 +7,7 @@
     using UnityEngine;
 
     [DisallowMultipleComponent]
-    public class TerminalKeyboardController : MonoBehaviour
+    public class TerminalKeyboardController : MonoBehaviour, IInputHandler
     {
         protected static readonly TerminalControlTypes[] ControlTypes = Enum.GetValues(
                 typeof(TerminalControlTypes)
@@ -17,6 +17,26 @@
             .Except(new[] { TerminalControlTypes.None })
 #pragma warning restore CS0612 // Type or member is obsolete
             .ToArray();
+
+        public bool ShouldHandleInputThisFrame
+        {
+            get
+            {
+                foreach (TerminalControlTypes controlType in _controlOrder)
+                {
+                    if (!_inputChecks.TryGetValue(controlType, out Func<bool> inputCheck))
+                    {
+                        continue;
+                    }
+                    if (inputCheck())
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+        }
 
         [Header("System")]
         public InputMode inputMode =
@@ -101,12 +121,12 @@
 
             if (!TryGetComponent(out terminal))
             {
-                Debug.LogError("Failed to find TerminalUI, Input will not work.");
+                Debug.LogError("Failed to find TerminalUI, Input will not work.", this);
             }
 
             if (_controlOrder is not { Count: > 0 })
             {
-                Debug.LogError("No controls specified, Input will not work.");
+                Debug.LogError("No controls specified, Input will not work.", this);
             }
             else
             {
@@ -128,7 +148,8 @@
             {
                 Debug.LogWarning(
                     $"Control Order is missing the following controls: [{string.Join(", ", ControlTypes.Except(_controlOrder))}]. "
-                        + "Input for these will not be handled. Is this intentional?"
+                        + "Input for these will not be handled. Is this intentional?",
+                    this
                 );
             }
         }

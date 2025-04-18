@@ -379,11 +379,18 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
             LogItem logItem = buffer.Logs[logCount - 2];
 
-            Terminal.Log(
-                string.IsNullOrWhiteSpace(logItem.stackTrace)
-                    ? $"{logItem.message} (no trace)"
-                    : logItem.stackTrace
-            );
+            if (string.IsNullOrWhiteSpace(logItem.stackTrace))
+            {
+                Terminal.Log(
+                    logItem.message.EndsWith(" (no trace)", StringComparison.OrdinalIgnoreCase)
+                        ? logItem.message
+                        : $"{logItem.message} (no trace)"
+                );
+            }
+            else
+            {
+                Terminal.Log(logItem.stackTrace);
+            }
         }
 
         [RegisterCommand(

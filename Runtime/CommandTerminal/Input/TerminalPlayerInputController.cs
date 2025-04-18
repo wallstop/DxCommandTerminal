@@ -15,13 +15,23 @@
 
         protected bool _enabled;
 
+        [SerializeField]
+        protected PlayerInput _serializedPlayerInput;
+
+        protected PlayerInput _playerInput;
+
         protected virtual void Awake()
         {
-            if (enableWarnings && !TryGetComponent(out PlayerInput _))
+            _playerInput = _serializedPlayerInput;
+            if (_playerInput == null)
             {
-                Debug.LogWarning(
-                    "No PlayerInput attached, events may not work (which is the point of this component)."
-                );
+                if (!TryGetComponent(out _playerInput) && enableWarnings)
+                {
+                    Debug.LogWarning(
+                        "No PlayerInput attached, events may not work (which is the point of this component).",
+                        this
+                    );
+                }
             }
 
             if (terminal != null)
@@ -31,7 +41,7 @@
 
             if (!TryGetComponent(out terminal))
             {
-                Debug.LogError("Failed to find TerminalUI, Input will not work.");
+                Debug.LogError("Failed to find TerminalUI, Input will not work.", this);
             }
         }
 

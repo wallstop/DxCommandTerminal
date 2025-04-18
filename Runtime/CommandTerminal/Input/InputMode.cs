@@ -6,11 +6,15 @@
     {
         [Obsolete]
         None = 0,
-        LegacyInputSystem = 1,
+#if !ENABLE_LEGACY_INPUT_MANAGER
+        [Obsolete]
+#endif
+        LegacyInputSystem = 1 << 0
+        ,
 #if !ENABLE_INPUT_SYSTEM
         [Obsolete]
 #endif
-        NewInputSystem = 2
+        NewInputSystem = 1 << 1
         ,
     }
 }

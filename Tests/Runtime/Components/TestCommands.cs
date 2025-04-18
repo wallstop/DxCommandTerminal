@@ -3,24 +3,23 @@
     using System;
     using System.Diagnostics;
     using System.Linq;
-    using Attributes;
     using Backend;
 
     public static class TestCommands
     {
-        [RegisterCommand]
+        //[RegisterCommand]
         public static void TestCommand(CommandArg[] args) { }
 
-        [RegisterCommand]
+        //[RegisterCommand]
         public static void InvalidTestCommand1() { }
 
-        [RegisterCommand]
+        //[RegisterCommand]
         public static void InvalidTestCommand2(string args) { }
 
-        [RegisterCommand]
+        //[RegisterCommand]
         public static void InvalidTestCommand3(string args, string[] args2) { }
 
-        [RegisterCommand(MinArgCount = 0, MaxArgCount = 1, Name = "generate-test-data")]
+        //[RegisterCommand(MinArgCount = 0, MaxArgCount = 1, Name = "generate-test-data")]
         public static void GenerateTestData(CommandArg[] args)
         {
             if (args.Length != 1 || !args.Single().TryGet(out int count))
@@ -41,7 +40,7 @@
             );
         }
 
-        [RegisterCommand(MinArgCount = 0, MaxArgCount = 1, Name = "perf-test")]
+        //[RegisterCommand(MinArgCount = 0, MaxArgCount = 1, Name = "perf-test")]
         public static void RunPerformanceTest(CommandArg[] args)
         {
             if (args.Length != 1 || !args.Single().TryGet(out int count))

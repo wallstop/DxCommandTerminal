@@ -151,6 +151,8 @@ namespace WallstopStudios.DxCommandTerminal.UI
         [SerializeField]
         internal TerminalThemePack _themePack;
 
+        private IInputHandler[] _inputHandlers;
+
 #if UNITY_EDITOR
         private readonly Dictionary<string, object> _propertyValues = new();
         private readonly List<SerializedProperty> _uiProperties = new();
@@ -254,6 +256,8 @@ namespace WallstopStudios.DxCommandTerminal.UI
                     );
                     break;
             }
+
+            _inputHandlers = GetComponents<IInputHandler>();
 
             if (!TryGetComponent(out _input))
             {
@@ -797,16 +801,26 @@ namespace WallstopStudios.DxCommandTerminal.UI
             _commandInput.RegisterCallback<ChangeEvent<string>, TerminalUI>(
                 (evt, context) =>
                 {
-                    if (_commandIssuedThisFrame)
+                    if (
+                        context._commandIssuedThisFrame
+                        || Array.Exists(
+                            context._inputHandlers,
+                            handler => handler.ShouldHandleInputThisFrame
+                        )
+                    )
                     {
-                        evt.StopImmediatePropagation();
+                        if (!string.Equals(context._commandInput.value, context._input.CommandText))
+                        {
+                            context._commandInput.value = context._input.CommandText;
+                        }
+                        evt.StopPropagation();
                         return;
                     }
 
                     context._input.CommandText = evt.newValue;
 
                     context._runButton.style.display =
-                        showGUIButtons
+                        context.showGUIButtons
                         && !string.IsNullOrWhiteSpace(context._input.CommandText)
                         && !string.IsNullOrWhiteSpace(context.runButtonText)
                             ? DisplayStyle.Flex
