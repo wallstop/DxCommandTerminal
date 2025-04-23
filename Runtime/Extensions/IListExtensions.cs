@@ -4,7 +4,7 @@
     using System.Collections.Generic;
     using Object = UnityEngine.Object;
 
-    public sealed class UnityObjectNameComparer : IComparer<Object>
+    internal sealed class UnityObjectNameComparer : IComparer<Object>
     {
         public static readonly UnityObjectNameComparer Instance = new();
 
@@ -31,9 +31,9 @@
         }
     }
 
-    public static class IListExtensions
+    internal static class IListExtensions
     {
-        public static void Shift<T>(this IList<T> list, int amount)
+        internal static void Shift<T>(this IList<T> list, int amount)
         {
             int count = list.Count;
             if (count <= 1)
@@ -55,7 +55,7 @@
             Reverse(list, amount, count - 1);
         }
 
-        public static void Reverse<T>(this IList<T> list, int start, int end)
+        internal static void Reverse<T>(this IList<T> list, int start, int end)
         {
             while (start < end)
             {
@@ -65,13 +65,13 @@
             }
         }
 
-        public static void SortByName<T>(this List<T> list)
+        internal static void SortByName<T>(this List<T> list)
             where T : Object
         {
             list.Sort(UnityObjectNameComparer.Instance);
         }
 
-        public static bool IsSorted<T>(this IList<T> list, IComparer<T> comparer = null)
+        internal static bool IsSorted<T>(this IList<T> list, IComparer<T> comparer = null)
         {
             if (list.Count <= 1)
             {

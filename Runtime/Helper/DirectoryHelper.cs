@@ -5,16 +5,16 @@
     using System.Runtime.CompilerServices;
     using UnityEngine;
 
-    public static class DirectoryHelper
+    internal static class DirectoryHelper
     {
-        public static string GetCallerScriptDirectory([CallerFilePath] string sourceFilePath = "")
+        internal static string GetCallerScriptDirectory([CallerFilePath] string sourceFilePath = "")
         {
             return string.IsNullOrWhiteSpace(sourceFilePath)
                 ? string.Empty
                 : Path.GetDirectoryName(sourceFilePath);
         }
 
-        public static string FindPackageRootPath(string startDirectory)
+        internal static string FindPackageRootPath(string startDirectory)
         {
             return FindRootPath(
                 startDirectory,
@@ -22,7 +22,7 @@
             );
         }
 
-        public static string FindRootPath(
+        internal static string FindRootPath(
             string startDirectory,
             Func<string, bool> terminalCondition
         )
@@ -67,7 +67,7 @@
             return string.Empty;
         }
 
-        public static string FindAbsolutePathToDirectory(string directory)
+        internal static string FindAbsolutePathToDirectory(string directory)
         {
             string scriptDirectory = GetCallerScriptDirectory();
             if (string.IsNullOrEmpty(scriptDirectory))
@@ -89,7 +89,7 @@
             return AbsoluteToUnityRelativePath(targetPathAbsolute);
         }
 
-        public static string AbsoluteToUnityRelativePath(string absolutePath)
+        internal static string AbsoluteToUnityRelativePath(string absolutePath)
         {
             if (string.IsNullOrWhiteSpace(absolutePath))
             {

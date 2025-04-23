@@ -754,6 +754,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             _terminalContainer = new VisualElement { name = "TerminalContainer" };
             _terminalContainer.AddToClassList("terminal-container");
+            _uiDocument.rootVisualElement.style.height = new StyleLength(_realWindowHeight);
             _terminalContainer.style.height = new StyleLength(_realWindowHeight);
             root.Add(_terminalContainer);
 
@@ -1102,6 +1103,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 return;
             }
 
+            _uiDocument.rootVisualElement.style.height = _realWindowHeight;
             _terminalContainer.style.height = _currentWindowHeight;
             _terminalContainer.style.width = Screen.width;
             DisplayStyle commandInputStyle =

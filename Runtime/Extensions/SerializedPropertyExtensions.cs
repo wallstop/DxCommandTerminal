@@ -9,9 +9,9 @@
     using UnityEditor;
     using UnityEngine;
 
-    public static class FieldAccessorFactory
+    internal static class FieldAccessorFactory
     {
-        public static Func<object, object> CreateFieldGetter(FieldInfo field)
+        internal static Func<object, object> CreateFieldGetter(FieldInfo field)
         {
 #if WEB_GL
             return field.GetValue;
@@ -42,7 +42,7 @@
         }
     }
 
-    public static class SerializedPropertyExtensions
+    internal static class SerializedPropertyExtensions
     {
         private static readonly Dictionary<
             Type,
@@ -160,7 +160,7 @@
         /// <param name="property">The SerializedProperty.</param>
         /// <param name="fieldInfo">Outputs the FieldInfo of the referenced field.</param>
         /// <returns>The instance object that owns the field.</returns>
-        public static object GetEnclosingObject(
+        internal static object GetEnclosingObject(
             this SerializedProperty property,
             out FieldInfo fieldInfo
         )

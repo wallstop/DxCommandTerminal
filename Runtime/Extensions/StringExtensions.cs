@@ -1,8 +1,8 @@
 ﻿namespace WallstopStudios.DxCommandTerminal.Extensions
 {
-    public static class StringExtensions
+    internal static class StringExtensions
     {
-        public static bool NeedsLowerInvariantConversion(this string input)
+        internal static bool NeedsLowerInvariantConversion(this string input)
         {
             foreach (char inputCharacter in input)
             {
@@ -15,7 +15,7 @@
             return false;
         }
 
-        public static bool NeedsTrim(this string input)
+        internal static bool NeedsTrim(this string input)
         {
             if (string.IsNullOrEmpty(input))
             {

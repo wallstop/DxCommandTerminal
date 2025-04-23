@@ -3,10 +3,10 @@
     using System;
     using System.Threading;
 
-    public static class ThreadLocalRandom
+    internal static class ThreadLocalRandom
     {
-        public static Random Instance => LocalInstance.Value;
+        internal static Random Instance => LocalInstance.Value;
 
-        public static readonly ThreadLocal<Random> LocalInstance = new(() => new Random());
+        internal static readonly ThreadLocal<Random> LocalInstance = new(() => new Random());
     }
 }
