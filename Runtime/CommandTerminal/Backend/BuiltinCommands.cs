@@ -341,6 +341,31 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         [RegisterCommand(
             isDefault: true,
+            Name = "time-scale",
+            Help = "Sets Time.timeScale",
+            MinArgCount = 1,
+            MaxArgCount = 1
+        )]
+        public static void CommandTimeScale(CommandArg[] args)
+        {
+            CommandShell shell = Terminal.Shell;
+            if (shell == null)
+            {
+                return;
+            }
+
+            CommandArg arg = args[0];
+            if (!arg.TryGet(out float timeScale))
+            {
+                Terminal.Log(TerminalLogType.Warning, $"Invalid time scale {arg}.");
+                return;
+            }
+
+            Time.timeScale = timeScale;
+        }
+
+        [RegisterCommand(
+            isDefault: true,
             Name = "log-terminal",
             Help = "Output message via Terminal.Log"
         )]

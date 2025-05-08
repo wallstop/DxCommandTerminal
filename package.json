@@ -1,6 +1,6 @@
 {
   "name": "com.wallstop-studios.dxcommandterminal",
-  "version": "1.0.0-rc24",
+  "version": "1.0.0-rc24.1",
   "displayName": "DxCommandTerminal",
   "description": "Wallstop Studios fork of Command Terminal for Unity",
   "dependencies": {},
@@ -30,3 +30,4 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   }
 }
+

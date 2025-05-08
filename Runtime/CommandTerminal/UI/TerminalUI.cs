@@ -1704,12 +1704,15 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             Font currentFont = _persistedFont;
             _runtimeFont = font;
-            Debug.Log(
-                currentFont == null
-                    ? $"Setting font to {font.name}."
-                    : $"Changing font from {currentFont.name} to {font.name}.",
-                this
-            );
+            if (currentFont != font)
+            {
+                Debug.Log(
+                    currentFont == null
+                        ? $"Setting font to {font.name}."
+                        : $"Changing font from {currentFont.name} to {font.name}.",
+                    this
+                );
+            }
 
             if (persist)
             {
@@ -1794,7 +1797,11 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             string currentTheme = ThemeNameHelper.GetFriendlyThemeName(CurrentTheme);
             _runtimeTheme = validatedTheme;
-            Debug.Log($"Changing theme from {currentTheme} to {friendlyThemeName}.", this);
+            if (!string.Equals(currentTheme, friendlyThemeName, StringComparison.OrdinalIgnoreCase))
+            {
+                Debug.Log($"Changing theme from {currentTheme} to {friendlyThemeName}.", this);
+            }
+
             if (persist)
             {
                 _persistedTheme = validatedTheme;
