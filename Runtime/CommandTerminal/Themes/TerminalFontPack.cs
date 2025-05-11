@@ -4,7 +4,7 @@
     using UnityEngine;
 
     [CreateAssetMenu(
-        menuName = "DxCommandTerminal/Font Pack",
+        menuName = "Wallstop Studios/DxCommandTerminal/Font Pack",
         fileName = nameof(TerminalFontPack),
         order = 1_111_123
     )]

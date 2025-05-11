@@ -5,7 +5,7 @@
     using UnityEngine.UIElements;
 
     [CreateAssetMenu(
-        menuName = "DxCommandTerminal/Theme Pack",
+        menuName = "Wallstop Studios/DxCommandTerminal/Theme Pack",
         fileName = nameof(TerminalThemePack),
         order = 1_111_123
     )]
