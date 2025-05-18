@@ -7,7 +7,7 @@
     using Extensions;
 
     [Serializable]
-    public sealed class CyclicBuffer<T> : IReadOnlyList<T>
+    internal sealed class CyclicBuffer<T> : IReadOnlyList<T>
     {
         public struct CyclicBufferEnumerator : IEnumerator<T>
         {
