@@ -16,12 +16,11 @@
 
     public readonly struct CommandArg
     {
-        private static readonly Lazy<MethodInfo> TryGetMethod = new(
-            () =>
-                typeof(CommandArg)
-                    .GetMethods(BindingFlags.Instance | BindingFlags.Public)
-                    .Where(method => method.Name == nameof(TryGet))
-                    .FirstOrDefault(method => method.GetParameters().Length == 1)
+        private static readonly Lazy<MethodInfo> TryGetMethod = new(() =>
+            typeof(CommandArg)
+                .GetMethods(BindingFlags.Instance | BindingFlags.Public)
+                .Where(method => method.Name == nameof(TryGet))
+                .FirstOrDefault(method => method.GetParameters().Length == 1)
         );
         private static readonly Dictionary<Type, object> RegisteredParsers = new();
         private static readonly Dictionary<
