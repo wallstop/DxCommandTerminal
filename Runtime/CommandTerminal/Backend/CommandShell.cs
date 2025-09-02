@@ -7,11 +7,12 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     using System.Reflection;
     using System.Text;
     using Attributes;
-    using JetBrains.Annotations;
     using UnityEngine;
 
     public sealed class CommandShell
     {
+        private static readonly string[] IgnoredTypes = { "JetBrains.Rider" };
+
         public static readonly Lazy<(
             MethodInfo method,
             RegisterCommandAttribute attribute
@@ -34,57 +35,109 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                     .SelectMany(assembly => assembly.GetTypes())
             )
             {
-                foreach (MethodInfo method in type.GetMethods(methodFlags))
+                try
                 {
-                    if (
-                        Attribute.GetCustomAttribute(method, typeof(RegisterCommandAttribute))
-                        is not RegisterCommandAttribute attribute
-                    )
+                    foreach (MethodInfo method in type.GetMethods(methodFlags))
+                    {
+                        try
+                        {
+                            if (
+                                Attribute.GetCustomAttribute(
+                                    method,
+                                    typeof(RegisterCommandAttribute)
+                                )
+                                is not RegisterCommandAttribute attribute
+                            )
+                            {
+                                continue;
+                            }
+
+                            attribute.NormalizeName(method);
+                            commands.Add((method, attribute));
+                        }
+                        catch (Exception e)
+                        {
+                            if (ShouldIgnoreExceptionForType(type))
+                            {
+                                continue;
+                            }
+
+                            Debug.LogError(
+                                $"Failed to resolve method {method.Name} of type {type.FullName} with exception {e}"
+                            );
+                        }
+                    }
+                }
+                catch (Exception e)
+                {
+                    if (ShouldIgnoreExceptionForType(type))
                     {
                         continue;
                     }
 
-                    attribute.NormalizeName(method);
-                    commands.Add((method, attribute));
+                    Debug.LogError(
+                        $"Failed to resolve methods for type {type.FullName} with exception {e}"
+                    );
                 }
             }
 
             return commands.ToArray();
         });
-        public IReadOnlyDictionary<string, CommandInfo> Commands => _commands;
-        public IReadOnlyDictionary<string, CommandArg> Variables => _variables;
-        public ImmutableHashSet<string> AutoRegisteredCommands => _immutableAutoRegisteredCommands;
-        public ImmutableHashSet<string> IgnoredCommands => _immutableIgnoredCommands;
-        public bool IgnoringDefaultCommands { get; private set; }
 
-        public bool HasErrors => 0 < _errorMessages.Count;
+        private readonly List<CommandArg> _arguments = new(); // Cache for performance
 
-        private readonly CommandHistory _history;
+        private readonly HashSet<string> _autoRegisteredCommands = new(
+            StringComparer.OrdinalIgnoreCase
+        );
+
+        private readonly StringBuilder _commandBuilder = new();
 
         private readonly SortedDictionary<string, CommandInfo> _commands = new(
             StringComparer.OrdinalIgnoreCase
         );
-        private readonly SortedDictionary<string, CommandArg> _variables = new(
-            StringComparer.OrdinalIgnoreCase
-        );
-        private readonly List<CommandArg> _arguments = new(); // Cache for performance
+
         private readonly Queue<string> _errorMessages = new();
-        private readonly StringBuilder _commandBuilder = new();
+
+        private readonly CommandHistory _history;
         private readonly HashSet<string> _ignoredCommands = new(StringComparer.OrdinalIgnoreCase);
-        private readonly HashSet<string> _autoRegisteredCommands = new(
-            StringComparer.OrdinalIgnoreCase
-        );
+
         private readonly SortedDictionary<string, MethodInfo> _rejectedCommands = new(
             StringComparer.OrdinalIgnoreCase
         );
 
-        private ImmutableHashSet<string> _immutableAutoRegisteredCommands =
-            ImmutableHashSet<string>.Empty;
-        private ImmutableHashSet<string> _immutableIgnoredCommands = ImmutableHashSet<string>.Empty;
+        private readonly SortedDictionary<string, CommandArg> _variables = new(
+            StringComparer.OrdinalIgnoreCase
+        );
 
         public CommandShell(CommandHistory history)
         {
             _history = history ?? throw new ArgumentNullException(nameof(history));
+        }
+
+        public IReadOnlyDictionary<string, CommandInfo> Commands => _commands;
+        public IReadOnlyDictionary<string, CommandArg> Variables => _variables;
+
+        public ImmutableHashSet<string> AutoRegisteredCommands { get; private set; } =
+            ImmutableHashSet<string>.Empty;
+
+        public ImmutableHashSet<string> IgnoredCommands { get; private set; } =
+            ImmutableHashSet<string>.Empty;
+
+        public bool IgnoringDefaultCommands { get; private set; }
+
+        public bool HasErrors => 0 < _errorMessages.Count;
+
+        private static bool ShouldIgnoreExceptionForType(Type type)
+        {
+            foreach (string ignoredType in IgnoredTypes)
+            {
+                if (type.FullName?.IndexOf(ignoredType, StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         public bool TryConsumeErrorMessage(out string errorMessage)
@@ -113,8 +166,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             {
                 _commands.Remove(command);
             }
+
             _autoRegisteredCommands.Clear();
-            _immutableAutoRegisteredCommands = ImmutableHashSet<string>.Empty;
+            AutoRegisteredCommands = ImmutableHashSet<string>.Empty;
             return count;
         }
 
@@ -131,9 +185,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             {
                 _commands.Remove(ignoredCommand);
             }
-            _immutableIgnoredCommands = _ignoredCommands.ToImmutableHashSet(
-                StringComparer.OrdinalIgnoreCase
-            );
+
+            IgnoredCommands = _ignoredCommands.ToImmutableHashSet(StringComparer.OrdinalIgnoreCase);
             _rejectedCommands.Clear();
 
             foreach (
@@ -178,10 +231,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 bool success = AddCommand(
                     commandName,
                     proc,
-                    minArgs: attribute.MinArgCount,
-                    maxArgs: attribute.MaxArgCount,
-                    help: attribute.Help,
-                    hint: attribute.Hint
+                    attribute.MinArgCount,
+                    attribute.MaxArgCount,
+                    attribute.Help,
+                    attribute.Hint
                 );
                 if (success)
                 {
@@ -189,7 +242,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 }
             }
 
-            _immutableAutoRegisteredCommands = _autoRegisteredCommands.ToImmutableHashSet(
+            AutoRegisteredCommands = _autoRegisteredCommands.ToImmutableHashSet(
                 StringComparer.OrdinalIgnoreCase
             );
 
@@ -204,7 +257,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         }
 
         /// <summary>
-        /// Parses an input line into a command and runs that command.
+        ///     Parses an input line into a command and runs that command.
         /// </summary>
         public bool RunCommand(string line)
         {
@@ -225,6 +278,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                     {
                         continue;
                     }
+
                     if (argumentString.StartsWith('$'))
                     {
                         string variableName = argumentString[1..];
@@ -272,6 +326,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 {
                     _commandBuilder.Append(argument.startQuote.Value);
                 }
+
                 _commandBuilder.Append(argument.contents);
                 if (argument.endQuote != null)
                 {
@@ -335,6 +390,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 {
                     invalidMessage += $"\n    -> Usage: {command.hint}";
                 }
+
                 _errorMessages.Enqueue(invalidMessage);
                 _history.Push(line, false, false);
                 return false;
@@ -442,7 +498,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             return _variables.TryGetValue(name, out variable);
         }
 
-        [StringFormatMethod("format")]
         public void IssueErrorMessage(string format, params object[] parameters)
         {
             string formattedMessage =
@@ -479,14 +534,14 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 {
                     // No closing quote was found; consume the rest of the string (excluding the opening quote).
                     string input = stringValue.Substring(1);
-                    arg = new CommandArg(input, startQuote: firstChar);
+                    arg = new CommandArg(input, firstChar);
                     stringValue = string.Empty;
                 }
                 else
                 {
                     // Extract the argument inside the quotes.
                     string input = stringValue.Substring(1, closingQuoteIndex - 1);
-                    arg = new CommandArg(input, startQuote: firstChar, endQuote: firstChar);
+                    arg = new CommandArg(input, firstChar, firstChar);
                     // Remove the parsed argument (including the quotes) from the input.
                     stringValue = stringValue.Substring(closingQuoteIndex + 1);
                 }
