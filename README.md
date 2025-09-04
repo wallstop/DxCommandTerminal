@@ -88,6 +88,9 @@ Grab a copy of this repo (either `git clone` or [download a zip of the source](h
 More improvements coming soon, stick around :)
 
 Planned improvements:
+- More and better documentation
+- Wikification
+- A `command bar` for quick commands, instead of waiting for a terminal to fold into the screen
 - Command Groups
 - Ensure working in Mobile builds
 - Smarter auto complete
