@@ -1103,7 +1103,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 return;
             }
 
-            _uiDocument.rootVisualElement.style.height = _realWindowHeight;
+            _uiDocument.rootVisualElement.style.height = _currentWindowHeight;
             _terminalContainer.style.height = _currentWindowHeight;
             _terminalContainer.style.width = Screen.width;
             DisplayStyle commandInputStyle =
