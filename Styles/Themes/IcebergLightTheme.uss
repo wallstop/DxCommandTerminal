@@ -1,4 +1,4 @@
-﻿.iceberg-light-theme {
+.iceberg-light-theme {
     /* Backgrounds */
     --terminal-bg: rgba(235, 240, 242, 0.9);
     --button-bg: rgba(220, 225, 228, 1);

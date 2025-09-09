@@ -1,4 +1,4 @@
-﻿namespace WallstopStudios.DxCommandTerminal.Extensions
+namespace WallstopStudios.DxCommandTerminal.Extensions
 {
     internal static class StringExtensions
     {

@@ -1,4 +1,4 @@
-﻿.winter-sky-theme {
+.winter-sky-theme {
     /* Backgrounds */
     --terminal-bg: rgba(210, 225, 235, 0.75);
     --button-bg: rgba(190, 205, 215, 1);

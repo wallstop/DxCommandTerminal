@@ -1,4 +1,4 @@
-﻿.classic-green-theme {
+.classic-green-theme {
     /* Backgrounds */
     --terminal-bg: rgba(15, 15, 15, 0.85);
     --button-bg: rgba(30, 30, 30, 1);

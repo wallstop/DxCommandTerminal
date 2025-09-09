@@ -1,4 +1,4 @@
-﻿.tokyo-night-theme {
+.tokyo-night-theme {
     /* Backgrounds */
     --terminal-bg: rgba(26, 27, 38, 0.9);
     --button-bg: rgba(31, 32, 46, 1);

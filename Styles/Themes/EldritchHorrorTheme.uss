@@ -1,4 +1,4 @@
-﻿.eldritch-horror-theme {
+.eldritch-horror-theme {
     /* Backgrounds */
     --terminal-bg: rgba(30, 45, 40, 0.92);
     --button-bg: rgba(45, 65, 55, 1);

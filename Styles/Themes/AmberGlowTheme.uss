@@ -1,4 +1,4 @@
-﻿.amber-glow-theme {
+.amber-glow-theme {
     /* Backgrounds */
     --terminal-bg: rgba(25, 15, 5, 0.8);
     --button-bg: rgba(40, 25, 10, 1);

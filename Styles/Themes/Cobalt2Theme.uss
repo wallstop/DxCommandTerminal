@@ -1,4 +1,4 @@
-﻿.cobalt2-theme {
+.cobalt2-theme {
     /* Backgrounds */
     --terminal-bg: rgba(29, 46, 69, 0.9);
     --button-bg: rgba(42, 62, 90, 1);

@@ -1,4 +1,4 @@
-﻿.autumn-leaves-theme {
+.autumn-leaves-theme {
     /* Backgrounds */
     --terminal-bg: rgba(70, 40, 20, 0.85);
     --button-bg: rgba(95, 55, 30, 1);

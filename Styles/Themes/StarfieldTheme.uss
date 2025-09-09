@@ -1,4 +1,4 @@
-﻿.starfield-theme {
+.starfield-theme {
     /* Backgrounds */
     --terminal-bg: rgba(10, 10, 20, 0.95);
     --button-bg: rgba(20, 20, 35, 1);

@@ -1,4 +1,4 @@
-﻿namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
+namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 {
     using System;
     using System.Collections;

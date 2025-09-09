@@ -1,4 +1,4 @@
-﻿.volcano-theme {
+.volcano-theme {
     /* Backgrounds */
     --terminal-bg: rgba(35, 20, 15, 0.9);
     --button-bg: rgba(60, 35, 25, 1);

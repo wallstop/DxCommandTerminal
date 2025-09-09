@@ -1,4 +1,4 @@
-﻿.pip-boy-theme {
+.pip-boy-theme {
     /* Backgrounds */
     --terminal-bg: rgba(20, 35, 25, 0.9);
     --button-bg: rgba(30, 55, 35, 1);

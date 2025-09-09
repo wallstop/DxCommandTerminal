@@ -1,4 +1,4 @@
-﻿.github-light-theme {
+.github-light-theme {
     /* Backgrounds */
     --terminal-bg: rgba(255, 255, 255, 0.9);
     --button-bg: rgba(246, 248, 250, 1);

@@ -1,4 +1,4 @@
-﻿.hotpink-neon-theme {
+.hotpink-neon-theme {
     /* Backgrounds */
     --terminal-bg: rgba(30, 0, 20, 0.85);
     --button-bg: rgba(50, 10, 35, 1);

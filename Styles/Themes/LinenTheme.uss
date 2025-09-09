@@ -1,4 +1,4 @@
-﻿.linen-theme {
+.linen-theme {
     /* Backgrounds */
     --terminal-bg: rgba(250, 245, 235, 0.75);
     --button-bg: rgba(230, 225, 215, 1);

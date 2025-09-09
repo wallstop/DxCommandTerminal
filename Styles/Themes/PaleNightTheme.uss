@@ -1,4 +1,4 @@
-﻿.palenight-theme {
+.palenight-theme {
     /* Backgrounds */
     --terminal-bg: rgba(41, 45, 62, 0.9);
     --button-bg: rgba(63, 69, 93, 1);

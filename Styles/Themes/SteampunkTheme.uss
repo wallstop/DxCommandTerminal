@@ -1,4 +1,4 @@
-﻿.steampunk-theme {
+.steampunk-theme {
     /* Backgrounds */
     --terminal-bg: rgba(100, 80, 60, 0.85);
     --button-bg: rgba(125, 100, 75, 1);

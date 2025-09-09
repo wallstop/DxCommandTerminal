@@ -1,4 +1,4 @@
-﻿.purple-haze-theme {
+.purple-haze-theme {
     /* Backgrounds */
     --terminal-bg: rgba(40, 25, 50, 0.85);
     --button-bg: rgba(60, 40, 75, 1);

@@ -1,4 +1,4 @@
-﻿.shades-of-purple-theme {
+.shades-of-purple-theme {
     /* Backgrounds */
     --terminal-bg: rgba(45, 33, 87, 0.9);
     --button-bg: rgba(60, 45, 110, 1);

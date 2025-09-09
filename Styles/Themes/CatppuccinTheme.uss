@@ -1,4 +1,4 @@
-﻿.catppuccin-theme {
+.catppuccin-theme {
     /* Backgrounds */
     --terminal-bg: rgba(30, 30, 46, 0.9);
     --button-bg: rgba(49, 50, 68, 1);

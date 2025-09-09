@@ -1,4 +1,4 @@
-﻿.ayu-mirage-theme {
+.ayu-mirage-theme {
     /* Backgrounds */
     --terminal-bg: rgba(29, 31, 38, 0.9);
     --button-bg: rgba(35, 38, 48, 1);

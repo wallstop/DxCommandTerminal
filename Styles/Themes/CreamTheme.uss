@@ -1,4 +1,4 @@
-﻿.cream-theme {
+.cream-theme {
     /* Backgrounds */
     --terminal-bg: rgba(255, 250, 240, 0.7);
     --button-bg: rgba(240, 235, 220, 1);

@@ -1,4 +1,4 @@
-﻿.commodore64-theme {
+.commodore64-theme {
     /* Backgrounds */
     --terminal-bg: rgba(60, 50, 160, 0.85);
     --button-bg: rgba(80, 70, 180, 1);

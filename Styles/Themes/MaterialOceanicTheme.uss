@@ -1,4 +1,4 @@
-﻿.material-oceanic-theme {
+.material-oceanic-theme {
     /* Backgrounds */
     --terminal-bg: rgba(38, 50, 56, 0.9);
     --button-bg: rgba(54, 81, 94, 1);

@@ -1,4 +1,4 @@
-﻿.brushed-metal-theme {
+.brushed-metal-theme {
     /* Backgrounds */
     --terminal-bg: rgba(140, 150, 160, 0.8);
     --button-bg: rgba(160, 170, 180, 1);

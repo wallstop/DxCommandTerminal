@@ -1,4 +1,4 @@
-﻿.vs-light-theme {
+.vs-light-theme {
     /* Backgrounds */
     --terminal-bg: rgba(255, 255, 255, 0.9);
     --button-bg: rgba(239, 239, 242, 1);

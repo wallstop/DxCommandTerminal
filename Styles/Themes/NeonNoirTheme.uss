@@ -1,4 +1,4 @@
-﻿.neon-noir-theme {
+.neon-noir-theme {
     /* Backgrounds */
     --terminal-bg: rgba(10, 10, 10, 0.95);
     --button-bg: rgba(25, 25, 25, 1);

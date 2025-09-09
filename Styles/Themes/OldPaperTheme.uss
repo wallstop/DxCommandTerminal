@@ -1,4 +1,4 @@
-﻿.old-paper-theme {
+.old-paper-theme {
     /* Backgrounds */
     --terminal-bg: rgba(240, 230, 210, 0.78);
     --button-bg: rgba(220, 210, 190, 1);

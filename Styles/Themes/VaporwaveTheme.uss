@@ -1,4 +1,4 @@
-﻿.vaporwave-theme {
+.vaporwave-theme {
     /* Backgrounds */
     --terminal-bg: rgba(40, 15, 50, 0.85);
     --button-bg: rgba(60, 30, 70, 1);

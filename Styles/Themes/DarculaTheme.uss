@@ -1,4 +1,4 @@
-﻿.darcula-theme {
+.darcula-theme {
     /* Backgrounds */
     --terminal-bg: rgba(43, 43, 43, 0.9);
     --button-bg: rgba(60, 63, 65, 1);

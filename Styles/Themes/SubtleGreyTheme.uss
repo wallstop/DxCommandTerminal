@@ -1,4 +1,4 @@
-﻿.subtle-gray-theme {
+.subtle-gray-theme {
     /* Backgrounds */
     --terminal-bg: rgba(55, 55, 55, 0.8);
     --button-bg: rgba(75, 75, 75, 1);

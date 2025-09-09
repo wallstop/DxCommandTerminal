@@ -1,4 +1,4 @@
-﻿.forest-night-theme {
+.forest-night-theme {
     /* Backgrounds */
     --terminal-bg: rgba(33, 40, 34, 0.9);
     --button-bg: rgba(50, 60, 51, 1);

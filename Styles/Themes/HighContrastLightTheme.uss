@@ -1,4 +1,4 @@
-﻿.high-contrast-light-theme {
+.high-contrast-light-theme {
     /* Backgrounds */
     --terminal-bg: rgba(255, 255, 255, 0.75);
     --button-bg: rgba(230, 230, 230, 1);

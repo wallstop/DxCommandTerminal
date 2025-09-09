@@ -1,4 +1,4 @@
-﻿.dark-theme {
+.dark-theme {
     /* Backgrounds */
     --terminal-bg: rgba(28, 28, 30, 0.9);
     --button-bg: rgba(58, 58, 60, 1);

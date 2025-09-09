@@ -1,4 +1,4 @@
-﻿.hacker-matrix-theme {
+.hacker-matrix-theme {
     /* Backgrounds */
     --terminal-bg: rgba(0, 10, 0, 0.85);
     --button-bg: rgba(0, 25, 0, 1);

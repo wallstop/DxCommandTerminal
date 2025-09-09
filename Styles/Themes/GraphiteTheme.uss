@@ -1,4 +1,4 @@
-﻿.graphite-theme {
+.graphite-theme {
     /* Backgrounds */
     --terminal-bg: rgba(45, 45, 45, 0.9);
     --button-bg: rgba(65, 65, 65, 1);

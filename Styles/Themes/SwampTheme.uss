@@ -1,4 +1,4 @@
-﻿.swamp-theme {
+.swamp-theme {
     /* Backgrounds */
     --terminal-bg: rgba(60, 70, 50, 0.88);
     --button-bg: rgba(80, 90, 65, 1);

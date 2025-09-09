@@ -1,4 +1,4 @@
-﻿.ubuntu-theme {
+.ubuntu-theme {
     /* Backgrounds */
     --terminal-bg: rgba(48, 10, 36, 0.9);
     --button-bg: rgba(70, 25, 55, 1);

@@ -1,4 +1,4 @@
-﻿.winter-dark-theme {
+.winter-dark-theme {
     /* Backgrounds */
     --terminal-bg: rgba(1, 19, 28, 0.9);
     --button-bg: rgba(32, 60, 76, 1);

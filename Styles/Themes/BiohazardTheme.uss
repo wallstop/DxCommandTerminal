@@ -1,4 +1,4 @@
-﻿.biohazard-theme {
+.biohazard-theme {
     /* Backgrounds */
     --terminal-bg: rgba(40, 50, 30, 0.88);
     --button-bg: rgba(60, 75, 45, 1);

@@ -1,4 +1,4 @@
-﻿.light-theme {
+.light-theme {
     /* Backgrounds */
     --terminal-bg: rgba(245, 245, 245, 0.7);
     --button-bg: rgba(230, 230, 230, 1);

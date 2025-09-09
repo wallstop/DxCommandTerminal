@@ -1,4 +1,4 @@
-﻿.carbon-fiber-theme {
+.carbon-fiber-theme {
     /* Backgrounds */
     --terminal-bg: rgba(25, 25, 25, 0.92);
     --button-bg: rgba(45, 45, 45, 1);

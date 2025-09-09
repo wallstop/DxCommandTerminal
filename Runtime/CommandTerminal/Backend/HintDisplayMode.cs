@@ -1,4 +1,4 @@
-﻿namespace WallstopStudios.DxCommandTerminal.Backend
+namespace WallstopStudios.DxCommandTerminal.Backend
 {
     using System;
 

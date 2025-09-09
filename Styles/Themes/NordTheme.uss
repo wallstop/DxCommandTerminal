@@ -1,4 +1,4 @@
-﻿.nord-theme {
+.nord-theme {
     /* Backgrounds */
     --terminal-bg: rgba(46, 52, 64, 0.9);
     --button-bg: rgba(59, 66, 82, 1);

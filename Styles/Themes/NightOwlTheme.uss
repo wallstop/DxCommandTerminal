@@ -1,4 +1,4 @@
-﻿.night-owl-theme {
+.night-owl-theme {
     /* Backgrounds */
     --terminal-bg: rgba(1, 22, 39, 0.9);
     --button-bg: rgba(13, 38, 61, 1);

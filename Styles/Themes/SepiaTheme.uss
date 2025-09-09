@@ -1,4 +1,4 @@
-﻿.sepia-theme {
+.sepia-theme {
     /* Backgrounds */
     --terminal-bg: rgba(90, 70, 50, 0.8);
     --button-bg: rgba(110, 90, 70, 1);

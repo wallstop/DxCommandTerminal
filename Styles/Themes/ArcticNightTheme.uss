@@ -1,4 +1,4 @@
-﻿.arctic-night-theme {
+.arctic-night-theme {
     /* Backgrounds */
     --terminal-bg: rgba(15, 20, 30, 0.92);
     --button-bg: rgba(25, 35, 50, 1);

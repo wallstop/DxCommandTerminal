@@ -1,4 +1,4 @@
-﻿.github-dark-theme {
+.github-dark-theme {
     /* Backgrounds */
     --terminal-bg: rgba(13, 17, 23, 0.9);
     --button-bg: rgba(34, 39, 46, 1);

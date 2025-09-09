@@ -1,4 +1,4 @@
-﻿namespace WallstopStudios.DxCommandTerminal.Themes
+namespace WallstopStudios.DxCommandTerminal.Themes
 {
     using System;
     using System.Collections.Generic;

@@ -1,4 +1,4 @@
-﻿.gruvbox-light-theme {
+.gruvbox-light-theme {
     /* Backgrounds */
     --terminal-bg: rgba(251, 241, 199, 0.9);
     --button-bg: rgba(235, 219, 178, 1);

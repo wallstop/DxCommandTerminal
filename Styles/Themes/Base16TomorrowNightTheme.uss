@@ -1,4 +1,4 @@
-﻿.base16-tomorrow-night-theme {
+.base16-tomorrow-night-theme {
     /* Backgrounds */
     --terminal-bg: rgba(29, 31, 33, 0.9);
     --button-bg: rgba(42, 44, 46, 1);

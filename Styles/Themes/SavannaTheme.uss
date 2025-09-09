@@ -1,4 +1,4 @@
-﻿.savanna-theme {
+.savanna-theme {
     /* Backgrounds */
     --terminal-bg: rgba(245, 230, 200, 0.75);
     --button-bg: rgba(220, 205, 175, 1);

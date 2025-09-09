@@ -1,4 +1,4 @@
-﻿.zenburn-theme {
+.zenburn-theme {
     /* Backgrounds */
     --terminal-bg: rgba(63, 63, 63, 0.9);
     --button-bg: rgba(79, 79, 79, 1);

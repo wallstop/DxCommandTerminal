@@ -1,4 +1,4 @@
-﻿.oblivion-theme {
+.oblivion-theme {
     /* Backgrounds */
     --terminal-bg: rgba(31, 31, 31, 0.9);
     --button-bg: rgba(48, 48, 48, 1);

@@ -1,4 +1,4 @@
-﻿.bubblegum-theme {
+.bubblegum-theme {
     /* Backgrounds */
     --terminal-bg: rgba(255, 190, 210, 0.75);
     --button-bg: rgba(240, 170, 190, 1);

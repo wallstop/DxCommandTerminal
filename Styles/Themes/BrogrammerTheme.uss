@@ -1,4 +1,4 @@
-﻿.brogrammer-theme {
+.brogrammer-theme {
     /* Backgrounds */
     --terminal-bg: rgba(20, 20, 20, 0.9);
     --button-bg: rgba(35, 35, 35, 1);

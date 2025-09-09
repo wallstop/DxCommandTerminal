@@ -1,4 +1,4 @@
-﻿.noctis-theme {
+.noctis-theme {
     /* Backgrounds */
     --terminal-bg: rgba(12, 12, 12, 0.9);
     --button-bg: rgba(44, 44, 44, 1);

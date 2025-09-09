@@ -1,4 +1,4 @@
-﻿.redmond-theme {
+.redmond-theme {
     /* Backgrounds */
     --terminal-bg: rgba(240, 240, 240, 0.9);
     --button-bg: rgba(225, 225, 225, 1);

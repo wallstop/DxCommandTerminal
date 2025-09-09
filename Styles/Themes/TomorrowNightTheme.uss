@@ -1,4 +1,4 @@
-﻿.tomorrow-night-theme {
+.tomorrow-night-theme {
     /* Backgrounds */
     --terminal-bg: rgba(29, 31, 33, 0.9);
     --button-bg: rgba(44, 47, 49, 1);

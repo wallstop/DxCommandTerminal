@@ -1,4 +1,4 @@
-﻿.slime-theme {
+.slime-theme {
     /* Backgrounds */
     --terminal-bg: rgba(0, 116, 188, 0.9);
     --button-bg: rgba(0, 90, 150, 1);

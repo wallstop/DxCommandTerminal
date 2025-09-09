@@ -1,4 +1,4 @@
-﻿.forest-floor-theme {
+.forest-floor-theme {
     /* Backgrounds */
     --terminal-bg: rgba(50, 45, 35, 0.88);
     --button-bg: rgba(70, 65, 50, 1);

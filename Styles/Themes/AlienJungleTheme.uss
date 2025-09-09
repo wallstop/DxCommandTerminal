@@ -1,4 +1,4 @@
-﻿.alien-jungle-theme {
+.alien-jungle-theme {
     /* Backgrounds */
     --terminal-bg: rgba(50, 20, 70, 0.9);
     --button-bg: rgba(75, 30, 95, 1);

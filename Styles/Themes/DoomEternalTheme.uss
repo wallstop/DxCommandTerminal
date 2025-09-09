@@ -1,4 +1,4 @@
-﻿.doom-eternal-theme {
+.doom-eternal-theme {
     /* Backgrounds */
     --terminal-bg: rgba(30, 15, 10, 0.9);
     --button-bg: rgba(60, 30, 20, 1);

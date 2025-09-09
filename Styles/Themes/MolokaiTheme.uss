@@ -1,4 +1,4 @@
-﻿.molokai-theme {
+.molokai-theme {
     /* Backgrounds */
     --terminal-bg: rgba(25, 25, 25, 0.9);
     --button-bg: rgba(40, 40, 40, 1);

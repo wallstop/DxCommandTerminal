@@ -1,4 +1,4 @@
-﻿.coffee-shop-theme {
+.coffee-shop-theme {
     /* Backgrounds */
     --terminal-bg: rgba(60, 45, 35, 0.9);
     --button-bg: rgba(85, 65, 50, 1);

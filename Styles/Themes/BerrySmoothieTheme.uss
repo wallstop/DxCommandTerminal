@@ -1,4 +1,4 @@
-﻿.berry-smoothie-theme {
+.berry-smoothie-theme {
     /* Backgrounds */
     --terminal-bg: rgba(180, 150, 190, 0.8);
     --button-bg: rgba(160, 130, 170, 1);

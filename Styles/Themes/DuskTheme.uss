@@ -1,4 +1,4 @@
-﻿.dusk-theme {
+.dusk-theme {
     /* Backgrounds */
     --terminal-bg: rgba(30, 30, 60, 0.9);
     --button-bg: rgba(50, 50, 80, 1);

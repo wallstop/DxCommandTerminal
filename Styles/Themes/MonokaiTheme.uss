@@ -1,4 +1,4 @@
-﻿.monokai-theme {
+.monokai-theme {
     /* Backgrounds */
     --terminal-bg: rgba(39, 40, 34, 0.9);
     --button-bg: rgba(55, 56, 50, 1);

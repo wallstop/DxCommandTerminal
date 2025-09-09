@@ -1,4 +1,4 @@
-﻿.coral-reef-theme {
+.coral-reef-theme {
     /* Backgrounds */
     --terminal-bg: rgba(180, 240, 255, 0.7);
     --button-bg: rgba(150, 210, 230, 1);

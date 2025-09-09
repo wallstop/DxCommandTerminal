@@ -1,4 +1,4 @@
-﻿.iceberg-dark-theme {
+.iceberg-dark-theme {
     /* Backgrounds */
     --terminal-bg: rgba(21, 25, 30, 0.9);
     --button-bg: rgba(31, 36, 42, 1);

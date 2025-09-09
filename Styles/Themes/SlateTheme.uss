@@ -1,4 +1,4 @@
-﻿.slate-theme {
+.slate-theme {
     /* Backgrounds */
     --terminal-bg: rgba(70, 80, 90, 0.88);
     --button-bg: rgba(90, 100, 110, 1);

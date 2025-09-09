@@ -1,4 +1,4 @@
-﻿.transparent-cursor {
+.transparent-cursor {
     --unity-cursor-color: transparent;
 }
 

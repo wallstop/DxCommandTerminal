@@ -1,4 +1,4 @@
-﻿.botw-theme {
+.botw-theme {
     /* Backgrounds */
     --terminal-bg: rgba(242, 238, 225, 0.9);
     --button-bg: rgba(210, 205, 190, 1);

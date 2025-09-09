@@ -1,4 +1,4 @@
-﻿.obsidian-theme {
+.obsidian-theme {
     /* Backgrounds */
     --terminal-bg: rgba(27, 27, 27, 0.9);
     --button-bg: rgba(45, 45, 45, 1);

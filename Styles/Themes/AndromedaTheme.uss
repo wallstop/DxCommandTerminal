@@ -1,4 +1,4 @@
-﻿.andromeda-theme {
+.andromeda-theme {
     /* Backgrounds */
     --terminal-bg: rgba(35, 41, 54, 0.9);
     --button-bg: rgba(52, 62, 80, 1);

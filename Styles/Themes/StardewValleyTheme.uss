@@ -1,4 +1,4 @@
-﻿.stardew-valley-theme {
+.stardew-valley-theme {
     /* Backgrounds */
     --terminal-bg: rgba(255, 239, 191, 0.9);
     --button-bg: rgba(140, 82, 50, 1);

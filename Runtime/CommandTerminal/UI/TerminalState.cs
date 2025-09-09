@@ -1,4 +1,4 @@
-﻿namespace WallstopStudios.DxCommandTerminal.UI
+namespace WallstopStudios.DxCommandTerminal.UI
 {
     using System;
 

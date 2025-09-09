@@ -1,4 +1,4 @@
-﻿.redwood-theme {
+.redwood-theme {
     /* Backgrounds */
     --terminal-bg: rgba(80, 45, 35, 0.9);
     --button-bg: rgba(105, 60, 45, 1);

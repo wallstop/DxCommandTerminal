@@ -1,4 +1,4 @@
-﻿namespace WallstopStudios.DxCommandTerminal.Editor.Helper
+namespace WallstopStudios.DxCommandTerminal.Editor.Helper
 {
 #if UNITY_EDITOR
     using System;

@@ -1,4 +1,4 @@
-﻿.desert-oasis-theme {
+.desert-oasis-theme {
     /* Backgrounds */
     --terminal-bg: rgba(248, 236, 212, 0.9);
     --button-bg: rgba(228, 210, 180, 1);

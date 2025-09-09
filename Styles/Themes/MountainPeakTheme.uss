@@ -1,4 +1,4 @@
-﻿.mountain-peak-theme {
+.mountain-peak-theme {
     /* Backgrounds */
     --terminal-bg: rgba(235, 240, 245, 0.75);
     --button-bg: rgba(210, 215, 220, 1);

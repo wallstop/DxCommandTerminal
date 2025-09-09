@@ -1,4 +1,4 @@
-﻿.solarized-dark-theme {
+.solarized-dark-theme {
     /* Backgrounds */
     --terminal-bg: rgba(0, 43, 54, 0.9);
     --button-bg: rgba(7, 54, 66, 1);

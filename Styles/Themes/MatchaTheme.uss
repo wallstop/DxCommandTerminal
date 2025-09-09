@@ -1,4 +1,4 @@
-﻿.matcha-theme {
+.matcha-theme {
     /* Backgrounds */
     --terminal-bg: rgba(220, 235, 210, 0.75);
     --button-bg: rgba(195, 215, 180, 1);

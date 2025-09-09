@@ -1,4 +1,4 @@
-﻿namespace WallstopStudios.DxCommandTerminal.Input
+namespace WallstopStudios.DxCommandTerminal.Input
 {
     using System;
     using System.Collections.Generic;

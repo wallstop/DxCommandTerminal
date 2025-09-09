@@ -1,4 +1,4 @@
-﻿namespace WallstopStudios.DxCommandTerminal.Input
+namespace WallstopStudios.DxCommandTerminal.Input
 {
     public sealed class DefaultTerminalInput : ITerminalInput
     {

@@ -1,4 +1,4 @@
-﻿.underwater-theme {
+.underwater-theme {
     /* Backgrounds */
     --terminal-bg: rgba(10, 40, 55, 0.88);
     --button-bg: rgba(20, 60, 80, 1);

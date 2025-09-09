@@ -1,4 +1,4 @@
-﻿.dimmed-theme {
+.dimmed-theme {
     /* Backgrounds */
     --terminal-bg: rgba(40, 40, 45, 0.9);
     --button-bg: rgba(55, 55, 60, 1);

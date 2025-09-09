@@ -1,4 +1,4 @@
-﻿.synthwave84-theme {
+.synthwave84-theme {
     /* Backgrounds */
     --terminal-bg: rgba(41, 37, 71, 0.9);
     --button-bg: rgba(53, 48, 90, 1);

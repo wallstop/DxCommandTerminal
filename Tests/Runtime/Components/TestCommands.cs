@@ -1,4 +1,4 @@
-﻿namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Components
+namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Components
 {
     using System;
     using System.Diagnostics;

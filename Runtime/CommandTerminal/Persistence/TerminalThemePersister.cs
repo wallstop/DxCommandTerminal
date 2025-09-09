@@ -1,4 +1,4 @@
-﻿namespace WallstopStudios.DxCommandTerminal.Persistence
+namespace WallstopStudios.DxCommandTerminal.Persistence
 {
     using System;
     using System.Collections;

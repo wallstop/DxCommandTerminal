@@ -1,4 +1,4 @@
-﻿namespace WallstopStudios.DxCommandTerminal.DataStructures
+namespace WallstopStudios.DxCommandTerminal.DataStructures
 {
     using System;
     using System.Collections;

@@ -1,4 +1,4 @@
-﻿.everforest-dark-theme {
+.everforest-dark-theme {
     /* Backgrounds */
     --terminal-bg: rgba(45, 51, 59, 0.9);
     --button-bg: rgba(54, 61, 71, 1);

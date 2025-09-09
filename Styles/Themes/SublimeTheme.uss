@@ -1,4 +1,4 @@
-﻿.sublime-theme {
+.sublime-theme {
     /* Backgrounds */
     --terminal-bg: rgba(41, 42, 36, 0.9);
     --button-bg: rgba(58, 59, 52, 1);

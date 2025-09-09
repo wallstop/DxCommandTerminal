@@ -1,4 +1,4 @@
-﻿.jungle-theme {
+.jungle-theme {
     /* Backgrounds */
     --terminal-bg: rgba(25, 45, 30, 0.9);
     --button-bg: rgba(40, 70, 50, 1);

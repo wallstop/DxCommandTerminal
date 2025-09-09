@@ -1,4 +1,4 @@
-﻿.arctic-white-theme {
+.arctic-white-theme {
     /* Backgrounds */
     --terminal-bg: rgba(235, 245, 255, 0.7);
     --button-bg: rgba(210, 225, 240, 1);

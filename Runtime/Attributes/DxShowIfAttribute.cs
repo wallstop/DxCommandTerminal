@@ -1,4 +1,4 @@
-﻿namespace WallstopStudios.DxCommandTerminal.Attributes
+namespace WallstopStudios.DxCommandTerminal.Attributes
 {
     using UnityEngine;
 

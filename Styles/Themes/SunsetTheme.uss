@@ -1,4 +1,4 @@
-﻿.sunset-theme {
+.sunset-theme {
     /* Backgrounds */
     --terminal-bg: rgba(50, 20, 60, 0.88);
     --button-bg: rgba(75, 40, 85, 1);

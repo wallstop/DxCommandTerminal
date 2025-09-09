@@ -1,4 +1,4 @@
-﻿.flat-ui-light-theme {
+.flat-ui-light-theme {
     /* Backgrounds */
     --terminal-bg: rgba(236, 240, 241, 0.9);
     --button-bg: rgba(189, 195, 199, 1);

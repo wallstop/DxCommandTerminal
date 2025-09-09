@@ -1,4 +1,4 @@
-﻿.glitch-theme {
+.glitch-theme {
     /* Backgrounds */
     --terminal-bg: rgba(15, 10, 25, 0.9);
     --button-bg: rgba(30, 20, 45, 1);

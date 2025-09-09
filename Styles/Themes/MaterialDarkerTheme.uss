@@ -1,4 +1,4 @@
-﻿.material-darker-theme {
+.material-darker-theme {
     /* Backgrounds */
     --terminal-bg: rgba(33, 33, 33, 0.9);
     --button-bg: rgba(50, 50, 50, 1);

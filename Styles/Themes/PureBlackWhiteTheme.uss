@@ -1,4 +1,4 @@
-﻿.pure-black-white-theme {
+.pure-black-white-theme {
     /* Backgrounds */
     --terminal-bg: rgba(0, 0, 0, 0.85);
     --button-bg: rgba(30, 30, 30, 1);

@@ -1,4 +1,4 @@
-﻿.blackboard-theme {
+.blackboard-theme {
     /* Backgrounds */
     --terminal-bg: rgba(12, 38, 56, 0.9);
     --button-bg: rgba(30, 60, 80, 1);

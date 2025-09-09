@@ -1,4 +1,4 @@
-﻿.outrun-electric-theme {
+.outrun-electric-theme {
     /* Backgrounds */
     --terminal-bg: rgba(25, 19, 37, 0.9);
     --button-bg: rgba(51, 37, 72, 1);

@@ -1,4 +1,4 @@
-﻿.desert-night-theme {
+.desert-night-theme {
     /* Backgrounds */
     --terminal-bg: rgba(45, 35, 30, 0.8);
     --button-bg: rgba(70, 55, 45, 1);

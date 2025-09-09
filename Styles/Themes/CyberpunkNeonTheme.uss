@@ -1,4 +1,4 @@
-﻿.cyberpunk-neon-theme {
+.cyberpunk-neon-theme {
     /* Backgrounds */
     --terminal-bg: rgba(21, 21, 31, 0.9);
     --button-bg: rgba(41, 41, 61, 1);

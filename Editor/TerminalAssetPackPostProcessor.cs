@@ -1,4 +1,4 @@
-﻿namespace WallstopStudios.DxCommandTerminal.Editor
+namespace WallstopStudios.DxCommandTerminal.Editor
 {
     using System;
     using System.Collections.Generic;

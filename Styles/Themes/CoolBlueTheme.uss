@@ -1,4 +1,4 @@
-﻿.cool-blue-theme {
+.cool-blue-theme {
     /* Backgrounds */
     --terminal-bg: rgba(10, 20, 35, 0.85);
     --button-bg: rgba(20, 35, 55, 1);

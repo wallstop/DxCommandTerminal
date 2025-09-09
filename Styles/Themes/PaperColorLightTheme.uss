@@ -1,4 +1,4 @@
-﻿.papercolor-light-theme {
+.papercolor-light-theme {
     /* Backgrounds */
     --terminal-bg: rgba(238, 238, 238, 0.9);
     --button-bg: rgba(210, 210, 210, 1);

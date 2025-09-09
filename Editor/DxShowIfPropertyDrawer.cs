@@ -1,4 +1,4 @@
-﻿namespace WallstopStudios.DxCommandTerminal.Editor
+namespace WallstopStudios.DxCommandTerminal.Editor
 {
 #if UNITY_EDITOR
     using System.Reflection;
