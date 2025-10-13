@@ -9,13 +9,15 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         public readonly int maxArgCount;
         public readonly string help;
         public readonly string hint;
+        public readonly IArgumentCompleter completer;
 
         public CommandInfo(
             Action<CommandArg[]> proc,
             int minArgCount,
             int maxArgCount,
             string help,
-            string hint
+            string hint,
+            IArgumentCompleter completer = null
         )
         {
             this.proc = proc;
@@ -23,6 +25,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             this.minArgCount = minArgCount;
             this.help = help;
             this.hint = hint;
+            this.completer = completer;
         }
     }
 }

@@ -1,5 +1,7 @@
 {
   "default": true,
+  // Prefer ATX-style headings ("#"), avoids mixed setext/atx issues
+  "MD003": { "style": "atx" },
   // Allow long lines; Prettier handles wrapping policy
   "MD013": false,
   // Allow inline HTML when needed

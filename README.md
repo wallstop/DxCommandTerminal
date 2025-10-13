@@ -1,42 +1,47 @@
-DX Command Terminal
-======================
+# DX Command Terminal
 
-# CI/CD Status
+## CI/CD Status
+
 ![Npm Publish](https://github.com/wallstop/dxcommandterminal/actions/workflows/npm-publish.yml/badge.svg)
 
-# Notice
+## Notice
 
 This is a fork of [Command Terminal](https://github.com/stillwwater/command_terminal) for Unity, mainly to address usability gaps and add maintenance
 
-# Compatibility
-| Platform | Compatible |
-| --- | --- |
-| Unity 2021 | Likely, but untested |
-| Unity 2022 | &check; |
-| Unity 2023 | &check; |
-| Unity 6 | &check; |
-| URP | &check; |
-| HDRP | &check; |
+## Compatibility
 
-# Installation
+| Platform   | Compatible           |
+| ---------- | -------------------- |
+| Unity 2021 | Likely, but untested |
+| Unity 2022 | &check;              |
+| Unity 2023 | &check;              |
+| Unity 6    | &check;              |
+| URP        | &check;              |
+| HDRP       | &check;              |
+
+## Installation
 
 ## From Releases
+
 Check out the latest [Releases](https://github.com/wallstop/DxCommandTerminal/releases) to grab the Unity Package and import to your project.
 
 ## To Install as Unity Package
+
 1. Open Unity Package Manager
 2. (Optional) Enable Pre-release packages to get the latest, cutting-edge builds
 3. Open the Advanced Package Settings
 4. Add an entry for a new "Scoped Registry"
-    - Name: `NPM`
-    - URL: `https://registry.npmjs.org`
-    - Scope(s): `com.wallstop-studios.dxcommandterminal`
+   - Name: `NPM`
+   - URL: `https://registry.npmjs.org`
+   - Scope(s): `com.wallstop-studios.dxcommandterminal`
 5. Resolve the latest `com.wallstop-studios.dxcommandterminal`
 
 ## From Source
+
 Grab a copy of this repo (either `git clone` or [download a zip of the source](https://github.com/wallstop/DxCommandTerminal/archive/refs/heads/master.zip)) and copy the contents to your project's `Assets` folder.
 
 ## Improvements Over Baseline
+
 - [Enhanced Auto-Complete + Hint system + styling](#hints)
 - Fixed Input handling bugs related to [WebGL](#web-gl)
 - Fully integrated with Unity's [new Input System](#new-input-system)
@@ -74,6 +79,7 @@ Grab a copy of this repo (either `git clone` or [download a zip of the source](h
 - The concept of "FrontCommands" has been exterminated
 
 ## Code changes
+
 - All code is formatted via [Csharpier](https://csharpier.com/)
 - All variables are now consistently named
 - Access modifiers have been explicitly applied to every field
@@ -85,9 +91,11 @@ Grab a copy of this repo (either `git clone` or [download a zip of the source](h
 - Validation around command ignoring and log level ignoring has been added to Terminal, to prevent invalid data
 
 ## The Future
+
 More improvements coming soon, stick around :)
 
 Planned improvements:
+
 - More and better documentation
 - Wikification
 - A `command bar` for quick commands, instead of waiting for a terminal to fold into the screen
@@ -116,7 +124,7 @@ Enter `help` in the console to view all available commands, use the up and down 
 
 There are 2 options to register commands to be used in the Command Terminal.
 
-### 1. Using the RegisterCommand attribute:
+### 1. Using the RegisterCommand attribute
 
 The command method must be static (public or non-public).
 
@@ -132,6 +140,7 @@ static void CommandAdd(CommandArg[] args) {
     Terminal.Log("{0} + {1} = {2}", a, b, result);
 }
 ```
+
 `MinArgCount` and `MaxArgCount` allows the Command Interpreter to issue an error if arguments have been passed incorrectly, this way you can index the `CommandArg` array, knowing the array will have the correct size.
 
 In this case the command name (`add`) will be inferred from the method name, you can override this by setting `Name` in `RegisterCommand`.
@@ -140,7 +149,7 @@ In this case the command name (`add`) will be inferred from the method name, you
 [RegisterCommand(Name = "MyAdd", Help = "Adds 2 numbers", MinArgCount = 2, MaxArgCount = 2)]
 ```
 
-### 2. Manually adding Commands:
+### 2. Manually adding Commands
 
 `RegisterCommand` only works for static methods. If you want to use a non-static method, you may add the command manually.
 
@@ -150,7 +159,8 @@ Terminal.Shell.AddCommand("add", CommandAdd, 2, 2, "Adds 2 numbers");
 
 ---
 
-# Custom Parsing
+## Custom Parsing
+
 One change from the original Command Parser is the usage / functionality exposed for parsing the parameters to the CommandArgs themselves. The original library exposed four methods for retrieving arguments - `String`, `Float`, `Int`, and `bool`. If the input was invalid, these parsing methods would simply return the default value and log an error, making it very difficult to programmatically react to bad input.
 
 To remedy this, DxCommandTerminal exposes a single method, `TryGet`, and a readonly string field `contents`. `contents` returns the original input parameters as-is. `TryGet` attempts to parse the provided input parameter as the given type, taking in an optional parser. You can also register and deregister parsers for any type, which will override the built-in ones, making use of whatever custom logic you want (JSON, for example).
@@ -177,6 +187,7 @@ Assert.IsFalse(arg.TryGet(out int invalidInt)); // Failed to parse
 ```
 
 `TryGet<T>` supports the following types out of the box:
+
 - string
 - char
 - bool
@@ -197,6 +208,7 @@ Assert.IsFalse(arg.TryGet(out int invalidInt)); // Failed to parse
 - Enums
 
 **Unity Types**:
+
 - Vector2
 - Vector3
 - Vector4
@@ -214,6 +226,7 @@ In addition to parsing values directly, `TryGet` will automatically attempt to m
 - "MinValue"
 
 Similarly, for Colors:
+
 - "RGBA(0.7, 0.5, 0.1, 1.0)"
 - "(0.7, 0.5, 0.1, 1.0)"
 - "(0.7, 0.5, 0.1)"
@@ -225,6 +238,7 @@ For all built-in types, the parsers are guaranteed to work with the type's defau
 If you would like to have built-in parsers for a type that is not listed above, please open an issue!
 
 ## Advanced Parsing - Custom Parsers
+
 `TryGet<T>` has an overload that takes a nullable `CommandArgParser<T>`, which is a function with the following definition:
 
 ```csharp
@@ -277,11 +291,12 @@ or even
 int CommandArgParser.UnregisterAllParsers();
 ```
 
-All of these unregistration functions will return you information on whether the unregistration functions were successful. 
+All of these unregistration functions will return you information on whether the unregistration functions were successful.
 
 Note: Built in parser functions cannot be unregistered.
 
 ### Object Parsers (IArgParser)
+
 For stronger typing and lower allocations, you can also use object parsers that implement `IArgParser`.
 
 - Built-ins: All common numeric, date/time, IP, and Unity types ship with sealed parsers and public singletons, e.g. `IntArgParser.Instance`, `Vector3ArgParser.Instance`, `ColorArgParser.Instance`.
@@ -326,6 +341,7 @@ public static void LoadFile(CommandArg a)
 Enum parsing uses a hot path with cached name and ordinal lookups (`EnumArgParser`) for fast, case-insensitive matching and integer ordinals.
 
 Editor convenience
+
 - In the Unity Editor, parsers are auto-discovered on domain reload to ease development (`Editor/Parsers/ParserAutoDiscovery.cs`). This does not affect players.
 - Inspect what parsers are currently registered:
 
@@ -335,6 +351,7 @@ foreach (var t in types) UnityEngine.Debug.Log($"Parser for type: {t}");
 ```
 
 Static members parsing
+
 - Constant/Property name parsing (e.g., `MaxValue`, `IPAddress.Any`) is handled by dedicated static-member parsers and no longer lives inside `CommandArg`.
 
 ## Runtime Modes & Editor Toggle
@@ -365,6 +382,7 @@ DxCommandTerminal exposes a runtime mode enum to control environment-specific be
   - `TerminalRuntimeConfig.TryAutoDiscoverParsers()` conditionally registers all IArgParser implementations based on mode + toggle.
 
 ## Advanced Parsing - Changing Control Sets
+
 By default, command parameter input is stripped of whitespace characters. This, along with several other parsing-specific behaviors, are controlled via public static sets on `CommandArg` itself. If you would like to change this behavior in your code, you can modify the contents of these sets to be whatever you'd like. Below are a description of the sets and what they control.
 
 **Delimiters**: For complex, multi-value types like `Vector2`, `Quaternion`, `Color`, etc, the parameter is split using the first match, if any, found in this set. ie, `1,2,3` will get split into the array `["1", "2", "3"]` for parsing
@@ -377,22 +395,26 @@ By default, command parameter input is stripped of whitespace characters. This, 
 
 **IgnoredValuesForComplexTypes**: For complex, multi-value types like `Vector2`, `Quaternion`, `Color`, etc, the parameter input will replace all strings found in this set with the empty string.
 
-# Hotkeys
+## Hotkeys
+
 All actions are now fully configurable by either explicit keybindings, for keyboard controls, or via [new Input System](#new-input-system) bindings.
 
 ![png](./Media/Hotkeys.png)
 
 Keyboard hotkey bindings are now intelligent as they can be about shift key interaction. There are three ways to create a `shift+<binding>`:
+
 1. Prefix the binding with the `#` symbol. For example, `#tab` will be interpreted as `shift+tab`
 2. For keys with shifted versions, such as alpha numeric keys, simply use the shifted version. For example, `A` will be interpreted as `shift+a`
 3. When using the new input system, hotkeys can be represented as `shift+<binding>`. `shift+tab` will be interpreted as the combination `left shift` + `tab`.
 
 The only combination keys that are supported without using custom bindings via the new Input System are `shift+<binding>`.
 
-# New Input System
-DxCommandTerminal is now fully integrated with Unity's new Input System, if it is found in the project and enabled. 
+## New Input System
+
+DxCommandTerminal is now fully integrated with Unity's new Input System, if it is found in the project and enabled.
 
 You can also use `PlayerInput` or similar to bind InputActions to all available command terminal behavior. The available message are:
+
 - `HandlePrevious`: Selects the previously issued command form current command history location.
 - `HandleNext`: Selects the next issued command from current command history location.
 - `Close`: If the terminal is open, closes it.
@@ -403,9 +425,11 @@ You can also use `PlayerInput` or similar to bind InputActions to all available 
 - `EnterCommand`: Takes the current buffer and attempts to execute it as a command + parameters.
 
 ## Note
+
 If using PlayerInput to bind to the above controls, you will need to uncheck `Use Hotkeys` under the `Hotkeys` header in the Terminal script.
 
 When InputActions are not bound, there is an order of precedence for input checking. It is:
+
 - Close
 - Enter Command
 - Previous
@@ -417,14 +441,16 @@ When InputActions are not bound, there is an order of precedence for input check
 
 This order is irrelevant when using PlayerInput.
 
-# Web GL
+## Web GL
+
 If you are relying on `RegisterCommandAttribute` to wire up your commands to the CommandShell instead of manually registering them, you will need to set `Managed Stripping Level` to `Low`, `Minimal`, or `None` under `Player > WebGL > Other Settings > Optimizations > Managed Stripping Level` in order for command registration to work. Settings of `Medium` or higher will break the reflection code that loads the commands, causing the terminal to forget about its capabilities.
 
 ![png](./Media/ManagedStrippingLevel.png)
 
 See [Unity docs on Managed Stripping Level](https://docs.unity3d.com/2022.3/Documentation/ScriptReference/ManagedStrippingLevel.html) for more details.
 
-# Hints
+## Hints
+
 AutoComplete has gotten a major upgrade in this fork. Completion is now not only case-insensitive, but it will now also search (unique) commands that have been executed, ignoring any irrelevant input. Pressing the complete key multiple times now selects available options in a persistent fashion. Completion can be walked both forward and backwards. Results are now presented in a new UI that intelligently adapts to screen space and current selection position. When completion is no longer relevant, the UI is disabled. However, you can opt to always show the available commands by toggling the new `Display Hints` option in the Terminal configuration. There are also several new theming options for hints, with controls over the currently selected hint v unselected hints.
 
 ![png](./Media/AutoComplete.png)

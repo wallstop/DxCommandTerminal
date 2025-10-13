@@ -228,13 +228,17 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 Action<CommandArg[]> proc =
                     (Action<CommandArg[]>)
                         Delegate.CreateDelegate(typeof(Action<CommandArg[]>), method);
+                // Try resolve optional completer via CommandCompleterAttribute
+                IArgumentCompleter completer = ResolveCompleter(method);
+
                 bool success = AddCommand(
                     commandName,
                     proc,
                     attribute.MinArgCount,
                     attribute.MaxArgCount,
                     attribute.Help,
-                    attribute.Hint
+                    attribute.Hint,
+                    completer
                 );
                 if (success)
                 {
@@ -432,10 +436,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             int minArgs = 0,
             int maxArgs = -1,
             string help = "",
-            string hint = null
+            string hint = null,
+            IArgumentCompleter completer = null
         )
         {
-            CommandInfo info = new(proc, minArgs, maxArgs, help, hint);
+            CommandInfo info = new(proc, minArgs, maxArgs, help, hint, completer);
             return AddCommand(name, info);
         }
 
@@ -592,6 +597,61 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
 
             return true;
+        }
+
+        private static IArgumentCompleter ResolveCompleter(MethodInfo method)
+        {
+            try
+            {
+                object attr = Attribute.GetCustomAttribute(
+                    method,
+                    typeof(Attributes.CommandCompleterAttribute)
+                );
+                if (attr is not Attributes.CommandCompleterAttribute cca)
+                {
+                    return null;
+                }
+
+                Type t = cca.CompleterType;
+                // Prefer a public static Instance property
+                PropertyInfo instProp = t.GetProperty(
+                    "Instance",
+                    BindingFlags.Public | BindingFlags.Static
+                );
+                if (
+                    instProp != null
+                    && typeof(IArgumentCompleter).IsAssignableFrom(instProp.PropertyType)
+                )
+                {
+                    return (IArgumentCompleter)instProp.GetValue(null);
+                }
+
+                // Or a public static Instance field
+                FieldInfo instField = t.GetField(
+                    "Instance",
+                    BindingFlags.Public | BindingFlags.Static
+                );
+                if (
+                    instField != null
+                    && typeof(IArgumentCompleter).IsAssignableFrom(instField.FieldType)
+                )
+                {
+                    return (IArgumentCompleter)instField.GetValue(null);
+                }
+
+                // Else use parameterless constructor
+                ConstructorInfo ctor = t.GetConstructor(Type.EmptyTypes);
+                if (ctor != null)
+                {
+                    return (IArgumentCompleter)Activator.CreateInstance(t);
+                }
+            }
+            catch (Exception)
+            {
+                // Swallow and treat as no-completer; errors surface in logs elsewhere
+            }
+
+            return null;
         }
     }
 }

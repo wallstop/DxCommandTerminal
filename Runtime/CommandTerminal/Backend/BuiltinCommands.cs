@@ -78,8 +78,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             Name = "set-theme",
             Help = "Sets the current Terminal UI theme",
             MinArgCount = 1,
-            MaxArgCount = 1
+            MaxArgCount = 1,
+            Hint = "set-theme <theme>"
         )]
+        [CommandCompleter(typeof(Completers.ThemeArgumentCompleter))]
         public static void CommandSetTheme(CommandArg[] args)
         {
             TerminalUI terminal = TerminalUI.Instance;
@@ -124,6 +126,51 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
             terminal.SetTheme(theme);
             Terminal.Log(TerminalLogType.Message, $"Theme '{theme}' set.");
+        }
+
+        [RegisterCommand(
+            isDefault: true,
+            Name = "set-font",
+            Help = "Sets the current Terminal UI font",
+            MinArgCount = 1,
+            MaxArgCount = 1,
+            Hint = "set-font <font>"
+        )]
+        [CommandCompleter(typeof(Completers.FontArgumentCompleter))]
+        public static void CommandSetFont(CommandArg[] args)
+        {
+            TerminalUI terminal = TerminalUI.Instance;
+            if (terminal == null)
+            {
+                Terminal.Log(TerminalLogType.Warning, "No Terminal UI found.");
+                return;
+            }
+
+            if (terminal._fontPack == null)
+            {
+                Terminal.Log(TerminalLogType.Warning, "No font pack found.");
+                return;
+            }
+
+            string fontName = args[0].contents ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(fontName))
+            {
+                Terminal.Log(TerminalLogType.Warning, "Invalid font name.");
+                return;
+            }
+
+            UnityEngine.Font font = terminal._fontPack._fonts.FirstOrDefault(f =>
+                f != null && string.Equals(f.name, fontName, StringComparison.OrdinalIgnoreCase)
+            );
+
+            if (font == null)
+            {
+                Terminal.Log(TerminalLogType.Warning, $"Font '{fontName}' not found.");
+                return;
+            }
+
+            terminal.SetFont(font);
+            Terminal.Log(TerminalLogType.Message, $"Font '{font.name}' set.");
         }
 
         [RegisterCommand(
@@ -190,44 +237,44 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             );
         }
 
-        [RegisterCommand(
-            isDefault: true,
-            Name = "set-font",
-            Help = "Sets the current Terminal UI font",
-            MinArgCount = 1,
-            MaxArgCount = 1
-        )]
-        public static void CommandSetFont(CommandArg[] args)
-        {
-            TerminalUI terminal = TerminalUI.Instance;
-            if (terminal == null)
-            {
-                Terminal.Log(TerminalLogType.Warning, "No Terminal UI found.");
-                return;
-            }
-
-            if (terminal._fontPack == null)
-            {
-                Terminal.Log(TerminalLogType.Warning, "No font pack found.");
-                return;
-            }
-
-            string fontName = args[0].contents;
-
-            int newFontIndex = terminal._fontPack._fonts.FindIndex(font =>
-                string.Equals(font.name, fontName, StringComparison.OrdinalIgnoreCase)
-            );
-            if (newFontIndex < 0)
-            {
-                Terminal.Log(TerminalLogType.Warning, $"Font '{fontName}' not found.");
-                return;
-            }
-
-            Font font = terminal._fontPack._fonts[newFontIndex];
-
-            terminal.SetFont(font);
-            Terminal.Log(TerminalLogType.Message, $"Font '{font.name}' set.");
-        }
+        // [RegisterCommand(
+        //     isDefault: true,
+        //     Name = "set-font",
+        //     Help = "Sets the current Terminal UI font",
+        //     MinArgCount = 1,
+        //     MaxArgCount = 1
+        // )]
+        // public static void CommandSetFont(CommandArg[] args)
+        // {
+        //     TerminalUI terminal = TerminalUI.Instance;
+        //     if (terminal == null)
+        //     {
+        //         Terminal.Log(TerminalLogType.Warning, "No Terminal UI found.");
+        //         return;
+        //     }
+        //
+        //     if (terminal._fontPack == null)
+        //     {
+        //         Terminal.Log(TerminalLogType.Warning, "No font pack found.");
+        //         return;
+        //     }
+        //
+        //     string fontName = args[0].contents;
+        //
+        //     int newFontIndex = terminal._fontPack._fonts.FindIndex(font =>
+        //         string.Equals(font.name, fontName, StringComparison.OrdinalIgnoreCase)
+        //     );
+        //     if (newFontIndex < 0)
+        //     {
+        //         Terminal.Log(TerminalLogType.Warning, $"Font '{fontName}' not found.");
+        //         return;
+        //     }
+        //
+        //     Font font = terminal._fontPack._fonts[newFontIndex];
+        //
+        //     terminal.SetFont(font);
+        //     Terminal.Log(TerminalLogType.Message, $"Font '{font.name}' set.");
+        // }
 
         [RegisterCommand(
             isDefault: true,

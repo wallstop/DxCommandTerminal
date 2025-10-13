@@ -77,7 +77,7 @@ namespace WallstopStudios.DxCommandTerminal.DataStructures
             Capacity = capacity;
             _position = 0;
             Count = 0;
-            _buffer = new List<T>(capacity);
+            _buffer = new List<T>();
             if (initialContents != null)
             {
                 foreach (T item in initialContents)

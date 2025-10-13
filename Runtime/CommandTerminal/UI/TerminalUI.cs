@@ -668,8 +668,13 @@ namespace WallstopStudios.DxCommandTerminal.UI
             if (hintDisplayMode == HintDisplayMode.Always)
             {
                 _lastCompletionBufferTempCache.Clear();
+                int caret =
+                    _commandInput != null
+                        ? _commandInput.cursorIndex
+                        : (_lastKnownCommandText?.Length ?? 0);
                 Terminal.AutoComplete?.Complete(
                     _lastKnownCommandText,
+                    caret,
                     _lastCompletionBufferTempCache
                 );
                 bool equivalent =
@@ -857,11 +862,54 @@ namespace WallstopStudios.DxCommandTerminal.UI
                         {
                             context._commandInput.value = context._input.CommandText;
                         }
+                        // Ensure subsequent user keystrokes (e.g., space) trigger recompute
+                        // even if this event was caused by programmatic text changes (Tab, etc.).
+                        context._isCommandFromCode = false;
                         evt.StopPropagation();
                         return;
                     }
 
+                    // Assign input text
                     context._input.CommandText = evt.newValue;
+
+                    // If the user just typed a space right after a recognized command name,
+                    // proactively clear the hint bar so stale command-name suggestions disappear
+                    // before argument-context suggestions are computed/shown.
+                    try
+                    {
+                        string prev = evt.previousValue ?? string.Empty;
+                        string curr = evt.newValue ?? string.Empty;
+                        bool justTypedSpace = curr.EndsWith(" ") && curr.Length == prev.Length + 1;
+                        if (justTypedSpace && Backend.Terminal.Shell != null)
+                        {
+                            string check = curr;
+                            // Remove trailing space(s) to isolate the command token
+                            if (check.NeedsTrim())
+                            {
+                                check = check.TrimEnd();
+                            }
+
+                            if (
+                                Backend.CommandShell.TryEatArgument(
+                                    ref check,
+                                    out Backend.CommandArg cmd
+                                )
+                            )
+                            {
+                                if (Backend.Terminal.Shell.Commands.ContainsKey(cmd.contents))
+                                {
+                                    // Clear existing suggestions immediately
+                                    context._lastCompletionIndex = null;
+                                    context._previousLastCompletionIndex = null;
+                                    context._lastCompletionBuffer.Clear();
+                                    context._autoCompleteContainer?.Clear();
+                                }
+                            }
+                        }
+                    }
+                    catch
+                    { /* non-fatal UI hint clearing */
+                    }
 
                     context._runButton.style.display =
                         context.showGUIButtons
@@ -2016,10 +2064,15 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             try
             {
-                _lastKnownCommandText ??= _input.CommandText ?? string.Empty;
+                _lastKnownCommandText = _input.CommandText ?? string.Empty;
                 _lastCompletionBufferTempCache.Clear();
+                int caret =
+                    _commandInput != null
+                        ? _commandInput.cursorIndex
+                        : (_lastKnownCommandText?.Length ?? 0);
                 Terminal.AutoComplete?.Complete(
                     _lastKnownCommandText,
+                    caret,
                     _lastCompletionBufferTempCache
                 );
                 bool equivalentBuffers = true;

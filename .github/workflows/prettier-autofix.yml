@@ -45,7 +45,7 @@ jobs:
 
       - name: Markdownlint (auto-fix)
         if: ${{ github.event.pull_request.user.login == 'dependabot[bot]' }}
-        run: npx markdownlint "**/*.md" "**/*.markdown" --config .markdownlint.json --ignore-path .markdownlintignore --fix
+        run: npx --yes markdownlint-cli "**/*.md" "**/*.markdown" --config .markdownlint.json --ignore-path .markdownlintignore --fix
 
       - name: Commit formatting changes to PR branch (Dependabot only)
         if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login == 'dependabot[bot]' }}
@@ -113,7 +113,7 @@ jobs:
           npm run format:yaml
 
       - name: Markdownlint (auto-fix)
-        run: npx markdownlint "**/*.md" "**/*.markdown" --config .markdownlint.json --ignore-path .markdownlintignore --fix
+        run: npx --yes markdownlint-cli "**/*.md" "**/*.markdown" --config .markdownlint.json --ignore-path .markdownlintignore --fix
 
       - name: Detect changes
         id: changes
