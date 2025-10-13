@@ -1,9 +1,10 @@
-$ErrorActionPreference = 'Stop'
-
 param(
     [string] $Root = '.',
-    [switch] $VerboseOutput
+    [switch] $VerboseOutput,
+    [switch] $Fix
 )
+
+$ErrorActionPreference = 'Stop'
 
 function Write-VerboseLine($msg) {
     if ($VerboseOutput) { Write-Host $msg }
@@ -14,6 +15,7 @@ $extensions = @('md','markdown','json','asmdef','asmref','yml','yaml')
 
 $badBom = New-Object System.Collections.Generic.List[string]
 $badEol = New-Object System.Collections.Generic.List[string]
+$fixedFiles = New-Object System.Collections.Generic.List[string]
 
 $files = Get-ChildItem -Path $Root -Recurse -File |
     Where-Object {
@@ -29,9 +31,9 @@ foreach ($f in $files) {
     Write-VerboseLine "Checking: $($f.FullName)"
     $bytes = [System.IO.File]::ReadAllBytes($f.FullName)
 
+    $hasBom = $false
     if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) {
-        $badBom.Add($f.FullName)
-        continue
+        $hasBom = $true
     }
 
     # Verify all LF (0x0A) are preceded by CR (0x0D)
@@ -45,12 +47,32 @@ foreach ($f in $files) {
         }
     }
 
-    if ($hasLfWithoutCr) {
-        $badEol.Add($f.FullName)
+    if ($Fix -and ($hasBom -or $hasLfWithoutCr)) {
+        # Decode as UTF-8, skip BOM bytes if present
+        $startIndex = if ($hasBom) { 3 } else { 0 }
+        $len = $bytes.Length - $startIndex
+        $text = [System.Text.Encoding]::UTF8.GetString($bytes, $startIndex, $len)
+        # Normalize line endings to CRLF
+        $text = [System.Text.RegularExpressions.Regex]::Replace($text, "\r?\n", "`r`n")
+        # Write back without BOM
+        $enc = [System.Text.UTF8Encoding]::new($false)
+        [System.IO.File]::WriteAllText($f.FullName, $text, $enc)
+        $fixedFiles.Add($f.FullName)
+        # Recompute to reflect post-fix status
+        $bytes = [System.IO.File]::ReadAllBytes($f.FullName)
+        $hasBom = $false
+        $hasLfWithoutCr = $false
     }
+
+    if ($hasBom) { $badBom.Add($f.FullName) }
+    if ($hasLfWithoutCr) { $badEol.Add($f.FullName) }
 }
 
 if ($badBom.Count -eq 0 -and $badEol.Count -eq 0) {
+    if ($fixedFiles.Count -gt 0) {
+        Write-Host "EOL/BOM issues were fixed in the following files:"
+        $fixedFiles | ForEach-Object { Write-Host " - $_" }
+    }
     Write-Host "EOL/BOM check passed: All checked files use CRLF and no BOM."
     exit 0
 }
@@ -65,6 +87,10 @@ if ($badEol.Count -gt 0) {
     $badEol | ForEach-Object { Write-Host " - $_" }
 }
 
+if ($fixedFiles.Count -gt 0) {
+    Write-Host "Fixed files:"
+    $fixedFiles | ForEach-Object { Write-Host " - $_" }
+}
+
 Write-Error "EOL/BOM validation failed. See lists above."
 exit 1
-
