@@ -27,13 +27,17 @@
   "homepage": "https://github.com/wallstop/DxCommandTerminal/blob/master/README.md",
   "main": "README.md",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "format:md": "prettier --write \"**/*.{md,markdown}\"",
+    "format:md:check": "prettier --check \"**/*.{md,markdown}\"",
+    "format:json": "prettier --write \"**/*.{json,asmdef,asmref}\"",
+    "format:json:check": "prettier --check \"**/*.{json,asmdef,asmref}\"",
+    "format:yaml": "prettier --write \"**/*.{yml,yaml}\"",
+    "format:yaml:check": "prettier --check \"**/*.{yml,yaml}\"",
+    "lint:markdown": "markdownlint \"**/*.md\" \"**/*.markdown\" --config .markdownlint.json --ignore-path .markdownlintignore"
+  },
+  "devDependencies": {
+    "markdownlint-cli": "0.40.0",
+    "prettier": "3.3.3"
   }
 }
-
-
-
-
-
-
-
