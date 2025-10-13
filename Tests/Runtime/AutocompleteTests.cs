@@ -160,7 +160,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             CommandHistory history = new CommandHistory(8);
             CommandShell shell = new CommandShell(history);
 
-            shell.InitializeAutoRegisteredCommands();
+            shell.InitializeAutoRegisteredCommands(Array.Empty<string>());
 
             Assert.IsTrue(
                 shell.Commands.TryGetValue(
@@ -223,6 +223,70 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreEqual("g", partialSecondContext.PartialArg);
             Assert.AreEqual(1, partialSecondContext.ArgsBeforeCursor.Count);
             Assert.AreEqual("alpha", partialSecondContext.ArgsBeforeCursor[0].contents);
+        }
+
+        [Test]
+        public void AutoCompleteHonorsCaretIndexWithinInput()
+        {
+            CommandHistory history = new CommandHistory(16);
+            CommandShell shell = new CommandShell(history);
+            ChainedCompleter chainedCompleter = new ChainedCompleter();
+            shell.AddCommand("chain", _ => { }, 0, -1, string.Empty, null, chainedCompleter);
+
+            CommandAutoComplete autoComplete = new CommandAutoComplete(history, shell);
+            List<string> buffer = new List<string>();
+            int caretIndex = "chain alpha ".Length;
+            autoComplete.Complete("chain alpha gamma", caretIndex, buffer);
+
+            Assert.AreEqual(1, buffer.Count);
+            Assert.AreEqual("chain alpha gamma", buffer[0]);
+            Assert.AreEqual(1, chainedCompleter.Calls.Count);
+            CommandCompletionContext context = chainedCompleter.Calls[0];
+            Assert.AreEqual(1, context.ArgIndex);
+            Assert.AreEqual(string.Empty, context.PartialArg);
+            Assert.AreEqual(1, context.ArgsBeforeCursor.Count);
+            Assert.AreEqual("alpha", context.ArgsBeforeCursor[0].contents);
+        }
+
+        [Test]
+        public void AutoCompleteFallsBackToHistoryWhenCommandUnknown()
+        {
+            CommandHistory history = new CommandHistory(16);
+            history.Push("login", true, true);
+            history.Push("logout", true, true);
+            CommandShell shell = new CommandShell(history);
+
+            CommandAutoComplete autoComplete = new CommandAutoComplete(history, shell);
+            string[] suggestions = autoComplete.Complete("lo");
+
+            Assert.IsNotNull(suggestions);
+            CollectionAssert.Contains(suggestions, "login");
+            CollectionAssert.Contains(suggestions, "logout");
+        }
+
+        [Test]
+        public void AutoCompleteDeduplicatesValuesAcrossSources()
+        {
+            CommandHistory history = new CommandHistory(16);
+            history.Push("list", true, true);
+            CommandShell shell = new CommandShell(history);
+            shell.AddCommand("list", _ => { });
+            List<string> knownWords = new List<string> { "list" };
+            CommandAutoComplete autoComplete = new CommandAutoComplete(history, shell, knownWords);
+
+            string[] suggestions = autoComplete.Complete("li");
+            Assert.IsNotNull(suggestions);
+
+            int matches = 0;
+            for (int i = 0; i < suggestions.Length; ++i)
+            {
+                if (string.Equals(suggestions[i], "list", StringComparison.Ordinal))
+                {
+                    matches++;
+                }
+            }
+
+            Assert.AreEqual(1, matches, "Expected deduplicated suggestion list.");
         }
     }
 }

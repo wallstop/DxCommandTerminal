@@ -135,22 +135,40 @@ namespace WallstopStudios.DxCommandTerminal.DataStructures
 
         public void Resize(int newCapacity)
         {
+            if (newCapacity == Capacity)
+            {
+                return;
+            }
+
             if (newCapacity < 0)
             {
                 throw new ArgumentException(nameof(newCapacity));
             }
 
-            int oldCapacity = Capacity;
             Capacity = newCapacity;
+
+            // Normalize underlying storage so the oldest element is at index 0.
             _buffer.Shift(-_position);
+
             if (newCapacity < _buffer.Count)
             {
-                _buffer.RemoveRange(newCapacity, _buffer.Count - newCapacity);
+                // When shrinking, drop the oldest elements to retain the most recent window.
+                int removeCount = _buffer.Count - newCapacity;
+                _buffer.RemoveRange(0, removeCount);
             }
 
-            _position =
-                newCapacity < oldCapacity && newCapacity <= _buffer.Count ? 0 : _buffer.Count;
+            // Update next-write position: if full, wrap to 0 to overwrite oldest; otherwise append at end.
+            if (Capacity <= 0)
+            {
+                _position = 0;
+                Count = 0;
+                _buffer.Clear();
+                return;
+            }
+
+            // Count cannot exceed new capacity
             Count = Math.Min(newCapacity, Count);
+            _position = _buffer.Count >= Capacity ? 0 : _buffer.Count;
         }
 
         public bool Contains(T item)
