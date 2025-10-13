@@ -15,18 +15,22 @@ repos:
         description: Install the .NET tools listed at .config/dotnet-tools.json.
       - id: csharpier
         name: Run CSharpier on C# files
-        entry: dotnet tool run csharpier format
+        entry: dotnet tool run csharpier format .
         language: system
-        types:
-          - c#
+        # Run across the whole repo so it matches CI's full-repo check
+        pass_filenames: false
+        always_run: true
         description: CSharpier is an opinionated C# formatter inspired by Prettier.
 
   - repo: local
     hooks:
       - id: prettier
         name: Prettier (Markdown, JSON, asmdef, asmref, YAML)
-        entry: npx --yes prettier --write
+        entry: npx --yes prettier --write .
         language: system
+        # Run across the whole repo to match CI (filter still documents scope)
+        pass_filenames: false
+        always_run: true
         files: '(?i)\.(md|markdown|json|asmdef|asmref|ya?ml)$'
         description: Use the repo's Prettier version from package.json.
 

@@ -1,19 +1,14 @@
 {
-    "name": "WallstopStudios.DxCommandTerminal.Editor",
-    "rootNamespace": "WallstopStudios.DxCommandTerminal",
-    "references": [
-        "WallstopStudios.DxCommandTerminal",
-        "Unity.InputSystem"
-    ],
-    "includePlatforms": [
-        "Editor"
-    ],
-    "excludePlatforms": [],
-    "allowUnsafeCode": false,
-    "overrideReferences": false,
-    "precompiledReferences": [],
-    "autoReferenced": true,
-    "defineConstraints": [],
-    "versionDefines": [],
-    "noEngineReferences": false
+  "name": "WallstopStudios.DxCommandTerminal.Editor",
+  "rootNamespace": "WallstopStudios.DxCommandTerminal",
+  "references": ["WallstopStudios.DxCommandTerminal", "Unity.InputSystem"],
+  "includePlatforms": ["Editor"],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
 }

@@ -359,6 +359,7 @@ Static members parsing
 DxCommandTerminal exposes a runtime mode enum to control environment-specific behavior (e.g., parser auto-discovery), plus an Editor toggle wired through the Terminal component.
 
 - Enum: `TerminalRuntimeModeFlags` (flags, explicit numeric values)
+
   - `None` (0) — Obsolete; choose explicit modes.
   - `Editor` (1) — Enable editor-only features (when running in Editor).
   - `Development` (2) — Enable features only for development builds.
@@ -366,10 +367,12 @@ DxCommandTerminal exposes a runtime mode enum to control environment-specific be
   - `All` (7) — Enable all.
 
 - Set mode on `TerminalUI` (serialized):
+
   - `Runtime Mode` controls active modes.
   - `Editor > Auto-Discover Parsers` toggles automatic parser discovery in Editor when `Editor` mode is active.
 
 - Editor Menu:
+
   - Tools > DxCommandTerminal > Runtime Mode > [Editor | Development | Production | Editor+Development | All]
   - Tools > DxCommandTerminal > Runtime Mode > Toggle Auto-Discover Parsers
   - Acts on selected `TerminalUI` components (in the Hierarchy).

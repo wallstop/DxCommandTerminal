@@ -1,21 +1,14 @@
 {
-    "name": "WallstopStudios.DxCommandTerminal.Tests.Runtime",
-    "rootNamespace": "WallstopStudios.DxCommandTerminal.Tests",
-    "references": [
-        "WallstopStudios.DxCommandTerminal",
-        "UnityEngine.TestRunner"
-    ],
-    "includePlatforms": [],
-    "excludePlatforms": [],
-    "allowUnsafeCode": false,
-    "overrideReferences": true,
-    "precompiledReferences": [
-        "nunit.framework.dll"
-    ],
-    "autoReferenced": false,
-    "defineConstraints": [
-        "UNITY_INCLUDE_TESTS"
-    ],
-    "versionDefines": [],
-    "noEngineReferences": false
+  "name": "WallstopStudios.DxCommandTerminal.Tests.Runtime",
+  "rootNamespace": "WallstopStudios.DxCommandTerminal.Tests",
+  "references": ["WallstopStudios.DxCommandTerminal", "UnityEngine.TestRunner"],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": true,
+  "precompiledReferences": ["nunit.framework.dll"],
+  "autoReferenced": false,
+  "defineConstraints": ["UNITY_INCLUDE_TESTS"],
+  "versionDefines": [],
+  "noEngineReferences": false
 }

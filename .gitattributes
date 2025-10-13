@@ -1,0 +1,42 @@
+# Normalize text and enforce CRLF in working tree for key files
+* text=auto
+
+# Enforce CRLF for source and docs (matches Prettier/CSharpier + CI checks)
+*.cs        text eol=crlf
+*.csproj    text eol=crlf
+*.sln       text eol=crlf
+*.props     text eol=crlf
+*.targets   text eol=crlf
+
+*.md        text eol=crlf
+*.markdown  text eol=crlf
+
+*.json      text eol=crlf
+*.asmdef    text eol=crlf
+*.asmref    text eol=crlf
+
+*.yml       text eol=crlf
+*.yaml      text eol=crlf
+
+# Common config treated as text with CRLF
+.editorconfig     text eol=crlf
+.prettierrc       text eol=crlf
+.prettierrc.json  text eol=crlf
+.markdownlint.json text eol=crlf
+.yamllint.yaml    text eol=crlf
+
+# Unity / assets and binaries (do not modify EOL)
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.mp4   binary
+*.otf   binary
+*.ttf   binary
+*.woff  binary
+*.woff2 binary
+*.unity binary
+*.prefab binary
+*.mat    binary
+*.asset  binary
+*.dll    binary

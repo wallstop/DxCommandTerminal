@@ -22,7 +22,7 @@
 
 - Follow `.editorconfig`:
   - Indentation: spaces (C# 4), JSON/YAML/asmdef 2.
-  - Line endings: CRLF; encoding: UTF-8 BOM.
+  - Line endings: CRLF; encoding: UTF-8 (no BOM).
   - C#: prefer braces; explicit types over `var` unless obvious; `using` inside namespace.
   - Naming: Interfaces `IType`, type params `TType`, events/types/methods PascalCase; tests end with `Tests`.
 - Use CSharpier for formatting before committing.
