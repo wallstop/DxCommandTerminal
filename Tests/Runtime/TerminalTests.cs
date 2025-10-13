@@ -3,12 +3,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     using System.Collections;
     using System.Collections.Generic;
     using System.Linq;
+    using System.Reflection;
     using Backend;
     using Components;
     using NUnit.Framework;
     using UI;
     using UnityEngine;
     using UnityEngine.TestTools;
+    using UnityEngine.UIElements;
 
     public sealed class TerminalTests
     {
@@ -24,7 +26,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [UnityTest]
         public IEnumerator ToggleResetsState()
         {
-            yield return SpawnTerminal(resetStateOnInit: true);
+            yield return TestSceneHelpers.CleanRestart(resetStateOnInit: true);
 
             TerminalUI terminal = TerminalUI.Instance;
             CommandShell shell = Terminal.Shell;
@@ -63,7 +65,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [UnityTest]
         public IEnumerator CleanConstruction()
         {
-            yield return SpawnTerminal(resetStateOnInit: true);
+            yield return TestSceneHelpers.CleanRestart(resetStateOnInit: true);
 
             TerminalUI terminal1 = TerminalUI.Instance;
             Assert.IsNotNull(terminal1);
@@ -76,7 +78,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             CommandAutoComplete autoComplete = Terminal.AutoComplete;
             Assert.IsNotNull(autoComplete);
 
-            yield return SpawnTerminal(resetStateOnInit: false);
+            yield return TestSceneHelpers.CleanRestart(resetStateOnInit: false);
 
             TerminalUI terminal2 = TerminalUI.Instance;
             Assert.IsNotNull(TerminalUI.Instance);
@@ -86,7 +88,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreSame(buffer, Terminal.Buffer);
             Assert.AreSame(autoComplete, Terminal.AutoComplete);
 
-            yield return SpawnTerminal(resetStateOnInit: true);
+            yield return TestSceneHelpers.CleanRestart(resetStateOnInit: true);
 
             Assert.IsNotNull(TerminalUI.Instance);
             Assert.AreNotSame(terminal2, TerminalUI.Instance);
@@ -104,11 +106,63 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         internal static IEnumerator SpawnTerminal(bool resetStateOnInit)
         {
-            GameObject go = new("Terminal", typeof(StartTracker), typeof(TerminalUI));
-            TerminalUI terminal = go.GetComponent<TerminalUI>();
+            GameObject go = new("Terminal");
+            go.SetActive(false);
+
+            // In tests we skip building UI entirely to avoid engine panel updates
+
+            // Create lightweight test packs to avoid warnings
+            var themePack = ScriptableObject.CreateInstance<TestThemePack>();
+            var style = ScriptableObject.CreateInstance<StyleSheet>();
+            themePack.Add(style, "test-theme");
+
+            var fontPack = ScriptableObject.CreateInstance<TestFontPack>();
+            // UI is disabled during tests; no need to add a real font asset
+
+            StartTracker startTracker = go.AddComponent<StartTracker>();
+
+            TerminalUI terminal = go.AddComponent<TerminalUI>();
+            terminal.disableUIForTests = true;
+            terminal.InjectPacks(themePack, fontPack);
             terminal.resetStateOnInit = resetStateOnInit;
-            StartTracker startTracker = go.GetComponent<StartTracker>();
+
+            go.SetActive(true);
             yield return new WaitUntil(() => startTracker.Started);
+            // Ensure the buffer is large enough for concurrency tests
+            if (Terminal.Buffer != null)
+            {
+                Terminal.Buffer.Resize(4096);
+            }
         }
+
+        [UnityTest]
+        public IEnumerator CleanRestartHelperWorks()
+        {
+            // Start with reset and capture instances
+            yield return TestSceneHelpers.CleanRestart(resetStateOnInit: true);
+
+            var shell1 = Terminal.Shell;
+            var history1 = Terminal.History;
+            var buffer1 = Terminal.Buffer;
+            var auto1 = Terminal.AutoComplete;
+            Assert.IsNotNull(shell1);
+            Assert.IsNotNull(history1);
+
+            // Clean restart without reset should keep instances
+            yield return TestSceneHelpers.CleanRestart(resetStateOnInit: false);
+            Assert.AreSame(shell1, Terminal.Shell);
+            Assert.AreSame(history1, Terminal.History);
+            Assert.AreSame(buffer1, Terminal.Buffer);
+            Assert.AreSame(auto1, Terminal.AutoComplete);
+
+            // Clean restart with reset should replace instances
+            yield return TestSceneHelpers.CleanRestart(resetStateOnInit: true);
+            Assert.AreNotSame(shell1, Terminal.Shell);
+            Assert.AreNotSame(history1, Terminal.History);
+            Assert.AreNotSame(buffer1, Terminal.Buffer);
+            Assert.AreNotSame(auto1, Terminal.AutoComplete);
+        }
+
+        // Test-only pack types moved to Components/TestPacks.cs
     }
 }

@@ -281,6 +281,89 @@ All of these unregistration functions will return you information on whether the
 
 Note: Built in parser functions cannot be unregistered.
 
+### Object Parsers (IArgParser)
+For stronger typing and lower allocations, you can also use object parsers that implement `IArgParser`.
+
+- Built-ins: All common numeric, date/time, IP, and Unity types ship with sealed parsers and public singletons, e.g. `IntArgParser.Instance`, `Vector3ArgParser.Instance`, `ColorArgParser.Instance`.
+- Registration: Register any custom parser once at startup.
+
+```csharp
+using WallstopStudios.DxCommandTerminal.Backend.Parsers;
+
+// Register built-in or custom parsers
+CommandArg.RegisterObjectParser(IntArgParser.Instance);         // int
+CommandArg.RegisterObjectParser(Vector3ArgParser.Instance);     // UnityEngine.Vector3
+
+// Or discover all IArgParser implementations across loaded assemblies
+int discovered = CommandArg.DiscoverAndRegisterParsers(replaceExisting: false);
+```
+
+Create your own low-allocation parser by deriving from `ArgParser<T>`:
+
+```csharp
+public sealed class PathArgParser : ArgParser<System.IO.FileInfo>
+{
+    public static readonly PathArgParser Instance = new PathArgParser();
+    protected override bool TryParseTyped(string input, out System.IO.FileInfo value)
+    {
+        if (string.IsNullOrWhiteSpace(input)) { value = null; return false; }
+        value = new System.IO.FileInfo(input.Trim());
+        return true;
+    }
+}
+
+// Register once (e.g., game init)
+CommandArg.RegisterObjectParser(PathArgParser.Instance);
+
+// Usage in a command
+public static void LoadFile(CommandArg a)
+{
+    if (!a.TryGet(out System.IO.FileInfo file)) { Terminal.LogError("Invalid path"); return; }
+    // ...
+}
+```
+
+Enum parsing uses a hot path with cached name and ordinal lookups (`EnumArgParser`) for fast, case-insensitive matching and integer ordinals.
+
+Editor convenience
+- In the Unity Editor, parsers are auto-discovered on domain reload to ease development (`Editor/Parsers/ParserAutoDiscovery.cs`). This does not affect players.
+- Inspect what parsers are currently registered:
+
+```csharp
+var types = CommandArg.GetRegisteredObjectParserTypes();
+foreach (var t in types) UnityEngine.Debug.Log($"Parser for type: {t}");
+```
+
+Static members parsing
+- Constant/Property name parsing (e.g., `MaxValue`, `IPAddress.Any`) is handled by dedicated static-member parsers and no longer lives inside `CommandArg`.
+
+## Runtime Modes & Editor Toggle
+
+DxCommandTerminal exposes a runtime mode enum to control environment-specific behavior (e.g., parser auto-discovery), plus an Editor toggle wired through the Terminal component.
+
+- Enum: `TerminalRuntimeModeFlags` (flags, explicit numeric values)
+  - `None` (0) — Obsolete; choose explicit modes.
+  - `Editor` (1) — Enable editor-only features (when running in Editor).
+  - `Development` (2) — Enable features only for development builds.
+  - `Production` (4) — Enable features only for non-development builds.
+  - `All` (7) — Enable all.
+
+- Set mode on `TerminalUI` (serialized):
+  - `Runtime Mode` controls active modes.
+  - `Editor > Auto-Discover Parsers` toggles automatic parser discovery in Editor when `Editor` mode is active.
+
+- Editor Menu:
+  - Tools > DxCommandTerminal > Runtime Mode > [Editor | Development | Production | Editor+Development | All]
+  - Tools > DxCommandTerminal > Runtime Mode > Toggle Auto-Discover Parsers
+  - Acts on selected `TerminalUI` components (in the Hierarchy).
+
+- Programmatic checks (no allocations):
+  - `TerminalRuntimeConfig.HasFlagNoAlloc(value, flag)` bit-tests without boxing.
+  - `TerminalRuntimeConfig.ShouldEnableEditorFeatures()` respects `Editor` flag and `UNITY_EDITOR`.
+  - `TerminalRuntimeConfig.ShouldEnableDevelopmentFeatures()` respects `Development` and `Debug.isDebugBuild`.
+  - `TerminalRuntimeConfig.ShouldEnableProductionFeatures()` respects `Production` and non-development builds.
+  - `TerminalRuntimeConfig.TryAutoDiscoverParsers()` conditionally registers all IArgParser implementations based on mode + toggle.
+
 ## Advanced Parsing - Changing Control Sets
 By default, command parameter input is stripped of whitespace characters. This, along with several other parsing-specific behaviors, are controlled via public static sets on `CommandArg` itself. If you would like to change this behavior in your code, you can modify the contents of these sets to be whatever you'd like. Below are a description of the sets and what they control.
 

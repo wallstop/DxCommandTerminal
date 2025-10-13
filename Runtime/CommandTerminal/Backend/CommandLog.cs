@@ -1,6 +1,7 @@
 namespace WallstopStudios.DxCommandTerminal.Backend
 {
     using System;
+    using System.Collections.Concurrent;
     using System.Collections.Generic;
     using System.Linq;
     using DataStructures;
@@ -33,8 +34,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
     public sealed class CommandLog
     {
-        private static readonly string[] NewlineSeparators = { "\r\n", "\n", "\r" };
-        private static readonly string JoinSeparator = Environment.NewLine;
+        private const string InternalNamespace = "WallstopStudios.DxCommandTerminal";
 
         public IReadOnlyList<LogItem> Logs => _logs;
         public int Capacity => _logs.Capacity;
@@ -46,6 +46,13 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         private long _version;
 
+        private readonly ConcurrentQueue<(
+            string message,
+            string stackTrace,
+            TerminalLogType type,
+            bool includeStackTrace
+        )> _pending = new();
+
         public CommandLog(int maxItems, IEnumerable<TerminalLogType> ignoredLogTypes = null)
         {
             _logs = new CyclicBuffer<LogItem>(maxItems);
@@ -56,6 +63,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         public bool HandleLog(string message, TerminalLogType type, bool includeStackTrace = true)
         {
+            // Main-thread direct path retained for back-compat
             string stackTrace = includeStackTrace ? GetAccurateStackTrace() : string.Empty;
             return HandleLog(message, stackTrace, type);
         }
@@ -67,25 +75,58 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             {
                 return fullStackTrace;
             }
-
-            string[] lines = fullStackTrace.Split(NewlineSeparators, StringSplitOptions.None);
-
-            int startIndex = 1;
+            int length = fullStackTrace.Length;
+            int index = 0;
+            // Skip the first line (StackTraceUtility includes a leading line)
+            while (index < length && fullStackTrace[index] != '\n' && fullStackTrace[index] != '\r')
+            {
+                index++;
+            }
+            // Consume newline chars
             while (
-                startIndex < lines.Length
-                && lines[startIndex]
-                    .Contains(
-                        "WallstopStudios.DxCommandTerminal",
-                        StringComparison.OrdinalIgnoreCase
-                    )
+                index < length && (fullStackTrace[index] == '\n' || fullStackTrace[index] == '\r')
             )
             {
-                ++startIndex;
+                index++;
             }
 
-            return lines.Length <= startIndex
-                ? string.Empty
-                : string.Join(JoinSeparator, lines, startIndex, lines.Length - startIndex);
+            // Skip frames inside our own namespace for clearer logs
+            while (index < length)
+            {
+                int lineStart = index;
+                // Find end of line
+                while (
+                    index < length && fullStackTrace[index] != '\n' && fullStackTrace[index] != '\r'
+                )
+                {
+                    index++;
+                }
+
+                int lineLen = index - lineStart;
+                bool isInternal =
+                    fullStackTrace.IndexOf(
+                        InternalNamespace,
+                        lineStart,
+                        lineLen,
+                        StringComparison.OrdinalIgnoreCase
+                    ) >= 0;
+                if (!isInternal)
+                {
+                    // Return from this line onward
+                    return fullStackTrace.Substring(lineStart);
+                }
+
+                // Move to next line start (skip newline chars)
+                while (
+                    index < length
+                    && (fullStackTrace[index] == '\n' || fullStackTrace[index] == '\r')
+                )
+                {
+                    index++;
+                }
+            }
+
+            return string.Empty;
         }
 
         public bool HandleLog(string message, string stackTrace, TerminalLogType type)
@@ -99,6 +140,42 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             LogItem log = new(type, message, stackTrace);
             _logs.Add(log);
             return true;
+        }
+
+        public void EnqueueMessage(string message, TerminalLogType type, bool includeStackTrace)
+        {
+            if (ignoredLogTypes.Contains(type))
+            {
+                return;
+            }
+            _pending.Enqueue((message ?? string.Empty, string.Empty, type, includeStackTrace));
+        }
+
+        public void EnqueueUnityLog(string message, string stackTrace, TerminalLogType type)
+        {
+            if (ignoredLogTypes.Contains(type))
+            {
+                return;
+            }
+            _pending.Enqueue((message ?? string.Empty, stackTrace ?? string.Empty, type, false));
+        }
+
+        public int DrainPending()
+        {
+            int added = 0;
+            while (_pending.TryDequeue(out var item))
+            {
+                string stack = item.includeStackTrace ? GetAccurateStackTrace() : item.stackTrace;
+                if (ignoredLogTypes.Contains(item.type))
+                {
+                    continue;
+                }
+                _version++;
+                _logs.Add(new LogItem(item.type, item.message, stack));
+                added++;
+            }
+
+            return added;
         }
 
         public int Clear()

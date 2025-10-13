@@ -107,23 +107,19 @@ namespace WallstopStudios.DxCommandTerminal.Helper
 
             if (absolutePath.StartsWith(projectRoot, StringComparison.OrdinalIgnoreCase))
             {
-                // +1 to remove the leading slash only if projectRoot doesn't end with one
                 int startIndex = projectRoot.EndsWith("/", StringComparison.OrdinalIgnoreCase)
                     ? projectRoot.Length
                     : projectRoot.Length + 1;
-                return absolutePath.Length > startIndex ? absolutePath[startIndex..] : string.Empty;
-            }
-            if (absolutePath.StartsWith(projectRoot, StringComparison.OrdinalIgnoreCase))
-            {
-                int startIndex = projectRoot.EndsWith("/", StringComparison.OrdinalIgnoreCase)
-                    ? projectRoot.Length
-                    : projectRoot.Length + 1;
-                if (startIndex < absolutePath.Length)
+                string tail =
+                    absolutePath.Length > startIndex ? absolutePath[startIndex..] : string.Empty;
+                if (string.IsNullOrEmpty(tail))
                 {
-                    return "Assets/" + absolutePath[startIndex..];
+                    return string.Empty;
                 }
-
-                return "Assets";
+                // Ensure path starts with Assets/
+                return tail.StartsWith("Assets", StringComparison.OrdinalIgnoreCase)
+                    ? tail
+                    : ($"Assets/{tail}");
             }
 
             return string.Empty;

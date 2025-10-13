@@ -525,8 +525,19 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 {
                     if (stringValue[i] == firstChar)
                     {
-                        closingQuoteIndex = i;
-                        break;
+                        // Check if this quote is escaped by an odd number of backslashes
+                        int backslashCount = 0;
+                        int j = i - 1;
+                        while (1 <= j && stringValue[j] == '\\')
+                        {
+                            backslashCount++;
+                            j--;
+                        }
+                        if ((backslashCount % 2) == 0)
+                        {
+                            closingQuoteIndex = i;
+                            break;
+                        }
                     }
                 }
 
@@ -534,6 +545,14 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 {
                     // No closing quote was found; consume the rest of the string (excluding the opening quote).
                     string input = stringValue.Substring(1);
+                    if (firstChar == '\'')
+                    {
+                        input = input.Replace("\\'", "'").Replace("\\\\", "\\");
+                    }
+                    else if (firstChar == '"')
+                    {
+                        input = input.Replace("\\\"", "\"").Replace("\\\\", "\\");
+                    }
                     arg = new CommandArg(input, firstChar);
                     stringValue = string.Empty;
                 }
@@ -541,6 +560,15 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 {
                     // Extract the argument inside the quotes.
                     string input = stringValue.Substring(1, closingQuoteIndex - 1);
+                    // Unescape the matching quote and backslashes
+                    if (firstChar == '\'')
+                    {
+                        input = input.Replace("\\'", "'").Replace("\\\\", "\\");
+                    }
+                    else if (firstChar == '"')
+                    {
+                        input = input.Replace("\\\"", "\"").Replace("\\\\", "\\");
+                    }
                     arg = new CommandArg(input, firstChar, firstChar);
                     // Remove the parsed argument (including the quotes) from the input.
                     stringValue = stringValue.Substring(closingQuoteIndex + 1);

@@ -13,7 +13,7 @@ namespace WallstopStudios.DxCommandTerminal.Extensions
     {
         internal static Func<object, object> CreateFieldGetter(FieldInfo field)
         {
-#if WEB_GL
+#if ENABLE_IL2CPP || UNITY_WEBGL
             return field.GetValue;
 #else
             DynamicMethod dynamicMethod = new(

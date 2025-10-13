@@ -49,24 +49,48 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
             _duplicateBuffer.Clear();
             buffer.Clear();
+
+            // Commands
+            foreach (string command in _shell.Commands.Keys)
+            {
+                string known = command.NeedsLowerInvariantConversion()
+                    ? command.ToLowerInvariant()
+                    : command;
+                if (!known.StartsWith(input, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+                if (_duplicateBuffer.Add(known))
+                {
+                    buffer.Add(known);
+                }
+            }
+
+            // Known words
+            foreach (string known in _knownWords)
+            {
+                if (!known.StartsWith(input, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+                if (_duplicateBuffer.Add(known))
+                {
+                    buffer.Add(known);
+                }
+            }
+
+            // History
             foreach (
-                string known in _shell
-                    .Commands.Keys.Select(command =>
-                        command.NeedsLowerInvariantConversion()
-                            ? command.ToLowerInvariant()
-                            : command
-                    )
-                    .Concat(_knownWords)
-                    .Concat(
-                        _history.GetHistory(onlySuccess: onlySuccess, onlyErrorFree: onlyErrorFree)
-                    )
+                string known in _history.GetHistory(
+                    onlySuccess: onlySuccess,
+                    onlyErrorFree: onlyErrorFree
+                )
             )
             {
                 if (!known.StartsWith(input, StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
                 }
-
                 if (_duplicateBuffer.Add(known))
                 {
                     buffer.Add(known);

@@ -26,7 +26,10 @@ namespace WallstopStudios.DxCommandTerminal.Attributes
         }
 
         internal RegisterCommandAttribute(bool isDefault)
-            : this(string.Empty) { }
+            : this(string.Empty)
+        {
+            Default = isDefault;
+        }
 
         public void NormalizeName(MethodInfo method)
         {

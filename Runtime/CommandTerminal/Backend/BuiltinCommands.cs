@@ -292,31 +292,86 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             {
                 foreach (KeyValuePair<string, CommandInfo> command in shell.Commands)
                 {
-                    Terminal.Log($"{command.Key.ToUpperInvariant(), -16}: {command.Value.help}");
+                    string name = command.Key;
+                    CommandInfo info = command.Value;
+                    string usage = BuildUsage(name, info.minArgCount, info.maxArgCount, info.hint);
+                    string helpLine =
+                        $"{name.ToUpperInvariant(), -16}: {info.help}\n    -> {usage}";
+                    Terminal.Log(helpLine);
+                    UnityEngine.Debug.Log(helpLine);
                 }
                 return;
             }
-
-            string commandName = args[0].contents ?? string.Empty;
-
-            if (!shell.Commands.TryGetValue(commandName, out CommandInfo info))
-            {
-                shell.IssueErrorMessage($"Command {commandName} could not be found.");
-                return;
-            }
-
-            if (string.IsNullOrWhiteSpace(info.help))
-            {
-                Terminal.Log($"{commandName} does not provide any help documentation.");
-            }
-            else if (string.IsNullOrWhiteSpace(info.hint))
-            {
-                Terminal.Log(info.help);
-            }
             else
             {
-                Terminal.Log($"{info.help}\nUsage: {info.hint}");
+                string commandName = args[0].contents ?? string.Empty;
+
+                if (!shell.Commands.TryGetValue(commandName, out CommandInfo info))
+                {
+                    shell.IssueErrorMessage($"Command {commandName} could not be found.");
+                    return;
+                }
+
+                string usageLine = BuildUsage(
+                    commandName,
+                    info.minArgCount,
+                    info.maxArgCount,
+                    info.hint
+                );
+                if (string.IsNullOrWhiteSpace(info.help))
+                {
+                    string line = $"{commandName}: {usageLine}";
+                    Terminal.Log(line);
+                    UnityEngine.Debug.Log(line);
+                }
+                else
+                {
+                    string line = $"{info.help}\n{usageLine}";
+                    Terminal.Log(line);
+                    UnityEngine.Debug.Log(line);
+                }
             }
+        }
+
+        private static string BuildUsage(string name, int minArgs, int maxArgs, string hint)
+        {
+            if (!string.IsNullOrWhiteSpace(hint))
+            {
+                return $"Usage: {hint}";
+            }
+
+            StringBuilder.Clear();
+            StringBuilder.Append("Usage: ");
+            StringBuilder.Append(name);
+            if (minArgs <= 0 && (maxArgs == 0 || maxArgs < 0))
+            {
+                return StringBuilder.ToString();
+            }
+
+            int max = maxArgs < 0 ? minArgs : Math.Max(minArgs, maxArgs);
+            for (int i = 1; i <= minArgs; ++i)
+            {
+                StringBuilder.Append(' ');
+                StringBuilder.Append('<');
+                StringBuilder.Append("arg");
+                StringBuilder.Append(i);
+                StringBuilder.Append('>');
+            }
+            for (int i = minArgs + 1; i <= max; ++i)
+            {
+                StringBuilder.Append(' ');
+                StringBuilder.Append('[');
+                StringBuilder.Append("arg");
+                StringBuilder.Append(i);
+                StringBuilder.Append(']');
+            }
+            if (maxArgs < 0)
+            {
+                StringBuilder.Append(' ');
+                StringBuilder.Append("[args...]");
+            }
+
+            return StringBuilder.ToString();
         }
 
         [RegisterCommand(

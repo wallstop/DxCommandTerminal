@@ -27,7 +27,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             string formattedMessage = parameters is { Length: > 0 }
                 ? string.Format(format, parameters)
                 : format;
-            return buffer.HandleLog(formattedMessage, type);
+            buffer.EnqueueMessage(formattedMessage, type, includeStackTrace: true);
+            return true;
         }
     }
 }

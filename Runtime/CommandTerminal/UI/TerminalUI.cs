@@ -166,6 +166,30 @@ namespace WallstopStudios.DxCommandTerminal.UI
         private SerializedObject _serializedObject;
 #endif
 
+        // Editor integration
+#if UNITY_EDITOR
+        [Header("Editor")]
+        [Tooltip(
+            "When enabled (and runtime mode allows Editor), the terminal will auto-discover IArgParser implementations on reload/start."
+        )]
+        [SerializeField]
+        private bool _autoDiscoverParsersInEditor;
+#endif
+
+        [Header("Runtime Mode")]
+        [Tooltip(
+            "Controls which environment-specific features are enabled. Choose explicit modes. None is obsolete."
+        )]
+        [SerializeField]
+#pragma warning disable CS0618 // Type or member is obsolete
+        private Backend.TerminalRuntimeModeFlags _runtimeModes = Backend
+            .TerminalRuntimeModeFlags
+            .None;
+#pragma warning restore CS0618 // Type or member is obsolete
+
+        // Test helper to skip building UI entirely (prevents UI Toolkit panel updates)
+        internal bool disableUIForTests;
+
         private TerminalState _state = TerminalState.Closed;
         private float _currentWindowHeight;
         private float _targetWindowHeight;
@@ -225,6 +249,11 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         private void Awake()
         {
+            Backend.TerminalRuntimeConfig.SetMode(_runtimeModes);
+#if UNITY_EDITOR
+            Backend.TerminalRuntimeConfig.EditorAutoDiscover = _autoDiscoverParsersInEditor;
+#endif
+            Backend.TerminalRuntimeConfig.TryAutoDiscoverParsers();
             switch (_logBufferSize)
             {
                 case <= 0:
@@ -406,6 +435,8 @@ namespace WallstopStudios.DxCommandTerminal.UI
         private void LateUpdate()
         {
             ResetWindowIdempotent();
+            // Drain any cross-thread logs into the main-thread buffer before refreshing UI
+            Terminal.Buffer?.DrainPending();
             HandleHeightAnimation();
             RefreshUI();
             _commandIssuedThisFrame = false;
@@ -720,6 +751,14 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         private void SetupUI()
         {
+            if (disableUIForTests)
+            {
+                return;
+            }
+            if (_uiDocument == null)
+            {
+                _uiDocument = GetComponent<UIDocument>();
+            }
             if (_uiDocument == null)
             {
                 Debug.LogError("No UIDocument assigned, cannot setup UI.", this);
@@ -733,7 +772,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 return;
             }
 
-            SetFont(_persistedFont);
             uiRoot.Clear();
             VisualElement root = new();
             uiRoot.Add(root);
@@ -742,6 +780,11 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             InitializeTheme(root);
             InitializeFont();
+            // Ensure a font is set after initialization
+            if (CurrentFont != null)
+            {
+                SetFont(CurrentFont, persist: false);
+            }
 
             if (!string.IsNullOrWhiteSpace(_runtimeTheme))
             {
@@ -850,7 +893,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
         {
             if (_themePack == null)
             {
-                Debug.LogError("No theme pack assigned, cannot initialize theme.", this);
+                Debug.LogWarning("No theme pack assigned, cannot initialize theme.", this);
                 return;
             }
 
@@ -912,15 +955,25 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
             else
             {
-                Debug.LogError("No available terminal themes.", this);
+                Debug.LogWarning("No available terminal themes.", this);
             }
+        }
+
+        // Support method for tests and tooling to inject theme/font packs before enabling
+        public void InjectPacks(
+            Themes.TerminalThemePack themePack,
+            Themes.TerminalFontPack fontPack
+        )
+        {
+            _themePack = themePack;
+            _fontPack = fontPack;
         }
 
         private void InitializeFont()
         {
             if (_fontPack == null)
             {
-                Debug.LogError("No font pack assigned, cannot initialize font.", this);
+                Debug.LogWarning("No font pack assigned, cannot initialize font.", this);
                 return;
             }
 
@@ -957,7 +1010,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             if (_runtimeFont == null)
             {
-                Debug.LogError("No font assigned, defaulting to Courier New 16pt", this);
+                Debug.LogWarning("No font assigned, defaulting to Courier New 16pt", this);
                 _runtimeFont = Font.CreateDynamicFontFromOSFont("Courier New", 16);
             }
             else
@@ -2136,7 +2189,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         private static void HandleUnityLog(string message, string stackTrace, LogType type)
         {
-            Terminal.Buffer?.HandleLog(message, stackTrace, (TerminalLogType)type);
+            Terminal.Buffer?.EnqueueUnityLog(message, stackTrace, (TerminalLogType)type);
         }
     }
 }

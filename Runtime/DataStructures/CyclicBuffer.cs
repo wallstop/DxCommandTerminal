@@ -3,7 +3,6 @@ namespace WallstopStudios.DxCommandTerminal.DataStructures
     using System;
     using System.Collections;
     using System.Collections.Generic;
-    using System.Linq;
     using Extensions;
 
     [Serializable]
@@ -78,10 +77,13 @@ namespace WallstopStudios.DxCommandTerminal.DataStructures
             Capacity = capacity;
             _position = 0;
             Count = 0;
-            _buffer = new List<T>();
-            foreach (T item in initialContents ?? Enumerable.Empty<T>())
+            _buffer = new List<T>(capacity);
+            if (initialContents != null)
             {
-                Add(item);
+                foreach (T item in initialContents)
+                {
+                    Add(item);
+                }
             }
         }
 

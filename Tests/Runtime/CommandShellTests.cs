@@ -5,6 +5,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     using System.Linq;
     using System.Text;
     using Backend;
+    using Components;
     using NUnit.Framework;
     using UI;
     using UnityEngine;
@@ -25,7 +26,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [UnityTest]
         public IEnumerator UnescapedQuotes()
         {
-            yield return TerminalTests.SpawnTerminal(resetStateOnInit: true);
+            yield return TestSceneHelpers.CleanRestart(resetStateOnInit: true);
 
             int logCount = 0;
             Exception exception = null;
@@ -98,7 +99,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [UnityTest]
         public IEnumerator RunCommandLineNominal()
         {
-            yield return TerminalTests.SpawnTerminal(resetStateOnInit: true);
+            yield return TestSceneHelpers.CleanRestart(resetStateOnInit: true);
 
             int logCount = 0;
             Exception exception = null;
