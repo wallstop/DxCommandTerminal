@@ -3,7 +3,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     using System;
     using System.Collections.Generic;
     using System.Collections.Immutable;
-    using System.Linq;
     using System.Reflection;
     using System.Text;
     using Attributes;
@@ -22,66 +21,93 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             const BindingFlags methodFlags =
                 BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
 
-            Assembly[] ourAssembly = { typeof(BuiltInCommands).Assembly };
-            foreach (
-                Type type in AppDomain
-                    .CurrentDomain.GetAssemblies()
-                    /*
-                        Force our assembly to be processed last so user commands,
-                        if they conflict with in-built ones, are always registered first.
-                     */
-                    .Except(ourAssembly)
-                    .Concat(ourAssembly)
-                    .SelectMany(assembly => assembly.GetTypes())
+            Assembly ourAsm = typeof(BuiltInCommands).Assembly;
+            Assembly[] assemblies = AppDomain.CurrentDomain.GetAssemblies();
+
+            // First process all but our assembly
+            for (int ai = 0; ai < assemblies.Length; ++ai)
+            {
+                Assembly asm = assemblies[ai];
+                if (asm == ourAsm)
+                {
+                    continue;
+                }
+                ProcessAssembly(asm, methodFlags, commands);
+            }
+
+            // Then process our assembly last
+            ProcessAssembly(ourAsm, methodFlags, commands);
+
+            return commands.ToArray();
+
+            static void ProcessAssembly(
+                Assembly assembly,
+                BindingFlags methodFlags,
+                List<(MethodInfo, RegisterCommandAttribute)> commands
             )
             {
+                Type[] types;
                 try
                 {
-                    foreach (MethodInfo method in type.GetMethods(methodFlags))
-                    {
-                        try
-                        {
-                            if (
-                                Attribute.GetCustomAttribute(
-                                    method,
-                                    typeof(RegisterCommandAttribute)
-                                )
-                                is not RegisterCommandAttribute attribute
-                            )
-                            {
-                                continue;
-                            }
-
-                            attribute.NormalizeName(method);
-                            commands.Add((method, attribute));
-                        }
-                        catch (Exception e)
-                        {
-                            if (ShouldIgnoreExceptionForType(type))
-                            {
-                                continue;
-                            }
-
-                            Debug.LogError(
-                                $"Failed to resolve method {method.Name} of type {type.FullName} with exception {e}"
-                            );
-                        }
-                    }
+                    types = assembly.GetTypes();
                 }
-                catch (Exception e)
+                catch
                 {
-                    if (ShouldIgnoreExceptionForType(type))
+                    return;
+                }
+
+                for (int ti = 0; ti < types.Length; ++ti)
+                {
+                    Type type = types[ti];
+                    if (type == null)
                     {
                         continue;
                     }
-
-                    Debug.LogError(
-                        $"Failed to resolve methods for type {type.FullName} with exception {e}"
-                    );
+                    try
+                    {
+                        MethodInfo[] methods = type.GetMethods(methodFlags);
+                        for (int mi = 0; mi < methods.Length; ++mi)
+                        {
+                            MethodInfo method = methods[mi];
+                            try
+                            {
+                                if (
+                                    Attribute.GetCustomAttribute(
+                                        method,
+                                        typeof(RegisterCommandAttribute)
+                                    )
+                                    is not RegisterCommandAttribute attribute
+                                )
+                                {
+                                    continue;
+                                }
+                                attribute.NormalizeName(method);
+                                commands.Add((method, attribute));
+                            }
+                            catch (Exception e)
+                            {
+                                if (ShouldIgnoreExceptionForType(type))
+                                {
+                                    continue;
+                                }
+                                Debug.LogError(
+                                    $"Failed to resolve method {method.Name} of type {type.FullName} with exception {e}"
+                                );
+                            }
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        if (ShouldIgnoreExceptionForType(type))
+                        {
+                            continue;
+                        }
+                        Debug.LogError(
+                            $"Failed to resolve methods for type {type.FullName} with exception {e}"
+                        );
+                    }
                 }
             }
-
-            return commands.ToArray();
         });
 
         private readonly List<CommandArg> _arguments = new(); // Cache for performance
@@ -180,7 +206,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             IgnoringDefaultCommands = ignoreDefaultCommands;
             ClearAutoRegisteredCommands();
             _ignoredCommands.Clear();
-            _ignoredCommands.UnionWith(ignoredCommands ?? Enumerable.Empty<string>());
+            if (ignoreDefaultCommands != null)
+            {
+                _ignoredCommands.UnionWith(ignoredCommands);
+            }
+
             foreach (string ignoredCommand in _ignoredCommands)
             {
                 _commands.Remove(ignoredCommand);
@@ -255,7 +285,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 IssueErrorMessage(
                     $"{command.Key} has an invalid signature. "
                         + $"Expected: {command.Value.Name}(CommandArg[]). "
-                        + $"Found: {command.Value.Name}({string.Join(",", command.Value.GetParameters().Select(p => p.ParameterType.Name))})"
+                        + $"Found: {command.Value.Name}("
+                        + GetParameterTypeNames(command.Value)
+                        + ")"
                 );
             }
         }
@@ -484,6 +516,19 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             return true;
         }
 
+        internal void CopyCommandNamesTo(List<string> buffer)
+        {
+            if (buffer == null)
+            {
+                return;
+            }
+            buffer.Clear();
+            foreach (string key in _commands.Keys)
+            {
+                buffer.Add(key);
+            }
+        }
+
         // ReSharper disable once UnusedMember.Global
         public bool TryGetVariable(string name, out CommandArg variable)
         {
@@ -509,6 +554,33 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 (parameters is { Length: > 0 } ? string.Format(format, parameters) : format)
                 ?? string.Empty;
             _errorMessages.Enqueue(formattedMessage);
+        }
+
+        private static string GetParameterTypeNames(MethodInfo method)
+        {
+            if (method == null)
+            {
+                return string.Empty;
+            }
+
+            ParameterInfo[] parameters = method.GetParameters();
+            if (parameters == null || parameters.Length == 0)
+            {
+                return string.Empty;
+            }
+
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < parameters.Length; ++i)
+            {
+                if (i > 0)
+                {
+                    sb.Append(',');
+                }
+                ParameterInfo p = parameters[i];
+                Type pt = p != null ? p.ParameterType : null;
+                sb.Append(pt != null ? pt.Name : string.Empty);
+            }
+            return sb.ToString();
         }
 
         public static bool TryEatArgument(ref string stringValue, out CommandArg arg)
@@ -605,9 +677,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             {
                 object attr = Attribute.GetCustomAttribute(
                     method,
-                    typeof(Attributes.CommandCompleterAttribute)
+                    typeof(CommandCompleterAttribute)
                 );
-                if (attr is not Attributes.CommandCompleterAttribute cca)
+                if (attr is not CommandCompleterAttribute cca)
                 {
                     return null;
                 }

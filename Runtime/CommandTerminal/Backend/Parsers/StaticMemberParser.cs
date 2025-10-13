@@ -2,7 +2,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend.Parsers
 {
     using System;
     using System.Collections.Generic;
-    using System.Linq;
     using System.Reflection;
 
     public static class StaticMemberParser<T>
@@ -19,13 +18,27 @@ namespace WallstopStudios.DxCommandTerminal.Backend.Parsers
             }
 
             Type type = typeof(T);
-            Properties = type.GetProperties(BindingFlags.Static | BindingFlags.Public)
-                .Where(p => p.PropertyType == type)
-                .ToDictionary(p => p.Name, p => p, StringComparer.OrdinalIgnoreCase);
+            Properties = new Dictionary<string, PropertyInfo>(StringComparer.OrdinalIgnoreCase);
+            PropertyInfo[] props = type.GetProperties(BindingFlags.Static | BindingFlags.Public);
+            for (int i = 0; i < props.Length; ++i)
+            {
+                PropertyInfo p = props[i];
+                if (p != null && p.PropertyType == type)
+                {
+                    Properties[p.Name] = p;
+                }
+            }
 
-            Fields = type.GetFields(BindingFlags.Static | BindingFlags.Public)
-                .Where(f => f.FieldType == type)
-                .ToDictionary(f => f.Name, f => f, StringComparer.OrdinalIgnoreCase);
+            Fields = new Dictionary<string, FieldInfo>(StringComparer.OrdinalIgnoreCase);
+            FieldInfo[] fields = type.GetFields(BindingFlags.Static | BindingFlags.Public);
+            for (int i = 0; i < fields.Length; ++i)
+            {
+                FieldInfo f = fields[i];
+                if (f != null && f.FieldType == type)
+                {
+                    Fields[f.Name] = f;
+                }
+            }
 
             initialized = true;
         }

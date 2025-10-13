@@ -8,7 +8,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor
 
     internal static class TerminalUIRuntimeModeMenu
     {
-        private const string MenuRoot = "Tools/DxCommandTerminal/Runtime Mode/";
+        private const string MenuRoot = "Tools/Wallstop Studios/DxCommandTerminal/Runtime Mode/";
 
         [MenuItem(MenuRoot + "Editor", false, 0)]
         private static void SetEditorMode()

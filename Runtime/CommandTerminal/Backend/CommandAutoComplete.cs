@@ -2,7 +2,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 {
     using System;
     using System.Collections.Generic;
-    using System.Linq;
+    using System.Text;
     using Extensions;
 
     public sealed class CommandAutoComplete
@@ -10,6 +10,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         private readonly SortedSet<string> _knownWords = new(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _duplicateBuffer = new(StringComparer.OrdinalIgnoreCase);
         private readonly List<string> _buffer = new();
+        private readonly List<string> _historyScratch = new();
+        private readonly StringBuilder _sb = new();
 
         private readonly CommandHistory _history;
         private readonly CommandShell _shell;
@@ -22,7 +24,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         {
             _history = history ?? throw new ArgumentNullException(nameof(history));
             _shell = shell ?? throw new ArgumentNullException(nameof(shell));
-            _knownWords.UnionWith(commands ?? Enumerable.Empty<string>());
+            if (commands != null)
+            {
+                _knownWords.UnionWith(commands);
+            }
         }
 
         public string[] Complete(string text)
@@ -91,10 +96,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
 
             // Special case: caret is immediately after the command name with no space.
-            // Treat this as requesting suggestions for the first argument.
+            // Treat this as requesting suggestions for the first argument, but preserve any partial text.
             if (!trailingWhitespace && args.Count == 0)
             {
-                partialArg = string.Empty;
                 argIndex = 0;
             }
 
@@ -111,29 +115,49 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                     _shell
                 );
 
-                foreach (
-                    string suggestion in cmdInfo.completer.Complete(ctx) ?? Array.Empty<string>()
-                )
+                IEnumerable<string> suggestions =
+                    cmdInfo.completer.Complete(ctx) ?? Array.Empty<string>();
+
+                _sb.Clear();
+                _sb.Append(commandName);
+                if (0 < args.Count)
+                {
+                    _sb.Append(' ');
+                    for (int i = 0; i < args.Count; ++i)
+                    {
+                        if (i > 0)
+                        {
+                            _sb.Append(' ');
+                        }
+                        _sb.Append(args[i].contents);
+                    }
+                }
+                if (argIndex >= 0)
+                {
+                    _sb.Append(' ');
+                }
+                string prefixBase = _sb.ToString();
+
+                foreach (string suggestion in suggestions)
                 {
                     if (string.IsNullOrWhiteSpace(suggestion))
                     {
                         continue;
                     }
 
-                    string prefix = commandName;
-                    if (0 < args.Count)
-                    {
-                        prefix += " " + string.Join(" ", args.Select(a => a.contents));
-                    }
-
-                    if (argIndex >= 0)
-                    {
-                        prefix += " ";
-                    }
-
                     string insertion = suggestion;
-                    bool needsQuoting =
-                        !string.IsNullOrEmpty(insertion) && insertion.Any(char.IsWhiteSpace);
+                    bool needsQuoting = false;
+                    if (!string.IsNullOrEmpty(insertion))
+                    {
+                        for (int i = 0; i < insertion.Length; ++i)
+                        {
+                            if (char.IsWhiteSpace(insertion[i]))
+                            {
+                                needsQuoting = true;
+                                break;
+                            }
+                        }
+                    }
                     if (needsQuoting)
                     {
                         // Basic quoting to keep single argument with whitespace
@@ -141,7 +165,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                         insertion = "\"" + insertion.Replace("\"", "\\\"") + "\"";
                     }
 
-                    string full = prefix + insertion;
+                    _sb.Clear();
+                    _sb.Append(prefixBase);
+                    _sb.Append(insertion);
+                    string full = _sb.ToString();
                     string key = full.NeedsLowerInvariantConversion()
                         ? full.ToLowerInvariant()
                         : full;
@@ -185,8 +212,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             buffer.Clear();
 
             // Commands
-            foreach (string command in _shell.Commands.Keys)
+            _historyScratch.Clear();
+            _shell.CopyCommandNamesTo(_historyScratch);
+            for (int ci = 0; ci < _historyScratch.Count; ++ci)
             {
+                string command = _historyScratch[ci];
                 string known = command.NeedsLowerInvariantConversion()
                     ? command.ToLowerInvariant()
                     : command;
@@ -214,13 +244,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
 
             // History
-            foreach (
-                string known in _history.GetHistory(
-                    onlySuccess: onlySuccess,
-                    onlyErrorFree: onlyErrorFree
-                )
-            )
+            _history.CopyHistoryTo(_historyScratch, onlySuccess, onlyErrorFree);
+            for (int hi = 0; hi < _historyScratch.Count; ++hi)
             {
+                string known = _historyScratch[hi];
                 if (!known.StartsWith(input, StringComparison.OrdinalIgnoreCase))
                 {
                     continue;

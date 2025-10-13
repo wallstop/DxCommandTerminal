@@ -4,7 +4,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.Utils
     using System;
     using System.Collections.Generic;
     using System.IO;
-    using System.Linq;
+    using System.Text;
     using System.Reflection;
     using UnityEditor;
     using UnityEngine;
@@ -66,7 +66,19 @@ namespace WallstopStudios.DxCommandTerminal.Editor.Utils
                     }
                     catch (ReflectionTypeLoadException ex)
                     {
-                        types = ex.Types.Where(x => x != null).ToArray();
+                        List<Type> tmp = new List<Type>();
+                        if (ex.Types != null)
+                        {
+                            for (int i = 0; i < ex.Types.Length; ++i)
+                            {
+                                Type t = ex.Types[i];
+                                if (t != null)
+                                {
+                                    tmp.Add(t);
+                                }
+                            }
+                        }
+                        types = tmp.ToArray();
                     }
 
                     foreach (Type t in types)
@@ -79,17 +91,47 @@ namespace WallstopStudios.DxCommandTerminal.Editor.Utils
                 }
 
                 // Simple collision detection by simple name
-                var collisions = candidates
-                    .GroupBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
-                    .Where(g => g.Count() > 1)
-                    .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
+                Dictionary<string, List<Type>> nameGroups = new Dictionary<string, List<Type>>(
+                    StringComparer.OrdinalIgnoreCase
+                );
+                for (int i = 0; i < candidates.Count; ++i)
+                {
+                    Type t = candidates[i];
+                    string key = t.Name ?? string.Empty;
+                    if (!nameGroups.TryGetValue(key, out List<Type> list))
+                    {
+                        list = new List<Type>();
+                        nameGroups[key] = list;
+                    }
+                    list.Add(t);
+                }
+                Dictionary<string, List<Type>> collisions = new Dictionary<string, List<Type>>(
+                    StringComparer.OrdinalIgnoreCase
+                );
+                foreach (KeyValuePair<string, List<Type>> kv in nameGroups)
+                {
+                    if (kv.Value != null && kv.Value.Count > 1)
+                    {
+                        collisions[kv.Key] = kv.Value;
+                    }
+                }
 
                 foreach (Type type in candidates)
                 {
                     if (collisions.ContainsKey(type.Name))
                     {
+                        List<Type> coll = collisions[type.Name];
+                        StringBuilder sb = new StringBuilder();
+                        for (int i = 0; i < coll.Count; ++i)
+                        {
+                            if (i > 0)
+                            {
+                                sb.Append(", ");
+                            }
+                            sb.Append(coll[i]?.FullName);
+                        }
                         Debug.LogWarning(
-                            $"ScriptableObjectSingletonCreator: Multiple types share the name '{type.Name}'. Skipping auto-creation. Add [ScriptableSingletonPath] to disambiguate or rename. Types: {string.Join(", ", collisions[type.Name].Select(x => x.FullName))}"
+                            $"ScriptableObjectSingletonCreator: Multiple types share the name '{type.Name}'. Skipping auto-creation. Add [ScriptableSingletonPath] to disambiguate or rename. Types: {sb.ToString()}"
                         );
                         continue;
                     }

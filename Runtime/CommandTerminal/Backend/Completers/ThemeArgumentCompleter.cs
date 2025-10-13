@@ -2,7 +2,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend.Completers
 {
     using System;
     using System.Collections.Generic;
-    using System.Linq;
     using Themes;
     using UI;
 
@@ -22,20 +21,45 @@ namespace WallstopStudios.DxCommandTerminal.Backend.Completers
                 return Array.Empty<string>();
             }
 
-            IEnumerable<string> friendly = terminal
-                ._themePack._themeNames.Where(n => !string.IsNullOrWhiteSpace(n))
-                .Select(ThemeNameHelper.GetFriendlyThemeName)
-                .Where(n => !string.IsNullOrWhiteSpace(n))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(n => n, StringComparer.OrdinalIgnoreCase);
+            HashSet<string> set = new(StringComparer.OrdinalIgnoreCase);
+            List<string> friendlyList = new();
+            List<string> result = new();
+
+            foreach (string raw in terminal._themePack._themeNames)
+            {
+                if (string.IsNullOrWhiteSpace(raw))
+                {
+                    continue;
+                }
+                string friendly = ThemeNameHelper.GetFriendlyThemeName(raw);
+                if (string.IsNullOrWhiteSpace(friendly))
+                {
+                    continue;
+                }
+                if (set.Add(friendly))
+                {
+                    friendlyList.Add(friendly);
+                }
+            }
+
+            friendlyList.Sort(StringComparer.OrdinalIgnoreCase);
 
             string partial = context.PartialArg ?? string.Empty;
             if (string.IsNullOrWhiteSpace(partial))
             {
-                return friendly;
+                return friendlyList;
             }
 
-            return friendly.Where(n => n.StartsWith(partial, StringComparison.OrdinalIgnoreCase));
+            for (int i = 0; i < friendlyList.Count; ++i)
+            {
+                string n = friendlyList[i];
+                if (n.StartsWith(partial, StringComparison.OrdinalIgnoreCase))
+                {
+                    result.Add(n);
+                }
+            }
+
+            return result;
         }
     }
 }

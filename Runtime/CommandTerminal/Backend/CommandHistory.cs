@@ -2,7 +2,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 {
     using System;
     using System.Collections.Generic;
-    using System.Linq;
     using DataStructures;
 
     public sealed class CommandHistory
@@ -20,10 +19,41 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         public IEnumerable<string> GetHistory(bool onlySuccess, bool onlyErrorFree)
         {
-            return _history
-                .Where(value => !onlySuccess || value.success == true)
-                .Where(value => !onlyErrorFree || value.errorFree == true)
-                .Select(value => value.text);
+            foreach ((string text, bool? success, bool? errorFree) entry in _history)
+            {
+                if (onlySuccess && entry.success != true)
+                {
+                    continue;
+                }
+                if (onlyErrorFree && entry.errorFree != true)
+                {
+                    continue;
+                }
+                yield return entry.text;
+            }
+        }
+
+        public void CopyHistoryTo(List<string> buffer, bool onlySuccess, bool onlyErrorFree)
+        {
+            if (buffer == null)
+            {
+                return;
+            }
+            buffer.Clear();
+            int count = _history.Count;
+            for (int i = 0; i < count; ++i)
+            {
+                (string text, bool? success, bool? errorFree) entry = _history[i];
+                if (onlySuccess && entry.success != true)
+                {
+                    continue;
+                }
+                if (onlyErrorFree && entry.errorFree != true)
+                {
+                    continue;
+                }
+                buffer.Add(entry.text);
+            }
         }
 
         public void Resize(int newCapacity)

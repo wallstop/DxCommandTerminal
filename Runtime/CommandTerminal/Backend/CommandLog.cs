@@ -3,7 +3,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     using System;
     using System.Collections.Concurrent;
     using System.Collections.Generic;
-    using System.Linq;
     using DataStructures;
     using UnityEngine;
 
@@ -57,7 +56,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         {
             _logs = new CyclicBuffer<LogItem>(maxItems);
             this.ignoredLogTypes = new HashSet<TerminalLogType>(
-                ignoredLogTypes ?? Enumerable.Empty<TerminalLogType>()
+                ignoredLogTypes ?? Array.Empty<TerminalLogType>()
             );
         }
 
@@ -163,7 +162,16 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         public int DrainPending()
         {
             int added = 0;
-            while (_pending.TryDequeue(out var item))
+            while (
+                _pending.TryDequeue(
+                    out (
+                        string message,
+                        string stackTrace,
+                        TerminalLogType type,
+                        bool includeStackTrace
+                    ) item
+                )
+            )
             {
                 string stack = item.includeStackTrace ? GetAccurateStackTrace() : item.stackTrace;
                 if (ignoredLogTypes.Contains(item.type))

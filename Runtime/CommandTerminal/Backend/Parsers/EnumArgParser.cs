@@ -2,7 +2,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend.Parsers
 {
     using System;
     using System.Collections.Generic;
-    using System.Linq;
 
     public static class EnumArgParser
     {
@@ -20,12 +19,13 @@ namespace WallstopStudios.DxCommandTerminal.Backend.Parsers
             // Fast name map (case-insensitive)
             if (!CachedNames.TryGetValue(enumType, out Dictionary<string, object> nameMap))
             {
-                nameMap = Enum.GetNames(enumType)
-                    .ToDictionary(
-                        n => n,
-                        n => (object)Enum.Parse(enumType, n),
-                        StringComparer.OrdinalIgnoreCase
-                    );
+                nameMap = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+                string[] names = Enum.GetNames(enumType);
+                for (int i = 0; i < names.Length; ++i)
+                {
+                    string n = names[i];
+                    nameMap[n] = Enum.Parse(enumType, n);
+                }
                 CachedNames[enumType] = nameMap;
             }
 

@@ -2,7 +2,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 {
     using System;
     using System.Collections.Generic;
-    using System.Linq;
     using System.Reflection;
     using WallstopStudios.DxCommandTerminal.Backend.Parsers;
 
@@ -17,11 +16,25 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         }
 
         private static readonly Lazy<MethodInfo> TryGetMethod = new(() =>
-            typeof(CommandArg)
-                .GetMethods(BindingFlags.Instance | BindingFlags.Public)
-                .Where(method => method.Name == nameof(TryGet))
-                .FirstOrDefault(method => method.GetParameters().Length == 1)
-        );
+        {
+            MethodInfo[] methods = typeof(CommandArg).GetMethods(
+                BindingFlags.Instance | BindingFlags.Public
+            );
+            for (int i = 0; i < methods.Length; ++i)
+            {
+                MethodInfo m = methods[i];
+                if (m.Name != nameof(TryGet))
+                {
+                    continue;
+                }
+                ParameterInfo[] p = m.GetParameters();
+                if (p != null && p.Length == 1)
+                {
+                    return m;
+                }
+            }
+            return null;
+        });
         private static readonly Dictionary<Type, object> RegisteredParsers = new();
         private static readonly Dictionary<Type, IArgParser> RegisteredObjectParsers = new();
 
@@ -62,15 +75,14 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             get
             {
                 string cleanedString = contents;
-                cleanedString = IgnoredValuesForCleanedTypes.Aggregate(
-                    cleanedString,
-                    (current, ignoredValue) =>
-                        current.Replace(
-                            ignoredValue,
-                            string.Empty,
-                            StringComparison.OrdinalIgnoreCase
-                        )
-                );
+                foreach (string ignoredValue in IgnoredValuesForCleanedTypes)
+                {
+                    cleanedString = cleanedString.Replace(
+                        ignoredValue,
+                        string.Empty,
+                        StringComparison.OrdinalIgnoreCase
+                    );
+                }
                 return cleanedString;
             }
         }
@@ -239,13 +251,13 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         public static IReadOnlyCollection<Type> GetRegisteredObjectParserTypes()
         {
             // Snapshot for thread-safety and immutability to callers
-            return RegisteredObjectParsers.Keys.ToArray();
+            return new List<Type>(RegisteredObjectParsers.Keys);
         }
 
         public static int DiscoverAndRegisterParsers(bool replaceExisting = false)
         {
             int added = 0;
-            foreach (System.Reflection.Assembly asm in AppDomain.CurrentDomain.GetAssemblies())
+            foreach (Assembly asm in AppDomain.CurrentDomain.GetAssemblies())
             {
                 Type[] types;
                 try
@@ -254,7 +266,19 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 }
                 catch (ReflectionTypeLoadException e)
                 {
-                    types = e.Types.Where(t => t != null).ToArray();
+                    List<Type> tmp = new();
+                    if (e.Types != null)
+                    {
+                        for (int i = 0; i < e.Types.Length; ++i)
+                        {
+                            Type t = e.Types[i];
+                            if (t != null)
+                            {
+                                tmp.Add(t);
+                            }
+                        }
+                    }
+                    types = tmp.ToArray();
                 }
 
                 foreach (Type t in types)
@@ -270,7 +294,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
                     IArgParser instance = null;
                     // Prefer public static Instance singleton if available
-                    var instProp = t.GetProperty(
+                    PropertyInfo instProp = t.GetProperty(
                         "Instance",
                         BindingFlags.Public | BindingFlags.Static
                     );
@@ -283,7 +307,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                     }
                     else
                     {
-                        var instField = t.GetField(
+                        FieldInfo instField = t.GetField(
                             "Instance",
                             BindingFlags.Public | BindingFlags.Static
                         );
@@ -299,7 +323,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                     if (instance == null)
                     {
                         // Fall back to parameterless constructor
-                        var ctor = t.GetConstructor(Type.EmptyTypes);
+                        ConstructorInfo ctor = t.GetConstructor(Type.EmptyTypes);
                         if (ctor != null)
                         {
                             instance = (IArgParser)Activator.CreateInstance(t);

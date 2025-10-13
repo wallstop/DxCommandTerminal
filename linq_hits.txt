@@ -1,0 +1,122 @@
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\CustomEditors\TerminalThemePackEditor.cs:7:using System.Linq;
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\CustomEditors\TerminalThemePackEditor.cs:70:if (!TerminalThemeStyleSheetHelper.GetAvailableThemes(theme).Any())
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\CustomEditors\TerminalThemePackEditor.cs:82:|| _invalidStyles.Any()
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\CustomEditors\TerminalThemePackEditor.cs:197:&& TerminalThemeStyleSheetHelper.GetAvailableThemes(styleSheet).Any()
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\CustomEditors\TerminalUIEditor.cs:8:using System.Linq;
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\CustomEditors\TerminalUIEditor.cs:210:.RegisteredCommands.Value.Select(tuple => tuple.attribute)
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\CustomEditors\TerminalUIEditor.cs:211:.Select(attribute => attribute.Name)
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\CustomEditors\TerminalUIEditor.cs:216:.RegisteredCommands.Value.Select(tuple => tuple.attribute)
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\CustomEditors\TerminalUIEditor.cs:217:.Where(tuple => tuple.Default)
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\CustomEditors\TerminalUIEditor.cs:218:.Select(attribute => attribute.Name)
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\CustomEditors\TerminalUIEditor.cs:223:.RegisteredCommands.Value.Select(tuple => tuple.attribute)
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\CustomEditors\TerminalUIEditor.cs:224:.Where(tuple => !tuple.Default)
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\CustomEditors\TerminalUIEditor.cs:225:.Select(attribute => attribute.Name)
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\CustomEditors\TerminalUIEditor.cs:271:directories.ToArray()
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\CustomEditors\TerminalUIEditor.cs:288:return ordered.ToArray();
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\CustomEditors\TerminalUIEditor.cs:313:if (!_fontPacks.Any())
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\CustomEditors\TerminalUIEditor.cs:319:if (!_themePacks.Any())
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\CustomEditors\TerminalUIEditor.cs:400:return _fontsByPrefix.ToArray()[_fontKey].Value.ToArray()[_secondFontKey].Value;
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\CustomEditors\TerminalUIEditor.cs:477:.RegisteredCommands.Value.Select(tuple => tuple.attribute)
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\CustomEditors\TerminalUIEditor.cs:478:.Select(attribute => attribute.Name)
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\CustomEditors\TerminalUIEditor.cs:483:.RegisteredCommands.Value.Select(tuple => tuple.attribute)
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\CustomEditors\TerminalUIEditor.cs:484:.Where(tuple => tuple.Default)
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\CustomEditors\TerminalUIEditor.cs:485:.Select(attribute => attribute.Name)
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\CustomEditors\TerminalUIEditor.cs:490:.RegisteredCommands.Value.Select(tuple => tuple.attribute)
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\CustomEditors\TerminalUIEditor.cs:491:.Where(tuple => !tuple.Default)
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\CustomEditors\TerminalUIEditor.cs:492:.Select(attribute => attribute.Name)
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\CustomEditors\TerminalUIEditor.cs:736:if (!_themePacks.Any())
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\CustomEditors\TerminalUIEditor.cs:754:_themePacks.Select(themePack => themePack.name).ToArray()
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\CustomEditors\TerminalUIEditor.cs:788:if (!_fontPacks.Any())
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\CustomEditors\TerminalUIEditor.cs:806:_fontPacks.Select(fontPack => fontPack.name).ToArray()
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\CustomEditors\TerminalUIEditor.cs:862:._themePack._themeNames.Select(theme =>
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\CustomEditors\TerminalUIEditor.cs:875:.ToArray()
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\CustomEditors\TerminalUIEditor.cs:991:panelSettingGuids = AssetDatabase.FindAssets("t:PanelSettings", directories.ToArray());
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\CustomEditors\TerminalUIEditor.cs:1046:string[] ignorableCommands = _intermediateResults.ToArray();
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\CustomEditors\TerminalUIEditor.cs:1292:string[] fontKeys = _fontsByPrefix.Keys.ToArray();
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\CustomEditors\TerminalUIEditor.cs:1306:string[] secondFontKeys = availableFonts.Keys.ToArray();
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\Helper\TerminalThemeStyleSheetHelper.cs:7:using System.Linq;
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\Helper\TerminalThemeStyleSheetHelper.cs:146:return selectors.ToArray();
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\Utils\ScriptableObjectSingletonCreator.cs:7:using System.Linq;
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\Utils\ScriptableObjectSingletonCreator.cs:69:types = ex.Types.Where(x => x != null).ToArray();
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\Utils\ScriptableObjectSingletonCreator.cs:83:.GroupBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\Utils\ScriptableObjectSingletonCreator.cs:84:.Where(g => g.Count() > 1)
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\Utils\ScriptableObjectSingletonCreator.cs:85:.ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Editor\Utils\ScriptableObjectSingletonCreator.cs:92:$"ScriptableObjectSingletonCreator: Multiple types share the name '{type.Name}'. Skipping auto-creation. Add [ScriptableSingletonPath] to disambiguate or rename. Types: {string.Join(", ", collisions[type.Name].Select(x => x.FullName))}"
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\Backend\Completers\FontArgumentCompleter.cs:5:using System.Linq;
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\Backend\Completers\FontArgumentCompleter.cs:25:._fontPack._fonts.Where(f => f != null && !string.IsNullOrWhiteSpace(f.name))
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\Backend\Completers\FontArgumentCompleter.cs:26:.Select(f => f.name)
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\Backend\Completers\FontArgumentCompleter.cs:27:.Distinct(StringComparer.OrdinalIgnoreCase)
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\Backend\Completers\FontArgumentCompleter.cs:28:.OrderBy(n => n, StringComparer.OrdinalIgnoreCase);
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\Backend\Completers\FontArgumentCompleter.cs:36:return names.Where(n => n.StartsWith(partial, StringComparison.OrdinalIgnoreCase));
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\Backend\Completers\ThemeArgumentCompleter.cs:5:using System.Linq;
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\Backend\Completers\ThemeArgumentCompleter.cs:26:._themePack._themeNames.Where(n => !string.IsNullOrWhiteSpace(n))
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\Backend\Completers\ThemeArgumentCompleter.cs:27:.Select(ThemeNameHelper.GetFriendlyThemeName)
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\Backend\Completers\ThemeArgumentCompleter.cs:28:.Where(n => !string.IsNullOrWhiteSpace(n))
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\Backend\Completers\ThemeArgumentCompleter.cs:29:.Distinct(StringComparer.OrdinalIgnoreCase)
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\Backend\Completers\ThemeArgumentCompleter.cs:30:.OrderBy(n => n, StringComparer.OrdinalIgnoreCase);
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\Backend\Completers\ThemeArgumentCompleter.cs:38:return friendly.Where(n => n.StartsWith(partial, StringComparison.OrdinalIgnoreCase));
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\Backend\Parsers\EnumArgParser.cs:5:using System.Linq;
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\Backend\Parsers\StaticMemberParser.cs:5:using System.Linq;
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\Backend\Parsers\StaticMemberParser.cs:23:.Where(p => p.PropertyType == type)
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\Backend\Parsers\StaticMemberParser.cs:27:.Where(f => f.FieldType == type)
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\Backend\BuiltinCommands.cs:6:using System.Linq;
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\Backend\BuiltinCommands.cs:43:terminal._themePack._themeNames.Select(ThemeNameHelper.GetFriendlyThemeName)
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\Backend\BuiltinCommands.cs:71:terminal._fontPack._fonts.Select(font => font.name)
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\Backend\BuiltinCommands.cs:569:foreach (string variable in shell.Variables.Keys.ToArray())
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\Backend\BuiltinCommands.cs:670:if (!shell.Variables.Any())
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\Backend\CommandArg.cs:5:using System.Linq;
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\Backend\CommandArg.cs:22:.Where(method => method.Name == nameof(TryGet))
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\Backend\CommandArg.cs:65:cleanedString = IgnoredValuesForCleanedTypes.Aggregate(
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\Backend\CommandArg.cs:242:return RegisteredObjectParsers.Keys.ToArray();
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\Backend\CommandArg.cs:257:types = e.Types.Where(t => t != null).ToArray();
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\Backend\CommandAutoComplete.cs:5:using System.Linq;
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\Backend\CommandAutoComplete.cs:30:return Complete(text: text, buffer: _buffer).ToArray();
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\Backend\CommandAutoComplete.cs:126:prefix += " " + string.Join(" ", args.Select(a => a.contents));
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\Backend\CommandAutoComplete.cs:136:!string.IsNullOrEmpty(insertion) && insertion.Any(char.IsWhiteSpace);
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\Backend\CommandHistory.cs:5:using System.Linq;
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\Backend\CommandHistory.cs:24:.Where(value => !onlySuccess || value.success == true)
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\Backend\CommandHistory.cs:25:.Where(value => !onlyErrorFree || value.errorFree == true)
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\Backend\CommandHistory.cs:26:.Select(value => value.text);
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\Backend\CommandLog.cs:6:using System.Linq;
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\Backend\CommandShell.cs:6:using System.Linq;
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\Backend\CommandShell.cs:84:return commands.ToArray();
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\Backend\CommandShell.cs:258:+ $"Found: {command.Value.Name}({string.Join(",", command.Value.GetParameters().Select(p => p.ParameterType.Name))})"
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\Backend\CommandShell.cs:313:_arguments.Count == 0 ? Array.Empty<CommandArg>() : _arguments.ToArray()
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\Input\TerminalKeyboardController.cs:5:using System.Linq;
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\Input\TerminalKeyboardController.cs:19:.ToArray();
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\UI\TerminalUI.cs:10:using System.Linq;
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\UI\TerminalUI.cs:350:value = stringList.ToList();
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\UI\TerminalUI.cs:353:value = logTypeList.ToList();
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\UI\TerminalUI.cs:356:value = fontList.ToList();
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\UI\TerminalUI.cs:603:_propertyValues[property.name] = currentStringList.ToList();
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\UI\TerminalUI.cs:616:_propertyValues[property.name] = currentLogTypeList.ToList();
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\UI\TerminalUI.cs:1968:.Where(ThemeNameHelper.IsThemeName)
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Runtime\CommandTerminal\UI\TerminalUI.cs:1969:.ToArray();
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Tests\Runtime\Components\TestCommands.cs:5:using System.Linq;
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Tests\Runtime\Components\TestCommands.cs:31:foreach (int i in Enumerable.Range(0, count).OrderBy(_ => random.Next()))
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Tests\Runtime\Components\TestCommands.cs:34:"log " + string.Join("a", Enumerable.Range(0, i).Select(_ => string.Empty))
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Tests\Runtime\Components\TestCommands.cs:39:"log " + string.Join("a", Enumerable.Range(0, 1_000).Select(_ => string.Empty))
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Tests\Runtime\Components\TestCommands.cs:58:string[] logMessages = Enumerable.Range(0, count).Select(i => $"no-op {i}").ToArray();
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Tests\Runtime\ArrayPoolTests.cs:5:using System.Linq;
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Tests\Runtime\ArrayPoolTests.cs:56:Assert.IsTrue(second.All(v => v == 0));
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Tests\Runtime\ArrayPoolTests.cs:72:Assert.IsTrue(second.All(v => v == 0x7F));
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Tests\Runtime\CommandArgTests.cs:6:using System.Linq;
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Tests\Runtime\CommandArgTests.cs:412:.ToArray();
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Tests\Runtime\CommandArgTests.cs:905:.ToArray();
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Tests\Runtime\CommandArgTests.cs:923:.ToArray();
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Tests\Runtime\CommandShellTests.cs:5:using System.Linq;
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Tests\Runtime\CommandShellTests.cs:49:string[] logs = history.GetHistory(true, true).ToArray();
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Tests\Runtime\CommandShellTests.cs:66:logs = history.GetHistory(true, true).ToArray();
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Tests\Runtime\CommandShellTests.cs:122:string[] logs = history.GetHistory(true, true).ToArray();
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Tests\Runtime\CommandShellTests.cs:138:logs = history.GetHistory(true, true).ToArray();
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Tests\Runtime\CommandShellTests.cs:158:logs = history.GetHistory(true, true).ToArray();
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Tests\Runtime\CommandShellTests.cs:182:logs = history.GetHistory(true, true).ToArray();
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Tests\Runtime\CommandShellTests.cs:210:logs = history.GetHistory(true, true).ToArray();
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Tests\Runtime\CommandShellTests.cs:233:char[] quotes = CommandArg.Quotes.ToArray();
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Tests\Runtime\CommandShellTests.cs:259:logs = history.GetHistory(true, true).ToArray();
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Tests\Runtime\CommandShellTests.cs:280:logs = history.GetHistory(true, true).ToArray();
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Tests\Runtime\CommandShellTests.cs:297:logs = history.GetHistory(true, true).ToArray();
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Tests\Runtime\CommandShellTests.cs:305:logs.Count(message => string.Equals(message, "log")),
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Tests\Runtime\TerminalTests.cs:5:using System.Linq;
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Tests\Runtime\TerminalTests.cs:43:string[] events = history.GetHistory(onlySuccess: true, onlyErrorFree: true).ToArray();
+D:\Code\Packages\Packages\com.wallstop-studios.dxcommandterminal\Tests\Runtime\TerminalTests.cs:55:.ToArray();

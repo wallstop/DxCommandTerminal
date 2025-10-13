@@ -7,7 +7,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
     using System;
     using System.Collections.Generic;
     using System.ComponentModel;
-    using System.Linq;
     using Attributes;
     using Backend;
     using Extensions;
@@ -182,9 +181,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
         )]
         [SerializeField]
 #pragma warning disable CS0618 // Type or member is obsolete
-        private Backend.TerminalRuntimeModeFlags _runtimeModes = Backend
-            .TerminalRuntimeModeFlags
-            .None;
+        private TerminalRuntimeModeFlags _runtimeModes = TerminalRuntimeModeFlags.None;
 #pragma warning restore CS0618 // Type or member is obsolete
 
         // Test helper to skip building UI entirely (prevents UI Toolkit panel updates)
@@ -249,11 +246,11 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         private void Awake()
         {
-            Backend.TerminalRuntimeConfig.SetMode(_runtimeModes);
+            TerminalRuntimeConfig.SetMode(_runtimeModes);
 #if UNITY_EDITOR
-            Backend.TerminalRuntimeConfig.EditorAutoDiscover = _autoDiscoverParsersInEditor;
+            TerminalRuntimeConfig.EditorAutoDiscover = _autoDiscoverParsersInEditor;
 #endif
-            Backend.TerminalRuntimeConfig.TryAutoDiscoverParsers();
+            TerminalRuntimeConfig.TryAutoDiscoverParsers();
             switch (_logBufferSize)
             {
                 case <= 0:
@@ -347,13 +344,13 @@ namespace WallstopStudios.DxCommandTerminal.UI
                         switch (value)
                         {
                             case List<string> stringList:
-                                value = stringList.ToList();
+                                value = new List<string>(stringList);
                                 break;
                             case List<TerminalLogType> logTypeList:
-                                value = logTypeList.ToList();
+                                value = new List<TerminalLogType>(logTypeList);
                                 break;
                             case List<Font> fontList:
-                                value = fontList.ToList();
+                                value = new List<Font>(fontList);
                                 break;
                         }
                         _propertyValues[property.name] = value;
@@ -455,16 +452,10 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 {
                     Terminal.Buffer.Resize(logBufferSize);
                 }
-                if (
-                    !Terminal.Buffer.ignoredLogTypes.SetEquals(
-                        _ignoredLogTypes ?? Enumerable.Empty<TerminalLogType>()
-                    )
-                )
+                if (!Terminal.Buffer.ignoredLogTypes.SetEquals(_ignoredLogTypes))
                 {
                     Terminal.Buffer.ignoredLogTypes.Clear();
-                    Terminal.Buffer.ignoredLogTypes.UnionWith(
-                        _ignoredLogTypes ?? Enumerable.Empty<TerminalLogType>()
-                    );
+                    Terminal.Buffer.ignoredLogTypes.UnionWith(_ignoredLogTypes);
                 }
             }
 
@@ -491,9 +482,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             if (
                 Terminal.Shell.IgnoringDefaultCommands != ignoreDefaultCommands
                 || Terminal.Shell.Commands.Count <= 0
-                || !Terminal.Shell.IgnoredCommands.SetEquals(
-                    _disabledCommands ?? Enumerable.Empty<string>()
-                )
+                || !Terminal.Shell.IgnoredCommands.SetEquals(_disabledCommands)
             )
             {
                 Terminal.Shell.ClearAutoRegisteredCommands();
@@ -597,10 +586,10 @@ namespace WallstopStudios.DxCommandTerminal.UI
                         && previousValue is List<string> previousStringList
                     )
                     {
-                        if (!currentStringList.SequenceEqual(previousStringList))
+                        if (!ListsEqual(currentStringList, previousStringList))
                         {
                             needRefresh = true;
-                            _propertyValues[property.name] = currentStringList.ToList();
+                            _propertyValues[property.name] = new List<string>(currentStringList);
                         }
 
                         continue;
@@ -610,10 +599,12 @@ namespace WallstopStudios.DxCommandTerminal.UI
                         && previousValue is List<TerminalLogType> previousLogTypeList
                     )
                     {
-                        if (!currentLogTypeList.SequenceEqual(previousLogTypeList))
+                        if (!ListsEqual(currentLogTypeList, previousLogTypeList))
                         {
                             needRefresh = true;
-                            _propertyValues[property.name] = currentLogTypeList.ToList();
+                            _propertyValues[property.name] = new List<TerminalLogType>(
+                                currentLogTypeList
+                            );
                         }
 
                         continue;
@@ -652,6 +643,32 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 _input.CommandText = string.Empty;
                 ResetAutoComplete();
             }
+        }
+
+        private static bool ListsEqual<T>(List<T> a, List<T> b)
+        {
+            if (ReferenceEquals(a, b))
+            {
+                return true;
+            }
+            if (a is null || b is null)
+            {
+                return false;
+            }
+            int count = a.Count;
+            if (count != b.Count)
+            {
+                return false;
+            }
+            EqualityComparer<T> cmp = EqualityComparer<T>.Default;
+            for (int i = 0; i < count; ++i)
+            {
+                if (!cmp.Equals(a[i], b[i]))
+                {
+                    return false;
+                }
+            }
+            return true;
         }
 
         private static void ConsumeAndLogErrors()
@@ -880,7 +897,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                         string prev = evt.previousValue ?? string.Empty;
                         string curr = evt.newValue ?? string.Empty;
                         bool justTypedSpace = curr.EndsWith(" ") && curr.Length == prev.Length + 1;
-                        if (justTypedSpace && Backend.Terminal.Shell != null)
+                        if (justTypedSpace && Terminal.Shell != null)
                         {
                             string check = curr;
                             // Remove trailing space(s) to isolate the command token
@@ -889,14 +906,9 @@ namespace WallstopStudios.DxCommandTerminal.UI
                                 check = check.TrimEnd();
                             }
 
-                            if (
-                                Backend.CommandShell.TryEatArgument(
-                                    ref check,
-                                    out Backend.CommandArg cmd
-                                )
-                            )
+                            if (CommandShell.TryEatArgument(ref check, out CommandArg cmd))
                             {
-                                if (Backend.Terminal.Shell.Commands.ContainsKey(cmd.contents))
+                                if (Terminal.Shell.Commands.ContainsKey(cmd.contents))
                                 {
                                     // Clear existing suggestions immediately
                                     context._lastCompletionIndex = null;
@@ -986,18 +998,46 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             if (themeNames is { Count: > 0 })
             {
-                _runtimeTheme = themeNames.FirstOrDefault(theme =>
-                    theme.Contains("dark", StringComparison.OrdinalIgnoreCase)
-                );
-                if (_runtimeTheme == null)
+                string runtimeTheme = null;
+                foreach (string themeName in themeNames)
                 {
-                    _runtimeTheme = themeNames.FirstOrDefault(theme =>
-                        theme.Contains("light", StringComparison.OrdinalIgnoreCase)
-                    );
+                    if (
+                        themeName != null
+                        && themeName.Contains("dark", StringComparison.OrdinalIgnoreCase)
+                    )
+                    {
+                        runtimeTheme = themeName;
+                        break;
+                    }
                 }
+
+                _runtimeTheme = runtimeTheme;
                 if (_runtimeTheme == null)
                 {
-                    _runtimeTheme = themeNames.FirstOrDefault();
+                    foreach (string themeName in themeNames)
+                    {
+                        if (
+                            themeName != null
+                            && themeName.Contains("light", StringComparison.OrdinalIgnoreCase)
+                        )
+                        {
+                            runtimeTheme = themeName;
+                            break;
+                        }
+                    }
+
+                    _runtimeTheme = runtimeTheme;
+                }
+                if (_runtimeTheme == null && themeNames.Count > 0)
+                {
+                    foreach (string themeName in themeNames)
+                    {
+                        if (themeName != null)
+                        {
+                            _runtimeTheme = themeName;
+                            break;
+                        }
+                    }
                 }
                 Debug.LogWarning($"Persisted theme not found, defaulting to '{_runtimeTheme}'.");
             }
@@ -1008,10 +1048,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
         }
 
         // Support method for tests and tooling to inject theme/font packs before enabling
-        public void InjectPacks(
-            Themes.TerminalThemePack themePack,
-            Themes.TerminalFontPack fontPack
-        )
+        public void InjectPacks(TerminalThemePack themePack, TerminalFontPack fontPack)
         {
             _themePack = themePack;
             _fontPack = fontPack;
@@ -1034,25 +1071,65 @@ namespace WallstopStudios.DxCommandTerminal.UI
             List<Font> loadedFonts = _fontPack._fonts;
             if (loadedFonts is { Count: > 0 })
             {
-                _runtimeFont = loadedFonts.FirstOrDefault(font =>
-                    font.name.Contains("Mono", StringComparison.OrdinalIgnoreCase)
-                    && font.name.Contains("Regular", StringComparison.OrdinalIgnoreCase)
-                );
+                Font runtimeFont = null;
+                foreach (Font font in loadedFonts)
+                {
+                    if (
+                        font != null
+                        && font.name.Contains("Mono", StringComparison.OrdinalIgnoreCase)
+                        && font.name.Contains("Regular", StringComparison.OrdinalIgnoreCase)
+                    )
+                    {
+                        runtimeFont = font;
+                        break;
+                    }
+                }
+
+                _runtimeFont = runtimeFont;
                 if (_runtimeFont == null)
                 {
-                    _runtimeFont = loadedFonts.FirstOrDefault(font =>
-                        font.name.Contains("Mono", StringComparison.OrdinalIgnoreCase)
-                    );
+                    foreach (Font font in loadedFonts)
+                    {
+                        if (
+                            font != null
+                            && font.name.Contains("Mono", StringComparison.OrdinalIgnoreCase)
+                        )
+                        {
+                            runtimeFont = font;
+                            break;
+                        }
+                    }
+
+                    _runtimeFont = runtimeFont;
                 }
                 if (_runtimeFont == null)
                 {
-                    _runtimeFont = loadedFonts.FirstOrDefault(font =>
-                        font.name.Contains("Regular", StringComparison.OrdinalIgnoreCase)
-                    );
+                    foreach (Font font in loadedFonts)
+                    {
+                        if (
+                            font != null
+                            && font.name.Contains("Regular", StringComparison.OrdinalIgnoreCase)
+                        )
+                        {
+                            runtimeFont = font;
+                            break;
+                        }
+                    }
+
+                    _runtimeFont = runtimeFont;
                 }
-                if (_runtimeFont == null)
+                if (_runtimeFont == null && loadedFonts.Count > 0)
                 {
-                    _runtimeFont = loadedFonts.FirstOrDefault();
+                    foreach (Font font in loadedFonts)
+                    {
+                        if (font != null)
+                        {
+                            runtimeFont = font;
+                            break;
+                        }
+                    }
+
+                    _runtimeFont = runtimeFont;
                 }
             }
 
@@ -1919,18 +1996,30 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 }
 
                 List<string> themeNames = _themePack._themeNames;
-                if (themeNames.Contains(theme, StringComparer.OrdinalIgnoreCase))
+                foreach (string themeName in themeNames)
                 {
-                    validTheme = theme;
-                    return true;
+                    if (string.Equals(themeName, theme, StringComparison.OrdinalIgnoreCase))
+                    {
+                        validTheme = themeName;
+                        return true;
+                    }
                 }
 
                 foreach (string themeName in ThemeNameHelper.GetPossibleThemeNames(theme))
                 {
-                    if (themeNames.Contains(themeName, StringComparer.OrdinalIgnoreCase))
+                    foreach (string existingThemeName in themeNames)
                     {
-                        validTheme = themeName;
-                        return true;
+                        if (
+                            string.Equals(
+                                existingThemeName,
+                                themeName,
+                                StringComparison.OrdinalIgnoreCase
+                            )
+                        )
+                        {
+                            validTheme = existingThemeName;
+                            return true;
+                        }
                     }
                 }
 
@@ -1963,14 +2052,17 @@ namespace WallstopStudios.DxCommandTerminal.UI
                     return;
                 }
 
-                string[] loadedThemes = terminalRoot
-                    .GetClasses()
-                    .Where(ThemeNameHelper.IsThemeName)
-                    .ToArray();
-
-                foreach (string loadedTheme in loadedThemes)
+                List<string> loadedThemes = new List<string>();
+                foreach (string cls in terminalRoot.GetClasses())
                 {
-                    terminalRoot.RemoveFromClassList(loadedTheme);
+                    if (ThemeNameHelper.IsThemeName(cls))
+                    {
+                        loadedThemes.Add(cls);
+                    }
+                }
+                for (int i = 0; i < loadedThemes.Count; ++i)
+                {
+                    terminalRoot.RemoveFromClassList(loadedThemes[i]);
                 }
 
                 terminalRoot.AddToClassList(validatedTheme);

@@ -3,7 +3,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     using System;
     using System.Collections.Generic;
     using System.Diagnostics;
-    using System.Linq;
     using System.Text;
     using Attributes;
     using Themes;
@@ -38,10 +37,17 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return;
             }
 
-            string themes = string.Join(
-                BulkSeparator,
-                terminal._themePack._themeNames.Select(ThemeNameHelper.GetFriendlyThemeName)
-            );
+            StringBuilder.Clear();
+            List<string> names = terminal._themePack._themeNames;
+            for (int i = 0; i < names.Count; ++i)
+            {
+                if (i > 0)
+                {
+                    StringBuilder.Append(BulkSeparator);
+                }
+                StringBuilder.Append(ThemeNameHelper.GetFriendlyThemeName(names[i]));
+            }
+            string themes = StringBuilder.ToString();
             Terminal.Log(TerminalLogType.Message, themes);
         }
 
@@ -66,10 +72,18 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return;
             }
 
-            string themes = string.Join(
-                BulkSeparator,
-                terminal._fontPack._fonts.Select(font => font.name)
-            );
+            StringBuilder.Clear();
+            List<Font> fonts = terminal._fontPack._fonts;
+            for (int i = 0; i < fonts.Count; ++i)
+            {
+                if (i > 0)
+                {
+                    StringBuilder.Append(BulkSeparator);
+                }
+                Font f = fonts[i];
+                StringBuilder.Append(f != null ? f.name : string.Empty);
+            }
+            string themes = StringBuilder.ToString();
             Terminal.Log(TerminalLogType.Message, themes);
         }
 
@@ -159,9 +173,22 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return;
             }
 
-            UnityEngine.Font font = terminal._fontPack._fonts.FirstOrDefault(f =>
-                f != null && string.Equals(f.name, fontName, StringComparison.OrdinalIgnoreCase)
-            );
+            Font font = null;
+            foreach (Font existingFont in terminal._fontPack._fonts)
+            {
+                if (
+                    existingFont != null
+                    && string.Equals(
+                        existingFont.name,
+                        fontName,
+                        StringComparison.OrdinalIgnoreCase
+                    )
+                )
+                {
+                    font = existingFont;
+                    break;
+                }
+            }
 
             if (font == null)
             {
@@ -566,7 +593,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
 
             int variableCount = shell.Variables.Count;
-            foreach (string variable in shell.Variables.Keys.ToArray())
+            List<string> variableNames = new List<string>(shell.Variables.Keys);
+            foreach (string variable in variableNames)
             {
                 shell.ClearVariable(variable);
             }
@@ -667,7 +695,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return;
             }
 
-            if (!shell.Variables.Any())
+            if (shell.Variables.Count == 0)
             {
                 Terminal.Log(TerminalLogType.Warning, "No variables found.");
                 return;

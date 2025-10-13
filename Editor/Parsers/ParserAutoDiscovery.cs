@@ -11,8 +11,8 @@ namespace WallstopStudios.DxCommandTerminal.Editor
         {
             // Editor convenience: allow auto-discovery via config flags
             if (
-                Backend.TerminalRuntimeConfig.ShouldEnableEditorFeatures()
-                && Backend.TerminalRuntimeConfig.EditorAutoDiscover
+                TerminalRuntimeConfig.ShouldEnableEditorFeatures()
+                && TerminalRuntimeConfig.EditorAutoDiscover
             )
             {
                 CommandArg.DiscoverAndRegisterParsers(replaceExisting: false);

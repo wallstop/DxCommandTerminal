@@ -28,6 +28,7 @@
 - Use CSharpier for formatting before committing.
 - Do not use underscores in function names, especially test function names.
 - Do not use regions, anywhere, ever.
+- Avoid `var` wherever possible, use expressive types.
 
 ## Testing Guidelines
 
@@ -39,6 +40,7 @@
 - Do not use Description annotations for tests.
 - Do not create `async Task` test methods - the Unity test runner does not support this. Make do with `IEnumerator` based UnityTestMethods.
 - Do not use `Assert.ThrowsAsync`, it does not exist.
+- When asserting that UnityEngine.Objects are null or not null, please check for null directly (thing != null, thing == null), to properly adhere to Unity Object existence checks.
 
 ## Commit & Pull Request Guidelines
 

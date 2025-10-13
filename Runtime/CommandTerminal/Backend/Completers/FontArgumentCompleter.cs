@@ -2,7 +2,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend.Completers
 {
     using System;
     using System.Collections.Generic;
-    using System.Linq;
     using UI;
 
     public sealed class FontArgumentCompleter : IArgumentCompleter
@@ -21,19 +20,48 @@ namespace WallstopStudios.DxCommandTerminal.Backend.Completers
                 return Array.Empty<string>();
             }
 
-            IEnumerable<string> names = terminal
-                ._fontPack._fonts.Where(f => f != null && !string.IsNullOrWhiteSpace(f.name))
-                .Select(f => f.name)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(n => n, StringComparer.OrdinalIgnoreCase);
+            HashSet<string> set = new(StringComparer.OrdinalIgnoreCase);
+            List<string> namesList = new();
+            List<string> result = new();
+
+            // Collect unique names (case-insensitive)
+            foreach (UnityEngine.Font font in terminal._fontPack._fonts)
+            {
+                if (font == null)
+                {
+                    continue;
+                }
+
+                string name = font.name;
+                if (string.IsNullOrWhiteSpace(name))
+                {
+                    continue;
+                }
+                if (set.Add(name))
+                {
+                    namesList.Add(name);
+                }
+            }
+
+            // Sort deterministically
+            namesList.Sort(StringComparer.OrdinalIgnoreCase);
 
             string partial = context.PartialArg ?? string.Empty;
             if (string.IsNullOrWhiteSpace(partial))
             {
-                return names;
+                return namesList;
             }
 
-            return names.Where(n => n.StartsWith(partial, StringComparison.OrdinalIgnoreCase));
+            for (int i = 0; i < namesList.Count; ++i)
+            {
+                string n = namesList[i];
+                if (n.StartsWith(partial, StringComparison.OrdinalIgnoreCase))
+                {
+                    result.Add(n);
+                }
+            }
+
+            return result;
         }
     }
 }

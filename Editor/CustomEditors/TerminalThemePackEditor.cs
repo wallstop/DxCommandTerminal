@@ -4,7 +4,6 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
     using System;
     using System.Collections.Generic;
     using System.IO;
-    using System.Linq;
     using DxCommandTerminal.Helper;
     using Extensions;
     using Helper;
@@ -67,7 +66,8 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                     continue;
                 }
                 _styleCache.Add(theme);
-                if (!TerminalThemeStyleSheetHelper.GetAvailableThemes(theme).Any())
+                string[] available = TerminalThemeStyleSheetHelper.GetAvailableThemes(theme);
+                if (available == null || available.Length == 0)
                 {
                     _invalidStyles.Add(theme);
                 }
@@ -79,7 +79,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
             if (
                 anyInvalidTheme
                 || _styleCache.Count != themePack._themes.Count
-                || _invalidStyles.Any()
+                || _invalidStyles.Count != 0
             )
             {
                 if (GUILayout.Button("Fix Invalid Themes", _impactButtonStyle))
@@ -159,9 +159,18 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                 themePack._themes.SortByName();
                 themePack._themeNames ??= new List<string>();
                 themePack._themeNames.Clear();
-                themePack._themeNames.AddRange(
-                    themePack._themes.SelectMany(TerminalThemeStyleSheetHelper.GetAvailableThemes)
-                );
+                foreach (StyleSheet style in themePack._themes)
+                {
+                    string[] themes = TerminalThemeStyleSheetHelper.GetAvailableThemes(style);
+                    if (themes == null)
+                    {
+                        continue;
+                    }
+                    for (int i = 0; i < themes.Length; ++i)
+                    {
+                        themePack._themeNames.Add(themes[i]);
+                    }
+                }
             }
 
             void UpdateFromDirectory(string directory)
@@ -192,14 +201,16 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                     StyleSheet styleSheet = AssetDatabase.LoadAssetAtPath<StyleSheet>(
                         styleAssetPath
                     );
-                    if (
-                        styleSheet != null
-                        && TerminalThemeStyleSheetHelper.GetAvailableThemes(styleSheet).Any()
-                        && _styleCache.Add(styleSheet)
-                    )
+                    if (styleSheet != null)
                     {
-                        anyChanged = true;
-                        themePack._themes.Add(styleSheet);
+                        string[] themes = TerminalThemeStyleSheetHelper.GetAvailableThemes(
+                            styleSheet
+                        );
+                        if ((themes != null && themes.Length > 0) && _styleCache.Add(styleSheet))
+                        {
+                            anyChanged = true;
+                            themePack._themes.Add(styleSheet);
+                        }
                     }
                 }
             }
