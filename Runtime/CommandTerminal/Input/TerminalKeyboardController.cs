@@ -10,6 +10,9 @@ namespace WallstopStudios.DxCommandTerminal.Input
     {
         protected static readonly TerminalControlTypes[] ControlTypes = BuildControlTypes();
 
+        protected readonly HashSet<string> _missing = new();
+        protected readonly HashSet<TerminalControlTypes> _terminalControlTypes = new();
+
         private static TerminalControlTypes[] BuildControlTypes()
         {
             Array values = Enum.GetValues(typeof(TerminalControlTypes));
@@ -57,31 +60,14 @@ namespace WallstopStudios.DxCommandTerminal.Input
         public TerminalUI terminal;
 
         [Header("Hotkeys")]
-        [SerializeField]
         public string toggleHotkey = "`";
-
-        [SerializeField]
         public string toggleFullHotkey = "#`";
-
-        [SerializeField]
-        public string toggleLauncherHotkey = "%space";
-
-        [SerializeField]
+        public string toggleLauncherHotkey = "#space";
         public string completeHotkey = "tab";
-
-        [SerializeField]
         public string reverseCompleteHotkey = "#tab";
-
-        [SerializeField]
         public string previousHotkey = "up";
-
-        [SerializeField]
         public List<string> _completeCommandHotkeys = new() { "enter", "return" };
-
-        [SerializeField]
         public string closeHotkey = "escape";
-
-        [SerializeField]
         public string nextHotkey = "down";
 
         [SerializeField]
@@ -134,13 +120,17 @@ namespace WallstopStudios.DxCommandTerminal.Input
         private void VerifyControlOrderIntegrity()
         {
             // Verify set equality without LINQ
-            HashSet<TerminalControlTypes> set = new HashSet<TerminalControlTypes>(_controlOrder);
-            bool equal = set.Count == ControlTypes.Length;
+            _terminalControlTypes.Clear();
+            foreach (TerminalControlTypes controlType in _controlOrder)
+            {
+                _terminalControlTypes.Add(controlType);
+            }
+            bool equal = _terminalControlTypes.Count == ControlTypes.Length;
             if (equal)
             {
                 for (int i = 0; i < ControlTypes.Length; ++i)
                 {
-                    if (!set.Contains(ControlTypes[i]))
+                    if (!_terminalControlTypes.Contains(ControlTypes[i]))
                     {
                         equal = false;
                         break;
@@ -151,19 +141,21 @@ namespace WallstopStudios.DxCommandTerminal.Input
             if (!equal)
             {
                 // Build missing list for message
-                List<string> missing = new List<string>();
+                _missing.Clear();
                 for (int i = 0; i < ControlTypes.Length; ++i)
                 {
                     TerminalControlTypes t = ControlTypes[i];
-                    if (!set.Contains(t))
+                    if (!_terminalControlTypes.Contains(t))
                     {
-                        missing.Add(t.ToString());
+                        _missing.Add(t.ToString());
                     }
                 }
 
-                Debug.LogWarning(
-                    $"Control Order is missing the following controls: [{string.Join(", ", missing)}]. "
-                        + "Input for these will not be handled. Is this intentional?",
+                Debug.LogError(
+                    $"Control Order is missing the following controls: [{string.Join(", ", _missing)}]. "
+                        + "Input for these will not be handled. Is this intentional?"
+                        + $"\nTerminal Control Types: [{string.Join(", ", ControlTypes)}]"
+                        + $"\nExisting Control Types: [{string.Join(", ", _terminalControlTypes)}]",
                     this
                 );
             }
