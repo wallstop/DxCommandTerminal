@@ -64,6 +64,9 @@ namespace WallstopStudios.DxCommandTerminal.Input
         public string toggleFullHotkey = "#`";
 
         [SerializeField]
+        public string toggleLauncherHotkey = "%space";
+
+        [SerializeField]
         public string completeHotkey = "tab";
 
         [SerializeField]
@@ -89,6 +92,7 @@ namespace WallstopStudios.DxCommandTerminal.Input
             TerminalControlTypes.EnterCommand,
             TerminalControlTypes.Previous,
             TerminalControlTypes.Next,
+            TerminalControlTypes.ToggleLauncher,
             TerminalControlTypes.ToggleFull,
             TerminalControlTypes.ToggleSmall,
             TerminalControlTypes.CompleteBackward,
@@ -232,6 +236,15 @@ namespace WallstopStudios.DxCommandTerminal.Input
             terminal.ToggleFull();
         }
 
+        protected virtual void ToggleLauncher()
+        {
+            if (terminal == null)
+            {
+                return;
+            }
+            terminal.ToggleLauncher();
+        }
+
         protected virtual void ToggleSmall()
         {
             if (terminal == null)
@@ -285,6 +298,11 @@ namespace WallstopStudios.DxCommandTerminal.Input
             return InputHelpers.IsKeyPressed(toggleFullHotkey, inputMode);
         }
 
+        protected virtual bool IsToggleLauncherPressed()
+        {
+            return InputHelpers.IsKeyPressed(toggleLauncherHotkey, inputMode);
+        }
+
         protected virtual bool IsToggleSmallPressed()
         {
             return InputHelpers.IsKeyPressed(toggleHotkey, inputMode);
@@ -336,6 +354,8 @@ namespace WallstopStudios.DxCommandTerminal.Input
                     return IsToggleFullPressed();
                 case TerminalControlTypes.ToggleSmall:
                     return IsToggleSmallPressed();
+                case TerminalControlTypes.ToggleLauncher:
+                    return IsToggleLauncherPressed();
                 case TerminalControlTypes.CompleteBackward:
                     return IsCompleteBackwardPressed();
                 case TerminalControlTypes.CompleteForward:
@@ -366,6 +386,9 @@ namespace WallstopStudios.DxCommandTerminal.Input
                     break;
                 case TerminalControlTypes.ToggleSmall:
                     ToggleSmall();
+                    break;
+                case TerminalControlTypes.ToggleLauncher:
+                    ToggleLauncher();
                     break;
                 case TerminalControlTypes.CompleteBackward:
                     CompleteBackward();

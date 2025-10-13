@@ -101,6 +101,8 @@
     position: absolute;
     flex-direction: row;
     left: 2px;
+    gap: 6px;
+    align-items: center;
 }
 
 .terminal-output-label {
@@ -164,6 +166,24 @@
 .terminal-container,
 .log-scroll-view .unity-scroller .unity-scroller__dragger {
     background-color: var(--terminal-bg);
+}
+
+.terminal-container--launcher {
+    background-color: var(--terminal-bg);
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    box-shadow: 0 32px 60px rgba(0, 0, 0, 0.45);
+    transition: transform 0.12s ease, opacity 0.12s ease;
+}
+
+.terminal-button-active {
+    background-color: var(--button-selected-bg);
+    color: var(--button-selected-text);
+}
+
+.terminal-button-active:hover {
+    background-color: var(--button-selected-bg);
+    color: var(--button-selected-text);
 }
 
 .log-scroll-view .unity-scroller .unity-base-slider__dragger {

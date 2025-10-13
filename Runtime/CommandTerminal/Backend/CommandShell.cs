@@ -206,7 +206,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             IgnoringDefaultCommands = ignoreDefaultCommands;
             ClearAutoRegisteredCommands();
             _ignoredCommands.Clear();
-            if (ignoreDefaultCommands != null)
+            if (ignoredCommands != null)
             {
                 _ignoredCommands.UnionWith(ignoredCommands);
             }

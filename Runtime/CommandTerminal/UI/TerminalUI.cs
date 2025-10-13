@@ -38,7 +38,10 @@ namespace WallstopStudios.DxCommandTerminal.UI
         public bool IsClosed =>
             _state != TerminalState.OpenFull
             && _state != TerminalState.OpenSmall
+            && _state != TerminalState.OpenLauncher
             && Mathf.Approximately(_currentWindowHeight, _targetWindowHeight);
+
+        private bool IsLauncherActive => _state == TerminalState.OpenLauncher;
 
         public string CurrentTheme =>
             !string.IsNullOrWhiteSpace(_runtimeTheme) ? _runtimeTheme : _persistedTheme;
@@ -83,6 +86,10 @@ namespace WallstopStudios.DxCommandTerminal.UI
         [Tooltip("Duration for the ease-in animation in seconds")]
         public float easeInTime = 0.5f;
 
+        [Header("Launcher")]
+        [SerializeField]
+        private TerminalLauncherSettings _launcherSettings = new();
+
         [Header("System")]
         [SerializeField]
         private int _logBufferSize = 256;
@@ -112,6 +119,9 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         [DxShowIf(nameof(showGUIButtons))]
         public string fullButtonText = "full";
+
+        [DxShowIf(nameof(showGUIButtons))]
+        public string launcherButtonText = "launcher";
 
         [Header("Hints")]
         public HintDisplayMode hintDisplayMode = HintDisplayMode.AutoCompleteOnly;
@@ -188,6 +198,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
         internal bool disableUIForTests;
 
         private TerminalState _state = TerminalState.Closed;
+        private TerminalState _previousState = TerminalState.Closed;
         private float _currentWindowHeight;
         private float _targetWindowHeight;
         private float _realWindowHeight;
@@ -209,6 +220,8 @@ namespace WallstopStudios.DxCommandTerminal.UI
         private float _initialWindowHeight;
         private float _animationTimer;
         private bool _isAnimating;
+        private LauncherLayoutMetrics _launcherMetrics;
+        private bool _launcherMetricsInitialized;
 
         private VisualElement _terminalContainer;
         private ScrollView _logScrollView;
@@ -632,6 +645,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
         public void SetState(TerminalState newState)
         {
             _commandIssuedThisFrame = true;
+            _previousState = _state;
             _state = newState;
             ResetWindowIdempotent();
             if (_state != TerminalState.Closed)
@@ -736,25 +750,38 @@ namespace WallstopStudios.DxCommandTerminal.UI
         private void ResetWindowIdempotent()
         {
             int height = Screen.height;
+            int width = Screen.width;
             float oldTargetHeight = _targetWindowHeight;
+            bool wasLauncher = _launcherMetricsInitialized;
             try
             {
                 switch (_state)
                 {
                     case TerminalState.OpenSmall:
                     {
+                        _launcherMetricsInitialized = false;
                         _realWindowHeight = height * maxHeight * smallTerminalRatio;
                         _targetWindowHeight = _realWindowHeight;
                         break;
                     }
                     case TerminalState.OpenFull:
                     {
+                        _launcherMetricsInitialized = false;
                         _realWindowHeight = height * maxHeight;
+                        _targetWindowHeight = _realWindowHeight;
+                        break;
+                    }
+                    case TerminalState.OpenLauncher:
+                    {
+                        _launcherMetrics = _launcherSettings.ComputeMetrics(width, height);
+                        _launcherMetricsInitialized = true;
+                        _realWindowHeight = _launcherMetrics.Height;
                         _targetWindowHeight = _realWindowHeight;
                         break;
                     }
                     default:
                     {
+                        _launcherMetricsInitialized = false;
                         _realWindowHeight = height * maxHeight * smallTerminalRatio;
                         _targetWindowHeight = 0;
                         break;
@@ -763,10 +790,19 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
             finally
             {
-                // ReSharper disable once CompareOfFloatsByEqualityOperator
-                if (oldTargetHeight != _targetWindowHeight)
+                if (!Mathf.Approximately(oldTargetHeight, _targetWindowHeight))
                 {
-                    StartHeightAnimation();
+                    bool snapHeight =
+                        (_launcherMetricsInitialized || wasLauncher) && _launcherMetrics.SnapOpen;
+                    if (snapHeight)
+                    {
+                        _currentWindowHeight = _targetWindowHeight;
+                        _isAnimating = false;
+                    }
+                    else
+                    {
+                        StartHeightAnimation();
+                    }
                 }
             }
         }
@@ -1269,6 +1305,108 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
         }
 
+        private void ApplyStandardLayout(float screenWidth)
+        {
+            VisualElement rootElement = _uiDocument.rootVisualElement;
+            rootElement.style.width = screenWidth;
+            rootElement.style.height = _currentWindowHeight;
+
+            _terminalContainer.EnableInClassList("terminal-container--launcher", false);
+            _terminalContainer.style.width = screenWidth;
+            _terminalContainer.style.height = _currentWindowHeight;
+            _terminalContainer.style.left = 0;
+            _terminalContainer.style.top = 0;
+            _terminalContainer.style.paddingLeft = 0;
+            _terminalContainer.style.paddingRight = 0;
+            _terminalContainer.style.paddingTop = 0;
+            _terminalContainer.style.paddingBottom = 0;
+            _terminalContainer.style.marginLeft = 0;
+            _terminalContainer.style.marginRight = 0;
+            _terminalContainer.style.marginTop = 0;
+            _terminalContainer.style.marginBottom = 0;
+            _terminalContainer.style.borderTopLeftRadius = 0;
+            _terminalContainer.style.borderTopRightRadius = 0;
+            _terminalContainer.style.borderBottomLeftRadius = 0;
+            _terminalContainer.style.borderBottomRightRadius = 0;
+            _terminalContainer.style.justifyContent = Justify.FlexStart;
+            _terminalContainer.style.alignItems = Align.Stretch;
+
+            _logScrollView.style.marginTop = 0;
+            _logScrollView.style.height = new StyleLength(StyleKeyword.Null);
+            _logScrollView.style.maxHeight = new StyleLength(StyleKeyword.Null);
+            _logScrollView.style.minHeight = new StyleLength(StyleKeyword.Null);
+            _logScrollView.style.display = DisplayStyle.Flex;
+            _logScrollView.verticalScrollerVisibility = ScrollerVisibility.Auto;
+            _autoCompleteContainer.style.marginBottom = 0;
+            _inputContainer.style.marginBottom = 0;
+
+            EnsureChildOrder(
+                _terminalContainer,
+                _logScrollView,
+                _autoCompleteContainer,
+                _inputContainer
+            );
+        }
+
+        private void ApplyLauncherLayout(float screenWidth, float screenHeight)
+        {
+            VisualElement rootElement = _uiDocument.rootVisualElement;
+            rootElement.style.width = screenWidth;
+            rootElement.style.height = screenHeight;
+
+            _terminalContainer.EnableInClassList("terminal-container--launcher", true);
+            _terminalContainer.style.width = _launcherMetrics.Width;
+            _terminalContainer.style.height = _currentWindowHeight;
+            _terminalContainer.style.left = _launcherMetrics.Left;
+            _terminalContainer.style.top = _launcherMetrics.Top;
+            _terminalContainer.style.justifyContent = Justify.FlexStart;
+            _terminalContainer.style.alignItems = Align.Stretch;
+
+            float horizontalPadding = _launcherMetrics.InsetPadding;
+            float verticalPadding = Mathf.Max(4f, _launcherMetrics.InsetPadding * 0.5f);
+            _terminalContainer.style.paddingLeft = horizontalPadding;
+            _terminalContainer.style.paddingRight = horizontalPadding;
+            _terminalContainer.style.paddingTop = verticalPadding;
+            _terminalContainer.style.paddingBottom = verticalPadding;
+            _terminalContainer.style.marginLeft = 0;
+            _terminalContainer.style.marginRight = 0;
+            _terminalContainer.style.marginTop = 0;
+            _terminalContainer.style.marginBottom = 0;
+
+            float cornerRadius = _launcherMetrics.CornerRadius;
+            _terminalContainer.style.borderTopLeftRadius = cornerRadius;
+            _terminalContainer.style.borderTopRightRadius = cornerRadius;
+            _terminalContainer.style.borderBottomLeftRadius = cornerRadius;
+            _terminalContainer.style.borderBottomRightRadius = cornerRadius;
+
+            _autoCompleteContainer.style.marginBottom = Mathf.Max(2f, verticalPadding * 0.25f);
+            _inputContainer.style.marginBottom = Mathf.Max(4f, verticalPadding * 0.5f);
+
+            if (_launcherMetrics.HistoryHeight > 0f)
+            {
+                _logScrollView.style.display = DisplayStyle.Flex;
+                _logScrollView.style.height = _launcherMetrics.HistoryHeight;
+                _logScrollView.style.maxHeight = _launcherMetrics.HistoryHeight;
+                _logScrollView.style.minHeight = 0;
+                _logScrollView.style.marginTop = Mathf.Max(6f, verticalPadding * 0.35f);
+            }
+            else
+            {
+                _logScrollView.style.display = DisplayStyle.None;
+                _logScrollView.style.height = 0;
+                _logScrollView.style.maxHeight = 0;
+                _logScrollView.style.marginTop = 0;
+            }
+
+            _logScrollView.verticalScrollerVisibility = ScrollerVisibility.Hidden;
+            EnsureChildOrder(
+                _terminalContainer,
+                _autoCompleteContainer,
+                _inputContainer,
+                _logScrollView
+            );
+        }
+
         private void RefreshUI()
         {
             if (_terminalContainer == null)
@@ -1281,11 +1419,24 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 return;
             }
 
-            _uiDocument.rootVisualElement.style.height = _currentWindowHeight;
+            float screenWidth = Screen.width;
+            float screenHeight = Screen.height;
+
+            if (IsLauncherActive && _launcherMetricsInitialized)
+            {
+                ApplyLauncherLayout(screenWidth, screenHeight);
+            }
+            else
+            {
+                ApplyStandardLayout(screenWidth);
+            }
+
             _terminalContainer.style.height = _currentWindowHeight;
-            _terminalContainer.style.width = Screen.width;
+
             DisplayStyle commandInputStyle =
-                _currentWindowHeight <= 30 ? DisplayStyle.None : DisplayStyle.Flex;
+                !IsLauncherActive && _currentWindowHeight <= 30
+                    ? DisplayStyle.None
+                    : DisplayStyle.Flex;
 
             _needsFocus |=
                 _inputContainer.resolvedStyle.display != commandInputStyle
@@ -1294,6 +1445,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             RefreshLogs();
             RefreshAutoCompleteHints();
+
             string commandInput = _input.CommandText;
             if (!string.Equals(_commandInput.value, commandInput))
             {
@@ -1319,11 +1471,13 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 _needsScrollToEnd
                 && _logScrollView != null
                 && _logScrollView.style.display != DisplayStyle.None
+                && !IsLauncherActive
             )
             {
                 ScrollToEnd();
                 _needsScrollToEnd = false;
             }
+
             RefreshStateButtons();
         }
 
@@ -1353,7 +1507,14 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 return;
             }
 
+            if (IsLauncherActive && _launcherMetricsInitialized)
+            {
+                RefreshLauncherHistory(logs);
+                return;
+            }
+
             VisualElement content = _logScrollView.contentContainer;
+            _logScrollView.style.display = DisplayStyle.Flex;
             bool dirty = _lastSeenBufferVersion != Terminal.Buffer.Version;
             if (content.childCount != logs.Count)
             {
@@ -1383,30 +1544,31 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 for (int i = 0; i < logs.Count && i < content.childCount; ++i)
                 {
                     VisualElement item = content[i];
+                    LogItem logItem = logs[i];
                     switch (item)
                     {
                         case TextField logText:
                         {
-                            LogItem logItem = logs[i];
-                            SetupLogText(logText, logItem);
+                            ApplyLogStyling(logText, logItem);
                             logText.value = logItem.message;
                             break;
                         }
                         case Label logLabel:
                         {
-                            LogItem logItem = logs[i];
-                            SetupLogText(logLabel, logItem);
+                            ApplyLogStyling(logLabel, logItem);
                             logLabel.text = logItem.message;
                             break;
                         }
                         case Button button:
                         {
-                            LogItem logItem = logs[i];
-                            SetupLogText(button, logItem);
+                            ApplyLogStyling(button, logItem);
                             button.text = logItem.message;
                             break;
                         }
                     }
+
+                    item.style.opacity = 1f;
+                    item.style.display = DisplayStyle.Flex;
                 }
 
                 if (logs.Count == content.childCount)
@@ -1414,34 +1576,108 @@ namespace WallstopStudios.DxCommandTerminal.UI
                     _lastSeenBufferVersion = Terminal.Buffer.Version;
                 }
             }
-            return;
+        }
 
-            static void SetupLogText(VisualElement logText, LogItem log)
+        private void RefreshLauncherHistory(IReadOnlyList<LogItem> logs)
+        {
+            VisualElement content = _logScrollView.contentContainer;
+            int visibleCount = Mathf.Min(_launcherMetrics.HistoryVisibleEntryCount, logs.Count);
+
+            if (_launcherMetrics.HistoryHeight <= 0f || visibleCount <= 0)
             {
-                logText.EnableInClassList(
-                    "terminal-output-label--shell",
-                    log.type == TerminalLogType.ShellMessage
-                );
-                logText.EnableInClassList(
-                    "terminal-output-label--error",
-                    log.type
-                        is TerminalLogType.Exception
-                            or TerminalLogType.Error
-                            or TerminalLogType.Assert
-                );
-                logText.EnableInClassList(
-                    "terminal-output-label--warning",
-                    log.type == TerminalLogType.Warning
-                );
-                logText.EnableInClassList(
-                    "terminal-output-label--message",
-                    log.type == TerminalLogType.Message
-                );
-                logText.EnableInClassList(
-                    "terminal-output-label--input",
-                    log.type == TerminalLogType.Input
-                );
+                _logScrollView.style.display = DisplayStyle.None;
+                for (int i = 0; i < content.childCount; ++i)
+                {
+                    content[i].style.display = DisplayStyle.None;
+                }
+                _lastSeenBufferVersion = Terminal.Buffer?.Version;
+                _needsScrollToEnd = false;
+                return;
             }
+
+            _logScrollView.style.display = DisplayStyle.Flex;
+
+            if (content.childCount < visibleCount)
+            {
+                for (int i = content.childCount; i < visibleCount; ++i)
+                {
+                    Label logText = new();
+                    logText.AddToClassList("terminal-output-label");
+                    content.Add(logText);
+                }
+            }
+
+            for (int i = visibleCount; i < content.childCount; ++i)
+            {
+                content[i].style.display = DisplayStyle.None;
+            }
+
+            float denominator = Mathf.Max(1f, visibleCount - 1f);
+            for (int i = 0; i < visibleCount; ++i)
+            {
+                int logIndex = logs.Count - 1 - i;
+                VisualElement element = content[i];
+                LogItem logItem = logs[logIndex];
+
+                switch (element)
+                {
+                    case TextField logText:
+                    {
+                        ApplyLogStyling(logText, logItem);
+                        logText.value = logItem.message;
+                        break;
+                    }
+                    case Label logLabel:
+                    {
+                        ApplyLogStyling(logLabel, logItem);
+                        logLabel.text = logItem.message;
+                        break;
+                    }
+                    case Button button:
+                    {
+                        ApplyLogStyling(button, logItem);
+                        button.text = logItem.message;
+                        break;
+                    }
+                }
+
+                element.style.display = DisplayStyle.Flex;
+                float fade =
+                    visibleCount == 1
+                        ? 1f
+                        : Mathf.Pow(1f - (i / denominator), _launcherMetrics.HistoryFadeExponent);
+                element.style.opacity = Mathf.Clamp01(fade);
+            }
+
+            _lastSeenBufferVersion = Terminal.Buffer.Version;
+            _needsScrollToEnd = false;
+        }
+
+        private static void ApplyLogStyling(VisualElement logText, LogItem log)
+        {
+            logText.EnableInClassList(
+                "terminal-output-label--shell",
+                log.type == TerminalLogType.ShellMessage
+            );
+            logText.EnableInClassList(
+                "terminal-output-label--error",
+                log.type
+                    is TerminalLogType.Exception
+                        or TerminalLogType.Error
+                        or TerminalLogType.Assert
+            );
+            logText.EnableInClassList(
+                "terminal-output-label--warning",
+                log.type == TerminalLogType.Warning
+            );
+            logText.EnableInClassList(
+                "terminal-output-label--message",
+                log.type == TerminalLogType.Message
+            );
+            logText.EnableInClassList(
+                "terminal-output-label--input",
+                log.type == TerminalLogType.Input
+            );
         }
 
         private void ScrollToEnd()
@@ -1687,123 +1923,114 @@ namespace WallstopStudios.DxCommandTerminal.UI
             {
                 _autoCompleteContainer.Add(element);
             }
-        }
 
-        private void RefreshStateButtons()
-        {
-            if (_stateButtonContainer == null)
+            float desiredTop = _currentWindowHeight;
+            float desiredLeft = 2f;
+            float desiredWidth = Screen.width;
+            if (IsLauncherActive && _launcherMetricsInitialized)
             {
-                return;
+                desiredTop = _launcherMetrics.Top + _currentWindowHeight + 12f;
+                desiredLeft = _launcherMetrics.Left;
+                desiredWidth = _launcherMetrics.Width;
             }
 
-            _stateButtonContainer.style.top = _currentWindowHeight;
-            DisplayStyle displayStyle = showGUIButtons ? DisplayStyle.Flex : DisplayStyle.None;
+            _stateButtonContainer.style.top = desiredTop;
+            _stateButtonContainer.style.left = desiredLeft;
+            _stateButtonContainer.style.width = desiredWidth;
+            _stateButtonContainer.style.display = showGUIButtons
+                ? DisplayStyle.Flex
+                : DisplayStyle.None;
+            _stateButtonContainer.style.justifyContent =
+                IsLauncherActive && _launcherMetricsInitialized
+                    ? Justify.Center
+                    : Justify.FlexStart;
 
-            for (int i = 0; i < _stateButtonContainer.childCount; ++i)
-            {
-                VisualElement child = _stateButtonContainer[i];
-                child.style.display = displayStyle;
-            }
+            Button primaryButton;
+            Button secondaryButton;
+            Button launcherButton;
+            EnsureButtons(out primaryButton, out secondaryButton, out launcherButton);
 
-            if (!showGUIButtons)
-            {
-                return;
-            }
+            DisplayStyle buttonDisplay = showGUIButtons ? DisplayStyle.Flex : DisplayStyle.None;
 
-            Button firstButton;
-            Button secondButton;
-            if (_stateButtonContainer.childCount == 0)
-            {
-                firstButton = new Button(FirstClicked) { name = "StateButton1" };
-                firstButton.AddToClassList("terminal-button");
-                firstButton.style.display = displayStyle;
-                _stateButtonContainer.Add(firstButton);
+            UpdateButton(primaryButton, GetPrimaryLabel(), _state == TerminalState.OpenSmall);
+            UpdateButton(secondaryButton, GetSecondaryLabel(), _state == TerminalState.OpenFull);
+            UpdateButton(launcherButton, launcherButtonText, IsLauncherActive);
 
-                secondButton = new Button(SecondClicked) { name = "StateButton2" };
-                secondButton.AddToClassList("terminal-button");
-                secondButton.style.display = displayStyle;
-                _stateButtonContainer.Add(secondButton);
-            }
-            else
-            {
-                firstButton = _stateButtonContainer[0] as Button;
-                if (firstButton == null)
-                {
-                    return;
-                }
-                secondButton = _stateButtonContainer[1] as Button;
-                if (secondButton == null)
-                {
-                    return;
-                }
-            }
-
-            _inputCaretLabel.text = _inputCaret;
-
-            switch (_state)
-            {
-                case TerminalState.Closed:
-                    if (!string.IsNullOrWhiteSpace(smallButtonText))
-                    {
-                        firstButton.text = smallButtonText;
-                    }
-                    if (!string.IsNullOrWhiteSpace(fullButtonText))
-                    {
-                        secondButton.text = fullButtonText;
-                    }
-                    break;
-                case TerminalState.OpenSmall:
-                    if (!string.IsNullOrWhiteSpace(closeButtonText))
-                    {
-                        firstButton.text = closeButtonText;
-                    }
-                    if (!string.IsNullOrWhiteSpace(fullButtonText))
-                    {
-                        secondButton.text = fullButtonText;
-                    }
-                    break;
-                case TerminalState.OpenFull:
-                    if (!string.IsNullOrWhiteSpace(closeButtonText))
-                    {
-                        firstButton.text = closeButtonText;
-                    }
-                    if (!string.IsNullOrWhiteSpace(smallButtonText))
-                    {
-                        secondButton.text = smallButtonText;
-                    }
-                    break;
-                default:
-                    throw new InvalidEnumArgumentException(
-                        nameof(_state),
-                        (int)_state,
-                        typeof(TerminalState)
-                    );
-            }
             return;
+
+            void EnsureButtons(out Button primary, out Button secondary, out Button launcher)
+            {
+                while (_stateButtonContainer.childCount < 3)
+                {
+                    int index = _stateButtonContainer.childCount;
+                    Button button = index switch
+                    {
+                        0 => new Button(FirstClicked) { name = "StateButton1" },
+                        1 => new Button(SecondClicked) { name = "StateButton2" },
+                        _ => new Button(LauncherClicked) { name = "StateButton3" },
+                    };
+                    button.AddToClassList("terminal-button");
+                    _stateButtonContainer.Add(button);
+                }
+
+                primary = _stateButtonContainer[0] as Button;
+                secondary = _stateButtonContainer[1] as Button;
+                launcher = _stateButtonContainer[2] as Button;
+            }
+
+            string GetPrimaryLabel()
+            {
+                return _state switch
+                {
+                    TerminalState.Closed => smallButtonText,
+                    TerminalState.OpenSmall => closeButtonText,
+                    TerminalState.OpenFull => closeButtonText,
+                    TerminalState.OpenLauncher => closeButtonText,
+                    _ => string.Empty,
+                };
+            }
+
+            string GetSecondaryLabel()
+            {
+                return _state switch
+                {
+                    TerminalState.Closed => fullButtonText,
+                    TerminalState.OpenSmall => fullButtonText,
+                    TerminalState.OpenFull => smallButtonText,
+                    TerminalState.OpenLauncher => fullButtonText,
+                    _ => string.Empty,
+                };
+            }
+
+            void UpdateButton(Button button, string text, bool isActive)
+            {
+                if (button == null)
+                {
+                    return;
+                }
+
+                bool shouldShow =
+                    buttonDisplay == DisplayStyle.Flex && !string.IsNullOrWhiteSpace(text);
+                button.style.display = shouldShow ? DisplayStyle.Flex : DisplayStyle.None;
+                if (shouldShow)
+                {
+                    button.text = text;
+                }
+                button.EnableInClassList("terminal-button-active", shouldShow && isActive);
+            }
 
             void FirstClicked()
             {
                 switch (_state)
                 {
                     case TerminalState.Closed:
-                        if (!string.IsNullOrWhiteSpace(smallButtonText))
-                        {
-                            SetState(TerminalState.OpenSmall);
-                        }
+                        ToggleSmall();
                         break;
                     case TerminalState.OpenSmall:
                     case TerminalState.OpenFull:
-                        if (!string.IsNullOrWhiteSpace(closeButtonText))
-                        {
-                            SetState(TerminalState.Closed);
-                        }
+                    case TerminalState.OpenLauncher:
+                        Close();
                         break;
-                    default:
-                        throw new InvalidEnumArgumentException(
-                            nameof(_state),
-                            (int)_state,
-                            typeof(TerminalState)
-                        );
                 }
             }
 
@@ -1813,24 +2040,47 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 {
                     case TerminalState.Closed:
                     case TerminalState.OpenSmall:
-                        if (!string.IsNullOrWhiteSpace(fullButtonText))
-                        {
-                            SetState(TerminalState.OpenFull);
-                        }
+                    case TerminalState.OpenLauncher:
+                        ToggleFull();
                         break;
                     case TerminalState.OpenFull:
-                        if (!string.IsNullOrWhiteSpace(smallButtonText))
-                        {
-                            SetState(TerminalState.OpenSmall);
-                        }
+                        ToggleSmall();
                         break;
-                    default:
-                        throw new InvalidEnumArgumentException(
-                            nameof(_state),
-                            (int)_state,
-                            typeof(TerminalState)
-                        );
                 }
+            }
+
+            void LauncherClicked()
+            {
+                ToggleLauncher();
+            }
+        }
+
+        private static void EnsureChildOrder(
+            VisualElement parent,
+            params VisualElement[] orderedChildren
+        )
+        {
+            if (parent == null)
+            {
+                return;
+            }
+
+            int insertIndex = 0;
+            foreach (VisualElement child in orderedChildren)
+            {
+                if (child == null || child.parent != parent)
+                {
+                    continue;
+                }
+
+                int currentIndex = parent.IndexOf(child);
+                if (currentIndex != insertIndex)
+                {
+                    parent.Remove(child);
+                    parent.Insert(insertIndex, child);
+                }
+
+                insertIndex++;
             }
         }
 
@@ -2109,6 +2359,37 @@ namespace WallstopStudios.DxCommandTerminal.UI
             ToggleState(TerminalState.OpenFull);
         }
 
+        public void ToggleLauncher()
+        {
+            ToggleState(TerminalState.OpenLauncher);
+        }
+
+        // Internal test hooks
+        internal TerminalState CurrentStateForTests => _state;
+
+        internal bool LauncherMetricsInitializedForTests => _launcherMetricsInitialized;
+
+        internal ScrollView LogScrollViewForTests => _logScrollView;
+
+        internal void SetLauncherMetricsForTests(
+            LauncherLayoutMetrics metrics,
+            bool initialized = true
+        )
+        {
+            _launcherMetrics = metrics;
+            _launcherMetricsInitialized = initialized;
+        }
+
+        internal void SetLogScrollViewForTests(ScrollView scrollView)
+        {
+            _logScrollView = scrollView;
+        }
+
+        internal void RefreshLauncherHistoryForTests(IReadOnlyList<LogItem> logs)
+        {
+            RefreshLauncherHistory(logs);
+        }
+
         public void EnterCommand()
         {
             if (_state == TerminalState.Closed)
@@ -2251,6 +2532,144 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
         }
 
+        private void RefreshStateButtons()
+        {
+            if (_stateButtonContainer == null)
+            {
+                return;
+            }
+
+            float desiredTop = _currentWindowHeight;
+            float desiredLeft = 2f;
+            float desiredWidth = Screen.width;
+            if (IsLauncherActive && _launcherMetricsInitialized)
+            {
+                desiredTop = _launcherMetrics.Top + _currentWindowHeight + 12f;
+                desiredLeft = _launcherMetrics.Left;
+                desiredWidth = _launcherMetrics.Width;
+            }
+
+            _stateButtonContainer.style.top = desiredTop;
+            _stateButtonContainer.style.left = desiredLeft;
+            _stateButtonContainer.style.width = desiredWidth;
+            _stateButtonContainer.style.display = showGUIButtons
+                ? DisplayStyle.Flex
+                : DisplayStyle.None;
+            _stateButtonContainer.style.justifyContent =
+                IsLauncherActive && _launcherMetricsInitialized
+                    ? Justify.Center
+                    : Justify.FlexStart;
+
+            Button primaryButton;
+            Button secondaryButton;
+            Button launcherButton;
+            EnsureButtons(out primaryButton, out secondaryButton, out launcherButton);
+
+            DisplayStyle buttonDisplay = showGUIButtons ? DisplayStyle.Flex : DisplayStyle.None;
+
+            UpdateButton(primaryButton, GetPrimaryLabel(), _state == TerminalState.OpenSmall);
+            UpdateButton(secondaryButton, GetSecondaryLabel(), _state == TerminalState.OpenFull);
+            UpdateButton(launcherButton, launcherButtonText, IsLauncherActive);
+
+            return;
+
+            void EnsureButtons(out Button primary, out Button secondary, out Button launcher)
+            {
+                while (_stateButtonContainer.childCount < 3)
+                {
+                    int index = _stateButtonContainer.childCount;
+                    Button button = index switch
+                    {
+                        0 => new Button(FirstClicked) { name = "StateButton1" },
+                        1 => new Button(SecondClicked) { name = "StateButton2" },
+                        _ => new Button(LauncherClicked) { name = "StateButton3" },
+                    };
+                    button.AddToClassList("terminal-button");
+                    _stateButtonContainer.Add(button);
+                }
+
+                primary = _stateButtonContainer[0] as Button;
+                secondary = _stateButtonContainer[1] as Button;
+                launcher = _stateButtonContainer[2] as Button;
+            }
+
+            string GetPrimaryLabel()
+            {
+                return _state switch
+                {
+                    TerminalState.Closed => smallButtonText,
+                    TerminalState.OpenSmall => closeButtonText,
+                    TerminalState.OpenFull => closeButtonText,
+                    TerminalState.OpenLauncher => closeButtonText,
+                    _ => string.Empty,
+                };
+            }
+
+            string GetSecondaryLabel()
+            {
+                return _state switch
+                {
+                    TerminalState.Closed => fullButtonText,
+                    TerminalState.OpenSmall => fullButtonText,
+                    TerminalState.OpenFull => smallButtonText,
+                    TerminalState.OpenLauncher => fullButtonText,
+                    _ => string.Empty,
+                };
+            }
+
+            void UpdateButton(Button button, string text, bool isActive)
+            {
+                if (button == null)
+                {
+                    return;
+                }
+
+                bool shouldShow =
+                    buttonDisplay == DisplayStyle.Flex && !string.IsNullOrWhiteSpace(text);
+                button.style.display = shouldShow ? DisplayStyle.Flex : DisplayStyle.None;
+                if (shouldShow)
+                {
+                    button.text = text;
+                }
+                button.EnableInClassList("terminal-button-active", shouldShow && isActive);
+            }
+
+            void FirstClicked()
+            {
+                switch (_state)
+                {
+                    case TerminalState.Closed:
+                        ToggleSmall();
+                        break;
+                    case TerminalState.OpenSmall:
+                    case TerminalState.OpenFull:
+                    case TerminalState.OpenLauncher:
+                        Close();
+                        break;
+                }
+            }
+
+            void SecondClicked()
+            {
+                switch (_state)
+                {
+                    case TerminalState.Closed:
+                    case TerminalState.OpenSmall:
+                    case TerminalState.OpenLauncher:
+                        ToggleFull();
+                        break;
+                    case TerminalState.OpenFull:
+                        ToggleSmall();
+                        break;
+                }
+            }
+
+            void LauncherClicked()
+            {
+                ToggleLauncher();
+            }
+        }
+
         private void StartHeightAnimation()
         {
             if (Mathf.Approximately(_currentWindowHeight, _targetWindowHeight))
@@ -2277,15 +2696,22 @@ namespace WallstopStudios.DxCommandTerminal.UI
             float animationDuration;
             bool isExpanding = _targetWindowHeight > _initialWindowHeight;
 
+            bool useLauncherTiming =
+                IsLauncherActive || _previousState == TerminalState.OpenLauncher;
+
             if (isExpanding)
             {
                 selectedCurve = easeOutCurve;
-                animationDuration = easeOutTime;
+                animationDuration = useLauncherTiming
+                    ? Mathf.Max(_launcherMetrics.AnimationDuration, 0.0001f)
+                    : easeOutTime;
             }
             else
             {
                 selectedCurve = easeInCurve;
-                animationDuration = easeInTime;
+                animationDuration = useLauncherTiming
+                    ? Mathf.Max(_launcherMetrics.AnimationDuration, 0.0001f)
+                    : easeInTime;
             }
 
             if (animationDuration <= 0f)
