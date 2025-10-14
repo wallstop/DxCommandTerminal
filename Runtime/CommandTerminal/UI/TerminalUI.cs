@@ -22,6 +22,8 @@ namespace WallstopStudios.DxCommandTerminal.UI
     {
         private const string TerminalRootName = "TerminalRoot";
         private const float LauncherAutoCompleteSpacing = 6f;
+        private const float LauncherEstimatedSuggestionRowHeight = 28f;
+        private const float LauncherEstimatedHistoryRowHeight = 24f;
 
         private enum ScrollBarCaptureState
         {
@@ -1371,7 +1373,15 @@ namespace WallstopStudios.DxCommandTerminal.UI
             _autoCompleteContainer.style.top = new StyleLength(StyleKeyword.Null);
             _autoCompleteContainer.style.width = new StyleLength(StyleKeyword.Null);
             _autoCompleteContainer.style.maxHeight = new StyleLength(StyleKeyword.Null);
+            _autoCompleteContainer.style.maxWidth = new StyleLength(StyleKeyword.Null);
+            _autoCompleteContainer.style.height = new StyleLength(StyleKeyword.Null);
             _autoCompleteContainer.style.marginBottom = 0;
+            _autoCompleteContainer.style.marginTop = 0;
+            _autoCompleteContainer.style.marginLeft = 0;
+            _autoCompleteContainer.style.marginRight = 0;
+            _autoCompleteContainer.style.flexGrow = StyleKeyword.Null;
+            _autoCompleteContainer.style.flexShrink = StyleKeyword.Null;
+            _autoCompleteContainer.style.alignSelf = StyleKeyword.Null;
             _inputContainer.style.marginBottom = 0;
 
             EnsureChildOrder(
@@ -1437,11 +1447,25 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             _logScrollView.verticalScrollerVisibility = ScrollerVisibility.Auto;
 
-            _autoCompleteContainer.style.position = Position.Absolute;
+            _autoCompleteContainer.style.position = Position.Relative;
+            _autoCompleteContainer.style.left = new StyleLength(StyleKeyword.Null);
+            _autoCompleteContainer.style.top = new StyleLength(StyleKeyword.Null);
+            _autoCompleteContainer.style.width = new StyleLength(StyleKeyword.Null);
             _autoCompleteContainer.style.maxHeight = _launcherMetrics.HistoryHeight;
             _autoCompleteContainer.style.display = DisplayStyle.None;
+            _autoCompleteContainer.style.marginTop = 0;
+            _autoCompleteContainer.style.marginBottom = 0;
+            _autoCompleteContainer.style.marginLeft = 0;
+            _autoCompleteContainer.style.marginRight = 0;
+            _autoCompleteContainer.style.flexGrow = 0;
+            _autoCompleteContainer.style.flexShrink = 0;
 
-            EnsureChildOrder(_terminalContainer, _inputContainer, _logScrollView);
+            EnsureChildOrder(
+                _terminalContainer,
+                _inputContainer,
+                _autoCompleteContainer,
+                _logScrollView
+            );
         }
 
         private void RefreshUI()
@@ -2749,68 +2773,54 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             float padding = _launcherMetrics.InsetPadding;
             float inputHeight = Mathf.Max(_inputContainer.resolvedStyle.height, 0f);
-            float availableWidth = _launcherMetrics.Width - (padding * 2f);
-            if (availableWidth < 0f)
-            {
-                availableWidth = 0f;
-            }
-
-            float suggestionTop = padding + inputHeight + LauncherAutoCompleteSpacing;
-            bool hasSuggestions = _autoCompleteContainer.childCount > 0;
-            _autoCompleteContainer.style.left = padding;
+            float availableWidth = Mathf.Max(0f, _launcherMetrics.Width - (padding * 2f));
             _autoCompleteContainer.style.width = availableWidth;
+            _autoCompleteContainer.style.maxWidth = availableWidth;
+            _autoCompleteContainer.style.alignSelf = Align.Stretch;
+            _autoCompleteContainer.style.flexGrow = 0;
+            _autoCompleteContainer.style.flexShrink = 0;
+
+            bool hasSuggestions = false;
+            int suggestionChildCount = _autoCompleteContainer.contentContainer.childCount;
+            for (int i = 0; i < suggestionChildCount; ++i)
+            {
+                VisualElement suggestion = _autoCompleteContainer.contentContainer[i];
+                if (suggestion == null)
+                {
+                    continue;
+                }
+
+                if (suggestion.resolvedStyle.display == DisplayStyle.None)
+                {
+                    continue;
+                }
+
+                hasSuggestions = true;
+            }
+            if (!hasSuggestions && suggestionChildCount > 0)
+            {
+                hasSuggestions = true;
+            }
             if (hasSuggestions)
             {
                 _autoCompleteContainer.style.display = DisplayStyle.Flex;
-                _autoCompleteContainer.style.top = suggestionTop;
+                _autoCompleteContainer.style.marginTop = LauncherAutoCompleteSpacing;
             }
             else
             {
                 _autoCompleteContainer.style.display = DisplayStyle.None;
                 _autoCompleteContainer.style.height = 0;
+                _autoCompleteContainer.style.marginTop = 0;
             }
 
             float suggestionsHeight = hasSuggestions
-                ? Mathf.Max(
-                    _autoCompleteContainer.contentContainer.layout.height,
-                    _autoCompleteContainer.resolvedStyle.height
-                )
+                ? Mathf.Min(LauncherEstimatedSuggestionRowHeight, _launcherMetrics.HistoryHeight)
                 : 0f;
-
-            if (hasSuggestions && suggestionsHeight <= 0f)
-            {
-                float computedHeight = 0f;
-                int childCount = _autoCompleteContainer.contentContainer.childCount;
-                for (int i = 0; i < childCount; ++i)
-                {
-                    VisualElement child = _autoCompleteContainer.contentContainer[i];
-                    if (child == null)
-                    {
-                        continue;
-                    }
-
-                    computedHeight += child.resolvedStyle.height;
-                    computedHeight +=
-                        child.resolvedStyle.marginTop + child.resolvedStyle.marginBottom;
-                }
-
-                suggestionsHeight = Mathf.Max(computedHeight, suggestionsHeight);
-            }
-
-            if (hasSuggestions && suggestionsHeight <= 0f)
-            {
-                int childCount = _autoCompleteContainer.contentContainer.childCount;
-                suggestionsHeight = Mathf.Min(
-                    _launcherMetrics.HistoryHeight,
-                    Mathf.Max(0f, childCount * 28f)
-                );
-            }
-
-            suggestionsHeight = Mathf.Min(suggestionsHeight, _launcherMetrics.HistoryHeight);
             if (hasSuggestions)
             {
                 _autoCompleteContainer.style.height = Mathf.Max(0f, suggestionsHeight);
             }
+            _autoCompleteContainer.style.marginBottom = 0;
 
             float reservedForSuggestions = (
                 hasSuggestions
@@ -2818,12 +2828,30 @@ namespace WallstopStudios.DxCommandTerminal.UI
                     : LauncherAutoCompleteSpacing
             );
 
-            float historyContentHeight = Mathf.Max(
-                _logScrollView.contentContainer.layout.height,
-                _logScrollView.resolvedStyle.height
-            );
+            VisualElement historyContent = _logScrollView.contentContainer;
+            int visibleHistoryCount = 0;
+            int historyChildCount = historyContent.childCount;
+            for (int i = 0; i < historyChildCount; ++i)
+            {
+                VisualElement entry = historyContent[i];
+                if (entry == null || entry.resolvedStyle.display == DisplayStyle.None)
+                {
+                    continue;
+                }
+                visibleHistoryCount++;
+            }
+
+            if (visibleHistoryCount == 0)
+            {
+                int pendingLogs = Terminal.Buffer?.Logs != null ? Terminal.Buffer.Logs.Count : 0;
+                visibleHistoryCount = Mathf.Min(
+                    pendingLogs,
+                    _launcherMetrics.HistoryVisibleEntryCount
+                );
+            }
+
             float desiredHistoryHeight = Mathf.Min(
-                historyContentHeight,
+                visibleHistoryCount * LauncherEstimatedHistoryRowHeight,
                 _launcherMetrics.HistoryHeight
             );
             if (desiredHistoryHeight < 0f)
@@ -2831,11 +2859,14 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 desiredHistoryHeight = 0f;
             }
 
-            if (_logScrollView.contentContainer.childCount > 0)
+            if (visibleHistoryCount > 0)
             {
                 desiredHistoryHeight = Mathf.Max(
                     desiredHistoryHeight,
-                    Mathf.Min(48f, _launcherMetrics.HistoryHeight)
+                    Mathf.Min(
+                        visibleHistoryCount * LauncherEstimatedHistoryRowHeight,
+                        _launcherMetrics.HistoryHeight
+                    )
                 );
             }
 
@@ -2882,7 +2913,8 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 _logScrollView.style.maxHeight = availableForHistory;
             }
 
-            _logScrollView.style.marginTop = reservedForSuggestions;
+            float logTopMargin = LauncherAutoCompleteSpacing;
+            _logScrollView.style.marginTop = logTopMargin;
         }
 
         private void StartHeightAnimation()
