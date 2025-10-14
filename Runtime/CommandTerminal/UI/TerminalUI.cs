@@ -24,6 +24,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
         private const float LauncherAutoCompleteSpacing = 6f;
         private const float LauncherEstimatedSuggestionRowHeight = 32f;
         private const float LauncherEstimatedHistoryRowHeight = 28f;
+        private const float StandardEstimatedHistoryRowHeight = 24f;
 
         private enum ScrollBarCaptureState
         {
@@ -126,6 +127,13 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         [DxShowIf(nameof(showGUIButtons))]
         public string launcherButtonText = "launcher";
+
+        [Header("Appearance")]
+        [SerializeField]
+        private TerminalHistoryFadeTargets _historyFadeTargets =
+            TerminalHistoryFadeTargets.SmallTerminal
+            | TerminalHistoryFadeTargets.FullTerminal
+            | TerminalHistoryFadeTargets.Launcher;
 
         [Header("Hints")]
         public HintDisplayMode hintDisplayMode = HintDisplayMode.AutoCompleteOnly;
@@ -1698,6 +1706,15 @@ namespace WallstopStudios.DxCommandTerminal.UI
                     _lastSeenBufferVersion = Terminal.Buffer.Version;
                 }
             }
+
+            if (ShouldApplyHistoryFade())
+            {
+                ApplyHistoryFade(content, fadeFromTop: false);
+            }
+            else
+            {
+                ResetHistoryFade(content);
+            }
         }
 
         private void RefreshLauncherHistory()
@@ -1768,7 +1785,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 content[i].style.display = DisplayStyle.None;
             }
 
-            float denominator = Mathf.Max(1f, visibleCount - 1f);
             for (int i = 0; i < visibleCount; ++i)
             {
                 int historyIndex = entryCount - 1 - i;
@@ -1799,11 +1815,15 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 }
 
                 element.style.display = DisplayStyle.Flex;
-                float fade =
-                    visibleCount == 1
-                        ? 1f
-                        : Mathf.Pow(1f - (i / denominator), _launcherMetrics.HistoryFadeExponent);
-                element.style.opacity = Mathf.Clamp01(fade);
+            }
+
+            if (ShouldApplyHistoryFade())
+            {
+                ApplyHistoryFade(content, fadeFromTop: true);
+            }
+            else
+            {
+                ResetHistoryFade(content);
             }
 
             bool historyChanged = historyVersion != _lastRenderedLauncherHistoryVersion;
@@ -1871,6 +1891,165 @@ namespace WallstopStudios.DxCommandTerminal.UI
             if (0 < _logScrollView?.verticalScroller.highValue)
             {
                 _logScrollView.verticalScroller.value = _logScrollView.verticalScroller.highValue;
+            }
+        }
+
+        private bool ShouldApplyHistoryFade()
+        {
+            return _state switch
+            {
+                TerminalState.OpenLauncher
+                    => _historyFadeTargets.HasFlagNoAlloc(TerminalHistoryFadeTargets.Launcher),
+                TerminalState.OpenSmall
+                    => _historyFadeTargets.HasFlagNoAlloc(
+                        TerminalHistoryFadeTargets.SmallTerminal
+                    ),
+                TerminalState.OpenFull
+                    => _historyFadeTargets.HasFlagNoAlloc(
+                        TerminalHistoryFadeTargets.FullTerminal
+                    ),
+                _ => false,
+            };
+        }
+
+        private float GetHistoryFadeRangeFactor()
+        {
+            return _state switch
+            {
+                TerminalState.OpenLauncher => 0.6f,
+                TerminalState.OpenFull => 1.0f,
+                TerminalState.OpenSmall => 0.85f,
+                _ => 0.85f,
+            };
+        }
+
+        private float GetHistoryFadeMinimumOpacity()
+        {
+            return _state == TerminalState.OpenLauncher ? 0.35f : 0.45f;
+        }
+
+        private float GetHistoryFallbackRowHeight()
+        {
+            return _state == TerminalState.OpenLauncher
+                ? LauncherEstimatedHistoryRowHeight
+                : StandardEstimatedHistoryRowHeight;
+        }
+
+        private float GetHistoryFadeExponent()
+        {
+            if (_state == TerminalState.OpenLauncher && _launcherMetricsInitialized)
+            {
+                return Mathf.Max(0.01f, _launcherMetrics.HistoryFadeExponent);
+            }
+
+            return 1f;
+        }
+
+        private void ApplyHistoryFade(VisualElement container, bool fadeFromTop)
+        {
+            if (container == null)
+            {
+                return;
+            }
+
+            Rect viewportBounds = _logViewport?.worldBound ?? Rect.zero;
+            bool viewportIsValid = viewportBounds.height > 0.01f;
+            float fallbackRowHeight = GetHistoryFallbackRowHeight();
+
+            int childCount = container.childCount;
+            if (childCount == 0)
+            {
+                return;
+            }
+
+            int visibleCount = 0;
+            for (int i = 0; i < childCount; ++i)
+            {
+                VisualElement element = container[i];
+                if (element == null || element.resolvedStyle.display == DisplayStyle.None)
+                {
+                    continue;
+                }
+
+                visibleCount++;
+            }
+
+            if (visibleCount == 0)
+            {
+                return;
+            }
+
+            if (!viewportIsValid)
+            {
+                float fallbackHeight = Mathf.Max(1f, fallbackRowHeight * visibleCount);
+                viewportBounds.height = fallbackHeight;
+            }
+
+            float fadeRange = Mathf.Max(1f, viewportBounds.height * GetHistoryFadeRangeFactor());
+            float minimumOpacity = Mathf.Clamp01(GetHistoryFadeMinimumOpacity());
+
+            int visibleIndex = 0;
+            for (int i = 0; i < childCount; ++i)
+            {
+                VisualElement element = container[i];
+                if (element == null || element.resolvedStyle.display == DisplayStyle.None)
+                {
+                    continue;
+                }
+
+                float distance;
+                if (viewportIsValid)
+                {
+                    Rect childBounds = element.worldBound;
+                    bool boundsValid = childBounds.height > 0.01f;
+                    if (fadeFromTop)
+                    {
+                        distance = boundsValid
+                            ? Mathf.Max(0f, childBounds.yMin - viewportBounds.yMin)
+                            : fallbackRowHeight * visibleIndex;
+                    }
+                    else
+                    {
+                        int inverseIndex = Math.Max(0, visibleCount - visibleIndex - 1);
+                        distance = boundsValid
+                            ? Mathf.Max(0f, viewportBounds.yMax - childBounds.yMax)
+                            : fallbackRowHeight * inverseIndex;
+                    }
+                }
+                else
+                {
+                    int indexFromEdge = fadeFromTop
+                        ? visibleIndex
+                        : Math.Max(0, visibleCount - visibleIndex - 1);
+                    distance = fallbackRowHeight * indexFromEdge;
+                }
+
+                float normalized = Mathf.Clamp01(distance / fadeRange);
+                float adjusted = Mathf.Pow(normalized, GetHistoryFadeExponent());
+                float opacity = Mathf.Lerp(1f, minimumOpacity, adjusted);
+                element.style.opacity = opacity;
+
+                visibleIndex++;
+            }
+        }
+
+        private static void ResetHistoryFade(VisualElement container)
+        {
+            if (container == null)
+            {
+                return;
+            }
+
+            int childCount = container.childCount;
+            for (int i = 0; i < childCount; ++i)
+            {
+                VisualElement element = container[i];
+                if (element == null || element.resolvedStyle.display == DisplayStyle.None)
+                {
+                    continue;
+                }
+
+                element.style.opacity = 1f;
             }
         }
 

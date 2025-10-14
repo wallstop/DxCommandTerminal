@@ -110,13 +110,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 var middle = content[1] as Label;
                 Assert.IsNotNull(middle);
                 Assert.That(middle!.text, Is.EqualTo("second"));
-                Assert.That(middle.style.opacity.value, Is.LessThan(1f).And.GreaterThan(0f));
+                Assert.That(middle.style.opacity.value, Is.LessThan(1f).And.GreaterThan(0.35f));
 
                 // Oldest entry is faded out
                 var oldest = content[2] as Label;
                 Assert.IsNotNull(oldest);
                 Assert.That(oldest!.text, Is.EqualTo("first"));
-                Assert.That(oldest.style.opacity.value, Is.EqualTo(0f).Within(0.001f));
+                Assert.That(oldest.style.opacity.value, Is.EqualTo(0.35f).Within(0.001f));
             }
             finally
             {
