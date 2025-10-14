@@ -66,7 +66,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
         [Header("Dimensions")]
         public LauncherDimension width = LauncherDimension.RelativeToScreen(0.55f);
 
-        public LauncherDimension height = LauncherDimension.RelativeToScreen(0.18f);
+        public LauncherDimension height = LauncherDimension.RelativeToScreen(0.33f);
 
         public LauncherDimension historyHeight = LauncherDimension.RelativeToLauncher(0.45f);
 

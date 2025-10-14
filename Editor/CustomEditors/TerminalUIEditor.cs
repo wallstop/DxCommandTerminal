@@ -253,14 +253,20 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                 }
             }
 
-            if (Directory.Exists(Path.Combine(Application.dataPath, "Packages")))
+            string projectRoot = Path.GetDirectoryName(Application.dataPath);
+            if (!string.IsNullOrWhiteSpace(projectRoot))
             {
-                directories.Add("Packages");
-            }
+                string packagesAbsolute = Path.Combine(projectRoot, "Packages");
+                if (Directory.Exists(packagesAbsolute))
+                {
+                    directories.Add("Packages");
+                }
 
-            if (Directory.Exists(Path.Combine(Application.dataPath, "Library")))
-            {
-                directories.Add("Library");
+                string libraryAbsolute = Path.Combine(projectRoot, "Library");
+                if (Directory.Exists(libraryAbsolute))
+                {
+                    directories.Add("Library");
+                }
             }
 
             directories.Add("Assets");
@@ -995,14 +1001,20 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
             }
 
             List<string> directories = new();
-            if (Directory.Exists(Path.Combine(Application.dataPath, "Library")))
+            string projectRoot = Path.GetDirectoryName(Application.dataPath);
+            if (!string.IsNullOrWhiteSpace(projectRoot))
             {
-                directories.Add("Library");
-            }
+                string libraryAbsolute = Path.Combine(projectRoot, "Library");
+                if (Directory.Exists(libraryAbsolute))
+                {
+                    directories.Add("Library");
+                }
 
-            if (Directory.Exists(Path.Combine(Application.dataPath, "Packages")))
-            {
-                directories.Add("Packages");
+                string packagesAbsolute = Path.Combine(projectRoot, "Packages");
+                if (Directory.Exists(packagesAbsolute))
+                {
+                    directories.Add("Packages");
+                }
             }
 
             directories.Add("Assets");

@@ -17,7 +17,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             var settings = new TerminalLauncherSettings
             {
                 width = LauncherDimension.RelativeToScreen(0.5f),
-                height = LauncherDimension.RelativeToScreen(0.18f),
+                height = LauncherDimension.RelativeToScreen(0.33f),
                 historyHeight = LauncherDimension.RelativeToLauncher(0.5f),
                 minimumWidth = 300f,
                 minimumHeight = 120f,
