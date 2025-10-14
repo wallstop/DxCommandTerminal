@@ -25,7 +25,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             _handler = handler;
         }
 
-        public List<CommandCompletionContext> Calls { get; } = new List<CommandCompletionContext>();
+        public List<CommandCompletionContext> Calls { get; } = new();
 
         public IEnumerable<string> Complete(CommandCompletionContext context)
         {
@@ -45,7 +45,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
     internal sealed class ChainedCompleter : IArgumentCompleter
     {
-        public List<CommandCompletionContext> Calls { get; } = new List<CommandCompletionContext>();
+        public List<CommandCompletionContext> Calls { get; } = new();
 
         public IEnumerable<string> Complete(CommandCompletionContext context)
         {
@@ -75,7 +75,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
     internal sealed class AutoRegisteredCompleter : IArgumentCompleter
     {
-        public static AutoRegisteredCompleter Instance { get; } = new AutoRegisteredCompleter();
+        public static AutoRegisteredCompleter Instance { get; } = new();
 
         private AutoRegisteredCompleter() { }
 
@@ -99,11 +99,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void CompleterProducesQuotedSuggestions()
         {
-            CommandHistory history = new CommandHistory(8);
-            CommandShell shell = new CommandShell(history);
+            CommandHistory history = new(8);
+            CommandShell shell = new(history);
             shell.AddCommand("testcmd", _ => { }, 0, -1, string.Empty, null, new DummyCompleter());
 
-            CommandAutoComplete ac = new CommandAutoComplete(history, shell);
+            CommandAutoComplete ac = new(history, shell);
             string[] results = ac.Complete("testcmd ");
 
             // Expect both suggestions formatted for insertion
@@ -115,11 +115,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void ManualAddCommandExposesCompleter()
         {
-            CommandHistory history = new CommandHistory(8);
-            CommandShell shell = new CommandShell(history);
-            RecordingCompleter recordingCompleter = new RecordingCompleter(_ =>
-                Array.Empty<string>()
-            );
+            CommandHistory history = new(8);
+            CommandShell shell = new(history);
+            RecordingCompleter recordingCompleter = new(_ => Array.Empty<string>());
 
             bool added = shell.AddCommand(
                 "manual",
@@ -139,13 +137,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void AddCommandWithCommandInfoPreservesCompleter()
         {
-            CommandHistory history = new CommandHistory(8);
-            CommandShell shell = new CommandShell(history);
-            RecordingCompleter recordingCompleter = new RecordingCompleter(_ =>
-                Array.Empty<string>()
-            );
+            CommandHistory history = new(8);
+            CommandShell shell = new(history);
+            RecordingCompleter recordingCompleter = new(_ => Array.Empty<string>());
 
-            CommandInfo info = new CommandInfo(_ => { }, 0, 1, "help", "hint", recordingCompleter);
+            CommandInfo info = new(_ => { }, 0, 1, "help", "hint", recordingCompleter);
 
             bool added = shell.AddCommand("infoCommand", info);
 
@@ -157,8 +153,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void AutoRegisteredCommandReceivesCompleter()
         {
-            CommandHistory history = new CommandHistory(8);
-            CommandShell shell = new CommandShell(history);
+            CommandHistory history = new(8);
+            CommandShell shell = new(history);
 
             shell.InitializeAutoRegisteredCommands(Array.Empty<string>());
 
@@ -175,12 +171,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void AutoCompleteChainsArguments()
         {
-            CommandHistory history = new CommandHistory(16);
-            CommandShell shell = new CommandShell(history);
-            ChainedCompleter chainedCompleter = new ChainedCompleter();
+            CommandHistory history = new(16);
+            CommandShell shell = new(history);
+            ChainedCompleter chainedCompleter = new();
             shell.AddCommand("chain", _ => { }, 0, -1, string.Empty, null, chainedCompleter);
 
-            CommandAutoComplete autoComplete = new CommandAutoComplete(history, shell);
+            CommandAutoComplete autoComplete = new(history, shell);
 
             string[] commandSuggestions = autoComplete.Complete("cha");
             CollectionAssert.Contains(commandSuggestions, "chain");
@@ -228,13 +224,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void AutoCompleteHonorsCaretIndexWithinInput()
         {
-            CommandHistory history = new CommandHistory(16);
-            CommandShell shell = new CommandShell(history);
-            ChainedCompleter chainedCompleter = new ChainedCompleter();
+            CommandHistory history = new(16);
+            CommandShell shell = new(history);
+            ChainedCompleter chainedCompleter = new();
             shell.AddCommand("chain", _ => { }, 0, -1, string.Empty, null, chainedCompleter);
 
-            CommandAutoComplete autoComplete = new CommandAutoComplete(history, shell);
-            List<string> buffer = new List<string>();
+            CommandAutoComplete autoComplete = new(history, shell);
+            List<string> buffer = new();
             int caretIndex = "chain alpha ".Length;
             autoComplete.Complete("chain alpha gamma", caretIndex, buffer);
 
@@ -251,12 +247,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void AutoCompleteFallsBackToHistoryWhenCommandUnknown()
         {
-            CommandHistory history = new CommandHistory(16);
+            CommandHistory history = new(16);
             history.Push("login", true, true);
             history.Push("logout", true, true);
-            CommandShell shell = new CommandShell(history);
+            CommandShell shell = new(history);
 
-            CommandAutoComplete autoComplete = new CommandAutoComplete(history, shell);
+            CommandAutoComplete autoComplete = new(history, shell);
             string[] suggestions = autoComplete.Complete("lo");
 
             Assert.IsNotNull(suggestions);
@@ -267,12 +263,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void AutoCompleteDeduplicatesValuesAcrossSources()
         {
-            CommandHistory history = new CommandHistory(16);
+            CommandHistory history = new(16);
             history.Push("list", true, true);
-            CommandShell shell = new CommandShell(history);
+            CommandShell shell = new(history);
             shell.AddCommand("list", _ => { });
-            List<string> knownWords = new List<string> { "list" };
-            CommandAutoComplete autoComplete = new CommandAutoComplete(history, shell, knownWords);
+            List<string> knownWords = new() { "list" };
+            CommandAutoComplete autoComplete = new(history, shell, knownWords);
 
             string[] suggestions = autoComplete.Complete("li");
             Assert.IsNotNull(suggestions);

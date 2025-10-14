@@ -16,7 +16,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             {
                 Thread.CurrentThread.CurrentCulture = new CultureInfo("fr-FR");
 
-                CommandArg arg = new CommandArg("3.14159");
+                CommandArg arg = new("3.14159");
                 Assert.IsTrue(arg.TryGet(out float f));
                 Assert.AreEqual(3.14159f, f, 1e-5f);
 
@@ -40,21 +40,21 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             {
                 Thread.CurrentThread.CurrentCulture = new CultureInfo("fr-FR");
 
-                CommandArg rectArg = new CommandArg("1.5, 2.5, 3.5, 4.5");
+                CommandArg rectArg = new("1.5, 2.5, 3.5, 4.5");
                 Assert.IsTrue(rectArg.TryGet(out Rect r));
                 Assert.AreEqual(1.5f, r.x, 1e-5f);
                 Assert.AreEqual(2.5f, r.y, 1e-5f);
                 Assert.AreEqual(3.5f, r.width, 1e-5f);
                 Assert.AreEqual(4.5f, r.height, 1e-5f);
 
-                CommandArg quatArg = new CommandArg("0.1, 0.2, 0.3, 0.4");
+                CommandArg quatArg = new("0.1, 0.2, 0.3, 0.4");
                 Assert.IsTrue(quatArg.TryGet(out Quaternion q));
                 Assert.AreEqual(0.1f, q.x, 1e-5f);
                 Assert.AreEqual(0.2f, q.y, 1e-5f);
                 Assert.AreEqual(0.3f, q.z, 1e-5f);
                 Assert.AreEqual(0.4f, q.w, 1e-5f);
 
-                CommandArg colorArg = new CommandArg("RGBA(0.1,0.2,0.3,0.4)");
+                CommandArg colorArg = new("RGBA(0.1,0.2,0.3,0.4)");
                 Assert.IsTrue(colorArg.TryGet(out Color c));
                 Assert.AreEqual(0.1f, c.r, 1e-5f);
                 Assert.AreEqual(0.2f, c.g, 1e-5f);

@@ -10,7 +10,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void HandleLogRespectsIgnoredTypes()
         {
-            CommandLog log = new CommandLog(4, new[] { TerminalLogType.Warning });
+            CommandLog log = new(4, new[] { TerminalLogType.Warning });
 
             bool handled = log.HandleLog("ignored", TerminalLogType.Warning);
 
@@ -21,7 +21,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void DrainPendingProcessesQueuedMessagesInOrder()
         {
-            CommandLog log = new CommandLog(8);
+            CommandLog log = new(8);
 
             log.EnqueueMessage("first", TerminalLogType.Message, includeStackTrace: false);
             log.EnqueueUnityLog("second", "stack", TerminalLogType.Error);
@@ -40,7 +40,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void ResizeTrimsOldestEntriesAndKeepsOrder()
         {
-            CommandLog log = new CommandLog(6);
+            CommandLog log = new(6);
 
             for (int i = 0; i < 6; ++i)
             {
@@ -57,7 +57,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void ClearEmptiesBufferAndReturnsRemovedCount()
         {
-            CommandLog log = new CommandLog(5);
+            CommandLog log = new(5);
 
             log.HandleLog("a", TerminalLogType.Message);
             log.HandleLog("b", TerminalLogType.Warning);

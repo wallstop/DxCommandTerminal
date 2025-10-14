@@ -9,7 +9,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void Vector3UntypedTwoComponentsParses()
         {
-            CommandArg arg = new CommandArg("1,2");
+            CommandArg arg = new("1,2");
             Assert.IsTrue(arg.TryGet(typeof(Vector3), out object obj));
             Vector3 v = (Vector3)obj;
             Assert.AreEqual(1f, v.x, 1e-4f);
@@ -20,42 +20,42 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void RectUntypedNonNumeric()
         {
-            CommandArg arg = new CommandArg("1,2,three,4");
+            CommandArg arg = new("1,2,three,4");
             Assert.IsFalse(arg.TryGet(typeof(Rect), out object _));
         }
 
         [Test]
         public void Vector2IntUntypedNonInteger()
         {
-            CommandArg arg = new CommandArg("1,2.5");
+            CommandArg arg = new("1,2.5");
             Assert.IsFalse(arg.TryGet(typeof(Vector2Int), out object _));
         }
 
         [Test]
         public void QuaternionUntypedTooManyComponents()
         {
-            CommandArg arg = new CommandArg("0.1,0.2,0.3,0.4,0.5");
+            CommandArg arg = new("0.1,0.2,0.3,0.4,0.5");
             Assert.IsFalse(arg.TryGet(typeof(Quaternion), out object _));
         }
 
         [Test]
         public void ColorUntypedNonNumericRgba()
         {
-            CommandArg arg = new CommandArg("RGBA(0.1, nope, 0.3, 0.4)");
+            CommandArg arg = new("RGBA(0.1, nope, 0.3, 0.4)");
             Assert.IsFalse(arg.TryGet(typeof(Color), out object _));
         }
 
         [Test]
         public void Vector4UntypedTooManyComponents()
         {
-            CommandArg arg = new CommandArg("1,2,3,4,5");
+            CommandArg arg = new("1,2,3,4,5");
             Assert.IsFalse(arg.TryGet(typeof(Vector4), out object _));
         }
 
         [Test]
         public void ColorUntypedTooFewComponents()
         {
-            CommandArg arg = new CommandArg("0.1,0.2");
+            CommandArg arg = new("0.1,0.2");
             Assert.IsFalse(arg.TryGet(typeof(Color), out object _));
         }
     }

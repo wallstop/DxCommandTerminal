@@ -35,7 +35,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Parsers
             Assert.Greater(added, 0);
 
             // Validate a simple parse now succeeds via discovered parsers
-            CommandArg arg = new CommandArg("123");
+            CommandArg arg = new("123");
             Assert.IsTrue(arg.TryGet(out int value));
             Assert.AreEqual(123, value);
         }

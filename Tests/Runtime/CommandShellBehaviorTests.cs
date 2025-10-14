@@ -10,8 +10,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void InitializeAutoRegisteredCommandsRespectsIgnoredNames()
         {
-            CommandHistory history = new CommandHistory(8);
-            CommandShell shell = new CommandShell(history);
+            CommandHistory history = new(8);
+            CommandShell shell = new(history);
 
             shell.InitializeAutoRegisteredCommands(new[] { "help" }, ignoreDefaultCommands: false);
 
@@ -23,8 +23,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void InitializeAutoRegisteredCommandsCanSkipDefaultsEntirely()
         {
-            CommandHistory history = new CommandHistory(8);
-            CommandShell shell = new CommandShell(history);
+            CommandHistory history = new(8);
+            CommandShell shell = new(history);
 
             shell.InitializeAutoRegisteredCommands(
                 Array.Empty<string>(),
@@ -40,8 +40,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void InitializeAutoRegisteredCommandsRefreshesIgnoredCommands()
         {
-            CommandHistory history = new CommandHistory(8);
-            CommandShell shell = new CommandShell(history);
+            CommandHistory history = new(8);
+            CommandShell shell = new(history);
 
             shell.InitializeAutoRegisteredCommands(
                 Array.Empty<string>(),
@@ -58,8 +58,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void RunCommandQueuesErrorForMissingCommand()
         {
-            CommandHistory history = new CommandHistory(4);
-            CommandShell shell = new CommandShell(history);
+            CommandHistory history = new(4);
+            CommandShell shell = new(history);
 
             bool result = shell.RunCommand("missing");
 
@@ -68,19 +68,19 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             StringAssert.Contains("missing", message);
             Assert.IsFalse(shell.TryConsumeErrorMessage(out _));
 
-            List<string> all = new List<string>(history.GetHistory(false, false));
+            List<string> all = new(history.GetHistory(false, false));
             Assert.AreEqual(1, all.Count);
             Assert.AreEqual("missing", all[0]);
 
-            List<string> successes = new List<string>(history.GetHistory(true, false));
+            List<string> successes = new(history.GetHistory(true, false));
             Assert.AreEqual(0, successes.Count);
         }
 
         [Test]
         public void RunCommandInvokesHandlerAndRecordsSuccess()
         {
-            CommandHistory history = new CommandHistory(4);
-            CommandShell shell = new CommandShell(history);
+            CommandHistory history = new(4);
+            CommandShell shell = new(history);
 
             CommandArg[] captured = null;
             shell.AddCommand("echo", args => captured = args, 0, -1);
@@ -94,7 +94,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreEqual("world", captured[1].contents);
             Assert.IsFalse(shell.TryConsumeErrorMessage(out _));
 
-            List<string> successes = new List<string>(history.GetHistory(true, true));
+            List<string> successes = new(history.GetHistory(true, true));
             Assert.AreEqual(1, successes.Count);
             Assert.AreEqual("echo hello world", successes[0]);
         }
@@ -102,8 +102,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void RunCommandValidatesArgumentCount()
         {
-            CommandHistory history = new CommandHistory(4);
-            CommandShell shell = new CommandShell(history);
+            CommandHistory history = new(4);
+            CommandShell shell = new(history);
             shell.AddCommand("require-two", _ => { }, 2, 2);
 
             bool executed = shell.RunCommand("require-two only-one");
@@ -112,10 +112,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.IsTrue(shell.TryConsumeErrorMessage(out string message));
             StringAssert.Contains("requires", message);
 
-            List<string> successes = new List<string>(history.GetHistory(true, false));
+            List<string> successes = new(history.GetHistory(true, false));
             Assert.AreEqual(0, successes.Count);
 
-            List<string> all = new List<string>(history.GetHistory(false, false));
+            List<string> all = new(history.GetHistory(false, false));
             Assert.AreEqual(1, all.Count);
             Assert.AreEqual("require-two only-one", all[0]);
         }
@@ -123,8 +123,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void VariableSubstitutionInjectsStoredValues()
         {
-            CommandHistory history = new CommandHistory(4);
-            CommandShell shell = new CommandShell(history);
+            CommandHistory history = new(4);
+            CommandShell shell = new(history);
 
             CommandArg[] captured = null;
             shell.AddCommand("say", args => captured = args);
@@ -142,8 +142,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void UnknownVariableReferencesRemainLiteral()
         {
-            CommandHistory history = new CommandHistory(4);
-            CommandShell shell = new CommandShell(history);
+            CommandHistory history = new(4);
+            CommandShell shell = new(history);
 
             CommandArg[] captured = null;
             shell.AddCommand("say", args => captured = args);
@@ -159,8 +159,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void VariableSubstitutionPreservesStoredQuotes()
         {
-            CommandHistory history = new CommandHistory(4);
-            CommandShell shell = new CommandShell(history);
+            CommandHistory history = new(4);
+            CommandShell shell = new(history);
 
             CommandArg[] captured = null;
             shell.AddCommand("say", args => captured = args);
@@ -172,7 +172,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.IsNotNull(captured);
             Assert.AreEqual("hello world", captured[0].contents);
 
-            List<string> entries = new List<string>(history.GetHistory(false, false));
+            List<string> entries = new(history.GetHistory(false, false));
             Assert.AreEqual(1, entries.Count);
             Assert.AreEqual("say \"hello world\"", entries[0]);
         }
@@ -180,7 +180,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void ClearVariableRemovesStoredValue()
         {
-            CommandShell shell = new CommandShell(new CommandHistory(2));
+            CommandShell shell = new(new CommandHistory(2));
 
             Assert.IsTrue(shell.SetVariable("temp", new CommandArg("value")));
             Assert.IsTrue(shell.ClearVariable("temp"));
@@ -191,7 +191,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void TryConsumeErrorMessageReturnsFalseWhenEmpty()
         {
-            CommandShell shell = new CommandShell(new CommandHistory(2));
+            CommandShell shell = new(new CommandHistory(2));
 
             Assert.IsFalse(shell.TryConsumeErrorMessage(out _));
 
@@ -204,7 +204,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void AddCommandPreventsDuplicateNames()
         {
-            CommandShell shell = new CommandShell(new CommandHistory(2));
+            CommandShell shell = new(new CommandHistory(2));
 
             bool first = shell.AddCommand("duplicate", _ => { });
             bool second = shell.AddCommand("DUPLICATE", _ => { });
@@ -218,7 +218,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void ClearVariableRejectsInvalidNames()
         {
-            CommandShell shell = new CommandShell(new CommandHistory(2));
+            CommandShell shell = new(new CommandHistory(2));
 
             Assert.IsFalse(shell.ClearVariable(string.Empty));
             Assert.IsTrue(shell.TryConsumeErrorMessage(out string message));

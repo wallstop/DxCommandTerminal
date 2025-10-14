@@ -12,7 +12,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Parsers
             Assert.GreaterOrEqual(removed, 0);
 
             // Without object parsers, numeric parsing should fail
-            CommandArg arg = new CommandArg("42");
+            CommandArg arg = new("42");
             Assert.IsFalse(arg.TryGet(out int _));
 
             // Discover and register all IArgParser implementations in loaded assemblies

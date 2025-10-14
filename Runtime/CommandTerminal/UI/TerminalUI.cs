@@ -2755,6 +2755,43 @@ namespace WallstopStudios.DxCommandTerminal.UI
                     : LauncherAutoCompleteSpacing
             );
 
+            float historyContentHeight = Mathf.Max(
+                _logScrollView.contentContainer.layout.height,
+                _logScrollView.resolvedStyle.height
+            );
+            float desiredHistoryHeight = Mathf.Min(
+                historyContentHeight,
+                _launcherMetrics.HistoryHeight
+            );
+            if (desiredHistoryHeight < 0f)
+            {
+                desiredHistoryHeight = 0f;
+            }
+
+            if (_logScrollView.contentContainer.childCount > 0)
+            {
+                desiredHistoryHeight = Mathf.Max(
+                    desiredHistoryHeight,
+                    Mathf.Min(48f, _launcherMetrics.HistoryHeight)
+                );
+            }
+
+            float minimumHeight = padding * 2f + inputHeight + reservedForSuggestions;
+            float desiredHeight = minimumHeight + desiredHistoryHeight;
+            float clampedHeight = Mathf.Clamp(
+                desiredHeight,
+                minimumHeight,
+                _launcherMetrics.Height
+            );
+
+            if (!Mathf.Approximately(clampedHeight, _targetWindowHeight))
+            {
+                _initialWindowHeight = _currentWindowHeight;
+                _targetWindowHeight = clampedHeight;
+                _animationTimer = 0f;
+                _isAnimating = true;
+            }
+
             float availableForHistory =
                 _currentWindowHeight - (padding * 2f) - inputHeight - reservedForSuggestions;
             availableForHistory = Mathf.Min(availableForHistory, _launcherMetrics.HistoryHeight);

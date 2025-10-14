@@ -23,7 +23,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Parsers
 
         private sealed class CustomTypeParser : ArgParser<CustomType>
         {
-            public static readonly CustomTypeParser Instance = new CustomTypeParser();
+            public static readonly CustomTypeParser Instance = new();
 
             protected override bool TryParseTyped(string input, out CustomType value)
             {

@@ -8,8 +8,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     {
         private sealed class StaticLike
         {
-            public static StaticLike Alpha = new StaticLike(1);
-            public static StaticLike Beta = new StaticLike(2);
+            public static StaticLike Alpha = new(1);
+            public static StaticLike Beta = new(2);
 
             public int Value { get; }
 

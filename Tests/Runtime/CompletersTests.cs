@@ -29,7 +29,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 ScriptableObject.CreateInstance<TestFontPack>()
             );
 
-            ThemeArgumentCompleter completer = new ThemeArgumentCompleter();
+            ThemeArgumentCompleter completer = new();
             var ctx = new CommandCompletionContext(
                 "set-theme ",
                 "set-theme",
@@ -39,7 +39,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 Terminal.Shell
             );
 
-            List<string> results = new List<string>(completer.Complete(ctx));
+            List<string> results = new(completer.Complete(ctx));
             // Friendly names should be alpha/beta/gamma, filtering by 'b' -> beta only
             Assert.AreEqual(1, results.Count);
             Assert.AreEqual("beta", results[0]);
@@ -68,7 +68,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 fontPack
             );
 
-            FontArgumentCompleter completer = new FontArgumentCompleter();
+            FontArgumentCompleter completer = new();
             var ctx = new CommandCompletionContext(
                 "set-font ",
                 "set-font",
@@ -78,7 +78,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 Terminal.Shell
             );
 
-            List<string> results = new List<string>(completer.Complete(ctx));
+            List<string> results = new(completer.Complete(ctx));
             // Distinct should collapse 'Consolas' duplicates; filter 'co' -> Consolas and Cousine
             CollectionAssert.AreEquivalent(new[] { "Consolas", "Cousine" }, results);
         }

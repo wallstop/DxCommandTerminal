@@ -85,7 +85,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             {
                 workers[t] = Task.Run(() =>
                 {
-                    Random rand = new Random(Environment.TickCount + t);
+                    Random rand = new(Environment.TickCount + t);
                     for (int i = 0; i < iterations; ++i)
                     {
                         int size = rand.Next(1, 128);

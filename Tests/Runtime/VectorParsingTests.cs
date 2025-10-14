@@ -9,7 +9,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void Vector3ParsesVariousDelimiters()
         {
-            CommandArg arg = new CommandArg("1.1,2.2,3.3");
+            CommandArg arg = new("1.1,2.2,3.3");
             Assert.IsTrue(arg.TryGet(out Vector3 v1));
             Assert.AreEqual(1.1f, v1.x, 1e-4f);
             Assert.AreEqual(2.2f, v1.y, 1e-4f);
@@ -25,7 +25,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void ColorParsesRgba()
         {
-            CommandArg arg = new CommandArg("RGBA(0.1,0.2,0.3,0.4)");
+            CommandArg arg = new("RGBA(0.1,0.2,0.3,0.4)");
             Assert.IsTrue(arg.TryGet(out Color c));
             Assert.AreEqual(0.1f, c.r, 1e-4f);
             Assert.AreEqual(0.2f, c.g, 1e-4f);
