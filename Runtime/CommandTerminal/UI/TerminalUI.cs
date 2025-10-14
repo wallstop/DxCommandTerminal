@@ -247,9 +247,14 @@ namespace WallstopStudios.DxCommandTerminal.UI
             StringComparer.OrdinalIgnoreCase
         );
         private readonly List<VisualElement> _autoCompleteChildren = new();
+        private readonly List<CommandHistoryEntry> _launcherHistoryEntries = new();
 
         private float _launcherSuggestionContentHeight;
         private float _launcherHistoryContentHeight;
+        private long _lastRenderedLauncherHistoryVersion = -1;
+        private long _cachedLauncherScrollVersion = -1;
+        private float _cachedLauncherScrollValue;
+        private bool _restoreLauncherScrollPending;
 
         // Cached for performance (avoids allocations)
         private readonly Action _focusInput;
@@ -653,9 +658,18 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         public void SetState(TerminalState newState)
         {
+            if (_state == TerminalState.OpenLauncher && newState != TerminalState.OpenLauncher)
+            {
+                CacheLauncherScrollPosition();
+            }
+
             _commandIssuedThisFrame = true;
             _previousState = _state;
             _state = newState;
+            if (_state == TerminalState.OpenLauncher)
+            {
+                _restoreLauncherScrollPending = true;
+            }
             ResetWindowIdempotent();
             if (_state != TerminalState.Closed)
             {
@@ -1617,7 +1631,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             if (IsLauncherActive && _launcherMetricsInitialized)
             {
-                RefreshLauncherHistory(logs);
+                RefreshLauncherHistory();
                 return;
             }
 
@@ -1686,10 +1700,39 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
         }
 
-        private void RefreshLauncherHistory(IReadOnlyList<LogItem> logs)
+        private void RefreshLauncherHistory()
         {
+            if (_logScrollView == null)
+            {
+                return;
+            }
+
             VisualElement content = _logScrollView.contentContainer;
-            int visibleCount = Mathf.Min(_launcherMetrics.HistoryVisibleEntryCount, logs.Count);
+            CommandHistory history = Terminal.History;
+
+            if (history == null)
+            {
+                _launcherHistoryEntries.Clear();
+                _logScrollView.style.display = DisplayStyle.None;
+                for (int i = 0; i < content.childCount; ++i)
+                {
+                    content[i].style.display = DisplayStyle.None;
+                }
+
+                _lastRenderedLauncherHistoryVersion = -1;
+                _cachedLauncherScrollVersion = -1;
+                _cachedLauncherScrollValue = 0f;
+                _restoreLauncherScrollPending = false;
+                _launcherHistoryContentHeight = 0f;
+                _needsScrollToEnd = false;
+                return;
+            }
+
+            history.CopyEntriesTo(_launcherHistoryEntries);
+            long historyVersion = history.Version;
+
+            int entryCount = _launcherHistoryEntries.Count;
+            int visibleCount = Mathf.Min(_launcherMetrics.HistoryVisibleEntryCount, entryCount);
 
             if (_launcherMetrics.HistoryHeight <= 0f || visibleCount <= 0)
             {
@@ -1698,7 +1741,12 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 {
                     content[i].style.display = DisplayStyle.None;
                 }
-                _lastSeenBufferVersion = Terminal.Buffer?.Version;
+
+                _lastRenderedLauncherHistoryVersion = historyVersion;
+                _cachedLauncherScrollVersion = historyVersion;
+                _cachedLauncherScrollValue = 0f;
+                _restoreLauncherScrollPending = false;
+                _launcherHistoryContentHeight = 0f;
                 _needsScrollToEnd = false;
                 return;
             }
@@ -1723,28 +1771,29 @@ namespace WallstopStudios.DxCommandTerminal.UI
             float denominator = Mathf.Max(1f, visibleCount - 1f);
             for (int i = 0; i < visibleCount; ++i)
             {
-                int logIndex = logs.Count - 1 - i;
+                int historyIndex = entryCount - 1 - i;
+                CommandHistoryEntry entry = _launcherHistoryEntries[historyIndex];
                 VisualElement element = content[i];
-                LogItem logItem = logs[logIndex];
+                LogItem logItem = new(TerminalLogType.Input, entry.Text, string.Empty);
 
                 switch (element)
                 {
                     case TextField logText:
                     {
                         ApplyLogStyling(logText, logItem);
-                        logText.value = logItem.message;
+                        logText.value = entry.Text;
                         break;
                     }
                     case Label logLabel:
                     {
                         ApplyLogStyling(logLabel, logItem);
-                        logLabel.text = logItem.message;
+                        logLabel.text = entry.Text;
                         break;
                     }
                     case Button button:
                     {
                         ApplyLogStyling(button, logItem);
-                        button.text = logItem.message;
+                        button.text = entry.Text;
                         break;
                     }
                 }
@@ -1757,7 +1806,36 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 element.style.opacity = Mathf.Clamp01(fade);
             }
 
-            _lastSeenBufferVersion = Terminal.Buffer.Version;
+            bool historyChanged = historyVersion != _lastRenderedLauncherHistoryVersion;
+            bool restoreRequested = _restoreLauncherScrollPending;
+            float? targetScroll = null;
+
+            if (restoreRequested)
+            {
+                float targetValue = _cachedLauncherScrollValue;
+                if (_cachedLauncherScrollVersion != historyVersion)
+                {
+                    targetValue = 0f;
+                }
+
+                _cachedLauncherScrollVersion = historyVersion;
+                _cachedLauncherScrollValue = targetValue;
+                targetScroll = targetValue;
+                _restoreLauncherScrollPending = false;
+            }
+            else if (historyChanged)
+            {
+                _cachedLauncherScrollVersion = historyVersion;
+                _cachedLauncherScrollValue = 0f;
+                targetScroll = 0f;
+            }
+
+            if (targetScroll.HasValue)
+            {
+                ScheduleLauncherScroll(targetScroll.Value);
+            }
+
+            _lastRenderedLauncherHistoryVersion = historyVersion;
             _needsScrollToEnd = false;
         }
 
@@ -1794,6 +1872,55 @@ namespace WallstopStudios.DxCommandTerminal.UI
             {
                 _logScrollView.verticalScroller.value = _logScrollView.verticalScroller.highValue;
             }
+        }
+
+        private void CacheLauncherScrollPosition()
+        {
+            if (_logScrollView?.verticalScroller == null)
+            {
+                return;
+            }
+
+            float highValue = _logScrollView.verticalScroller.highValue;
+            float currentValue = Mathf.Clamp(
+                _logScrollView.verticalScroller.value,
+                0f,
+                highValue
+            );
+            _cachedLauncherScrollValue = currentValue;
+            _cachedLauncherScrollVersion = Terminal.History?.Version ?? -1;
+        }
+
+        private void ScheduleLauncherScroll(float targetValue)
+        {
+            if (_logScrollView?.verticalScroller == null)
+            {
+                return;
+            }
+
+            float clampedTarget = Mathf.Clamp(
+                targetValue,
+                0f,
+                _logScrollView.verticalScroller.highValue
+            );
+
+            _logScrollView
+                .schedule
+                .Execute(() =>
+                {
+                    if (_logScrollView?.verticalScroller == null)
+                    {
+                        return;
+                    }
+
+                    float highValue = _logScrollView.verticalScroller.highValue;
+                    _logScrollView.verticalScroller.value = Mathf.Clamp(
+                        clampedTarget,
+                        0f,
+                        highValue
+                    );
+                })
+                .ExecuteLater(0);
         }
 
         private void RefreshAutoCompleteHints()
@@ -2510,9 +2637,9 @@ namespace WallstopStudios.DxCommandTerminal.UI
             _logScrollView = scrollView;
         }
 
-        internal void RefreshLauncherHistoryForTests(IReadOnlyList<LogItem> logs)
+        internal void RefreshLauncherHistoryForTests()
         {
-            RefreshLauncherHistory(logs);
+            RefreshLauncherHistory();
         }
 
         internal void ResetWindowForTests()
@@ -2907,7 +3034,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             if (visibleHistoryCount == 0)
             {
-                int pendingLogs = Terminal.Buffer?.Logs != null ? Terminal.Buffer.Logs.Count : 0;
+                int pendingLogs = Terminal.History?.Count ?? 0;
                 visibleHistoryCount = Mathf.Min(
                     pendingLogs,
                     _launcherMetrics.HistoryVisibleEntryCount

@@ -19,6 +19,8 @@ namespace WallstopStudios.DxCommandTerminal.Attributes
 
         public bool DevelopmentOnly { get; set; }
 
+        public bool IncludeInHistory { get; set; } = true;
+
         public RegisterCommandAttribute(string commandName = null)
         {
             commandName = commandName?.Replace(" ", string.Empty).Trim();

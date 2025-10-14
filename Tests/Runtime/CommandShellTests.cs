@@ -349,5 +349,30 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 }
             }
         }
+
+        [UnityTest]
+        public IEnumerator ClearHistoryCommandClearsWithoutPersistingCommand()
+        {
+            yield return TestSceneHelpers.CleanRestart(resetStateOnInit: true);
+
+            CommandShell shell = Terminal.Shell;
+            Assert.IsNotNull(shell);
+            CommandHistory history = Terminal.History;
+            Assert.IsNotNull(history);
+
+            bool executed = shell.RunCommand("log test-history");
+            Assert.IsTrue(executed, "Expected log command to execute successfully");
+
+            string[] entries =
+                history.GetHistory(onlySuccess: false, onlyErrorFree: false).ToArray();
+            CollectionAssert.Contains(entries, "log test-history");
+
+            shell.RunCommand("clear-history");
+
+            entries = history.GetHistory(onlySuccess: false, onlyErrorFree: false).ToArray();
+            Assert.IsEmpty(entries, "History should be empty after invoking clear-history");
+
+            yield break;
+        }
     }
 }

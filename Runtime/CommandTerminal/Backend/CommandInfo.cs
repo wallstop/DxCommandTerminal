@@ -10,6 +10,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         public readonly string help;
         public readonly string hint;
         public readonly IArgumentCompleter completer;
+        public readonly bool includeInHistory;
 
         public CommandInfo(
             Action<CommandArg[]> proc,
@@ -17,7 +18,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             int maxArgCount,
             string help,
             string hint,
-            IArgumentCompleter completer = null
+            IArgumentCompleter completer = null,
+            bool includeInHistory = true
         )
         {
             this.proc = proc;
@@ -26,6 +28,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             this.help = help;
             this.hint = hint;
             this.completer = completer;
+            this.includeInHistory = includeInHistory;
         }
     }
 }

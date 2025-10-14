@@ -341,7 +341,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             isDefault: true,
             Name = "clear-history",
             Help = "Clear the command console's history",
-            MaxArgCount = 0
+            MaxArgCount = 0,
+            IncludeInHistory = false
         )]
         public static void CommandClearHistory(CommandArg[] args)
         {

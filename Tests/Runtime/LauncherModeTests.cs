@@ -67,16 +67,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             TerminalUI terminal = TerminalUI.Instance;
             Assert.IsNotNull(terminal);
 
-            CommandLog previousLog = Terminal.Buffer;
-            var log = new CommandLog(16);
-            Terminal.Buffer = log;
+            CommandHistory previousHistory = Terminal.History;
+            var history = new CommandHistory(16);
+            Terminal.History = history;
 
             try
             {
-                log.EnqueueMessage("first", TerminalLogType.Message, includeStackTrace: false);
-                log.EnqueueMessage("second", TerminalLogType.Message, includeStackTrace: false);
-                log.EnqueueMessage("third", TerminalLogType.Message, includeStackTrace: false);
-                log.DrainPending();
+                history.Push("first", true, true);
+                history.Push("second", true, true);
+                history.Push("third", true, true);
 
                 var metrics = new LauncherLayoutMetrics(
                     width: 640f,
@@ -96,7 +95,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 terminal.SetLogScrollViewForTests(scroll);
                 terminal.SetLauncherMetricsForTests(metrics);
                 terminal.SetState(TerminalState.OpenLauncher);
-                terminal.RefreshLauncherHistoryForTests(Terminal.Buffer.Logs);
+                terminal.RefreshLauncherHistoryForTests();
 
                 VisualElement content = terminal.LogScrollViewForTests.contentContainer;
                 Assert.That(content.childCount, Is.EqualTo(3));
@@ -121,7 +120,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             }
             finally
             {
-                Terminal.Buffer = previousLog;
+                Terminal.History = previousHistory;
             }
 
             yield return TestSceneHelpers.DestroyTerminalAndWait();

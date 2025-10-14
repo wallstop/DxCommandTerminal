@@ -268,7 +268,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                     attribute.MaxArgCount,
                     attribute.Help,
                     attribute.Hint,
-                    completer
+                    completer,
+                    attribute.IncludeInHistory
                 );
                 if (success)
                 {
@@ -428,13 +429,19 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 }
 
                 _errorMessages.Enqueue(invalidMessage);
-                _history.Push(line, false, false);
+                if (command.includeInHistory)
+                {
+                    _history.Push(line, false, false);
+                }
                 return false;
             }
 
             int errorCount = _errorMessages.Count;
             command.proc?.Invoke(arguments);
-            _history.Push(line, true, errorCount == _errorMessages.Count);
+            if (command.includeInHistory)
+            {
+                _history.Push(line, true, errorCount == _errorMessages.Count);
+            }
             return true;
         }
 
@@ -469,10 +476,19 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             int maxArgs = -1,
             string help = "",
             string hint = null,
-            IArgumentCompleter completer = null
+            IArgumentCompleter completer = null,
+            bool includeInHistory = true
         )
         {
-            CommandInfo info = new(proc, minArgs, maxArgs, help, hint, completer);
+            CommandInfo info = new(
+                proc,
+                minArgs,
+                maxArgs,
+                help,
+                hint,
+                completer,
+                includeInHistory
+            );
             return AddCommand(name, info);
         }
 
