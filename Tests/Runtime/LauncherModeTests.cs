@@ -126,5 +126,50 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             yield return TestSceneHelpers.DestroyTerminalAndWait();
         }
+
+        [UnityTest]
+        public IEnumerator LauncherResetMaintainsDynamicTargetHeight()
+        {
+            yield return TestSceneHelpers.CleanRestart(resetStateOnInit: true);
+
+            TerminalUI terminal = TerminalUI.Instance;
+            Assert.IsNotNull(terminal);
+
+            terminal.ToggleLauncher();
+            yield return TestSceneHelpers.WaitFrames(2);
+
+            Assert.That(terminal.CurrentStateForTests, Is.EqualTo(TerminalState.OpenLauncher));
+            Assert.That(terminal.LauncherMetricsInitializedForTests, Is.True);
+
+            float launcherMaxHeight = terminal.LauncherMetricsForTests.Height;
+            Assert.That(launcherMaxHeight, Is.GreaterThan(0f));
+
+            float reducedTarget = Mathf.Max(60f, launcherMaxHeight * 0.25f);
+            terminal.SetWindowHeightsForTests(reducedTarget, reducedTarget);
+
+            Assert.That(
+                terminal.TargetWindowHeightForTests,
+                Is.EqualTo(reducedTarget).Within(0.001f)
+            );
+
+            terminal.ResetWindowForTests();
+
+            Assert.That(
+                terminal.TargetWindowHeightForTests,
+                Is.EqualTo(reducedTarget).Within(0.001f)
+            );
+
+            float excessiveTarget = launcherMaxHeight * 1.5f;
+            terminal.SetWindowHeightsForTests(excessiveTarget, excessiveTarget);
+
+            terminal.ResetWindowForTests();
+
+            Assert.That(
+                terminal.TargetWindowHeightForTests,
+                Is.EqualTo(terminal.LauncherMetricsForTests.Height).Within(0.001f)
+            );
+
+            yield return TestSceneHelpers.DestroyTerminalAndWait();
+        }
     }
 }

@@ -775,10 +775,35 @@ namespace WallstopStudios.DxCommandTerminal.UI
                     }
                     case TerminalState.OpenLauncher:
                     {
-                        _launcherMetrics = _launcherSettings.ComputeMetrics(width, height);
+                        LauncherLayoutMetrics computedMetrics = _launcherSettings.ComputeMetrics(
+                            width,
+                            height
+                        );
+                        float reservedEstimate = Mathf.Max(
+                            _launcherSettings.inputReservePixels,
+                            48f
+                        );
+                        float estimatedMinimumHeight =
+                            (computedMetrics.InsetPadding * 2f) + reservedEstimate;
+                        _launcherMetrics = computedMetrics;
                         _launcherMetricsInitialized = true;
                         _realWindowHeight = _launcherMetrics.Height;
-                        _targetWindowHeight = _realWindowHeight;
+                        if (!wasLauncher)
+                        {
+                            _targetWindowHeight = Mathf.Clamp(
+                                estimatedMinimumHeight,
+                                0f,
+                                _launcherMetrics.Height
+                            );
+                        }
+                        else
+                        {
+                            _targetWindowHeight = Mathf.Clamp(
+                                _targetWindowHeight,
+                                0f,
+                                _launcherMetrics.Height
+                            );
+                        }
                         break;
                     }
                     default:
@@ -1410,7 +1435,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 _logScrollView.style.marginTop = 0;
             }
 
-            _logScrollView.verticalScrollerVisibility = ScrollerVisibility.Hidden;
+            _logScrollView.verticalScrollerVisibility = ScrollerVisibility.Auto;
 
             _autoCompleteContainer.style.position = Position.Absolute;
             _autoCompleteContainer.style.maxHeight = _launcherMetrics.HistoryHeight;
@@ -2393,6 +2418,23 @@ namespace WallstopStudios.DxCommandTerminal.UI
             _launcherMetricsInitialized = initialized;
         }
 
+        internal LauncherLayoutMetrics LauncherMetricsForTests => _launcherMetrics;
+
+        internal float TargetWindowHeightForTests => _targetWindowHeight;
+
+        internal float CurrentWindowHeightForTests => _currentWindowHeight;
+
+        internal void SetWindowHeightsForTests(
+            float currentHeight,
+            float targetHeight,
+            bool isAnimating = false
+        )
+        {
+            _currentWindowHeight = currentHeight;
+            _targetWindowHeight = targetHeight;
+            _isAnimating = isAnimating;
+        }
+
         internal void SetLogScrollViewForTests(ScrollView scrollView)
         {
             _logScrollView = scrollView;
@@ -2401,6 +2443,11 @@ namespace WallstopStudios.DxCommandTerminal.UI
         internal void RefreshLauncherHistoryForTests(IReadOnlyList<LogItem> logs)
         {
             RefreshLauncherHistory(logs);
+        }
+
+        internal void ResetWindowForTests()
+        {
+            ResetWindowIdempotent();
         }
 
         private void ResetLauncherSettings()
@@ -2720,6 +2767,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             else
             {
                 _autoCompleteContainer.style.display = DisplayStyle.None;
+                _autoCompleteContainer.style.height = 0;
             }
 
             float suggestionsHeight = hasSuggestions
@@ -2747,6 +2795,21 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 }
 
                 suggestionsHeight = Mathf.Max(computedHeight, suggestionsHeight);
+            }
+
+            if (hasSuggestions && suggestionsHeight <= 0f)
+            {
+                int childCount = _autoCompleteContainer.contentContainer.childCount;
+                suggestionsHeight = Mathf.Min(
+                    _launcherMetrics.HistoryHeight,
+                    Mathf.Max(0f, childCount * 28f)
+                );
+            }
+
+            suggestionsHeight = Mathf.Min(suggestionsHeight, _launcherMetrics.HistoryHeight);
+            if (hasSuggestions)
+            {
+                _autoCompleteContainer.style.height = Mathf.Max(0f, suggestionsHeight);
             }
 
             float reservedForSuggestions = (
@@ -2786,10 +2849,19 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             if (!Mathf.Approximately(clampedHeight, _targetWindowHeight))
             {
-                _initialWindowHeight = _currentWindowHeight;
+                _initialWindowHeight = Mathf.Clamp(
+                    _currentWindowHeight,
+                    minimumHeight,
+                    _launcherMetrics.Height
+                );
                 _targetWindowHeight = clampedHeight;
                 _animationTimer = 0f;
                 _isAnimating = true;
+                if (Mathf.Approximately(_initialWindowHeight, clampedHeight))
+                {
+                    _currentWindowHeight = clampedHeight;
+                    _isAnimating = false;
+                }
             }
 
             float availableForHistory =
