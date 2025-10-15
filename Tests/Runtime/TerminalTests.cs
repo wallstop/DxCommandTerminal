@@ -17,6 +17,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     public sealed class TerminalTests
     {
         private TerminalRuntimeProfile _runtimeProfileUnderTest;
+        private TerminalAppearanceProfile _appearanceProfileUnderTest;
 
         [UnityTearDown]
         public IEnumerator UnityTearDown()
@@ -26,6 +27,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             {
                 ScriptableObject.DestroyImmediate(_runtimeProfileUnderTest);
                 _runtimeProfileUnderTest = null;
+            }
+            if (_appearanceProfileUnderTest != null)
+            {
+                ScriptableObject.DestroyImmediate(_appearanceProfileUnderTest);
+                _appearanceProfileUnderTest = null;
             }
         }
 
@@ -242,6 +248,47 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.IsTrue(shell.IgnoringDefaultCommands);
             Assert.IsTrue(shell.IgnoredCommands.Contains("clear"));
             Assert.IsTrue(log.ignoredLogTypes.Contains(TerminalLogType.Warning));
+        }
+
+        [UnityTest]
+        public IEnumerator AppearanceProfileOverridesSerializedFields()
+        {
+            TerminalAppearanceProfile profile = ScriptableObject.CreateInstance<TerminalAppearanceProfile>();
+            _appearanceProfileUnderTest = profile;
+            profile.showGUIButtons = false;
+            profile.runButtonText = "execute";
+            profile.closeButtonText = "dismiss";
+            profile.smallButtonText = "mini";
+            profile.fullButtonText = "mega";
+            profile.launcherButtonText = "apps";
+            profile.hintDisplayMode = HintDisplayMode.Always;
+            profile.makeHintsClickable = false;
+            profile.historyFadeTargets = TerminalHistoryFadeTargets.Launcher;
+            profile.cursorBlinkRateMilliseconds = 250;
+            profile.logUnityMessages = true;
+
+            yield return SpawnTerminal(
+                resetStateOnInit: true,
+                configure: terminal => terminal.SetAppearanceProfileForTests(profile)
+            );
+
+            TerminalUI terminal = TerminalUI.Instance;
+            Assert.IsNotNull(terminal);
+
+            Assert.IsFalse(terminal.showGUIButtons);
+            Assert.AreEqual("execute", terminal.runButtonText);
+            Assert.AreEqual("dismiss", terminal.closeButtonText);
+            Assert.AreEqual("mini", terminal.smallButtonText);
+            Assert.AreEqual("mega", terminal.fullButtonText);
+            Assert.AreEqual("apps", terminal.launcherButtonText);
+            Assert.AreEqual(HintDisplayMode.Always, terminal.hintDisplayMode);
+            Assert.IsFalse(terminal.makeHintsClickable);
+            Assert.AreEqual(TerminalHistoryFadeTargets.Launcher, terminal.HistoryFadeTargetsForTests);
+            Assert.AreEqual(250, terminal.CursorBlinkRateForTests);
+            Assert.IsTrue(terminal.LogUnityMessagesForTests);
+
+            ScriptableObject.DestroyImmediate(profile);
+            _appearanceProfileUnderTest = null;
         }
 #endif
 

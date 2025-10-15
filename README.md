@@ -85,6 +85,7 @@ Grab a copy of this repo (either `git clone` or [download a zip of the source](h
 - **Modular UI presenters** – The 3.6k line `TerminalUI` has been split into partials (`TerminalUI.LogView`, `TerminalUI.AutoCompleteView`, `TerminalUI.LayoutView`) that focus on specific responsibilities while the core MonoBehaviour handles lifecycle and runtime wiring.
 - **Input abstraction** – `TerminalKeyboardController` targets the new `ITerminalInputTarget` interface, so custom terminals or headless tests can drive command execution without a concrete `TerminalUI`. Playmode tests confirm dispatch behaviour and fallback to the built-in UI.
 - **Profile-driven input** – `TerminalInputProfile` ScriptableObjects package hotkeys and control ordering so multiple controllers can share consistent bindings.
+- **Appearance presets** – `TerminalAppearanceProfile` captures button labels, hint behaviour, history fade, and cursor settings to standardise the terminal look across scenes.
 - **Editor interoperability** – Serialized-property utilities expose an override hook so editor drawers (like `DxShowIfPropertyDrawer`) can access backing objects without relying on runtime internals, preserving assembly boundaries.
 - **Allocation guardrails** – An automated playmode test (`AllocationRegressionTests`) monitors `GC.Alloc` while issuing commands and toggling terminal state to catch regressions immediately.
 

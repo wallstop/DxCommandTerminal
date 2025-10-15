@@ -189,6 +189,9 @@ namespace WallstopStudios.DxCommandTerminal.UI
         [SerializeField]
         internal TerminalThemePack _themePack;
 
+        [SerializeField]
+        private TerminalAppearanceProfile _appearanceProfile;
+
         private IInputHandler[] _inputHandlers;
 
         private TerminalRuntime _runtime;
@@ -440,6 +443,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
         private void Awake()
         {
             ApplyRuntimeProfile();
+            ApplyAppearanceProfile();
 
             TerminalRuntimeModeFlags resolvedRuntimeModes = ResolveRuntimeModeFlags();
             ApplyRuntimeMode(resolvedRuntimeModes);
@@ -502,6 +506,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             string[] staticStaticPropertiesTracked =
             {
                 nameof(_runtimeProfile),
+                nameof(_appearanceProfile),
                 nameof(_logBufferSize),
                 nameof(_historyBufferSize),
                 nameof(_ignoredLogTypes),
@@ -569,6 +574,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
 
             ApplyRuntimeProfile();
+            ApplyAppearanceProfile();
         }
 #endif
 
@@ -597,6 +603,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             Terminal.RegisterRuntime(_runtime);
 
             RefreshStaticState(force: resetStateOnInit);
+            ApplyAppearanceProfile();
             ConsumeAndLogErrors();
 
             if (_logUnityMessages && !_unityLogAttached)
@@ -735,6 +742,26 @@ namespace WallstopStudios.DxCommandTerminal.UI
             {
                 destination.Add(source[i]);
             }
+        }
+
+        private void ApplyAppearanceProfile()
+        {
+            if (_appearanceProfile == null)
+            {
+                return;
+            }
+
+            showGUIButtons = _appearanceProfile.showGUIButtons;
+            runButtonText = _appearanceProfile.runButtonText;
+            closeButtonText = _appearanceProfile.closeButtonText;
+            smallButtonText = _appearanceProfile.smallButtonText;
+            fullButtonText = _appearanceProfile.fullButtonText;
+            launcherButtonText = _appearanceProfile.launcherButtonText;
+            hintDisplayMode = _appearanceProfile.hintDisplayMode;
+            makeHintsClickable = _appearanceProfile.makeHintsClickable;
+            _historyFadeTargets = _appearanceProfile.historyFadeTargets;
+            _cursorBlinkRateMilliseconds = Mathf.Max(0, _appearanceProfile.cursorBlinkRateMilliseconds);
+            _logUnityMessages = _appearanceProfile.logUnityMessages;
         }
 
 #if UNITY_EDITOR
@@ -1777,6 +1804,18 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 RefreshStaticState(force: true);
             }
         }
+
+        internal void SetAppearanceProfileForTests(TerminalAppearanceProfile profile)
+        {
+            _appearanceProfile = profile;
+            ApplyAppearanceProfile();
+        }
+
+        internal TerminalHistoryFadeTargets HistoryFadeTargetsForTests => _historyFadeTargets;
+
+        internal int CursorBlinkRateForTests => _cursorBlinkRateMilliseconds;
+
+        internal bool LogUnityMessagesForTests => _logUnityMessages;
 
         internal void SetWindowHeightsForTests(
             float currentHeight,

@@ -47,7 +47,7 @@
 - Allow multiple profiles per project and expose assignment in inspector with sensible defaults. `TerminalLauncherSettings` becomes a serializable asset reused across scenes.
 - Move persisted theme/font selection into a `TerminalThemePersistenceProfile` (ScriptableObject + runtime adapter) to trim IO concerns from `TerminalThemePersister` MonoBehaviour; supports injection/mocking in tests.
 
-**Progress:** `TerminalInputProfile` now drives `TerminalKeyboardController` hotkeys/control order, with playmode coverage. Appearance/command profiles remain outstanding.
+**Progress:** `TerminalInputProfile` now drives controller bindings (with playmode coverage) and `TerminalAppearanceProfile` standardises button/hint/history settings applied at startup. Command/persistence profiles remain outstanding.
 
 ### P1 — UI Rendering & Virtualization Improvements
 - Swap manual `VisualElement` management with UIToolkit `ListView` virtualization for history/log to avoid re-creating labels each refresh; ensure zero allocation by providing custom `MakeItem`/`BindItem` that reuse pooled entries.
