@@ -44,6 +44,113 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         [Test]
+        public void StandardLayoutPlacesInputAtBottom()
+        {
+            GameObject go = new GameObject("StandardLayoutRegressionTest");
+            go.SetActive(false);
+            TerminalUI terminal = go.AddComponent<TerminalUI>();
+            terminal.disableUIForTests = true;
+            go.SetActive(true);
+
+            try
+            {
+                VisualElement terminalContainer = new VisualElement();
+                VisualElement inputContainer = new VisualElement();
+                ScrollView autoComplete = new ScrollView();
+                ScrollView log = new ScrollView();
+
+                terminal.InjectLayoutElementsForTests(
+                    terminalContainer,
+                    inputContainer,
+                    autoComplete,
+                    log
+                );
+                terminal.ArrangeStandardVisualHierarchyForTests();
+
+                Assert.That(terminalContainer.childCount, Is.EqualTo(3));
+                Assert.That(terminalContainer[0], Is.SameAs(log));
+                Assert.That(terminalContainer[1], Is.SameAs(autoComplete));
+                Assert.That(terminalContainer[2], Is.SameAs(inputContainer));
+            }
+            finally
+            {
+                Object.DestroyImmediate(go);
+            }
+        }
+
+        [Test]
+        public void LauncherHistoryUsesAvailableHeight()
+        {
+            GameObject go = new GameObject("LauncherHistoryHeightTest");
+            go.SetActive(false);
+            TerminalUI terminal = go.AddComponent<TerminalUI>();
+            terminal.disableUIForTests = true;
+            go.SetActive(true);
+
+            try
+            {
+                VisualElement terminalContainer = new VisualElement();
+                VisualElement inputContainer = new VisualElement();
+                ScrollView autoComplete = new ScrollView();
+                ScrollView log = new ScrollView();
+                terminal.InjectLayoutElementsForTests(
+                    terminalContainer,
+                    inputContainer,
+                    autoComplete,
+                    log
+                );
+                terminal.ArrangeLauncherVisualHierarchyForTests();
+                terminal.ForceStateForTests(TerminalState.OpenLauncher);
+
+                LauncherLayoutMetrics metrics = new LauncherLayoutMetrics(
+                    width: 640f,
+                    height: 260f,
+                    left: 0f,
+                    top: 0f,
+                    historyHeight: 180f,
+                    cornerRadius: 12f,
+                    insetPadding: 12f,
+                    historyVisibleEntryCount: 6,
+                    historyFadeExponent: 2f,
+                    snapOpen: true,
+                    animationDuration: 0.12f
+                );
+
+                terminal.SetLauncherMetricsForTests(metrics);
+                terminal.SetWindowHeightsForTests(metrics.Height, metrics.Height);
+                terminal.SetLauncherContentHeightsForTests(historyHeight: 260f, suggestionHeight: 0f);
+
+                terminal.LogItemsForTests.Clear();
+                terminal.LogItemsForTests.Add(new LogItem(TerminalLogType.Message, "entry", string.Empty));
+
+                terminal.UpdateLauncherLayoutMetricsForTests();
+
+                float verticalPadding = Mathf.Max(4f, metrics.InsetPadding * 0.5f);
+                float inputHeight = TerminalUI.LauncherInputFallbackHeightForTests;
+                float spacingAboveLog = Mathf.Max(
+                    TerminalUI.LauncherAutoCompleteSpacingForTests,
+                    verticalPadding * 0.25f
+                );
+                float maximumHistoryHeight = Mathf.Max(
+                    metrics.HistoryHeight,
+                    metrics.Height - (verticalPadding * 2f) - inputHeight - spacingAboveLog
+                );
+                maximumHistoryHeight = Mathf.Max(0f, maximumHistoryHeight);
+
+                float expected = maximumHistoryHeight;
+
+                Assert.That(log.style.display.value, Is.EqualTo(DisplayStyle.Flex));
+                Assert.That(log.style.height.value, Is.EqualTo(expected).Within(0.001f));
+                Assert.That(log.style.maxHeight.value, Is.EqualTo(expected).Within(0.001f));
+                Assert.That(log.style.marginTop.value, Is.EqualTo(spacingAboveLog).Within(0.001f));
+            }
+            finally
+            {
+                Object.DestroyImmediate(go);
+            }
+        }
+
+        [Test]
         public void LauncherHistoryRemainsVisibleWhenItemsExist()
         {
             GameObject go = new GameObject("LauncherHistoryRegressionTest");

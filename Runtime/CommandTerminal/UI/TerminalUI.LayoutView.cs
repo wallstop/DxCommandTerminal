@@ -227,7 +227,10 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 _logScrollView.style.height = _launcherMetrics.HistoryHeight;
                 _logScrollView.style.maxHeight = _launcherMetrics.HistoryHeight;
                 _logScrollView.style.minHeight = 0;
+                _logScrollView.style.flexGrow = 0f;
+                _logScrollView.style.flexShrink = 1f;
                 _logScrollView.style.marginTop = Mathf.Max(6f, verticalPadding * 0.35f);
+                _logScrollView.style.marginBottom = 0;
             }
             else
             {
@@ -236,6 +239,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 _logScrollView.style.maxHeight = 0;
                 _launcherHistoryContentHeight = 0f;
                 _logScrollView.style.marginTop = 0;
+                _logScrollView.style.marginBottom = 0;
             }
 
             _logScrollView.verticalScrollerVisibility = ScrollerVisibility.Auto;
@@ -292,6 +296,8 @@ namespace WallstopStudios.DxCommandTerminal.UI
             _logScrollView.style.maxHeight = new StyleLength(StyleKeyword.Null);
             _logScrollView.style.minHeight = new StyleLength(StyleKeyword.Null);
             _logScrollView.style.display = DisplayStyle.Flex;
+            _logScrollView.style.flexGrow = 1f;
+            _logScrollView.style.flexShrink = 1f;
             _logScrollView.verticalScrollerVisibility = ScrollerVisibility.Auto;
 
             _autoCompleteContainer.style.position = Position.Relative;
@@ -313,9 +319,9 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             EnsureChildOrder(
                 _terminalContainer,
-                _inputContainer,
+                _logScrollView,
                 _autoCompleteContainer,
-                _logScrollView
+                _inputContainer
             );
         }
         private void UpdateLauncherLayoutMetrics()
@@ -451,10 +457,19 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 ? visibleHistoryCount * LauncherEstimatedHistoryRowHeight
                 : 0f;
 
+            float maximumHistoryHeight = Mathf.Max(
+                _launcherMetrics.HistoryHeight,
+                _launcherMetrics.Height
+                    - (verticalPadding * 2f)
+                    - inputHeight
+                    - reservedForSuggestions
+            );
+            maximumHistoryHeight = Mathf.Max(0f, maximumHistoryHeight);
+
             float desiredHistoryHeight = hasHistory
                 ? Mathf.Min(
                     Mathf.Max(historyHeightFromContent, estimatedHistoryHeight),
-                    _launcherMetrics.HistoryHeight
+                    maximumHistoryHeight
                 )
                 : 0f;
             if (desiredHistoryHeight < 0f)
@@ -499,7 +514,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 - (verticalPadding * 2f)
                 - inputHeight
                 - reservedForSuggestions;
-            availableForHistory = Mathf.Min(availableForHistory, _launcherMetrics.HistoryHeight);
+            availableForHistory = Mathf.Min(availableForHistory, maximumHistoryHeight);
             availableForHistory = Mathf.Max(0f, availableForHistory);
 
             bool hasHistoryContent = _logListItems.Count > 0;
@@ -509,6 +524,8 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 _logScrollView.style.display = DisplayStyle.None;
                 _logScrollView.style.height = 0;
                 _logScrollView.style.maxHeight = 0;
+                _logScrollView.style.flexGrow = 0f;
+                _logScrollView.style.flexShrink = 1f;
                 _launcherHistoryContentHeight = 0f;
             }
             else
@@ -516,9 +533,12 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 _logScrollView.style.display = DisplayStyle.Flex;
                 _logScrollView.style.height = availableForHistory;
                 _logScrollView.style.maxHeight = availableForHistory;
+                _logScrollView.style.flexGrow = 0f;
+                _logScrollView.style.flexShrink = 1f;
             }
 
             _logScrollView.style.marginTop = spacingAboveLog;
+            _logScrollView.style.marginBottom = 0;
         }
         private void RefreshStateButtons()
         {
@@ -656,6 +676,17 @@ namespace WallstopStudios.DxCommandTerminal.UI
             {
                 ToggleLauncher();
             }
+        }
+
+
+        internal void ArrangeStandardVisualHierarchyForTests()
+        {
+            EnsureChildOrder(
+                _terminalContainer,
+                _logScrollView,
+                _autoCompleteContainer,
+                _inputContainer
+            );
         }
 
         internal void ArrangeLauncherVisualHierarchyForTests()

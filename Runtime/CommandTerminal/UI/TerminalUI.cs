@@ -24,6 +24,11 @@ namespace WallstopStudios.DxCommandTerminal.UI
         private const float LauncherInputFallbackHeight = 24f;
         private const float StandardEstimatedHistoryRowHeight = 24f;
 
+        internal const float LauncherInputFallbackHeightForTests = LauncherInputFallbackHeight;
+        internal const float LauncherAutoCompleteSpacingForTests = LauncherAutoCompleteSpacing;
+        internal const float LauncherEstimatedHistoryRowHeightForTests = LauncherEstimatedHistoryRowHeight;
+
+
         private enum ScrollBarCaptureState
         {
             None = 0,
