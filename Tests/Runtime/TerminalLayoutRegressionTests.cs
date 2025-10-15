@@ -127,7 +127,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 terminal.SetLauncherContentHeightsForTests(historyHeight: 260f, suggestionHeight: 0f);
 
                 terminal.LogItemsForTests.Clear();
-                terminal.LogItemsForTests.Add(new LogItem(TerminalLogType.Message, "entry", string.Empty));
+                terminal.LogItemsForTests.Add(new LogItem(TerminalLogType.Input, "entry", string.Empty));
 
                 terminal.UpdateLauncherLayoutMetricsForTests();
 
@@ -247,7 +247,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
                 terminal.LogItemsForTests.Clear();
                 terminal.LogItemsForTests.Add(
-                    new LogItem(TerminalLogType.Message, "run-tests", string.Empty)
+                    new LogItem(TerminalLogType.Input, "run-tests", string.Empty)
                 );
 
                 terminal.UpdateLauncherLayoutMetricsForTests();
@@ -380,6 +380,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 Assert.That(autoComplete.style.marginTop.value, Is.EqualTo(TerminalUI.LauncherAutoCompleteSpacingForTests * 0.5f).Within(0.001f));
                 Assert.That(log.style.marginTop.value, Is.EqualTo(TerminalUI.LauncherAutoCompleteSpacingForTests * 0.5f).Within(0.001f));
                 Assert.That(log.style.marginBottom.value, Is.EqualTo(0f).Within(0.001f));
+
+                terminal.CompletionBufferForTests.Clear();
+                terminal.RefreshAutoCompleteHintsForTests();
+                terminal.SetLauncherContentHeightsForTests(historyHeight: 100f, suggestionHeight: 0f);
+                terminal.UpdateLauncherLayoutMetricsForTests();
+
+                Assert.That(autoComplete.style.display.value, Is.EqualTo(DisplayStyle.None));
+                Assert.That(autoComplete.style.marginTop.value, Is.EqualTo(0f).Within(0.001f));
+                Assert.That(log.style.marginTop.value, Is.EqualTo(0f).Within(0.001f));
             }
             finally
             {

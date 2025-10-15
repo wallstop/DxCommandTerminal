@@ -18,7 +18,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
     public sealed partial class TerminalUI : MonoBehaviour, ITerminalInputTarget
     {
         private const string TerminalRootName = "TerminalRoot";
-        private const float LauncherAutoCompleteSpacing = 4f;
+        private const float LauncherAutoCompleteSpacing = 3f;
         private const float LauncherEstimatedSuggestionRowHeight = 32f;
         private const float LauncherEstimatedHistoryRowHeight = 28f;
         private const float LauncherInputFallbackHeight = 24f;

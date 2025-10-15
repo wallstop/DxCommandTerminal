@@ -464,7 +464,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             bool hasHistory = visibleHistoryCount > 0;
 
-            const float MinimumSpacing = 2f;
+            const float MinimumSpacing = 1f;
             float spacingAboveLog = 0f;
             if (hasHistory && hasSuggestions)
             {
