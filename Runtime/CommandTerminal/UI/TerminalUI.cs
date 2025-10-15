@@ -1861,6 +1861,8 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         internal ScrollView LogScrollViewForTests => _logScrollView;
 
+        internal ListView LogListViewForTests => _logListView;
+
         internal ScrollView AutoCompleteContainerForTests => _autoCompleteContainer;
 
         internal VisualElement InputContainerForTests => _inputContainer;

@@ -119,7 +119,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             long historyVersion = history.Version;
 
             _logListItems.Clear();
-            for (int i = 0; i < _launcherHistoryEntries.Count; ++i)
+            for (int i = _launcherHistoryEntries.Count - 1; i >= 0; --i)
             {
                 CommandHistoryEntry entry = _launcherHistoryEntries[i];
                 _logListItems.Add(

@@ -65,12 +65,17 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     autoComplete,
                     log
                 );
-                terminal.ArrangeStandardVisualHierarchyForTests();
+                terminal.SetWindowHeightsForTests(200f, 200f);
+                terminal.ConfigureStandardLayoutForTests(800f);
 
                 Assert.That(terminalContainer.childCount, Is.EqualTo(3));
                 Assert.That(terminalContainer[0], Is.SameAs(log));
                 Assert.That(terminalContainer[1], Is.SameAs(autoComplete));
                 Assert.That(terminalContainer[2], Is.SameAs(inputContainer));
+
+                Assert.That(log.style.display.value, Is.EqualTo(DisplayStyle.Flex));
+                Assert.That(log.style.flexGrow.value, Is.EqualTo(1f).Within(0.001f));
+                Assert.That(log.style.marginTop.value, Is.EqualTo(0f).Within(0.001f));
             }
             finally
             {
@@ -131,13 +136,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     TerminalUI.LauncherAutoCompleteSpacingForTests,
                     verticalPadding * 0.25f
                 );
-                float maximumHistoryHeight = Mathf.Max(
-                    metrics.HistoryHeight,
-                    metrics.Height - (verticalPadding * 2f) - inputHeight - spacingAboveLog
-                );
-                maximumHistoryHeight = Mathf.Max(0f, maximumHistoryHeight);
-
-                float expected = maximumHistoryHeight;
+                float expected = metrics.HistoryHeight;
 
                 Assert.That(log.style.display.value, Is.EqualTo(DisplayStyle.Flex));
                 Assert.That(log.style.height.value, Is.EqualTo(expected).Within(0.001f));
@@ -212,6 +211,65 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 terminal.UpdateLauncherLayoutMetricsForTests();
 
                 Assert.That(log.style.display.value, Is.EqualTo(DisplayStyle.None));
+            }
+            finally
+            {
+                Object.DestroyImmediate(go);
+            }
+        }
+
+        [Test]
+        public void LauncherHistoryNewestEntryAppearsNearInput()
+        {
+            GameObject go = new GameObject("LauncherHistoryOrderTest");
+            go.SetActive(false);
+            TerminalUI terminal = go.AddComponent<TerminalUI>();
+            terminal.disableUIForTests = true;
+            go.SetActive(true);
+
+            try
+            {
+                VisualElement terminalContainer = new VisualElement();
+                VisualElement inputContainer = new VisualElement();
+                ScrollView autoComplete = new ScrollView();
+                ScrollView log = new ScrollView();
+                terminal.InjectLayoutElementsForTests(
+                    terminalContainer,
+                    inputContainer,
+                    autoComplete,
+                    log
+                );
+                terminal.ArrangeLauncherVisualHierarchyForTests();
+
+                terminal.ForceStateForTests(TerminalState.OpenLauncher);
+                terminal.SetLauncherMetricsForTests(
+                    new LauncherLayoutMetrics(
+                        width: 640f,
+                        height: 240f,
+                        left: 0f,
+                        top: 0f,
+                        historyHeight: 160f,
+                        cornerRadius: 12f,
+                        insetPadding: 12f,
+                        historyVisibleEntryCount: 4,
+                        historyFadeExponent: 2f,
+                        snapOpen: true,
+                        animationDuration: 0.12f
+                    )
+                );
+
+                CommandHistory history = terminal.Runtime.History;
+                Assert.IsNotNull(history);
+                history.Push("first", true, true);
+                history.Push("second", true, true);
+                history.Push("third", true, true);
+
+                terminal.RefreshLauncherHistoryForTests();
+
+                Assert.That(terminal.LogItemsForTests.Count, Is.EqualTo(3));
+                Assert.That(terminal.LogItemsForTests[0].message, Is.EqualTo("third"));
+                Assert.That(terminal.LogItemsForTests[1].message, Is.EqualTo("second"));
+                Assert.That(terminal.LogItemsForTests[2].message, Is.EqualTo("first"));
             }
             finally
             {
