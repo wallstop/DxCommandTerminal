@@ -423,22 +423,31 @@ namespace WallstopStudios.DxCommandTerminal.Input
                 return;
             }
 
-            if (TryGetComponent<ITerminalInputTarget>(out ITerminalInputTarget resolvedTarget))
+            if (!TryGetComponent<ITerminalInputTarget>(out ITerminalInputTarget resolvedTarget))
+            {
+                MonoBehaviour[] behaviours = GetComponents<MonoBehaviour>();
+                for (int i = 0; i < behaviours.Length && resolvedTarget == null; ++i)
+                {
+                    if (behaviours[i] is ITerminalInputTarget candidate)
+                    {
+                        resolvedTarget = candidate;
+                    }
+                }
+            }
+
+            if (resolvedTarget != null)
             {
                 _inputTarget = resolvedTarget;
                 terminal = resolvedTarget as TerminalUI;
                 _missingTargetLogged = false;
             }
-            else
+            else if (!_missingTargetLogged)
             {
-                if (!_missingTargetLogged)
-                {
-                    Debug.LogError(
-                        "Failed to locate a terminal input target. Input will not work.",
-                        this
-                    );
-                    _missingTargetLogged = true;
-                }
+                Debug.LogWarning(
+                    "Failed to locate a terminal input target. Input will not work.",
+                    this
+                );
+                _missingTargetLogged = true;
             }
         }
 

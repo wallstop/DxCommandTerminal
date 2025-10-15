@@ -69,11 +69,18 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             if (terminal._fontPack == null)
             {
                 Terminal.Log(TerminalLogType.Warning, "No font pack found.");
+                Terminal.Log(TerminalLogType.Message, "No fonts available.");
                 return;
             }
 
             StringBuilder.Clear();
             List<Font> fonts = terminal._fontPack._fonts;
+            if (fonts.Count == 0)
+            {
+                Terminal.Log(TerminalLogType.Message, "No fonts available.");
+                return;
+            }
+
             for (int i = 0; i < fonts.Count; ++i)
             {
                 if (i > 0)

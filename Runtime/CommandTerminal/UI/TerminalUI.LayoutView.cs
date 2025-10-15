@@ -313,9 +313,9 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             EnsureChildOrder(
                 _terminalContainer,
-                _logScrollView,
+                _inputContainer,
                 _autoCompleteContainer,
-                _inputContainer
+                _logScrollView
             );
         }
         private void UpdateLauncherLayoutMetrics()
@@ -502,7 +502,9 @@ namespace WallstopStudios.DxCommandTerminal.UI
             availableForHistory = Mathf.Min(availableForHistory, _launcherMetrics.HistoryHeight);
             availableForHistory = Mathf.Max(0f, availableForHistory);
 
-            if (availableForHistory <= 0.01f || _logScrollView.contentContainer.childCount == 0)
+            bool hasHistoryContent = _logListItems.Count > 0;
+
+            if (availableForHistory <= 0.01f || !hasHistoryContent)
             {
                 _logScrollView.style.display = DisplayStyle.None;
                 _logScrollView.style.height = 0;

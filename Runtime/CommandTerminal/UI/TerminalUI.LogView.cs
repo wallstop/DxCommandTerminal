@@ -93,17 +93,19 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         private void RefreshLauncherHistory()
         {
-            if (_logListView == null)
-            {
-                return;
-            }
-
             CommandHistory history = ActiveHistory;
 
             if (history == null)
             {
                 _logListItems.Clear();
-                _logListView.Rebuild();
+                if (_logListView != null)
+                {
+                    _logListView.Rebuild();
+                }
+                else
+                {
+                    PopulateManualLauncherHistory();
+                }
                 _lastRenderedLauncherHistoryVersion = -1;
                 _cachedLauncherScrollVersion = -1;
                 _cachedLauncherScrollValue = 0f;
@@ -125,12 +127,19 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 );
             }
 
-            if (_logListView.itemsSource != _logListItems)
+            if (_logListView != null)
             {
-                _logListView.itemsSource = _logListItems;
-            }
+                if (_logListView.itemsSource != _logListItems)
+                {
+                    _logListView.itemsSource = _logListItems;
+                }
 
-            _logListView.Rebuild();
+                _logListView.Rebuild();
+            }
+            else
+            {
+                PopulateManualLauncherHistory();
+            }
             _lastRenderedLauncherHistoryVersion = historyVersion;
             _cachedLauncherScrollVersion = historyVersion;
             _cachedLauncherScrollValue = 0f;
@@ -225,6 +234,54 @@ namespace WallstopStudios.DxCommandTerminal.UI
             float minimumOpacity = Mathf.Clamp01(GetHistoryFadeMinimumOpacity());
             float adjusted = Mathf.Pow(clamped, exponent);
             return Mathf.Lerp(1f, minimumOpacity, adjusted);
+        }
+
+        private void PopulateManualLauncherHistory()
+        {
+            if (_logScrollView == null)
+            {
+                return;
+            }
+
+            VisualElement container = _logScrollView.contentContainer;
+            if (container == null)
+            {
+                return;
+            }
+
+            container.Clear();
+
+            int totalCount = _logListItems.Count;
+            for (int i = 0; i < totalCount; ++i)
+            {
+                LogItem logItem = _logListItems[i];
+                VisualElement element = CreateLogListItem();
+                switch (element)
+                {
+                    case Label label:
+                        label.text = logItem.message;
+                        break;
+                    case TextField textField:
+                        textField.value = logItem.message;
+                        break;
+                    case Button button:
+                        button.text = logItem.message;
+                        break;
+                }
+
+                ApplyLogStyling(element, logItem);
+                element.style.opacity = ComputeLogOpacity(i, totalCount);
+                container.Add(element);
+            }
+
+            if (totalCount > 0)
+            {
+                _launcherHistoryContentHeight = totalCount * LauncherEstimatedHistoryRowHeight;
+            }
+            else
+            {
+                _launcherHistoryContentHeight = 0f;
+            }
         }
 
     }

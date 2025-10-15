@@ -17,13 +17,32 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             if (!shouldDisplay)
             {
-                if (0 < _autoCompleteContainer?.childCount)
+                if (_autoCompleteContainer != null)
                 {
-                    _autoCompleteContainer.Clear();
+                    _autoCompleteContainer.style.display = DisplayStyle.None;
+                    _autoCompleteContainer.style.height = 0f;
+                    _autoCompleteContainer.style.maxHeight = 0f;
+                    if (0 < _autoCompleteContainer.childCount)
+                    {
+                        _autoCompleteContainer.Clear();
+                    }
+
+                    if (_autoCompleteViewport != null)
+                    {
+                        _autoCompleteViewport.style.height = 0f;
+                    }
                 }
 
                 _previousLastCompletionIndex = null;
                 return;
+            }
+
+            _autoCompleteContainer.style.display = DisplayStyle.Flex;
+            _autoCompleteContainer.style.height = new StyleLength(StyleKeyword.Null);
+            _autoCompleteContainer.style.maxHeight = new StyleLength(StyleKeyword.Null);
+            if (_autoCompleteViewport != null)
+            {
+                _autoCompleteViewport.style.height = new StyleLength(StyleKeyword.Null);
             }
 
             int bufferLength = _lastCompletionBuffer.Count;

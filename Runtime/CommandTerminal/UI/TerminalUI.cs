@@ -1847,9 +1847,20 @@ namespace WallstopStudios.DxCommandTerminal.UI
         // Internal test hooks
         internal TerminalState CurrentStateForTests => _state;
 
+        internal void ForceStateForTests(TerminalState state)
+        {
+            _state = state;
+        }
+
         internal bool LauncherMetricsInitializedForTests => _launcherMetricsInitialized;
 
         internal ScrollView LogScrollViewForTests => _logScrollView;
+
+        internal ScrollView AutoCompleteContainerForTests => _autoCompleteContainer;
+
+        internal VisualElement InputContainerForTests => _inputContainer;
+
+        internal VisualElement TerminalContainerForTests => _terminalContainer;
 
         internal void SetLauncherMetricsForTests(
             LauncherLayoutMetrics metrics,
@@ -1865,6 +1876,10 @@ namespace WallstopStudios.DxCommandTerminal.UI
         internal float TargetWindowHeightForTests => _targetWindowHeight;
 
         internal float CurrentWindowHeightForTests => _currentWindowHeight;
+
+        internal IList<LogItem> LogItemsForTests => _logListItems;
+
+        internal IList<string> CompletionBufferForTests => _lastCompletionBuffer;
 
         internal void SetRuntimeProfileForTests(TerminalRuntimeProfile profile)
         {
@@ -1923,6 +1938,15 @@ namespace WallstopStudios.DxCommandTerminal.UI
             _isAnimating = isAnimating;
         }
 
+        internal void SetLauncherContentHeightsForTests(
+            float historyHeight,
+            float suggestionHeight
+        )
+        {
+            _launcherHistoryContentHeight = historyHeight;
+            _launcherSuggestionContentHeight = suggestionHeight;
+        }
+
         internal void SetLogScrollViewForTests(ScrollView scrollView)
         {
             _logScrollView = scrollView;
@@ -1931,6 +1955,40 @@ namespace WallstopStudios.DxCommandTerminal.UI
         internal void RefreshLauncherHistoryForTests()
         {
             RefreshLauncherHistory();
+        }
+
+        internal void UpdateLauncherLayoutMetricsForTests()
+        {
+            UpdateLauncherLayoutMetrics();
+        }
+
+        internal void RefreshAutoCompleteHintsForTests()
+        {
+            RefreshAutoCompleteHints();
+        }
+
+        internal void InjectAutoCompleteContainerForTests(ScrollView container)
+        {
+            _autoCompleteContainer = container;
+            _autoCompleteViewport = container != null ? container.contentViewport : null;
+        }
+
+        internal void InjectLayoutElementsForTests(
+            VisualElement terminalContainer,
+            VisualElement inputContainer,
+            ScrollView autoCompleteContainer,
+            ScrollView logScrollView
+        )
+        {
+            _terminalContainer = terminalContainer;
+            _inputContainer = inputContainer;
+            _logScrollView = logScrollView;
+            InjectAutoCompleteContainerForTests(autoCompleteContainer);
+        }
+
+        internal void SetHintDisplayModeForTests(HintDisplayMode mode)
+        {
+            hintDisplayMode = mode;
         }
 
         internal void ResetWindowForTests()
