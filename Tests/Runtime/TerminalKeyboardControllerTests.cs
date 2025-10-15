@@ -1,6 +1,7 @@
 namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 {
     using System.Collections;
+    using System.Collections.Generic;
     using Backend;
     using Components;
     using Input;
@@ -79,6 +80,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             {
                 ExecuteControlForTests(control);
             }
+
+            public void ApplyProfileForTests(TerminalInputProfile profile)
+            {
+                SetInputProfileForTests(profile);
+            }
         }
 
         [UnityTest]
@@ -140,6 +146,64 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             controller.ExecuteControlForTests(TerminalControlTypes.Close);
 
             Assert.IsTrue(terminal.IsClosed);
+        }
+
+        [UnityTest]
+        public IEnumerator InputProfileOverridesControllerSettings()
+        {
+            yield return TestSceneHelpers.DestroyTerminalAndWait();
+
+            GameObject go = new("ProfileController");
+            go.SetActive(false);
+
+            TestKeyboardController controller = go.AddComponent<TestKeyboardController>();
+            controller.terminal = null;
+
+            TerminalInputProfile profile = ScriptableObject.CreateInstance<TerminalInputProfile>();
+            profile.inputMode = InputMode.NewInputSystem;
+            profile.toggleHotkey = "f1";
+            profile.toggleFullHotkey = "f2";
+            profile.toggleLauncherHotkey = "f3";
+            profile.completeHotkey = "f4";
+            profile.reverseCompleteHotkey = "f5";
+            profile.previousHotkey = "pageup";
+            profile.nextHotkey = "pagedown";
+            profile.enterCommandHotkeys = new List<string> { "kp_enter" };
+            profile.closeHotkey = "home";
+            profile.controlOrder = new List<TerminalControlTypes>
+            {
+                TerminalControlTypes.EnterCommand,
+                TerminalControlTypes.Close,
+            };
+
+            controller.ApplyProfileForTests(profile);
+
+            go.SetActive(true);
+            yield return null;
+
+            Assert.AreEqual(InputMode.NewInputSystem, controller.inputMode);
+            Assert.AreEqual("f1", controller.toggleHotkey);
+            Assert.AreEqual("f2", controller.toggleFullHotkey);
+            Assert.AreEqual("f3", controller.toggleLauncherHotkey);
+            Assert.AreEqual("f4", controller.completeHotkey);
+            Assert.AreEqual("f5", controller.reverseCompleteHotkey);
+            Assert.AreEqual("pageup", controller.previousHotkey);
+            Assert.AreEqual("pagedown", controller.nextHotkey);
+            Assert.AreEqual("home", controller.closeHotkey);
+            CollectionAssert.AreEqual(
+                new List<string> { "kp_enter" },
+                controller._completeCommandHotkeys
+            );
+            CollectionAssert.AreEqual(
+                new List<TerminalControlTypes>
+                {
+                    TerminalControlTypes.EnterCommand,
+                    TerminalControlTypes.Close,
+                },
+                controller._controlOrder
+            );
+
+            ScriptableObject.DestroyImmediate(profile);
         }
     }
 }

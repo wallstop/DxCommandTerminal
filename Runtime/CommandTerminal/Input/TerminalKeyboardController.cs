@@ -61,6 +61,10 @@ namespace WallstopStudios.DxCommandTerminal.Input
 #endif
         public TerminalUI terminal;
 
+        [Header("Profiles")]
+        [SerializeField]
+        private TerminalInputProfile _inputProfile;
+
         [Header("Hotkeys")]
         public string toggleHotkey = "`";
         public string toggleFullHotkey = "#`";
@@ -74,7 +78,7 @@ namespace WallstopStudios.DxCommandTerminal.Input
 
         [SerializeField]
         [Tooltip("Re-order these to choose what priority you want input to be checked in")]
-        protected List<TerminalControlTypes> _controlOrder = new()
+        protected internal List<TerminalControlTypes> _controlOrder = new()
         {
             TerminalControlTypes.Close,
             TerminalControlTypes.EnterCommand,
@@ -93,6 +97,8 @@ namespace WallstopStudios.DxCommandTerminal.Input
         {
             ResolveInputTarget();
 
+            ApplyProfileIfAvailable();
+
             if (_controlOrder is not { Count: > 0 })
             {
                 Debug.LogError("No controls specified, Input will not work.", this);
@@ -108,6 +114,7 @@ namespace WallstopStudios.DxCommandTerminal.Input
             if (!Application.isPlaying)
             {
                 ResolveInputTarget();
+                ApplyProfileIfAvailable();
                 VerifyControlOrderIntegrity();
             }
         }
@@ -428,6 +435,22 @@ namespace WallstopStudios.DxCommandTerminal.Input
         {
             ExecuteControl(controlType);
         }
+
+        internal void SetInputProfileForTests(TerminalInputProfile profile)
+        {
+            _inputProfile = profile;
+            ApplyProfileIfAvailable();
+        }
 #endif
+
+        private void ApplyProfileIfAvailable()
+        {
+            if (_inputProfile == null)
+            {
+                return;
+            }
+
+            _inputProfile.ApplyTo(this);
+        }
     }
 }

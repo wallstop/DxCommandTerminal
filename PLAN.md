@@ -47,6 +47,8 @@
 - Allow multiple profiles per project and expose assignment in inspector with sensible defaults. `TerminalLauncherSettings` becomes a serializable asset reused across scenes.
 - Move persisted theme/font selection into a `TerminalThemePersistenceProfile` (ScriptableObject + runtime adapter) to trim IO concerns from `TerminalThemePersister` MonoBehaviour; supports injection/mocking in tests.
 
+**Progress:** `TerminalInputProfile` now drives `TerminalKeyboardController` hotkeys/control order, with playmode coverage. Appearance/command profiles remain outstanding.
+
 ### P1 — UI Rendering & Virtualization Improvements
 - Swap manual `VisualElement` management with UIToolkit `ListView` virtualization for history/log to avoid re-creating labels each refresh; ensure zero allocation by providing custom `MakeItem`/`BindItem` that reuse pooled entries.
 - Extract USS selectors into modular style sheets under `Styles/` to reduce runtime code toggling class lists; `LogView` can simply set classes based on pre-defined style variants.
@@ -79,7 +81,7 @@
 ## Implementation Notes & Sequencing
 1. ✅ Land `TerminalRuntime` core + proxy static API (P0). Update tests to inject runtime explicitly.
 2. ✅ Extract presenter/view/controller slices from `TerminalUI`, wiring new runtime (P0). Ensure incremental commits keep behaviour parity.
-3. ⏳ Integrate zero-allocation audit outcomes (P0); add instrumentation and tests.
+3. ✅ Integrate zero-allocation audit outcomes (P0); add instrumentation and tests.
 4. ⏳ Move configuration/persistence into ScriptableObject profiles (P1) and update inspector tooling.
 5. ⏳ Roll out input abstraction and UI virtualization (P1), followed by persistence improvements (P1).
 6. ⏳ Add observability/tooling features and documentation (P2).

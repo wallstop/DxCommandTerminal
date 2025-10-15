@@ -84,8 +84,15 @@ Grab a copy of this repo (either `git clone` or [download a zip of the source](h
 - **Profile-driven configuration** – `TerminalRuntimeProfile` ScriptableObjects capture buffer capacities, disabled commands, and ignored log levels. Terminals can reuse or swap profiles without code changes.
 - **Modular UI presenters** – The 3.6k line `TerminalUI` has been split into partials (`TerminalUI.LogView`, `TerminalUI.AutoCompleteView`, `TerminalUI.LayoutView`) that focus on specific responsibilities while the core MonoBehaviour handles lifecycle and runtime wiring.
 - **Input abstraction** – `TerminalKeyboardController` targets the new `ITerminalInputTarget` interface, so custom terminals or headless tests can drive command execution without a concrete `TerminalUI`. Playmode tests confirm dispatch behaviour and fallback to the built-in UI.
+- **Profile-driven input** – `TerminalInputProfile` ScriptableObjects package hotkeys and control ordering so multiple controllers can share consistent bindings.
 - **Editor interoperability** – Serialized-property utilities expose an override hook so editor drawers (like `DxShowIfPropertyDrawer`) can access backing objects without relying on runtime internals, preserving assembly boundaries.
 - **Allocation guardrails** – An automated playmode test (`AllocationRegressionTests`) monitors `GC.Alloc` while issuing commands and toggling terminal state to catch regressions immediately.
+
+### Test Coverage Snapshot
+- `TerminalRuntimeTests` validate runtime reuse/reset logic across multiple terminal spawns.
+- `TerminalKeyboardControllerTests` exercise the new input abstraction path with both mocked targets and real `TerminalUI` fallbacks.
+- `AllocationRegressionTests` enforce zero-allocation behaviour during command spam, history navigation, and resize toggles.
+- The existing parsing/history/builtin command suites remain intact, ensuring command semantics and log persistence continue to function after refactors.
 
 For a deeper look at ongoing modernization goals, check `PLAN.md`.
 
