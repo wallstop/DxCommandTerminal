@@ -376,26 +376,44 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             CommandShell shell = Terminal.Shell;
 
             Assert.IsTrue(shell.RunCommand("list-fonts"));
+            int startIndex = Terminal.Buffer.Logs.Count;
             Terminal.Buffer?.DrainPending();
-            LogItem listLog = GetLastLog(
-                Terminal.Buffer,
-                item => item.type == TerminalLogType.Message
+            Assert.IsTrue(
+                TryFindLogSince(
+                    Terminal.Buffer,
+                    startIndex,
+                    item => item.type == TerminalLogType.Message,
+                    out LogItem listLog
+                ),
+                "Expected log entry after list-fonts command."
             );
             Assert.IsNotNull(listLog);
 
             Assert.IsTrue(shell.RunCommand("get-font"));
+            startIndex = Terminal.Buffer.Logs.Count;
             Terminal.Buffer?.DrainPending();
-            LogItem getLog = GetLastLog(
-                Terminal.Buffer,
-                item => item.type == TerminalLogType.Message
+            Assert.IsTrue(
+                TryFindLogSince(
+                    Terminal.Buffer,
+                    startIndex,
+                    item => item.type == TerminalLogType.Message,
+                    out LogItem getLog
+                ),
+                "Expected log entry after get-font command."
             );
             StringAssert.Contains("null", getLog.message);
 
             Assert.IsTrue(shell.RunCommand("set-font missing-font"));
+            startIndex = Terminal.Buffer.Logs.Count;
             Terminal.Buffer?.DrainPending();
-            LogItem warningLog = GetLastLog(
-                Terminal.Buffer,
-                item => item.type == TerminalLogType.Warning
+            Assert.IsTrue(
+                TryFindLogSince(
+                    Terminal.Buffer,
+                    startIndex,
+                    item => item.type == TerminalLogType.Warning,
+                    out LogItem warningLog
+                ),
+                "Expected warning log after set-font missing-font command."
             );
             StringAssert.Contains("not found", warningLog.message);
 

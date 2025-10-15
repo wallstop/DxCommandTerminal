@@ -78,6 +78,17 @@ Grab a copy of this repo (either `git clone` or [download a zip of the source](h
 - Extra input validation has been added on all public methods, such that user code is sanitized where appropriate, or rejected if invalid.
 - The concept of "FrontCommands" has been exterminated
 
+## Modern Architecture Highlights (2024 Refactor)
+
+- **Instance-based runtime** – `TerminalRuntime` now owns log/history/autocomplete state per terminal instance. The legacy static façade delegates to the active runtime, enabling multiple terminals in the same scene and cleaner testing.
+- **Profile-driven configuration** – `TerminalRuntimeProfile` ScriptableObjects capture buffer capacities, disabled commands, and ignored log levels. Terminals can reuse or swap profiles without code changes.
+- **Modular UI presenters** – The 3.6k line `TerminalUI` has been split into partials (`TerminalUI.LogView`, `TerminalUI.AutoCompleteView`, `TerminalUI.LayoutView`) that focus on specific responsibilities while the core MonoBehaviour handles lifecycle and runtime wiring.
+- **Input abstraction** – `TerminalKeyboardController` targets the new `ITerminalInputTarget` interface, so custom terminals or headless tests can drive command execution without a concrete `TerminalUI`. Playmode tests confirm dispatch behaviour and fallback to the built-in UI.
+- **Editor interoperability** – Serialized-property utilities expose an override hook so editor drawers (like `DxShowIfPropertyDrawer`) can access backing objects without relying on runtime internals, preserving assembly boundaries.
+- **Allocation guardrails** – An automated playmode test (`AllocationRegressionTests`) monitors `GC.Alloc` while issuing commands and toggling terminal state to catch regressions immediately.
+
+For a deeper look at ongoing modernization goals, check `PLAN.md`.
+
 ## Code changes
 
 - All code is formatted via [Csharpier](https://csharpier.com/)

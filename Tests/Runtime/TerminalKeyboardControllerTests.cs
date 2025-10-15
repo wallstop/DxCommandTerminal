@@ -116,5 +116,30 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreEqual(1, target.ToggleLauncherCount);
             Assert.IsTrue(target.IsClosed);
         }
+
+        [UnityTest]
+        public IEnumerator ControllerFallsBackToTerminalUIWhenTargetMissing()
+        {
+            yield return TestSceneHelpers.DestroyTerminalAndWait();
+
+            yield return TerminalTests.SpawnTerminal(
+                resetStateOnInit: true,
+                configure: null,
+                ensureLargeLogBuffer: true
+            );
+
+            TerminalUI terminal = TerminalUI.Instance;
+            Assert.IsNotNull(terminal);
+
+            TerminalKeyboardController controller = terminal.gameObject.AddComponent<TerminalKeyboardController>();
+            controller.terminal = terminal;
+
+            yield return null;
+
+            controller.ExecuteControlForTests(TerminalControlTypes.ToggleFull);
+            controller.ExecuteControlForTests(TerminalControlTypes.Close);
+
+            Assert.IsTrue(terminal.IsClosed);
+        }
     }
 }
