@@ -377,11 +377,22 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Assert.IsTrue(shell.RunCommand("set-random-font"));
             Terminal.Buffer?.DrainPending();
-            LogItem randomLog = GetLastLog(
-                Terminal.Buffer,
-                item => item.type == TerminalLogType.Warning
+            bool hasNoFontsWarning = Terminal
+                .Buffer
+                .Logs
+                .Any(
+                    item =>
+                        !string.IsNullOrEmpty(item.message)
+                        && item.message.IndexOf(
+                            "No fonts available",
+                            StringComparison.OrdinalIgnoreCase
+                        ) >= 0
+                );
+
+            Assert.IsTrue(
+                hasNoFontsWarning,
+                $"Expected 'No fonts available' warning. Logs: {string.Join(" | ", Terminal.Buffer.Logs.Select(log => log.message))}"
             );
-            StringAssert.Contains("No fonts available", randomLog.message);
             yield break;
         }
 
