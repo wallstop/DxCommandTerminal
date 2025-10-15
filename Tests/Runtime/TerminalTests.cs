@@ -1,3 +1,4 @@
+#pragma warning disable CS0618 // Type or member is obsolete
 namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 {
     using System;
@@ -5,22 +6,26 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     using System.Collections.Generic;
     using System.Linq;
     using Backend;
+    using Backend.Profiles;
     using Components;
     using NUnit.Framework;
     using UI;
     using UnityEngine;
     using UnityEngine.TestTools;
     using UnityEngine.UIElements;
-    using Object = UnityEngine.Object;
 
     public sealed class TerminalTests
     {
-        [TearDown]
-        public void TearDown()
+        private TerminalRuntimeProfile _runtimeProfileUnderTest;
+
+        [UnityTearDown]
+        public IEnumerator UnityTearDown()
         {
-            if (TerminalUI.Instance != null)
+            yield return TestSceneHelpers.DestroyTerminalAndWait();
+            if (_runtimeProfileUnderTest != null)
             {
-                Object.Destroy(TerminalUI.Instance.gameObject);
+                ScriptableObject.DestroyImmediate(_runtimeProfileUnderTest);
+                _runtimeProfileUnderTest = null;
             }
         }
 
@@ -95,7 +100,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreNotSame(terminal2, TerminalUI.Instance);
             Assert.AreNotSame(terminal1, TerminalUI.Instance);
             Assert.AreNotSame(shell, Terminal.Shell);
-            Assert.AreNotSame(shell, Terminal.Shell);
             Assert.IsNotNull(Terminal.Shell);
             Assert.AreNotSame(history, Terminal.History);
             Assert.IsNotNull(Terminal.History);
@@ -107,7 +111,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         internal static IEnumerator SpawnTerminal(
             bool resetStateOnInit,
-            Action<TerminalUI> configure = null
+            Action<TerminalUI> configure = null,
+            bool ensureLargeLogBuffer = true
         )
         {
             GameObject go = new("Terminal");
@@ -138,7 +143,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             go.SetActive(true);
             yield return new WaitUntil(() => startTracker.Started);
             // Ensure the buffer is large enough for concurrency tests
-            if (Terminal.Buffer != null)
+            if (ensureLargeLogBuffer && Terminal.Buffer != null)
             {
                 Terminal.Buffer.Resize(4096);
             }
@@ -203,6 +208,42 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             TerminalRuntimeModeFlags configuredMode = TerminalRuntimeConfig.GetModeForTests();
             Assert.AreEqual(TerminalRuntimeModeFlags.Production, configuredMode);
         }
+
+#if UNITY_EDITOR
+        [UnityTest]
+        public IEnumerator RuntimeProfileOverridesEmbeddedSettings()
+        {
+            TerminalRuntimeProfile profile = ScriptableObject.CreateInstance<TerminalRuntimeProfile>();
+            _runtimeProfileUnderTest = profile;
+
+            profile.ConfigureForTests(
+                logBufferSize: 10,
+                historyBufferSize: 5,
+                ignoreDefaults: true,
+                ignoredLogTypes: new[] { TerminalLogType.Warning },
+                disabledCommands: new[] { "clear" }
+            );
+
+            yield return SpawnTerminal(
+                resetStateOnInit: true,
+                configure: terminal => terminal.SetRuntimeProfileForTests(profile),
+                ensureLargeLogBuffer: false
+            );
+
+            TerminalUI terminal = TerminalUI.Instance;
+            Assert.IsNotNull(terminal);
+
+            CommandLog log = terminal.Runtime.Log;
+            CommandHistory history = terminal.Runtime.History;
+            CommandShell shell = terminal.Runtime.Shell;
+
+            Assert.AreEqual(10, log.Capacity);
+            Assert.AreEqual(5, history.Capacity);
+            Assert.IsTrue(shell.IgnoringDefaultCommands);
+            Assert.IsTrue(shell.IgnoredCommands.Contains("clear"));
+            Assert.IsTrue(log.ignoredLogTypes.Contains(TerminalLogType.Warning));
+        }
+#endif
 
         [UnityTest]
         public IEnumerator RuntimeModeOptionsFallbackToFirstWhenSelectionMissing()

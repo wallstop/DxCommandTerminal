@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 
 [assembly: InternalsVisibleTo("WallstopStudios.DxCommandTerminal.Editor")]
+[assembly: InternalsVisibleTo("WallstopStudios.DxCommandTerminal.Tests.Runtime")]
 
 namespace WallstopStudios.DxCommandTerminal.UI
 {
@@ -9,6 +10,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
     using System.ComponentModel;
     using Attributes;
     using Backend;
+    using Backend.Profiles;
     using Extensions;
     using Helper;
     using Input;
@@ -113,6 +115,10 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         [Header("System")]
         [SerializeField]
+        [Tooltip("Optional configuration asset applied on Awake to seed runtime settings.")]
+        private TerminalRuntimeProfile _runtimeProfile;
+
+        [SerializeField]
         private int _logBufferSize = 256;
 
         [SerializeField]
@@ -189,6 +195,18 @@ namespace WallstopStudios.DxCommandTerminal.UI
         internal TerminalThemePack _themePack;
 
         private IInputHandler[] _inputHandlers;
+
+        private TerminalRuntime _runtime;
+
+        internal ITerminalRuntime Runtime => _runtime;
+
+        private CommandLog ActiveLog => _runtime?.Log;
+
+        private CommandShell ActiveShell => _runtime?.Shell;
+
+        private CommandHistory ActiveHistory => _runtime?.History;
+
+        private CommandAutoComplete ActiveAutoComplete => _runtime?.AutoComplete;
 
 #if UNITY_EDITOR
         private readonly Dictionary<string, object> _propertyValues = new();
@@ -424,6 +442,8 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         private void Awake()
         {
+            ApplyRuntimeProfile();
+
             TerminalRuntimeModeFlags resolvedRuntimeModes = ResolveRuntimeModeFlags();
             ApplyRuntimeMode(resolvedRuntimeModes);
             switch (_logBufferSize)
@@ -484,6 +504,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             string[] staticStaticPropertiesTracked =
             {
+                nameof(_runtimeProfile),
                 nameof(_logBufferSize),
                 nameof(_historyBufferSize),
                 nameof(_ignoredLogTypes),
@@ -542,8 +563,39 @@ namespace WallstopStudios.DxCommandTerminal.UI
 #endif
         }
 
+#if UNITY_EDITOR
+        private void OnValidate()
+        {
+            if (Application.isPlaying)
+            {
+                return;
+            }
+
+            ApplyRuntimeProfile();
+        }
+#endif
+
         private void OnEnable()
         {
+            if (resetStateOnInit)
+            {
+                TerminalRuntimeCache.Clear();
+            }
+
+            if (_runtime == null)
+            {
+                if (!resetStateOnInit && TerminalRuntimeCache.TryAcquire(out TerminalRuntime cachedRuntime))
+                {
+                    _runtime = cachedRuntime;
+                }
+                else
+                {
+                    _runtime = new TerminalRuntime();
+                }
+            }
+
+            Terminal.RegisterRuntime(_runtime);
+
             RefreshStaticState(force: resetStateOnInit);
             ConsumeAndLogErrors();
 
@@ -577,10 +629,14 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
 
             SetState(TerminalState.Closed);
+
+            Terminal.UnregisterRuntime(_runtime);
         }
 
         private void OnDestroy()
         {
+            TerminalRuntimeCache.Store(_runtime);
+
             if (Instance != this)
             {
                 return;
@@ -608,7 +664,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
         {
             ResetWindowIdempotent();
             // Drain any cross-thread logs into the main-thread buffer before refreshing UI
-            Terminal.Buffer?.DrainPending();
+            ActiveLog?.DrainPending();
             HandleHeightAnimation();
             RefreshUI();
             _commandIssuedThisFrame = false;
@@ -616,60 +672,68 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         private void RefreshStaticState(bool force)
         {
-            int logBufferSize = Mathf.Max(0, _logBufferSize);
-            if (force || Terminal.Buffer == null)
+            if (_runtime == null)
             {
-                Terminal.Buffer = new CommandLog(logBufferSize, _ignoredLogTypes);
-            }
-            else
-            {
-                if (Terminal.Buffer.Capacity != logBufferSize)
-                {
-                    Terminal.Buffer.Resize(logBufferSize);
-                }
-                if (!Terminal.Buffer.ignoredLogTypes.SetEquals(_ignoredLogTypes))
-                {
-                    Terminal.Buffer.ignoredLogTypes.Clear();
-                    Terminal.Buffer.ignoredLogTypes.UnionWith(_ignoredLogTypes);
-                }
+                _runtime = new TerminalRuntime();
             }
 
-            int historyBufferSize = Mathf.Max(0, _historyBufferSize);
-            if (force || Terminal.History == null)
+            TerminalRuntimeSettings settings = BuildRuntimeSettings();
+            TerminalRuntimeUpdateResult updateResult = _runtime.Configure(settings, force);
+
+            if (_started && (updateResult.CommandsRefreshed || updateResult.RuntimeReset))
             {
-                Terminal.History = new CommandHistory(historyBufferSize);
+                ResetAutoComplete();
             }
-            else if (Terminal.History.Capacity != historyBufferSize)
+        }
+
+        private TerminalRuntimeSettings BuildRuntimeSettings()
+        {
+            int logCapacity = Mathf.Max(0, _logBufferSize);
+            int historyCapacity = Mathf.Max(0, _historyBufferSize);
+            return new TerminalRuntimeSettings(
+                logCapacity,
+                historyCapacity,
+                _ignoredLogTypes,
+                _disabledCommands,
+                ignoreDefaultCommands
+            );
+        }
+
+        private void ApplyRuntimeProfile()
+        {
+            if (_runtimeProfile == null)
             {
-                Terminal.History.Resize(historyBufferSize);
+                return;
             }
 
-            if (force || Terminal.Shell == null)
+            _logBufferSize = Mathf.Max(0, _runtimeProfile.LogBufferSize);
+            _historyBufferSize = Mathf.Max(0, _runtimeProfile.HistoryBufferSize);
+            ignoreDefaultCommands = _runtimeProfile.IgnoreDefaultCommands;
+            CopyList(_runtimeProfile.IgnoredLogTypes, _ignoredLogTypes);
+            CopyList(_runtimeProfile.DisabledCommands, _disabledCommands);
+        }
+
+        private static void CopyList<T>(IReadOnlyList<T> source, List<T> destination)
+        {
+            if (destination == null)
             {
-                Terminal.Shell = new CommandShell(Terminal.History);
+                return;
             }
 
-            if (force || Terminal.AutoComplete == null)
+            if (ReferenceEquals(source, destination))
             {
-                Terminal.AutoComplete = new CommandAutoComplete(Terminal.History, Terminal.Shell);
+                return;
             }
 
-            if (
-                Terminal.Shell.IgnoringDefaultCommands != ignoreDefaultCommands
-                || Terminal.Shell.Commands.Count <= 0
-                || !Terminal.Shell.IgnoredCommands.SetEquals(_disabledCommands)
-            )
+            destination.Clear();
+            if (source == null)
             {
-                Terminal.Shell.ClearAutoRegisteredCommands();
-                Terminal.Shell.InitializeAutoRegisteredCommands(
-                    ignoredCommands: _disabledCommands,
-                    ignoreDefaultCommands: ignoreDefaultCommands
-                );
+                return;
+            }
 
-                if (_started)
-                {
-                    ResetAutoComplete();
-                }
+            for (int i = 0; i < source.Count; ++i)
+            {
+                destination.Add(source[i]);
             }
         }
 
@@ -719,6 +783,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             if (CheckForRefresh(_staticStateProperties))
             {
+                ApplyRuntimeProfile();
                 RefreshStaticState(force: false);
             }
 
@@ -856,9 +921,9 @@ namespace WallstopStudios.DxCommandTerminal.UI
             return true;
         }
 
-        private static void ConsumeAndLogErrors()
+        private void ConsumeAndLogErrors()
         {
-            while (Terminal.Shell?.TryConsumeErrorMessage(out string error) == true)
+            while (ActiveShell?.TryConsumeErrorMessage(out string error) == true)
             {
                 Terminal.Log(TerminalLogType.Error, $"Error: {error}");
             }
@@ -869,6 +934,17 @@ namespace WallstopStudios.DxCommandTerminal.UI
             _lastKnownCommandText = _input.CommandText ?? string.Empty;
             _lastCompletionAnchorText = null;
             _lastCompletionAnchorCaretIndex = null;
+            CommandAutoComplete autoComplete = ActiveAutoComplete;
+            if (autoComplete == null)
+            {
+                _lastCompletionIndex = null;
+                _previousLastCompletionIndex = null;
+                _lastCompletionBuffer.Clear();
+                _lastCompletionBufferTempCache.Clear();
+                _lastCompletionBufferTempSet.Clear();
+                return;
+            }
+
             if (hintDisplayMode == HintDisplayMode.Always)
             {
                 _lastCompletionBufferTempCache.Clear();
@@ -876,7 +952,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                     _commandInput != null
                         ? _commandInput.cursorIndex
                         : (_lastKnownCommandText?.Length ?? 0);
-                Terminal.AutoComplete?.Complete(
+                autoComplete.Complete(
                     _lastKnownCommandText,
                     caret,
                     _lastCompletionBufferTempCache
@@ -1170,7 +1246,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                         string prev = evt.previousValue ?? string.Empty;
                         string curr = evt.newValue ?? string.Empty;
                         bool justTypedSpace = curr.EndsWith(" ") && curr.Length == prev.Length + 1;
-                        if (justTypedSpace && Terminal.Shell != null)
+                        if (justTypedSpace && context.ActiveShell != null)
                         {
                             string check = curr;
                             // Remove trailing space(s) to isolate the command token
@@ -1181,7 +1257,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
                             if (CommandShell.TryEatArgument(ref check, out CommandArg cmd))
                             {
-                                if (Terminal.Shell.Commands.ContainsKey(cmd.contents))
+                                if (context.ActiveShell.Commands.ContainsKey(cmd.contents))
                                 {
                                     // Clear existing suggestions immediately
                                     context._lastCompletionIndex = null;
@@ -1768,12 +1844,14 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         private void RefreshLogs()
         {
-            IReadOnlyList<LogItem> logs = Terminal.Buffer?.Logs;
-            if (logs == null)
+            CommandLog log = ActiveLog;
+            if (log == null)
             {
                 return;
             }
 
+            IReadOnlyList<LogItem> logs = log.Logs;
+            
             if (_logScrollView == null)
             {
                 return;
@@ -1787,7 +1865,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             VisualElement content = _logScrollView.contentContainer;
             _logScrollView.style.display = DisplayStyle.Flex;
-            bool dirty = _lastSeenBufferVersion != Terminal.Buffer.Version;
+            bool dirty = _lastSeenBufferVersion != log.Version;
             if (content.childCount != logs.Count)
             {
                 dirty = true;
@@ -1845,7 +1923,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
                 if (logs.Count == content.childCount)
                 {
-                    _lastSeenBufferVersion = Terminal.Buffer.Version;
+                    _lastSeenBufferVersion = log.Version;
                 }
             }
 
@@ -1867,7 +1945,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
 
             VisualElement content = _logScrollView.contentContainer;
-            CommandHistory history = Terminal.History;
+            CommandHistory history = ActiveHistory;
 
             if (history == null)
             {
@@ -2204,7 +2282,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             float highValue = _logScrollView.verticalScroller.highValue;
             float currentValue = Mathf.Clamp(_logScrollView.verticalScroller.value, 0f, highValue);
             _cachedLauncherScrollValue = currentValue;
-            _cachedLauncherScrollVersion = Terminal.History?.Version ?? -1;
+            _cachedLauncherScrollVersion = ActiveHistory?.Version ?? -1;
         }
 
         private void ScheduleLauncherScroll(float targetValue)
@@ -2877,7 +2955,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
 
             _input.CommandText =
-                Terminal.History?.Previous(skipSameCommandsInHistory) ?? string.Empty;
+                ActiveHistory?.Previous(skipSameCommandsInHistory) ?? string.Empty;
             ResetAutoComplete();
             _needsFocus = true;
         }
@@ -2889,7 +2967,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 return;
             }
 
-            _input.CommandText = Terminal.History?.Next(skipSameCommandsInHistory) ?? string.Empty;
+            _input.CommandText = ActiveHistory?.Next(skipSameCommandsInHistory) ?? string.Empty;
             ResetAutoComplete();
             _needsFocus = true;
         }
@@ -2935,6 +3013,16 @@ namespace WallstopStudios.DxCommandTerminal.UI
         internal float TargetWindowHeightForTests => _targetWindowHeight;
 
         internal float CurrentWindowHeightForTests => _currentWindowHeight;
+
+        internal void SetRuntimeProfileForTests(TerminalRuntimeProfile profile)
+        {
+            _runtimeProfile = profile;
+            ApplyRuntimeProfile();
+            if (_runtime != null)
+            {
+                RefreshStaticState(force: true);
+            }
+        }
 
         internal void SetWindowHeightsForTests(
             float currentHeight,
@@ -2994,8 +3082,8 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 }
 
                 Terminal.Log(TerminalLogType.Input, commandText);
-                Terminal.Shell?.RunCommand(commandText);
-                while (Terminal.Shell?.TryConsumeErrorMessage(out string error) == true)
+                ActiveShell?.RunCommand(commandText);
+                while (ActiveShell?.TryConsumeErrorMessage(out string error) == true)
                 {
                     Terminal.Log(TerminalLogType.Error, $"Error: {error}");
                 }
@@ -3017,7 +3105,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 return suggestion ?? string.Empty;
             }
 
-            CommandAutoComplete autoComplete = Terminal.AutoComplete;
+            CommandAutoComplete autoComplete = ActiveAutoComplete;
             if (autoComplete == null || !autoComplete.LastCompletionUsedCompleter)
             {
                 return suggestion;
@@ -3036,7 +3124,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             try
             {
-                CommandAutoComplete autoComplete = Terminal.AutoComplete;
+                CommandAutoComplete autoComplete = ActiveAutoComplete;
                 if (autoComplete == null)
                 {
                     return;
@@ -3387,7 +3475,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             if (visibleHistoryCount == 0)
             {
-                int pendingLogs = Terminal.History?.Count ?? 0;
+                int pendingLogs = ActiveHistory?.Count ?? 0;
                 visibleHistoryCount = Mathf.Min(
                     pendingLogs,
                     _launcherMetrics.HistoryVisibleEntryCount
@@ -3629,7 +3717,14 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         private static void HandleUnityLog(string message, string stackTrace, LogType type)
         {
-            Terminal.Buffer?.EnqueueUnityLog(message, stackTrace, (TerminalLogType)type);
+            ITerminalRuntime runtime = Terminal.ActiveRuntime;
+            if (runtime == null)
+            {
+                return;
+            }
+
+            CommandLog log = runtime.Log;
+            log?.EnqueueUnityLog(message, stackTrace, (TerminalLogType)type);
         }
     }
 }

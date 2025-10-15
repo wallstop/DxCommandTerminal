@@ -4,10 +4,30 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
     public static class Terminal
     {
-        public static CommandLog Buffer { get; internal set; }
-        public static CommandShell Shell { get; internal set; }
-        public static CommandHistory History { get; internal set; }
-        public static CommandAutoComplete AutoComplete { get; internal set; }
+        private static ITerminalRuntime _activeRuntime;
+
+        public static CommandLog Buffer => _activeRuntime?.Log;
+
+        public static CommandShell Shell => _activeRuntime?.Shell;
+
+        public static CommandHistory History => _activeRuntime?.History;
+
+        public static CommandAutoComplete AutoComplete => _activeRuntime?.AutoComplete;
+
+        internal static ITerminalRuntime ActiveRuntime => _activeRuntime;
+
+        internal static void RegisterRuntime(ITerminalRuntime runtime)
+        {
+            _activeRuntime = runtime;
+        }
+
+        internal static void UnregisterRuntime(ITerminalRuntime runtime)
+        {
+            if (_activeRuntime == runtime)
+            {
+                _activeRuntime = null;
+            }
+        }
 
         [StringFormatMethod("format")]
         public static bool Log(string format, params object[] parameters)
@@ -18,17 +38,13 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         [StringFormatMethod("format")]
         public static bool Log(TerminalLogType type, string format, params object[] parameters)
         {
-            CommandLog buffer = Buffer;
-            if (buffer == null)
+            ITerminalRuntime runtime = _activeRuntime;
+            if (runtime == null)
             {
                 return false;
             }
 
-            string formattedMessage = parameters is { Length: > 0 }
-                ? string.Format(format, parameters)
-                : format;
-            buffer.EnqueueMessage(formattedMessage, type, includeStackTrace: true);
-            return true;
+            return runtime.LogMessage(type, format, parameters);
         }
     }
 }

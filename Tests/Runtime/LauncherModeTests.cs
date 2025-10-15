@@ -68,61 +68,54 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             TerminalUI terminal = TerminalUI.Instance;
             Assert.IsNotNull(terminal);
 
-            CommandHistory previousHistory = Terminal.History;
-            CommandHistory history = new CommandHistory(16);
-            Terminal.History = history;
+            CommandHistory history = terminal.Runtime.History;
+            Assert.IsNotNull(history);
+            history.Clear();
 
-            try
-            {
-                history.Push("first", true, true);
-                history.Push("second", true, true);
-                history.Push("third", true, true);
+            history.Push("first", true, true);
+            history.Push("second", true, true);
+            history.Push("third", true, true);
 
-                LauncherLayoutMetrics metrics = new LauncherLayoutMetrics(
-                    width: 640f,
-                    height: 160f,
-                    left: 100f,
-                    top: 200f,
-                    historyHeight: 120f,
-                    cornerRadius: 14f,
-                    insetPadding: 12f,
-                    historyVisibleEntryCount: 3,
-                    historyFadeExponent: 2f,
-                    snapOpen: true,
-                    animationDuration: 0.1f
-                );
+            LauncherLayoutMetrics metrics = new LauncherLayoutMetrics(
+                width: 640f,
+                height: 160f,
+                left: 100f,
+                top: 200f,
+                historyHeight: 120f,
+                cornerRadius: 14f,
+                insetPadding: 12f,
+                historyVisibleEntryCount: 3,
+                historyFadeExponent: 2f,
+                snapOpen: true,
+                animationDuration: 0.1f
+            );
 
-                ScrollView scroll = new ScrollView();
-                terminal.SetLogScrollViewForTests(scroll);
-                terminal.SetLauncherMetricsForTests(metrics);
-                terminal.SetState(TerminalState.OpenLauncher);
-                terminal.RefreshLauncherHistoryForTests();
+            ScrollView scroll = new ScrollView();
+            terminal.SetLogScrollViewForTests(scroll);
+            terminal.SetLauncherMetricsForTests(metrics);
+            terminal.SetState(TerminalState.OpenLauncher);
+            terminal.RefreshLauncherHistoryForTests();
 
-                VisualElement content = terminal.LogScrollViewForTests.contentContainer;
-                Assert.That(content.childCount, Is.EqualTo(3));
+            VisualElement content = terminal.LogScrollViewForTests.contentContainer;
+            Assert.That(content.childCount, Is.EqualTo(3));
 
-                // Verify newest entry is first and fully opaque
-                Label newest = content[0] as Label;
-                Assert.IsNotNull(newest);
-                Assert.That(newest!.text, Is.EqualTo("third"));
-                Assert.That(newest.style.opacity.value, Is.EqualTo(1f).Within(0.001f));
+            // Verify newest entry is first and fully opaque
+            Label newest = content[0] as Label;
+            Assert.IsNotNull(newest);
+            Assert.That(newest!.text, Is.EqualTo("third"));
+            Assert.That(newest.style.opacity.value, Is.EqualTo(1f).Within(0.001f));
 
-                // Middle entry has partial opacity
-                Label middle = content[1] as Label;
-                Assert.IsNotNull(middle);
-                Assert.That(middle!.text, Is.EqualTo("second"));
-                Assert.That(middle.style.opacity.value, Is.LessThan(1f).And.GreaterThan(0.35f));
+            // Middle entry has partial opacity
+            Label middle = content[1] as Label;
+            Assert.IsNotNull(middle);
+            Assert.That(middle!.text, Is.EqualTo("second"));
+            Assert.That(middle.style.opacity.value, Is.LessThan(1f).And.GreaterThan(0.35f));
 
-                // Oldest entry is faded out
-                Label oldest = content[2] as Label;
-                Assert.IsNotNull(oldest);
-                Assert.That(oldest!.text, Is.EqualTo("first"));
-                Assert.That(oldest.style.opacity.value, Is.EqualTo(0.35f).Within(0.001f));
-            }
-            finally
-            {
-                Terminal.History = previousHistory;
-            }
+            // Oldest entry is faded out
+            Label oldest = content[2] as Label;
+            Assert.IsNotNull(oldest);
+            Assert.That(oldest!.text, Is.EqualTo("first"));
+            Assert.That(oldest.style.opacity.value, Is.EqualTo(0.35f).Within(0.001f));
 
             yield return TestSceneHelpers.DestroyTerminalAndWait();
         }

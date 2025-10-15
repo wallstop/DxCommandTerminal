@@ -21,7 +21,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Components
         public static IEnumerator CleanRestart(bool resetStateOnInit, int settleFrames = 2)
         {
             yield return DestroyTerminalAndWait(settleFrames);
-            yield return TerminalTests.SpawnTerminal(resetStateOnInit);
+            yield return TerminalTests.SpawnTerminal(
+                resetStateOnInit,
+                configure: null,
+                ensureLargeLogBuffer: true
+            );
             for (int i = 0; i < settleFrames; ++i)
             {
                 yield return null;
