@@ -658,6 +658,16 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
         }
 
+        internal void ArrangeLauncherVisualHierarchyForTests()
+        {
+            EnsureChildOrder(
+                _terminalContainer,
+                _inputContainer,
+                _autoCompleteContainer,
+                _logScrollView
+            );
+        }
+
         private static void EnsureChildOrder(VisualElement parent, params VisualElement[] children)
         {
             if (parent == null || children == null || children.Length == 0)

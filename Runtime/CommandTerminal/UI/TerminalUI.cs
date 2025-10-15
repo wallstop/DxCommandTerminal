@@ -21,7 +21,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
         private const float LauncherAutoCompleteSpacing = 6f;
         private const float LauncherEstimatedSuggestionRowHeight = 32f;
         private const float LauncherEstimatedHistoryRowHeight = 28f;
-        private const float LauncherInputFallbackHeight = 30f;
+        private const float LauncherInputFallbackHeight = 24f;
         private const float StandardEstimatedHistoryRowHeight = 24f;
 
         private enum ScrollBarCaptureState

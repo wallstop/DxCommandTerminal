@@ -64,6 +64,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     autoComplete,
                     log
                 );
+                terminal.ArrangeLauncherVisualHierarchyForTests();
+
+                Assert.That(terminalContainer.childCount, Is.EqualTo(3));
+                Assert.That(terminalContainer[0], Is.SameAs(inputContainer));
+                Assert.That(terminalContainer[1], Is.SameAs(autoComplete));
+                Assert.That(terminalContainer[2], Is.SameAs(log));
 
                 terminal.ForceStateForTests(TerminalState.OpenLauncher);
                 terminal.SetLauncherMetricsForTests(
@@ -107,4 +113,3 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
     }
 }
-

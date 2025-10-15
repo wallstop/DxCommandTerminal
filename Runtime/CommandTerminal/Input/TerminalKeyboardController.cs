@@ -143,9 +143,8 @@ namespace WallstopStudios.DxCommandTerminal.Input
                 }
             }
 
-            if (!equal)
+            if (!equal && _controlOrder is { Count: > 0 })
             {
-                // Build missing list for message
                 _missing.Clear();
                 for (int i = 0; i < ControlTypes.Length; ++i)
                 {
@@ -156,7 +155,7 @@ namespace WallstopStudios.DxCommandTerminal.Input
                     }
                 }
 
-                Debug.LogError(
+                Debug.LogWarning(
                     $"Control Order is missing the following controls: [{string.Join(", ", _missing)}]. "
                         + "Input for these will not be handled. Is this intentional?"
                         + $"\nTerminal Control Types: [{string.Join(", ", ControlTypes)}]"
@@ -164,6 +163,7 @@ namespace WallstopStudios.DxCommandTerminal.Input
                     this
                 );
             }
+
         }
 
         protected virtual void Update()
