@@ -123,7 +123,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             {
                 CommandHistoryEntry entry = _launcherHistoryEntries[i];
                 _logListItems.Add(
-                    new LogItem(TerminalLogType.Message, entry.Text, string.Empty)
+                    new LogItem(TerminalLogType.Input, entry.Text, string.Empty)
                 );
             }
 
@@ -250,6 +250,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
 
             container.Clear();
+            container.style.justifyContent = Justify.FlexEnd;
 
             int totalCount = _logListItems.Count;
             for (int i = 0; i < totalCount; ++i)

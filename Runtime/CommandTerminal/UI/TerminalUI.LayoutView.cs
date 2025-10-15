@@ -201,7 +201,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             _terminalContainer.style.flexDirection = FlexDirection.Column;
 
             float horizontalPadding = _launcherMetrics.InsetPadding;
-            float verticalPadding = Mathf.Max(4f, _launcherMetrics.InsetPadding * 0.5f);
+            float verticalPadding = Mathf.Max(6f, _launcherMetrics.InsetPadding * 0.3f);
             _terminalContainer.style.paddingLeft = horizontalPadding;
             _terminalContainer.style.paddingRight = horizontalPadding;
             _terminalContainer.style.paddingTop = verticalPadding;
@@ -223,16 +223,14 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             if (_launcherMetrics.HistoryHeight > 0f)
             {
-                float marginTop = Mathf.Max(6f, verticalPadding * 0.35f);
-                StyleLength historyLength = new StyleLength(_launcherMetrics.HistoryHeight);
                 ApplyLogDisplay(
                     DisplayStyle.Flex,
-                    historyLength,
-                    historyLength,
+                    new StyleLength(_launcherMetrics.HistoryHeight),
+                    new StyleLength(_launcherMetrics.HistoryHeight),
                     new StyleLength(0f),
                     0f,
                     1f,
-                    new StyleLength(marginTop),
+                    new StyleLength(0f),
                     new StyleLength(0f)
                 );
             }
@@ -367,7 +365,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
 
             float horizontalPadding = _launcherMetrics.InsetPadding;
-            float verticalPadding = Mathf.Max(4f, horizontalPadding * 0.5f);
+            float verticalPadding = Mathf.Max(6f, horizontalPadding * 0.3f);
             float inputHeight = Mathf.Max(_inputContainer.resolvedStyle.height, 0f);
             if (inputHeight <= 0f)
             {
@@ -405,7 +403,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             if (hasSuggestions)
             {
                 _autoCompleteContainer.style.display = DisplayStyle.Flex;
-                _autoCompleteContainer.style.marginTop = LauncherAutoCompleteSpacing;
+                _autoCompleteContainer.style.marginTop = LauncherAutoCompleteSpacing * 0.5f;
             }
             else
             {
@@ -466,21 +464,16 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             bool hasHistory = visibleHistoryCount > 0;
 
+            const float MinimumSpacing = 2f;
             float spacingAboveLog = 0f;
-            if (hasHistory)
+            if (hasHistory && hasSuggestions)
             {
-                spacingAboveLog = hasSuggestions
-                    ? LauncherAutoCompleteSpacing
-                    : Mathf.Max(LauncherAutoCompleteSpacing, verticalPadding * 0.25f);
-            }
-            else if (hasSuggestions)
-            {
-                spacingAboveLog = LauncherAutoCompleteSpacing;
+                spacingAboveLog = Mathf.Max(MinimumSpacing, LauncherAutoCompleteSpacing * 0.5f);
             }
 
             float reservedForSuggestions = hasSuggestions
                 ? suggestionsHeight + spacingAboveLog
-                : spacingAboveLog;
+                : 0f;
 
             float historyHeightFromContent = hasHistory ? _launcherHistoryContentHeight : 0f;
             if (float.IsNaN(historyHeightFromContent) || historyHeightFromContent < 0f)
@@ -734,6 +727,12 @@ namespace WallstopStudios.DxCommandTerminal.UI
         internal void ConfigureStandardLayoutForTests(float screenWidth)
         {
             ConfigureStandardLayoutElements(screenWidth);
+        }
+
+
+        internal void ApplyLauncherLayoutForTests(float width, float height)
+        {
+            ApplyLauncherLayout(width, height);
         }
 
         internal void ArrangeLauncherVisualHierarchyForTests()

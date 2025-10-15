@@ -18,7 +18,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
     public sealed partial class TerminalUI : MonoBehaviour, ITerminalInputTarget
     {
         private const string TerminalRootName = "TerminalRoot";
-        private const float LauncherAutoCompleteSpacing = 6f;
+        private const float LauncherAutoCompleteSpacing = 4f;
         private const float LauncherEstimatedSuggestionRowHeight = 32f;
         private const float LauncherEstimatedHistoryRowHeight = 28f;
         private const float LauncherInputFallbackHeight = 24f;
@@ -1100,7 +1100,26 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 logContent.style.flexDirection = FlexDirection.Column;
                 logContent.style.alignItems = Align.Stretch;
                 logContent.style.minHeight = 0f;
+                logContent.style.justifyContent = Justify.FlexEnd;
                 logContent.RegisterCallback<GeometryChangedEvent>(OnLogContentGeometryChanged);
+                StyleEmptyLabel();
+            }
+
+            void StyleEmptyLabel()
+            {
+                if (_logListView == null)
+                {
+                    return;
+                }
+
+                Label emptyLabel = _logListView.Q<Label>("unity-list-view__empty-label");
+                if (emptyLabel == null)
+                {
+                    _logListView.schedule.Execute(StyleEmptyLabel).ExecuteLater(0);
+                    return;
+                }
+
+                StyleEmptyLabelElement(emptyLabel);
             }
 
             _autoCompleteContainer = new ScrollView(ScrollViewMode.Horizontal)
@@ -1863,6 +1882,8 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         internal ListView LogListViewForTests => _logListView;
 
+        internal VisualElement LogContentForTests => _logScrollView?.contentContainer;
+
         internal ScrollView AutoCompleteContainerForTests => _autoCompleteContainer;
 
         internal VisualElement InputContainerForTests => _inputContainer;
@@ -1933,6 +1954,22 @@ namespace WallstopStudios.DxCommandTerminal.UI
         internal int CursorBlinkRateForTests => _cursorBlinkRateMilliseconds;
 
         internal bool LogUnityMessagesForTests => _logUnityMessages;
+
+        internal static void StyleEmptyLabelForTests(Label label)
+        {
+            StyleEmptyLabelElement(label);
+        }
+
+        private static void StyleEmptyLabelElement(Label emptyLabel)
+        {
+            if (emptyLabel == null)
+            {
+                return;
+            }
+
+            emptyLabel.text = string.Empty;
+            emptyLabel.style.display = DisplayStyle.None;
+        }
 
         internal void SetWindowHeightsForTests(
             float currentHeight,

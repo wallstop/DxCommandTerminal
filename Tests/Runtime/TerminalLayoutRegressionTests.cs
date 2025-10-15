@@ -76,6 +76,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 Assert.That(log.style.display.value, Is.EqualTo(DisplayStyle.Flex));
                 Assert.That(log.style.flexGrow.value, Is.EqualTo(1f).Within(0.001f));
                 Assert.That(log.style.marginTop.value, Is.EqualTo(0f).Within(0.001f));
+                Assert.That(log.style.marginBottom.value, Is.EqualTo(0f).Within(0.001f));
             }
             finally
             {
@@ -130,18 +131,65 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
                 terminal.UpdateLauncherLayoutMetricsForTests();
 
-                float verticalPadding = Mathf.Max(4f, metrics.InsetPadding * 0.5f);
-                float inputHeight = TerminalUI.LauncherInputFallbackHeightForTests;
-                float spacingAboveLog = Mathf.Max(
-                    TerminalUI.LauncherAutoCompleteSpacingForTests,
-                    verticalPadding * 0.25f
-                );
                 float expected = metrics.HistoryHeight;
 
                 Assert.That(log.style.display.value, Is.EqualTo(DisplayStyle.Flex));
                 Assert.That(log.style.height.value, Is.EqualTo(expected).Within(0.001f));
                 Assert.That(log.style.maxHeight.value, Is.EqualTo(expected).Within(0.001f));
-                Assert.That(log.style.marginTop.value, Is.EqualTo(spacingAboveLog).Within(0.001f));
+                Assert.That(log.style.marginTop.value, Is.EqualTo(0f).Within(0.001f));
+                Assert.That(log.style.marginBottom.value, Is.EqualTo(0f).Within(0.001f));
+            }
+            finally
+            {
+                Object.DestroyImmediate(go);
+            }
+        }
+
+        [Test]
+        public void LauncherPaddingIsSymmetric()
+        {
+            GameObject go = new GameObject("LauncherPaddingTest");
+            go.SetActive(false);
+            TerminalUI terminal = go.AddComponent<TerminalUI>();
+            terminal.disableUIForTests = true;
+            go.SetActive(true);
+
+            try
+            {
+                VisualElement terminalContainer = new VisualElement();
+                VisualElement inputContainer = new VisualElement();
+                ScrollView autoComplete = new ScrollView();
+                ScrollView log = new ScrollView();
+                terminal.InjectLayoutElementsForTests(
+                    terminalContainer,
+                    inputContainer,
+                    autoComplete,
+                    log
+                );
+                terminal.ForceStateForTests(TerminalState.OpenLauncher);
+
+                LauncherLayoutMetrics metrics = new LauncherLayoutMetrics(
+                    width: 640f,
+                    height: 260f,
+                    left: 0f,
+                    top: 0f,
+                    historyHeight: 160f,
+                    cornerRadius: 12f,
+                    insetPadding: 12f,
+                    historyVisibleEntryCount: 4,
+                    historyFadeExponent: 2f,
+                    snapOpen: true,
+                    animationDuration: 0.12f
+                );
+
+                terminal.SetLauncherMetricsForTests(metrics);
+                terminal.SetWindowHeightsForTests(metrics.Height, metrics.Height);
+                terminal.ApplyLauncherLayoutForTests(metrics.Width, metrics.Height);
+
+                Assert.That(
+                    terminal.TerminalContainerForTests.style.paddingTop.value,
+                    Is.EqualTo(terminal.TerminalContainerForTests.style.paddingBottom.value).Within(0.001f)
+                );
             }
             finally
             {
@@ -206,6 +254,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
                 Assert.That(log.style.display.value, Is.EqualTo(DisplayStyle.Flex));
                 Assert.That(log.style.height.value, Is.GreaterThan(0f));
+                Assert.That(log.style.marginTop.value, Is.EqualTo(0f).Within(0.001f));
+                Assert.That(autoComplete.style.display.value, Is.EqualTo(DisplayStyle.None));
+                Assert.That(autoComplete.style.marginTop.value, Is.EqualTo(0f).Within(0.001f));
 
                 terminal.LogItemsForTests.Clear();
                 terminal.UpdateLauncherLayoutMetricsForTests();
@@ -268,6 +319,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
                 Assert.That(terminal.LogItemsForTests.Count, Is.EqualTo(3));
                 Assert.That(terminal.LogItemsForTests[0].message, Is.EqualTo("third"));
+                Assert.That(terminal.LogItemsForTests[0].type, Is.EqualTo(TerminalLogType.Input));
                 Assert.That(terminal.LogItemsForTests[1].message, Is.EqualTo("second"));
                 Assert.That(terminal.LogItemsForTests[2].message, Is.EqualTo("first"));
             }
@@ -275,6 +327,73 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             {
                 Object.DestroyImmediate(go);
             }
+        }
+
+        [Test]
+        public void LauncherSuggestionsUseTightSpacing()
+        {
+            GameObject go = new GameObject("LauncherSuggestionSpacingTest");
+            go.SetActive(false);
+            TerminalUI terminal = go.AddComponent<TerminalUI>();
+            terminal.disableUIForTests = true;
+            go.SetActive(true);
+
+            try
+            {
+                VisualElement terminalContainer = new VisualElement();
+                VisualElement inputContainer = new VisualElement();
+                ScrollView autoComplete = new ScrollView();
+                ScrollView log = new ScrollView();
+                terminal.InjectLayoutElementsForTests(
+                    terminalContainer,
+                    inputContainer,
+                    autoComplete,
+                    log
+                );
+                terminal.ArrangeLauncherVisualHierarchyForTests();
+                terminal.ForceStateForTests(TerminalState.OpenLauncher);
+
+                LauncherLayoutMetrics metrics = new LauncherLayoutMetrics(
+                    width: 640f,
+                    height: 240f,
+                    left: 0f,
+                    top: 0f,
+                    historyHeight: 160f,
+                    cornerRadius: 12f,
+                    insetPadding: 12f,
+                    historyVisibleEntryCount: 4,
+                    historyFadeExponent: 2f,
+                    snapOpen: true,
+                    animationDuration: 0.12f
+                );
+
+                terminal.SetLauncherMetricsForTests(metrics);
+                terminal.SetWindowHeightsForTests(metrics.Height, metrics.Height);
+                terminal.SetLauncherContentHeightsForTests(historyHeight: 100f, suggestionHeight: 40f);
+
+                terminal.CompletionBufferForTests.Clear();
+                terminal.CompletionBufferForTests.Add("help");
+                terminal.RefreshAutoCompleteHintsForTests();
+
+                terminal.UpdateLauncherLayoutMetricsForTests();
+
+                Assert.That(autoComplete.style.marginTop.value, Is.EqualTo(TerminalUI.LauncherAutoCompleteSpacingForTests * 0.5f).Within(0.001f));
+                Assert.That(log.style.marginTop.value, Is.EqualTo(TerminalUI.LauncherAutoCompleteSpacingForTests * 0.5f).Within(0.001f));
+                Assert.That(log.style.marginBottom.value, Is.EqualTo(0f).Within(0.001f));
+            }
+            finally
+            {
+                Object.DestroyImmediate(go);
+            }
+        }
+
+        [Test]
+        public void LogEmptyLabelHidden()
+        {
+            Label emptyLabel = new Label("List is empty");
+            TerminalUI.StyleEmptyLabelForTests(emptyLabel);
+            Assert.That(emptyLabel.text, Is.Empty);
+            Assert.That(emptyLabel.style.display.value, Is.EqualTo(DisplayStyle.None));
         }
     }
 }
