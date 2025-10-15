@@ -113,7 +113,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         [UnityTest]
-        public IEnumerator ClearHistoryCommandPurgesInputLogs()
+        public IEnumerator ClearHistoryCommandPurgesAllLogs()
         {
             yield return RestartTerminal();
 
@@ -122,15 +122,17 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             buffer.Clear();
             Terminal.Log(TerminalLogType.Input, "alpha");
+            Terminal.Log(TerminalLogType.Message, "visible");
             buffer.DrainPending();
             Assert.IsTrue(buffer.Logs.Any(log => log.type == TerminalLogType.Input));
+            Assert.IsTrue(buffer.Logs.Any(log => log.type == TerminalLogType.Message));
 
             CommandShell shell = Terminal.Shell;
             Assert.IsNotNull(shell);
             Assert.IsTrue(shell.RunCommand("clear-history"));
 
             buffer.DrainPending();
-            Assert.IsFalse(buffer.Logs.Any(log => log.type == TerminalLogType.Input));
+            Assert.AreEqual(0, buffer.Logs.Count);
             yield break;
         }
 
@@ -216,7 +218,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Assert.IsTrue(shell.RunCommand("trace"));
             Terminal.Buffer?.DrainPending();
-            LogItem warningLog = Terminal.Buffer.Logs.Last(item => item.type == TerminalLogType.Warning);
+            LogItem warningLog = Terminal.Buffer.Logs.Last(item =>
+                item.type == TerminalLogType.Warning
+            );
             StringAssert.Contains("Nothing to trace", warningLog.message);
 
             Terminal.Log(TerminalLogType.Message, "trace-target");
@@ -243,12 +247,16 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Assert.IsTrue(shell.RunCommand("get-variable foo"));
             Terminal.Buffer?.DrainPending();
-            LogItem getLog = Terminal.Buffer.Logs.Last(item => item.type == TerminalLogType.ShellMessage);
+            LogItem getLog = Terminal.Buffer.Logs.Last(item =>
+                item.type == TerminalLogType.ShellMessage
+            );
             StringAssert.Contains("bar baz", getLog.message);
 
             Assert.IsTrue(shell.RunCommand("list-variables"));
             Terminal.Buffer?.DrainPending();
-            LogItem listLog = Terminal.Buffer.Logs.Last(item => item.type == TerminalLogType.ShellMessage);
+            LogItem listLog = Terminal.Buffer.Logs.Last(item =>
+                item.type == TerminalLogType.ShellMessage
+            );
             StringAssert.Contains("foo", listLog.message);
 
             Assert.IsTrue(shell.RunCommand("clear-variable foo"));
@@ -263,7 +271,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Assert.IsTrue(shell.RunCommand("list-variables"));
             Terminal.Buffer?.DrainPending();
-            LogItem emptyLog = Terminal.Buffer.Logs.Last(item => item.type == TerminalLogType.Warning);
+            LogItem emptyLog = Terminal.Buffer.Logs.Last(item =>
+                item.type == TerminalLogType.Warning
+            );
             StringAssert.Contains("No variables found", emptyLog.message);
             yield break;
         }
@@ -277,23 +287,31 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Assert.IsTrue(shell.RunCommand("list-themes"));
             Terminal.Buffer?.DrainPending();
-            LogItem listLog = Terminal.Buffer.Logs.Last(item => item.type == TerminalLogType.Message);
+            LogItem listLog = Terminal.Buffer.Logs.Last(item =>
+                item.type == TerminalLogType.Message
+            );
             string expectedThemeName = ThemeNameHelper.GetFriendlyThemeName("test-theme");
             StringAssert.Contains(expectedThemeName, listLog.message);
 
             Assert.IsTrue(shell.RunCommand("get-theme"));
             Terminal.Buffer?.DrainPending();
-            LogItem getLog = Terminal.Buffer.Logs.Last(item => item.type == TerminalLogType.Message);
+            LogItem getLog = Terminal.Buffer.Logs.Last(item =>
+                item.type == TerminalLogType.Message
+            );
             StringAssert.Contains("Current terminal theme", getLog.message);
 
             Assert.IsTrue(shell.RunCommand("set-theme test-theme"));
             Terminal.Buffer?.DrainPending();
-            LogItem setLog = Terminal.Buffer.Logs.Last(item => item.type == TerminalLogType.Message);
+            LogItem setLog = Terminal.Buffer.Logs.Last(item =>
+                item.type == TerminalLogType.Message
+            );
             StringAssert.Contains("test-theme", setLog.message);
 
             Assert.IsTrue(shell.RunCommand("set-random-theme"));
             Terminal.Buffer?.DrainPending();
-            LogItem randomLog = Terminal.Buffer.Logs.Last(item => item.type == TerminalLogType.Message);
+            LogItem randomLog = Terminal.Buffer.Logs.Last(item =>
+                item.type == TerminalLogType.Message
+            );
             StringAssert.Contains("set theme", randomLog.message);
             yield break;
         }
@@ -307,22 +325,30 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Assert.IsTrue(shell.RunCommand("list-fonts"));
             Terminal.Buffer?.DrainPending();
-            LogItem listLog = Terminal.Buffer.Logs.Last(item => item.type == TerminalLogType.Message);
+            LogItem listLog = Terminal.Buffer.Logs.Last(item =>
+                item.type == TerminalLogType.Message
+            );
             Assert.IsNotNull(listLog);
 
             Assert.IsTrue(shell.RunCommand("get-font"));
             Terminal.Buffer?.DrainPending();
-            LogItem getLog = Terminal.Buffer.Logs.Last(item => item.type == TerminalLogType.Message);
+            LogItem getLog = Terminal.Buffer.Logs.Last(item =>
+                item.type == TerminalLogType.Message
+            );
             StringAssert.Contains("null", getLog.message);
 
             Assert.IsTrue(shell.RunCommand("set-font missing-font"));
             Terminal.Buffer?.DrainPending();
-            LogItem warningLog = Terminal.Buffer.Logs.Last(item => item.type == TerminalLogType.Warning);
+            LogItem warningLog = Terminal.Buffer.Logs.Last(item =>
+                item.type == TerminalLogType.Warning
+            );
             StringAssert.Contains("not found", warningLog.message);
 
             Assert.IsTrue(shell.RunCommand("set-random-font"));
             Terminal.Buffer?.DrainPending();
-            LogItem randomLog = Terminal.Buffer.Logs.Last(item => item.type == TerminalLogType.Warning);
+            LogItem randomLog = Terminal.Buffer.Logs.Last(item =>
+                item.type == TerminalLogType.Warning
+            );
             StringAssert.Contains("No fonts available", randomLog.message);
             yield break;
         }
@@ -337,11 +363,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             int initialCount = Terminal.Buffer.Logs.Count;
             Assert.IsTrue(shell.RunCommand("help"));
             Terminal.Buffer?.DrainPending();
-            bool hasUsage = Terminal.Buffer.Logs
-                .Skip(initialCount)
+            bool hasUsage = Terminal
+                .Buffer.Logs.Skip(initialCount)
                 .Any(item =>
-                    item.type == TerminalLogType.ShellMessage
-                    && item.message.Contains("Usage:")
+                    item.type == TerminalLogType.ShellMessage && item.message.Contains("Usage:")
                 );
             Assert.IsTrue(hasUsage);
 

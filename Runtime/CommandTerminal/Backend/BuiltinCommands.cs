@@ -357,7 +357,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             if (buffer != null)
             {
                 buffer.DrainPending();
-                buffer.RemoveWhere(log => log.type == TerminalLogType.Input);
+                buffer.Clear();
             }
         }
 

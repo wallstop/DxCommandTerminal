@@ -366,16 +366,12 @@ DxCommandTerminal exposes a runtime mode enum to control environment-specific be
   - `Production` (4) — Enable features only for non-development builds.
   - `All` (7) — Enable all.
 
-- Set mode on `TerminalUI` (serialized):
+- Configure modes on `TerminalUI` via the `Runtime Mode Options` list:
 
-  - `Runtime Mode` controls active modes.
-  - `Editor > Auto-Discover Parsers` toggles automatic parser discovery in Editor when `Editor` mode is active.
-
-- Editor Menu:
-
-  - Tools > DxCommandTerminal > Runtime Mode > [Editor | Development | Production | Editor+Development | All]
-  - Tools > DxCommandTerminal > Runtime Mode > Toggle Auto-Discover Parsers
-  - Acts on selected `TerminalUI` components (in the Hierarchy).
+  - Define one or more options (identifier, label, flags) to describe your environments.
+  - `Selected Runtime Mode Id` chooses which option applies when the terminal initializes.
+  - The legacy `Runtime Mode` enum field remains as a fallback for existing assets.
+  - `Editor > Auto-Discover Parsers` still toggles automatic parser discovery when the `Editor` flag is active.
 
 - Programmatic checks (no allocations):
   - `TerminalRuntimeConfig.HasFlagNoAlloc(value, flag)` bit-tests without boxing.

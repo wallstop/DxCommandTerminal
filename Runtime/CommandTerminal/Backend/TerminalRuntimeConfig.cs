@@ -122,5 +122,16 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
             return 0;
         }
+
+        internal static TerminalRuntimeModeFlags GetModeForTests()
+        {
+#pragma warning disable CS0618 // Type or member is obsolete
+            if (Instance != null)
+            {
+                return Instance._mode;
+            }
+            return _fallbackMode;
+#pragma warning restore CS0618 // Type or member is obsolete
+        }
     }
 }

@@ -34,6 +34,21 @@ namespace WallstopStudios.DxCommandTerminal.UI
             TrackerActive = 2,
         }
 
+        [Serializable]
+        public sealed class RuntimeModeOption
+        {
+            [Tooltip("Unique identifier for this runtime mode option.")]
+            public string id = "default";
+
+            [Tooltip("Friendly label for inspector tooling.")]
+            public string displayName = "Default";
+
+#pragma warning disable CS0618 // Type or member is obsolete
+            [Tooltip("Runtime mode flags applied when this option is active.")]
+            public TerminalRuntimeModeFlags modes = TerminalRuntimeModeFlags.All;
+#pragma warning restore CS0618 // Type or member is obsolete
+        }
+
         // Cache log callback to reduce allocations
         private static readonly Application.LogCallback UnityLogCallback = HandleUnityLog;
 
@@ -199,9 +214,15 @@ namespace WallstopStudios.DxCommandTerminal.UI
 #endif
 
         [Header("Runtime Mode")]
-        [Tooltip(
-            "Controls which environment-specific features are enabled. Choose explicit modes. None is obsolete."
-        )]
+        [Tooltip("Available runtime mode options used to configure environment-specific features.")]
+        [SerializeField]
+        private List<RuntimeModeOption> _runtimeModeOptions = new();
+
+        [Tooltip("Identifier of the runtime mode option applied on startup.")]
+        [SerializeField]
+        private string _selectedRuntimeModeId = string.Empty;
+
+        [Tooltip("Legacy fallback for existing data. Prefer runtime mode options.")]
         [SerializeField]
 #pragma warning disable CS0618 // Type or member is obsolete
         private TerminalRuntimeModeFlags _runtimeModes = TerminalRuntimeModeFlags.None;
@@ -282,13 +303,129 @@ namespace WallstopStudios.DxCommandTerminal.UI
 #endif
         }
 
-        private void Awake()
+        private TerminalRuntimeModeFlags ResolveRuntimeModeFlags()
         {
-            TerminalRuntimeConfig.SetMode(_runtimeModes);
+            TerminalRuntimeModeFlags resolved;
+            bool resolvedFromOptions = TryResolveRuntimeModeFromOptions(out resolved);
+            if (resolvedFromOptions)
+            {
+                return resolved;
+            }
+
+#pragma warning disable CS0618 // Type or member is obsolete
+            return _runtimeModes;
+#pragma warning restore CS0618 // Type or member is obsolete
+        }
+
+        private bool TryResolveRuntimeModeFromOptions(out TerminalRuntimeModeFlags resolved)
+        {
+            resolved = TerminalRuntimeModeFlags.None;
+            if (_runtimeModeOptions == null || _runtimeModeOptions.Count == 0)
+            {
+                return false;
+            }
+
+            int matchIndex = ResolveRuntimeModeIndex(_selectedRuntimeModeId);
+            if (matchIndex < 0)
+            {
+                matchIndex = 0;
+            }
+
+            RuntimeModeOption option = _runtimeModeOptions[matchIndex];
+            if (option == null)
+            {
+                return false;
+            }
+
+            resolved = option.modes;
+            if (!string.IsNullOrWhiteSpace(option.id))
+            {
+                _selectedRuntimeModeId = option.id;
+            }
+
+            return true;
+        }
+
+        private int ResolveRuntimeModeIndex(string key)
+        {
+            if (string.IsNullOrWhiteSpace(key) || _runtimeModeOptions == null)
+            {
+                return -1;
+            }
+
+            for (int i = 0; i < _runtimeModeOptions.Count; ++i)
+            {
+                RuntimeModeOption option = _runtimeModeOptions[i];
+                if (option == null || string.IsNullOrWhiteSpace(option.id))
+                {
+                    continue;
+                }
+
+                if (string.Equals(option.id, key, StringComparison.OrdinalIgnoreCase))
+                {
+                    return i;
+                }
+            }
+
+            return -1;
+        }
+
+        internal bool TryApplyRuntimeMode(string runtimeModeId)
+        {
+            if (_runtimeModeOptions == null || _runtimeModeOptions.Count == 0)
+            {
+                return false;
+            }
+
+            int index = ResolveRuntimeModeIndex(runtimeModeId);
+            if (index < 0)
+            {
+                return false;
+            }
+
+            RuntimeModeOption option = _runtimeModeOptions[index];
+            if (option == null)
+            {
+                return false;
+            }
+
+            _selectedRuntimeModeId = option.id;
+            ApplyRuntimeMode(option.modes);
+            return true;
+        }
+
+        internal void SetRuntimeModeOptions(
+            IEnumerable<RuntimeModeOption> options,
+            string selectedId
+        )
+        {
+            if (options == null)
+            {
+                _runtimeModeOptions = new List<RuntimeModeOption>();
+            }
+            else
+            {
+                _runtimeModeOptions = new List<RuntimeModeOption>(options);
+            }
+
+            _selectedRuntimeModeId = string.IsNullOrWhiteSpace(selectedId)
+                ? string.Empty
+                : selectedId;
+        }
+
+        private void ApplyRuntimeMode(TerminalRuntimeModeFlags modes)
+        {
+            TerminalRuntimeConfig.SetMode(modes);
 #if UNITY_EDITOR
             TerminalRuntimeConfig.EditorAutoDiscover = _autoDiscoverParsersInEditor;
 #endif
             TerminalRuntimeConfig.TryAutoDiscoverParsers();
+        }
+
+        private void Awake()
+        {
+            TerminalRuntimeModeFlags resolvedRuntimeModes = ResolveRuntimeModeFlags();
+            ApplyRuntimeMode(resolvedRuntimeModes);
             switch (_logBufferSize)
             {
                 case <= 0:

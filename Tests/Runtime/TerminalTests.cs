@@ -1,5 +1,6 @@
 namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 {
+    using System;
     using System.Collections;
     using System.Collections.Generic;
     using System.Linq;
@@ -10,6 +11,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     using UnityEngine;
     using UnityEngine.TestTools;
     using UnityEngine.UIElements;
+    using Object = UnityEngine.Object;
 
     public sealed class TerminalTests
     {
@@ -103,7 +105,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.IsNotNull(Terminal.AutoComplete);
         }
 
-        internal static IEnumerator SpawnTerminal(bool resetStateOnInit)
+        internal static IEnumerator SpawnTerminal(
+            bool resetStateOnInit,
+            Action<TerminalUI> configure = null
+        )
         {
             GameObject go = new("Terminal");
             go.SetActive(false);
@@ -124,6 +129,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             terminal.disableUIForTests = true;
             terminal.InjectPacks(themePack, fontPack);
             terminal.resetStateOnInit = resetStateOnInit;
+
+            if (configure != null)
+            {
+                configure(terminal);
+            }
 
             go.SetActive(true);
             yield return new WaitUntil(() => startTracker.Started);
@@ -160,6 +170,111 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreNotSame(history1, Terminal.History);
             Assert.AreNotSame(buffer1, Terminal.Buffer);
             Assert.AreNotSame(auto1, Terminal.AutoComplete);
+        }
+
+        [UnityTest]
+        public IEnumerator RuntimeModeOptionsApplySelectedConfiguration()
+        {
+            yield return TestSceneHelpers.DestroyTerminalAndWait();
+
+            TerminalRuntimeConfig.SetMode(TerminalRuntimeModeFlags.None);
+
+            TerminalUI.RuntimeModeOption[] options = new TerminalUI.RuntimeModeOption[]
+            {
+                new TerminalUI.RuntimeModeOption
+                {
+                    id = "editor",
+                    displayName = "Editor Only",
+                    modes = TerminalRuntimeModeFlags.Editor,
+                },
+                new TerminalUI.RuntimeModeOption
+                {
+                    id = "production",
+                    displayName = "Production Only",
+                    modes = TerminalRuntimeModeFlags.Production,
+                },
+            };
+
+            yield return SpawnTerminal(
+                resetStateOnInit: true,
+                configure: terminal => terminal.SetRuntimeModeOptions(options, "production")
+            );
+
+            TerminalRuntimeModeFlags configuredMode = TerminalRuntimeConfig.GetModeForTests();
+            Assert.AreEqual(TerminalRuntimeModeFlags.Production, configuredMode);
+        }
+
+        [UnityTest]
+        public IEnumerator RuntimeModeOptionsFallbackToFirstWhenSelectionMissing()
+        {
+            yield return TestSceneHelpers.DestroyTerminalAndWait();
+
+            TerminalRuntimeConfig.SetMode(TerminalRuntimeModeFlags.None);
+
+            TerminalUI.RuntimeModeOption[] options = new TerminalUI.RuntimeModeOption[]
+            {
+                new TerminalUI.RuntimeModeOption
+                {
+                    id = "development",
+                    displayName = "Development",
+                    modes = TerminalRuntimeModeFlags.Development,
+                },
+                new TerminalUI.RuntimeModeOption
+                {
+                    id = "production",
+                    displayName = "Production",
+                    modes = TerminalRuntimeModeFlags.Production,
+                },
+            };
+
+            yield return SpawnTerminal(
+                resetStateOnInit: true,
+                configure: terminal => terminal.SetRuntimeModeOptions(options, "missing")
+            );
+
+            TerminalRuntimeModeFlags configuredMode = TerminalRuntimeConfig.GetModeForTests();
+            Assert.AreEqual(TerminalRuntimeModeFlags.Development, configuredMode);
+        }
+
+        [UnityTest]
+        public IEnumerator TryApplyRuntimeModeChangesActiveSelection()
+        {
+            yield return TestSceneHelpers.DestroyTerminalAndWait();
+
+            TerminalRuntimeConfig.SetMode(TerminalRuntimeModeFlags.None);
+
+            TerminalUI.RuntimeModeOption[] options = new TerminalUI.RuntimeModeOption[]
+            {
+                new TerminalUI.RuntimeModeOption
+                {
+                    id = "editor",
+                    displayName = "Editor",
+                    modes = TerminalRuntimeModeFlags.Editor,
+                },
+                new TerminalUI.RuntimeModeOption
+                {
+                    id = "production",
+                    displayName = "Production",
+                    modes = TerminalRuntimeModeFlags.Production,
+                },
+            };
+
+            yield return SpawnTerminal(
+                resetStateOnInit: true,
+                configure: terminal => terminal.SetRuntimeModeOptions(options, "editor")
+            );
+
+            TerminalRuntimeModeFlags initialMode = TerminalRuntimeConfig.GetModeForTests();
+            Assert.AreEqual(TerminalRuntimeModeFlags.Editor, initialMode);
+
+            TerminalUI terminalInstance = TerminalUI.Instance;
+            Assert.IsNotNull(terminalInstance);
+
+            bool switched = terminalInstance.TryApplyRuntimeMode("production");
+            Assert.IsTrue(switched);
+
+            TerminalRuntimeModeFlags updatedMode = TerminalRuntimeConfig.GetModeForTests();
+            Assert.AreEqual(TerminalRuntimeModeFlags.Production, updatedMode);
         }
 
         // Test-only pack types moved to Components/TestPacks.cs
