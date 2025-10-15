@@ -8,7 +8,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.Utils
     using System.Reflection;
     using UnityEditor;
     using UnityEngine;
-    using WallstopStudios.DxCommandTerminal.Internal;
+    using Internal;
 
     [InitializeOnLoad]
     public static class ScriptableObjectSingletonCreator

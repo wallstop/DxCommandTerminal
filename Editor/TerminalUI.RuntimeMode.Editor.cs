@@ -45,12 +45,12 @@ namespace WallstopStudios.DxCommandTerminal.Editor
         [MenuItem(MenuRoot + "Toggle Auto-Discover Parsers", false, 50)]
         private static void ToggleAutoDiscover()
         {
-            foreach (var obj in Selection.objects)
+            foreach (Object obj in Selection.objects)
             {
-                if (obj is GameObject go && go.TryGetComponent<TerminalUI>(out var ui))
+                if (obj is GameObject go && go.TryGetComponent<TerminalUI>(out TerminalUI ui))
                 {
-                    var so = new SerializedObject(ui);
-                    var prop = so.FindProperty("_autoDiscoverParsersInEditor");
+                    SerializedObject so = new SerializedObject(ui);
+                    SerializedProperty prop = so.FindProperty("_autoDiscoverParsersInEditor");
                     if (prop != null)
                     {
                         prop.boolValue = !prop.boolValue;
@@ -63,12 +63,12 @@ namespace WallstopStudios.DxCommandTerminal.Editor
 
         private static void SetSelectedRuntimeMode(TerminalRuntimeModeFlags mode)
         {
-            foreach (var obj in Selection.objects)
+            foreach (Object obj in Selection.objects)
             {
-                if (obj is GameObject go && go.TryGetComponent<TerminalUI>(out var ui))
+                if (obj is GameObject go && go.TryGetComponent<TerminalUI>(out TerminalUI ui))
                 {
-                    var so = new SerializedObject(ui);
-                    var prop = so.FindProperty("_runtimeModes");
+                    SerializedObject so = new SerializedObject(ui);
+                    SerializedProperty prop = so.FindProperty("_runtimeModes");
                     if (prop != null)
                     {
                         prop.intValue = (int)mode;

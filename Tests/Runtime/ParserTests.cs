@@ -29,11 +29,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void StaticMemberParserFindsFields()
         {
-            Assert.IsTrue(StaticMemberParser<StaticLike>.TryParse("Alpha", out var a));
+            Assert.IsTrue(StaticMemberParser<StaticLike>.TryParse("Alpha", out StaticLike a));
             Assert.IsNotNull(a);
             Assert.AreEqual(1, a.Value);
 
-            Assert.IsTrue(StaticMemberParser<StaticLike>.TryParse("Beta", out var b));
+            Assert.IsTrue(StaticMemberParser<StaticLike>.TryParse("Beta", out StaticLike b));
             Assert.IsNotNull(b);
             Assert.AreEqual(2, b.Value);
         }

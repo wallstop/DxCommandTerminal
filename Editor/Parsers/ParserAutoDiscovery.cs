@@ -2,7 +2,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor
 {
 #if UNITY_EDITOR
     using UnityEditor;
-    using WallstopStudios.DxCommandTerminal.Backend;
+    using Backend;
 
     [InitializeOnLoad]
     internal static class ParserAutoDiscovery

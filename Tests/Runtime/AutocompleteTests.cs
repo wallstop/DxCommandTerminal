@@ -2,9 +2,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 {
     using System;
     using System.Collections.Generic;
+    using Attributes;
     using Backend;
     using NUnit.Framework;
-    using WallstopStudios.DxCommandTerminal.Attributes;
 
     internal sealed class DummyCompleter : IArgumentCompleter
     {

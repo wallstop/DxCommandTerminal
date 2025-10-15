@@ -111,11 +111,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             // In tests we skip building UI entirely to avoid engine panel updates
 
             // Create lightweight test packs to avoid warnings
-            var themePack = ScriptableObject.CreateInstance<TestThemePack>();
-            var style = ScriptableObject.CreateInstance<StyleSheet>();
+            TestThemePack themePack = ScriptableObject.CreateInstance<TestThemePack>();
+            StyleSheet style = ScriptableObject.CreateInstance<StyleSheet>();
             themePack.Add(style, "test-theme");
 
-            var fontPack = ScriptableObject.CreateInstance<TestFontPack>();
+            TestFontPack fontPack = ScriptableObject.CreateInstance<TestFontPack>();
             // UI is disabled during tests; no need to add a real font asset
 
             StartTracker startTracker = go.AddComponent<StartTracker>();
@@ -140,10 +140,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             // Start with reset and capture instances
             yield return TestSceneHelpers.CleanRestart(resetStateOnInit: true);
 
-            var shell1 = Terminal.Shell;
-            var history1 = Terminal.History;
-            var buffer1 = Terminal.Buffer;
-            var auto1 = Terminal.AutoComplete;
+            CommandShell shell1 = Terminal.Shell;
+            CommandHistory history1 = Terminal.History;
+            CommandLog buffer1 = Terminal.Buffer;
+            CommandAutoComplete auto1 = Terminal.AutoComplete;
             Assert.IsNotNull(shell1);
             Assert.IsNotNull(history1);
 

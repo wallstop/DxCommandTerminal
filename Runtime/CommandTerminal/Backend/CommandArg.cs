@@ -3,7 +3,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     using System;
     using System.Collections.Generic;
     using System.Reflection;
-    using WallstopStudios.DxCommandTerminal.Backend.Parsers;
+    using Parsers;
 
     public delegate bool CommandArgParser<T>(string input, out T parsed);
 

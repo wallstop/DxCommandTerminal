@@ -1,5 +1,7 @@
 namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Parsers
 {
+    using System;
+    using System.Collections.Generic;
     using Backend;
     using Backend.Parsers;
     using NUnit.Framework;
@@ -14,7 +16,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Parsers
             CommandArg.RegisterObjectParser(IntArgParser.Instance, true);
             CommandArg.RegisterObjectParser(FloatArgParser.Instance, true);
 
-            var types = CommandArg.GetRegisteredObjectParserTypes();
+            IReadOnlyCollection<Type> types = CommandArg.GetRegisteredObjectParserTypes();
             CollectionAssert.Contains(types, typeof(int));
             CollectionAssert.Contains(types, typeof(float));
         }
@@ -37,7 +39,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Parsers
         {
             CommandArg.UnregisterObjectParser(typeof(CustomType));
             Assert.IsTrue(CommandArg.RegisterObjectParser(CustomTypeParser.Instance, false));
-            var types = CommandArg.GetRegisteredObjectParserTypes();
+            IReadOnlyCollection<Type> types = CommandArg.GetRegisteredObjectParserTypes();
             CollectionAssert.Contains(types, typeof(CustomType));
 
             Assert.IsTrue(CommandArg.UnregisterObjectParser(typeof(CustomType)));

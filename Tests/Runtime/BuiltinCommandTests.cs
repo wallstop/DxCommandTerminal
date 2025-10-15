@@ -242,12 +242,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Assert.IsTrue(shell.RunCommand("get-variable foo"));
             Terminal.Buffer?.DrainPending();
-            LogItem getLog = Terminal.Buffer.Logs.Last(item => item.type == TerminalLogType.Message);
+            LogItem getLog = Terminal.Buffer.Logs.Last(item => item.type == TerminalLogType.ShellMessage);
             StringAssert.Contains("bar baz", getLog.message);
 
             Assert.IsTrue(shell.RunCommand("list-variables"));
             Terminal.Buffer?.DrainPending();
-            LogItem listLog = Terminal.Buffer.Logs.Last(item => item.type == TerminalLogType.Message);
+            LogItem listLog = Terminal.Buffer.Logs.Last(item => item.type == TerminalLogType.ShellMessage);
             StringAssert.Contains("foo", listLog.message);
 
             Assert.IsTrue(shell.RunCommand("clear-variable foo"));
@@ -337,14 +337,17 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Terminal.Buffer?.DrainPending();
             bool hasUsage = Terminal.Buffer.Logs
                 .Skip(initialCount)
-                .Any(item => item.type == TerminalLogType.Message && item.message.Contains("Usage:"));
+                .Any(item =>
+                    item.type == TerminalLogType.ShellMessage
+                    && item.message.Contains("Usage:")
+                );
             Assert.IsTrue(hasUsage);
 
             initialCount = Terminal.Buffer.Logs.Count;
             Assert.IsTrue(shell.RunCommand("help clear-history"));
             Terminal.Buffer?.DrainPending();
             LogItem specificLog = Terminal.Buffer.Logs.Last(item =>
-                item.type == TerminalLogType.Message && item.message.Contains("clear-history")
+                item.type == TerminalLogType.ShellMessage && item.message.Contains("clear-history")
             );
             StringAssert.Contains("clear-history", specificLog.message);
             yield break;

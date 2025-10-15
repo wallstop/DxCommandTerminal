@@ -6,6 +6,8 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
     using System.Diagnostics;
     using System.IO;
     using System.Linq;
+    using System.Reflection;
+    using Attributes;
     using Backend;
     using DxCommandTerminal.Helper;
     using UnityEditor;
@@ -207,10 +209,12 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
             _allCommands.Clear();
             _defaultCommands.Clear();
             _nonDefaultCommands.Clear();
-            var reg = CommandShell.RegisteredCommands.Value;
+            (MethodInfo method, RegisterCommandAttribute attribute)[] reg = CommandShell
+                .RegisteredCommands
+                .Value;
             for (int i = 0; i < reg.Length; ++i)
             {
-                var attr = reg[i].attribute;
+                RegisterCommandAttribute attr = reg[i].attribute;
                 if (attr == null || string.IsNullOrWhiteSpace(attr.Name))
                 {
                     continue;
@@ -500,10 +504,12 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
             _allCommands.Clear();
             _defaultCommands.Clear();
             _nonDefaultCommands.Clear();
-            var reg = CommandShell.RegisteredCommands.Value;
+            (MethodInfo method, RegisterCommandAttribute attribute)[] reg = CommandShell
+                .RegisteredCommands
+                .Value;
             for (int i = 0; i < reg.Length; ++i)
             {
-                var attr = reg[i].attribute;
+                RegisterCommandAttribute attr = reg[i].attribute;
                 if (attr == null || string.IsNullOrWhiteSpace(attr.Name))
                 {
                     continue;

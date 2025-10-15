@@ -1,6 +1,6 @@
 namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Components
 {
-    using WallstopStudios.DxCommandTerminal.Input;
+    using Input;
     using UnityEngine;
 
     [DisallowMultipleComponent]

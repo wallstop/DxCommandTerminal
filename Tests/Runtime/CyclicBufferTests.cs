@@ -1,9 +1,9 @@
 namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 {
     using System.Collections;
+    using DataStructures;
     using NUnit.Framework;
     using UnityEngine.TestTools;
-    using WallstopStudios.DxCommandTerminal.DataStructures;
 
     public sealed class CyclicBufferTests
     {

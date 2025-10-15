@@ -1,8 +1,8 @@
 namespace WallstopStudios.DxCommandTerminal.Backend
 {
     using System;
+    using Internal;
     using UnityEngine;
-    using WallstopStudios.DxCommandTerminal.Internal;
 
     [Flags]
     public enum TerminalRuntimeModeFlags

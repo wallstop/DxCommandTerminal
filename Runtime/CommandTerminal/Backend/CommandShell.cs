@@ -338,8 +338,28 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
 
             string commandName = _arguments[0].contents ?? string.Empty;
-            // Remove command name from arguments
-            _arguments.RemoveAt(0);
+            int commandSegments = 1;
+
+            if (!TryResolveCommand(commandName, out _, out _))
+            {
+                StringBuilder spacedBuilder = null;
+                for (int i = 1; i < _arguments.Count; ++i)
+                {
+                    spacedBuilder ??= new StringBuilder(commandName);
+                    spacedBuilder.Append(' ');
+                    spacedBuilder.Append(_arguments[i].contents);
+                    string candidate = spacedBuilder.ToString();
+
+                    if (TryResolveCommand(candidate, out _, out _))
+                    {
+                        commandName = candidate;
+                        commandSegments = i + 1;
+                        break;
+                    }
+                }
+            }
+
+            _arguments.RemoveRange(0, commandSegments);
 
             return RunCommand(
                 commandName,

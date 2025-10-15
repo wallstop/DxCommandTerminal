@@ -15,7 +15,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void LauncherMetricsRespectSizingModes()
         {
-            var settings = new TerminalLauncherSettings
+            TerminalLauncherSettings settings = new TerminalLauncherSettings
             {
                 width = LauncherDimension.RelativeToScreen(0.5f),
                 height = LauncherDimension.RelativeToScreen(0.33f),
@@ -69,7 +69,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.IsNotNull(terminal);
 
             CommandHistory previousHistory = Terminal.History;
-            var history = new CommandHistory(16);
+            CommandHistory history = new CommandHistory(16);
             Terminal.History = history;
 
             try
@@ -78,7 +78,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 history.Push("second", true, true);
                 history.Push("third", true, true);
 
-                var metrics = new LauncherLayoutMetrics(
+                LauncherLayoutMetrics metrics = new LauncherLayoutMetrics(
                     width: 640f,
                     height: 160f,
                     left: 100f,
@@ -92,7 +92,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     animationDuration: 0.1f
                 );
 
-                var scroll = new ScrollView();
+                ScrollView scroll = new ScrollView();
                 terminal.SetLogScrollViewForTests(scroll);
                 terminal.SetLauncherMetricsForTests(metrics);
                 terminal.SetState(TerminalState.OpenLauncher);
@@ -102,19 +102,19 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 Assert.That(content.childCount, Is.EqualTo(3));
 
                 // Verify newest entry is first and fully opaque
-                var newest = content[0] as Label;
+                Label newest = content[0] as Label;
                 Assert.IsNotNull(newest);
                 Assert.That(newest!.text, Is.EqualTo("third"));
                 Assert.That(newest.style.opacity.value, Is.EqualTo(1f).Within(0.001f));
 
                 // Middle entry has partial opacity
-                var middle = content[1] as Label;
+                Label middle = content[1] as Label;
                 Assert.IsNotNull(middle);
                 Assert.That(middle!.text, Is.EqualTo("second"));
                 Assert.That(middle.style.opacity.value, Is.LessThan(1f).And.GreaterThan(0.35f));
 
                 // Oldest entry is faded out
-                var oldest = content[2] as Label;
+                Label oldest = content[2] as Label;
                 Assert.IsNotNull(oldest);
                 Assert.That(oldest!.text, Is.EqualTo("first"));
                 Assert.That(oldest.style.opacity.value, Is.EqualTo(0.35f).Within(0.001f));
