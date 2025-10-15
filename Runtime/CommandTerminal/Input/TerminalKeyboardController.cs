@@ -12,6 +12,8 @@ namespace WallstopStudios.DxCommandTerminal.Input
 
         protected readonly HashSet<string> _missing = new();
         protected readonly HashSet<TerminalControlTypes> _terminalControlTypes = new();
+        protected ITerminalInputTarget _inputTarget;
+        private bool _missingTargetLogged;
 
         private static TerminalControlTypes[] BuildControlTypes()
         {
@@ -89,15 +91,7 @@ namespace WallstopStudios.DxCommandTerminal.Input
 
         protected virtual void Awake()
         {
-            if (terminal != null)
-            {
-                return;
-            }
-
-            if (!TryGetComponent(out terminal))
-            {
-                Debug.LogError("Failed to find TerminalUI, Input will not work.", this);
-            }
+            ResolveInputTarget();
 
             if (_controlOrder is not { Count: > 0 })
             {
@@ -113,6 +107,7 @@ namespace WallstopStudios.DxCommandTerminal.Input
         {
             if (!Application.isPlaying)
             {
+                ResolveInputTarget();
                 VerifyControlOrderIntegrity();
             }
         }
@@ -163,6 +158,15 @@ namespace WallstopStudios.DxCommandTerminal.Input
 
         protected virtual void Update()
         {
+            if (_inputTarget == null)
+            {
+                ResolveInputTarget();
+                if (_inputTarget == null)
+                {
+                    return;
+                }
+            }
+
             if (_controlOrder is not { Count: > 0 })
             {
                 return;
@@ -184,85 +188,85 @@ namespace WallstopStudios.DxCommandTerminal.Input
 
         protected virtual void Close()
         {
-            if (terminal == null)
+            if (_inputTarget == null)
             {
                 return;
             }
 
-            terminal.Close();
+            _inputTarget.Close();
         }
 
         protected virtual void EnterCommand()
         {
-            if (terminal == null)
+            if (_inputTarget == null)
             {
                 return;
             }
-            terminal.EnterCommand();
+            _inputTarget.EnterCommand();
         }
 
         protected virtual void Previous()
         {
-            if (terminal == null)
+            if (_inputTarget == null)
             {
                 return;
             }
-            terminal.HandlePrevious();
+            _inputTarget.HandlePrevious();
         }
 
         protected virtual void Next()
         {
-            if (terminal == null)
+            if (_inputTarget == null)
             {
                 return;
             }
-            terminal.HandleNext();
+            _inputTarget.HandleNext();
         }
 
         protected virtual void ToggleFull()
         {
-            if (terminal == null)
+            if (_inputTarget == null)
             {
                 return;
             }
-            terminal.ToggleFull();
+            _inputTarget.ToggleFull();
         }
 
         protected virtual void ToggleLauncher()
         {
-            if (terminal == null)
+            if (_inputTarget == null)
             {
                 return;
             }
-            terminal.ToggleLauncher();
+            _inputTarget.ToggleLauncher();
         }
 
         protected virtual void ToggleSmall()
         {
-            if (terminal == null)
+            if (_inputTarget == null)
             {
                 return;
             }
-            terminal.ToggleSmall();
+            _inputTarget.ToggleSmall();
         }
 
         protected virtual void Complete()
         {
-            if (terminal == null)
+            if (_inputTarget == null)
             {
                 return;
             }
 
-            terminal.CompleteCommand(searchForward: true);
+            _inputTarget.CompleteCommand(searchForward: true);
         }
 
         protected virtual void CompleteBackward()
         {
-            if (terminal == null)
+            if (_inputTarget == null)
             {
                 return;
             }
-            terminal.CompleteCommand(searchForward: false);
+            _inputTarget.CompleteCommand(searchForward: false);
         }
 
         #endregion
@@ -357,7 +361,7 @@ namespace WallstopStudios.DxCommandTerminal.Input
             }
         }
 
-        private void ExecuteControl(TerminalControlTypes controlType)
+        protected virtual void ExecuteControl(TerminalControlTypes controlType)
         {
             switch (controlType)
             {
@@ -390,5 +394,40 @@ namespace WallstopStudios.DxCommandTerminal.Input
                     break;
             }
         }
+
+        private void ResolveInputTarget()
+        {
+            if (terminal != null)
+            {
+                _inputTarget = terminal;
+                _missingTargetLogged = false;
+                return;
+            }
+
+            if (TryGetComponent<ITerminalInputTarget>(out ITerminalInputTarget resolvedTarget))
+            {
+                _inputTarget = resolvedTarget;
+                terminal = resolvedTarget as TerminalUI;
+                _missingTargetLogged = false;
+            }
+            else
+            {
+                if (!_missingTargetLogged)
+                {
+                    Debug.LogError(
+                        "Failed to locate a terminal input target. Input will not work.",
+                        this
+                    );
+                    _missingTargetLogged = true;
+                }
+            }
+        }
+
+#if UNITY_EDITOR || UNITY_INCLUDE_TESTS
+        internal void ExecuteControlForTests(TerminalControlTypes controlType)
+        {
+            ExecuteControl(controlType);
+        }
+#endif
     }
 }

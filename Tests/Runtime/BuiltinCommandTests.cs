@@ -42,6 +42,30 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             return default;
         }
 
+        private static bool TryFindLogSince(
+            CommandLog buffer,
+            int startIndex,
+            Func<LogItem, bool> predicate,
+            out LogItem result
+        )
+        {
+            Assert.IsNotNull(buffer, "Command log is not initialized.");
+            IReadOnlyList<LogItem> logs = buffer.Logs;
+            int clampedStart = Mathf.Clamp(startIndex, 0, logs.Count);
+            for (int i = clampedStart; i < logs.Count; ++i)
+            {
+                LogItem entry = logs[i];
+                if (predicate == null || predicate(entry))
+                {
+                    result = entry;
+                    return true;
+                }
+            }
+
+            result = default;
+            return false;
+        }
+
         private static IEnumerator RestartTerminal()
         {
             yield return TestSceneHelpers.CleanRestart(resetStateOnInit: true);
