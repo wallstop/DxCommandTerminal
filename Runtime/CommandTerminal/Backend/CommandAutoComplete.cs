@@ -16,6 +16,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         private readonly CommandHistory _history;
         private readonly CommandShell _shell;
 
+        public string LastCompleterPrefix { get; private set; }
+
+        public bool LastCompletionUsedCompleter { get; private set; }
+
         public CommandAutoComplete(
             CommandHistory history,
             CommandShell shell,
@@ -47,6 +51,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             string input = text ?? string.Empty;
             buffer.Clear();
             _duplicateBuffer.Clear();
+            LastCompleterPrefix = null;
+            LastCompletionUsedCompleter = false;
 
             if (string.IsNullOrWhiteSpace(input))
             {
@@ -138,6 +144,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 }
                 string prefixBase = _sb.ToString();
 
+                bool addedSuggestions = false;
                 foreach (string suggestion in suggestions)
                 {
                     if (string.IsNullOrWhiteSpace(suggestion))
@@ -174,13 +181,16 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                         : full;
                     if (_duplicateBuffer.Add(key))
                     {
-                        buffer.Add(full);
+                        buffer.Add(insertion);
+                        addedSuggestions = true;
                     }
                 }
 
                 // If we got any results from the completer, return them.
-                if (0 < buffer.Count)
+                if (addedSuggestions)
                 {
+                    LastCompleterPrefix = prefixBase;
+                    LastCompletionUsedCompleter = true;
                     return buffer;
                 }
 
@@ -227,11 +237,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 {
                     continue;
                 }
-                string duplicateKey = !string.IsNullOrEmpty(normalizedCommand)
-                    ? normalizedCommand
-                    : command.NeedsLowerInvariantConversion()
-                        ? command.ToLowerInvariant()
-                        : command;
+                string duplicateKey =
+                    !string.IsNullOrEmpty(normalizedCommand) ? normalizedCommand
+                    : command.NeedsLowerInvariantConversion() ? command.ToLowerInvariant()
+                    : command;
                 string display = command.NeedsLowerInvariantConversion()
                     ? command.ToLowerInvariant()
                     : command;

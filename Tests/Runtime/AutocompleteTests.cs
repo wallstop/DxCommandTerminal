@@ -106,10 +106,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             CommandAutoComplete ac = new(history, shell);
             string[] results = ac.Complete("testcmd ");
 
-            // Expect both suggestions formatted for insertion
+            // Expect suggestions returned without the command prefix but still quoted when needed
             Assert.IsNotNull(results);
-            CollectionAssert.Contains(results, "testcmd \"foo bar\"");
-            CollectionAssert.Contains(results, "testcmd baz");
+            CollectionAssert.Contains(results, "\"foo bar\"");
+            CollectionAssert.Contains(results, "baz");
+            Assert.IsTrue(ac.LastCompletionUsedCompleter);
+            Assert.AreEqual("testcmd ", ac.LastCompleterPrefix);
         }
 
         [Test]
@@ -182,10 +184,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             CollectionAssert.Contains(commandSuggestions, "chain");
 
             string[] firstArgumentSuggestions = autoComplete.Complete("chain ");
-            CollectionAssert.AreEquivalent(
-                new[] { "chain alpha", "chain beta" },
-                firstArgumentSuggestions
-            );
+            CollectionAssert.AreEquivalent(new[] { "alpha", "beta" }, firstArgumentSuggestions);
+            Assert.IsTrue(autoComplete.LastCompletionUsedCompleter);
+            Assert.AreEqual("chain ", autoComplete.LastCompleterPrefix);
             Assert.AreEqual(1, chainedCompleter.Calls.Count);
             CommandCompletionContext firstContext = chainedCompleter.Calls[0];
             Assert.AreEqual(0, firstContext.ArgIndex);
@@ -193,7 +194,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreEqual(0, firstContext.ArgsBeforeCursor.Count);
 
             string[] secondArgumentSuggestions = autoComplete.Complete("chain alpha ");
-            CollectionAssert.Contains(secondArgumentSuggestions, "chain alpha gamma");
+            CollectionAssert.Contains(secondArgumentSuggestions, "gamma");
+            Assert.IsTrue(autoComplete.LastCompletionUsedCompleter);
+            Assert.AreEqual("chain alpha ", autoComplete.LastCompleterPrefix);
             Assert.AreEqual(2, chainedCompleter.Calls.Count);
             CommandCompletionContext secondContext = chainedCompleter.Calls[1];
             Assert.AreEqual(1, secondContext.ArgIndex);
@@ -203,7 +206,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             chainedCompleter.Calls.Clear();
             string[] partialFirstArgument = autoComplete.Complete("chain a");
-            CollectionAssert.Contains(partialFirstArgument, "chain alpha");
+            CollectionAssert.Contains(partialFirstArgument, "alpha");
+            Assert.IsTrue(autoComplete.LastCompletionUsedCompleter);
+            Assert.AreEqual("chain ", autoComplete.LastCompleterPrefix);
             Assert.AreEqual(1, chainedCompleter.Calls.Count);
             CommandCompletionContext partialFirstContext = chainedCompleter.Calls[0];
             Assert.AreEqual(0, partialFirstContext.ArgIndex);
@@ -212,7 +217,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             chainedCompleter.Calls.Clear();
             string[] partialSecondArgument = autoComplete.Complete("chain alpha g");
-            CollectionAssert.Contains(partialSecondArgument, "chain alpha gamma");
+            CollectionAssert.Contains(partialSecondArgument, "gamma");
+            Assert.IsTrue(autoComplete.LastCompletionUsedCompleter);
+            Assert.AreEqual("chain alpha ", autoComplete.LastCompleterPrefix);
             Assert.AreEqual(1, chainedCompleter.Calls.Count);
             CommandCompletionContext partialSecondContext = chainedCompleter.Calls[0];
             Assert.AreEqual(1, partialSecondContext.ArgIndex);
@@ -235,7 +242,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             autoComplete.Complete("chain alpha gamma", caretIndex, buffer);
 
             Assert.AreEqual(1, buffer.Count);
-            Assert.AreEqual("chain alpha gamma", buffer[0]);
+            Assert.AreEqual("gamma", buffer[0]);
+            Assert.IsTrue(autoComplete.LastCompletionUsedCompleter);
+            Assert.AreEqual("chain alpha ", autoComplete.LastCompleterPrefix);
             Assert.AreEqual(1, chainedCompleter.Calls.Count);
             CommandCompletionContext context = chainedCompleter.Calls[0];
             Assert.AreEqual(1, context.ArgIndex);

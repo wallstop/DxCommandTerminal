@@ -255,6 +255,8 @@ namespace WallstopStudios.DxCommandTerminal.UI
             StringComparer.OrdinalIgnoreCase
         );
         private readonly List<VisualElement> _autoCompleteChildren = new();
+        private string _lastCompletionAnchorText;
+        private int? _lastCompletionAnchorCaretIndex;
         private readonly List<CommandHistoryEntry> _launcherHistoryEntries = new();
 
         private float _launcherSuggestionContentHeight;
@@ -727,6 +729,8 @@ namespace WallstopStudios.DxCommandTerminal.UI
         private void ResetAutoComplete()
         {
             _lastKnownCommandText = _input.CommandText ?? string.Empty;
+            _lastCompletionAnchorText = null;
+            _lastCompletionAnchorCaretIndex = null;
             if (hintDisplayMode == HintDisplayMode.Always)
             {
                 _lastCompletionBufferTempCache.Clear();
@@ -1898,16 +1902,15 @@ namespace WallstopStudios.DxCommandTerminal.UI
         {
             return _state switch
             {
-                TerminalState.OpenLauncher
-                    => _historyFadeTargets.HasFlagNoAlloc(TerminalHistoryFadeTargets.Launcher),
-                TerminalState.OpenSmall
-                    => _historyFadeTargets.HasFlagNoAlloc(
-                        TerminalHistoryFadeTargets.SmallTerminal
-                    ),
-                TerminalState.OpenFull
-                    => _historyFadeTargets.HasFlagNoAlloc(
-                        TerminalHistoryFadeTargets.FullTerminal
-                    ),
+                TerminalState.OpenLauncher => _historyFadeTargets.HasFlagNoAlloc(
+                    TerminalHistoryFadeTargets.Launcher
+                ),
+                TerminalState.OpenSmall => _historyFadeTargets.HasFlagNoAlloc(
+                    TerminalHistoryFadeTargets.SmallTerminal
+                ),
+                TerminalState.OpenFull => _historyFadeTargets.HasFlagNoAlloc(
+                    TerminalHistoryFadeTargets.FullTerminal
+                ),
                 _ => false,
             };
         }
@@ -2061,11 +2064,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
 
             float highValue = _logScrollView.verticalScroller.highValue;
-            float currentValue = Mathf.Clamp(
-                _logScrollView.verticalScroller.value,
-                0f,
-                highValue
-            );
+            float currentValue = Mathf.Clamp(_logScrollView.verticalScroller.value, 0f, highValue);
             _cachedLauncherScrollValue = currentValue;
             _cachedLauncherScrollVersion = Terminal.History?.Version ?? -1;
         }
@@ -2084,8 +2083,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             );
 
             _logScrollView
-                .schedule
-                .Execute(() =>
+                .schedule.Execute(() =>
                 {
                     if (_logScrollView?.verticalScroller == null)
                     {
@@ -2147,7 +2145,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                             string currentHint = hint;
                             Button hintButton = new(() =>
                             {
-                                _input.CommandText = currentHint;
+                                _input.CommandText = BuildCompletionText(currentHint);
                                 _lastCompletionIndex = currentIndex;
                                 _needsFocus = true;
                             })
@@ -2874,6 +2872,23 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
         }
 
+        private string BuildCompletionText(string suggestion)
+        {
+            if (string.IsNullOrEmpty(suggestion))
+            {
+                return suggestion ?? string.Empty;
+            }
+
+            CommandAutoComplete autoComplete = Terminal.AutoComplete;
+            if (autoComplete == null || !autoComplete.LastCompletionUsedCompleter)
+            {
+                return suggestion;
+            }
+
+            string prefix = autoComplete.LastCompleterPrefix ?? string.Empty;
+            return string.Concat(prefix, suggestion);
+        }
+
         public void CompleteCommand(bool searchForward = true)
         {
             if (_state == TerminalState.Closed)
@@ -2883,23 +2898,33 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             try
             {
+                CommandAutoComplete autoComplete = Terminal.AutoComplete;
+                if (autoComplete == null)
+                {
+                    return;
+                }
+
                 _lastKnownCommandText = _input.CommandText ?? string.Empty;
                 _lastCompletionBufferTempCache.Clear();
                 int caret =
                     _commandInput != null
                         ? _commandInput.cursorIndex
                         : (_lastKnownCommandText?.Length ?? 0);
-                Terminal.AutoComplete?.Complete(
-                    _lastKnownCommandText,
-                    caret,
+
+                string completionSource = _lastCompletionAnchorText ?? _lastKnownCommandText;
+                int completionCaret = _lastCompletionAnchorCaretIndex ?? caret;
+
+                autoComplete.Complete(
+                    completionSource,
+                    completionCaret,
                     _lastCompletionBufferTempCache
                 );
+
                 bool equivalentBuffers = true;
                 try
                 {
                     int completionLength = _lastCompletionBufferTempCache.Count;
-                    equivalentBuffers =
-                        _lastCompletionBuffer.Count == _lastCompletionBufferTempCache.Count;
+                    equivalentBuffers = _lastCompletionBuffer.Count == completionLength;
                     if (equivalentBuffers)
                     {
                         _lastCompletionBufferTempSet.Clear();
@@ -2917,9 +2942,10 @@ namespace WallstopStudios.DxCommandTerminal.UI
                             }
                         }
                     }
+
                     if (equivalentBuffers)
                     {
-                        if (0 < completionLength)
+                        if (completionLength > 0)
                         {
                             if (_lastCompletionIndex == null)
                             {
@@ -2937,23 +2963,36 @@ namespace WallstopStudios.DxCommandTerminal.UI
                                     % completionLength;
                             }
 
-                            _input.CommandText = _lastCompletionBuffer[_lastCompletionIndex.Value];
+                            string selection = _lastCompletionBuffer[_lastCompletionIndex.Value];
+                            _input.CommandText = BuildCompletionText(selection);
+                            if (_lastCompletionAnchorText == null)
+                            {
+                                _lastCompletionAnchorText = completionSource;
+                                _lastCompletionAnchorCaretIndex = completionCaret;
+                            }
                         }
                         else
                         {
                             _lastCompletionIndex = null;
+                            _lastCompletionAnchorText = null;
+                            _lastCompletionAnchorCaretIndex = null;
                         }
                     }
                     else
                     {
-                        if (0 < completionLength)
+                        if (completionLength > 0)
                         {
                             _lastCompletionIndex = 0;
-                            _input.CommandText = _lastCompletionBufferTempCache[0];
+                            string selection = _lastCompletionBufferTempCache[0];
+                            _input.CommandText = BuildCompletionText(selection);
+                            _lastCompletionAnchorText = completionSource;
+                            _lastCompletionAnchorCaretIndex = completionCaret;
                         }
                         else
                         {
                             _lastCompletionIndex = null;
+                            _lastCompletionAnchorText = null;
+                            _lastCompletionAnchorCaretIndex = null;
                         }
                     }
                 }
