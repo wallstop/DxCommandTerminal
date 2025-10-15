@@ -9,17 +9,50 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
     public sealed partial class TerminalUI
     {
-        private void RefreshLogs()
+
+        private VisualElement CreateLogListItem()
         {
-            CommandLog log = ActiveLog;
-            if (log == null)
+            Label label = new();
+            label.AddToClassList("terminal-output-label");
+            label.style.whiteSpace = WhiteSpace.Normal;
+            label.style.flexGrow = 1f;
+            return label;
+        }
+
+        private void BindLogListItem(VisualElement element, int index)
+        {
+            if (_logListItems == null || index < 0 || index >= _logListItems.Count)
             {
                 return;
             }
 
-            IReadOnlyList<LogItem> logs = log.Logs;
-            
-            if (_logScrollView == null)
+            LogItem logItem = _logListItems[index];
+            switch (element)
+            {
+                case Label label:
+                    label.text = logItem.message;
+                    break;
+                case TextField textField:
+                    textField.value = logItem.message;
+                    break;
+                case Button button:
+                    button.text = logItem.message;
+                    break;
+            }
+
+            ApplyLogStyling(element, logItem);
+            element.style.opacity = ComputeLogOpacity(index, _logListItems.Count);
+        }
+
+        private void RefreshLogs()
+        {
+            if (_logListView == null)
+            {
+                return;
+            }
+
+            CommandLog log = ActiveLog;
+            if (log == null)
             {
                 return;
             }
@@ -30,99 +63,47 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 return;
             }
 
-            VisualElement content = _logScrollView.contentContainer;
-            _logScrollView.style.display = DisplayStyle.Flex;
-            bool dirty = _lastSeenBufferVersion != log.Version;
-            if (content.childCount != logs.Count)
-            {
-                dirty = true;
-                if (content.childCount < logs.Count)
-                {
-                    for (int i = 0; i < logs.Count - content.childCount; ++i)
-                    {
-                        Label logText = new();
-                        logText.AddToClassList("terminal-output-label");
-                        content.Add(logText);
-                    }
-                }
-                else if (logs.Count < content.childCount)
-                {
-                    for (int i = content.childCount - 1; logs.Count <= i; --i)
-                    {
-                        content.RemoveAt(i);
-                    }
-                }
-
-                _needsScrollToEnd = true;
-            }
+            IReadOnlyList<LogItem> logs = log.Logs;
+            bool dirty =
+                _lastSeenBufferVersion != log.Version
+                || _logListItems.Count != logs.Count;
 
             if (dirty)
             {
-                for (int i = 0; i < logs.Count && i < content.childCount; ++i)
+                _logListItems.Clear();
+                for (int i = 0; i < logs.Count; ++i)
                 {
-                    VisualElement item = content[i];
-                    LogItem logItem = logs[i];
-                    switch (item)
-                    {
-                        case TextField logText:
-                        {
-                            ApplyLogStyling(logText, logItem);
-                            logText.value = logItem.message;
-                            break;
-                        }
-                        case Label logLabel:
-                        {
-                            ApplyLogStyling(logLabel, logItem);
-                            logLabel.text = logItem.message;
-                            break;
-                        }
-                        case Button button:
-                        {
-                            ApplyLogStyling(button, logItem);
-                            button.text = logItem.message;
-                            break;
-                        }
-                    }
-
-                    item.style.opacity = 1f;
-                    item.style.display = DisplayStyle.Flex;
+                    _logListItems.Add(logs[i]);
                 }
 
-                if (logs.Count == content.childCount)
+                if (_logListView.itemsSource != _logListItems)
                 {
-                    _lastSeenBufferVersion = log.Version;
+                    _logListView.itemsSource = _logListItems;
                 }
-            }
 
-            if (ShouldApplyHistoryFade())
-            {
-                ApplyHistoryFade(content, fadeFromTop: false);
+                _logListView.Rebuild();
+                _lastSeenBufferVersion = log.Version;
+                _needsScrollToEnd = true;
             }
-            else
+            else if (ShouldApplyHistoryFade())
             {
-                ResetHistoryFade(content);
+                _logListView.RefreshItems();
             }
         }
 
         private void RefreshLauncherHistory()
         {
-            if (_logScrollView == null)
+            if (_logListView == null)
             {
                 return;
             }
 
-            VisualElement content = _logScrollView.contentContainer;
             CommandHistory history = ActiveHistory;
 
             if (history == null)
             {
-                _launcherHistoryEntries.Clear();
-                _logScrollView.style.display = DisplayStyle.None;
-                for (int i = 0; i < content.childCount; ++i)
-                {
-                    content[i].style.display = DisplayStyle.None;
-                }
-
+                _logListItems.Clear();
+                _logListView.Rebuild();
                 _lastRenderedLauncherHistoryVersion = -1;
                 _cachedLauncherScrollVersion = -1;
                 _cachedLauncherScrollValue = 0f;
@@ -135,117 +116,26 @@ namespace WallstopStudios.DxCommandTerminal.UI
             history.CopyEntriesTo(_launcherHistoryEntries);
             long historyVersion = history.Version;
 
-            int entryCount = _launcherHistoryEntries.Count;
-            int visibleCount = Mathf.Min(_launcherMetrics.HistoryVisibleEntryCount, entryCount);
-
-            if (_launcherMetrics.HistoryHeight <= 0f || visibleCount <= 0)
+            _logListItems.Clear();
+            for (int i = 0; i < _launcherHistoryEntries.Count; ++i)
             {
-                _logScrollView.style.display = DisplayStyle.None;
-                for (int i = 0; i < content.childCount; ++i)
-                {
-                    content[i].style.display = DisplayStyle.None;
-                }
-
-                _lastRenderedLauncherHistoryVersion = historyVersion;
-                _cachedLauncherScrollVersion = historyVersion;
-                _cachedLauncherScrollValue = 0f;
-                _restoreLauncherScrollPending = false;
-                _launcherHistoryContentHeight = 0f;
-                _needsScrollToEnd = false;
-                return;
+                CommandHistoryEntry entry = _launcherHistoryEntries[i];
+                _logListItems.Add(
+                    new LogItem(TerminalLogType.Message, entry.Text, string.Empty)
+                );
             }
 
-            _logScrollView.style.display = DisplayStyle.Flex;
-
-            if (content.childCount < visibleCount)
+            if (_logListView.itemsSource != _logListItems)
             {
-                for (int i = content.childCount; i < visibleCount; ++i)
-                {
-                    Label logText = new();
-                    logText.AddToClassList("terminal-output-label");
-                    content.Add(logText);
-                }
+                _logListView.itemsSource = _logListItems;
             }
 
-            for (int i = visibleCount; i < content.childCount; ++i)
-            {
-                content[i].style.display = DisplayStyle.None;
-            }
-
-            for (int i = 0; i < visibleCount; ++i)
-            {
-                int historyIndex = entryCount - 1 - i;
-                CommandHistoryEntry entry = _launcherHistoryEntries[historyIndex];
-                VisualElement element = content[i];
-                LogItem logItem = new(TerminalLogType.Input, entry.Text, string.Empty);
-
-                switch (element)
-                {
-                    case TextField logText:
-                    {
-                        ApplyLogStyling(logText, logItem);
-                        logText.value = entry.Text;
-                        break;
-                    }
-                    case Label logLabel:
-                    {
-                        ApplyLogStyling(logLabel, logItem);
-                        logLabel.text = entry.Text;
-                        break;
-                    }
-                    case Button button:
-                    {
-                        ApplyLogStyling(button, logItem);
-                        button.text = entry.Text;
-                        break;
-                    }
-                }
-
-                element.style.display = DisplayStyle.Flex;
-            }
-
-            if (ShouldApplyHistoryFade())
-            {
-                ApplyHistoryFade(content, fadeFromTop: true);
-            }
-            else
-            {
-                ResetHistoryFade(content);
-            }
-
-            bool historyChanged = historyVersion != _lastRenderedLauncherHistoryVersion;
-            bool restoreRequested = _restoreLauncherScrollPending;
-            float? targetScroll = null;
-
-            if (restoreRequested)
-            {
-                float targetValue = _cachedLauncherScrollValue;
-                if (_cachedLauncherScrollVersion != historyVersion)
-                {
-                    targetValue = 0f;
-                }
-
-                _cachedLauncherScrollVersion = historyVersion;
-                _cachedLauncherScrollValue = targetValue;
-                targetScroll = targetValue;
-                _restoreLauncherScrollPending = false;
-            }
-            else if (historyChanged)
-            {
-                _cachedLauncherScrollVersion = historyVersion;
-                _cachedLauncherScrollValue = 0f;
-                targetScroll = 0f;
-            }
-
-            if (targetScroll.HasValue)
-            {
-                ScheduleLauncherScroll(targetScroll.Value);
-            }
-
+            _logListView.Rebuild();
             _lastRenderedLauncherHistoryVersion = historyVersion;
+            _cachedLauncherScrollVersion = historyVersion;
+            _cachedLauncherScrollValue = 0f;
             _needsScrollToEnd = false;
         }
-
         private static void ApplyLogStyling(VisualElement logText, LogItem log)
         {
             logText.EnableInClassList(
@@ -307,13 +197,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
             return _state == TerminalState.OpenLauncher ? 0.35f : 0.45f;
         }
 
-        private float GetHistoryFallbackRowHeight()
-        {
-            return _state == TerminalState.OpenLauncher
-                ? LauncherEstimatedHistoryRowHeight
-                : StandardEstimatedHistoryRowHeight;
-        }
-
         private float GetHistoryFadeExponent()
         {
             if (_state == TerminalState.OpenLauncher && _launcherMetricsInitialized)
@@ -324,435 +207,25 @@ namespace WallstopStudios.DxCommandTerminal.UI
             return 1f;
         }
 
-        private void ApplyHistoryFade(VisualElement container, bool fadeFromTop)
+        private float ComputeLogOpacity(int index, int totalCount)
         {
-            if (container == null)
+            if (!ShouldApplyHistoryFade() || totalCount <= 1)
             {
-                return;
+                return 1f;
             }
 
-            Rect viewportBounds = _logViewport?.worldBound ?? Rect.zero;
-            bool viewportIsValid = viewportBounds.height > 0.01f;
-            float fallbackRowHeight = GetHistoryFallbackRowHeight();
+            bool fadeFromTop = _state == TerminalState.OpenLauncher;
+            float normalized = fadeFromTop
+                ? (float)index / (totalCount - 1)
+                : (float)(totalCount - 1 - index) / (totalCount - 1);
 
-            int childCount = container.childCount;
-            if (childCount == 0)
-            {
-                return;
-            }
-
-            int visibleCount = 0;
-            for (int i = 0; i < childCount; ++i)
-            {
-                VisualElement element = container[i];
-                if (element == null || element.resolvedStyle.display == DisplayStyle.None)
-                {
-                    continue;
-                }
-
-                visibleCount++;
-            }
-
-            if (visibleCount == 0)
-            {
-                return;
-            }
-
-            if (!viewportIsValid)
-            {
-                float fallbackHeight = Mathf.Max(1f, fallbackRowHeight * visibleCount);
-                viewportBounds.height = fallbackHeight;
-            }
-
-            float fadeRange = Mathf.Max(1f, viewportBounds.height * GetHistoryFadeRangeFactor());
+            float range = Mathf.Clamp01(GetHistoryFadeRangeFactor());
+            float clamped = Mathf.Clamp01(normalized * range);
+            float exponent = Mathf.Max(0.01f, GetHistoryFadeExponent());
             float minimumOpacity = Mathf.Clamp01(GetHistoryFadeMinimumOpacity());
-
-            int visibleIndex = 0;
-            for (int i = 0; i < childCount; ++i)
-            {
-                VisualElement element = container[i];
-                if (element == null || element.resolvedStyle.display == DisplayStyle.None)
-                {
-                    continue;
-                }
-
-                float distance;
-                if (viewportIsValid)
-                {
-                    Rect childBounds = element.worldBound;
-                    bool boundsValid = childBounds.height > 0.01f;
-                    if (fadeFromTop)
-                    {
-                        distance = boundsValid
-                            ? Mathf.Max(0f, childBounds.yMin - viewportBounds.yMin)
-                            : fallbackRowHeight * visibleIndex;
-                    }
-                    else
-                    {
-                        int inverseIndex = Math.Max(0, visibleCount - visibleIndex - 1);
-                        distance = boundsValid
-                            ? Mathf.Max(0f, viewportBounds.yMax - childBounds.yMax)
-                            : fallbackRowHeight * inverseIndex;
-                    }
-                }
-                else
-                {
-                    int indexFromEdge = fadeFromTop
-                        ? visibleIndex
-                        : Math.Max(0, visibleCount - visibleIndex - 1);
-                    distance = fallbackRowHeight * indexFromEdge;
-                }
-
-                float normalized = Mathf.Clamp01(distance / fadeRange);
-                float adjusted = Mathf.Pow(normalized, GetHistoryFadeExponent());
-                float opacity = Mathf.Lerp(1f, minimumOpacity, adjusted);
-                element.style.opacity = opacity;
-
-                visibleIndex++;
-            }
+            float adjusted = Mathf.Pow(clamped, exponent);
+            return Mathf.Lerp(1f, minimumOpacity, adjusted);
         }
-
-        private static void ResetHistoryFade(VisualElement container)
-        {
-            if (container == null)
-            {
-                return;
-            }
-
-            int childCount = container.childCount;
-            for (int i = 0; i < childCount; ++i)
-            {
-                VisualElement element = container[i];
-                if (element == null || element.resolvedStyle.display == DisplayStyle.None)
-                {
-                    continue;
-                }
-
-                element.style.opacity = 1f;
-            }
-        }
-
-        private void CacheLauncherScrollPosition()
-        {
-            if (_logScrollView?.verticalScroller == null)
-            {
-                return;
-            }
-
-            float highValue = _logScrollView.verticalScroller.highValue;
-            float currentValue = Mathf.Clamp(_logScrollView.verticalScroller.value, 0f, highValue);
-            _cachedLauncherScrollValue = currentValue;
-            _cachedLauncherScrollVersion = ActiveHistory?.Version ?? -1;
-        }
-
-        private void ScheduleLauncherScroll(float targetValue)
-        {
-            if (_logScrollView?.verticalScroller == null)
-            {
-                return;
-            }
-
-            float clampedTarget = Mathf.Clamp(
-                targetValue,
-                0f,
-                _logScrollView.verticalScroller.highValue
-            );
-
-            _logScrollView
-                .schedule.Execute(() =>
-                {
-                    if (_logScrollView?.verticalScroller == null)
-                    {
-                        return;
-                    }
-
-                    float highValue = _logScrollView.verticalScroller.highValue;
-                    _logScrollView.verticalScroller.value = Mathf.Clamp(
-                        clampedTarget,
-                        0f,
-                        highValue
-                    );
-                })
-                .ExecuteLater(0);
-        }
-
-
-
-        private void UpdateAutoCompleteView()
-        {
-            if (_lastCompletionIndex == null)
-            {
-                return;
-            }
-
-            if (_autoCompleteContainer?.contentContainer == null)
-            {
-                return;
-            }
-
-            int childCount = _autoCompleteContainer.childCount;
-            if (childCount == 0)
-            {
-                return;
-            }
-
-            if (childCount <= _lastCompletionIndex)
-            {
-                _lastCompletionIndex =
-                    (_lastCompletionIndex % childCount + childCount) % childCount;
-            }
-
-            if (_previousLastCompletionIndex == _lastCompletionIndex)
-            {
-                return;
-            }
-
-            VisualElement current = _autoCompleteContainer[_lastCompletionIndex.Value];
-            float viewportWidth = _autoCompleteContainer.contentViewport.resolvedStyle.width;
-
-            // Use layout properties relative to the content container
-            float targetElementLeft = current.layout.x;
-            float targetElementWidth = current.layout.width;
-            float targetElementRight = targetElementLeft + targetElementWidth;
-
-            const float epsilon = 0.01f;
-
-            bool isFullyVisible =
-                epsilon <= targetElementLeft && targetElementRight <= viewportWidth + epsilon;
-
-            if (isFullyVisible)
-            {
-                return;
-            }
-
-            bool isIncrementing;
-            if (_previousLastCompletionIndex == childCount - 1 && _lastCompletionIndex == 0)
-            {
-                isIncrementing = true;
-            }
-            else if (_previousLastCompletionIndex == 0 && _lastCompletionIndex == childCount - 1)
-            {
-                isIncrementing = false;
-            }
-            else
-            {
-                isIncrementing = _previousLastCompletionIndex < _lastCompletionIndex;
-            }
-
-            _autoCompleteChildren.Clear();
-            for (int i = 0; i < childCount; ++i)
-            {
-                _autoCompleteChildren.Add(_autoCompleteContainer[i]);
-            }
-
-            int shiftAmount;
-            if (isIncrementing)
-            {
-                shiftAmount = -1 * _lastCompletionIndex.Value;
-                _lastCompletionIndex = 0;
-            }
-            else
-            {
-                shiftAmount = 0;
-                float accumulatedWidth = 0;
-                for (int i = 1; i <= childCount; ++i)
-                {
-                    shiftAmount++;
-                    int index = -i % childCount;
-                    index = (index + childCount) % childCount;
-                    VisualElement element = _autoCompleteChildren[index];
-                    accumulatedWidth +=
-                        element.resolvedStyle.width
-                        + element.resolvedStyle.marginLeft
-                        + element.resolvedStyle.marginRight
-                        + element.resolvedStyle.borderLeftWidth
-                        + element.resolvedStyle.borderRightWidth;
-
-                    if (accumulatedWidth <= viewportWidth)
-                    {
-                        continue;
-                    }
-
-                    if (element != current)
-                    {
-                        --shiftAmount;
-                    }
-
-                    break;
-                }
-
-                _lastCompletionIndex = (shiftAmount - 1 + childCount) % childCount;
-            }
-
-            _autoCompleteChildren.Shift(shiftAmount);
-            _lastCompletionBuffer.Shift(shiftAmount);
-
-            _autoCompleteContainer.Clear();
-            foreach (VisualElement element in _autoCompleteChildren)
-            {
-                _autoCompleteContainer.Add(element);
-            }
-
-            float desiredTop = _currentWindowHeight;
-            float desiredLeft = 2f;
-            float desiredWidth = Screen.width;
-            if (IsLauncherActive && _launcherMetricsInitialized)
-            {
-                desiredTop = _launcherMetrics.Top + _currentWindowHeight + 12f;
-                desiredLeft = _launcherMetrics.Left;
-                desiredWidth = _launcherMetrics.Width;
-            }
-
-            _stateButtonContainer.style.top = desiredTop;
-            _stateButtonContainer.style.left = desiredLeft;
-            _stateButtonContainer.style.width = desiredWidth;
-            _stateButtonContainer.style.display = showGUIButtons
-                ? DisplayStyle.Flex
-                : DisplayStyle.None;
-            _stateButtonContainer.style.justifyContent =
-                IsLauncherActive && _launcherMetricsInitialized
-                    ? Justify.Center
-                    : Justify.FlexStart;
-
-            Button primaryButton;
-            Button secondaryButton;
-            Button launcherButton;
-            EnsureButtons(out primaryButton, out secondaryButton, out launcherButton);
-
-            DisplayStyle buttonDisplay = showGUIButtons ? DisplayStyle.Flex : DisplayStyle.None;
-
-            UpdateButton(primaryButton, GetPrimaryLabel(), _state == TerminalState.OpenSmall);
-            UpdateButton(secondaryButton, GetSecondaryLabel(), _state == TerminalState.OpenFull);
-            UpdateButton(launcherButton, launcherButtonText, IsLauncherActive);
-
-            return;
-
-            void EnsureButtons(out Button primary, out Button secondary, out Button launcher)
-            {
-                while (_stateButtonContainer.childCount < 3)
-                {
-                    int index = _stateButtonContainer.childCount;
-                    Button button = index switch
-                    {
-                        0 => new Button(FirstClicked) { name = "StateButton1" },
-                        1 => new Button(SecondClicked) { name = "StateButton2" },
-                        _ => new Button(LauncherClicked) { name = "StateButton3" },
-                    };
-                    button.AddToClassList("terminal-button");
-                    _stateButtonContainer.Add(button);
-                }
-
-                primary = _stateButtonContainer[0] as Button;
-                secondary = _stateButtonContainer[1] as Button;
-                launcher = _stateButtonContainer[2] as Button;
-            }
-
-            string GetPrimaryLabel()
-            {
-                return _state switch
-                {
-                    TerminalState.Closed => smallButtonText,
-                    TerminalState.OpenSmall => closeButtonText,
-                    TerminalState.OpenFull => closeButtonText,
-                    TerminalState.OpenLauncher => closeButtonText,
-                    _ => string.Empty,
-                };
-            }
-
-            string GetSecondaryLabel()
-            {
-                return _state switch
-                {
-                    TerminalState.Closed => fullButtonText,
-                    TerminalState.OpenSmall => fullButtonText,
-                    TerminalState.OpenFull => smallButtonText,
-                    TerminalState.OpenLauncher => fullButtonText,
-                    _ => string.Empty,
-                };
-            }
-
-            void UpdateButton(Button button, string text, bool isActive)
-            {
-                if (button == null)
-                {
-                    return;
-                }
-
-                bool shouldShow =
-                    buttonDisplay == DisplayStyle.Flex && !string.IsNullOrWhiteSpace(text);
-                button.style.display = shouldShow ? DisplayStyle.Flex : DisplayStyle.None;
-                if (shouldShow)
-                {
-                    button.text = text;
-                }
-                button.EnableInClassList("terminal-button-active", shouldShow && isActive);
-            }
-
-            void FirstClicked()
-            {
-                switch (_state)
-                {
-                    case TerminalState.Closed:
-                        ToggleSmall();
-                        break;
-                    case TerminalState.OpenSmall:
-                    case TerminalState.OpenFull:
-                    case TerminalState.OpenLauncher:
-                        Close();
-                        break;
-                }
-            }
-
-            void SecondClicked()
-            {
-                switch (_state)
-                {
-                    case TerminalState.Closed:
-                    case TerminalState.OpenSmall:
-                    case TerminalState.OpenLauncher:
-                        ToggleFull();
-                        break;
-                    case TerminalState.OpenFull:
-                        ToggleSmall();
-                        break;
-                }
-            }
-
-            void LauncherClicked()
-            {
-                ToggleLauncher();
-            }
-        }
-
-        private static void EnsureChildOrder(
-            VisualElement parent,
-            params VisualElement[] orderedChildren
-        )
-        {
-            if (parent == null)
-            {
-                return;
-            }
-
-            int insertIndex = 0;
-            foreach (VisualElement child in orderedChildren)
-            {
-                if (child == null || child.parent != parent)
-                {
-                    continue;
-                }
-
-                int currentIndex = parent.IndexOf(child);
-                if (currentIndex != insertIndex)
-                {
-                    parent.Remove(child);
-                    parent.Insert(insertIndex, child);
-                }
-
-                insertIndex++;
-            }
-        }
-
 
     }
 }

@@ -13,6 +13,7 @@ namespace WallstopStudios.DxCommandTerminal.Input
         protected readonly HashSet<string> _missing = new();
         protected readonly HashSet<TerminalControlTypes> _terminalControlTypes = new();
         protected ITerminalInputTarget _inputTarget;
+        private ITerminalInputSource _inputSource;
         private bool _missingTargetLogged;
 
         private static TerminalControlTypes[] BuildControlTypes()
@@ -96,6 +97,7 @@ namespace WallstopStudios.DxCommandTerminal.Input
         protected virtual void Awake()
         {
             ResolveInputTarget();
+            ResolveInputSource();
 
             ApplyProfileIfAvailable();
 
@@ -116,6 +118,7 @@ namespace WallstopStudios.DxCommandTerminal.Input
                 ResolveInputTarget();
                 ApplyProfileIfAvailable();
                 VerifyControlOrderIntegrity();
+                ResolveInputSource();
             }
         }
 
@@ -169,6 +172,15 @@ namespace WallstopStudios.DxCommandTerminal.Input
             {
                 ResolveInputTarget();
                 if (_inputTarget == null)
+                {
+                    return;
+                }
+            }
+
+            if (_inputSource == null)
+            {
+                ResolveInputSource();
+                if (_inputSource == null)
                 {
                     return;
                 }
@@ -283,42 +295,42 @@ namespace WallstopStudios.DxCommandTerminal.Input
 
         protected virtual bool IsClosePressed()
         {
-            return InputHelpers.IsKeyPressed(closeHotkey, inputMode);
+            return _inputSource != null && _inputSource.IsKeyPressed(closeHotkey);
         }
 
         protected virtual bool IsPreviousPressed()
         {
-            return InputHelpers.IsKeyPressed(previousHotkey, inputMode);
+            return _inputSource != null && _inputSource.IsKeyPressed(previousHotkey);
         }
 
         protected virtual bool IsNextPressed()
         {
-            return InputHelpers.IsKeyPressed(nextHotkey, inputMode);
+            return _inputSource != null && _inputSource.IsKeyPressed(nextHotkey);
         }
 
         protected virtual bool IsToggleFullPressed()
         {
-            return InputHelpers.IsKeyPressed(toggleFullHotkey, inputMode);
+            return _inputSource != null && _inputSource.IsKeyPressed(toggleFullHotkey);
         }
 
         protected virtual bool IsToggleLauncherPressed()
         {
-            return InputHelpers.IsKeyPressed(toggleLauncherHotkey, inputMode);
+            return _inputSource != null && _inputSource.IsKeyPressed(toggleLauncherHotkey);
         }
 
         protected virtual bool IsToggleSmallPressed()
         {
-            return InputHelpers.IsKeyPressed(toggleHotkey, inputMode);
+            return _inputSource != null && _inputSource.IsKeyPressed(toggleHotkey);
         }
 
         protected virtual bool IsCompleteBackwardPressed()
         {
-            return InputHelpers.IsKeyPressed(reverseCompleteHotkey, inputMode);
+            return _inputSource != null && _inputSource.IsKeyPressed(reverseCompleteHotkey);
         }
 
         protected virtual bool IsCompletePressed()
         {
-            return InputHelpers.IsKeyPressed(completeHotkey, inputMode);
+            return _inputSource != null && _inputSource.IsKeyPressed(completeHotkey);
         }
 
         protected virtual bool IsEnterCommandPressed()
@@ -330,7 +342,7 @@ namespace WallstopStudios.DxCommandTerminal.Input
 
             foreach (string command in _completeCommandHotkeys)
             {
-                if (InputHelpers.IsKeyPressed(command, inputMode))
+                if (_inputSource != null && _inputSource.IsKeyPressed(command))
                 {
                     return true;
                 }
@@ -451,6 +463,12 @@ namespace WallstopStudios.DxCommandTerminal.Input
             }
 
             _inputProfile.ApplyTo(this);
+            ResolveInputSource();
+        }
+
+        private void ResolveInputSource()
+        {
+            _inputSource = TerminalInputSourceFactory.Create(inputMode);
         }
     }
 }

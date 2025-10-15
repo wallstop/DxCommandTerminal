@@ -47,12 +47,14 @@
 - Allow multiple profiles per project and expose assignment in inspector with sensible defaults. `TerminalLauncherSettings` becomes a serializable asset reused across scenes.
 - Move persisted theme/font selection into a `TerminalThemePersistenceProfile` (ScriptableObject + runtime adapter) to trim IO concerns from `TerminalThemePersister` MonoBehaviour; supports injection/mocking in tests.
 
-**Progress:** `TerminalInputProfile` now drives controller bindings (with playmode coverage) and `TerminalAppearanceProfile` standardises button/hint/history settings applied at startup. Command/persistence profiles remain outstanding.
+**Progress:** `TerminalInputProfile` drives controller bindings (playmode coverage), `TerminalAppearanceProfile` standardises button/hint/history settings, `TerminalCommandProfile` configures ignore lists and disabled commands (with automated tests), and `TerminalThemePersistenceProfile` allows enabling/disabling theme persistence without touching code. Remaining work covers broader persistence APIs beyond themes.
 
 ### P1 — UI Rendering & Virtualization Improvements
 - Swap manual `VisualElement` management with UIToolkit `ListView` virtualization for history/log to avoid re-creating labels each refresh; ensure zero allocation by providing custom `MakeItem`/`BindItem` that reuse pooled entries.
 - Extract USS selectors into modular style sheets under `Styles/` to reduce runtime code toggling class lists; `LogView` can simply set classes based on pre-defined style variants.
 - Provide layout data caches and lightweight diffing to avoid clearing/rebuilding containers when nothing changed (`ListsEqual` currently compares single lists but still calls `Clear`/`Add`).
+
+**Progress:** Log rendering now uses a virtualized `ListView` with custom binders (`TerminalUI.LogView`), eliminating per-frame element churn while preserving fade styling. USS modularisation remains to be completed.
 
 ### P1 — Input System Stratification
 - Introduce an `ITerminalInputSource` abstraction handing parsed commands / navigation intents; implement `LegacyInputSource`, `NewInputSystemSource`, and `EditorShortcutSource`. `TerminalKeyboardController` becomes an adapter composed with an input source chosen via profile.
@@ -69,6 +71,8 @@
 - Add structured diagnostics (allocation counters, command execution timing) behind development flag to help maintain zero allocation guarantee.
 - Provide editor window to inspect active terminal runtimes, registered commands, pending logs (replaces reliance on static global state for debugging).
 - Publish developer documentation updates (README + API docs) reflecting new architecture and usage patterns.
+
+**Progress:** Added `Terminal Runtime Inspector` editor window to surface active runtime details (command count, history size, allocation guard status). Remaining work: structured runtime diagnostics beyond the basic view.
 
 ## Test Coverage Gaps & Strategy
 - **Runtime composition:** Add playmode tests covering multiple terminals instantiated simultaneously with distinct profiles to ensure isolation (new `TerminalRuntime` works).

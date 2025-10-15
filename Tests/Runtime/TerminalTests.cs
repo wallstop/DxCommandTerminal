@@ -17,6 +17,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     public sealed class TerminalTests
     {
         private TerminalRuntimeProfile _runtimeProfileUnderTest;
+        private TerminalCommandProfile _commandProfileUnderTest;
         private TerminalAppearanceProfile _appearanceProfileUnderTest;
 
         [UnityTearDown]
@@ -32,6 +33,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             {
                 ScriptableObject.DestroyImmediate(_appearanceProfileUnderTest);
                 _appearanceProfileUnderTest = null;
+            }
+            if (_commandProfileUnderTest != null)
+            {
+                ScriptableObject.DestroyImmediate(_commandProfileUnderTest);
+                _commandProfileUnderTest = null;
             }
         }
 
@@ -289,6 +295,38 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             ScriptableObject.DestroyImmediate(profile);
             _appearanceProfileUnderTest = null;
+        }
+
+        [UnityTest]
+        public IEnumerator CommandProfileOverridesShellConfiguration()
+        {
+            TerminalCommandProfile profile = ScriptableObject.CreateInstance<TerminalCommandProfile>();
+            _commandProfileUnderTest = profile;
+            profile.ignoreDefaultCommands = true;
+            profile.disabledCommands = new List<string> { "help" };
+            profile.ignoredLogTypes = new List<TerminalLogType> { TerminalLogType.Warning };
+
+            yield return SpawnTerminal(
+                resetStateOnInit: true,
+                configure: terminal => terminal.SetCommandProfileForTests(profile)
+            );
+
+            TerminalUI terminal = TerminalUI.Instance;
+            Assert.IsNotNull(terminal);
+
+            Assert.IsTrue(terminal.ignoreDefaultCommands);
+            CollectionAssert.Contains(terminal.DisabledCommandsForTests, "help");
+            CollectionAssert.Contains(
+                terminal.IgnoredLogTypesForTests,
+                TerminalLogType.Warning
+            );
+
+            CommandShell shell = terminal.Runtime.Shell;
+            Assert.IsTrue(shell.IgnoringDefaultCommands);
+            CollectionAssert.Contains(shell.IgnoredCommands, "help");
+
+            CommandLog log = terminal.Runtime.Log;
+            Assert.IsTrue(log.ignoredLogTypes.Contains(TerminalLogType.Warning));
         }
 #endif
 

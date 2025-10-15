@@ -86,6 +86,8 @@ Grab a copy of this repo (either `git clone` or [download a zip of the source](h
 - **Input abstraction** – `TerminalKeyboardController` targets the new `ITerminalInputTarget` interface, so custom terminals or headless tests can drive command execution without a concrete `TerminalUI`. Playmode tests confirm dispatch behaviour and fallback to the built-in UI.
 - **Profile-driven input** – `TerminalInputProfile` ScriptableObjects package hotkeys and control ordering so multiple controllers can share consistent bindings.
 - **Appearance presets** – `TerminalAppearanceProfile` captures button labels, hint behaviour, history fade, and cursor settings to standardise the terminal look across scenes.
+- **Command/persistence profiles** – `TerminalCommandProfile` and `TerminalThemePersistenceProfile` centralize ignore lists and theme persistence toggles without code changes.
+- **Runtime inspector** – Editor window `Terminal Runtime Inspector` (Window ▸ DX Command Terminal) surfaces active runtime state for debugging.
 - **Editor interoperability** – Serialized-property utilities expose an override hook so editor drawers (like `DxShowIfPropertyDrawer`) can access backing objects without relying on runtime internals, preserving assembly boundaries.
 - **Allocation guardrails** – An automated playmode test (`AllocationRegressionTests`) monitors `GC.Alloc` while issuing commands and toggling terminal state to catch regressions immediately.
 
@@ -94,6 +96,7 @@ Grab a copy of this repo (either `git clone` or [download a zip of the source](h
 - `TerminalKeyboardControllerTests` exercise the new input abstraction path with both mocked targets and real `TerminalUI` fallbacks.
 - `AllocationRegressionTests` enforce zero-allocation behaviour during command spam, history navigation, and resize toggles.
 - The existing parsing/history/builtin command suites remain intact, ensuring command semantics and log persistence continue to function after refactors.
+- `TerminalTests` now verify runtime, appearance, and command profiles override serialized defaults end-to-end.
 
 For a deeper look at ongoing modernization goals, check `PLAN.md`.
 

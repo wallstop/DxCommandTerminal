@@ -12,7 +12,13 @@ namespace WallstopStudios.DxCommandTerminal.Persistence
     public class TerminalThemePersister : MonoBehaviour
     {
         protected virtual string ThemeFile =>
-            Path.Join(Application.persistentDataPath, "DxCommandTerminal", "TerminalTheme.json");
+            !string.IsNullOrWhiteSpace(_customThemeFile)
+                ? _customThemeFile
+                : Path.Join(
+                    Application.persistentDataPath,
+                    "DxCommandTerminal",
+                    "TerminalTheme.json"
+                );
 
         [Header("System")]
         public TerminalUI terminal;
@@ -23,29 +29,45 @@ namespace WallstopStudios.DxCommandTerminal.Persistence
         [DxShowIf(nameof(savePeriodically))]
         public float savePeriod = 1f;
 
+        [Header("Profiles")]
+        [SerializeField]
+        private TerminalThemePersistenceProfile _persistenceProfile;
+
         protected Font _lastSeenFont;
         protected string _lastSeenTheme;
         protected float? _nextUpdateTime;
 
         protected bool _persisting;
         protected Coroutine _persistence;
+        private bool _persistenceEnabled = true;
+        private bool _loadOnStart = true;
+        private string _customThemeFile;
 
         protected virtual void Awake()
         {
             if (terminal != null)
             {
+                ApplyPersistenceProfile();
                 return;
             }
 
             if (!TryGetComponent(out terminal))
             {
                 Debug.LogError("Failed to find TerminalUI, Theme persistence will not work.", this);
+                return;
             }
+
+            ApplyPersistenceProfile();
         }
 
         protected virtual IEnumerator Start()
         {
-            if (terminal == null)
+            if (terminal == null || !_persistenceEnabled)
+            {
+                yield break;
+            }
+
+            if (!_loadOnStart)
             {
                 yield break;
             }
@@ -57,6 +79,11 @@ namespace WallstopStudios.DxCommandTerminal.Persistence
 
         protected virtual void Update()
         {
+            if (!_persistenceEnabled)
+            {
+                return;
+            }
+
             if (!savePeriodically)
             {
                 return;
@@ -100,6 +127,11 @@ namespace WallstopStudios.DxCommandTerminal.Persistence
 
         protected virtual IEnumerator CheckAndPersistAnyChanges(bool hydrate)
         {
+            if (!_persistenceEnabled)
+            {
+                yield break;
+            }
+
             _lastSeenFont = terminal.CurrentFont;
             _lastSeenTheme = terminal.CurrentTheme;
             _persisting = true;
@@ -285,6 +317,14 @@ namespace WallstopStudios.DxCommandTerminal.Persistence
             }
         }
 
+        protected virtual void OnValidate()
+        {
+            if (!Application.isPlaying)
+            {
+                ApplyPersistenceProfile();
+            }
+        }
+
         public virtual TerminalThemeConfiguration? GetConfiguration()
         {
             if (terminal == null)
@@ -304,5 +344,43 @@ namespace WallstopStudios.DxCommandTerminal.Persistence
                 theme = terminal.CurrentTheme ?? string.Empty,
             };
         }
+
+        private void ApplyPersistenceProfile()
+        {
+            _persistenceEnabled = true;
+            _loadOnStart = true;
+            _customThemeFile = null;
+
+            if (_persistenceProfile == null)
+            {
+                return;
+            }
+
+            _persistenceEnabled = _persistenceProfile.enablePersistence;
+            _loadOnStart = _persistenceProfile.loadOnStart;
+            savePeriodically = _persistenceProfile.savePeriodically;
+            savePeriod = Mathf.Max(0f, _persistenceProfile.savePeriod);
+
+            if (!string.IsNullOrWhiteSpace(_persistenceProfile.fileName))
+            {
+                _customThemeFile = Path.Join(
+                    Application.persistentDataPath,
+                    "DxCommandTerminal",
+                    _persistenceProfile.fileName
+                );
+            }
+        }
+
+#if UNITY_EDITOR || UNITY_INCLUDE_TESTS
+        internal void SetPersistenceProfileForTests(TerminalThemePersistenceProfile profile)
+        {
+            _persistenceProfile = profile;
+            ApplyPersistenceProfile();
+        }
+
+        internal bool PersistenceEnabledForTests => _persistenceEnabled;
+
+        internal bool LoadOnStartForTests => _loadOnStart;
+#endif
     }
 }

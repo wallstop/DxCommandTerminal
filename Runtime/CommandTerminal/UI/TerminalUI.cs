@@ -192,6 +192,9 @@ namespace WallstopStudios.DxCommandTerminal.UI
         [SerializeField]
         private TerminalAppearanceProfile _appearanceProfile;
 
+        [SerializeField]
+        private TerminalCommandProfile _commandProfile;
+
         private IInputHandler[] _inputHandlers;
 
         private TerminalRuntime _runtime;
@@ -275,6 +278,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         private VisualElement _terminalContainer;
         private ScrollView _logScrollView;
+        private ListView _logListView;
         private ScrollView _autoCompleteContainer;
         private VisualElement _autoCompleteViewport;
         private VisualElement _logViewport;
@@ -296,6 +300,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
         private string _lastCompletionAnchorText;
         private int? _lastCompletionAnchorCaretIndex;
         private readonly List<CommandHistoryEntry> _launcherHistoryEntries = new();
+        private readonly List<LogItem> _logListItems = new();
 
         private float _launcherSuggestionContentHeight;
         private float _launcherHistoryContentHeight;
@@ -443,6 +448,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
         private void Awake()
         {
             ApplyRuntimeProfile();
+            ApplyCommandProfile();
             ApplyAppearanceProfile();
 
             TerminalRuntimeModeFlags resolvedRuntimeModes = ResolveRuntimeModeFlags();
@@ -574,6 +580,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
 
             ApplyRuntimeProfile();
+            ApplyCommandProfile();
             ApplyAppearanceProfile();
         }
 #endif
@@ -602,6 +609,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             Terminal.RegisterRuntime(_runtime);
 
+            ApplyCommandProfile();
             RefreshStaticState(force: resetStateOnInit);
             ApplyAppearanceProfile();
             ConsumeAndLogErrors();
@@ -762,6 +770,18 @@ namespace WallstopStudios.DxCommandTerminal.UI
             _historyFadeTargets = _appearanceProfile.historyFadeTargets;
             _cursorBlinkRateMilliseconds = Mathf.Max(0, _appearanceProfile.cursorBlinkRateMilliseconds);
             _logUnityMessages = _appearanceProfile.logUnityMessages;
+        }
+
+        private void ApplyCommandProfile()
+        {
+            if (_commandProfile == null)
+            {
+                return;
+            }
+
+            ignoreDefaultCommands = _commandProfile.ignoreDefaultCommands;
+            CopyList(_commandProfile.disabledCommands, _disabledCommands);
+            CopyList(_commandProfile.ignoredLogTypes, _ignoredLogTypes);
         }
 
 #if UNITY_EDITOR
@@ -1008,9 +1028,18 @@ namespace WallstopStudios.DxCommandTerminal.UI
             _terminalContainer.style.height = new StyleLength(_realWindowHeight);
             root.Add(_terminalContainer);
 
-            _logScrollView = new ScrollView();
+            _logListView = new ListView
+            {
+                virtualizationMethod = CollectionVirtualizationMethod.DynamicHeight,
+                selectionType = SelectionType.None,
+                showAlternatingRowBackgrounds = AlternatingRowBackground.None,
+                name = "LogListView",
+            };
+            _logListView.makeItem = CreateLogListItem;
+            _logListView.bindItem = BindLogListItem;
+            _logListView.itemsSource = _logListItems;
+            _logScrollView = _logListView;
             InitializeScrollView(_logScrollView);
-            _logScrollView.name = "LogScrollView";
             _logScrollView.AddToClassList("log-scroll-view");
             _terminalContainer.Add(_logScrollView);
             _logViewport = _logScrollView.contentViewport;
@@ -1810,6 +1839,30 @@ namespace WallstopStudios.DxCommandTerminal.UI
             _appearanceProfile = profile;
             ApplyAppearanceProfile();
         }
+
+        internal void SetCommandProfileForTests(TerminalCommandProfile profile)
+        {
+            _commandProfile = profile;
+            ApplyCommandProfile();
+            if (_runtime != null)
+            {
+                RefreshStaticState(force: true);
+            }
+        }
+
+        internal void SetDisabledCommandsForTests(IReadOnlyList<string> commands)
+        {
+            CopyList(commands, _disabledCommands);
+        }
+
+        internal void SetIgnoredLogTypesForTests(IReadOnlyList<TerminalLogType> logTypes)
+        {
+            CopyList(logTypes, _ignoredLogTypes);
+        }
+
+        internal IReadOnlyList<string> DisabledCommandsForTests => _disabledCommands;
+
+        internal IReadOnlyList<TerminalLogType> IgnoredLogTypesForTests => _ignoredLogTypes;
 
         internal TerminalHistoryFadeTargets HistoryFadeTargetsForTests => _historyFadeTargets;
 
