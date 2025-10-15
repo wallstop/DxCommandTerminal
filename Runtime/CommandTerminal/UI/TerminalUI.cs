@@ -24,6 +24,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
         private const float LauncherAutoCompleteSpacing = 6f;
         private const float LauncherEstimatedSuggestionRowHeight = 32f;
         private const float LauncherEstimatedHistoryRowHeight = 28f;
+        private const float LauncherInputFallbackHeight = 30f;
         private const float StandardEstimatedHistoryRowHeight = 24f;
 
         private enum ScrollBarCaptureState
@@ -3162,9 +3163,14 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 return;
             }
 
-            float padding = _launcherMetrics.InsetPadding;
+            float horizontalPadding = _launcherMetrics.InsetPadding;
+            float verticalPadding = Mathf.Max(4f, horizontalPadding * 0.5f);
             float inputHeight = Mathf.Max(_inputContainer.resolvedStyle.height, 0f);
-            float availableWidth = Mathf.Max(0f, _launcherMetrics.Width - (padding * 2f));
+            if (inputHeight <= 0f)
+            {
+                inputHeight = LauncherInputFallbackHeight;
+            }
+            float availableWidth = Mathf.Max(0f, _launcherMetrics.Width - (horizontalPadding * 2f));
             _autoCompleteContainer.style.width = availableWidth;
             _autoCompleteContainer.style.maxWidth = availableWidth;
             _autoCompleteContainer.style.alignSelf = Align.Stretch;
@@ -3229,14 +3235,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
             _autoCompleteContainer.style.marginBottom = 0;
 
-            float spacingAboveLog = hasSuggestions
-                ? LauncherAutoCompleteSpacing
-                : Mathf.Max(LauncherAutoCompleteSpacing, padding * 0.25f);
-
-            float reservedForSuggestions = hasSuggestions
-                ? suggestionsHeight + spacingAboveLog
-                : spacingAboveLog;
-
             VisualElement historyContent = _logScrollView.contentContainer;
             int visibleHistoryCount = 0;
             int historyChildCount = historyContent.childCount;
@@ -3263,31 +3261,46 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 }
             }
 
-            float historyHeightFromContent =
-                visibleHistoryCount > 0 ? _launcherHistoryContentHeight : 0f;
+            bool hasHistory = visibleHistoryCount > 0;
+
+            float spacingAboveLog = 0f;
+            if (hasHistory)
+            {
+                spacingAboveLog = hasSuggestions
+                    ? LauncherAutoCompleteSpacing
+                    : Mathf.Max(LauncherAutoCompleteSpacing, verticalPadding * 0.25f);
+            }
+            else if (hasSuggestions)
+            {
+                spacingAboveLog = LauncherAutoCompleteSpacing;
+            }
+
+            float reservedForSuggestions = hasSuggestions
+                ? suggestionsHeight + spacingAboveLog
+                : spacingAboveLog;
+
+            float historyHeightFromContent = hasHistory ? _launcherHistoryContentHeight : 0f;
             if (float.IsNaN(historyHeightFromContent) || historyHeightFromContent < 0f)
             {
                 historyHeightFromContent = 0f;
             }
 
-            float estimatedHistoryHeight =
-                visibleHistoryCount > 0
-                    ? visibleHistoryCount * LauncherEstimatedHistoryRowHeight
-                    : 0f;
+            float estimatedHistoryHeight = hasHistory
+                ? visibleHistoryCount * LauncherEstimatedHistoryRowHeight
+                : 0f;
 
-            float desiredHistoryHeight =
-                visibleHistoryCount > 0
-                    ? Mathf.Min(
-                        Mathf.Max(historyHeightFromContent, estimatedHistoryHeight),
-                        _launcherMetrics.HistoryHeight
-                    )
-                    : 0f;
+            float desiredHistoryHeight = hasHistory
+                ? Mathf.Min(
+                    Mathf.Max(historyHeightFromContent, estimatedHistoryHeight),
+                    _launcherMetrics.HistoryHeight
+                )
+                : 0f;
             if (desiredHistoryHeight < 0f)
             {
                 desiredHistoryHeight = 0f;
             }
 
-            float minimumHeight = padding * 2f + inputHeight + reservedForSuggestions;
+            float minimumHeight = (verticalPadding * 2f) + inputHeight + reservedForSuggestions;
             float desiredHeight = minimumHeight + desiredHistoryHeight;
             float clampedHeight = Mathf.Clamp(
                 desiredHeight,
@@ -3297,23 +3310,33 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             if (!Mathf.Approximately(clampedHeight, _targetWindowHeight))
             {
-                _initialWindowHeight = Mathf.Clamp(
-                    _currentWindowHeight,
-                    minimumHeight,
-                    _launcherMetrics.Height
-                );
+                float previousTarget = _targetWindowHeight;
                 _targetWindowHeight = clampedHeight;
-                _animationTimer = 0f;
-                _isAnimating = true;
-                if (Mathf.Approximately(_initialWindowHeight, clampedHeight))
+
+                if (_launcherMetrics.SnapOpen)
                 {
-                    _currentWindowHeight = clampedHeight;
+                    _currentWindowHeight = _targetWindowHeight;
                     _isAnimating = false;
+                }
+                else
+                {
+                    _initialWindowHeight = Mathf.Clamp(
+                        _currentWindowHeight,
+                        minimumHeight,
+                        _launcherMetrics.Height
+                    );
+                    if (!Mathf.Approximately(previousTarget, _targetWindowHeight))
+                    {
+                        StartHeightAnimation();
+                    }
                 }
             }
 
             float availableForHistory =
-                _currentWindowHeight - (padding * 2f) - inputHeight - reservedForSuggestions;
+                _currentWindowHeight
+                - (verticalPadding * 2f)
+                - inputHeight
+                - reservedForSuggestions;
             availableForHistory = Mathf.Min(availableForHistory, _launcherMetrics.HistoryHeight);
             availableForHistory = Mathf.Max(0f, availableForHistory);
 

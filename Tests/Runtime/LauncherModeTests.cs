@@ -1,6 +1,7 @@
 namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 {
     using System.Collections;
+    using System.Reflection;
     using Backend;
     using Components;
     using NUnit.Framework;
@@ -169,6 +170,89 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
 
             yield return TestSceneHelpers.DestroyTerminalAndWait();
+        }
+
+        [Test]
+        public void LauncherWithoutContentCollapsesToInputPadding()
+        {
+            GameObject go = new("LauncherTest");
+            TerminalUI terminal = go.AddComponent<TerminalUI>();
+
+            try
+            {
+                LauncherLayoutMetrics metrics = new(
+                    width: 640f,
+                    height: 200f,
+                    left: 100f,
+                    top: 200f,
+                    historyHeight: 0f,
+                    cornerRadius: 16f,
+                    insetPadding: 14f,
+                    historyVisibleEntryCount: 5,
+                    historyFadeExponent: 2f,
+                    snapOpen: true,
+                    animationDuration: 0.1f
+                );
+
+                ScrollView autoComplete = new(ScrollViewMode.Horizontal);
+                ScrollView log = new();
+                VisualElement input = new();
+
+                SetPrivateField(terminal, "_state", TerminalState.OpenLauncher);
+                SetPrivateField(terminal, "_launcherMetricsInitialized", true);
+                SetPrivateField(terminal, "_launcherMetrics", metrics);
+                SetPrivateField(terminal, "_autoCompleteContainer", autoComplete);
+                SetPrivateField(terminal, "_autoCompleteViewport", autoComplete.contentViewport);
+                SetPrivateField(terminal, "_logScrollView", log);
+                SetPrivateField(terminal, "_inputContainer", input);
+                SetPrivateField(terminal, "_currentWindowHeight", metrics.Height);
+                SetPrivateField(terminal, "_targetWindowHeight", metrics.Height);
+                SetPrivateField(terminal, "_launcherSuggestionContentHeight", 0f);
+                SetPrivateField(terminal, "_launcherHistoryContentHeight", 0f);
+
+                MethodInfo updateMetrics = typeof(TerminalUI).GetMethod(
+                    "UpdateLauncherLayoutMetrics",
+                    BindingFlags.Instance | BindingFlags.NonPublic
+                );
+                Assert.IsNotNull(updateMetrics);
+
+                updateMetrics!.Invoke(terminal, null);
+
+                float fallbackHeight = (float)
+                    typeof(TerminalUI)
+                        .GetField(
+                            "LauncherInputFallbackHeight",
+                            BindingFlags.Static | BindingFlags.NonPublic
+                        )
+                        ?.GetValue(null);
+                Assert.Greater(fallbackHeight, 0f);
+
+                float expectedPadding = Mathf.Max(4f, metrics.InsetPadding * 0.5f);
+                float expectedHeight = (expectedPadding * 2f) + fallbackHeight;
+
+                Assert.That(
+                    terminal.TargetWindowHeightForTests,
+                    Is.EqualTo(expectedHeight).Within(0.001f)
+                );
+                Assert.That(
+                    terminal.CurrentWindowHeightForTests,
+                    Is.EqualTo(expectedHeight).Within(0.001f)
+                );
+            }
+            finally
+            {
+                Object.DestroyImmediate(go);
+            }
+        }
+
+        private static void SetPrivateField<T>(TerminalUI terminal, string fieldName, T value)
+        {
+            FieldInfo field = typeof(TerminalUI).GetField(
+                fieldName,
+                BindingFlags.Instance | BindingFlags.NonPublic
+            );
+            Assert.IsNotNull(field, $"Expected field '{fieldName}' to exist.");
+            field!.SetValue(terminal, value);
         }
     }
 }
