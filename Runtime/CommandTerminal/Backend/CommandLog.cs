@@ -194,6 +194,43 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             return logCount;
         }
 
+        public int RemoveWhere(Func<LogItem, bool> predicate)
+        {
+            if (predicate == null)
+            {
+                return 0;
+            }
+
+            int count = _logs.Count;
+            if (count == 0)
+            {
+                return 0;
+            }
+
+            List<LogItem> retained = new(count);
+            for (int i = 0; i < count; ++i)
+            {
+                LogItem entry = _logs[i];
+                if (!predicate(entry))
+                {
+                    retained.Add(entry);
+                }
+            }
+
+            if (retained.Count == count)
+            {
+                return 0;
+            }
+
+            _logs.Clear();
+            for (int i = 0; i < retained.Count; ++i)
+            {
+                _logs.Add(retained[i]);
+            }
+            _version++;
+            return count - retained.Count;
+        }
+
         public void Resize(int newCapacity)
         {
             if (newCapacity < _logs.Count)

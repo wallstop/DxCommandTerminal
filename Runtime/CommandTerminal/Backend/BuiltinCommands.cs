@@ -352,6 +352,13 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         public static void CommandClearHistory(CommandArg[] args)
         {
             Terminal.History?.Clear();
+
+            CommandLog buffer = Terminal.Buffer;
+            if (buffer != null)
+            {
+                buffer.DrainPending();
+                buffer.RemoveWhere(log => log.type == TerminalLogType.Input);
+            }
         }
 
         [RegisterCommand(

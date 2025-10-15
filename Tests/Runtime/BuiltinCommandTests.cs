@@ -112,6 +112,28 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         [UnityTest]
+        public IEnumerator ClearHistoryCommandPurgesInputLogs()
+        {
+            yield return RestartTerminal();
+
+            CommandLog buffer = Terminal.Buffer;
+            Assert.IsNotNull(buffer);
+
+            buffer.Clear();
+            Terminal.Log(TerminalLogType.Input, "alpha");
+            buffer.DrainPending();
+            Assert.IsTrue(buffer.Logs.Any(log => log.type == TerminalLogType.Input));
+
+            CommandShell shell = Terminal.Shell;
+            Assert.IsNotNull(shell);
+            Assert.IsTrue(shell.RunCommand("clear-history"));
+
+            buffer.DrainPending();
+            Assert.IsFalse(buffer.Logs.Any(log => log.type == TerminalLogType.Input));
+            yield break;
+        }
+
+        [UnityTest]
         public IEnumerator TimeCommandMeasuresNestedExecution()
         {
             yield return RestartTerminal();
