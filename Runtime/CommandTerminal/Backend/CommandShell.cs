@@ -349,57 +349,22 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         public bool RunCommand(string commandName, CommandArg[] arguments)
         {
-            _commandBuilder.Clear();
-            _commandBuilder.Append(commandName);
-            if (arguments.Length != 0)
+            string originalCommandName = commandName ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(originalCommandName))
             {
-                _commandBuilder.Append(' ');
-            }
-
-            for (int i = 0; i < arguments.Length; ++i)
-            {
-                CommandArg argument = arguments[i];
-                if (argument.startQuote != null)
-                {
-                    _commandBuilder.Append(argument.startQuote.Value);
-                }
-
-                _commandBuilder.Append(argument.contents);
-                if (argument.endQuote != null)
-                {
-                    _commandBuilder.Append(argument.endQuote.Value);
-                }
-
-                if (i != arguments.Length - 1)
-                {
-                    _commandBuilder.Append(' ');
-                }
-            }
-
-            string line = _commandBuilder.ToString();
-
-            if (string.IsNullOrWhiteSpace(commandName))
-            {
-                IssueErrorMessage($"Invalid command name '{commandName}'");
-                // Don't log empty commands
+                IssueErrorMessage($"Invalid command name '{originalCommandName}'");
                 return false;
             }
 
-            if (commandName.Contains(' '))
+            if (!TryResolveCommand(originalCommandName, out string canonicalName, out CommandInfo command))
             {
-                commandName = commandName.Replace(
-                    " ",
-                    string.Empty,
-                    StringComparison.OrdinalIgnoreCase
-                );
-            }
-
-            if (!_commands.TryGetValue(commandName, out CommandInfo command))
-            {
-                IssueErrorMessage($"Command {commandName} not found");
-                _history.Push(line, false, false);
+                string originalLine = BuildCommandLine(originalCommandName, arguments);
+                IssueErrorMessage($"Command {originalCommandName} not found");
+                _history.Push(originalLine, false, false);
                 return false;
             }
+
+            string line = BuildCommandLine(canonicalName, arguments);
 
             int argCount = arguments.Length;
             string errorMessage = null;
@@ -422,7 +387,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 string pluralFix = requiredArg == 1 ? "" : "s";
 
                 string invalidMessage =
-                    $"{commandName} requires {errorMessage} {requiredArg} argument{pluralFix}";
+                    $"{canonicalName} requires {errorMessage} {requiredArg} argument{pluralFix}";
                 if (!string.IsNullOrWhiteSpace(command.hint))
                 {
                     invalidMessage += $"\n    -> Usage: {command.hint}";
@@ -459,6 +424,35 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 name = name.Replace(" ", string.Empty, StringComparison.OrdinalIgnoreCase);
             }
 
+            string normalizedCandidate = NormalizeCommandKey(name);
+            if (string.IsNullOrEmpty(normalizedCandidate))
+            {
+                IssueErrorMessage($"Invalid Command Name: {name}");
+                return false;
+            }
+
+            foreach (string existingName in _commands.Keys)
+            {
+                if (string.Equals(existingName, name, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (
+                    string.Equals(
+                        NormalizeCommandKey(existingName),
+                        normalizedCandidate,
+                        StringComparison.Ordinal
+                    )
+                )
+                {
+                    IssueErrorMessage(
+                        $"Command {name} conflicts with existing command {existingName}."
+                    );
+                    return false;
+                }
+            }
+
             if (!_commands.TryAdd(name, info))
             {
                 IssueErrorMessage($"Command {name} is already defined.");
@@ -466,6 +460,111 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
 
             return true;
+        }
+
+        private bool TryResolveCommand(
+            string inputName,
+            out string canonicalName,
+            out CommandInfo command
+        )
+        {
+            canonicalName = string.Empty;
+            command = default;
+
+            if (string.IsNullOrWhiteSpace(inputName))
+            {
+                return false;
+            }
+
+            string candidate = inputName;
+            if (candidate.Contains(' '))
+            {
+                candidate = candidate.Replace(
+                    " ",
+                    string.Empty,
+                    StringComparison.OrdinalIgnoreCase
+                );
+            }
+
+            string normalizedInput = NormalizeCommandKey(candidate);
+
+            foreach (KeyValuePair<string, CommandInfo> entry in _commands)
+            {
+                if (string.Equals(entry.Key, candidate, StringComparison.OrdinalIgnoreCase))
+                {
+                    canonicalName = entry.Key;
+                    command = entry.Value;
+                    return true;
+                }
+
+                if (
+                    string.Equals(
+                        NormalizeCommandKey(entry.Key),
+                        normalizedInput,
+                        StringComparison.Ordinal
+                    )
+                )
+                {
+                    canonicalName = entry.Key;
+                    command = entry.Value;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private string BuildCommandLine(string commandName, CommandArg[] arguments)
+        {
+            _commandBuilder.Clear();
+            _commandBuilder.Append(commandName);
+            if (arguments.Length != 0)
+            {
+                _commandBuilder.Append(' ');
+            }
+
+            for (int i = 0; i < arguments.Length; ++i)
+            {
+                CommandArg argument = arguments[i];
+                if (argument.startQuote != null)
+                {
+                    _commandBuilder.Append(argument.startQuote.Value);
+                }
+
+                _commandBuilder.Append(argument.contents);
+                if (argument.endQuote != null)
+                {
+                    _commandBuilder.Append(argument.endQuote.Value);
+                }
+
+                if (i != arguments.Length - 1)
+                {
+                    _commandBuilder.Append(' ');
+                }
+            }
+
+            return _commandBuilder.ToString();
+        }
+
+        internal static string NormalizeCommandKey(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return string.Empty;
+            }
+
+            StringBuilder builder = null;
+            for (int i = 0; i < name.Length; ++i)
+            {
+                char ch = name[i];
+                if (char.IsLetterOrDigit(ch))
+                {
+                    builder ??= new StringBuilder(name.Length);
+                    builder.Append(char.ToLowerInvariant(ch));
+                }
+            }
+
+            return builder == null ? string.Empty : builder.ToString();
         }
 
         // ReSharper disable once MemberCanBePrivate.Global

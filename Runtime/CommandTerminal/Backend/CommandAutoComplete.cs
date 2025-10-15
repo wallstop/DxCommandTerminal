@@ -208,6 +208,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             {
                 input = input.Trim();
             }
+            string normalizedInput = CommandShell.NormalizeCommandKey(input);
+            bool useNormalizedMatch = !string.IsNullOrEmpty(normalizedInput);
             _duplicateBuffer.Clear();
             buffer.Clear();
 
@@ -217,27 +219,43 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             for (int ci = 0; ci < _historyScratch.Count; ++ci)
             {
                 string command = _historyScratch[ci];
-                string known = command.NeedsLowerInvariantConversion()
-                    ? command.ToLowerInvariant()
-                    : command;
-                if (!known.StartsWith(input, StringComparison.OrdinalIgnoreCase))
+                string normalizedCommand = CommandShell.NormalizeCommandKey(command);
+                bool matches = useNormalizedMatch
+                    ? normalizedCommand.StartsWith(normalizedInput, StringComparison.Ordinal)
+                    : command.StartsWith(input, StringComparison.OrdinalIgnoreCase);
+                if (!matches)
                 {
                     continue;
                 }
-                if (_duplicateBuffer.Add(known))
+                string duplicateKey = !string.IsNullOrEmpty(normalizedCommand)
+                    ? normalizedCommand
+                    : command.NeedsLowerInvariantConversion()
+                        ? command.ToLowerInvariant()
+                        : command;
+                string display = command.NeedsLowerInvariantConversion()
+                    ? command.ToLowerInvariant()
+                    : command;
+                if (_duplicateBuffer.Add(duplicateKey))
                 {
-                    buffer.Add(known);
+                    buffer.Add(display);
                 }
             }
 
             // Known words
             foreach (string known in _knownWords)
             {
-                if (!known.StartsWith(input, StringComparison.OrdinalIgnoreCase))
+                string normalizedKnown = CommandShell.NormalizeCommandKey(known);
+                bool matches = useNormalizedMatch
+                    ? normalizedKnown.StartsWith(normalizedInput, StringComparison.Ordinal)
+                    : known.StartsWith(input, StringComparison.OrdinalIgnoreCase);
+                if (!matches)
                 {
                     continue;
                 }
-                if (_duplicateBuffer.Add(known))
+                string duplicateKey = !string.IsNullOrEmpty(normalizedKnown)
+                    ? normalizedKnown
+                    : known;
+                if (_duplicateBuffer.Add(duplicateKey))
                 {
                     buffer.Add(known);
                 }
@@ -248,11 +266,18 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             for (int hi = 0; hi < _historyScratch.Count; ++hi)
             {
                 string known = _historyScratch[hi];
-                if (!known.StartsWith(input, StringComparison.OrdinalIgnoreCase))
+                string normalizedKnown = CommandShell.NormalizeCommandKey(known);
+                bool matches = useNormalizedMatch
+                    ? normalizedKnown.StartsWith(normalizedInput, StringComparison.Ordinal)
+                    : known.StartsWith(input, StringComparison.OrdinalIgnoreCase);
+                if (!matches)
                 {
                     continue;
                 }
-                if (_duplicateBuffer.Add(known))
+                string duplicateKey = !string.IsNullOrEmpty(normalizedKnown)
+                    ? normalizedKnown
+                    : known;
+                if (_duplicateBuffer.Add(duplicateKey))
                 {
                     buffer.Add(known);
                 }

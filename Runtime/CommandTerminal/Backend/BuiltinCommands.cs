@@ -320,6 +320,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
 
             Font font = terminal.SetRandomFont();
+            if (font == null)
+            {
+                Terminal.Log(TerminalLogType.Warning, "No fonts available to select.");
+                return;
+            }
             Terminal.Log(
                 TerminalLogType.Message,
                 $"Randomly selected and set font to '{font.name}'."
