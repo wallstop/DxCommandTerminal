@@ -655,5 +655,38 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 ToggleLauncher();
             }
         }
+
+        private static void EnsureChildOrder(VisualElement parent, params VisualElement[] children)
+        {
+            if (parent == null || children == null || children.Length == 0)
+            {
+                return;
+            }
+
+            int insertIndex = 0;
+            for (int i = 0; i < children.Length; ++i)
+            {
+                VisualElement child = children[i];
+                if (child == null)
+                {
+                    continue;
+                }
+
+                if (child.parent != parent)
+                {
+                    parent.Add(child);
+                }
+
+                int currentIndex = parent.IndexOf(child);
+                if (currentIndex != insertIndex)
+                {
+                    parent.Remove(child);
+                    int boundedIndex = Mathf.Clamp(insertIndex, 0, parent.childCount);
+                    parent.Insert(boundedIndex, child);
+                }
+
+                insertIndex += 1;
+            }
+        }
     }
 }

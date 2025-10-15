@@ -129,6 +129,44 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
         }
 
+        private void UpdateAutoCompleteView()
+        {
+            if (_autoCompleteContainer == null)
+            {
+                return;
+            }
+
+            int suggestionCount = _autoCompleteContainer.childCount;
+            if (suggestionCount == 0)
+            {
+                _lastCompletionIndex = null;
+                return;
+            }
+
+            if (_lastCompletionIndex == null)
+            {
+                return;
+            }
+
+            int clampedIndex = Mathf.Clamp(
+                _lastCompletionIndex.Value,
+                0,
+                suggestionCount - 1
+            );
+            if (clampedIndex != _lastCompletionIndex.Value)
+            {
+                _lastCompletionIndex = clampedIndex;
+            }
+
+            VisualElement selectedElement = _autoCompleteContainer[clampedIndex];
+            if (selectedElement == null)
+            {
+                return;
+            }
+
+            _autoCompleteContainer.ScrollTo(selectedElement);
+        }
+
         private void ResetAutoComplete()
         {
             _lastKnownCommandText = _input.CommandText ?? string.Empty;

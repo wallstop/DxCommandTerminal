@@ -942,6 +942,28 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
         }
 
+        private void CacheLauncherScrollPosition()
+        {
+            if (_logScrollView == null)
+            {
+                _cachedLauncherScrollVersion = -1;
+                _cachedLauncherScrollValue = 0f;
+                return;
+            }
+
+            CommandHistory history = ActiveHistory;
+            if (history == null)
+            {
+                _cachedLauncherScrollVersion = -1;
+                _cachedLauncherScrollValue = 0f;
+                return;
+            }
+
+            _cachedLauncherScrollVersion = history.Version;
+            Scroller verticalScroller = _logScrollView.verticalScroller;
+            _cachedLauncherScrollValue = verticalScroller != null ? verticalScroller.value : 0f;
+        }
+
         private static bool ListsEqual<T>(List<T> a, List<T> b)
         {
             if (ReferenceEquals(a, b))
@@ -1038,23 +1060,43 @@ namespace WallstopStudios.DxCommandTerminal.UI
             _logListView.makeItem = CreateLogListItem;
             _logListView.bindItem = BindLogListItem;
             _logListView.itemsSource = _logListItems;
-            _logScrollView = _logListView;
-            InitializeScrollView(_logScrollView);
-            _logScrollView.AddToClassList("log-scroll-view");
-            _terminalContainer.Add(_logScrollView);
-            _logViewport = _logScrollView.contentViewport;
-            if (_logViewport != null)
+            _terminalContainer.Add(_logListView);
+
+            EnsureLogScrollViewReady();
+
+            void EnsureLogScrollViewReady()
             {
-                _logViewport.style.flexGrow = 1f;
-                _logViewport.style.flexShrink = 1f;
-                _logViewport.style.minHeight = 0f;
-                _logViewport.style.overflow = Overflow.Hidden;
+                if (_logScrollView != null)
+                {
+                    return;
+                }
+
+                ScrollView listViewScrollView = _logListView.Q<ScrollView>();
+                if (listViewScrollView == null)
+                {
+                    _logListView.schedule.Execute(EnsureLogScrollViewReady).ExecuteLater(0);
+                    return;
+                }
+
+                _logScrollView = listViewScrollView;
+                InitializeScrollView(_logScrollView);
+                _logScrollView.AddToClassList("log-scroll-view");
+
+                _logViewport = _logScrollView.contentViewport;
+                if (_logViewport != null)
+                {
+                    _logViewport.style.flexGrow = 1f;
+                    _logViewport.style.flexShrink = 1f;
+                    _logViewport.style.minHeight = 0f;
+                    _logViewport.style.overflow = Overflow.Hidden;
+                }
+
+                VisualElement logContent = _logScrollView.contentContainer;
+                logContent.style.flexDirection = FlexDirection.Column;
+                logContent.style.alignItems = Align.Stretch;
+                logContent.style.minHeight = 0f;
+                logContent.RegisterCallback<GeometryChangedEvent>(OnLogContentGeometryChanged);
             }
-            VisualElement logContent = _logScrollView.contentContainer;
-            logContent.style.flexDirection = FlexDirection.Column;
-            logContent.style.alignItems = Align.Stretch;
-            logContent.style.minHeight = 0f;
-            logContent.RegisterCallback<GeometryChangedEvent>(OnLogContentGeometryChanged);
 
             _autoCompleteContainer = new ScrollView(ScrollViewMode.Horizontal)
             {
