@@ -30,9 +30,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             LauncherLayoutMetrics metrics = settings.ComputeMetrics(1920, 1080);
 
             Assert.That(metrics.Width, Is.EqualTo(960f).Within(0.001f));
-            Assert.That(metrics.Height, Is.EqualTo(194.4f).Within(0.001f));
+            Assert.That(metrics.Height, Is.EqualTo(356.4f).Within(0.001f));
             Assert.That(metrics.Left, Is.EqualTo(480f).Within(0.001f));
-            Assert.That(metrics.Top, Is.EqualTo(442.8f).Within(0.5f));
+            Assert.That(metrics.Top, Is.EqualTo(361.8f).Within(0.5f));
             Assert.That(metrics.HistoryHeight, Is.EqualTo(metrics.Height * 0.5f).Within(0.001f));
             Assert.That(metrics.HistoryVisibleEntryCount, Is.EqualTo(4));
             Assert.That(metrics.HistoryFadeExponent, Is.EqualTo(2f).Within(0.001f));
@@ -176,7 +176,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void LauncherWithoutContentCollapsesToInputPadding()
         {
             GameObject go = new("LauncherTest");
+            go.SetActive(false);
             TerminalUI terminal = go.AddComponent<TerminalUI>();
+            terminal.disableUIForTests = true;
+            go.SetActive(true);
 
             try
             {

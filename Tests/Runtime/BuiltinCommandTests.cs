@@ -7,6 +7,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     using Backend;
     using Components;
     using NUnit.Framework;
+    using Themes;
     using UI;
     using UnityEngine;
     using UnityEngine.TestTools;
@@ -277,7 +278,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.IsTrue(shell.RunCommand("list-themes"));
             Terminal.Buffer?.DrainPending();
             LogItem listLog = Terminal.Buffer.Logs.Last(item => item.type == TerminalLogType.Message);
-            StringAssert.Contains("test-theme", listLog.message);
+            string expectedThemeName = ThemeNameHelper.GetFriendlyThemeName("test-theme");
+            StringAssert.Contains(expectedThemeName, listLog.message);
 
             Assert.IsTrue(shell.RunCommand("get-theme"));
             Terminal.Buffer?.DrainPending();

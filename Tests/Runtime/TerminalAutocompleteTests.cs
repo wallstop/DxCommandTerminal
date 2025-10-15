@@ -66,7 +66,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.IsNotNull(input);
 
             CommandShell shell = Terminal.Shell;
-            shell.AddCommand(
+            bool added = shell.AddCommand(
                 "set-theme",
                 _ => { },
                 0,
@@ -75,6 +75,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 null,
                 new ThemeCompleter()
             );
+            Assert.IsTrue(added);
 
             terminal.SetState(TerminalState.OpenFull);
             yield return null;
@@ -113,6 +114,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             TerminalUI terminal = go.AddComponent<TerminalUI>();
             terminal.disableUIForTests = true;
+            terminal.ignoreDefaultCommands = true;
             terminal.InjectPacks(themePack, fontPack);
             terminal.resetStateOnInit = resetStateOnInit;
 
