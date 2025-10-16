@@ -309,7 +309,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         private float _launcherSuggestionContentHeight;
         private float _launcherHistoryContentHeight;
-        private float _launcherHistoryRowHeightEstimate = LauncherEstimatedHistoryRowHeight;
         private long _lastRenderedLauncherHistoryVersion = -1;
         private long _cachedLauncherScrollVersion = -1;
         private float _cachedLauncherScrollValue;
@@ -1901,9 +1900,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
         internal LauncherLayoutMetrics LauncherMetricsForTests => _launcherMetrics;
 
         internal float TargetWindowHeightForTests => _targetWindowHeight;
-
-        internal float LauncherHistoryRowHeightEstimateForTests =>
-            _launcherHistoryRowHeightEstimate;
 
         internal float CurrentWindowHeightForTests => _currentWindowHeight;
 

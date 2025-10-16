@@ -439,6 +439,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             VisualElement historyContent = _logScrollView.contentContainer;
             int visibleHistoryCount = 0;
+            float measuredHistoryHeightSum = 0f;
             int historyChildCount = historyContent.childCount;
             for (int i = 0; i < historyChildCount; ++i)
             {
@@ -449,6 +450,12 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 }
 
                 visibleHistoryCount++;
+
+                float entryHeight = entry.resolvedStyle.height;
+                if (!float.IsNaN(entryHeight) && entryHeight > 0.5f)
+                {
+                    measuredHistoryHeightSum += entryHeight;
+                }
             }
 
             int maximumVisibleEntries = _launcherMetrics.HistoryVisibleEntryCount;
@@ -477,6 +484,16 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             bool hasHistoryContent = _logListItems.Count > 0;
 
+            float measuredHistoryHeight = _launcherHistoryContentHeight;
+            if (measuredHistoryHeight <= 0f && measuredHistoryHeightSum > 0f)
+            {
+                measuredHistoryHeight = measuredHistoryHeightSum;
+            }
+            if (measuredHistoryHeight < 0f || float.IsNaN(measuredHistoryHeight))
+            {
+                measuredHistoryHeight = 0f;
+            }
+
             LauncherLayoutSnapshot snapshot = CalculateLauncherLayoutSnapshot(
                 _launcherMetrics,
                 _currentWindowHeight,
@@ -487,7 +504,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 hasSuggestions,
                 effectiveSuggestionHeight,
                 visibleHistoryCount,
-                _launcherHistoryContentHeight
+                measuredHistoryHeight
             );
 
             if (hasSuggestions)
@@ -749,12 +766,37 @@ namespace WallstopStudios.DxCommandTerminal.UI
             bool hasSuggestions,
             float suggestionMeasuredHeight,
             int visibleHistoryCount,
-            float historyContentHeight
+            float measuredHistoryHeight
         )
         {
             float historyLimit = Mathf.Max(0f, metrics.HistoryHeight);
 
-            float rowHeightEstimate = _launcherHistoryRowHeightEstimate;
+            bool hasHistory = visibleHistoryCount > 0;
+
+            if (!hasHistory)
+            {
+                measuredHistoryHeight = 0f;
+            }
+
+            if (float.IsNaN(measuredHistoryHeight) || measuredHistoryHeight < 0f)
+            {
+                measuredHistoryHeight = 0f;
+            }
+
+            float sanitizedHistoryContentHeight = hasHistory
+                ? Mathf.Min(measuredHistoryHeight, historyLimit)
+                : 0f;
+            if (sanitizedHistoryContentHeight < 0f || float.IsNaN(sanitizedHistoryContentHeight))
+            {
+                sanitizedHistoryContentHeight = 0f;
+            }
+
+            float rowHeightEstimate = LauncherEstimatedHistoryRowHeight;
+            if (hasHistory && sanitizedHistoryContentHeight > 0f && visibleHistoryCount > 0)
+            {
+                rowHeightEstimate = sanitizedHistoryContentHeight / visibleHistoryCount;
+            }
+
             if (float.IsNaN(rowHeightEstimate) || rowHeightEstimate <= 0f)
             {
                 rowHeightEstimate = LauncherEstimatedHistoryRowHeight;
@@ -773,8 +815,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
                 suggestionsHeight = Mathf.Clamp(suggestionHeightSource, 0f, historyLimit);
             }
-
-            bool hasHistory = visibleHistoryCount > 0;
 
             const float MinimumSpacing = 1f;
             float spacingAboveHistory = 0f;
@@ -795,19 +835,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 float standardSpacing = Mathf.Max(2f, LauncherAutoCompleteSpacing * 0.25f);
                 reservedSuggestionHeight =
                     suggestionsHeight > 0f ? suggestionsHeight + standardSpacing : 0f;
-            }
-
-            float sanitizedHistoryContentHeight = hasHistory
-                ? Mathf.Max(0f, historyContentHeight)
-                : 0f;
-            if (float.IsNaN(sanitizedHistoryContentHeight))
-            {
-                sanitizedHistoryContentHeight = 0f;
-            }
-
-            if (sanitizedHistoryContentHeight > historyLimit)
-            {
-                sanitizedHistoryContentHeight = historyLimit;
             }
 
             float estimatedHistoryHeight = hasHistory
