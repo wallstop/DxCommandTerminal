@@ -306,3 +306,8 @@
 .terminal-output-label--error {
     color: var(--text-error);
 }
+
+.unity-list-view__empty-label {
+    display: none;
+    color: transparent;
+}

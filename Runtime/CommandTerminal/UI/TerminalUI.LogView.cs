@@ -82,13 +82,17 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 }
 
                 _logListView.Rebuild();
+                ConfigureEmptyLabel(_logListView);
                 _lastSeenBufferVersion = log.Version;
                 _needsScrollToEnd = true;
             }
             else if (ShouldApplyHistoryFade())
             {
                 _logListView.RefreshItems();
+                ConfigureEmptyLabel(_logListView);
             }
+
+            ConfigureEmptyLabel(_logListView);
         }
 
         private void RefreshLauncherHistory()
@@ -101,6 +105,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 if (_logListView != null)
                 {
                     _logListView.Rebuild();
+                    ConfigureEmptyLabel(_logListView);
                 }
                 else
                 {
@@ -135,6 +140,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 }
 
                 _logListView.Rebuild();
+                ConfigureEmptyLabel(_logListView);
             }
             else
             {

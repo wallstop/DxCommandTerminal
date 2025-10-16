@@ -146,6 +146,52 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         [Test]
+        public void ClosedTerminalHidesContainer()
+        {
+            GameObject go = new GameObject("TerminalVisibilityTest");
+            go.SetActive(false);
+            TerminalUI terminal = go.AddComponent<TerminalUI>();
+            terminal.disableUIForTests = true;
+            go.SetActive(true);
+
+            try
+            {
+                VisualElement terminalContainer = new VisualElement();
+                VisualElement inputContainer = new VisualElement();
+                ScrollView autoComplete = new ScrollView();
+                ScrollView log = new ScrollView();
+                terminal.InjectLayoutElementsForTests(
+                    terminalContainer,
+                    inputContainer,
+                    autoComplete,
+                    log
+                );
+
+                terminal.ForceStateForTests(TerminalState.Closed);
+                terminal.SetWindowHeightsForTests(0f, 0f);
+                terminal.UpdateTerminalVisibilityForTests();
+
+                Assert.That(
+                    terminal.TerminalContainerForTests.style.display.value,
+                    Is.EqualTo(DisplayStyle.None)
+                );
+
+                terminal.ForceStateForTests(TerminalState.OpenSmall);
+                terminal.SetWindowHeightsForTests(200f, 200f);
+                terminal.UpdateTerminalVisibilityForTests();
+
+                Assert.That(
+                    terminal.TerminalContainerForTests.style.display.value,
+                    Is.EqualTo(DisplayStyle.Flex)
+                );
+            }
+            finally
+            {
+                Object.DestroyImmediate(go);
+            }
+        }
+
+        [Test]
         public void LauncherPaddingIsSymmetric()
         {
             GameObject go = new GameObject("LauncherPaddingTest");
@@ -399,8 +445,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void LogEmptyLabelHidden()
         {
-            Label emptyLabel = new Label("List is empty");
-            TerminalUI.StyleEmptyLabelForTests(emptyLabel);
+            ListView listView = new ListView();
+            TerminalUI.ConfigureEmptyLabelForTests(listView);
+
+            Label emptyLabel = new Label("List is empty") { name = "unity-list-view__empty-label" };
+            listView.Add(emptyLabel);
+            TerminalUI.ConfigureEmptyLabelForTests(listView);
             Assert.That(emptyLabel.text, Is.Empty);
             Assert.That(emptyLabel.style.display.value, Is.EqualTo(DisplayStyle.None));
         }

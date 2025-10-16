@@ -1065,6 +1065,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             _logListView.makeItem = CreateLogListItem;
             _logListView.bindItem = BindLogListItem;
             _logListView.itemsSource = _logListItems;
+            ConfigureEmptyLabel(_logListView);
             _terminalContainer.Add(_logListView);
 
             EnsureLogScrollViewReady();
@@ -1086,6 +1087,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 _logScrollView = listViewScrollView;
                 InitializeScrollView(_logScrollView);
                 _logScrollView.AddToClassList("log-scroll-view");
+                ConfigureEmptyLabel(_logListView);
 
                 _logViewport = _logScrollView.contentViewport;
                 if (_logViewport != null)
@@ -1100,26 +1102,9 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 logContent.style.flexDirection = FlexDirection.Column;
                 logContent.style.alignItems = Align.Stretch;
                 logContent.style.minHeight = 0f;
-                logContent.style.justifyContent = Justify.FlexEnd;
+                logContent.style.justifyContent = Justify.FlexStart;
                 logContent.RegisterCallback<GeometryChangedEvent>(OnLogContentGeometryChanged);
-                StyleEmptyLabel();
-            }
-
-            void StyleEmptyLabel()
-            {
-                if (_logListView == null)
-                {
-                    return;
-                }
-
-                Label emptyLabel = _logListView.Q<Label>("unity-list-view__empty-label");
-                if (emptyLabel == null)
-                {
-                    _logListView.schedule.Execute(StyleEmptyLabel).ExecuteLater(0);
-                    return;
-                }
-
-                StyleEmptyLabelElement(emptyLabel);
+                ConfigureEmptyLabel(_logListView);
             }
 
             _autoCompleteContainer = new ScrollView(ScrollViewMode.Horizontal)
@@ -1884,11 +1869,21 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         internal VisualElement LogContentForTests => _logScrollView?.contentContainer;
 
+        internal void UpdateTerminalVisibilityForTests()
+        {
+            UpdateTerminalVisibility(_state != TerminalState.Closed && _currentWindowHeight > 0.1f);
+        }
+
         internal ScrollView AutoCompleteContainerForTests => _autoCompleteContainer;
 
         internal VisualElement InputContainerForTests => _inputContainer;
 
         internal VisualElement TerminalContainerForTests => _terminalContainer;
+
+        internal void RefreshUIForTests()
+        {
+            RefreshUI();
+        }
 
         internal void SetLauncherMetricsForTests(
             LauncherLayoutMetrics metrics,
@@ -1955,20 +1950,53 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         internal bool LogUnityMessagesForTests => _logUnityMessages;
 
-        internal static void StyleEmptyLabelForTests(Label label)
+        private void UpdateTerminalVisibility(bool shouldDisplayTerminal)
         {
-            StyleEmptyLabelElement(label);
+            if (_terminalContainer != null)
+            {
+                _terminalContainer.style.display = shouldDisplayTerminal
+                    ? DisplayStyle.Flex
+                    : DisplayStyle.None;
+            }
+
+            if (_uiDocument != null)
+            {
+                VisualElement terminalRoot = _uiDocument.rootVisualElement?.Q<VisualElement>(
+                    TerminalRootName
+                );
+                if (terminalRoot != null)
+                {
+                    terminalRoot.style.display = shouldDisplayTerminal
+                        ? DisplayStyle.Flex
+                        : DisplayStyle.None;
+                }
+            }
         }
 
-        private static void StyleEmptyLabelElement(Label emptyLabel)
+        internal static void ConfigureEmptyLabelForTests(ListView listView)
         {
-            if (emptyLabel == null)
+            ConfigureEmptyLabel(listView);
+        }
+
+        private static void ConfigureEmptyLabel(ListView listView)
+        {
+            if (listView == null)
             {
                 return;
             }
 
-            emptyLabel.text = string.Empty;
-            emptyLabel.style.display = DisplayStyle.None;
+            void HideLabel()
+            {
+                Label emptyLabel = listView.Q<Label>("unity-list-view__empty-label");
+                if (emptyLabel != null)
+                {
+                    emptyLabel.style.display = DisplayStyle.None;
+                    emptyLabel.text = string.Empty;
+                }
+            }
+
+            HideLabel();
+            listView.schedule.Execute(HideLabel).ExecuteLater(0);
         }
 
         internal void SetWindowHeightsForTests(

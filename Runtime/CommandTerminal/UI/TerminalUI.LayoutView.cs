@@ -34,6 +34,11 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             _terminalContainer.style.height = _currentWindowHeight;
 
+            bool shouldDisplayTerminal =
+                _state != TerminalState.Closed && _currentWindowHeight > 0.1f;
+
+            UpdateTerminalVisibility(shouldDisplayTerminal);
+
             DisplayStyle commandInputStyle =
                 !IsLauncherActive && _currentWindowHeight <= 30
                     ? DisplayStyle.None
