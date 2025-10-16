@@ -9,13 +9,13 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
     public sealed partial class TerminalUI
     {
-
         private VisualElement CreateLogListItem()
         {
             Label label = new();
             label.AddToClassList("terminal-output-label");
             label.style.whiteSpace = WhiteSpace.Normal;
             label.style.flexGrow = 1f;
+            TrackLogItemMetrics(label);
             return label;
         }
 
@@ -64,9 +64,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
 
             IReadOnlyList<LogItem> logs = log.Logs;
-            bool dirty =
-                _lastSeenBufferVersion != log.Version
-                || _logListItems.Count != logs.Count;
+            bool dirty = _lastSeenBufferVersion != log.Version || _logListItems.Count != logs.Count;
 
             if (dirty)
             {
@@ -127,9 +125,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             for (int i = _launcherHistoryEntries.Count - 1; i >= 0; --i)
             {
                 CommandHistoryEntry entry = _launcherHistoryEntries[i];
-                _logListItems.Add(
-                    new LogItem(TerminalLogType.Input, entry.Text, string.Empty)
-                );
+                _logListItems.Add(new LogItem(TerminalLogType.Input, entry.Text, string.Empty));
             }
 
             if (_logListView != null)
@@ -151,6 +147,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             _cachedLauncherScrollValue = 0f;
             _needsScrollToEnd = false;
         }
+
         private static void ApplyLogStyling(VisualElement logText, LogItem log)
         {
             logText.EnableInClassList(
@@ -178,7 +175,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
             );
         }
 
-    
         private bool ShouldApplyHistoryFade()
         {
             return _state switch
@@ -283,7 +279,8 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             if (totalCount > 0)
             {
-                _launcherHistoryContentHeight = totalCount * LauncherEstimatedHistoryRowHeight;
+                float rowEstimate = Mathf.Clamp(_launcherHistoryRowHeightEstimate, 4f, 512f);
+                _launcherHistoryContentHeight = totalCount * rowEstimate;
             }
             else
             {
@@ -291,5 +288,36 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
         }
 
+        private void TrackLogItemMetrics(VisualElement element)
+        {
+            if (element == null)
+            {
+                return;
+            }
+
+            element.RegisterCallback<GeometryChangedEvent>(OnLogItemGeometryChanged);
+        }
+
+        private void OnLogItemGeometryChanged(GeometryChangedEvent evt)
+        {
+            if (evt == null)
+            {
+                return;
+            }
+
+            float resolvedHeight = Mathf.Max(evt.newRect.height, 0f);
+            if (float.IsNaN(resolvedHeight) || resolvedHeight <= 2f)
+            {
+                return;
+            }
+
+            float clampedHeight = Mathf.Clamp(resolvedHeight, 2f, 512f);
+            if (Mathf.Abs(clampedHeight - _launcherHistoryRowHeightEstimate) <= 0.1f)
+            {
+                return;
+            }
+
+            _launcherHistoryRowHeightEstimate = clampedHeight;
+        }
     }
 }

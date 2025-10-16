@@ -1,5 +1,6 @@
 namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 {
+    using System.Collections.Generic;
     using Backend;
     using NUnit.Framework;
     using UI;
@@ -124,10 +125,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
                 terminal.SetLauncherMetricsForTests(metrics);
                 terminal.SetWindowHeightsForTests(metrics.Height, metrics.Height);
-                terminal.SetLauncherContentHeightsForTests(historyHeight: 260f, suggestionHeight: 0f);
+                terminal.SetLauncherContentHeightsForTests(
+                    historyHeight: 260f,
+                    suggestionHeight: 0f
+                );
 
                 terminal.LogItemsForTests.Clear();
-                terminal.LogItemsForTests.Add(new LogItem(TerminalLogType.Input, "entry", string.Empty));
+                terminal.LogItemsForTests.Add(
+                    new LogItem(TerminalLogType.Input, "entry", string.Empty)
+                );
 
                 terminal.UpdateLauncherLayoutMetricsForTests();
 
@@ -138,9 +144,139 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 Assert.That(log.style.maxHeight.value, Is.EqualTo(expected).Within(0.001f));
                 Assert.That(log.style.marginTop.value, Is.EqualTo(0f).Within(0.001f));
                 Assert.That(log.style.marginBottom.value, Is.EqualTo(0f).Within(0.001f));
+
+                terminal.LogItemsForTests.Add(
+                    new LogItem(TerminalLogType.Input, "entry-2", string.Empty)
+                );
+                terminal.RefreshLauncherHistoryForTests();
+                terminal.SetLauncherContentHeightsForTests(
+                    historyHeight: metrics.HistoryHeight,
+                    suggestionHeight: 0f
+                );
+                terminal.SetWindowHeightsForTests(metrics.Height, metrics.Height);
+                terminal.UpdateLauncherLayoutMetricsForTests();
+
+                float heightAllowance = metrics.Height + 0.001f;
+                Assert.That(
+                    terminal.TargetWindowHeightForTests,
+                    Is.LessThanOrEqualTo(heightAllowance)
+                );
+                Assert.That(
+                    log.style.height.value,
+                    Is.EqualTo(metrics.HistoryHeight).Within(0.001f)
+                );
             }
             finally
             {
+                Object.DestroyImmediate(go);
+            }
+        }
+
+        [Test]
+        public void LauncherLayoutSnapshotReflectsHistoryAllocation()
+        {
+            GameObject go = new GameObject("LauncherSnapshotTest");
+            go.SetActive(false);
+            TerminalUI terminal = go.AddComponent<TerminalUI>();
+            terminal.disableUIForTests = true;
+            go.SetActive(true);
+
+            List<TerminalUI.LauncherLayoutSnapshot> snapshots =
+                new List<TerminalUI.LauncherLayoutSnapshot>();
+
+            void CaptureSnapshot(TerminalUI.LauncherLayoutSnapshot snapshot)
+            {
+                snapshots.Add(snapshot);
+            }
+
+            try
+            {
+                VisualElement terminalContainer = new VisualElement();
+                VisualElement inputContainer = new VisualElement();
+                ScrollView autoComplete = new ScrollView();
+                ScrollView log = new ScrollView();
+
+                terminal.InjectLayoutElementsForTests(
+                    terminalContainer,
+                    inputContainer,
+                    autoComplete,
+                    log
+                );
+                terminal.ArrangeLauncherVisualHierarchyForTests();
+                terminal.ForceStateForTests(TerminalState.OpenLauncher);
+
+                LauncherLayoutMetrics metrics = new LauncherLayoutMetrics(
+                    width: 620f,
+                    height: 240f,
+                    left: 0f,
+                    top: 0f,
+                    historyHeight: 160f,
+                    cornerRadius: 10f,
+                    insetPadding: 12f,
+                    historyVisibleEntryCount: 2,
+                    historyFadeExponent: 2f,
+                    snapOpen: true,
+                    animationDuration: 0.1f
+                );
+
+                terminal.SetLauncherMetricsForTests(metrics);
+                terminal.SetWindowHeightsForTests(metrics.Height, metrics.Height);
+
+                terminal.LogItemsForTests.Clear();
+                terminal.LogItemsForTests.Add(
+                    new LogItem(TerminalLogType.Input, "first", string.Empty)
+                );
+                terminal.LogItemsForTests.Add(
+                    new LogItem(TerminalLogType.Input, "second", string.Empty)
+                );
+                terminal.LogItemsForTests.Add(
+                    new LogItem(TerminalLogType.Input, "third", string.Empty)
+                );
+                terminal.LogItemsForTests.Add(
+                    new LogItem(TerminalLogType.Input, "fourth", string.Empty)
+                );
+
+                terminal.RefreshLauncherHistoryForTests();
+                terminal.SetLauncherContentHeightsForTests(historyHeight: 0f, suggestionHeight: 0f);
+
+                TerminalUI.LauncherLayoutComputed += CaptureSnapshot;
+
+                terminal.UpdateLauncherLayoutMetricsForTests();
+
+                Assert.That(snapshots.Count, Is.GreaterThan(0));
+
+                TerminalUI.LauncherLayoutSnapshot snapshot = snapshots[snapshots.Count - 1];
+                Assert.That(snapshot.VisibleHistoryCount, Is.EqualTo(2));
+
+                float estimatedHistoryHeight =
+                    snapshot.VisibleHistoryCount
+                    * TerminalUI.LauncherEstimatedHistoryRowHeightForTests;
+                float expectedHistoryHeight = Mathf.Min(
+                    metrics.HistoryHeight,
+                    estimatedHistoryHeight
+                );
+
+                Assert.That(
+                    snapshot.HistoryRowHeightEstimate,
+                    Is.EqualTo(TerminalUI.LauncherEstimatedHistoryRowHeightForTests).Within(0.001f)
+                );
+                Assert.That(
+                    snapshot.HistoryTargetHeight,
+                    Is.EqualTo(expectedHistoryHeight).Within(0.001f)
+                );
+                Assert.That(snapshot.ClampedHeight, Is.LessThanOrEqualTo(metrics.Height + 0.001f));
+                Assert.That(
+                    snapshot.AvailableHistoryHeight,
+                    Is.LessThanOrEqualTo(metrics.HistoryHeight + 0.001f)
+                );
+                Assert.That(
+                    terminal.TargetWindowHeightForTests,
+                    Is.EqualTo(snapshot.ClampedHeight).Within(0.001f)
+                );
+            }
+            finally
+            {
+                TerminalUI.LauncherLayoutComputed -= CaptureSnapshot;
                 Object.DestroyImmediate(go);
             }
         }
@@ -234,7 +370,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
                 Assert.That(
                     terminal.TerminalContainerForTests.style.paddingTop.value,
-                    Is.EqualTo(terminal.TerminalContainerForTests.style.paddingBottom.value).Within(0.001f)
+                    Is.EqualTo(terminal.TerminalContainerForTests.style.paddingBottom.value)
+                        .Within(0.001f)
                 );
             }
             finally
@@ -289,7 +426,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 );
 
                 terminal.SetWindowHeightsForTests(200f, 200f);
-                terminal.SetLauncherContentHeightsForTests(historyHeight: 64f, suggestionHeight: 0f);
+                terminal.SetLauncherContentHeightsForTests(
+                    historyHeight: 64f,
+                    suggestionHeight: 0f
+                );
 
                 terminal.LogItemsForTests.Clear();
                 terminal.LogItemsForTests.Add(
@@ -415,7 +555,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
                 terminal.SetLauncherMetricsForTests(metrics);
                 terminal.SetWindowHeightsForTests(metrics.Height, metrics.Height);
-                terminal.SetLauncherContentHeightsForTests(historyHeight: 100f, suggestionHeight: 40f);
+                terminal.SetLauncherContentHeightsForTests(
+                    historyHeight: 100f,
+                    suggestionHeight: 40f
+                );
 
                 terminal.CompletionBufferForTests.Clear();
                 terminal.CompletionBufferForTests.Add("help");
@@ -423,13 +566,22 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
                 terminal.UpdateLauncherLayoutMetricsForTests();
 
-                Assert.That(autoComplete.style.marginTop.value, Is.EqualTo(TerminalUI.LauncherAutoCompleteSpacingForTests * 0.5f).Within(0.001f));
-                Assert.That(log.style.marginTop.value, Is.EqualTo(TerminalUI.LauncherAutoCompleteSpacingForTests * 0.5f).Within(0.001f));
+                Assert.That(
+                    autoComplete.style.marginTop.value,
+                    Is.EqualTo(TerminalUI.LauncherAutoCompleteSpacingForTests * 0.5f).Within(0.001f)
+                );
+                Assert.That(
+                    log.style.marginTop.value,
+                    Is.EqualTo(TerminalUI.LauncherAutoCompleteSpacingForTests * 0.5f).Within(0.001f)
+                );
                 Assert.That(log.style.marginBottom.value, Is.EqualTo(0f).Within(0.001f));
 
                 terminal.CompletionBufferForTests.Clear();
                 terminal.RefreshAutoCompleteHintsForTests();
-                terminal.SetLauncherContentHeightsForTests(historyHeight: 100f, suggestionHeight: 0f);
+                terminal.SetLauncherContentHeightsForTests(
+                    historyHeight: 100f,
+                    suggestionHeight: 0f
+                );
                 terminal.UpdateLauncherLayoutMetricsForTests();
 
                 Assert.That(autoComplete.style.display.value, Is.EqualTo(DisplayStyle.None));

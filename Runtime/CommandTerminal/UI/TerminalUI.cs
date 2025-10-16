@@ -26,8 +26,8 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         internal const float LauncherInputFallbackHeightForTests = LauncherInputFallbackHeight;
         internal const float LauncherAutoCompleteSpacingForTests = LauncherAutoCompleteSpacing;
-        internal const float LauncherEstimatedHistoryRowHeightForTests = LauncherEstimatedHistoryRowHeight;
-
+        internal const float LauncherEstimatedHistoryRowHeightForTests =
+            LauncherEstimatedHistoryRowHeight;
 
         private enum ScrollBarCaptureState
         {
@@ -309,6 +309,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         private float _launcherSuggestionContentHeight;
         private float _launcherHistoryContentHeight;
+        private float _launcherHistoryRowHeightEstimate = LauncherEstimatedHistoryRowHeight;
         private long _lastRenderedLauncherHistoryVersion = -1;
         private long _cachedLauncherScrollVersion = -1;
         private float _cachedLauncherScrollValue;
@@ -773,7 +774,10 @@ namespace WallstopStudios.DxCommandTerminal.UI
             hintDisplayMode = _appearanceProfile.hintDisplayMode;
             makeHintsClickable = _appearanceProfile.makeHintsClickable;
             _historyFadeTargets = _appearanceProfile.historyFadeTargets;
-            _cursorBlinkRateMilliseconds = Mathf.Max(0, _appearanceProfile.cursorBlinkRateMilliseconds);
+            _cursorBlinkRateMilliseconds = Mathf.Max(
+                0,
+                _appearanceProfile.cursorBlinkRateMilliseconds
+            );
             _logUnityMessages = _appearanceProfile.logUnityMessages;
         }
 
@@ -1898,6 +1902,9 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         internal float TargetWindowHeightForTests => _targetWindowHeight;
 
+        internal float LauncherHistoryRowHeightEstimateForTests =>
+            _launcherHistoryRowHeightEstimate;
+
         internal float CurrentWindowHeightForTests => _currentWindowHeight;
 
         internal IList<LogItem> LogItemsForTests => _logListItems;
@@ -2010,10 +2017,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             _isAnimating = isAnimating;
         }
 
-        internal void SetLauncherContentHeightsForTests(
-            float historyHeight,
-            float suggestionHeight
-        )
+        internal void SetLauncherContentHeightsForTests(float historyHeight, float suggestionHeight)
         {
             _launcherHistoryContentHeight = historyHeight;
             _launcherSuggestionContentHeight = suggestionHeight;

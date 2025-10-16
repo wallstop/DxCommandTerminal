@@ -86,6 +86,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             RefreshStateButtons();
         }
+
         private void FocusInput()
         {
             if (_textInput == null)
@@ -98,6 +99,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             _commandInput.cursorIndex = textEndPosition;
             _commandInput.selectIndex = textEndPosition;
         }
+
         private void ResetWindowIdempotent()
         {
             int height = Screen.height;
@@ -189,6 +191,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 }
             }
         }
+
         private void ApplyLauncherLayout(float screenWidth, float screenHeight)
         {
             VisualElement rootElement = _uiDocument.rootVisualElement;
@@ -206,7 +209,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             _terminalContainer.style.flexDirection = FlexDirection.Column;
 
             float horizontalPadding = _launcherMetrics.InsetPadding;
-            float verticalPadding = Mathf.Max(6f, _launcherMetrics.InsetPadding * 0.3f);
+            float verticalPadding = Mathf.Max(6f, _launcherMetrics.InsetPadding * 0.35f);
             _terminalContainer.style.paddingLeft = horizontalPadding;
             _terminalContainer.style.paddingRight = horizontalPadding;
             _terminalContainer.style.paddingTop = verticalPadding;
@@ -280,6 +283,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 logElement
             );
         }
+
         private void ApplyStandardLayout(float screenWidth)
         {
             if (_uiDocument == null)
@@ -362,6 +366,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 _inputContainer
             );
         }
+
         private void UpdateLauncherLayoutMetrics()
         {
             if (!IsLauncherActive || !_launcherMetricsInitialized)
@@ -376,6 +381,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             {
                 inputHeight = LauncherInputFallbackHeight;
             }
+
             float availableWidth = Mathf.Max(0f, _launcherMetrics.Width - (horizontalPadding * 2f));
             _autoCompleteContainer.style.width = availableWidth;
             _autoCompleteContainer.style.maxWidth = availableWidth;
@@ -401,10 +407,12 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
                 hasSuggestions = true;
             }
+
             if (!hasSuggestions && suggestionChildCount > 0)
             {
                 hasSuggestions = true;
             }
+
             if (hasSuggestions)
             {
                 _autoCompleteContainer.style.display = DisplayStyle.Flex;
@@ -418,6 +426,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 {
                     _autoCompleteViewport.style.height = 0;
                 }
+
                 _autoCompleteContainer.style.marginTop = 0;
                 _launcherSuggestionContentHeight = 0f;
             }
@@ -427,19 +436,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
             {
                 effectiveSuggestionHeight = LauncherEstimatedSuggestionRowHeight;
             }
-
-            float suggestionsHeight = hasSuggestions
-                ? Mathf.Clamp(effectiveSuggestionHeight, 0f, _launcherMetrics.HistoryHeight)
-                : 0f;
-            if (hasSuggestions)
-            {
-                _autoCompleteContainer.style.height = Mathf.Max(0f, suggestionsHeight);
-                if (_autoCompleteViewport != null)
-                {
-                    _autoCompleteViewport.style.height = Mathf.Max(0f, suggestionsHeight);
-                }
-            }
-            _autoCompleteContainer.style.marginBottom = 0;
 
             VisualElement historyContent = _logScrollView.contentContainer;
             int visibleHistoryCount = 0;
@@ -451,66 +447,62 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 {
                     continue;
                 }
+
                 visibleHistoryCount++;
             }
 
+            int maximumVisibleEntries = _launcherMetrics.HistoryVisibleEntryCount;
             if (visibleHistoryCount == 0)
             {
                 int pendingLogs = ActiveHistory?.Count ?? 0;
-                visibleHistoryCount = Mathf.Min(
-                    pendingLogs,
-                    _launcherMetrics.HistoryVisibleEntryCount
-                );
+                if (maximumVisibleEntries > 0)
+                {
+                    visibleHistoryCount = Mathf.Min(pendingLogs, maximumVisibleEntries);
+                }
+                else
+                {
+                    visibleHistoryCount = pendingLogs;
+                }
+
                 if (visibleHistoryCount == 0)
                 {
                     _launcherHistoryContentHeight = 0f;
                 }
             }
 
-            bool hasHistory = visibleHistoryCount > 0;
-
-            const float MinimumSpacing = 1f;
-            float spacingAboveLog = 0f;
-            if (hasHistory && hasSuggestions)
+            if (maximumVisibleEntries > 0 && visibleHistoryCount > maximumVisibleEntries)
             {
-                spacingAboveLog = Mathf.Max(MinimumSpacing, LauncherAutoCompleteSpacing * 0.5f);
+                visibleHistoryCount = maximumVisibleEntries;
             }
 
-            float reservedForSuggestions = hasSuggestions
-                ? suggestionsHeight + spacingAboveLog
-                : 0f;
+            bool hasHistoryContent = _logListItems.Count > 0;
 
-            float historyHeightFromContent = hasHistory ? _launcherHistoryContentHeight : 0f;
-            if (float.IsNaN(historyHeightFromContent) || historyHeightFromContent < 0f)
-            {
-                historyHeightFromContent = 0f;
-            }
-
-            float estimatedHistoryHeight = hasHistory
-                ? visibleHistoryCount * LauncherEstimatedHistoryRowHeight
-                : 0f;
-
-            float maximumHistoryHeight = Mathf.Max(0f, _launcherMetrics.HistoryHeight);
-
-            float desiredHistoryHeight = hasHistory
-                ? Mathf.Min(
-                    Mathf.Max(historyHeightFromContent, estimatedHistoryHeight),
-                    maximumHistoryHeight
-                )
-                : 0f;
-            if (desiredHistoryHeight < 0f)
-            {
-                desiredHistoryHeight = 0f;
-            }
-
-            float minimumHeight = (verticalPadding * 2f) + inputHeight + reservedForSuggestions;
-            float desiredHeight = minimumHeight + desiredHistoryHeight;
-            float clampedHeight = Mathf.Clamp(
-                desiredHeight,
-                minimumHeight,
-                _launcherMetrics.Height
+            LauncherLayoutSnapshot snapshot = CalculateLauncherLayoutSnapshot(
+                _launcherMetrics,
+                _currentWindowHeight,
+                horizontalPadding,
+                verticalPadding,
+                inputHeight,
+                IsLauncherActive,
+                hasSuggestions,
+                effectiveSuggestionHeight,
+                visibleHistoryCount,
+                _launcherHistoryContentHeight
             );
 
+            if (hasSuggestions)
+            {
+                float suggestionsHeight = Mathf.Max(0f, snapshot.SuggestionsHeight);
+                _autoCompleteContainer.style.height = suggestionsHeight;
+                if (_autoCompleteViewport != null)
+                {
+                    _autoCompleteViewport.style.height = suggestionsHeight;
+                }
+            }
+
+            _autoCompleteContainer.style.marginBottom = 0;
+
+            float clampedHeight = snapshot.ClampedHeight;
             if (!Mathf.Approximately(clampedHeight, _targetWindowHeight))
             {
                 float previousTarget = _targetWindowHeight;
@@ -525,7 +517,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 {
                     _initialWindowHeight = Mathf.Clamp(
                         _currentWindowHeight,
-                        minimumHeight,
+                        snapshot.MinimumHeight,
                         _launcherMetrics.Height
                     );
                     if (!Mathf.Approximately(previousTarget, _targetWindowHeight))
@@ -535,15 +527,10 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 }
             }
 
-            float availableForHistory =
-                _currentWindowHeight
-                - (verticalPadding * 2f)
-                - inputHeight
-                - reservedForSuggestions;
-            availableForHistory = Mathf.Min(availableForHistory, maximumHistoryHeight);
-            availableForHistory = Mathf.Max(0f, availableForHistory);
+            snapshot = snapshot.WithCurrentHeight(_currentWindowHeight);
 
-            bool hasHistoryContent = _logListItems.Count > 0;
+            float availableForHistory = snapshot.AvailableHistoryHeight;
+            float spacingAboveLog = snapshot.SpacingAboveHistory;
 
             if (availableForHistory <= 0.01f || !hasHistoryContent)
             {
@@ -578,7 +565,10 @@ namespace WallstopStudios.DxCommandTerminal.UI
             {
                 _logScrollView.verticalScrollerVisibility = ScrollerVisibility.Auto;
             }
+
+            ReportLauncherLayoutSnapshot(snapshot);
         }
+
         private void RefreshStateButtons()
         {
             if (_stateButtonContainer == null)
@@ -717,7 +707,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
         }
 
-
         internal void ArrangeStandardVisualHierarchyForTests()
         {
             VisualElement logElement = GetLogOrderElement();
@@ -733,7 +722,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
         {
             ConfigureStandardLayoutElements(screenWidth);
         }
-
 
         internal void ApplyLauncherLayoutForTests(float width, float height)
         {
@@ -751,6 +739,294 @@ namespace WallstopStudios.DxCommandTerminal.UI
             );
         }
 
+        private LauncherLayoutSnapshot CalculateLauncherLayoutSnapshot(
+            LauncherLayoutMetrics metrics,
+            float currentWindowHeight,
+            float horizontalPadding,
+            float verticalPadding,
+            float inputHeight,
+            bool isLauncherActive,
+            bool hasSuggestions,
+            float suggestionMeasuredHeight,
+            int visibleHistoryCount,
+            float historyContentHeight
+        )
+        {
+            float historyLimit = Mathf.Max(0f, metrics.HistoryHeight);
+
+            float rowHeightEstimate = _launcherHistoryRowHeightEstimate;
+            if (float.IsNaN(rowHeightEstimate) || rowHeightEstimate <= 0f)
+            {
+                rowHeightEstimate = LauncherEstimatedHistoryRowHeight;
+            }
+
+            rowHeightEstimate = Mathf.Clamp(rowHeightEstimate, 4f, 512f);
+
+            float suggestionsHeight = 0f;
+            if (hasSuggestions)
+            {
+                float suggestionHeightSource = suggestionMeasuredHeight;
+                if (suggestionHeightSource <= 0f)
+                {
+                    suggestionHeightSource = LauncherEstimatedSuggestionRowHeight;
+                }
+
+                suggestionsHeight = Mathf.Clamp(suggestionHeightSource, 0f, historyLimit);
+            }
+
+            bool hasHistory = visibleHistoryCount > 0;
+
+            const float MinimumSpacing = 1f;
+            float spacingAboveHistory = 0f;
+            if (hasHistory && hasSuggestions)
+            {
+                spacingAboveHistory = Mathf.Max(MinimumSpacing, LauncherAutoCompleteSpacing * 0.5f);
+            }
+
+            float reservedSuggestionHeight;
+            if (isLauncherActive)
+            {
+                reservedSuggestionHeight = hasSuggestions
+                    ? suggestionsHeight + spacingAboveHistory
+                    : 0f;
+            }
+            else
+            {
+                float standardSpacing = Mathf.Max(2f, LauncherAutoCompleteSpacing * 0.25f);
+                reservedSuggestionHeight =
+                    suggestionsHeight > 0f ? suggestionsHeight + standardSpacing : 0f;
+            }
+
+            float sanitizedHistoryContentHeight = hasHistory
+                ? Mathf.Max(0f, historyContentHeight)
+                : 0f;
+            if (float.IsNaN(sanitizedHistoryContentHeight))
+            {
+                sanitizedHistoryContentHeight = 0f;
+            }
+
+            if (sanitizedHistoryContentHeight > historyLimit)
+            {
+                sanitizedHistoryContentHeight = historyLimit;
+            }
+
+            float estimatedHistoryHeight = hasHistory
+                ? Mathf.Max(0f, visibleHistoryCount * rowHeightEstimate)
+                : 0f;
+
+            float fallbackHistoryHeight = estimatedHistoryHeight;
+            if (fallbackHistoryHeight <= 0f && hasHistory)
+            {
+                fallbackHistoryHeight = Mathf.Max(
+                    visibleHistoryCount * rowHeightEstimate,
+                    rowHeightEstimate
+                );
+            }
+
+            if (sanitizedHistoryContentHeight > 0f && hasHistory)
+            {
+                float cappedEstimate = Mathf.Max(
+                    rowHeightEstimate,
+                    visibleHistoryCount * rowHeightEstimate
+                );
+                fallbackHistoryHeight = Mathf.Min(sanitizedHistoryContentHeight, cappedEstimate);
+            }
+
+            float desiredHistoryHeight = hasHistory ? Mathf.Max(0f, fallbackHistoryHeight) : 0f;
+            if (desiredHistoryHeight > historyLimit)
+            {
+                desiredHistoryHeight = historyLimit;
+            }
+
+            float minimumHeight = (verticalPadding * 2f) + inputHeight + reservedSuggestionHeight;
+            float desiredHeight = minimumHeight + desiredHistoryHeight;
+            float clampedHeight = Mathf.Clamp(desiredHeight, minimumHeight, metrics.Height);
+
+            float historyTargetHeight = Mathf.Min(
+                historyLimit,
+                Mathf.Max(0f, clampedHeight - minimumHeight)
+            );
+            float cappedHeight = minimumHeight + historyTargetHeight;
+            if (!Mathf.Approximately(cappedHeight, clampedHeight))
+            {
+                clampedHeight = cappedHeight;
+            }
+
+            float availableHistoryHeight = Mathf.Clamp(
+                currentWindowHeight - minimumHeight,
+                0f,
+                historyLimit
+            );
+
+            return new LauncherLayoutSnapshot(
+                metrics,
+                horizontalPadding,
+                verticalPadding,
+                inputHeight,
+                isLauncherActive,
+                hasSuggestions,
+                suggestionsHeight,
+                reservedSuggestionHeight,
+                spacingAboveHistory,
+                hasHistory,
+                visibleHistoryCount,
+                sanitizedHistoryContentHeight,
+                estimatedHistoryHeight,
+                rowHeightEstimate,
+                desiredHistoryHeight,
+                historyTargetHeight,
+                minimumHeight,
+                desiredHeight,
+                clampedHeight,
+                currentWindowHeight,
+                availableHistoryHeight
+            );
+        }
+
+        private void ReportLauncherLayoutSnapshot(LauncherLayoutSnapshot snapshot)
+        {
+            LauncherLayoutComputed?.Invoke(snapshot);
+        }
+
+        internal static event Action<LauncherLayoutSnapshot> LauncherLayoutComputed;
+
+        internal readonly struct LauncherLayoutSnapshot
+        {
+            internal LauncherLayoutSnapshot(
+                LauncherLayoutMetrics metrics,
+                float horizontalPadding,
+                float verticalPadding,
+                float inputHeight,
+                bool isLauncherActive,
+                bool hasSuggestions,
+                float suggestionsHeight,
+                float reservedSuggestionsHeight,
+                float spacingAboveHistory,
+                bool hasHistory,
+                int visibleHistoryCount,
+                float historyMeasuredHeight,
+                float historyEstimatedHeight,
+                float historyRowHeightEstimate,
+                float historyDesiredHeight,
+                float historyTargetHeight,
+                float minimumHeight,
+                float desiredHeight,
+                float clampedHeight,
+                float currentWindowHeight,
+                float availableHistoryHeight
+            )
+            {
+                Metrics = metrics;
+                HorizontalPadding = horizontalPadding;
+                VerticalPadding = verticalPadding;
+                InputHeight = inputHeight;
+                IsLauncherActive = isLauncherActive;
+                HasSuggestions = hasSuggestions;
+                SuggestionsHeight = suggestionsHeight;
+                ReservedSuggestionsHeight = reservedSuggestionsHeight;
+                SpacingAboveHistory = spacingAboveHistory;
+                HasHistory = hasHistory;
+                VisibleHistoryCount = visibleHistoryCount;
+                HistoryMeasuredHeight = historyMeasuredHeight;
+                HistoryEstimatedHeight = historyEstimatedHeight;
+                HistoryRowHeightEstimate = historyRowHeightEstimate;
+                HistoryDesiredHeight = historyDesiredHeight;
+                HistoryTargetHeight = historyTargetHeight;
+                MinimumHeight = minimumHeight;
+                DesiredHeight = desiredHeight;
+                ClampedHeight = clampedHeight;
+                CurrentWindowHeight = currentWindowHeight;
+                HistoryLimit = metrics.HistoryHeight;
+                AvailableHistoryHeight = Mathf.Clamp(availableHistoryHeight, 0f, HistoryLimit);
+            }
+
+            internal LauncherLayoutSnapshot WithCurrentHeight(float currentHeight)
+            {
+                float recalculatedAvailableHistory = Mathf.Clamp(
+                    currentHeight - MinimumHeight,
+                    0f,
+                    HistoryLimit
+                );
+
+                return new LauncherLayoutSnapshot(
+                    Metrics,
+                    HorizontalPadding,
+                    VerticalPadding,
+                    InputHeight,
+                    IsLauncherActive,
+                    HasSuggestions,
+                    SuggestionsHeight,
+                    ReservedSuggestionsHeight,
+                    SpacingAboveHistory,
+                    HasHistory,
+                    VisibleHistoryCount,
+                    HistoryMeasuredHeight,
+                    HistoryEstimatedHeight,
+                    HistoryRowHeightEstimate,
+                    HistoryDesiredHeight,
+                    HistoryTargetHeight,
+                    MinimumHeight,
+                    DesiredHeight,
+                    ClampedHeight,
+                    currentHeight,
+                    recalculatedAvailableHistory
+                );
+            }
+
+            public override string ToString()
+            {
+                return "LauncherLayoutSnapshot "
+                    + $"(InputHeight={InputHeight:F2}, Suggestions={SuggestionsHeight:F2}, Reserved={ReservedSuggestionsHeight:F2}, "
+                    + $"MeasuredHistory={HistoryMeasuredHeight:F2}, EstimatedHistory={HistoryEstimatedHeight:F2}, DesiredHistory={HistoryDesiredHeight:F2}, "
+                    + $"RowEstimate={HistoryRowHeightEstimate:F2}, TargetHistory={HistoryTargetHeight:F2}, HistoryLimit={HistoryLimit:F2}, MinimumHeight={MinimumHeight:F2}, DesiredHeight={DesiredHeight:F2}, "
+                    + $"ClampedHeight={ClampedHeight:F2}, CurrentHeight={CurrentWindowHeight:F2}, AvailableHistory={AvailableHistoryHeight:F2}, "
+                    + $"VisibleHistoryCount={VisibleHistoryCount}, HasSuggestions={HasSuggestions}, HasHistory={HasHistory}, SpacingAboveHistory={SpacingAboveHistory:F2})";
+            }
+
+            internal LauncherLayoutMetrics Metrics { get; }
+
+            internal float HorizontalPadding { get; }
+
+            internal float VerticalPadding { get; }
+
+            internal float InputHeight { get; }
+
+            internal bool IsLauncherActive { get; }
+
+            internal bool HasSuggestions { get; }
+
+            internal float SuggestionsHeight { get; }
+
+            internal float ReservedSuggestionsHeight { get; }
+
+            internal float SpacingAboveHistory { get; }
+
+            internal bool HasHistory { get; }
+
+            internal int VisibleHistoryCount { get; }
+
+            internal float HistoryMeasuredHeight { get; }
+
+            internal float HistoryEstimatedHeight { get; }
+
+            internal float HistoryRowHeightEstimate { get; }
+
+            internal float HistoryDesiredHeight { get; }
+
+            internal float HistoryTargetHeight { get; }
+
+            internal float HistoryLimit { get; }
+
+            internal float MinimumHeight { get; }
+
+            internal float DesiredHeight { get; }
+
+            internal float ClampedHeight { get; }
+
+            internal float CurrentWindowHeight { get; }
+
+            internal float AvailableHistoryHeight { get; }
+        }
 
         private VisualElement GetLogOrderElement()
         {
