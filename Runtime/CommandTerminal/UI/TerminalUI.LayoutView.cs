@@ -339,6 +339,11 @@ namespace WallstopStudios.DxCommandTerminal.UI
             if (_logScrollView != null)
             {
                 _logScrollView.verticalScrollerVisibility = ScrollerVisibility.Auto;
+                VisualElement logContent = _logScrollView.contentContainer;
+                if (logContent != null)
+                {
+                    logContent.style.justifyContent = Justify.FlexEnd;
+                }
             }
 
             _autoCompleteContainer.style.position = Position.Relative;
@@ -581,6 +586,11 @@ namespace WallstopStudios.DxCommandTerminal.UI
             if (_logScrollView != null)
             {
                 _logScrollView.verticalScrollerVisibility = ScrollerVisibility.Auto;
+                VisualElement launcherContent = _logScrollView.contentContainer;
+                if (launcherContent != null)
+                {
+                    launcherContent.style.justifyContent = Justify.FlexStart;
+                }
                 ApplyLauncherFade(snapshot);
             }
 

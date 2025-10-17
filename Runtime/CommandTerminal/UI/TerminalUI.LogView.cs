@@ -47,20 +47,14 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 totalCount = 1;
             }
 
-            float opacity;
             if (IsLauncherActive && _launcherMetricsInitialized)
             {
-                int maximumVisible = Mathf.Max(1, _launcherMetrics.HistoryVisibleEntryCount);
-                int fadeWindow = Mathf.Min(totalCount, maximumVisible);
-                int fadeIndex = Mathf.Clamp(index, 0, fadeWindow - 1);
-                opacity = ComputeLogOpacity(fadeIndex, fadeWindow);
+                element.style.opacity = 1f;
             }
             else
             {
-                opacity = ComputeLogOpacity(index, totalCount);
+                element.style.opacity = ComputeLogOpacity(index, totalCount);
             }
-
-            element.style.opacity = opacity;
         }
 
         private void RefreshLogs()
