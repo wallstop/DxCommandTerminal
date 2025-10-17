@@ -1,6 +1,6 @@
 namespace WallstopStudios.DxCommandTerminal.Backend
 {
-    internal readonly struct TerminalRuntimeUpdateResult
+    public readonly struct TerminalRuntimeUpdateResult
     {
         public TerminalRuntimeUpdateResult(
             bool logRecreated,
@@ -27,6 +27,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         public bool CommandsRefreshed { get; }
 
-        public bool RuntimeReset => LogRecreated || HistoryRecreated || ShellRecreated || AutoCompleteRecreated;
+        public bool RuntimeReset =>
+            LogRecreated || HistoryRecreated || ShellRecreated || AutoCompleteRecreated;
     }
 }

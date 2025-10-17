@@ -4,7 +4,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     /// Represents an isolated runtime backing a terminal instance. Provides access to the
     /// command buffer, history, shell, and autocomplete services without relying on static state.
     /// </summary>
-    internal interface ITerminalRuntime
+    public interface ITerminalRuntime
     {
         CommandLog Log { get; }
 

@@ -61,6 +61,12 @@ namespace WallstopStudios.DxCommandTerminal.UI
         public static ITerminalRuntimeConfigurator RuntimeConfigurator { get; set; } =
             TerminalRuntimeConfiguratorProxy.Default;
 
+        public static ITerminalInputProvider InputProvider { get; set; } =
+            TerminalInputProviderProxy.Default;
+
+        public static ITerminalRuntimeProvider RuntimeProvider { get; set; } =
+            TerminalRuntimeProviderProxy.Default;
+
         public static TerminalUI ActiveTerminal => TerminalProvider?.ActiveTerminal;
 
         public static IReadOnlyList<TerminalUI> ActiveTerminals =>
@@ -506,7 +512,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             if (!TryGetComponent(out _input))
             {
-                _input = DefaultTerminalInput.Instance;
+                _input = TerminalUI.InputProvider?.GetInput(this) ?? DefaultTerminalInput.Instance;
             }
 
             if (TerminalProvider == null)

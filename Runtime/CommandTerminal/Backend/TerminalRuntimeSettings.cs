@@ -2,7 +2,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 {
     using System.Collections.Generic;
 
-    internal readonly struct TerminalRuntimeSettings
+    public readonly struct TerminalRuntimeSettings
     {
         public TerminalRuntimeSettings(
             int logCapacity,

@@ -67,6 +67,11 @@ Terminals register themselves with an `ITerminalProvider` (`TerminalRegistry` by
 
 ### Runtime Configuration
 
+### Input Provider
+
+`TerminalUI` obtains its input via an `ITerminalInputProvider`. The default proxy returns `DefaultTerminalInput.Instance`, but you can supply your own provider (e.g., during tests or to integrate with a custom input system) by assigning `TerminalUI.InputProvider`.
+
+
 `TerminalUI` resolves runtime modes through an `ITerminalRuntimeConfigurator`. The default proxy wraps the legacy static `TerminalRuntimeConfig`, but you can inject your own implementation (for example, in tests or specialized runtime scenarios) via `TerminalUI.RuntimeConfigurator`.
 - Fixed a bug where enabling and disabling the Terminal would break AutoComplete
 - Fixed a bug where you could interact with the terminal when it was in closed state

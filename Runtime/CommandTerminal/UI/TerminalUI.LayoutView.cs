@@ -353,6 +353,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             if (_logScrollView != null)
             {
                 _logScrollView.verticalScrollerVisibility = ScrollerVisibility.Auto;
+                _historyListAdapter?.SetJustification(Justify.FlexEnd);
                 _launcherViewController?.ConfigureForStandardMode();
             }
 
@@ -596,6 +597,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             if (_logScrollView != null)
             {
                 _logScrollView.verticalScrollerVisibility = ScrollerVisibility.Auto;
+                _historyListAdapter?.SetJustification(Justify.FlexStart);
                 _launcherViewController?.ConfigureForLauncherMode();
                 _launcherViewController?.ClampScroll();
                 _launcherViewController?.UpdateFade();

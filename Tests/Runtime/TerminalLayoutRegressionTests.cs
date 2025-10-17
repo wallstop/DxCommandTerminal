@@ -56,6 +56,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             try
             {
                 VisualElement terminalContainer = new VisualElement();
+                terminalContainer.style.paddingTop = 10f;
+                terminalContainer.style.paddingBottom = 5f;
                 VisualElement inputContainer = new VisualElement();
                 ScrollView autoComplete = new ScrollView();
                 ScrollView log = new ScrollView();
@@ -82,8 +84,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 float expectedContainerHeight =
                     LayoutMeasurementUtility.ComputeStandardContainerHeight(
                         200f,
-                        paddingTop: 0f,
-                        paddingBottom: 0f
+                        paddingTop: 10f,
+                        paddingBottom: 5f
                     );
 
                 Assert.That(
