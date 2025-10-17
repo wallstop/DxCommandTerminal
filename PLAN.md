@@ -11,6 +11,7 @@
 2. **Launcher spacing inconsistencies when suggestions toggle**
    - *Symptoms*: Small residual gaps persist when the autocomplete pill row is removed, depending on the previous state.
    - *Next Steps*: ensure we zero out margins on both the pill container and history container when suggestions disappear, and add dedicated regression coverage.
+   - *Progress*: Added regression coverage (`LauncherSpacingResetsWhenSuggestionsDisappear`) to verify history margins clear when suggestions disappear.
 
 3. **Terminal visibility race on close**
    - *Symptoms*: A brief flash of history text can appear when closing the terminal via toggle.

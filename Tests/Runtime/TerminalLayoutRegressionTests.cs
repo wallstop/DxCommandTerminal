@@ -403,6 +403,82 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         [Test]
+        public void LauncherSpacingResetsWhenSuggestionsDisappear()
+        {
+            GameObject go = new GameObject("LauncherSpacingTest");
+            go.SetActive(false);
+            TerminalUI terminal = go.AddComponent<TerminalUI>();
+            terminal.disableUIForTests = true;
+            go.SetActive(true);
+
+            try
+            {
+                VisualElement terminalContainer = new VisualElement();
+                VisualElement inputContainer = new VisualElement();
+                ScrollView autoComplete = new ScrollView();
+                ScrollView log = new ScrollView();
+
+                terminal.InjectLayoutElementsForTests(
+                    terminalContainer,
+                    inputContainer,
+                    autoComplete,
+                    log
+                );
+                terminal.AttachHistoryAdapterForTests(null, log);
+                terminal.ArrangeLauncherVisualHierarchyForTests();
+                terminal.ForceStateForTests(TerminalState.OpenLauncher);
+
+                LauncherLayoutMetrics metrics = new LauncherLayoutMetrics(
+                    width: 620f,
+                    height: 240f,
+                    left: 0f,
+                    top: 0f,
+                    historyHeight: 160f,
+                    cornerRadius: 12f,
+                    insetPadding: 12f,
+                    historyVisibleEntryCount: 4,
+                    historyFadeExponent: 2f,
+                    snapOpen: true,
+                    animationDuration: 0.12f
+                );
+
+                terminal.SetLauncherMetricsForTests(metrics);
+                terminal.SetWindowHeightsForTests(metrics.Height, metrics.Height);
+
+                VisualElement historyEntry = new VisualElement();
+                historyEntry.style.display = DisplayStyle.Flex;
+                log.contentContainer.Add(historyEntry);
+
+                VisualElement suggestion = new VisualElement();
+                suggestion.style.display = DisplayStyle.Flex;
+                terminal.AutoCompleteContainerForTests.contentContainer.Add(suggestion);
+
+                terminal.SetLauncherContentHeightsForTests(
+                    historyHeight: metrics.HistoryHeight * 0.5f,
+                    suggestionHeight: 24f
+                );
+                terminal.UpdateLauncherLayoutMetricsForTests();
+
+                float marginWithSuggestions = log.contentContainer.style.marginTop.value;
+                Assert.That(marginWithSuggestions, Is.GreaterThan(0f));
+
+                terminal.AutoCompleteContainerForTests.contentContainer.Clear();
+                terminal.SetLauncherContentHeightsForTests(
+                    historyHeight: metrics.HistoryHeight * 0.5f,
+                    suggestionHeight: 0f
+                );
+                terminal.UpdateLauncherLayoutMetricsForTests();
+
+                float marginWithoutSuggestions = log.contentContainer.style.marginTop.value;
+                Assert.That(marginWithoutSuggestions, Is.EqualTo(0f).Within(0.001f));
+            }
+            finally
+            {
+                Object.DestroyImmediate(go);
+            }
+        }
+
+        [Test]
         public void ClosedTerminalHidesContainer()
         {
             GameObject go = new GameObject("TerminalVisibilityTest");
