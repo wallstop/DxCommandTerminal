@@ -80,7 +80,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 return 0f;
             }
 
-            return ClampPositive(styleValue.value);
+            return ClampPositive(styleValue.value.value);
         }
 
         internal static float ComputeReservedSuggestionHeight(

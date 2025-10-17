@@ -38,7 +38,7 @@
    - Factor shared height/row calculations into a utility used by both launcher layouts and future standard terminal sizing. Added `LayoutMeasurementUtility`, updated launcher reserved suggestion and height clamps to reuse it, and introduced focused unit tests (including new standard-container coverage). Standard layout now uses the shared helper for container height calculations. Next: audit animation entry points and any remaining ad-hoc geometry math.
 
 7. **Minimise ad-hoc singletons** — *In Progress*
-   - Introduced `ITerminalProvider` and `TerminalRegistry`, wiring `TerminalUI` to register/unregister instances and exposing `ActiveTerminal`/`ActiveTerminals`. Built-in commands and completers now consume the provider instead of `Instance`, regression tests validate provider behavior, and singleton audit notes captured usage of `Terminal.ActiveRuntime`, `DefaultTerminalInput.Instance`, and `TerminalRuntimeConfig`. Next: document the provider and evaluate replacing the remaining static lookups with injectable accessors.
+   - Introduced `ITerminalProvider`/`TerminalRegistry` for terminal lookup and `ITerminalRuntimeConfigurator` with a default proxy wrapping `TerminalRuntimeConfig`. `TerminalUI` now registers providers/configurators and is covered by new `TerminalRuntimeConfiguratorTests`. Next: document the provider/configurator APIs and evaluate replacing the remaining static lookups (`Terminal.ActiveRuntime`, `DefaultTerminalInput.Instance`).
 
 ## Architectural Assessment
 

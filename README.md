@@ -64,6 +64,10 @@ Grab a copy of this repo (either `git clone` or [download a zip of the source](h
 ### Terminal Provider
 
 Terminals register themselves with an `ITerminalProvider` (`TerminalRegistry` by default). Use `TerminalUI.ActiveTerminal` or `TerminalUI.ActiveTerminals` instead of touching the singleton directly. Consumers that need custom lifetimes can swap the provider at runtime or in tests to manage their own registry of terminals.
+
+### Runtime Configuration
+
+`TerminalUI` resolves runtime modes through an `ITerminalRuntimeConfigurator`. The default proxy wraps the legacy static `TerminalRuntimeConfig`, but you can inject your own implementation (for example, in tests or specialized runtime scenarios) via `TerminalUI.RuntimeConfigurator`.
 - Fixed a bug where enabling and disabling the Terminal would break AutoComplete
 - Fixed a bug where you could interact with the terminal when it was in closed state
 - Fixed a bug where commands run programmatically were not added to history

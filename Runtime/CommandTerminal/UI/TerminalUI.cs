@@ -58,6 +58,9 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         public static ITerminalProvider TerminalProvider { get; set; } = TerminalRegistry.Default;
 
+        public static ITerminalRuntimeConfigurator RuntimeConfigurator { get; set; } =
+            TerminalRuntimeConfiguratorProxy.Default;
+
         public static TerminalUI ActiveTerminal => TerminalProvider?.ActiveTerminal;
 
         public static IReadOnlyList<TerminalUI> ActiveTerminals =>
@@ -452,11 +455,11 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         private void ApplyRuntimeMode(TerminalRuntimeModeFlags modes)
         {
-            TerminalRuntimeConfig.SetMode(modes);
+            RuntimeConfigurator.SetMode(modes);
 #if UNITY_EDITOR
-            TerminalRuntimeConfig.EditorAutoDiscover = _autoDiscoverParsersInEditor;
+            RuntimeConfigurator.EditorAutoDiscover = _autoDiscoverParsersInEditor;
 #endif
-            TerminalRuntimeConfig.TryAutoDiscoverParsers();
+            RuntimeConfigurator.TryAutoDiscoverParsers();
         }
 
         private void Awake()

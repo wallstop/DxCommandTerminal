@@ -459,7 +459,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 );
                 terminal.UpdateLauncherLayoutMetricsForTests();
 
-                float marginWithSuggestions = log.contentContainer.style.marginTop.value;
+                float marginWithSuggestions = log.contentContainer.style.marginTop.value.value;
                 Assert.That(marginWithSuggestions, Is.GreaterThan(0f));
 
                 terminal.AutoCompleteContainerForTests.contentContainer.Clear();
@@ -469,7 +469,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 );
                 terminal.UpdateLauncherLayoutMetricsForTests();
 
-                float marginWithoutSuggestions = log.contentContainer.style.marginTop.value;
+                float marginWithoutSuggestions = log.contentContainer.style.marginTop.value.value;
                 Assert.That(marginWithoutSuggestions, Is.EqualTo(0f).Within(0.001f));
             }
             finally
