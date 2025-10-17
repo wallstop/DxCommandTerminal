@@ -951,10 +951,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             _commandIssuedThisFrame = true;
             _previousState = _state;
             _state = newState;
-            if (_state == TerminalState.OpenLauncher)
-            {
-                _restoreLauncherScrollPending = true;
-            }
+            if (_state == TerminalState.OpenLauncher) { }
             ResetWindowIdempotent();
             if (_state != TerminalState.Closed)
             {

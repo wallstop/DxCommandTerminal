@@ -307,7 +307,15 @@ namespace WallstopStudios.DxCommandTerminal.UI
         {
             _terminalContainer.EnableInClassList("terminal-container--launcher", false);
             _terminalContainer.style.width = screenWidth;
-            _terminalContainer.style.height = _currentWindowHeight;
+
+            float paddingTop = Mathf.Max(0f, _terminalContainer.resolvedStyle.paddingTop);
+            float paddingBottom = Mathf.Max(0f, _terminalContainer.resolvedStyle.paddingBottom);
+            float containerHeight = LayoutMeasurementUtility.ComputeStandardContainerHeight(
+                _currentWindowHeight,
+                paddingTop,
+                paddingBottom
+            );
+            _terminalContainer.style.height = containerHeight;
             _terminalContainer.style.left = 0;
             _terminalContainer.style.top = 0;
             _terminalContainer.style.position = Position.Relative;

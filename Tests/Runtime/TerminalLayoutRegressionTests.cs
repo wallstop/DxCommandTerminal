@@ -78,6 +78,18 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 Assert.That(log.style.flexGrow.value, Is.EqualTo(1f).Within(0.001f));
                 Assert.That(log.style.marginTop.value, Is.EqualTo(0f).Within(0.001f));
                 Assert.That(log.style.marginBottom.value, Is.EqualTo(0f).Within(0.001f));
+
+                float expectedContainerHeight =
+                    LayoutMeasurementUtility.ComputeStandardContainerHeight(
+                        200f,
+                        paddingTop: 0f,
+                        paddingBottom: 0f
+                    );
+
+                Assert.That(
+                    terminal.TerminalContainerForTests.style.height.value,
+                    Is.EqualTo(expectedContainerHeight).Within(0.001f)
+                );
             }
             finally
             {

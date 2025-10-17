@@ -88,6 +88,16 @@ namespace WallstopStudios.DxCommandTerminal.UI
             return suggestionsHeight + standardSpacing;
         }
 
+        internal static float ComputeStandardContainerHeight(
+            float currentHeight,
+            float paddingTop,
+            float paddingBottom
+        )
+        {
+            float innerHeight = ClampPositive(currentHeight - paddingTop - paddingBottom);
+            return paddingTop + innerHeight + paddingBottom;
+        }
+
         internal static float ClampToHistoryLimit(float value, float historyLimit)
         {
             return Mathf.Min(historyLimit, ClampPositive(value));

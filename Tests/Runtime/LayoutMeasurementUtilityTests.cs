@@ -39,5 +39,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             float clamped = LayoutMeasurementUtility.ClampToHistoryLimit(250f, 200f);
             Assert.That(clamped, Is.EqualTo(200f));
         }
+
+        [Test]
+        public void ComputeStandardContainerHeightClampsToPositive()
+        {
+            float height = LayoutMeasurementUtility.ComputeStandardContainerHeight(50f, 10f, 5f);
+            Assert.That(height, Is.EqualTo(50f));
+
+            float clamped = LayoutMeasurementUtility.ComputeStandardContainerHeight(10f, 8f, 5f);
+            Assert.That(clamped, Is.EqualTo(13f));
+        }
     }
 }
