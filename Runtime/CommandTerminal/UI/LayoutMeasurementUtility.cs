@@ -1,6 +1,7 @@
 namespace WallstopStudios.DxCommandTerminal.UI
 {
     using UnityEngine;
+    using UnityEngine.UIElements;
 
     internal static class LayoutMeasurementUtility
     {
@@ -64,6 +65,22 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
 
             return Mathf.Clamp(sanitized, minimum, maximum);
+        }
+
+        internal static float ResolvePadding(float resolved, StyleLength styleValue)
+        {
+            float normalizedResolved = ClampPositive(resolved);
+            if (normalizedResolved > 0f)
+            {
+                return normalizedResolved;
+            }
+
+            if (styleValue.keyword == StyleKeyword.Auto || styleValue.keyword == StyleKeyword.None)
+            {
+                return 0f;
+            }
+
+            return ClampPositive(styleValue.value);
         }
 
         internal static float ComputeReservedSuggestionHeight(

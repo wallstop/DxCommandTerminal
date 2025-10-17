@@ -3,6 +3,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     using NUnit.Framework;
     using UI;
     using UnityEngine;
+    using UnityEngine.UIElements;
 
     public sealed class LayoutMeasurementUtilityTests
     {
@@ -48,6 +49,19 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             float clamped = LayoutMeasurementUtility.ComputeStandardContainerHeight(10f, 8f, 5f);
             Assert.That(clamped, Is.EqualTo(13f));
+        }
+
+        [Test]
+        public void ResolvePaddingFallsBackToStyleValue()
+        {
+            StyleLength stylePadding = new StyleLength(12f);
+            float resolved = 0f;
+
+            float result = LayoutMeasurementUtility.ResolvePadding(resolved, stylePadding);
+            Assert.That(result, Is.EqualTo(12f));
+
+            result = LayoutMeasurementUtility.ResolvePadding(4f, stylePadding);
+            Assert.That(result, Is.EqualTo(4f));
         }
     }
 }
