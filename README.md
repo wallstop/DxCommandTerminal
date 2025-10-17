@@ -58,6 +58,12 @@ Grab a copy of this repo (either `git clone` or [download a zip of the source](h
 - Fixed a bug where only the latest error message was preserved - errors are now queued
 - Fixed a bug where attempting to access static `Terminal` properties would throw if the Terminal had been enabled yet.
 - Fixed a bug where moving through command history did not update the cursor position
+
+## Architecture Notes
+
+### Terminal Provider
+
+Terminals register themselves with an `ITerminalProvider` (`TerminalRegistry` by default). Use `TerminalUI.ActiveTerminal` or `TerminalUI.ActiveTerminals` instead of touching the singleton directly. Consumers that need custom lifetimes can swap the provider at runtime or in tests to manage their own registry of terminals.
 - Fixed a bug where enabling and disabling the Terminal would break AutoComplete
 - Fixed a bug where you could interact with the terminal when it was in closed state
 - Fixed a bug where commands run programmatically were not added to history

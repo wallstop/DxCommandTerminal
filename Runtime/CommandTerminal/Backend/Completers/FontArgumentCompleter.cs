@@ -14,7 +14,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend.Completers
                 return Array.Empty<string>();
             }
 
-            TerminalUI terminal = TerminalUI.Instance;
+            TerminalUI terminal = TerminalUI.ActiveTerminal;
             if (terminal == null || terminal._fontPack == null)
             {
                 return Array.Empty<string>();

@@ -282,6 +282,115 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         [Test]
+        public void HistoryAdapterSwitchesJustificationBetweenModes()
+        {
+            GameObject go = new GameObject("HistoryAdapterAlignmentTest");
+            go.SetActive(false);
+            TerminalUI terminal = go.AddComponent<TerminalUI>();
+            terminal.disableUIForTests = true;
+            go.SetActive(true);
+
+            try
+            {
+                VisualElement terminalContainer = new VisualElement();
+                VisualElement inputContainer = new VisualElement();
+                ScrollView autoComplete = new ScrollView();
+                ScrollView log = new ScrollView();
+
+                terminal.InjectLayoutElementsForTests(
+                    terminalContainer,
+                    inputContainer,
+                    autoComplete,
+                    log
+                );
+                terminal.AttachHistoryAdapterForTests(null, log);
+
+                terminal.ConfigureStandardLayoutForTests(800f);
+
+                Assert.That(
+                    log.contentContainer.style.justifyContent.value,
+                    Is.EqualTo(Justify.FlexEnd)
+                );
+
+                terminal.ArrangeLauncherVisualHierarchyForTests();
+                terminal.ForceStateForTests(TerminalState.OpenLauncher);
+
+                LauncherLayoutMetrics metrics = new LauncherLayoutMetrics(
+                    width: 600f,
+                    height: 300f,
+                    left: 100f,
+                    top: 100f,
+                    historyHeight: 200f,
+                    cornerRadius: 10f,
+                    insetPadding: 12f,
+                    historyVisibleEntryCount: 4,
+                    historyFadeExponent: 2f,
+                    snapOpen: true,
+                    animationDuration: 0.12f
+                );
+
+                terminal.SetLauncherMetricsForTests(metrics);
+                terminal.SetWindowHeightsForTests(metrics.Height, metrics.Height);
+                terminal.UpdateLauncherLayoutMetricsForTests();
+
+                Assert.That(
+                    log.contentContainer.style.justifyContent.value,
+                    Is.EqualTo(Justify.FlexStart)
+                );
+            }
+            finally
+            {
+                Object.DestroyImmediate(go);
+            }
+        }
+
+        [Test]
+        public void LauncherOpacityRespectsFadeCurve()
+        {
+            GameObject go = new GameObject("LauncherOpacityTest");
+            go.SetActive(false);
+            TerminalUI terminal = go.AddComponent<TerminalUI>();
+            terminal.disableUIForTests = true;
+            go.SetActive(true);
+
+            try
+            {
+                terminal.ForceStateForTests(TerminalState.OpenLauncher);
+                LauncherLayoutMetrics metrics = new LauncherLayoutMetrics(
+                    width: 580f,
+                    height: 300f,
+                    left: 0f,
+                    top: 0f,
+                    historyHeight: 220f,
+                    cornerRadius: 12f,
+                    insetPadding: 12f,
+                    historyVisibleEntryCount: 4,
+                    historyFadeExponent: 2f,
+                    snapOpen: true,
+                    animationDuration: 0.1f
+                );
+
+                terminal.SetLauncherMetricsForTests(metrics);
+
+                float fullyVisible = terminal.ComputeLauncherOpacityForTests(0f);
+                float midFade = terminal.ComputeLauncherOpacityForTests(0.5f);
+                float fullyFaded = terminal.ComputeLauncherOpacityForTests(1f);
+
+                Assert.That(fullyVisible, Is.EqualTo(1f).Within(0.001f));
+                Assert.That(midFade, Is.GreaterThan(fullyFaded));
+                Assert.That(midFade, Is.LessThan(fullyVisible));
+                Assert.That(
+                    fullyFaded,
+                    Is.EqualTo(terminal.LauncherFadeMinimumForTests).Within(0.001f)
+                );
+            }
+            finally
+            {
+                Object.DestroyImmediate(go);
+            }
+        }
+
+        [Test]
         public void ClosedTerminalHidesContainer()
         {
             GameObject go = new GameObject("TerminalVisibilityTest");

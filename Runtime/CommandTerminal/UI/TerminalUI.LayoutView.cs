@@ -339,11 +339,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             if (_logScrollView != null)
             {
                 _logScrollView.verticalScrollerVisibility = ScrollerVisibility.Auto;
-                VisualElement logContent = _logScrollView.contentContainer;
-                if (logContent != null)
-                {
-                    logContent.style.justifyContent = Justify.FlexEnd;
-                }
+                _launcherViewController?.ConfigureForStandardMode();
             }
 
             _autoCompleteContainer.style.position = Position.Relative;
@@ -586,93 +582,38 @@ namespace WallstopStudios.DxCommandTerminal.UI
             if (_logScrollView != null)
             {
                 _logScrollView.verticalScrollerVisibility = ScrollerVisibility.Auto;
-                VisualElement launcherContent = _logScrollView.contentContainer;
-                if (launcherContent != null)
-                {
-                    launcherContent.style.justifyContent = Justify.FlexStart;
-                }
-                ApplyLauncherFade(snapshot);
+                _launcherViewController?.ConfigureForLauncherMode();
+                _launcherViewController?.ClampScroll();
+                _launcherViewController?.UpdateFade();
+                _launcherViewController?.ScheduleFade();
             }
 
             ReportLauncherLayoutSnapshot(snapshot);
         }
 
-        private void ApplyLauncherFade(LauncherLayoutSnapshot snapshot)
+        private void UpdateLauncherFade()
         {
-            if (!IsLauncherActive || !_launcherMetricsInitialized || _logScrollView == null)
-            {
-                return;
-            }
-
-            void ExecuteFade()
-            {
-                VisualElement viewport = _logScrollView.contentViewport;
-                VisualElement historyContent = _logScrollView.contentContainer;
-                if (viewport == null || historyContent == null)
-                {
-                    return;
-                }
-
-                Rect viewportWorld = viewport.worldBound;
-                float viewportHeight = viewportWorld.height;
-                if (viewportHeight <= 0.01f)
-                {
-                    return;
-                }
-
-                float viewportTop = viewportWorld.yMin;
-                float viewportBottom = viewportWorld.yMax;
-
-                float rangeFactor = Mathf.Clamp01(GetHistoryFadeRangeFactor());
-                float exponent = Mathf.Max(0.01f, GetHistoryFadeExponent());
-                float minimumOpacity = Mathf.Clamp01(GetHistoryFadeMinimumOpacity());
-
-                int childCount = historyContent.childCount;
-                for (int i = 0; i < childCount; ++i)
-                {
-                    VisualElement entry = historyContent[i];
-                    if (entry == null || entry.resolvedStyle.display == DisplayStyle.None)
-                    {
-                        continue;
-                    }
-
-                    Rect entryBounds = entry.worldBound;
-                    float entryCenter = (entryBounds.yMin + entryBounds.yMax) * 0.5f;
-                    float clampedCenter = Mathf.Clamp(entryCenter, viewportTop, viewportBottom);
-                    float normalized = Mathf.Clamp01(
-                        (clampedCenter - viewportTop) / viewportHeight
-                    );
-
-                    float adjusted = Mathf.Pow(normalized * rangeFactor, exponent);
-                    float opacity = Mathf.Lerp(1f, minimumOpacity, adjusted);
-
-                    ApplyLauncherEntryOpacity(entry, opacity);
-                }
-            }
-
-            ExecuteFade();
-            _logScrollView.schedule.Execute(ExecuteFade).ExecuteLater(0);
+            _launcherViewController?.UpdateFade();
         }
 
-        private static void ApplyLauncherEntryOpacity(VisualElement entry, float opacity)
+        private void RequestLauncherFade()
         {
-            if (entry == null)
-            {
-                return;
-            }
+            _launcherViewController?.ScheduleFade();
+        }
 
-            entry.style.opacity = opacity;
+        private void ClearLauncherFade()
+        {
+            _launcherViewController?.ClearFade();
+        }
 
-            Label label = entry as Label;
-            if (label == null)
-            {
-                label = entry.Q<Label>(className: "terminal-output-label");
-            }
+        private void ClampLauncherScroll()
+        {
+            _launcherViewController?.ClampScroll();
+        }
 
-            if (label != null)
-            {
-                label.style.opacity = opacity;
-            }
+        private void OnLogScrollValueChanged(float value)
+        {
+            _launcherViewController?.HandleScrollValueChanged(value);
         }
 
         private void RefreshStateButtons()
@@ -867,31 +808,27 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 measuredHistoryHeight = 0f;
             }
 
-            if (float.IsNaN(measuredHistoryHeight) || measuredHistoryHeight < 0f)
-            {
-                measuredHistoryHeight = 0f;
-            }
+            measuredHistoryHeight = LayoutMeasurementUtility.ClampPositive(measuredHistoryHeight);
 
             float sanitizedHistoryContentHeight = hasHistory
                 ? Mathf.Min(measuredHistoryHeight, historyLimit)
                 : 0f;
-            if (sanitizedHistoryContentHeight < 0f || float.IsNaN(sanitizedHistoryContentHeight))
-            {
-                sanitizedHistoryContentHeight = 0f;
-            }
+            sanitizedHistoryContentHeight = LayoutMeasurementUtility.ClampPositive(
+                sanitizedHistoryContentHeight
+            );
 
-            float rowHeightEstimate = LauncherEstimatedHistoryRowHeight;
-            if (hasHistory && sanitizedHistoryContentHeight > 0f && visibleHistoryCount > 0)
-            {
-                rowHeightEstimate = sanitizedHistoryContentHeight / visibleHistoryCount;
-            }
+            float rowHeightEstimate = LayoutMeasurementUtility.ComputeAverageRowHeight(
+                sanitizedHistoryContentHeight,
+                visibleHistoryCount,
+                LauncherEstimatedHistoryRowHeight
+            );
 
-            if (float.IsNaN(rowHeightEstimate) || rowHeightEstimate <= 0f)
-            {
-                rowHeightEstimate = LauncherEstimatedHistoryRowHeight;
-            }
-
-            rowHeightEstimate = Mathf.Clamp(rowHeightEstimate, 4f, 512f);
+            rowHeightEstimate = LayoutMeasurementUtility.ClampRowHeightEstimate(
+                rowHeightEstimate,
+                LauncherEstimatedHistoryRowHeight,
+                4f,
+                512f
+            );
 
             float suggestionsHeight = 0f;
             if (hasSuggestions)
@@ -912,19 +849,14 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 spacingAboveHistory = Mathf.Max(MinimumSpacing, LauncherAutoCompleteSpacing * 0.5f);
             }
 
-            float reservedSuggestionHeight;
-            if (isLauncherActive)
-            {
-                reservedSuggestionHeight = hasSuggestions
-                    ? suggestionsHeight + spacingAboveHistory
-                    : 0f;
-            }
-            else
-            {
-                float standardSpacing = Mathf.Max(2f, LauncherAutoCompleteSpacing * 0.25f);
-                reservedSuggestionHeight =
-                    suggestionsHeight > 0f ? suggestionsHeight + standardSpacing : 0f;
-            }
+            float reservedSuggestionHeight =
+                LayoutMeasurementUtility.ComputeReservedSuggestionHeight(
+                    isLauncherActive,
+                    hasSuggestions,
+                    suggestionsHeight,
+                    spacingAboveHistory,
+                    LauncherAutoCompleteSpacing
+                );
 
             float estimatedHistoryHeight = hasHistory
                 ? Mathf.Max(0f, visibleHistoryCount * rowHeightEstimate)
@@ -948,19 +880,19 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 fallbackHistoryHeight = Mathf.Min(sanitizedHistoryContentHeight, cappedEstimate);
             }
 
-            float desiredHistoryHeight = hasHistory ? Mathf.Max(0f, fallbackHistoryHeight) : 0f;
-            if (desiredHistoryHeight > historyLimit)
-            {
-                desiredHistoryHeight = historyLimit;
-            }
+            float desiredHistoryHeight = LayoutMeasurementUtility.ComputeDesiredHistoryHeight(
+                hasHistory,
+                fallbackHistoryHeight,
+                historyLimit
+            );
 
             float minimumHeight = (verticalPadding * 2f) + inputHeight + reservedSuggestionHeight;
             float desiredHeight = minimumHeight + desiredHistoryHeight;
             float clampedHeight = Mathf.Clamp(desiredHeight, minimumHeight, metrics.Height);
 
-            float historyTargetHeight = Mathf.Min(
-                historyLimit,
-                Mathf.Max(0f, clampedHeight - minimumHeight)
+            float historyTargetHeight = LayoutMeasurementUtility.ClampToHistoryLimit(
+                Mathf.Max(0f, clampedHeight - minimumHeight),
+                historyLimit
             );
             float cappedHeight = minimumHeight + historyTargetHeight;
             if (!Mathf.Approximately(cappedHeight, clampedHeight))

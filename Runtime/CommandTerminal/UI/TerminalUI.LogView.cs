@@ -59,7 +59,8 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         private void RefreshLogs()
         {
-            if (_logListView == null)
+            ListView logListView = _historyListAdapter?.ListView;
+            if (logListView == null)
             {
                 return;
             }
@@ -87,36 +88,37 @@ namespace WallstopStudios.DxCommandTerminal.UI
                     _logListItems.Add(logs[i]);
                 }
 
-                if (_logListView.itemsSource != _logListItems)
+                if (logListView.itemsSource != _logListItems)
                 {
-                    _logListView.itemsSource = _logListItems;
+                    logListView.itemsSource = _logListItems;
                 }
 
-                _logListView.Rebuild();
-                ConfigureEmptyLabel(_logListView);
+                logListView.Rebuild();
+                _historyListAdapter?.ConfigureEmptyLabel();
                 _lastSeenBufferVersion = log.Version;
                 _needsScrollToEnd = true;
             }
             else if (ShouldApplyHistoryFade())
             {
-                _logListView.RefreshItems();
-                ConfigureEmptyLabel(_logListView);
+                logListView.RefreshItems();
+                _historyListAdapter?.ConfigureEmptyLabel();
             }
 
-            ConfigureEmptyLabel(_logListView);
+            _historyListAdapter?.ConfigureEmptyLabel();
         }
 
         private void RefreshLauncherHistory()
         {
+            ListView logListView = _historyListAdapter?.ListView;
             CommandHistory history = ActiveHistory;
 
             if (history == null)
             {
                 _logListItems.Clear();
-                if (_logListView != null)
+                if (logListView != null)
                 {
-                    _logListView.Rebuild();
-                    ConfigureEmptyLabel(_logListView);
+                    logListView.Rebuild();
+                    _historyListAdapter?.ConfigureEmptyLabel();
                 }
                 else
                 {
@@ -125,9 +127,9 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 _lastRenderedLauncherHistoryVersion = -1;
                 _cachedLauncherScrollVersion = -1;
                 _cachedLauncherScrollValue = 0f;
-                _restoreLauncherScrollPending = false;
                 _launcherHistoryContentHeight = 0f;
                 _needsScrollToEnd = false;
+                _launcherViewController?.ClearFade();
                 return;
             }
 
@@ -139,10 +141,10 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 && _logListItems.Count == _launcherHistoryEntries.Count
             )
             {
-                if (_logListView != null && ShouldApplyHistoryFade())
+                if (logListView != null && ShouldApplyHistoryFade())
                 {
-                    _logListView.RefreshItems();
-                    ConfigureEmptyLabel(_logListView);
+                    logListView.RefreshItems();
+                    _historyListAdapter?.ConfigureEmptyLabel();
                 }
 
                 return;
@@ -155,15 +157,15 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 _logListItems.Add(new LogItem(TerminalLogType.Input, entry.Text, string.Empty));
             }
 
-            if (_logListView != null)
+            if (logListView != null)
             {
-                if (_logListView.itemsSource != _logListItems)
+                if (logListView.itemsSource != _logListItems)
                 {
-                    _logListView.itemsSource = _logListItems;
+                    logListView.itemsSource = _logListItems;
                 }
 
-                _logListView.Rebuild();
-                ConfigureEmptyLabel(_logListView);
+                logListView.Rebuild();
+                _historyListAdapter?.ConfigureEmptyLabel();
             }
             else
             {
@@ -173,6 +175,10 @@ namespace WallstopStudios.DxCommandTerminal.UI
             _cachedLauncherScrollVersion = historyVersion;
             _cachedLauncherScrollValue = 0f;
             _needsScrollToEnd = false;
+
+            _launcherViewController?.ClampScroll();
+            _launcherViewController?.UpdateFade();
+            _launcherViewController?.ScheduleFade();
         }
 
         private static void ApplyLogStyling(VisualElement logText, LogItem log)

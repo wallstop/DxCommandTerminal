@@ -24,7 +24,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         )]
         public static void CommandListThemes(CommandArg[] args)
         {
-            TerminalUI terminal = TerminalUI.Instance;
+            TerminalUI terminal = TerminalUI.ActiveTerminal;
             if (terminal == null)
             {
                 Terminal.Log(TerminalLogType.Warning, "No Terminal UI found.");
@@ -59,7 +59,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         )]
         public static void CommandListFonts(CommandArg[] args)
         {
-            TerminalUI terminal = TerminalUI.Instance;
+            TerminalUI terminal = TerminalUI.ActiveTerminal;
             if (terminal == null)
             {
                 Terminal.Log(TerminalLogType.Warning, "No Terminal UI found.");
@@ -105,7 +105,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         [CommandCompleter(typeof(Completers.ThemeArgumentCompleter))]
         public static void CommandSetTheme(CommandArg[] args)
         {
-            TerminalUI terminal = TerminalUI.Instance;
+            TerminalUI terminal = TerminalUI.ActiveTerminal;
             if (terminal == null)
             {
                 Terminal.Log(TerminalLogType.Warning, "No Terminal UI found.");
@@ -160,7 +160,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         [CommandCompleter(typeof(Completers.FontArgumentCompleter))]
         public static void CommandSetFont(CommandArg[] args)
         {
-            TerminalUI terminal = TerminalUI.Instance;
+            TerminalUI terminal = TerminalUI.ActiveTerminal;
             if (terminal == null)
             {
                 Terminal.Log(TerminalLogType.Warning, "No Terminal UI found.");
@@ -214,7 +214,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         )]
         public static void CommandGetTheme(CommandArg[] args)
         {
-            TerminalUI terminal = TerminalUI.Instance;
+            TerminalUI terminal = TerminalUI.ActiveTerminal;
             if (terminal == null)
             {
                 Terminal.Log(TerminalLogType.Warning, "No Terminal UI found.");
@@ -234,7 +234,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         )]
         public static void CommandGetFont(CommandArg[] args)
         {
-            TerminalUI terminal = TerminalUI.Instance;
+            TerminalUI terminal = TerminalUI.ActiveTerminal;
             if (terminal == null)
             {
                 Terminal.Log(TerminalLogType.Warning, "No Terminal UI found.");
@@ -257,7 +257,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         )]
         public static void CommandSetRandomTheme(CommandArg[] args)
         {
-            TerminalUI terminal = TerminalUI.Instance;
+            TerminalUI terminal = TerminalUI.ActiveTerminal;
             if (terminal == null)
             {
                 Terminal.Log(TerminalLogType.Warning, "No Terminal UI found.");
@@ -280,7 +280,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         // )]
         // public static void CommandSetFont(CommandArg[] args)
         // {
-        //     TerminalUI terminal = TerminalUI.Instance;
+        //     TerminalUI terminal = TerminalUI.ActiveTerminal;
         //     if (terminal == null)
         //     {
         //         Terminal.Log(TerminalLogType.Warning, "No Terminal UI found.");
@@ -319,7 +319,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         )]
         public static void CommandSetRandomFont(CommandArg[] args)
         {
-            TerminalUI terminal = TerminalUI.Instance;
+            TerminalUI terminal = TerminalUI.ActiveTerminal;
             if (terminal == null)
             {
                 Terminal.Log(TerminalLogType.Warning, "No Terminal UI found.");

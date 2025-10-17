@@ -56,6 +56,13 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         public static TerminalUI Instance { get; private set; }
 
+        public static ITerminalProvider TerminalProvider { get; set; } = TerminalRegistry.Default;
+
+        public static TerminalUI ActiveTerminal => TerminalProvider?.ActiveTerminal;
+
+        public static IReadOnlyList<TerminalUI> ActiveTerminals =>
+            TerminalProvider?.ActiveTerminals ?? System.Array.Empty<TerminalUI>();
+
         // ReSharper disable once MemberCanBePrivate.Global
         public bool IsClosed =>
             _state != TerminalState.OpenFull
@@ -284,6 +291,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
         private VisualElement _terminalContainer;
         private ScrollView _logScrollView;
         private ListView _logListView;
+        private HistoryListAdapter _historyListAdapter;
         private ScrollView _autoCompleteContainer;
         private VisualElement _autoCompleteViewport;
         private VisualElement _logViewport;
@@ -306,13 +314,14 @@ namespace WallstopStudios.DxCommandTerminal.UI
         private int? _lastCompletionAnchorCaretIndex;
         private readonly List<CommandHistoryEntry> _launcherHistoryEntries = new();
         private readonly List<LogItem> _logListItems = new();
+        private Action<float> _launcherScrollValueChangedHandler;
+        private LauncherViewController _launcherViewController;
 
         private float _launcherSuggestionContentHeight;
         private float _launcherHistoryContentHeight;
         private long _lastRenderedLauncherHistoryVersion = -1;
         private long _cachedLauncherScrollVersion = -1;
         private float _cachedLauncherScrollValue;
-        private bool _restoreLauncherScrollPending;
 
         // Cached for performance (avoids allocations)
         private readonly Action _focusInput;
@@ -497,7 +506,16 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 _input = DefaultTerminalInput.Instance;
             }
 
+            if (TerminalProvider == null)
+            {
+                TerminalProvider = TerminalRegistry.Default;
+            }
+
             Instance = this;
+            TerminalProvider.Register(this);
+
+            _launcherViewController = new LauncherViewController(this);
+            _historyListAdapter = new HistoryListAdapter(this, _logListItems);
 
 #if UNITY_EDITOR
             _serializedObject = new SerializedObject(this);
@@ -657,12 +675,11 @@ namespace WallstopStudios.DxCommandTerminal.UI
         {
             TerminalRuntimeCache.Store(_runtime);
 
-            if (Instance != this)
+            TerminalProvider?.Unregister(this);
+            if (Instance == this)
             {
-                return;
+                Instance = TerminalProvider?.ActiveTerminal;
             }
-
-            Instance = null;
         }
 
         private void Start()
@@ -1058,57 +1075,8 @@ namespace WallstopStudios.DxCommandTerminal.UI
             _terminalContainer.style.height = new StyleLength(_realWindowHeight);
             root.Add(_terminalContainer);
 
-            _logListView = new ListView
-            {
-                virtualizationMethod = CollectionVirtualizationMethod.DynamicHeight,
-                selectionType = SelectionType.None,
-                showAlternatingRowBackgrounds = AlternatingRowBackground.None,
-                name = "LogListView",
-            };
-            _logListView.makeItem = CreateLogListItem;
-            _logListView.bindItem = BindLogListItem;
-            _logListView.itemsSource = _logListItems;
-            ConfigureEmptyLabel(_logListView);
-            _terminalContainer.Add(_logListView);
-
-            EnsureLogScrollViewReady();
-
-            void EnsureLogScrollViewReady()
-            {
-                if (_logScrollView != null)
-                {
-                    return;
-                }
-
-                ScrollView listViewScrollView = _logListView.Q<ScrollView>();
-                if (listViewScrollView == null)
-                {
-                    _logListView.schedule.Execute(EnsureLogScrollViewReady).ExecuteLater(0);
-                    return;
-                }
-
-                _logScrollView = listViewScrollView;
-                InitializeScrollView(_logScrollView);
-                _logScrollView.AddToClassList("log-scroll-view");
-                ConfigureEmptyLabel(_logListView);
-
-                _logViewport = _logScrollView.contentViewport;
-                if (_logViewport != null)
-                {
-                    _logViewport.style.flexGrow = 1f;
-                    _logViewport.style.flexShrink = 1f;
-                    _logViewport.style.minHeight = 0f;
-                    _logViewport.style.overflow = Overflow.Hidden;
-                }
-
-                VisualElement logContent = _logScrollView.contentContainer;
-                logContent.style.flexDirection = FlexDirection.Column;
-                logContent.style.alignItems = Align.Stretch;
-                logContent.style.minHeight = 0f;
-                logContent.style.justifyContent = Justify.FlexEnd;
-                logContent.RegisterCallback<GeometryChangedEvent>(OnLogContentGeometryChanged);
-                ConfigureEmptyLabel(_logListView);
-            }
+            _historyListAdapter.EnsureInitialized(_terminalContainer);
+            _logListView = _historyListAdapter.ListView;
 
             _autoCompleteContainer = new ScrollView(ScrollViewMode.Horizontal)
             {
@@ -1465,7 +1433,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 .Every(_cursorBlinkRateMilliseconds);
         }
 
-        private static void InitializeScrollView(ScrollView scrollView)
+        private void InitializeScrollView(ScrollView scrollView)
         {
             VisualElement parent = scrollView.Q<VisualElement>(
                 className: "unity-scroller--vertical"
@@ -1491,6 +1459,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             ScrollBarCaptureState scrollBarCaptureState = ScrollBarCaptureState.None;
 
             RegisterCallbacks();
+            SetupScrollValueChanged();
             return;
 
             void RegisterCallbacks()
@@ -1566,6 +1535,19 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 {
                     trackerElement.RemoveFromClassList("dragger-hovered");
                 }
+            }
+
+            void SetupScrollValueChanged()
+            {
+                Scroller scroller = scrollView.verticalScroller;
+                if (scroller == null)
+                {
+                    scrollView.schedule.Execute(SetupScrollValueChanged).ExecuteLater(0);
+                    return;
+                }
+
+                scroller.valueChanged -= OnLogScrollValueChanged;
+                scroller.valueChanged += OnLogScrollValueChanged;
             }
         }
 
@@ -2083,6 +2065,31 @@ namespace WallstopStudios.DxCommandTerminal.UI
             InjectAutoCompleteContainerForTests(autoCompleteContainer);
         }
 
+        internal void AttachHistoryAdapterForTests(ListView listView, ScrollView scrollView)
+        {
+            if (_historyListAdapter == null)
+            {
+                _historyListAdapter = new HistoryListAdapter(this, _logListItems);
+            }
+
+            if (listView != null)
+            {
+                _logListView = listView;
+            }
+
+            if (scrollView != null)
+            {
+                _logScrollView = scrollView;
+            }
+
+            _historyListAdapter.InjectForTests(listView, scrollView);
+
+            if (_logListView == null)
+            {
+                _logListView = _historyListAdapter.ListView;
+            }
+        }
+
         internal void SetHintDisplayModeForTests(HintDisplayMode mode)
         {
             hintDisplayMode = mode;
@@ -2285,5 +2292,14 @@ namespace WallstopStudios.DxCommandTerminal.UI
             CommandLog log = runtime.Log;
             log?.EnqueueUnityLog(message, stackTrace, (TerminalLogType)type);
         }
+
+        internal float ComputeLauncherOpacityForTests(float normalized)
+        {
+            return _launcherViewController != null
+                ? _launcherViewController.ComputeOpacityForTests(normalized)
+                : 1f;
+        }
+
+        internal float LauncherFadeMinimumForTests => GetHistoryFadeMinimumOpacity();
     }
 }
