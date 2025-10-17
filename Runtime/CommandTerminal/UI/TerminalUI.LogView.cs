@@ -50,10 +50,10 @@ namespace WallstopStudios.DxCommandTerminal.UI
             float opacity;
             if (IsLauncherActive && _launcherMetricsInitialized)
             {
-                int maxVisible = Mathf.Max(1, _launcherMetrics.HistoryVisibleEntryCount);
-                int fadeWindow = Mathf.Min(totalCount, maxVisible);
-                int clampedIndex = Mathf.Clamp(index, 0, fadeWindow - 1);
-                opacity = ComputeLogOpacity(clampedIndex, fadeWindow);
+                int maximumVisible = Mathf.Max(1, _launcherMetrics.HistoryVisibleEntryCount);
+                int fadeWindow = Mathf.Min(totalCount, maximumVisible);
+                int fadeIndex = Mathf.Clamp(index, 0, fadeWindow - 1);
+                opacity = ComputeLogOpacity(fadeIndex, fadeWindow);
             }
             else
             {
@@ -229,7 +229,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
         {
             return _state switch
             {
-                TerminalState.OpenLauncher => 0.6f,
+                TerminalState.OpenLauncher => 1.0f,
                 TerminalState.OpenFull => 1.0f,
                 TerminalState.OpenSmall => 0.85f,
                 _ => 0.85f,

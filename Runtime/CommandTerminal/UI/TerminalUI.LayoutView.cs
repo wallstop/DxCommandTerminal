@@ -581,9 +581,88 @@ namespace WallstopStudios.DxCommandTerminal.UI
             if (_logScrollView != null)
             {
                 _logScrollView.verticalScrollerVisibility = ScrollerVisibility.Auto;
+                ApplyLauncherFade(snapshot);
             }
 
             ReportLauncherLayoutSnapshot(snapshot);
+        }
+
+        private void ApplyLauncherFade(LauncherLayoutSnapshot snapshot)
+        {
+            if (!IsLauncherActive || !_launcherMetricsInitialized || _logScrollView == null)
+            {
+                return;
+            }
+
+            void ExecuteFade()
+            {
+                VisualElement viewport = _logScrollView.contentViewport;
+                VisualElement historyContent = _logScrollView.contentContainer;
+                if (viewport == null || historyContent == null)
+                {
+                    return;
+                }
+
+                Rect viewportWorld = viewport.worldBound;
+                float viewportHeight = viewportWorld.height;
+                if (viewportHeight <= 0.01f)
+                {
+                    return;
+                }
+
+                float viewportTop = viewportWorld.yMin;
+                float viewportBottom = viewportWorld.yMax;
+
+                float rangeFactor = Mathf.Clamp01(GetHistoryFadeRangeFactor());
+                float exponent = Mathf.Max(0.01f, GetHistoryFadeExponent());
+                float minimumOpacity = Mathf.Clamp01(GetHistoryFadeMinimumOpacity());
+
+                int childCount = historyContent.childCount;
+                for (int i = 0; i < childCount; ++i)
+                {
+                    VisualElement entry = historyContent[i];
+                    if (entry == null || entry.resolvedStyle.display == DisplayStyle.None)
+                    {
+                        continue;
+                    }
+
+                    Rect entryBounds = entry.worldBound;
+                    float entryCenter = (entryBounds.yMin + entryBounds.yMax) * 0.5f;
+                    float clampedCenter = Mathf.Clamp(entryCenter, viewportTop, viewportBottom);
+                    float normalized = Mathf.Clamp01(
+                        (clampedCenter - viewportTop) / viewportHeight
+                    );
+
+                    float adjusted = Mathf.Pow(normalized * rangeFactor, exponent);
+                    float opacity = Mathf.Lerp(1f, minimumOpacity, adjusted);
+
+                    ApplyLauncherEntryOpacity(entry, opacity);
+                }
+            }
+
+            ExecuteFade();
+            _logScrollView.schedule.Execute(ExecuteFade).ExecuteLater(0);
+        }
+
+        private static void ApplyLauncherEntryOpacity(VisualElement entry, float opacity)
+        {
+            if (entry == null)
+            {
+                return;
+            }
+
+            entry.style.opacity = opacity;
+
+            Label label = entry as Label;
+            if (label == null)
+            {
+                label = entry.Q<Label>(className: "terminal-output-label");
+            }
+
+            if (label != null)
+            {
+                label.style.opacity = opacity;
+            }
         }
 
         private void RefreshStateButtons()

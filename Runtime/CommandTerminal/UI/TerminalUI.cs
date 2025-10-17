@@ -1105,7 +1105,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 logContent.style.flexDirection = FlexDirection.Column;
                 logContent.style.alignItems = Align.Stretch;
                 logContent.style.minHeight = 0f;
-                logContent.style.justifyContent = Justify.FlexStart;
+                logContent.style.justifyContent = Justify.FlexEnd;
                 logContent.RegisterCallback<GeometryChangedEvent>(OnLogContentGeometryChanged);
                 ConfigureEmptyLabel(_logListView);
             }
@@ -1571,10 +1571,35 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         private void ScrollToEnd()
         {
-            if (0 < _logScrollView?.verticalScroller.highValue)
+            if (_logScrollView == null)
             {
-                _logScrollView.verticalScroller.value = _logScrollView.verticalScroller.highValue;
+                return;
             }
+
+            void Execute()
+            {
+                if (_logScrollView == null)
+                {
+                    return;
+                }
+
+                Scroller scroller = _logScrollView.verticalScroller;
+                if (scroller == null)
+                {
+                    return;
+                }
+
+                float highValue = scroller.highValue;
+                if (highValue <= 0.01f)
+                {
+                    return;
+                }
+
+                scroller.value = highValue;
+            }
+
+            Execute();
+            _logScrollView.schedule.Execute(Execute).ExecuteLater(0);
         }
 
         public Font SetRandomFont(bool persist = false)
