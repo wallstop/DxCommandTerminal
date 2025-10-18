@@ -36,11 +36,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             bool autoCompleteRecreated = EnsureAutoComplete(
                 forceReset || historyRecreated || shellRecreated
             );
-            bool commandsRefreshed = EnsureShellConfiguration(
-                settings,
-                forceReset,
-                shellRecreated
-            );
+            bool commandsRefreshed = EnsureShellConfiguration(settings, forceReset, shellRecreated);
 
             return new TerminalRuntimeUpdateResult(
                 logRecreated,
@@ -148,8 +144,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 }
                 else
                 {
-                    bool ignoreFlagChanged = _appliedIgnoreDefaultCommands
-                        != settings.IgnoreDefaultCommands;
+                    bool ignoreFlagChanged =
+                        _appliedIgnoreDefaultCommands != settings.IgnoreDefaultCommands;
                     if (ignoreFlagChanged)
                     {
                         shouldRefreshCommands = true;

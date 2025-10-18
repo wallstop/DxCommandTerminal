@@ -225,7 +225,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [UnityTest]
         public IEnumerator RuntimeProfileOverridesEmbeddedSettings()
         {
-            TerminalRuntimeProfile profile = ScriptableObject.CreateInstance<TerminalRuntimeProfile>();
+            TerminalRuntimeProfile profile =
+                ScriptableObject.CreateInstance<TerminalRuntimeProfile>();
             _runtimeProfileUnderTest = profile;
 
             profile.ConfigureForTests(
@@ -259,7 +260,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [UnityTest]
         public IEnumerator AppearanceProfileOverridesSerializedFields()
         {
-            TerminalAppearanceProfile profile = ScriptableObject.CreateInstance<TerminalAppearanceProfile>();
+            TerminalAppearanceProfile profile =
+                ScriptableObject.CreateInstance<TerminalAppearanceProfile>();
             _appearanceProfileUnderTest = profile;
             profile.showGUIButtons = false;
             profile.runButtonText = "execute";
@@ -289,7 +291,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreEqual("apps", terminal.launcherButtonText);
             Assert.AreEqual(HintDisplayMode.Always, terminal.hintDisplayMode);
             Assert.IsFalse(terminal.makeHintsClickable);
-            Assert.AreEqual(TerminalHistoryFadeTargets.Launcher, terminal.HistoryFadeTargetsForTests);
+            Assert.AreEqual(
+                TerminalHistoryFadeTargets.Launcher,
+                terminal.HistoryFadeTargetsForTests
+            );
             Assert.AreEqual(250, terminal.CursorBlinkRateForTests);
             Assert.IsTrue(terminal.LogUnityMessagesForTests);
 
@@ -300,7 +305,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [UnityTest]
         public IEnumerator CommandProfileOverridesShellConfiguration()
         {
-            TerminalCommandProfile profile = ScriptableObject.CreateInstance<TerminalCommandProfile>();
+            TerminalCommandProfile profile =
+                ScriptableObject.CreateInstance<TerminalCommandProfile>();
             _commandProfileUnderTest = profile;
             profile.ignoreDefaultCommands = true;
             profile.disabledCommands = new List<string> { "help" };
@@ -316,10 +322,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Assert.IsTrue(terminal.ignoreDefaultCommands);
             CollectionAssert.Contains(terminal.DisabledCommandsForTests, "help");
-            CollectionAssert.Contains(
-                terminal.IgnoredLogTypesForTests,
-                TerminalLogType.Warning
-            );
+            CollectionAssert.Contains(terminal.IgnoredLogTypesForTests, TerminalLogType.Warning);
 
             CommandShell shell = terminal.Runtime.Shell;
             Assert.IsTrue(shell.IgnoringDefaultCommands);

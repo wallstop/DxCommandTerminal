@@ -137,7 +137,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             TerminalUI terminal = TerminalUI.Instance;
             Assert.IsNotNull(terminal);
 
-            TerminalKeyboardController controller = terminal.gameObject.AddComponent<TerminalKeyboardController>();
+            TerminalKeyboardController controller =
+                terminal.gameObject.AddComponent<TerminalKeyboardController>();
             controller.terminal = terminal;
 
             yield return null;

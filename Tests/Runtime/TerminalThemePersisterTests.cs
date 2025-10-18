@@ -21,8 +21,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             TerminalUI terminal = TerminalUI.Instance;
             Assert.IsNotNull(terminal);
 
-            TerminalThemePersister persister = terminal.gameObject.AddComponent<TerminalThemePersister>();
-            TerminalThemePersistenceProfile profile = ScriptableObject.CreateInstance<TerminalThemePersistenceProfile>();
+            TerminalThemePersister persister =
+                terminal.gameObject.AddComponent<TerminalThemePersister>();
+            TerminalThemePersistenceProfile profile =
+                ScriptableObject.CreateInstance<TerminalThemePersistenceProfile>();
             profile.enablePersistence = false;
             persister.SetPersistenceProfileForTests(profile);
 

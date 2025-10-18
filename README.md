@@ -71,8 +71,8 @@ Terminals register themselves with an `ITerminalProvider` (`TerminalRegistry` by
 
 `TerminalUI` obtains its input via an `ITerminalInputProvider`. The default proxy returns `DefaultTerminalInput.Instance`, but you can supply your own provider (e.g., during tests or to integrate with a custom input system) by assigning `TerminalUI.InputProvider`.
 
-
 `TerminalUI` resolves runtime modes through an `ITerminalRuntimeConfigurator`. The default proxy wraps the legacy static `TerminalRuntimeConfig`, but you can inject your own implementation (for example, in tests or specialized runtime scenarios) via `TerminalUI.RuntimeConfigurator`.
+
 - Fixed a bug where enabling and disabling the Terminal would break AutoComplete
 - Fixed a bug where you could interact with the terminal when it was in closed state
 - Fixed a bug where commands run programmatically were not added to history
@@ -107,6 +107,7 @@ Terminals register themselves with an `ITerminalProvider` (`TerminalRegistry` by
 - **Allocation guardrails** – An automated playmode test (`AllocationRegressionTests`) monitors `GC.Alloc` while issuing commands and toggling terminal state to catch regressions immediately.
 
 ### Test Coverage Snapshot
+
 - `TerminalRuntimeTests` validate runtime reuse/reset logic across multiple terminal spawns.
 - `TerminalKeyboardControllerTests` exercise the new input abstraction path with both mocked targets and real `TerminalUI` fallbacks.
 - `AllocationRegressionTests` enforce zero-allocation behaviour during command spam, history navigation, and resize toggles.

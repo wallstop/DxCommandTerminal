@@ -113,7 +113,8 @@ namespace WallstopStudios.DxCommandTerminal.Helper
             int startIndex = projectRoot.EndsWith("/", StringComparison.OrdinalIgnoreCase)
                 ? projectRoot.Length
                 : projectRoot.Length + 1;
-            string tail = absolutePath.Length > startIndex ? absolutePath[startIndex..] : string.Empty;
+            string tail =
+                absolutePath.Length > startIndex ? absolutePath[startIndex..] : string.Empty;
             if (string.IsNullOrEmpty(tail))
             {
                 return string.Empty;

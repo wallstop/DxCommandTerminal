@@ -192,7 +192,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Terminal.Buffer?.DrainPending();
             LogItem timeLog = GetLastLog(
                 Terminal.Buffer,
-                item => item.type == TerminalLogType.ShellMessage && item.message.StartsWith("Time:")
+                item =>
+                    item.type == TerminalLogType.ShellMessage && item.message.StartsWith("Time:")
             );
             StringAssert.StartsWith("Time:", timeLog.message);
             Assert.Greater(Terminal.Buffer.Logs.Count, initialCount);
@@ -419,17 +420,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Assert.IsTrue(shell.RunCommand("set-random-font"));
             Terminal.Buffer?.DrainPending();
-            bool hasNoFontsWarning = Terminal
-                .Buffer
-                .Logs
-                .Any(
-                    item =>
-                        !string.IsNullOrEmpty(item.message)
-                        && item.message.IndexOf(
-                            "No fonts available",
-                            StringComparison.OrdinalIgnoreCase
-                        ) >= 0
-                );
+            bool hasNoFontsWarning = Terminal.Buffer.Logs.Any(item =>
+                !string.IsNullOrEmpty(item.message)
+                && item.message.IndexOf("No fonts available", StringComparison.OrdinalIgnoreCase)
+                    >= 0
+            );
 
             Assert.IsTrue(
                 hasNoFontsWarning,

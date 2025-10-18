@@ -363,8 +363,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             bool executed = shell.RunCommand("log test-history");
             Assert.IsTrue(executed, "Expected log command to execute successfully");
 
-            string[] entries =
-                history.GetHistory(onlySuccess: false, onlyErrorFree: false).ToArray();
+            string[] entries = history
+                .GetHistory(onlySuccess: false, onlyErrorFree: false)
+                .ToArray();
             CollectionAssert.Contains(entries, "log test-history");
 
             shell.RunCommand("clear-history");

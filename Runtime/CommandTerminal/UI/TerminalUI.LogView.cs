@@ -47,13 +47,12 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 totalCount = 1;
             }
 
-            if (IsLauncherActive && _launcherMetricsInitialized)
+            bool shouldUseLauncherFade = IsLauncherActive && _launcherMetricsInitialized;
+            element.style.opacity = ComputeLogOpacity(index, totalCount);
+
+            if (shouldUseLauncherFade)
             {
-                element.style.opacity = 1f;
-            }
-            else
-            {
-                element.style.opacity = ComputeLogOpacity(index, totalCount);
+                _launcherViewController?.ScheduleFade();
             }
         }
 

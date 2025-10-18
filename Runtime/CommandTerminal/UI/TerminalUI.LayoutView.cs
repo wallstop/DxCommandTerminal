@@ -352,9 +352,9 @@ namespace WallstopStudios.DxCommandTerminal.UI
             );
             if (_logScrollView != null)
             {
-                _logScrollView.verticalScrollerVisibility = ScrollerVisibility.Auto;
                 _historyListAdapter?.SetJustification(Justify.FlexEnd);
                 _launcherViewController?.ConfigureForStandardMode();
+                RestoreStandardScrollBounds();
             }
 
             _autoCompleteContainer.style.position = Position.Relative;
@@ -565,6 +565,14 @@ namespace WallstopStudios.DxCommandTerminal.UI
             float availableForHistory = snapshot.AvailableHistoryHeight;
             float spacingAboveLog = snapshot.SpacingAboveHistory;
 
+            bool hasHistoryOverflow =
+                hasHistoryContent
+                && (
+                    _logListItems.Count > snapshot.VisibleHistoryCount
+                    || snapshot.HistoryMeasuredHeight > availableForHistory + 0.5f
+                    || snapshot.HistoryEstimatedHeight > availableForHistory + 0.5f
+                );
+
             if (availableForHistory <= 0.01f || !hasHistoryContent)
             {
                 ApplyLogDisplay(
@@ -596,7 +604,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             if (_logScrollView != null)
             {
-                _logScrollView.verticalScrollerVisibility = ScrollerVisibility.Auto;
+                UpdateLauncherScrollBar(snapshot, hasHistoryOverflow);
                 _historyListAdapter?.SetJustification(Justify.FlexStart);
                 _launcherViewController?.ConfigureForLauncherMode();
                 _launcherViewController?.ClampScroll();
@@ -615,6 +623,81 @@ namespace WallstopStudios.DxCommandTerminal.UI
         private void RequestLauncherFade()
         {
             _launcherViewController?.ScheduleFade();
+        }
+
+        private void UpdateLauncherScrollBar(LauncherLayoutSnapshot snapshot, bool shouldShow)
+        {
+            ScrollView scrollView = _logScrollView;
+            if (scrollView == null)
+            {
+                return;
+            }
+
+            scrollView.verticalScrollerVisibility = shouldShow
+                ? ScrollerVisibility.Auto
+                : ScrollerVisibility.Hidden;
+
+            Scroller scroller = scrollView.verticalScroller;
+            if (scroller == null)
+            {
+                return;
+            }
+
+            scroller.style.display = shouldShow ? DisplayStyle.Flex : DisplayStyle.None;
+
+            float availableHeight = scrollView.contentViewport?.layout.height ?? 0f;
+            float measuredHeight = Mathf.Max(
+                _launcherHistoryContentHeight,
+                LayoutMeasurementUtility.ClampPositive(scrollView.contentContainer.layout.height),
+                snapshot.HistoryMeasuredHeight
+            );
+
+            float estimatedHeight = Mathf.Max(
+                measuredHeight,
+                snapshot.HistoryEstimatedHeight,
+                snapshot.VisibleHistoryCount * snapshot.HistoryRowHeightEstimate
+            );
+
+            if (_logListItems.Count > snapshot.VisibleHistoryCount)
+            {
+                float countBasedEstimate = _logListItems.Count * snapshot.HistoryRowHeightEstimate;
+                estimatedHeight = Mathf.Max(estimatedHeight, countBasedEstimate);
+            }
+
+            float scrollRange = Mathf.Max(0f, estimatedHeight - availableHeight);
+            scroller.highValue = scrollRange;
+            scroller.value = Mathf.Clamp(scroller.value, scroller.lowValue, scroller.highValue);
+        }
+
+        private void RestoreStandardScrollBounds()
+        {
+            ScrollView scrollView = _logScrollView;
+            if (scrollView == null)
+            {
+                return;
+            }
+
+            scrollView.verticalScrollerVisibility = ScrollerVisibility.Auto;
+
+            void AdjustBounds()
+            {
+                Scroller scroller = scrollView.verticalScroller;
+                if (scroller == null)
+                {
+                    return;
+                }
+
+                scroller.style.display = DisplayStyle.Flex;
+
+                float viewportHeight = scrollView.contentViewport?.layout.height ?? 0f;
+                float contentHeight = scrollView.contentContainer?.layout.height ?? 0f;
+                float scrollRange = Mathf.Max(0f, contentHeight - viewportHeight);
+                scroller.highValue = scrollRange;
+                scroller.value = Mathf.Clamp(scroller.value, scroller.lowValue, scroller.highValue);
+            }
+
+            AdjustBounds();
+            scrollView.schedule.Execute(AdjustBounds).ExecuteLater(0);
         }
 
         private void ClearLauncherFade()

@@ -376,7 +376,13 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return false;
             }
 
-            if (!TryResolveCommand(originalCommandName, out string canonicalName, out CommandInfo command))
+            if (
+                !TryResolveCommand(
+                    originalCommandName,
+                    out string canonicalName,
+                    out CommandInfo command
+                )
+            )
             {
                 string originalLine = BuildCommandLine(originalCommandName, arguments);
                 IssueErrorMessage($"Command {originalCommandName} not found");
@@ -599,15 +605,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             bool includeInHistory = true
         )
         {
-            CommandInfo info = new(
-                proc,
-                minArgs,
-                maxArgs,
-                help,
-                hint,
-                completer,
-                includeInHistory
-            );
+            CommandInfo info = new(proc, minArgs, maxArgs, help, hint, completer, includeInHistory);
             return AddCommand(name, info);
         }
 

@@ -1,12 +1,12 @@
 #if UNITY_EDITOR
 namespace WallstopStudios.DxCommandTerminal.Editor.Diagnostics
 {
-    using UnityEditor;
     using Backend;
+    using UnityEditor;
 
     public sealed class TerminalRuntimeInspectorWindow : EditorWindow
     {
-        [MenuItem("Window/DX Command Terminal/Runtime Inspector")] 
+        [MenuItem("Window/DX Command Terminal/Runtime Inspector")]
         private static void Open()
         {
             TerminalRuntimeInspectorWindow window = GetWindow<TerminalRuntimeInspectorWindow>();
@@ -24,10 +24,19 @@ namespace WallstopStudios.DxCommandTerminal.Editor.Diagnostics
             }
 
             EditorGUILayout.LabelField("Active Runtime", EditorStyles.boldLabel);
-            EditorGUILayout.LabelField("Commands", runtime.Shell?.Commands?.Count.ToString() ?? "n/a");
-            EditorGUILayout.LabelField("History Entries", runtime.History?.Count.ToString() ?? "n/a");
+            EditorGUILayout.LabelField(
+                "Commands",
+                runtime.Shell?.Commands?.Count.ToString() ?? "n/a"
+            );
+            EditorGUILayout.LabelField(
+                "History Entries",
+                runtime.History?.Count.ToString() ?? "n/a"
+            );
             EditorGUILayout.LabelField("Log Capacity", runtime.Log?.Capacity.ToString() ?? "n/a");
-            EditorGUILayout.LabelField("Autocomplete", runtime.AutoComplete != null ? "Available" : "Missing");
+            EditorGUILayout.LabelField(
+                "Autocomplete",
+                runtime.AutoComplete != null ? "Available" : "Missing"
+            );
         }
     }
 }

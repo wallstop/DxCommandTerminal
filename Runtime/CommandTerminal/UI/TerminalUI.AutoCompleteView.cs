@@ -167,11 +167,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 return;
             }
 
-            int clampedIndex = Mathf.Clamp(
-                _lastCompletionIndex.Value,
-                0,
-                suggestionCount - 1
-            );
+            int clampedIndex = Mathf.Clamp(_lastCompletionIndex.Value, 0, suggestionCount - 1);
             if (clampedIndex != _lastCompletionIndex.Value)
             {
                 _lastCompletionIndex = clampedIndex;
@@ -209,11 +205,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                     _commandInput != null
                         ? _commandInput.cursorIndex
                         : (_lastKnownCommandText?.Length ?? 0);
-                autoComplete.Complete(
-                    _lastKnownCommandText,
-                    caret,
-                    _lastCompletionBufferTempCache
-                );
+                autoComplete.Complete(_lastKnownCommandText, caret, _lastCompletionBufferTempCache);
                 bool equivalent =
                     _lastCompletionBufferTempCache.Count == _lastCompletionBuffer.Count;
                 if (equivalent)

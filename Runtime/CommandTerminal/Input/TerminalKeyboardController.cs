@@ -163,7 +163,6 @@ namespace WallstopStudios.DxCommandTerminal.Input
                     this
                 );
             }
-
         }
 
         protected virtual void Update()

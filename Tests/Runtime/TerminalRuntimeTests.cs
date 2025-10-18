@@ -76,11 +76,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             TerminalRuntime runtime = new TerminalRuntime();
             runtime.Configure(CreateSettings(), forceReset: true);
 
-            bool logged = runtime.LogMessage(
-                TerminalLogType.Message,
-                "hello {0}",
-                "world"
-            );
+            bool logged = runtime.LogMessage(TerminalLogType.Message, "hello {0}", "world");
 
             Assert.IsTrue(logged);
 
