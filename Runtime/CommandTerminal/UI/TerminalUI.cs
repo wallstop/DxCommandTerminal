@@ -299,6 +299,10 @@ namespace WallstopStudios.DxCommandTerminal.UI
         private bool _launcherMetricsInitialized;
         private bool _isClosingLauncher;
         private bool _isClosingStandard;
+        private bool _hasCachedStandardScroll;
+        private bool _restoreStandardScrollPending;
+        private float _cachedStandardScrollValue;
+        private long _cachedStandardLogVersion;
 
         private VisualElement _terminalContainer;
         private ScrollView _logScrollView;
@@ -959,6 +963,13 @@ namespace WallstopStudios.DxCommandTerminal.UI
             {
                 CacheLauncherScrollPosition();
             }
+            if (
+                (_state == TerminalState.OpenSmall || _state == TerminalState.OpenFull)
+                && newState == TerminalState.Closed
+            )
+            {
+                CacheStandardScrollPosition();
+            }
 
             _commandIssuedThisFrame = true;
             _previousState = _state;
@@ -978,7 +989,29 @@ namespace WallstopStudios.DxCommandTerminal.UI
             if (_state == TerminalState.OpenSmall || _state == TerminalState.OpenFull)
             {
                 _isClosingStandard = false;
-                _needsScrollToEnd = true;
+                if (_hasCachedStandardScroll)
+                {
+                    CommandLog log = ActiveLog;
+                    if (log != null && log.Version == _cachedStandardLogVersion)
+                    {
+                        _restoreStandardScrollPending = true;
+                        _needsScrollToEnd = false;
+                    }
+                    else
+                    {
+                        _restoreStandardScrollPending = false;
+                        _needsScrollToEnd = true;
+                    }
+                }
+                else
+                {
+                    _restoreStandardScrollPending = false;
+                    _needsScrollToEnd = true;
+                }
+            }
+            else if (!_isClosingStandard)
+            {
+                _restoreStandardScrollPending = false;
             }
             if (_isClosingStandard)
             {
@@ -1023,6 +1056,34 @@ namespace WallstopStudios.DxCommandTerminal.UI
             _cachedLauncherScrollVersion = history.Version;
             Scroller verticalScroller = _logScrollView.verticalScroller;
             _cachedLauncherScrollValue = verticalScroller != null ? verticalScroller.value : 0f;
+        }
+
+        private void CacheStandardScrollPosition()
+        {
+            if (_logScrollView == null)
+            {
+                _hasCachedStandardScroll = false;
+                _cachedStandardScrollValue = 0f;
+                _cachedStandardLogVersion = -1;
+                _restoreStandardScrollPending = false;
+                return;
+            }
+
+            Scroller scroller = _logScrollView.verticalScroller;
+            if (scroller == null)
+            {
+                _hasCachedStandardScroll = false;
+                _cachedStandardScrollValue = 0f;
+                _cachedStandardLogVersion = -1;
+                _restoreStandardScrollPending = false;
+                return;
+            }
+
+            CommandLog log = ActiveLog;
+            _cachedStandardScrollValue = scroller.value;
+            _cachedStandardLogVersion = log?.Version ?? -1;
+            _hasCachedStandardScroll = true;
+            _restoreStandardScrollPending = false;
         }
 
         private static bool ListsEqual<T>(List<T> a, List<T> b)
@@ -1589,6 +1650,8 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         private void ScrollToEnd()
         {
+            _restoreStandardScrollPending = false;
+
             if (_logScrollView == null)
             {
                 return;

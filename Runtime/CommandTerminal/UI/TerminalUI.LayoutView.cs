@@ -748,7 +748,30 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 }
 
                 scroller.style.display = StyleKeyword.Null;
-                scroller.value = Mathf.Clamp(scroller.value, scroller.lowValue, scroller.highValue);
+
+                float clampedValue = Mathf.Clamp(
+                    scroller.value,
+                    scroller.lowValue,
+                    scroller.highValue
+                );
+                if (!Mathf.Approximately(clampedValue, scroller.value))
+                {
+                    scroller.value = clampedValue;
+                }
+
+                if (_restoreStandardScrollPending && _hasCachedStandardScroll)
+                {
+                    float restored = Mathf.Clamp(
+                        _cachedStandardScrollValue,
+                        scroller.lowValue,
+                        scroller.highValue
+                    );
+                    scroller.value = restored;
+                    UpdateStandardScrollAlignment(scroller.value);
+                    _restoreStandardScrollPending = false;
+                    return;
+                }
+
                 if (_isClosingStandard)
                 {
                     _historyListAdapter?.SetJustification(Justify.FlexEnd);
@@ -759,7 +782,48 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
 
             AdjustBounds();
-            scrollView.schedule.Execute(AdjustBounds).ExecuteLater(0);
+            scrollView
+                .schedule.Execute(() =>
+                {
+                    Scroller scroller = scrollView.verticalScroller;
+                    if (scroller == null)
+                    {
+                        return;
+                    }
+
+                    scroller.style.display = StyleKeyword.Null;
+                    float clampedValue = Mathf.Clamp(
+                        scroller.value,
+                        scroller.lowValue,
+                        scroller.highValue
+                    );
+                    if (!Mathf.Approximately(clampedValue, scroller.value))
+                    {
+                        scroller.value = clampedValue;
+                    }
+
+                    if (_restoreStandardScrollPending && _hasCachedStandardScroll)
+                    {
+                        float restored = Mathf.Clamp(
+                            _cachedStandardScrollValue,
+                            scroller.lowValue,
+                            scroller.highValue
+                        );
+                        scroller.value = restored;
+                        UpdateStandardScrollAlignment(scroller.value);
+                        _restoreStandardScrollPending = false;
+                        return;
+                    }
+
+                    if (_isClosingStandard)
+                    {
+                        _historyListAdapter?.SetJustification(Justify.FlexEnd);
+                        return;
+                    }
+
+                    UpdateStandardScrollAlignment(scroller.value);
+                })
+                .ExecuteLater(0);
         }
 
         private void ClearLauncherFade()
@@ -780,12 +844,17 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 return;
             }
 
+            if (_isClosingStandard)
+            {
+                return;
+            }
+
             UpdateStandardScrollAlignment(value);
         }
 
         private void UpdateStandardScrollAlignment()
         {
-            if (_logScrollView == null)
+            if (_logScrollView == null || _isClosingStandard)
             {
                 return;
             }
@@ -801,7 +870,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         private void UpdateStandardScrollAlignment(float scrollerValue)
         {
-            if (IsLauncherActive)
+            if (IsLauncherActive || _isClosingStandard)
             {
                 return;
             }

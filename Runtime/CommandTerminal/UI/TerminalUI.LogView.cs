@@ -81,6 +81,8 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             if (dirty)
             {
+                _restoreStandardScrollPending = false;
+                _hasCachedStandardScroll = false;
                 _logListItems.Clear();
                 for (int i = 0; i < logs.Count; ++i)
                 {
