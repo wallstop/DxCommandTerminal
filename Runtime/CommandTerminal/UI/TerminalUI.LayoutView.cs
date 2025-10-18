@@ -749,6 +749,12 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
                 scroller.style.display = StyleKeyword.Null;
                 scroller.value = Mathf.Clamp(scroller.value, scroller.lowValue, scroller.highValue);
+                if (_isClosingStandard)
+                {
+                    _historyListAdapter?.SetJustification(Justify.FlexEnd);
+                    return;
+                }
+
                 UpdateStandardScrollAlignment(scroller.value);
             }
 

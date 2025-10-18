@@ -298,6 +298,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
         private LauncherLayoutMetrics _launcherMetrics;
         private bool _launcherMetricsInitialized;
         private bool _isClosingLauncher;
+        private bool _isClosingStandard;
 
         private VisualElement _terminalContainer;
         private ScrollView _logScrollView;
@@ -964,9 +965,24 @@ namespace WallstopStudios.DxCommandTerminal.UI
             _state = newState;
             _isClosingLauncher =
                 _previousState == TerminalState.OpenLauncher && newState == TerminalState.Closed;
+            _isClosingStandard =
+                (
+                    _previousState == TerminalState.OpenSmall
+                    || _previousState == TerminalState.OpenFull
+                )
+                && newState == TerminalState.Closed;
             if (_state == TerminalState.OpenLauncher)
             {
                 _isClosingLauncher = false;
+            }
+            if (_state == TerminalState.OpenSmall || _state == TerminalState.OpenFull)
+            {
+                _isClosingStandard = false;
+                _needsScrollToEnd = true;
+            }
+            if (_isClosingStandard)
+            {
+                _historyListAdapter?.SetJustification(Justify.FlexEnd);
             }
             ResetWindowIdempotent();
             if (_state != TerminalState.Closed)
@@ -2273,6 +2289,10 @@ namespace WallstopStudios.DxCommandTerminal.UI
                     _launcherSuggestionContentHeight = 0f;
                     _launcherHistoryContentHeight = 0f;
                 }
+                if (_isClosingStandard)
+                {
+                    _isClosingStandard = false;
+                }
                 return;
             }
 
@@ -2317,6 +2337,10 @@ namespace WallstopStudios.DxCommandTerminal.UI
                     _launcherMetricsInitialized = false;
                     _launcherSuggestionContentHeight = 0f;
                     _launcherHistoryContentHeight = 0f;
+                }
+                if (_isClosingStandard)
+                {
+                    _isClosingStandard = false;
                 }
             }
         }
