@@ -297,6 +297,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
         private bool _useLauncherAnimationTiming;
         private LauncherLayoutMetrics _launcherMetrics;
         private bool _launcherMetricsInitialized;
+        private bool _isClosingLauncher;
 
         private VisualElement _terminalContainer;
         private ScrollView _logScrollView;
@@ -961,7 +962,12 @@ namespace WallstopStudios.DxCommandTerminal.UI
             _commandIssuedThisFrame = true;
             _previousState = _state;
             _state = newState;
-            if (_state == TerminalState.OpenLauncher) { }
+            _isClosingLauncher =
+                _previousState == TerminalState.OpenLauncher && newState == TerminalState.Closed;
+            if (_state == TerminalState.OpenLauncher)
+            {
+                _isClosingLauncher = false;
+            }
             ResetWindowIdempotent();
             if (_state != TerminalState.Closed)
             {
@@ -2221,7 +2227,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             _isAnimating = true;
             bool isExpanding = _targetWindowHeight > _initialWindowHeight;
             _useLauncherAnimationTiming =
-                _state == TerminalState.OpenLauncher
+                (_state == TerminalState.OpenLauncher || _isClosingLauncher)
                 && (isExpanding || _launcherMetricsInitialized);
         }
 
@@ -2260,6 +2266,13 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 _currentWindowHeight = _targetWindowHeight;
                 _isAnimating = false;
                 _useLauncherAnimationTiming = false;
+                if (_isClosingLauncher)
+                {
+                    _isClosingLauncher = false;
+                    _launcherMetricsInitialized = false;
+                    _launcherSuggestionContentHeight = 0f;
+                    _launcherHistoryContentHeight = 0f;
+                }
                 return;
             }
 
@@ -2298,6 +2311,13 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 _currentWindowHeight = _targetWindowHeight;
                 _isAnimating = false;
                 _useLauncherAnimationTiming = false;
+                if (_isClosingLauncher)
+                {
+                    _isClosingLauncher = false;
+                    _launcherMetricsInitialized = false;
+                    _launcherSuggestionContentHeight = 0f;
+                    _launcherHistoryContentHeight = 0f;
+                }
             }
         }
 

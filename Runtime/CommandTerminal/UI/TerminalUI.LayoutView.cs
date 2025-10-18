@@ -22,7 +22,9 @@ namespace WallstopStudios.DxCommandTerminal.UI
             float screenWidth = Screen.width;
             float screenHeight = Screen.height;
 
-            if (IsLauncherActive && _launcherMetricsInitialized)
+            bool useLauncherLayout =
+                _launcherMetricsInitialized && (IsLauncherActive || _isClosingLauncher);
+            if (useLauncherLayout)
             {
                 ApplyLauncherLayout(screenWidth, screenHeight);
                 UpdateLauncherLayoutMetrics();
@@ -106,7 +108,8 @@ namespace WallstopStudios.DxCommandTerminal.UI
             int width = Screen.width;
             float oldTargetHeight = _targetWindowHeight;
             bool wasLauncher = _launcherMetricsInitialized;
-            if (_state != TerminalState.OpenLauncher)
+            bool closingLauncher = _isClosingLauncher && wasLauncher;
+            if (_state != TerminalState.OpenLauncher && !closingLauncher)
             {
                 _launcherSuggestionContentHeight = 0f;
                 _launcherHistoryContentHeight = 0f;
@@ -166,8 +169,16 @@ namespace WallstopStudios.DxCommandTerminal.UI
                     }
                     default:
                     {
-                        _launcherMetricsInitialized = false;
-                        _realWindowHeight = height * maxHeight * smallTerminalRatio;
+                        bool keepLauncherMetrics = closingLauncher && wasLauncher;
+                        if (!keepLauncherMetrics)
+                        {
+                            _launcherMetricsInitialized = false;
+                            _launcherSuggestionContentHeight = 0f;
+                            _launcherHistoryContentHeight = 0f;
+                        }
+                        _realWindowHeight = keepLauncherMetrics
+                            ? Mathf.Max(_currentWindowHeight, 0f)
+                            : height * maxHeight * smallTerminalRatio;
                         _targetWindowHeight = 0;
                         break;
                     }
@@ -385,7 +396,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         private void UpdateLauncherLayoutMetrics()
         {
-            if (!IsLauncherActive || !_launcherMetricsInitialized)
+            if ((!IsLauncherActive && !_isClosingLauncher) || !_launcherMetricsInitialized)
             {
                 return;
             }
@@ -516,7 +527,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 horizontalPadding,
                 verticalPadding,
                 inputHeight,
-                IsLauncherActive,
+                IsLauncherActive || _isClosingLauncher,
                 hasSuggestions,
                 effectiveSuggestionHeight,
                 visibleHistoryCount,
@@ -1041,7 +1052,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             float reservedSuggestionHeight =
                 LayoutMeasurementUtility.ComputeReservedSuggestionHeight(
-                    isLauncherActive,
+                    IsLauncherActive || _isClosingLauncher,
                     hasSuggestions,
                     suggestionsHeight,
                     spacingAboveHistory,
@@ -1101,7 +1112,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 horizontalPadding,
                 verticalPadding,
                 inputHeight,
-                isLauncherActive,
+                IsLauncherActive || _isClosingLauncher,
                 hasSuggestions,
                 suggestionsHeight,
                 reservedSuggestionHeight,
