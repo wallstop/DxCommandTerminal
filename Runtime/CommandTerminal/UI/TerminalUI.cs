@@ -1719,25 +1719,13 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
 
             float highValue = scroller.highValue;
-            float contentHeight =
-                scrollView.contentContainer != null
-                    ? scrollView.contentContainer.layout.height
-                    : 0f;
-            float viewportHeight =
-                scrollView.contentViewport != null ? scrollView.contentViewport.layout.height : 0f;
-            float fallbackTarget = Mathf.Max(0f, contentHeight - viewportHeight);
-            float target = Mathf.Max(highValue, fallbackTarget);
+            float target = highValue;
             if (target <= 0.01f)
             {
                 return false;
             }
 
             scroller.value = target;
-            Vector2 offset = scrollView.scrollOffset;
-            if (!Mathf.Approximately(offset.y, target))
-            {
-                scrollView.scrollOffset = new Vector2(offset.x, target);
-            }
 
             UpdateStandardScrollAlignment(target);
             return true;

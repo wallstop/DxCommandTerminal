@@ -81,7 +81,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
             {
                 ListView listView = new ListView
                 {
-                    virtualizationMethod = CollectionVirtualizationMethod.DynamicHeight,
                     selectionType = SelectionType.None,
                     showAlternatingRowBackgrounds = AlternatingRowBackground.None,
                     name = "LogListView",

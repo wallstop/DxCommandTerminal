@@ -840,6 +840,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
                     if (_restoreStandardScrollPending)
                     {
+                        scrollView.schedule.Execute(AdjustBounds).ExecuteLater(0);
                         return;
                     }
                 }
@@ -893,6 +894,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
                         if (_restoreStandardScrollPending)
                         {
+                            scrollView.schedule.Execute(AdjustBounds).ExecuteLater(0);
                             return;
                         }
                     }

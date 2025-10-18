@@ -68,7 +68,7 @@
 - [x] Defer clearing launcher metrics while closing so shortcut-based closes reuse launcher layout/scrolling until the tween ends.
 - [x] Expand overflow heuristics and defer scroller recalculation to eliminate the transient gap at the bottom of launcher history when commands stream in.
 - [ ] Ensure standard closing tween keeps the log content anchored beneath the input (In Progress – scroller now forced to follow the current bottom offset whenever `_isClosingStandard` is true; needs in-editor validation).
-- [ ] Disable virtualization on the launcher/terminal history list to keep entries realized during close/overflow transitions (pending 2021.3 check).
+- [x] Disable virtualization on the launcher/terminal history list to keep entries realized during close/overflow transitions (verified safe on 2021.3).
 - [ ] Stress-test launcher with rapid command bursts to confirm the bottom padding no longer flashes before the first manual scroll.
 
 ### Standard Terminal Scroll Persistence _(In Progress)_
@@ -78,6 +78,7 @@
 - [x] Clamp cached value and honor bottom-alignment when `highValue` is zero.
 - [x] Detect when the user closed while pinned to the latest entry and fall back to `ScrollToEnd` instead of replaying a normalized offset.
 - [x] Retry `ScrollToEnd` after layout settles and compute fallback targets from content/viewport height so reopening at the bottom no longer depends on `highValue`.
+- [x] Keep retrying restoration until the scroller exposes a valid range, applying the cached normalized value once ready so mid-history positions persist.
 - [ ] Validate cached scroll replay after close/reopen (In Progress – normalized caching wired to restore offsets; needs runtime confirmation after the closing-time anchoring settles the scroll view).
 - [ ] Add conditional diagnostics around `ScrollToEnd`/`TryApplyScrollToEnd` capturing `highValue`, fallback targets, and cached metadata whenever restoration fails, to assist future debugging.
 - [ ] Add diagnostics and possibly a fallback auto-scroll once geometry stabilizes if cached state becomes stale (e.g., buffer cleared).
