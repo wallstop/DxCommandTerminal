@@ -82,8 +82,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 && !IsLauncherActive
             )
             {
-                ScrollToEnd();
-                _needsScrollToEnd = false;
+                _needsScrollToEnd = !ScrollToEnd();
             }
 
             RefreshStateButtons();

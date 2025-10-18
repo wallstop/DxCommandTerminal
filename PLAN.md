@@ -76,7 +76,10 @@
 - [x] Cache scroller value and log version on close; suppress auto-scroll when restoring.
 - [x] Delay restoration until `RestoreStandardScrollBounds` runs with valid `highValue`.
 - [x] Clamp cached value and honor bottom-alignment when `highValue` is zero.
+- [x] Detect when the user closed while pinned to the latest entry and fall back to `ScrollToEnd` instead of replaying a normalized offset.
+- [x] Retry `ScrollToEnd` after layout settles and compute fallback targets from content/viewport height so reopening at the bottom no longer depends on `highValue`.
 - [ ] Validate cached scroll replay after close/reopen (In Progress – normalized caching wired to restore offsets; needs runtime confirmation after the closing-time anchoring settles the scroll view).
+- [ ] Add conditional diagnostics around `ScrollToEnd`/`TryApplyScrollToEnd` capturing `highValue`, fallback targets, and cached metadata whenever restoration fails, to assist future debugging.
 - [ ] Add diagnostics and possibly a fallback auto-scroll once geometry stabilizes if cached state becomes stale (e.g., buffer cleared).
 - [ ] Investigate caching per terminal state (small/full) to avoid cross-state interference.
 
