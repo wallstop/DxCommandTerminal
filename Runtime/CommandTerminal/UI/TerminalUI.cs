@@ -1584,6 +1584,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 }
 
                 scroller.value = highValue;
+                UpdateStandardScrollAlignment(highValue);
             }
 
             Execute();

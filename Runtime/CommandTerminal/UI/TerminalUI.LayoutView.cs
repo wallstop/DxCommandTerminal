@@ -604,7 +604,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             if (_logScrollView != null)
             {
-                UpdateLauncherScrollBar(snapshot, hasHistoryOverflow);
+                UpdateLauncherScrollBar(hasHistoryOverflow);
                 _historyListAdapter?.SetJustification(Justify.FlexStart);
                 _launcherViewController?.ConfigureForLauncherMode();
                 _launcherViewController?.ClampScroll();
@@ -625,7 +625,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             _launcherViewController?.ScheduleFade();
         }
 
-        private void UpdateLauncherScrollBar(LauncherLayoutSnapshot snapshot, bool shouldShow)
+        private void UpdateLauncherScrollBar(bool shouldShow)
         {
             ScrollView scrollView = _logScrollView;
             if (scrollView == null)
@@ -644,28 +644,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
 
             scroller.style.display = shouldShow ? DisplayStyle.Flex : DisplayStyle.None;
-
-            float availableHeight = scrollView.contentViewport?.layout.height ?? 0f;
-            float measuredHeight = Mathf.Max(
-                _launcherHistoryContentHeight,
-                LayoutMeasurementUtility.ClampPositive(scrollView.contentContainer.layout.height),
-                snapshot.HistoryMeasuredHeight
-            );
-
-            float estimatedHeight = Mathf.Max(
-                measuredHeight,
-                snapshot.HistoryEstimatedHeight,
-                snapshot.VisibleHistoryCount * snapshot.HistoryRowHeightEstimate
-            );
-
-            if (_logListItems.Count > snapshot.VisibleHistoryCount)
-            {
-                float countBasedEstimate = _logListItems.Count * snapshot.HistoryRowHeightEstimate;
-                estimatedHeight = Mathf.Max(estimatedHeight, countBasedEstimate);
-            }
-
-            float scrollRange = Mathf.Max(0f, estimatedHeight - availableHeight);
-            scroller.highValue = scrollRange;
             scroller.value = Mathf.Clamp(scroller.value, scroller.lowValue, scroller.highValue);
         }
 
@@ -687,13 +665,9 @@ namespace WallstopStudios.DxCommandTerminal.UI
                     return;
                 }
 
-                scroller.style.display = DisplayStyle.Flex;
-
-                float viewportHeight = scrollView.contentViewport?.layout.height ?? 0f;
-                float contentHeight = scrollView.contentContainer?.layout.height ?? 0f;
-                float scrollRange = Mathf.Max(0f, contentHeight - viewportHeight);
-                scroller.highValue = scrollRange;
+                scroller.style.display = StyleKeyword.Null;
                 scroller.value = Mathf.Clamp(scroller.value, scroller.lowValue, scroller.highValue);
+                UpdateStandardScrollAlignment(scroller.value);
             }
 
             AdjustBounds();
@@ -712,7 +686,53 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         private void OnLogScrollValueChanged(float value)
         {
-            _launcherViewController?.HandleScrollValueChanged(value);
+            if (IsLauncherActive)
+            {
+                _launcherViewController?.HandleScrollValueChanged(value);
+                return;
+            }
+
+            UpdateStandardScrollAlignment(value);
+        }
+
+        private void UpdateStandardScrollAlignment()
+        {
+            if (_logScrollView == null)
+            {
+                return;
+            }
+
+            Scroller scroller = _logScrollView.verticalScroller;
+            if (scroller == null)
+            {
+                return;
+            }
+
+            UpdateStandardScrollAlignment(scroller.value);
+        }
+
+        private void UpdateStandardScrollAlignment(float scrollerValue)
+        {
+            if (IsLauncherActive)
+            {
+                return;
+            }
+
+            ScrollView scrollView = _logScrollView;
+            if (scrollView == null)
+            {
+                return;
+            }
+
+            Scroller scroller = scrollView.verticalScroller;
+            if (scroller == null)
+            {
+                return;
+            }
+
+            bool hasOverflow = scroller.highValue > 0.01f;
+            bool nearBottom = !hasOverflow || scrollerValue >= scroller.highValue - 0.5f;
+            _historyListAdapter?.SetJustification(nearBottom ? Justify.FlexEnd : Justify.FlexStart);
         }
 
         private void RefreshStateButtons()

@@ -1,3 +1,4 @@
+#pragma warning disable CS0612 // Type or member is obsolete
 namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 {
     using System.Collections;

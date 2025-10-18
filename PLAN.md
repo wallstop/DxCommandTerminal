@@ -39,6 +39,7 @@
 
 - [x] Added overflow detection and explicit vertical scroller toggling in `Runtime/CommandTerminal/UI/TerminalUI.LayoutView.cs` to gate visibility.
 - [x] Reworked scroller API usage to remain compatible with Unity 2021.3 (no `showVerticalScroller`, preferring `ScrollerVisibility` and style toggles).
+- [x] Restored standard terminal alignment switching so flex justification snaps to `FlexStart` whenever the user scrolls away from the bottom, eliminating white-space overrun while preserving bottom alignment by default.
 - [ ] Validate virtualization interactions and adjust scroller range calculations if Unity still suppresses the dragger.
 
 ### History Fade _(In Progress)_
