@@ -178,7 +178,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 if (!Mathf.Approximately(oldTargetHeight, _targetWindowHeight))
                 {
                     bool snapHeight =
-                        (_launcherMetricsInitialized || wasLauncher) && _launcherMetrics.SnapOpen;
+                        _state == TerminalState.OpenLauncher && _launcherMetrics.SnapOpen;
                     if (snapHeight)
                     {
                         _currentWindowHeight = _targetWindowHeight;
@@ -565,10 +565,16 @@ namespace WallstopStudios.DxCommandTerminal.UI
             float availableForHistory = snapshot.AvailableHistoryHeight;
             float spacingAboveLog = snapshot.SpacingAboveHistory;
 
+            int historyEntryCap = snapshot.Metrics.HistoryVisibleEntryCount;
+            bool exceedsEntryCap = historyEntryCap > 0 && _logListItems.Count > historyEntryCap;
             bool hasHistoryOverflow =
                 hasHistoryContent
                 && (
-                    _logListItems.Count > snapshot.VisibleHistoryCount
+                    exceedsEntryCap
+                    || (
+                        snapshot.VisibleHistoryCount > 0
+                        && _logListItems.Count > snapshot.VisibleHistoryCount
+                    )
                     || snapshot.HistoryMeasuredHeight > availableForHistory + 0.5f
                     || snapshot.HistoryEstimatedHeight > availableForHistory + 0.5f
                 );
@@ -604,7 +610,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             if (_logScrollView != null)
             {
-                UpdateLauncherScrollBar(hasHistoryOverflow);
+                UpdateLauncherScrollBar(snapshot, availableForHistory, hasHistoryOverflow);
                 _historyListAdapter?.SetJustification(Justify.FlexStart);
                 _launcherViewController?.ConfigureForLauncherMode();
                 _launcherViewController?.ClampScroll();
@@ -625,7 +631,11 @@ namespace WallstopStudios.DxCommandTerminal.UI
             _launcherViewController?.ScheduleFade();
         }
 
-        private void UpdateLauncherScrollBar(bool shouldShow)
+        private void UpdateLauncherScrollBar(
+            LauncherLayoutSnapshot snapshot,
+            float availableForHistory,
+            bool shouldShow
+        )
         {
             ScrollView scrollView = _logScrollView;
             if (scrollView == null)
@@ -643,8 +653,69 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 return;
             }
 
-            scroller.style.display = shouldShow ? DisplayStyle.Flex : DisplayStyle.None;
+            if (!shouldShow)
+            {
+                scroller.style.display = DisplayStyle.None;
+                scroller.highValue = 0f;
+                scroller.value = 0f;
+                return;
+            }
+
+            scroller.style.display = StyleKeyword.Null;
+
+            float viewportHeight =
+                scrollView.contentViewport?.layout.height ?? Mathf.Max(availableForHistory, 0f);
+            float measuredHeight = Mathf.Max(
+                _launcherHistoryContentHeight,
+                LayoutMeasurementUtility.ClampPositive(scrollView.contentContainer.layout.height),
+                snapshot.HistoryMeasuredHeight
+            );
+
+            float estimatedHeight = Mathf.Max(
+                measuredHeight,
+                snapshot.HistoryEstimatedHeight,
+                snapshot.VisibleHistoryCount * snapshot.HistoryRowHeightEstimate
+            );
+
+            if (_logListItems.Count > 0)
+            {
+                float totalEstimate = _logListItems.Count * snapshot.HistoryRowHeightEstimate;
+                estimatedHeight = Mathf.Max(estimatedHeight, totalEstimate);
+            }
+
+            int entryCap = snapshot.Metrics.HistoryVisibleEntryCount;
+            if (entryCap > 0 && _logListItems.Count > entryCap)
+            {
+                float cappedEstimate = (entryCap + 1) * snapshot.HistoryRowHeightEstimate;
+                estimatedHeight = Mathf.Max(estimatedHeight, cappedEstimate);
+            }
+
+            float scrollRange = Mathf.Max(0f, estimatedHeight - viewportHeight);
+            scroller.highValue = scrollRange;
             scroller.value = Mathf.Clamp(scroller.value, scroller.lowValue, scroller.highValue);
+
+            scrollView
+                .schedule.Execute(() =>
+                {
+                    Scroller deferredScroller = scrollView.verticalScroller;
+                    if (deferredScroller == null)
+                    {
+                        return;
+                    }
+
+                    float deferredViewport =
+                        scrollView.contentViewport?.layout.height ?? viewportHeight;
+                    float deferredContent =
+                        scrollView.contentContainer?.layout.height ?? measuredHeight;
+                    float deferredRange = Mathf.Max(0f, deferredContent - deferredViewport);
+                    deferredScroller.highValue = deferredRange;
+                    deferredScroller.value = Mathf.Clamp(
+                        deferredScroller.value,
+                        deferredScroller.lowValue,
+                        deferredScroller.highValue
+                    );
+                })
+                .ExecuteLater(0);
         }
 
         private void RestoreStandardScrollBounds()

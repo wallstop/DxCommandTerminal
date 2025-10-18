@@ -47,6 +47,12 @@
 - [x] Ensure launcher bindings default to computed opacity and immediately request fade recomputation to avoid resets.
 - [ ] Observe geometry-driven fade output under momentum scrolling and update diagnostics if needed.
 
+### Animation & Launcher Layout _(In Progress)_
+
+- [x] Prevent launcher snap logic from running while closing so the exit tween respects the configured curves.
+- [x] Expand overflow heuristics and defer scroller recalculation to eliminate the transient gap at the bottom of launcher history when commands stream in.
+- [ ] Stress-test launcher with rapid command bursts to confirm the bottom padding no longer flashes before the first manual scroll.
+
 ### Shared Cleanup
 
 - Centralise scroll/fade state checks into a tiny helper so both `BindLogListItem` and `LauncherViewController` consult the same readiness predicate (active state, metrics initialised, scroller present).
