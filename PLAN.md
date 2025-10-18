@@ -49,7 +49,7 @@
 
 ### Animation & Launcher Layout _(In Progress)_
 
-- [x] Prevent launcher snap logic from running while closing so the exit tween respects the configured curves.
+- [x] Prevent launcher snap logic from running while closing so the exit tween respects the configured curves.\n- [x] Keep the container visible while height animation plays and reset launcher timing flags once the tween completes.
 - [x] Expand overflow heuristics and defer scroller recalculation to eliminate the transient gap at the bottom of launcher history when commands stream in.
 - [ ] Stress-test launcher with rapid command bursts to confirm the bottom padding no longer flashes before the first manual scroll.
 

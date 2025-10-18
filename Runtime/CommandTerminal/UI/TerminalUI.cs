@@ -294,6 +294,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
         private float _initialWindowHeight;
         private float _animationTimer;
         private bool _isAnimating;
+        private bool _useLauncherAnimationTiming;
         private LauncherLayoutMetrics _launcherMetrics;
         private bool _launcherMetricsInitialized;
 
@@ -2211,6 +2212,10 @@ namespace WallstopStudios.DxCommandTerminal.UI
             _initialWindowHeight = _currentWindowHeight;
             _animationTimer = 0f;
             _isAnimating = true;
+            bool isExpanding = _targetWindowHeight > _initialWindowHeight;
+            _useLauncherAnimationTiming =
+                _state == TerminalState.OpenLauncher
+                && (isExpanding || _launcherMetricsInitialized);
         }
 
         private void HandleHeightAnimation()
@@ -2226,8 +2231,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             float animationDuration;
             bool isExpanding = _targetWindowHeight > _initialWindowHeight;
 
-            bool useLauncherTiming =
-                IsLauncherActive || _previousState == TerminalState.OpenLauncher;
+            bool useLauncherTiming = _useLauncherAnimationTiming;
 
             if (isExpanding)
             {
@@ -2248,6 +2252,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             {
                 _currentWindowHeight = _targetWindowHeight;
                 _isAnimating = false;
+                _useLauncherAnimationTiming = false;
                 return;
             }
 
@@ -2285,6 +2290,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             {
                 _currentWindowHeight = _targetWindowHeight;
                 _isAnimating = false;
+                _useLauncherAnimationTiming = false;
             }
         }
 
