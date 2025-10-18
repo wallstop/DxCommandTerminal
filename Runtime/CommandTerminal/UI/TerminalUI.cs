@@ -971,6 +971,13 @@ namespace WallstopStudios.DxCommandTerminal.UI
             {
                 _input.CommandText = string.Empty;
                 ResetAutoComplete();
+                if (_commandInput != null)
+                {
+                    _isCommandFromCode = true;
+                    _commandInput.SetValueWithoutNotify(string.Empty);
+                    _commandInput.cursorIndex = 0;
+                    _commandInput.selectIndex = 0;
+                }
             }
         }
 
