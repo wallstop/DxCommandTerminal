@@ -10,6 +10,8 @@
 
 - Launcher mode clamps history height via `ApplyLauncherLayout` in `Runtime/CommandTerminal/UI/TerminalUI.LayoutView.cs:195`, yet the vertical scroller element inside the list view never appears despite mouse-wheel scrolling working.
 - `LauncherViewController.UpdateFade` (`Runtime/CommandTerminal/UI/TerminalUI.LauncherViewController.cs:49`) runs, but rendered entries keep full opacity; neither the entry container nor nested label reflects the expected gradient.
+- Standard terminal currently restores alignment but still loses scroll position after large log updates or terminal toggles.
+- A white highlight appears on history rows when hovered/selected due to default UI Toolkit classes.
 
 ## Root-Cause Hypotheses
 
@@ -25,6 +27,16 @@
 2. Virtualization rebinding calls `BindLogListItem` (`Runtime/CommandTerminal/UI/TerminalUI.LogView.cs:29`), which resets `element.style.opacity = 1f` for launcher mode; if `HandleScrollValueChanged` is not invoked afterwards (e.g., touchpad inertial scroll), entries keep the reset opacity.
 3. Project setups can exclude `TerminalHistoryFadeTargets.Launcher` from the appearance profile (`Runtime/CommandTerminal/UI/TerminalAppearanceProfile.cs:26`), so we need to confirm configuration is not simply disabling the effect.
 
+### Standard Terminal Scroll Persistence
+
+- ScrollView `highValue` is undefined until geometry settles; caching scroller value on close must wait for `highValue` before restoration.
+- Log buffer mutations reset the non-virtualized listview, invalidating cached offsets.
+- Auto-scroll-on-open fights manual cached position.
+
+### History Hover Styling
+
+- USS defaults for `.unity-list-view__item--hovered` and `.unity-list-view__item--selected` introduce light backgrounds in dark themes.
+
 ## Investigation Tasks
 
 1. Reproduce in-editor with UI Toolkit Debugger attached; inspect `unity-scroller--vertical` during overflow to confirm visibility, size, and USS state.
@@ -32,6 +44,8 @@
 3. Temporarily toggle `ListView.virtualizationMethod` to `CollectionVirtualizationMethod.None` to see if scrollbar/fade behaviour immediately returns, confirming a virtualization interaction.
 4. Trace `HandleScrollValueChanged` invocations (subscribe to `_logScrollView.verticalScroller.valueChanged`) to ensure fade recalculations fire after `BindLogListItem` resets opacity and after momentum scrolling completes.
 5. Verify the active `TerminalAppearanceProfile` in scenes/prefabs retains the `Launcher` flag for `_historyFadeTargets`; capture asset GUID if a custom profile overrides defaults.
+6. Add temporary logging around `_cachedStandardScrollValue`, `scroller.highValue`, and `_restoreStandardScrollPending` transitions to confirm restoration timing.
+7. Identify all USS selectors contributing hover/highlight styling and override them at the base theme.
 
 ## Implementation Strategy
 
@@ -53,8 +67,22 @@
 - [x] Keep the container visible while height animation plays and reset launcher timing flags once the tween completes.
 - [x] Defer clearing launcher metrics while closing so shortcut-based closes reuse launcher layout/scrolling until the tween ends.
 - [x] Expand overflow heuristics and defer scroller recalculation to eliminate the transient gap at the bottom of launcher history when commands stream in.
+- [ ] Ensure standard closing tween keeps the log content anchored beneath the input (In Progress – scroller now forced to follow the current bottom offset whenever `_isClosingStandard` is true; needs in-editor validation).
 - [ ] Disable virtualization on the launcher/terminal history list to keep entries realized during close/overflow transitions (pending 2021.3 check).
 - [ ] Stress-test launcher with rapid command bursts to confirm the bottom padding no longer flashes before the first manual scroll.
+
+### Standard Terminal Scroll Persistence _(In Progress)_
+
+- [x] Cache scroller value and log version on close; suppress auto-scroll when restoring.
+- [x] Delay restoration until `RestoreStandardScrollBounds` runs with valid `highValue`.
+- [x] Clamp cached value and honor bottom-alignment when `highValue` is zero.
+- [ ] Validate cached scroll replay after close/reopen (In Progress – normalized caching wired to restore offsets; needs runtime confirmation after the closing-time anchoring settles the scroll view).
+- [ ] Add diagnostics and possibly a fallback auto-scroll once geometry stabilizes if cached state becomes stale (e.g., buffer cleared).
+- [ ] Investigate caching per terminal state (small/full) to avoid cross-state interference.
+
+### History Hover Styling _(Done)_
+
+- [x] Override all `.unity-list-view__item` hover/focus/selected classes to remain transparent in dark themes.
 
 ### Shared Cleanup
 
@@ -65,6 +93,7 @@
 
 - Manual: With 2, 5, and 10 history entries, verify the scrollbar appears only once the viewport height cap is exceeded and that dragging the thumb scrolls correctly.
 - Manual: Check opacity gradient before and after scrolling with mouse wheel, touchpad momentum, and keyboard navigation.
+- Manual: Toggle standard terminal (small/full) with history scrolled, confirming scroll restoration matches cached position.
 - Automated: Extend `Tests/Runtime/TerminalTests.cs` with a launcher-focused test that feeds > `historyVisibleEntryCount` entries, asserts `_logScrollView.verticalScrollerVisibility == ScrollerVisibility.Visible`, and inspects the realized child opacities.
 - Regression: Run existing runtime test suite to ensure non-launcher behaviours remain intact.
 

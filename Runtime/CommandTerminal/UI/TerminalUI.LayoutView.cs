@@ -739,6 +739,70 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             scrollView.verticalScrollerVisibility = ScrollerVisibility.Auto;
 
+            float GetClosingScrollTarget(Scroller scrollerLocal)
+            {
+                if (scrollerLocal == null)
+                {
+                    return 0f;
+                }
+
+                float highValue = scrollerLocal.highValue;
+                if (highValue > 0.001f)
+                {
+                    return highValue;
+                }
+
+                VisualElement viewport = scrollView.contentViewport;
+                VisualElement content = scrollView.contentContainer;
+                float viewportHeight = viewport != null ? viewport.layout.height : 0f;
+                float contentHeight = content != null ? content.layout.height : 0f;
+                float fallback = Mathf.Max(0f, contentHeight - viewportHeight);
+                return Mathf.Max(highValue, fallback);
+            }
+
+            void SnapClosingScroll(Scroller scrollerLocal)
+            {
+                if (scrollerLocal == null)
+                {
+                    return;
+                }
+
+                float target = GetClosingScrollTarget(scrollerLocal);
+                if (!Mathf.Approximately(scrollerLocal.value, target))
+                {
+                    scrollerLocal.value = target;
+                }
+
+                Vector2 offset = scrollView.scrollOffset;
+                if (!Mathf.Approximately(offset.y, target))
+                {
+                    scrollView.scrollOffset = new Vector2(offset.x, target);
+                }
+            }
+
+            float GetRestoredStandardScrollValue(Scroller scrollerLocal)
+            {
+                if (scrollerLocal == null)
+                {
+                    return 0f;
+                }
+
+                float lowValue = scrollerLocal.lowValue;
+                float highValue = scrollerLocal.highValue;
+                float clamped = Mathf.Clamp(_cachedStandardScrollValue, lowValue, highValue);
+
+                float cachedRange = _cachedStandardScrollHighValue - _cachedStandardScrollLowValue;
+                float currentRange = highValue - lowValue;
+                if (cachedRange <= 0.0001f || currentRange <= 0.0001f)
+                {
+                    return clamped;
+                }
+
+                float normalized = Mathf.Clamp01(_cachedStandardScrollNormalized);
+                float ratioValue = (normalized * currentRange) + lowValue;
+                return Mathf.Clamp(ratioValue, lowValue, highValue);
+            }
+
             void AdjustBounds()
             {
                 Scroller scroller = scrollView.verticalScroller;
@@ -761,19 +825,29 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
                 if (_restoreStandardScrollPending && _hasCachedStandardScroll)
                 {
-                    float restored = Mathf.Clamp(
-                        _cachedStandardScrollValue,
-                        scroller.lowValue,
-                        scroller.highValue
-                    );
-                    scroller.value = restored;
-                    UpdateStandardScrollAlignment(scroller.value);
-                    _restoreStandardScrollPending = false;
-                    return;
+                    float lowValue = scroller.lowValue;
+                    float highValue = scroller.highValue;
+                    float range = highValue - lowValue;
+                    bool hasRange = range > 0.01f;
+                    bool cachedIsNearLow =
+                        Mathf.Abs(_cachedStandardScrollValue - lowValue) <= 0.01f;
+                    if (hasRange || cachedIsNearLow)
+                    {
+                        float restored = GetRestoredStandardScrollValue(scroller);
+                        scroller.value = restored;
+                        UpdateStandardScrollAlignment(restored);
+                        _restoreStandardScrollPending = false;
+                    }
+
+                    if (_restoreStandardScrollPending)
+                    {
+                        return;
+                    }
                 }
 
                 if (_isClosingStandard)
                 {
+                    SnapClosingScroll(scroller);
                     _historyListAdapter?.SetJustification(Justify.FlexEnd);
                     return;
                 }
@@ -804,19 +878,29 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
                     if (_restoreStandardScrollPending && _hasCachedStandardScroll)
                     {
-                        float restored = Mathf.Clamp(
-                            _cachedStandardScrollValue,
-                            scroller.lowValue,
-                            scroller.highValue
-                        );
-                        scroller.value = restored;
-                        UpdateStandardScrollAlignment(scroller.value);
-                        _restoreStandardScrollPending = false;
-                        return;
+                        float lowValue = scroller.lowValue;
+                        float highValue = scroller.highValue;
+                        float range = highValue - lowValue;
+                        bool hasRange = range > 0.01f;
+                        bool cachedIsNearLow =
+                            Mathf.Abs(_cachedStandardScrollValue - lowValue) <= 0.01f;
+                        if (hasRange || cachedIsNearLow)
+                        {
+                            float restored = GetRestoredStandardScrollValue(scroller);
+                            scroller.value = restored;
+                            UpdateStandardScrollAlignment(restored);
+                            _restoreStandardScrollPending = false;
+                        }
+
+                        if (_restoreStandardScrollPending)
+                        {
+                            return;
+                        }
                     }
 
                     if (_isClosingStandard)
                     {
+                        SnapClosingScroll(scroller);
                         _historyListAdapter?.SetJustification(Justify.FlexEnd);
                         return;
                     }

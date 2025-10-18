@@ -302,6 +302,9 @@ namespace WallstopStudios.DxCommandTerminal.UI
         private bool _hasCachedStandardScroll;
         private bool _restoreStandardScrollPending;
         private float _cachedStandardScrollValue;
+        private float _cachedStandardScrollNormalized;
+        private float _cachedStandardScrollLowValue;
+        private float _cachedStandardScrollHighValue;
         private long _cachedStandardLogVersion;
 
         private VisualElement _terminalContainer;
@@ -1005,7 +1008,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 }
                 else
                 {
-                    _restoreStandardScrollPending = false;
                     _needsScrollToEnd = true;
                 }
             }
@@ -1064,6 +1066,9 @@ namespace WallstopStudios.DxCommandTerminal.UI
             {
                 _hasCachedStandardScroll = false;
                 _cachedStandardScrollValue = 0f;
+                _cachedStandardScrollNormalized = 0f;
+                _cachedStandardScrollLowValue = 0f;
+                _cachedStandardScrollHighValue = 0f;
                 _cachedStandardLogVersion = -1;
                 _restoreStandardScrollPending = false;
                 return;
@@ -1074,13 +1079,25 @@ namespace WallstopStudios.DxCommandTerminal.UI
             {
                 _hasCachedStandardScroll = false;
                 _cachedStandardScrollValue = 0f;
+                _cachedStandardScrollNormalized = 0f;
+                _cachedStandardScrollLowValue = 0f;
+                _cachedStandardScrollHighValue = 0f;
                 _cachedStandardLogVersion = -1;
                 _restoreStandardScrollPending = false;
                 return;
             }
 
             CommandLog log = ActiveLog;
-            _cachedStandardScrollValue = scroller.value;
+            float scrollerValue = scroller.value;
+            float lowValue = scroller.lowValue;
+            float highValue = scroller.highValue;
+            float range = highValue - lowValue;
+
+            _cachedStandardScrollValue = scrollerValue;
+            _cachedStandardScrollLowValue = lowValue;
+            _cachedStandardScrollHighValue = highValue;
+            _cachedStandardScrollNormalized =
+                range > 0.0001f ? Mathf.Clamp01((scrollerValue - lowValue) / range) : 0f;
             _cachedStandardLogVersion = log?.Version ?? -1;
             _hasCachedStandardScroll = true;
             _restoreStandardScrollPending = false;
