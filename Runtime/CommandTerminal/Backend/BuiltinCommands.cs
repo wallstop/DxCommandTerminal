@@ -30,7 +30,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         private static CommandShell ActiveShell => RuntimeScope?.Shell;
 
-        private static CommandLog ActiveLog => RuntimeScope?.Log;
+        private static CommandLog ActiveLog => RuntimeScope?.Buffer;
 
         private static CommandHistory ActiveHistory => RuntimeScope?.History;
 

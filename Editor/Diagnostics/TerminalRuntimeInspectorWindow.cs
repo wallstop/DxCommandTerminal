@@ -4,6 +4,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.Diagnostics
     using Backend;
     using Service;
     using UnityEditor;
+    using WallstopStudios.DxCommandTerminal.UI;
 
     public sealed class TerminalRuntimeInspectorWindow : EditorWindow
     {

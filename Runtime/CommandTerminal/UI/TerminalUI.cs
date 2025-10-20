@@ -53,9 +53,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
 #pragma warning restore CS0618 // Type or member is obsolete
         }
 
-        // Cache log callback to reduce allocations
-        private readonly Application.LogCallback UnityLogCallback = HandleUnityLog;
-
         public static TerminalUI Instance { get; private set; }
 
         private static ITerminalServiceLocator _serviceLocator = TerminalServiceLocator.Default;
@@ -279,7 +276,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         [SerializeField]
         [Tooltip("Optional service binding asset used to resolve terminal dependencies.")]
-        private TerminalServiceBindingAsset _serviceBindingAsset;
+        internal TerminalServiceBindingAsset _serviceBindingAsset;
 
         [SerializeField]
         [Tooltip("Optional component-based binding overrides. Added automatically by the editor.")]
@@ -775,7 +772,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             if (_logUnityMessages && !_unityLogAttached)
             {
-                Application.logMessageReceivedThreaded += UnityLogCallback;
+                Application.logMessageReceivedThreaded += HandleUnityLog;
                 _unityLogAttached = true;
             }
 
@@ -798,7 +795,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             if (_unityLogAttached)
             {
-                Application.logMessageReceivedThreaded -= UnityLogCallback;
+                Application.logMessageReceivedThreaded -= HandleUnityLog;
                 _unityLogAttached = false;
             }
 
