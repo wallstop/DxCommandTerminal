@@ -34,6 +34,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             StubRuntimeScope runtimeScope = new StubRuntimeScope();
             StubRuntimeConfiguratorService runtimeConfiguratorService =
                 new StubRuntimeConfiguratorService();
+            StubRuntimePool runtimePool = new StubRuntimePool();
 
             ITerminalServiceLocator locator = new StubServiceLocator(
                 terminalProvider,
@@ -41,7 +42,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 inputProvider,
                 runtimeProvider,
                 runtimeScope,
-                runtimeConfiguratorService
+                runtimeConfiguratorService,
+                runtimePool
             );
 
             TerminalUI.ServiceLocator = locator;
@@ -73,13 +75,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void RuntimeScopeReceivesRegistrations()
         {
             StubRuntimeScope runtimeScope = new StubRuntimeScope();
+            StubRuntimePool runtimePool = new StubRuntimePool();
             MutableTerminalServiceLocator locator = new MutableTerminalServiceLocator(
                 new TerminalRegistry(),
                 new StubRuntimeConfigurator(),
                 new StubInputProvider(),
                 new StubRuntimeProvider(),
                 runtimeScope,
-                new StubRuntimeConfiguratorService()
+                new StubRuntimeConfiguratorService(),
+                runtimePool
             );
 
             TerminalUI.ServiceLocator = locator;
@@ -92,7 +96,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             try
             {
-                Assert.That(runtimeScope.RegisteredRuntime, Is.NotNull);
+                Assert.That(runtimeScope.RegisteredRuntime, Is.Not.Null);
             }
             finally
             {
@@ -127,7 +131,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             try
             {
-                Assert.That(TerminalUI.ServiceLocator, Is.SameAs(component));
+                Assert.That(TerminalUI.ServiceLocator, Is.SameAs(bindingAsset));
                 Assert.That(TerminalUI.TerminalProvider, Is.SameAs(provider));
             }
             finally
@@ -151,17 +155,24 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 ScriptableObject.CreateInstance<ScriptableTerminalProvider>();
             bindingAsset.SetTerminalProviderForTests(provider);
 
-            GameObject go = new GameObject("TerminalServiceLocator_Component");
-            go.SetActive(false);
+            GameObject componentGo = new GameObject("TerminalServiceLocator_Component");
+            componentGo.SetActive(false);
             TerminalServiceBindingComponent component =
-                go.AddComponent<TerminalServiceBindingComponent>();
+                componentGo.AddComponent<TerminalServiceBindingComponent>();
             component.SetBindingAssetForTests(bindingAsset);
+            componentGo.SetActive(true);
+
+            GameObject terminalGo = new GameObject("TerminalServiceLocator_Component_Terminal");
+            terminalGo.SetActive(false);
+            TerminalUI terminal = terminalGo.AddComponent<TerminalUI>();
+            terminal.disableUIForTests = true;
             terminal.SetServiceBindingComponentForTests(component);
-            go.SetActive(true);
+            terminalGo.SetActive(true);
 
             Assert.That(TerminalUI.ServiceLocator, Is.SameAs(bindingAsset));
 
-            Object.DestroyImmediate(go);
+            Object.DestroyImmediate(terminalGo);
+            Object.DestroyImmediate(componentGo);
             Assert.That(
                 TerminalUI.ServiceLocator,
                 Is.SameAs(originalLocator ?? TerminalServiceLocator.Default)
@@ -216,13 +227,16 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             private readonly ITerminalRuntimeScope _runtimeScope;
             private readonly ITerminalRuntimeConfiguratorService _runtimeConfiguratorService;
 
+            private readonly ITerminalRuntimePool _runtimePool;
+
             internal StubServiceLocator(
                 ITerminalProvider terminalProvider,
                 ITerminalRuntimeConfigurator runtimeConfigurator,
                 ITerminalInputProvider inputProvider,
                 ITerminalRuntimeProvider runtimeProvider,
                 ITerminalRuntimeScope runtimeScope,
-                ITerminalRuntimeConfiguratorService runtimeConfiguratorService
+                ITerminalRuntimeConfiguratorService runtimeConfiguratorService,
+                ITerminalRuntimePool runtimePool
             )
             {
                 _terminalProvider = terminalProvider;
@@ -231,6 +245,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 _runtimeProvider = runtimeProvider;
                 _runtimeScope = runtimeScope;
                 _runtimeConfiguratorService = runtimeConfiguratorService;
+                _runtimePool = runtimePool;
             }
 
             public ITerminalProvider TerminalProvider => _terminalProvider;
@@ -245,6 +260,21 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             public ITerminalRuntimeConfiguratorService RuntimeConfiguratorService =>
                 _runtimeConfiguratorService;
+
+            public ITerminalRuntimePool RuntimePool => _runtimePool;
+        }
+
+        private sealed class StubRuntimePool : ITerminalRuntimePool
+        {
+            public bool TryRent(out ITerminalRuntime runtime)
+            {
+                runtime = null;
+                return false;
+            }
+
+            public void Return(ITerminalRuntime runtime) { }
+
+            public void Clear() { }
         }
 
         private sealed class StubTerminalProvider : ITerminalProvider
