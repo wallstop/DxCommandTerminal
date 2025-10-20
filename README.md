@@ -46,8 +46,8 @@ Grab a copy of this repo (either `git clone` or [download a zip of the source](h
 - Fixed Input handling bugs related to [WebGL](#web-gl)
 - Fully integrated with Unity's [new Input System](#new-input-system)
 - Fully [configurable and bindable controls](#hotkeys) for every action
-- Add ability to ignore commands that have been annotated with `RegisterCommandAttribute`. In this way, your terminals can ignore any built-in commands, for cleanliness. A custom editor has been added to provide users with the ability to identify what commands are available to ignore, and selectively ignore them.
-- Add ability to ignore certain (or all) log levels, such that unwanted logs do not clutter terminal output
+- Add ability to block or explicitly allow commands that have been annotated with `RegisterCommandAttribute`. In this way, your terminals can trim or whitelist built-in commands for cleanliness. A custom editor has been added to provide users with the ability to identify what commands are available to allow/block, and selectively configure them.
+- Add ability to block or allow specific log levels via profile driven filters so only relevant logs are routed into the terminal buffer.
 - Add ability to optionally have Unity log messages routed to the terminal, default on, but can be turned off
 - Add ability to optionally ignore all default commands, such that you can write your own commands that conflict with the default provided ones, such as `HELP`, `TIME`, etc
 - CommandArg value parsing has been overhauled. Instead of specific properties like `Float` and `Int` that always return a value, regardless of if parsing succeeded or not, a singular `bool TryGet<T>(out T parsed)` method is supplied. This method provides robust parsing for all common types and has the ability to take in user-specified custom parsers for any fancy logic. See [Custom Parsing](#custom-parsing) for details.
@@ -96,12 +96,12 @@ Terminals register themselves with an `ITerminalProvider` (`TerminalRegistry` by
 ## Modern Architecture Highlights (2024 Refactor)
 
 - **Instance-based runtime** – `TerminalRuntime` now owns log/history/autocomplete state per terminal instance. The legacy static façade delegates to the active runtime, enabling multiple terminals in the same scene and cleaner testing.
-- **Profile-driven configuration** – `TerminalRuntimeProfile` ScriptableObjects capture buffer capacities, disabled commands, and ignored log levels. Terminals can reuse or swap profiles without code changes.
+- **Profile-driven configuration** – `TerminalRuntimeProfile` ScriptableObjects capture buffer capacities plus command/log allow and block lists. Terminals can reuse or swap profiles without code changes.
 - **Modular UI presenters** – The 3.6k line `TerminalUI` has been split into partials (`TerminalUI.LogView`, `TerminalUI.AutoCompleteView`, `TerminalUI.LayoutView`) that focus on specific responsibilities while the core MonoBehaviour handles lifecycle and runtime wiring.
 - **Input abstraction** – `TerminalKeyboardController` targets the new `ITerminalInputTarget` interface, so custom terminals or headless tests can drive command execution without a concrete `TerminalUI`. Playmode tests confirm dispatch behaviour and fallback to the built-in UI.
 - **Profile-driven input** – `TerminalInputProfile` ScriptableObjects package hotkeys and control ordering so multiple controllers can share consistent bindings.
 - **Appearance presets** – `TerminalAppearanceProfile` captures button labels, hint behaviour, history fade, and cursor settings to standardise the terminal look across scenes.
-- **Command/persistence profiles** – `TerminalCommandProfile` and `TerminalThemePersistenceProfile` centralize ignore lists and theme persistence toggles without code changes.
+- **Command/persistence profiles** – `TerminalCommandProfile` exposes allow/block filters while `TerminalThemePersistenceProfile` handles theme persistence toggles without code changes.
 - **Runtime inspector** – Editor window `Terminal Runtime Inspector` (Window ▸ DX Command Terminal) surfaces active runtime state for debugging.
 - **Editor interoperability** – Serialized-property utilities expose an override hook so editor drawers (like `DxShowIfPropertyDrawer`) can access backing objects without relying on runtime internals, preserving assembly boundaries.
 - **Allocation guardrails** – An automated playmode test (`AllocationRegressionTests`) monitors `GC.Alloc` while issuing commands and toggling terminal state to catch regressions immediately.

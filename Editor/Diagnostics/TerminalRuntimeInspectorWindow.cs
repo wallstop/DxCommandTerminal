@@ -2,6 +2,7 @@
 namespace WallstopStudios.DxCommandTerminal.Editor.Diagnostics
 {
     using Backend;
+    using Service;
     using UnityEditor;
 
     public sealed class TerminalRuntimeInspectorWindow : EditorWindow
@@ -16,7 +17,8 @@ namespace WallstopStudios.DxCommandTerminal.Editor.Diagnostics
 
         private void OnGUI()
         {
-            ITerminalRuntime runtime = Terminal.ActiveRuntime;
+            ITerminalRuntimeScope runtimeScope = TerminalUI.ServiceLocator?.RuntimeScope;
+            ITerminalRuntime runtime = runtimeScope?.ActiveRuntime;
             if (runtime == null)
             {
                 EditorGUILayout.HelpBox("No active terminal runtime detected.", MessageType.Info);

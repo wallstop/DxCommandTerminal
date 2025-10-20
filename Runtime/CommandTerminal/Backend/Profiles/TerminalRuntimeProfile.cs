@@ -1,6 +1,7 @@
 namespace WallstopStudios.DxCommandTerminal.Backend.Profiles
 {
     using System.Collections.Generic;
+    using Backend;
     using UnityEngine;
 
     [CreateAssetMenu(
@@ -19,32 +20,40 @@ namespace WallstopStudios.DxCommandTerminal.Backend.Profiles
         private int _historyBufferSize = 512;
 
         [SerializeField]
-        private bool _ignoreDefaultCommands;
+        private TerminalCommandFilterConfiguration _commandFilters =
+            new TerminalCommandFilterConfiguration();
 
         [SerializeField]
-        private List<TerminalLogType> _ignoredLogTypes = new();
-
-        [SerializeField]
-        private List<string> _disabledCommands = new();
+        private TerminalLogFilterConfiguration _logFilters = new TerminalLogFilterConfiguration();
 
         public int LogBufferSize => Mathf.Max(0, _logBufferSize);
 
         public int HistoryBufferSize => Mathf.Max(0, _historyBufferSize);
 
-        public bool IgnoreDefaultCommands => _ignoreDefaultCommands;
+        public bool IncludeDefaultCommands => _commandFilters?.IncludeDefaults ?? true;
 
-        public IReadOnlyList<TerminalLogType> IgnoredLogTypes => _ignoredLogTypes;
+        public IReadOnlyList<string> AllowedCommands =>
+            _commandFilters?.Allowed ?? System.Array.Empty<string>();
 
-        public IReadOnlyList<string> DisabledCommands => _disabledCommands;
+        public IReadOnlyList<string> BlockedCommands =>
+            _commandFilters?.Blocked ?? System.Array.Empty<string>();
+
+        public IReadOnlyList<TerminalLogType> AllowedLogTypes =>
+            _logFilters?.Allowed ?? System.Array.Empty<TerminalLogType>();
+
+        public IReadOnlyList<TerminalLogType> BlockedLogTypes =>
+            _logFilters?.Blocked ?? System.Array.Empty<TerminalLogType>();
 
         internal TerminalRuntimeSettings BuildSettings()
         {
             return new TerminalRuntimeSettings(
                 LogBufferSize,
                 HistoryBufferSize,
-                _ignoredLogTypes,
-                _disabledCommands,
-                _ignoreDefaultCommands
+                BlockedLogTypes,
+                AllowedLogTypes,
+                BlockedCommands,
+                AllowedCommands,
+                IncludeDefaultCommands
             );
         }
 
@@ -52,31 +61,44 @@ namespace WallstopStudios.DxCommandTerminal.Backend.Profiles
         internal void ConfigureForTests(
             int logBufferSize,
             int historyBufferSize,
-            bool ignoreDefaults,
-            IReadOnlyList<TerminalLogType> ignoredLogTypes,
-            IReadOnlyList<string> disabledCommands
+            bool includeDefaults,
+            IReadOnlyList<TerminalLogType> allowedLogTypes,
+            IReadOnlyList<TerminalLogType> blockedLogTypes,
+            IReadOnlyList<string> allowedCommands,
+            IReadOnlyList<string> blockedCommands
         )
         {
             _logBufferSize = logBufferSize;
             _historyBufferSize = historyBufferSize;
-            _ignoreDefaultCommands = ignoreDefaults;
-
-            _ignoredLogTypes.Clear();
-            if (ignoredLogTypes != null)
+            if (_commandFilters == null)
             {
-                for (int i = 0; i < ignoredLogTypes.Count; ++i)
-                {
-                    _ignoredLogTypes.Add(ignoredLogTypes[i]);
-                }
+                _commandFilters = new TerminalCommandFilterConfiguration();
             }
 
-            _disabledCommands.Clear();
-            if (disabledCommands != null)
+            if (_logFilters == null)
             {
-                for (int i = 0; i < disabledCommands.Count; ++i)
-                {
-                    _disabledCommands.Add(disabledCommands[i]);
-                }
+                _logFilters = new TerminalLogFilterConfiguration();
+            }
+
+            _commandFilters.includeDefaultCommands = includeDefaults;
+            CopyList(allowedCommands, _commandFilters.allowedCommands);
+            CopyList(blockedCommands, _commandFilters.blockedCommands);
+
+            CopyList(allowedLogTypes, _logFilters.allowedLogTypes);
+            CopyList(blockedLogTypes, _logFilters.blockedLogTypes);
+        }
+
+        private static void CopyList<T>(IReadOnlyList<T> source, List<T> destination)
+        {
+            destination.Clear();
+            if (source == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < source.Count; ++i)
+            {
+                destination.Add(source[i]);
             }
         }
 #endif

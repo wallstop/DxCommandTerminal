@@ -40,6 +40,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         public long Version => _version;
 
         public readonly HashSet<TerminalLogType> ignoredLogTypes;
+        public readonly HashSet<TerminalLogType> allowedLogTypes;
 
         private readonly CyclicBuffer<LogItem> _logs;
 
@@ -52,12 +53,17 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             bool includeStackTrace
         )> _pending = new();
 
-        public CommandLog(int maxItems, IEnumerable<TerminalLogType> ignoredLogTypes = null)
+        public CommandLog(
+            int maxItems,
+            IEnumerable<TerminalLogType> blockedLogTypes = null,
+            IEnumerable<TerminalLogType> allowedLogTypes = null
+        )
         {
             _logs = new CyclicBuffer<LogItem>(maxItems);
-            this.ignoredLogTypes = new HashSet<TerminalLogType>(
-                ignoredLogTypes ?? Array.Empty<TerminalLogType>()
-            );
+            blockedLogTypes ??= Array.Empty<TerminalLogType>();
+            this.ignoredLogTypes = new HashSet<TerminalLogType>(blockedLogTypes);
+            allowedLogTypes ??= Array.Empty<TerminalLogType>();
+            this.allowedLogTypes = new HashSet<TerminalLogType>(allowedLogTypes);
         }
 
         public bool HandleLog(string message, TerminalLogType type, bool includeStackTrace = true)
@@ -130,7 +136,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         public bool HandleLog(string message, string stackTrace, TerminalLogType type)
         {
-            if (ignoredLogTypes.Contains(type))
+            if (!IsLogTypePermitted(type))
             {
                 return false;
             }
@@ -143,7 +149,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         public void EnqueueMessage(string message, TerminalLogType type, bool includeStackTrace)
         {
-            if (ignoredLogTypes.Contains(type))
+            if (!IsLogTypePermitted(type))
             {
                 return;
             }
@@ -152,7 +158,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         public void EnqueueUnityLog(string message, string stackTrace, TerminalLogType type)
         {
-            if (ignoredLogTypes.Contains(type))
+            if (!IsLogTypePermitted(type))
             {
                 return;
             }
@@ -174,7 +180,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             )
             {
                 string stack = item.includeStackTrace ? GetAccurateStackTrace() : item.stackTrace;
-                if (ignoredLogTypes.Contains(item.type))
+                if (!IsLogTypePermitted(item.type))
                 {
                     continue;
                 }
@@ -238,6 +244,21 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 _version++;
             }
             _logs.Resize(newCapacity);
+        }
+
+        private bool IsLogTypePermitted(TerminalLogType type)
+        {
+            if (ignoredLogTypes.Contains(type))
+            {
+                return false;
+            }
+
+            if (allowedLogTypes.Count > 0 && !allowedLogTypes.Contains(type))
+            {
+                return false;
+            }
+
+            return true;
         }
     }
 }

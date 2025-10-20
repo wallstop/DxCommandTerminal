@@ -16,6 +16,43 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         private static readonly StringBuilder StringBuilder = new();
 
+        private static ITerminalServiceLocator ServiceLocator => TerminalUI.ServiceLocator;
+
+        private static ITerminalProvider TerminalProvider => ServiceLocator?.TerminalProvider;
+
+        private static ITerminalRuntimeScope RuntimeScope => ServiceLocator?.RuntimeScope;
+
+        private static TerminalUI GetActiveTerminal()
+        {
+            return TerminalProvider?.ActiveTerminal;
+        }
+
+        private static CommandShell ActiveShell => RuntimeScope?.Shell;
+
+        private static CommandLog ActiveLog => RuntimeScope?.Log;
+
+        private static CommandHistory ActiveHistory => RuntimeScope?.History;
+
+        private static void Log(TerminalLogType type, string format, params object[] arguments)
+        {
+            ITerminalRuntimeScope scope = RuntimeScope;
+            if (scope != null)
+            {
+                scope.Log(type, format, arguments);
+                return;
+            }
+
+            Debug.unityLogger.Log(
+                type.ToString(),
+                arguments is { Length: > 0 } ? string.Format(format, arguments) : format
+            );
+        }
+
+        private static void Log(string format, params object[] arguments)
+        {
+            Log(TerminalLogType.Message, format, arguments);
+        }
+
         [RegisterCommand(
             isDefault: true,
             Name = "list-themes",
@@ -24,16 +61,16 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         )]
         public static void CommandListThemes(CommandArg[] args)
         {
-            TerminalUI terminal = TerminalUI.ActiveTerminal;
+            TerminalUI terminal = GetActiveTerminal();
             if (terminal == null)
             {
-                Terminal.Log(TerminalLogType.Warning, "No Terminal UI found.");
+                Log(TerminalLogType.Warning, "No Terminal UI found.");
                 return;
             }
 
             if (terminal._themePack == null)
             {
-                Terminal.Log(TerminalLogType.Warning, "No theme pack found.");
+                Log(TerminalLogType.Warning, "No theme pack found.");
                 return;
             }
 
@@ -48,7 +85,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 StringBuilder.Append(ThemeNameHelper.GetFriendlyThemeName(names[i]));
             }
             string themes = StringBuilder.ToString();
-            Terminal.Log(TerminalLogType.Message, themes);
+            Log(TerminalLogType.Message, themes);
         }
 
         [RegisterCommand(
@@ -59,17 +96,17 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         )]
         public static void CommandListFonts(CommandArg[] args)
         {
-            TerminalUI terminal = TerminalUI.ActiveTerminal;
+            TerminalUI terminal = GetActiveTerminal();
             if (terminal == null)
             {
-                Terminal.Log(TerminalLogType.Warning, "No Terminal UI found.");
+                Log(TerminalLogType.Warning, "No Terminal UI found.");
                 return;
             }
 
             if (terminal._fontPack == null)
             {
-                Terminal.Log(TerminalLogType.Warning, "No font pack found.");
-                Terminal.Log(TerminalLogType.Message, "No fonts available.");
+                Log(TerminalLogType.Warning, "No font pack found.");
+                Log(TerminalLogType.Message, "No fonts available.");
                 return;
             }
 
@@ -77,7 +114,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             List<Font> fonts = terminal._fontPack._fonts;
             if (fonts.Count == 0)
             {
-                Terminal.Log(TerminalLogType.Message, "No fonts available.");
+                Log(TerminalLogType.Message, "No fonts available.");
                 return;
             }
 
@@ -91,7 +128,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 StringBuilder.Append(f != null ? f.name : string.Empty);
             }
             string themes = StringBuilder.ToString();
-            Terminal.Log(TerminalLogType.Message, themes);
+            Log(TerminalLogType.Message, themes);
         }
 
         [RegisterCommand(
@@ -105,10 +142,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         [CommandCompleter(typeof(Completers.ThemeArgumentCompleter))]
         public static void CommandSetTheme(CommandArg[] args)
         {
-            TerminalUI terminal = TerminalUI.ActiveTerminal;
+            TerminalUI terminal = GetActiveTerminal();
             if (terminal == null)
             {
-                Terminal.Log(TerminalLogType.Warning, "No Terminal UI found.");
+                Log(TerminalLogType.Warning, "No Terminal UI found.");
                 return;
             }
 
@@ -123,7 +160,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 )
             )
             {
-                Terminal.Log(TerminalLogType.Message, $"Theme '{theme}' is already set.");
+                Log(TerminalLogType.Message, $"Theme '{theme}' is already set.");
                 return;
             }
 
@@ -141,12 +178,12 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
             if (newThemeIndex < 0)
             {
-                Terminal.Log(TerminalLogType.Warning, $"Theme '{theme}' not found.");
+                Log(TerminalLogType.Warning, $"Theme '{theme}' not found.");
                 return;
             }
 
             terminal.SetTheme(theme);
-            Terminal.Log(TerminalLogType.Message, $"Theme '{theme}' set.");
+            Log(TerminalLogType.Message, $"Theme '{theme}' set.");
         }
 
         [RegisterCommand(
@@ -160,23 +197,23 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         [CommandCompleter(typeof(Completers.FontArgumentCompleter))]
         public static void CommandSetFont(CommandArg[] args)
         {
-            TerminalUI terminal = TerminalUI.ActiveTerminal;
+            TerminalUI terminal = GetActiveTerminal();
             if (terminal == null)
             {
-                Terminal.Log(TerminalLogType.Warning, "No Terminal UI found.");
+                Log(TerminalLogType.Warning, "No Terminal UI found.");
                 return;
             }
 
             if (terminal._fontPack == null)
             {
-                Terminal.Log(TerminalLogType.Warning, "No font pack found.");
+                Log(TerminalLogType.Warning, "No font pack found.");
                 return;
             }
 
             string fontName = args[0].contents ?? string.Empty;
             if (string.IsNullOrWhiteSpace(fontName))
             {
-                Terminal.Log(TerminalLogType.Warning, "Invalid font name.");
+                Log(TerminalLogType.Warning, "Invalid font name.");
                 return;
             }
 
@@ -199,12 +236,12 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
             if (font == null)
             {
-                Terminal.Log(TerminalLogType.Warning, $"Font '{fontName}' not found.");
+                Log(TerminalLogType.Warning, $"Font '{fontName}' not found.");
                 return;
             }
 
             terminal.SetFont(font);
-            Terminal.Log(TerminalLogType.Message, $"Font '{font.name}' set.");
+            Log(TerminalLogType.Message, $"Font '{font.name}' set.");
         }
 
         [RegisterCommand(
@@ -214,14 +251,14 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         )]
         public static void CommandGetTheme(CommandArg[] args)
         {
-            TerminalUI terminal = TerminalUI.ActiveTerminal;
+            TerminalUI terminal = GetActiveTerminal();
             if (terminal == null)
             {
-                Terminal.Log(TerminalLogType.Warning, "No Terminal UI found.");
+                Log(TerminalLogType.Warning, "No Terminal UI found.");
                 return;
             }
 
-            Terminal.Log(
+            Log(
                 TerminalLogType.Message,
                 $"Current terminal theme is '{terminal.CurrentFriendlyTheme}'."
             );
@@ -234,15 +271,15 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         )]
         public static void CommandGetFont(CommandArg[] args)
         {
-            TerminalUI terminal = TerminalUI.ActiveTerminal;
+            TerminalUI terminal = GetActiveTerminal();
             if (terminal == null)
             {
-                Terminal.Log(TerminalLogType.Warning, "No Terminal UI found.");
+                Log(TerminalLogType.Warning, "No Terminal UI found.");
                 return;
             }
 
             Font currentFont = terminal.CurrentFont;
-            Terminal.Log(
+            Log(
                 TerminalLogType.Message,
                 $"Current terminal font is '{(currentFont == null ? "null" : currentFont.name)}'."
             );
@@ -257,18 +294,15 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         )]
         public static void CommandSetRandomTheme(CommandArg[] args)
         {
-            TerminalUI terminal = TerminalUI.ActiveTerminal;
+            TerminalUI terminal = GetActiveTerminal();
             if (terminal == null)
             {
-                Terminal.Log(TerminalLogType.Warning, "No Terminal UI found.");
+                Log(TerminalLogType.Warning, "No Terminal UI found.");
                 return;
             }
 
             string newTheme = terminal.SetRandomTheme();
-            Terminal.Log(
-                TerminalLogType.Message,
-                $"Randomly selected and set theme to '{newTheme}'."
-            );
+            Log(TerminalLogType.Message, $"Randomly selected and set theme to '{newTheme}'.");
         }
 
         // [RegisterCommand(
@@ -280,16 +314,16 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         // )]
         // public static void CommandSetFont(CommandArg[] args)
         // {
-        //     TerminalUI terminal = TerminalUI.ActiveTerminal;
+        //     TerminalUI terminal = GetActiveTerminal();
         //     if (terminal == null)
         //     {
-        //         Terminal.Log(TerminalLogType.Warning, "No Terminal UI found.");
+        //         Log(TerminalLogType.Warning, "No Terminal UI found.");
         //         return;
         //     }
         //
         //     if (terminal._fontPack == null)
         //     {
-        //         Terminal.Log(TerminalLogType.Warning, "No font pack found.");
+        //         Log(TerminalLogType.Warning, "No font pack found.");
         //         return;
         //     }
         //
@@ -300,14 +334,14 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         //     );
         //     if (newFontIndex < 0)
         //     {
-        //         Terminal.Log(TerminalLogType.Warning, $"Font '{fontName}' not found.");
+        //         Log(TerminalLogType.Warning, $"Font '{fontName}' not found.");
         //         return;
         //     }
         //
         //     Font font = terminal._fontPack._fonts[newFontIndex];
         //
         //     terminal.SetFont(font);
-        //     Terminal.Log(TerminalLogType.Message, $"Font '{font.name}' set.");
+        //     Log(TerminalLogType.Message, $"Font '{font.name}' set.");
         // }
 
         [RegisterCommand(
@@ -319,23 +353,20 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         )]
         public static void CommandSetRandomFont(CommandArg[] args)
         {
-            TerminalUI terminal = TerminalUI.ActiveTerminal;
+            TerminalUI terminal = GetActiveTerminal();
             if (terminal == null)
             {
-                Terminal.Log(TerminalLogType.Warning, "No Terminal UI found.");
+                Log(TerminalLogType.Warning, "No Terminal UI found.");
                 return;
             }
 
             Font font = terminal.SetRandomFont();
             if (font == null)
             {
-                Terminal.Log(TerminalLogType.Warning, "No fonts available to select.");
+                Log(TerminalLogType.Warning, "No fonts available to select.");
                 return;
             }
-            Terminal.Log(
-                TerminalLogType.Message,
-                $"Randomly selected and set font to '{font.name}'."
-            );
+            Log(TerminalLogType.Message, $"Randomly selected and set font to '{font.name}'.");
         }
 
         [RegisterCommand(
@@ -346,7 +377,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         )]
         public static void CommandClearConsole(CommandArg[] args)
         {
-            Terminal.Buffer?.Clear();
+            ActiveLog?.Clear();
         }
 
         [RegisterCommand(
@@ -358,9 +389,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         )]
         public static void CommandClearHistory(CommandArg[] args)
         {
-            Terminal.History?.Clear();
+            ActiveHistory?.Clear();
 
-            CommandLog buffer = Terminal.Buffer;
+            CommandLog buffer = ActiveLog;
             if (buffer != null)
             {
                 buffer.DrainPending();
@@ -376,7 +407,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         )]
         public static void CommandHelp(CommandArg[] args)
         {
-            CommandShell shell = Terminal.Shell;
+            CommandShell shell = ActiveShell;
             if (shell == null)
             {
                 return;
@@ -391,7 +422,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                     string usage = BuildUsage(name, info.minArgCount, info.maxArgCount, info.hint);
                     string helpLine =
                         $"{name.ToUpperInvariant(), -16}: {info.help}\n    -> {usage}";
-                    Terminal.Log(helpLine);
+                    Log(helpLine);
                     UnityEngine.Debug.Log(helpLine);
                 }
                 return;
@@ -415,13 +446,13 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 if (string.IsNullOrWhiteSpace(info.help))
                 {
                     string line = $"{commandName}: {usageLine}";
-                    Terminal.Log(line);
+                    Log(line);
                     UnityEngine.Debug.Log(line);
                 }
                 else
                 {
                     string line = $"{info.help}\n{usageLine}";
-                    Terminal.Log(line);
+                    Log(line);
                     UnityEngine.Debug.Log(line);
                 }
             }
@@ -476,7 +507,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         )]
         public static void CommandTime(CommandArg[] args)
         {
-            CommandShell shell = Terminal.Shell;
+            CommandShell shell = ActiveShell;
             if (shell == null)
             {
                 return;
@@ -485,7 +516,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             Stopwatch sw = Stopwatch.StartNew();
             shell.RunCommand(JoinArguments(args));
             sw.Stop();
-            Terminal.Log($"Time: {sw.ElapsedMilliseconds}ms");
+            Log($"Time: {sw.ElapsedMilliseconds}ms");
         }
 
         [RegisterCommand(
@@ -497,7 +528,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         )]
         public static void CommandTimeScale(CommandArg[] args)
         {
-            CommandShell shell = Terminal.Shell;
+            CommandShell shell = ActiveShell;
             if (shell == null)
             {
                 return;
@@ -506,7 +537,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             CommandArg arg = args[0];
             if (!arg.TryGet(out float timeScale))
             {
-                Terminal.Log(TerminalLogType.Warning, $"Invalid time scale {arg}.");
+                Log(TerminalLogType.Warning, $"Invalid time scale {arg}.");
                 return;
             }
 
@@ -520,7 +551,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         )]
         public static void CommandLogTerminal(CommandArg[] args)
         {
-            Terminal.Log(JoinArguments(args));
+            Log(JoinArguments(args));
         }
 
         [RegisterCommand(isDefault: true, Name = "log", Help = "Output message via Debug.Log")]
@@ -537,7 +568,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         )]
         public static void CommandTrace(CommandArg[] args)
         {
-            CommandLog buffer = Terminal.Buffer;
+            CommandLog buffer = ActiveLog;
             if (buffer == null)
             {
                 return;
@@ -547,7 +578,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
             if (logCount - 2 < 0)
             {
-                Terminal.Log(TerminalLogType.Warning, "Nothing to trace.");
+                Log(TerminalLogType.Warning, "Nothing to trace.");
                 return;
             }
 
@@ -555,7 +586,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
             if (string.IsNullOrWhiteSpace(logItem.stackTrace))
             {
-                Terminal.Log(
+                Log(
                     logItem.message.EndsWith(" (no trace)", StringComparison.OrdinalIgnoreCase)
                         ? logItem.message
                         : $"{logItem.message} (no trace)"
@@ -563,7 +594,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
             else
             {
-                Terminal.Log(logItem.stackTrace);
+                Log(logItem.stackTrace);
             }
         }
 
@@ -576,7 +607,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         )]
         public static void CommandClearVariable(CommandArg[] args)
         {
-            CommandShell shell = Terminal.Shell;
+            CommandShell shell = ActiveShell;
             if (shell == null)
             {
                 return;
@@ -586,14 +617,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             bool cleared = shell.ClearVariable(variableName);
             if (cleared)
             {
-                Terminal.Log($"Variable '{variableName}' cleared successfully.");
+                Log($"Variable '{variableName}' cleared successfully.");
             }
             else
             {
-                Terminal.Log(
-                    TerminalLogType.Warning,
-                    $"Warning: Variable '{variableName}' not found."
-                );
+                Log(TerminalLogType.Warning, $"Warning: Variable '{variableName}' not found.");
             }
         }
 
@@ -606,7 +634,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         )]
         public static void CommandClearAllVariable(CommandArg[] args)
         {
-            CommandShell shell = Terminal.Shell;
+            CommandShell shell = ActiveShell;
             if (shell == null)
             {
                 return;
@@ -619,7 +647,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 shell.ClearVariable(variable);
             }
 
-            Terminal.Log(
+            Log(
                 variableCount == 0
                     ? "No variables found - nothing to clear."
                     : $"Cleared {variableCount} variables."
@@ -635,7 +663,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         )]
         public static void CommandSetVariable(CommandArg[] args)
         {
-            CommandShell shell = Terminal.Shell;
+            CommandShell shell = ActiveShell;
             if (shell == null)
             {
                 return;
@@ -645,7 +673,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
             if (string.IsNullOrWhiteSpace(variableName) || variableName.StartsWith('$'))
             {
-                Terminal.Log(
+                Log(
                     TerminalLogType.Warning,
                     $"Warning: Possibly invalid variable name '{variableName}'."
                 );
@@ -655,18 +683,18 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             bool set = shell.SetVariable(variableName, variableValue);
             if (set)
             {
-                Terminal.Log($"Variable '{variableName}' set to '{variableValue}' successfully.");
+                Log($"Variable '{variableName}' set to '{variableValue}' successfully.");
             }
             else if (shell.Variables.TryGetValue(variableName, out CommandArg existingVariable))
             {
-                Terminal.Log(
+                Log(
                     TerminalLogType.Warning,
                     $"Variable '{variableName}' failed to set. Existing value: {existingVariable}."
                 );
             }
             else
             {
-                Terminal.Log(
+                Log(
                     TerminalLogType.Warning,
                     $"Variable '{variableName}' failed to set. No existing value found."
                 );
@@ -682,7 +710,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         )]
         public static void CommandGetVariable(CommandArg[] args)
         {
-            CommandShell shell = Terminal.Shell;
+            CommandShell shell = ActiveShell;
             if (shell == null)
             {
                 return;
@@ -692,11 +720,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
             if (shell.Variables.TryGetValue(variableName, out CommandArg variable))
             {
-                Terminal.Log($"Variable '{variableName}' is set to '{variable}'.");
+                Log($"Variable '{variableName}' is set to '{variable}'.");
             }
             else
             {
-                Terminal.Log(TerminalLogType.Warning, $"Variable '{variableName}' not found.");
+                Log(TerminalLogType.Warning, $"Variable '{variableName}' not found.");
             }
         }
 
@@ -709,7 +737,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         )]
         public static void CommandGetAllVariables(CommandArg[] args)
         {
-            CommandShell shell = Terminal.Shell;
+            CommandShell shell = ActiveShell;
             if (shell == null)
             {
                 return;
@@ -717,13 +745,13 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
             if (shell.Variables.Count == 0)
             {
-                Terminal.Log(TerminalLogType.Warning, "No variables found.");
+                Log(TerminalLogType.Warning, "No variables found.");
                 return;
             }
 
             foreach (KeyValuePair<string, CommandArg> entry in shell.Variables)
             {
-                Terminal.Log($"Variable '{entry.Key}' is set to '{entry.Value}'.");
+                Log($"Variable '{entry.Key}' is set to '{entry.Value}'.");
             }
         }
 

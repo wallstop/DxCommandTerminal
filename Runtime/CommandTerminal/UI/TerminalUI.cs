@@ -1,18 +1,20 @@
-﻿namespace WallstopStudios.DxCommandTerminal.UI
+namespace WallstopStudios.DxCommandTerminal.UI
 {
     using System;
     using System.Collections.Generic;
-    using System.ComponentModel;
     using Attributes;
-    using Backend;
-    using Backend.Profiles;
     using Extensions;
     using Helper;
     using Input;
     using Themes;
-    using UnityEditor;
     using UnityEngine;
     using UnityEngine.UIElements;
+    using WallstopStudios.DxCommandTerminal.Backend;
+    using WallstopStudios.DxCommandTerminal.Backend.Profiles;
+    using WallstopStudios.DxCommandTerminal.Service;
+#if UNITY_EDITOR
+    using UnityEditor;
+#endif
 
     [DisallowMultipleComponent]
     public sealed partial class TerminalUI : MonoBehaviour, ITerminalInputTarget
@@ -56,21 +58,74 @@
 
         public static TerminalUI Instance { get; private set; }
 
-        public static ITerminalProvider TerminalProvider { get; set; } = TerminalRegistry.Default;
+        private static ITerminalServiceLocator _serviceLocator = TerminalServiceLocator.Default;
 
-        public static ITerminalRuntimeConfigurator RuntimeConfigurator { get; set; } =
-            TerminalRuntimeConfiguratorProxy.Default;
+        public static ITerminalServiceLocator ServiceLocator
+        {
+            get => _serviceLocator ?? TerminalServiceLocator.Default;
+            set => _serviceLocator = value ?? TerminalServiceLocator.Default;
+        }
 
-        public static ITerminalInputProvider InputProvider { get; set; } =
-            TerminalInputProviderProxy.Default;
+        public static ITerminalProvider TerminalProvider
+        {
+            get => ServiceLocator.TerminalProvider;
+            set => EnsureMutableLocator().TerminalProvider = value;
+        }
 
-        public static ITerminalRuntimeProvider RuntimeProvider { get; set; } =
-            TerminalRuntimeProviderProxy.Default;
+        public static ITerminalRuntimeConfigurator RuntimeConfigurator
+        {
+            get => ServiceLocator.RuntimeConfigurator;
+            set => EnsureMutableLocator().RuntimeConfigurator = value;
+        }
+
+        public static ITerminalInputProvider InputProvider
+        {
+            get => ServiceLocator.InputProvider;
+            set => EnsureMutableLocator().InputProvider = value;
+        }
+
+        public static ITerminalRuntimeProvider RuntimeProvider
+        {
+            get => ServiceLocator.RuntimeProvider;
+            set => EnsureMutableLocator().RuntimeProvider = value;
+        }
+
+        public static ITerminalRuntimePool RuntimePool
+        {
+            get => ServiceLocator.RuntimePool;
+            set => EnsureMutableLocator().RuntimePool = value;
+        }
 
         public static TerminalUI ActiveTerminal => TerminalProvider?.ActiveTerminal;
 
         public static IReadOnlyList<TerminalUI> ActiveTerminals =>
             TerminalProvider?.ActiveTerminals ?? System.Array.Empty<TerminalUI>();
+
+        private ITerminalRuntimeScope RuntimeScope => ServiceLocator.RuntimeScope;
+
+        private ITerminalRuntimePool RuntimePoolInstance => ServiceLocator.RuntimePool;
+
+        private static MutableTerminalServiceLocator EnsureMutableLocator()
+        {
+            if (_serviceLocator is MutableTerminalServiceLocator mutable)
+            {
+                return mutable;
+            }
+
+            ITerminalServiceLocator currentLocator =
+                _serviceLocator ?? TerminalServiceLocator.Default;
+            MutableTerminalServiceLocator replacement = new MutableTerminalServiceLocator(
+                currentLocator.TerminalProvider,
+                currentLocator.RuntimeConfigurator,
+                currentLocator.InputProvider,
+                currentLocator.RuntimeProvider,
+                currentLocator.RuntimeScope,
+                currentLocator.RuntimeConfiguratorService,
+                currentLocator.RuntimePool
+            );
+            _serviceLocator = replacement;
+            return replacement;
+        }
 
         // ReSharper disable once MemberCanBePrivate.Global
         public bool IsClosed =>
@@ -199,10 +254,16 @@
         private bool _logUnityMessages;
 
         [SerializeField]
-        internal List<TerminalLogType> _ignoredLogTypes = new();
+        internal TerminalConfigurationAsset _terminalConfigurationAsset;
+
+        internal ITerminalRuntimeFactory _runtimeFactoryOverrideForTests;
+
+        internal List<TerminalLogType> _allowedLogTypes = new();
+        internal List<TerminalLogType> _blockedLogTypes = new();
 
         [SerializeField]
-        internal List<string> _disabledCommands = new();
+        internal List<string> _allowedCommands = new();
+        internal List<string> _blockedCommands = new();
 
         [SerializeField]
         internal TerminalFontPack _fontPack;
@@ -216,9 +277,19 @@
         [SerializeField]
         private TerminalCommandProfile _commandProfile;
 
+        [SerializeField]
+        [Tooltip("Optional service binding asset used to resolve terminal dependencies.")]
+        private TerminalServiceBindingAsset _serviceBindingAsset;
+
+        [SerializeField]
+        [Tooltip("Optional component-based binding overrides. Added automatically by the editor.")]
+        internal TerminalServiceBindingComponent _serviceBindingComponent;
+
         private IInputHandler[] _inputHandlers;
 
-        private TerminalRuntime _runtime;
+        private ITerminalRuntime _runtime;
+        private ITerminalServiceLocator _previousServiceLocator;
+        private ITerminalServiceLocator _appliedServiceLocator;
 
         internal ITerminalRuntime Runtime => _runtime;
 
@@ -599,8 +670,11 @@
                 nameof(_appearanceProfile),
                 nameof(_logBufferSize),
                 nameof(_historyBufferSize),
-                nameof(_ignoredLogTypes),
-                nameof(_disabledCommands),
+                nameof(_terminalConfigurationAsset),
+                nameof(_blockedLogTypes),
+                nameof(_allowedLogTypes),
+                nameof(_blockedCommands),
+                nameof(_allowedCommands),
                 nameof(ignoreDefaultCommands),
                 nameof(_fontPack),
             };
@@ -615,7 +689,8 @@
             string[] autoCompletePropertiesTracked =
             {
                 nameof(hintDisplayMode),
-                nameof(_disabledCommands),
+                nameof(_blockedCommands),
+                nameof(_allowedCommands),
                 nameof(ignoreDefaultCommands),
             };
             TrackProperties(autoCompletePropertiesTracked, _autoCompleteProperties);
@@ -671,27 +746,27 @@
 
         private void OnEnable()
         {
+            ApplyServiceBinding();
+
             if (resetStateOnInit)
             {
-                TerminalRuntimeCache.Clear();
+                ITerminalRuntimePool pool = RuntimePoolInstance;
+                if (pool != null)
+                {
+                    pool.Clear();
+                }
+                else
+                {
+                    TerminalRuntimeCache.Clear();
+                }
             }
 
             if (_runtime == null)
             {
-                if (
-                    !resetStateOnInit
-                    && TerminalRuntimeCache.TryAcquire(out TerminalRuntime cachedRuntime)
-                )
-                {
-                    _runtime = cachedRuntime;
-                }
-                else
-                {
-                    _runtime = new TerminalRuntime();
-                }
+                _runtime = AcquireRuntime();
             }
 
-            Terminal.RegisterRuntime(_runtime);
+            RuntimeScope?.RegisterRuntime(_runtime);
 
             ApplyCommandProfile();
             RefreshStaticState(force: resetStateOnInit);
@@ -729,18 +804,102 @@
 
             SetState(TerminalState.Closed);
 
-            Terminal.UnregisterRuntime(_runtime);
+            RuntimeScope?.UnregisterRuntime(_runtime);
+
+            RestoreServiceBinding();
         }
 
         private void OnDestroy()
         {
-            TerminalRuntimeCache.Store(_runtime);
+            ITerminalRuntime runtime = _runtime;
+            ITerminalRuntimePool pool = RuntimePoolInstance;
+            if (runtime != null)
+            {
+                if (pool != null)
+                {
+                    pool.Return(runtime);
+                }
+                else if (runtime is TerminalRuntime runtimeImpl)
+                {
+                    TerminalRuntimeCache.Store(runtimeImpl);
+                }
+            }
 
             TerminalProvider?.Unregister(this);
             if (Instance == this)
             {
                 Instance = TerminalProvider?.ActiveTerminal;
             }
+
+            RestoreServiceBinding();
+        }
+
+        private void ApplyServiceBinding()
+        {
+            ITerminalServiceLocator locator = ResolveServiceLocator();
+            if (locator == null)
+            {
+                _previousServiceLocator = null;
+                _appliedServiceLocator = null;
+                return;
+            }
+
+            if (!ReferenceEquals(ServiceLocator, locator))
+            {
+                _previousServiceLocator = ServiceLocator;
+                ServiceLocator = locator;
+            }
+
+            _appliedServiceLocator = locator;
+        }
+
+        private void RestoreServiceBinding()
+        {
+            if (_appliedServiceLocator == null)
+            {
+                return;
+            }
+
+            if (ReferenceEquals(ServiceLocator, _appliedServiceLocator))
+            {
+                ITerminalServiceLocator fallback =
+                    _previousServiceLocator ?? TerminalServiceLocator.Default;
+                ServiceLocator = fallback;
+            }
+
+            _previousServiceLocator = null;
+            _appliedServiceLocator = null;
+        }
+
+        private ITerminalServiceLocator ResolveServiceLocator()
+        {
+            if (_serviceBindingAsset != null)
+            {
+                return _serviceBindingAsset;
+            }
+
+            if (_serviceBindingComponent != null)
+            {
+                return _serviceBindingComponent;
+            }
+
+            TerminalServiceBindingComponent bindingComponent =
+                GetComponent<TerminalServiceBindingComponent>();
+            if (bindingComponent != null)
+            {
+                _serviceBindingComponent = bindingComponent;
+                return bindingComponent;
+            }
+
+            TerminalServiceBindingAsset defaultBinding =
+                TerminalServiceBindingSettings.DefaultBinding;
+            if (defaultBinding != null)
+            {
+                _serviceBindingAsset = defaultBinding;
+                return defaultBinding;
+            }
+
+            return null;
         }
 
         private void Start()
@@ -768,11 +927,65 @@
             _commandIssuedThisFrame = false;
         }
 
+        private ITerminalRuntime AcquireRuntime()
+        {
+            ITerminalRuntimePool pool = RuntimePoolInstance;
+            if (!resetStateOnInit)
+            {
+                if (
+                    pool != null
+                    && pool.TryRent(out ITerminalRuntime pooledRuntime)
+                    && pooledRuntime != null
+                )
+                {
+                    return pooledRuntime;
+                }
+
+                if (
+                    pool == null
+                    && TerminalRuntimeCache.TryAcquire(out TerminalRuntime cachedRuntime)
+                )
+                {
+                    return cachedRuntime;
+                }
+            }
+
+            ITerminalSettingsProvider settingsProvider = ResolveSettingsProvider();
+            ITerminalRuntimeFactory factory = ResolveRuntimeFactory();
+            ITerminalRuntime runtime = factory.CreateRuntime(settingsProvider);
+            return runtime;
+        }
+
+        private ITerminalSettingsProvider ResolveSettingsProvider()
+        {
+            if (_terminalConfigurationAsset != null)
+            {
+                return _terminalConfigurationAsset;
+            }
+
+            if (_runtimeProfile != null)
+            {
+                return new RuntimeProfileSettingsProvider(_runtimeProfile);
+            }
+
+            return new DefaultTerminalSettingsProvider();
+        }
+
+        private ITerminalRuntimeFactory ResolveRuntimeFactory()
+        {
+            if (_runtimeFactoryOverrideForTests != null)
+            {
+                return _runtimeFactoryOverrideForTests;
+            }
+
+            return new TerminalRuntimeFactory();
+        }
+
         private void RefreshStaticState(bool force)
         {
             if (_runtime == null)
             {
-                _runtime = new TerminalRuntime();
+                _runtime = AcquireRuntime();
             }
 
             TerminalRuntimeSettings settings = BuildRuntimeSettings();
@@ -791,9 +1004,11 @@
             return new TerminalRuntimeSettings(
                 logCapacity,
                 historyCapacity,
-                _ignoredLogTypes,
-                _disabledCommands,
-                ignoreDefaultCommands
+                _blockedLogTypes,
+                _allowedLogTypes,
+                _blockedCommands,
+                _allowedCommands,
+                includeDefaultCommands: !ignoreDefaultCommands
             );
         }
 
@@ -806,9 +1021,11 @@
 
             _logBufferSize = Mathf.Max(0, _runtimeProfile.LogBufferSize);
             _historyBufferSize = Mathf.Max(0, _runtimeProfile.HistoryBufferSize);
-            ignoreDefaultCommands = _runtimeProfile.IgnoreDefaultCommands;
-            CopyList(_runtimeProfile.IgnoredLogTypes, _ignoredLogTypes);
-            CopyList(_runtimeProfile.DisabledCommands, _disabledCommands);
+            ignoreDefaultCommands = !_runtimeProfile.IncludeDefaultCommands;
+            CopyList(_runtimeProfile.BlockedLogTypes, _blockedLogTypes);
+            CopyList(_runtimeProfile.AllowedLogTypes, _allowedLogTypes);
+            CopyList(_runtimeProfile.BlockedCommands, _blockedCommands);
+            CopyList(_runtimeProfile.AllowedCommands, _allowedCommands);
         }
 
         private static void CopyList<T>(IReadOnlyList<T> source, List<T> destination)
@@ -865,9 +1082,11 @@
                 return;
             }
 
-            ignoreDefaultCommands = _commandProfile.ignoreDefaultCommands;
-            CopyList(_commandProfile.disabledCommands, _disabledCommands);
-            CopyList(_commandProfile.ignoredLogTypes, _ignoredLogTypes);
+            ignoreDefaultCommands = !_commandProfile.CommandFilters.IncludeDefaults;
+            CopyList(_commandProfile.LogFilters.Blocked, _blockedLogTypes);
+            CopyList(_commandProfile.LogFilters.Allowed, _allowedLogTypes);
+            CopyList(_commandProfile.CommandFilters.Blocked, _blockedCommands);
+            CopyList(_commandProfile.CommandFilters.Allowed, _allowedCommands);
         }
 
 #if UNITY_EDITOR
@@ -1293,7 +1512,7 @@
         {
             while (ActiveShell?.TryConsumeErrorMessage(out string error) == true)
             {
-                Terminal.Log(TerminalLogType.Error, $"Error: {error}");
+                RuntimeScope?.Log(TerminalLogType.Error, $"Error: {error}");
             }
         }
 
@@ -2418,6 +2637,28 @@
 
         internal IList<string> CompletionBufferForTests => _lastCompletionBuffer;
 
+        internal void SetConfigurationAssetForTests(TerminalConfigurationAsset configurationAsset)
+        {
+            _terminalConfigurationAsset = configurationAsset;
+        }
+
+        internal void SetRuntimeFactoryForTests(ITerminalRuntimeFactory factory)
+        {
+            _runtimeFactoryOverrideForTests = factory;
+        }
+
+        internal void SetServiceBindingForTests(TerminalServiceBindingAsset binding)
+        {
+            _serviceBindingAsset = binding;
+        }
+
+        internal void SetServiceBindingComponentForTests(
+            TerminalServiceBindingComponent bindingComponent
+        )
+        {
+            _serviceBindingComponent = bindingComponent;
+        }
+
         internal void SetRuntimeProfileForTests(TerminalRuntimeProfile profile)
         {
             _runtimeProfile = profile;
@@ -2444,19 +2685,33 @@
             }
         }
 
-        internal void SetDisabledCommandsForTests(IReadOnlyList<string> commands)
+        internal void SetBlockedCommandsForTests(IReadOnlyList<string> commands)
         {
-            CopyList(commands, _disabledCommands);
+            CopyList(commands, _blockedCommands);
         }
 
-        internal void SetIgnoredLogTypesForTests(IReadOnlyList<TerminalLogType> logTypes)
+        internal void SetAllowedCommandsForTests(IReadOnlyList<string> commands)
         {
-            CopyList(logTypes, _ignoredLogTypes);
+            CopyList(commands, _allowedCommands);
         }
 
-        internal IReadOnlyList<string> DisabledCommandsForTests => _disabledCommands;
+        internal void SetBlockedLogTypesForTests(IReadOnlyList<TerminalLogType> logTypes)
+        {
+            CopyList(logTypes, _blockedLogTypes);
+        }
 
-        internal IReadOnlyList<TerminalLogType> IgnoredLogTypesForTests => _ignoredLogTypes;
+        internal void SetAllowedLogTypesForTests(IReadOnlyList<TerminalLogType> logTypes)
+        {
+            CopyList(logTypes, _allowedLogTypes);
+        }
+
+        internal IReadOnlyList<string> BlockedCommandsForTests => _blockedCommands;
+
+        internal IReadOnlyList<string> AllowedCommandsForTests => _allowedCommands;
+
+        internal IReadOnlyList<TerminalLogType> BlockedLogTypesForTests => _blockedLogTypes;
+
+        internal IReadOnlyList<TerminalLogType> AllowedLogTypesForTests => _allowedLogTypes;
 
         internal TerminalHistoryFadeTargets HistoryFadeTargetsForTests => _historyFadeTargets;
 
@@ -2627,11 +2882,11 @@
                     return;
                 }
 
-                Terminal.Log(TerminalLogType.Input, commandText);
+                RuntimeScope?.Log(TerminalLogType.Input, commandText);
                 ActiveShell?.RunCommand(commandText);
                 while (ActiveShell?.TryConsumeErrorMessage(out string error) == true)
                 {
-                    Terminal.Log(TerminalLogType.Error, $"Error: {error}");
+                    RuntimeScope?.Log(TerminalLogType.Error, $"Error: {error}");
                 }
 
                 _input.CommandText = string.Empty;
@@ -2806,7 +3061,7 @@
 
         private static void HandleUnityLog(string message, string stackTrace, LogType type)
         {
-            ITerminalRuntime runtime = Terminal.ActiveRuntime;
+            ITerminalRuntime runtime = RuntimeScope?.ActiveRuntime;
             if (runtime == null)
             {
                 return;

@@ -19,6 +19,25 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private TerminalRuntimeProfile _runtimeProfileUnderTest;
         private TerminalCommandProfile _commandProfileUnderTest;
         private TerminalAppearanceProfile _appearanceProfileUnderTest;
+        private TerminalConfigurationAsset _configurationAssetUnderTest;
+
+        private sealed class CapturingRuntimeFactory : ITerminalRuntimeFactory
+        {
+            internal ITerminalSettingsProvider CapturedProvider { get; private set; }
+
+            private readonly ITerminalRuntimeFactory _innerFactory;
+
+            internal CapturingRuntimeFactory()
+            {
+                _innerFactory = new TerminalRuntimeFactory();
+            }
+
+            public ITerminalRuntime CreateRuntime(ITerminalSettingsProvider settingsProvider)
+            {
+                CapturedProvider = settingsProvider;
+                return _innerFactory.CreateRuntime(settingsProvider);
+            }
+        }
 
         [UnityTearDown]
         public IEnumerator UnityTearDown()
@@ -38,6 +57,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             {
                 ScriptableObject.DestroyImmediate(_commandProfileUnderTest);
                 _commandProfileUnderTest = null;
+            }
+            if (_configurationAssetUnderTest != null)
+            {
+                ScriptableObject.DestroyImmediate(_configurationAssetUnderTest);
+                _configurationAssetUnderTest = null;
             }
         }
 
@@ -190,6 +214,89 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         [UnityTest]
+        public IEnumerator AcquireRuntimeUsesConfigurationAssetProvider()
+        {
+            yield return TestSceneHelpers.DestroyTerminalAndWait();
+
+            TerminalConfigurationAsset configurationAsset =
+                ScriptableObject.CreateInstance<TerminalConfigurationAsset>();
+            _configurationAssetUnderTest = configurationAsset;
+
+            CapturingRuntimeFactory runtimeFactory = new CapturingRuntimeFactory();
+
+            yield return SpawnTerminal(
+                resetStateOnInit: true,
+                configure: terminal =>
+                {
+                    terminal.SetRuntimeFactoryForTests(runtimeFactory);
+                    terminal.SetConfigurationAssetForTests(configurationAsset);
+                    terminal.SetRuntimeProfileForTests(null);
+                },
+                ensureLargeLogBuffer: false
+            );
+
+            Assert.IsNotNull(runtimeFactory.CapturedProvider);
+            Assert.AreSame(configurationAsset, runtimeFactory.CapturedProvider);
+        }
+
+        [UnityTest]
+        public IEnumerator AcquireRuntimeFallsBackToRuntimeProfileProvider()
+        {
+            yield return TestSceneHelpers.DestroyTerminalAndWait();
+
+            TerminalRuntimeProfile runtimeProfile =
+                ScriptableObject.CreateInstance<TerminalRuntimeProfile>();
+            _runtimeProfileUnderTest = runtimeProfile;
+            runtimeProfile.ConfigureForTests(
+                logBufferSize: 32,
+                historyBufferSize: 16,
+                includeDefaults: true,
+                allowedLogTypes: Array.Empty<TerminalLogType>(),
+                blockedLogTypes: Array.Empty<TerminalLogType>(),
+                allowedCommands: Array.Empty<string>(),
+                blockedCommands: Array.Empty<string>()
+            );
+
+            CapturingRuntimeFactory runtimeFactory = new CapturingRuntimeFactory();
+
+            yield return SpawnTerminal(
+                resetStateOnInit: true,
+                configure: terminal =>
+                {
+                    terminal.SetRuntimeFactoryForTests(runtimeFactory);
+                    terminal.SetConfigurationAssetForTests(null);
+                    terminal.SetRuntimeProfileForTests(runtimeProfile);
+                },
+                ensureLargeLogBuffer: false
+            );
+
+            Assert.IsNotNull(runtimeFactory.CapturedProvider);
+            Assert.IsInstanceOf<RuntimeProfileSettingsProvider>(runtimeFactory.CapturedProvider);
+        }
+
+        [UnityTest]
+        public IEnumerator AcquireRuntimeFallsBackToDefaultSettingsProvider()
+        {
+            yield return TestSceneHelpers.DestroyTerminalAndWait();
+
+            CapturingRuntimeFactory runtimeFactory = new CapturingRuntimeFactory();
+
+            yield return SpawnTerminal(
+                resetStateOnInit: true,
+                configure: terminal =>
+                {
+                    terminal.SetRuntimeFactoryForTests(runtimeFactory);
+                    terminal.SetConfigurationAssetForTests(null);
+                    terminal.SetRuntimeProfileForTests(null);
+                },
+                ensureLargeLogBuffer: false
+            );
+
+            Assert.IsNotNull(runtimeFactory.CapturedProvider);
+            Assert.IsInstanceOf<DefaultTerminalSettingsProvider>(runtimeFactory.CapturedProvider);
+        }
+
+        [UnityTest]
         public IEnumerator RuntimeModeOptionsApplySelectedConfiguration()
         {
             yield return TestSceneHelpers.DestroyTerminalAndWait();
@@ -232,9 +339,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             profile.ConfigureForTests(
                 logBufferSize: 10,
                 historyBufferSize: 5,
-                ignoreDefaults: true,
-                ignoredLogTypes: new[] { TerminalLogType.Warning },
-                disabledCommands: new[] { "clear" }
+                includeDefaults: false,
+                allowedLogTypes: Array.Empty<TerminalLogType>(),
+                blockedLogTypes: new[] { TerminalLogType.Warning },
+                allowedCommands: Array.Empty<string>(),
+                blockedCommands: new[] { "clear" }
             );
 
             yield return SpawnTerminal(
@@ -308,9 +417,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             TerminalCommandProfile profile =
                 ScriptableObject.CreateInstance<TerminalCommandProfile>();
             _commandProfileUnderTest = profile;
-            profile.ignoreDefaultCommands = true;
-            profile.disabledCommands = new List<string> { "help" };
-            profile.ignoredLogTypes = new List<TerminalLogType> { TerminalLogType.Warning };
+            profile.CommandFilters.includeDefaultCommands = false;
+            profile.CommandFilters.blockedCommands = new List<string> { "help" };
+            profile.LogFilters.blockedLogTypes = new List<TerminalLogType>
+            {
+                TerminalLogType.Warning,
+            };
 
             yield return SpawnTerminal(
                 resetStateOnInit: true,
@@ -321,8 +433,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.IsNotNull(terminal);
 
             Assert.IsTrue(terminal.ignoreDefaultCommands);
-            CollectionAssert.Contains(terminal.DisabledCommandsForTests, "help");
-            CollectionAssert.Contains(terminal.IgnoredLogTypesForTests, TerminalLogType.Warning);
+            CollectionAssert.Contains(terminal.BlockedCommandsForTests, "help");
+            CollectionAssert.Contains(terminal.BlockedLogTypesForTests, TerminalLogType.Warning);
 
             CommandShell shell = terminal.Runtime.Shell;
             Assert.IsTrue(shell.IgnoringDefaultCommands);

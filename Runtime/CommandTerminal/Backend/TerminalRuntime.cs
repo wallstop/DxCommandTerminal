@@ -6,7 +6,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     internal sealed class TerminalRuntime : ITerminalRuntime
     {
         private readonly HashSet<TerminalLogType> _ignoredLogTypesScratch = new();
+        private readonly HashSet<TerminalLogType> _allowedLogTypesScratch = new();
         private readonly HashSet<string> _ignoredCommandScratch = new(
+            StringComparer.OrdinalIgnoreCase
+        );
+        private readonly HashSet<string> _allowedCommandScratch = new(
             StringComparer.OrdinalIgnoreCase
         );
 
@@ -67,8 +71,12 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             int desiredCapacity = Math.Max(0, settings.LogCapacity);
             if (forceReset || _log == null)
             {
-                _log = new CommandLog(desiredCapacity, settings.IgnoredLogTypes);
-                ApplyIgnoredLogTypes(settings.IgnoredLogTypes);
+                _log = new CommandLog(
+                    desiredCapacity,
+                    settings.BlockedLogTypes,
+                    settings.AllowedLogTypes
+                );
+                ApplyLogFilters(settings.BlockedLogTypes, settings.AllowedLogTypes);
                 return true;
             }
 
@@ -77,7 +85,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 _log.Resize(desiredCapacity);
             }
 
-            ApplyIgnoredLogTypes(settings.IgnoredLogTypes);
+            ApplyLogFilters(settings.BlockedLogTypes, settings.AllowedLogTypes);
             return false;
         }
 
@@ -153,16 +161,32 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                     else
                     {
                         _ignoredCommandScratch.Clear();
-                        for (int i = 0; i < settings.DisabledCommands.Count; ++i)
+                        for (int i = 0; i < settings.BlockedCommands.Count; ++i)
                         {
-                            string command = settings.DisabledCommands[i];
+                            string command = settings.BlockedCommands[i];
                             if (!string.IsNullOrWhiteSpace(command))
                             {
                                 _ignoredCommandScratch.Add(command);
                             }
                         }
 
-                        if (!_shell.IgnoredCommands.SetEquals(_ignoredCommandScratch))
+                        _allowedCommandScratch.Clear();
+                        for (int i = 0; i < settings.AllowedCommands.Count; ++i)
+                        {
+                            string command = settings.AllowedCommands[i];
+                            if (!string.IsNullOrWhiteSpace(command))
+                            {
+                                _allowedCommandScratch.Add(command);
+                            }
+                        }
+
+                        bool blockedChanged = !_shell.IgnoredCommands.SetEquals(
+                            _ignoredCommandScratch
+                        );
+                        bool allowedChanged = !_shell.AllowedCommands.SetEquals(
+                            _allowedCommandScratch
+                        );
+                        if (blockedChanged || allowedChanged)
                         {
                             shouldRefreshCommands = true;
                         }
@@ -182,25 +206,39 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
             _shell.ClearAutoRegisteredCommands();
             _ignoredCommandScratch.Clear();
-            for (int i = 0; i < settings.DisabledCommands.Count; ++i)
+            for (int i = 0; i < settings.BlockedCommands.Count; ++i)
             {
-                string command = settings.DisabledCommands[i];
+                string command = settings.BlockedCommands[i];
                 if (!string.IsNullOrWhiteSpace(command))
                 {
                     _ignoredCommandScratch.Add(command);
                 }
             }
 
+            _allowedCommandScratch.Clear();
+            for (int i = 0; i < settings.AllowedCommands.Count; ++i)
+            {
+                string command = settings.AllowedCommands[i];
+                if (!string.IsNullOrWhiteSpace(command))
+                {
+                    _allowedCommandScratch.Add(command);
+                }
+            }
+
             _shell.InitializeAutoRegisteredCommands(
                 _ignoredCommandScratch,
-                ignoreDefaultCommands: settings.IgnoreDefaultCommands
+                ignoreDefaultCommands: settings.IgnoreDefaultCommands,
+                allowedCommands: _allowedCommandScratch
             );
 
             _appliedIgnoreDefaultCommands = settings.IgnoreDefaultCommands;
             return true;
         }
 
-        private void ApplyIgnoredLogTypes(IReadOnlyList<TerminalLogType> ignoredLogTypes)
+        private void ApplyLogFilters(
+            IReadOnlyList<TerminalLogType> blockedLogTypes,
+            IReadOnlyList<TerminalLogType> allowedLogTypes
+        )
         {
             if (_log == null)
             {
@@ -208,21 +246,41 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
 
             _ignoredLogTypesScratch.Clear();
-            if (ignoredLogTypes != null)
+            if (blockedLogTypes != null)
             {
-                for (int i = 0; i < ignoredLogTypes.Count; ++i)
+                for (int i = 0; i < blockedLogTypes.Count; ++i)
                 {
-                    _ignoredLogTypesScratch.Add(ignoredLogTypes[i]);
+                    _ignoredLogTypesScratch.Add(blockedLogTypes[i]);
                 }
             }
 
-            if (_log.ignoredLogTypes.SetEquals(_ignoredLogTypesScratch))
+            _allowedLogTypesScratch.Clear();
+            if (allowedLogTypes != null)
+            {
+                for (int i = 0; i < allowedLogTypes.Count; ++i)
+                {
+                    _allowedLogTypesScratch.Add(allowedLogTypes[i]);
+                }
+            }
+
+            bool blockedChanged = !_log.ignoredLogTypes.SetEquals(_ignoredLogTypesScratch);
+            bool allowedChanged = !_log.allowedLogTypes.SetEquals(_allowedLogTypesScratch);
+            if (!blockedChanged && !allowedChanged)
             {
                 return;
             }
 
-            _log.ignoredLogTypes.Clear();
-            _log.ignoredLogTypes.UnionWith(_ignoredLogTypesScratch);
+            if (blockedChanged)
+            {
+                _log.ignoredLogTypes.Clear();
+                _log.ignoredLogTypes.UnionWith(_ignoredLogTypesScratch);
+            }
+
+            if (allowedChanged)
+            {
+                _log.allowedLogTypes.Clear();
+                _log.allowedLogTypes.UnionWith(_allowedLogTypesScratch);
+            }
         }
     }
 }

@@ -1,5 +1,7 @@
 namespace WallstopStudios.DxCommandTerminal.Backend
 {
+    using UI;
+
     public sealed class TerminalRuntimeProviderProxy : ITerminalRuntimeProvider
     {
         internal static ITerminalRuntimeProvider Default { get; } =
@@ -7,6 +9,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         private TerminalRuntimeProviderProxy() { }
 
-        public ITerminalRuntime ActiveRuntime => Terminal.ActiveRuntime;
+        public ITerminalRuntime ActiveRuntime =>
+            TerminalUI.ServiceLocator?.RuntimeScope?.ActiveRuntime;
     }
 }

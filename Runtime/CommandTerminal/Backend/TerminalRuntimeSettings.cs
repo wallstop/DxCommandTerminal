@@ -7,26 +7,36 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         public TerminalRuntimeSettings(
             int logCapacity,
             int historyCapacity,
-            IReadOnlyList<TerminalLogType> ignoredLogTypes,
-            IReadOnlyList<string> disabledCommands,
-            bool ignoreDefaultCommands
+            IReadOnlyList<TerminalLogType> blockedLogTypes,
+            IReadOnlyList<TerminalLogType> allowedLogTypes,
+            IReadOnlyList<string> blockedCommands,
+            IReadOnlyList<string> allowedCommands,
+            bool includeDefaultCommands
         )
         {
             LogCapacity = logCapacity;
             HistoryCapacity = historyCapacity;
-            IgnoredLogTypes = ignoredLogTypes ?? System.Array.Empty<TerminalLogType>();
-            DisabledCommands = disabledCommands ?? System.Array.Empty<string>();
-            IgnoreDefaultCommands = ignoreDefaultCommands;
+            BlockedLogTypes = blockedLogTypes ?? System.Array.Empty<TerminalLogType>();
+            AllowedLogTypes = allowedLogTypes ?? System.Array.Empty<TerminalLogType>();
+            BlockedCommands = blockedCommands ?? System.Array.Empty<string>();
+            AllowedCommands = allowedCommands ?? System.Array.Empty<string>();
+            IncludeDefaultCommands = includeDefaultCommands;
         }
 
         public int LogCapacity { get; }
 
         public int HistoryCapacity { get; }
 
-        public IReadOnlyList<TerminalLogType> IgnoredLogTypes { get; }
+        public IReadOnlyList<TerminalLogType> BlockedLogTypes { get; }
 
-        public IReadOnlyList<string> DisabledCommands { get; }
+        public IReadOnlyList<TerminalLogType> AllowedLogTypes { get; }
 
-        public bool IgnoreDefaultCommands { get; }
+        public IReadOnlyList<string> BlockedCommands { get; }
+
+        public IReadOnlyList<string> AllowedCommands { get; }
+
+        public bool IncludeDefaultCommands { get; }
+
+        public bool IgnoreDefaultCommands => !IncludeDefaultCommands;
     }
 }

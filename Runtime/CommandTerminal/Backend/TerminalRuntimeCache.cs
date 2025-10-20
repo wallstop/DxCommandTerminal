@@ -1,5 +1,9 @@
 namespace WallstopStudios.DxCommandTerminal.Backend
 {
+    [System.Obsolete(
+        "TerminalRuntimeCache is deprecated. Use ITerminalRuntimePool via TerminalUI.ServiceLocator.RuntimePool.",
+        false
+    )]
     internal static class TerminalRuntimeCache
     {
         private static TerminalRuntime _cachedRuntime;

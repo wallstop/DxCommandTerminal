@@ -115,6 +115,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         private readonly HashSet<string> _autoRegisteredCommands = new(
             StringComparer.OrdinalIgnoreCase
         );
+        private readonly HashSet<string> _allowedCommands = new(StringComparer.OrdinalIgnoreCase);
 
         private readonly StringBuilder _commandBuilder = new();
 
@@ -147,6 +148,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             ImmutableHashSet<string>.Empty;
 
         public ImmutableHashSet<string> IgnoredCommands { get; private set; } =
+            ImmutableHashSet<string>.Empty;
+        public ImmutableHashSet<string> AllowedCommands { get; private set; } =
             ImmutableHashSet<string>.Empty;
 
         public bool IgnoringDefaultCommands { get; private set; }
@@ -200,7 +203,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         public void InitializeAutoRegisteredCommands(
             IEnumerable<string> ignoredCommands = null,
-            bool ignoreDefaultCommands = false
+            bool ignoreDefaultCommands = false,
+            IEnumerable<string> allowedCommands = null
         )
         {
             IgnoringDefaultCommands = ignoreDefaultCommands;
@@ -217,6 +221,13 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
 
             IgnoredCommands = _ignoredCommands.ToImmutableHashSet(StringComparer.OrdinalIgnoreCase);
+            _allowedCommands.Clear();
+            if (allowedCommands != null)
+            {
+                _allowedCommands.UnionWith(allowedCommands);
+            }
+            AllowedCommands = _allowedCommands.ToImmutableHashSet(StringComparer.OrdinalIgnoreCase);
+            bool hasAllowList = _allowedCommands.Count > 0;
             _rejectedCommands.Clear();
 
             foreach (
@@ -260,6 +271,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                         Delegate.CreateDelegate(typeof(Action<CommandArg[]>), method);
                 // Try resolve optional completer via CommandCompleterAttribute
                 IArgumentCompleter completer = ResolveCompleter(method);
+
+                if (hasAllowList && !_allowedCommands.Contains(commandName))
+                {
+                    continue;
+                }
 
                 bool success = AddCommand(
                     commandName,

@@ -17,6 +17,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
     using Persistence;
     using Themes;
     using UI;
+    using Service;
     using Object = UnityEngine.Object;
 #if ENABLE_INPUT_SYSTEM
     using UnityEngine.InputSystem;
@@ -27,7 +28,11 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
     public sealed class TerminalUIEditor : Editor
     {
         private static readonly TimeSpan CycleInterval = TimeSpan.FromSeconds(0.75);
-
+        private const string ResourcesRoot = "Assets/Resources";
+        private const string SettingsAssetPath =
+            ResourcesRoot + "/TerminalServiceBindingSettings.asset";
+        private const string DefaultBindingAssetPath =
+            ResourcesRoot + "/TerminalServiceBinding.asset";
         private int _commandIndex;
         private TerminalUI _lastSeen;
 
@@ -125,6 +130,11 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                         terminal._fontPack = fontPack;
                         _ = TrySetupDefaultFont(terminal);
                     }
+                }
+
+                if (EnsureServiceBindingAssigned(terminal))
+                {
+                    anyChange = true;
                 }
 
                 terminal.gameObject.AddComponent<TerminalKeyboardController>();
@@ -435,6 +445,191 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
             }
         }
 
+        private bool RenderServiceBindingSummary(TerminalUI terminal)
+        {
+            bool changed = false;
+            SerializedProperty bindingAssetProperty = serializedObject.FindProperty(
+                nameof(TerminalUI._serviceBindingAsset)
+            );
+
+            EditorGUILayout.LabelField("Service Binding", EditorStyles.boldLabel);
+            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
+            {
+                EditorGUILayout.LabelField(
+                    "Active Source",
+                    DescribeServiceBindingSource(terminal),
+                    EditorStyles.miniLabel
+                );
+
+                EditorGUI.BeginChangeCheck();
+                EditorGUILayout.PropertyField(
+                    bindingAssetProperty,
+                    new GUIContent("Binding Asset", "Optional asset providing service overrides.")
+                );
+                if (EditorGUI.EndChangeCheck())
+                {
+                    changed = true;
+                }
+
+                if (bindingAssetProperty.objectReferenceValue != null)
+                {
+                    using (new EditorGUILayout.HorizontalScope())
+                    {
+                        GUILayout.Space(EditorGUIUtility.labelWidth);
+                        if (GUILayout.Button("Select Asset", GUILayout.ExpandWidth(false)))
+                        {
+                            Selection.activeObject = bindingAssetProperty.objectReferenceValue;
+                        }
+                    }
+                }
+
+                TerminalServiceBindingComponent component =
+                    terminal._serviceBindingComponent
+                    ?? terminal.GetComponent<TerminalServiceBindingComponent>();
+
+                EditorGUI.BeginDisabledGroup(true);
+                EditorGUILayout.ObjectField(
+                    "Binding Component",
+                    component,
+                    typeof(TerminalServiceBindingComponent),
+                    true
+                );
+                EditorGUI.EndDisabledGroup();
+
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    GUILayout.Space(EditorGUIUtility.labelWidth);
+                    if (component == null)
+                    {
+                        if (GUILayout.Button("Add Component", GUILayout.ExpandWidth(false)))
+                        {
+                            if (EnsureServiceBindingAssigned(terminal))
+                            {
+                                serializedObject.Update();
+                                component =
+                                    terminal._serviceBindingComponent
+                                    ?? terminal.GetComponent<TerminalServiceBindingComponent>();
+                                changed = true;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        if (GUILayout.Button("Select Component", GUILayout.ExpandWidth(false)))
+                        {
+                            Selection.activeObject = component;
+                        }
+                    }
+                }
+
+                TerminalServiceBindingAsset projectDefault =
+                    TerminalServiceBindingSettings.DefaultBinding;
+
+                EditorGUI.BeginDisabledGroup(true);
+                EditorGUILayout.ObjectField(
+                    "Project Default",
+                    projectDefault,
+                    typeof(TerminalServiceBindingAsset),
+                    false
+                );
+                EditorGUI.EndDisabledGroup();
+
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    GUILayout.Space(EditorGUIUtility.labelWidth);
+                    if (projectDefault != null)
+                    {
+                        if (
+                            GUILayout.Button("Select Project Default", GUILayout.ExpandWidth(false))
+                        )
+                        {
+                            Selection.activeObject = projectDefault;
+                        }
+                    }
+                    else if (
+                        GUILayout.Button("Create Project Default", GUILayout.ExpandWidth(false))
+                    )
+                    {
+                        projectDefault = EnsureProjectDefaultBindingAssets();
+                        Selection.activeObject = projectDefault;
+                        changed = true;
+                    }
+                }
+            }
+
+            EditorGUILayout.Space();
+            return changed;
+        }
+
+        private static string DescribeServiceBindingSource(TerminalUI terminal)
+        {
+            if (terminal._serviceBindingAsset != null)
+            {
+                return $"Asset: {terminal._serviceBindingAsset.name}";
+            }
+
+            if (
+                terminal._serviceBindingComponent != null
+                || terminal.GetComponent<TerminalServiceBindingComponent>() != null
+            )
+            {
+                return "Component Overrides";
+            }
+
+            if (TerminalServiceBindingSettings.DefaultBinding != null)
+            {
+                return $"Project Default: {TerminalServiceBindingSettings.DefaultBinding.name}";
+            }
+
+            return "Runtime Defaults";
+        }
+
+        private static TerminalServiceBindingAsset EnsureProjectDefaultBindingAssets()
+        {
+            EnsureResourcesFolderExists();
+
+            TerminalServiceBindingAsset binding =
+                AssetDatabase.LoadAssetAtPath<TerminalServiceBindingAsset>(DefaultBindingAssetPath);
+            if (binding == null)
+            {
+                binding = ScriptableObject.CreateInstance<TerminalServiceBindingAsset>();
+                AssetDatabase.CreateAsset(binding, DefaultBindingAssetPath);
+            }
+
+            TerminalServiceBindingSettings settings =
+                AssetDatabase.LoadAssetAtPath<TerminalServiceBindingSettings>(SettingsAssetPath);
+            if (settings == null)
+            {
+                settings = ScriptableObject.CreateInstance<TerminalServiceBindingSettings>();
+                AssetDatabase.CreateAsset(settings, SettingsAssetPath);
+            }
+
+            settings.SetDefaultBinding(binding);
+            EditorUtility.SetDirty(settings);
+            AssetDatabase.SaveAssets();
+            return binding;
+        }
+
+        private static void EnsureResourcesFolderExists()
+        {
+            if (AssetDatabase.IsValidFolder(ResourcesRoot))
+            {
+                return;
+            }
+
+            string[] segments = ResourcesRoot.Split('/');
+            string currentPath = segments[0];
+            for (int i = 1; i < segments.Length; ++i)
+            {
+                string nextPath = $"{currentPath}/{segments[i]}";
+                if (!AssetDatabase.IsValidFolder(nextPath))
+                {
+                    AssetDatabase.CreateFolder(currentPath, segments[i]);
+                }
+                currentPath = nextPath;
+            }
+        }
+
         public override void OnInspectorGUI()
         {
             _impactButtonStyle ??= new GUIStyle(GUI.skin.button)
@@ -472,13 +667,17 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
 
             RenderCyclingPreviews();
 
+            anyChanged |= RenderServiceBindingSummary(terminal);
+
             DrawPropertiesExcluding(
                 serializedObject,
                 "m_Script",
                 nameof(TerminalUI._themePack),
                 nameof(TerminalUI._fontPack),
                 nameof(TerminalUI._persistedTheme),
-                nameof(TerminalUI._uiDocument)
+                nameof(TerminalUI._uiDocument),
+                nameof(TerminalUI._serviceBindingAsset),
+                nameof(TerminalUI._serviceBindingComponent)
             );
 
             bool propertiesDirty = CheckForSimpleProperties(terminal);
@@ -941,22 +1140,22 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
         {
             bool anyChanged = false;
 
-            if (terminal._ignoredLogTypes == null)
+            if (terminal._blockedLogTypes == null)
             {
-                terminal._ignoredLogTypes = new List<TerminalLogType>();
+                terminal._blockedLogTypes = new List<TerminalLogType>();
                 anyChanged = true;
             }
 
-            if (terminal._disabledCommands == null)
+            if (terminal._blockedCommands == null)
             {
-                terminal._disabledCommands = new List<string>();
+                terminal._blockedCommands = new List<string>();
                 anyChanged = true;
             }
 
             _seenLogTypes.Clear();
-            for (int i = terminal._ignoredLogTypes.Count - 1; 0 <= i; --i)
+            for (int i = terminal._blockedLogTypes.Count - 1; 0 <= i; --i)
             {
-                TerminalLogType logType = terminal._ignoredLogTypes[i];
+                TerminalLogType logType = terminal._blockedLogTypes[i];
                 int count = 0;
                 if (
                     Enum.IsDefined(typeof(TerminalLogType), logType)
@@ -969,7 +1168,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
 
                 _seenLogTypes[logType] = count + 1;
                 anyChanged = true;
-                terminal._ignoredLogTypes.RemoveAt(i);
+                terminal._blockedLogTypes.RemoveAt(i);
             }
 
             return anyChanged;
@@ -1075,7 +1274,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
             {
                 _intermediateResults.UnionWith(_defaultCommands);
             }
-            _intermediateResults.ExceptWith(terminal._disabledCommands);
+            _intermediateResults.ExceptWith(terminal._blockedCommands);
 
             if (0 < _intermediateResults.Count)
             {
@@ -1095,7 +1294,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                         if (GUILayout.Button(ignoreContent))
                         {
                             string command = ignorableCommands[_commandIndex];
-                            terminal._disabledCommands.Add(command);
+                            terminal._blockedCommands.Add(command);
                             anyChanged = true;
                         }
                     }
@@ -1113,11 +1312,11 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
         {
             bool anyChanged = false;
             _seenCommands.Clear();
-            _seenCommands.UnionWith(terminal._disabledCommands);
+            _seenCommands.UnionWith(terminal._blockedCommands);
 
             if (
-                _seenCommands.Count != terminal._disabledCommands.Count
-                || terminal._disabledCommands.Exists(command => !_allCommands.Contains(command))
+                _seenCommands.Count != terminal._blockedCommands.Count
+                || terminal._blockedCommands.Exists(command => !_allCommands.Contains(command))
             )
             {
                 EditorGUILayout.BeginHorizontal();
@@ -1127,19 +1326,19 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                     if (GUILayout.Button("Cleanup Disabled Commands"))
                     {
                         _seenCommands.Clear();
-                        for (int i = terminal._disabledCommands.Count - 1; 0 <= i; --i)
+                        for (int i = terminal._blockedCommands.Count - 1; 0 <= i; --i)
                         {
-                            string command = terminal._disabledCommands[i];
+                            string command = terminal._blockedCommands[i];
                             if (!_seenCommands.Add(command))
                             {
-                                terminal._disabledCommands.RemoveAt(i);
+                                terminal._blockedCommands.RemoveAt(i);
                                 anyChanged = true;
                                 continue;
                             }
 
                             if (!_allCommands.Contains(command))
                             {
-                                terminal._disabledCommands.RemoveAt(i);
+                                terminal._blockedCommands.RemoveAt(i);
                                 anyChanged = true;
                             }
                         }
@@ -1302,6 +1501,32 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
 
             terminal.SetFont(defaultFont, persist: true);
             return true;
+        }
+
+        private static bool EnsureServiceBindingAssigned(TerminalUI terminal)
+        {
+            TerminalServiceBindingComponent bindingComponent =
+                terminal.GetComponent<TerminalServiceBindingComponent>();
+            bool anyChange = false;
+
+            if (bindingComponent == null)
+            {
+                bindingComponent = Undo.AddComponent<TerminalServiceBindingComponent>(
+                    terminal.gameObject
+                );
+                EditorUtility.SetDirty(terminal.gameObject);
+                anyChange = true;
+            }
+
+            if (terminal._serviceBindingComponent != bindingComponent)
+            {
+                Undo.RecordObject(terminal, "Assign Terminal Service Binding Component");
+                terminal.SetServiceBindingComponentForTests(bindingComponent);
+                EditorUtility.SetDirty(terminal);
+                anyChange = true;
+            }
+
+            return anyChange;
         }
 
         private bool RenderSelectableFonts(TerminalUI terminal)

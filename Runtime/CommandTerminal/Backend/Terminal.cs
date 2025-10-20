@@ -2,6 +2,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 {
     using JetBrains.Annotations;
 
+    [System.Obsolete(
+        "Terminal static facade is deprecated. Use ITerminalRuntimeScope via TerminalUI.ServiceLocator.",
+        false
+    )]
     public static class Terminal
     {
         private static ITerminalRuntime _activeRuntime;

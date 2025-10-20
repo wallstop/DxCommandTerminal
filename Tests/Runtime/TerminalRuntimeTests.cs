@@ -62,12 +62,40 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             runtime.Configure(CreateSettings(), forceReset: true);
 
             TerminalRuntimeUpdateResult updated = runtime.Configure(
-                CreateSettings(disabledCommands: new[] { "help" }),
+                CreateSettings(blockedCommands: new[] { "help" }),
                 forceReset: false
             );
 
             Assert.IsTrue(updated.CommandsRefreshed);
             Assert.IsTrue(runtime.Shell.IgnoredCommands.Contains("help"));
+        }
+
+        [Test]
+        public void ConfigureHonorsCommandAllowList()
+        {
+            TerminalRuntime runtime = new TerminalRuntime();
+            runtime.Configure(CreateSettings(allowedCommands: new[] { "help" }), forceReset: true);
+
+            CollectionAssert.AreEquivalent(new[] { "help" }, runtime.Shell.AutoRegisteredCommands);
+        }
+
+        [Test]
+        public void ConfigureHonorsLogAllowList()
+        {
+            TerminalRuntime runtime = new TerminalRuntime();
+            runtime.Configure(
+                CreateSettings(allowedLogTypes: new[] { TerminalLogType.Message }),
+                forceReset: true
+            );
+
+            CommandLog log = runtime.Log;
+            log.HandleLog("allowed", TerminalLogType.Message);
+            log.HandleLog("blocked", TerminalLogType.Warning);
+            log.DrainPending();
+
+            Assert.IsTrue(log.allowedLogTypes.Contains(TerminalLogType.Message));
+            Assert.IsFalse(log.allowedLogTypes.Contains(TerminalLogType.Warning));
+            Assert.IsTrue(log.Logs.All(entry => entry.type == TerminalLogType.Message));
         }
 
         [Test]
@@ -109,17 +137,21 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private static TerminalRuntimeSettings CreateSettings(
             int logCapacity = 32,
             int historyCapacity = 16,
-            IReadOnlyList<TerminalLogType> ignoredLogTypes = null,
-            IReadOnlyList<string> disabledCommands = null,
-            bool ignoreDefaultCommands = false
+            IReadOnlyList<TerminalLogType> blockedLogTypes = null,
+            IReadOnlyList<TerminalLogType> allowedLogTypes = null,
+            IReadOnlyList<string> blockedCommands = null,
+            IReadOnlyList<string> allowedCommands = null,
+            bool includeDefaultCommands = true
         )
         {
             return new TerminalRuntimeSettings(
                 logCapacity,
                 historyCapacity,
-                ignoredLogTypes ?? Array.Empty<TerminalLogType>(),
-                disabledCommands ?? Array.Empty<string>(),
-                ignoreDefaultCommands
+                blockedLogTypes ?? Array.Empty<TerminalLogType>(),
+                allowedLogTypes ?? Array.Empty<TerminalLogType>(),
+                blockedCommands ?? Array.Empty<string>(),
+                allowedCommands ?? Array.Empty<string>(),
+                includeDefaultCommands
             );
         }
     }

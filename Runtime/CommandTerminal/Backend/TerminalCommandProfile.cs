@@ -1,6 +1,5 @@
 namespace WallstopStudios.DxCommandTerminal.Backend
 {
-    using System.Collections.Generic;
     using UI;
     using UnityEngine;
 
@@ -12,13 +11,18 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     public sealed class TerminalCommandProfile : ScriptableObject
     {
         [Header("Commands")]
-        public bool ignoreDefaultCommands;
+        [SerializeField]
+        private Profiles.TerminalCommandFilterConfiguration _commandFilters =
+            new Profiles.TerminalCommandFilterConfiguration();
 
-        [Tooltip("Commands that should be disabled for this terminal instance.")]
-        public List<string> disabledCommands = new();
+        [Header("Logs")]
+        [SerializeField]
+        private Profiles.TerminalLogFilterConfiguration _logFilters =
+            new Profiles.TerminalLogFilterConfiguration();
 
-        [Tooltip("Log types to ignore when routing into the terminal buffer.")]
-        public List<TerminalLogType> ignoredLogTypes = new();
+        public Profiles.TerminalCommandFilterConfiguration CommandFilters => _commandFilters;
+
+        public Profiles.TerminalLogFilterConfiguration LogFilters => _logFilters;
 
         public void ApplyTo(TerminalUI terminal)
         {
@@ -27,9 +31,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return;
             }
 
-            terminal.ignoreDefaultCommands = ignoreDefaultCommands;
-            terminal.SetDisabledCommandsForTests(disabledCommands);
-            terminal.SetIgnoredLogTypesForTests(ignoredLogTypes);
+            terminal.ignoreDefaultCommands = !_commandFilters.IncludeDefaults;
+            terminal.SetAllowedCommandsForTests(_commandFilters.Allowed);
+            terminal.SetBlockedCommandsForTests(_commandFilters.Blocked);
+            terminal.SetAllowedLogTypesForTests(_logFilters.Allowed);
+            terminal.SetBlockedLogTypesForTests(_logFilters.Blocked);
         }
     }
 }
