@@ -1,4 +1,4 @@
-namespace WallstopStudios.DxCommandTerminal.UI
+﻿namespace WallstopStudios.DxCommandTerminal.UI
 {
     using System;
     using System.Collections.Generic;
@@ -307,11 +307,53 @@ namespace WallstopStudios.DxCommandTerminal.UI
         private float _cachedStandardScrollHighValue;
         private bool _cachedStandardScrollAtEnd;
         private long _cachedStandardLogVersion;
+        private int _standardRestoreRetryCount;
+        private StandardScrollSnapshot _smallStandardScrollCache;
+        private StandardScrollSnapshot _fullStandardScrollCache;
+
+        [Header("Diagnostics")]
+        [SerializeField]
+        [Tooltip("Enable verbose logging for scroll caching/restoration behaviour.")]
+        private bool enableScrollDiagnostics;
+
+        [SerializeField]
+        [Tooltip("Enable verbose logging for launcher history fade behaviour.")]
+        private bool enableFadeDiagnostics;
+
+        [SerializeField]
+        [Tooltip("Enable verbose logging for launcher layout/scroll computations.")]
+        private bool enableLauncherDiagnostics;
+        private const float ScrollDiagnosticMinimumIntervalSeconds = 0.5f;
+        private const int StandardRestoreRetryLimit = 5;
+        private string _lastScrollDiagnosticMessage;
+        private int _suppressedScrollDiagnosticCount;
+        private float _lastScrollDiagnosticTimestamp = float.NegativeInfinity;
+        private string _pendingScrollDiagnosticMessage;
+
+        private struct StandardScrollSnapshot
+        {
+            public bool HasCache;
+            public float Value;
+            public float Normalized;
+            public float Low;
+            public float High;
+            public bool AtEnd;
+            public long LogVersion;
+
+            public void Reset()
+            {
+                HasCache = false;
+                Value = 0f;
+                Normalized = 0f;
+                Low = 0f;
+                High = 0f;
+                AtEnd = false;
+                LogVersion = -1;
+            }
+        }
 
         private VisualElement _terminalContainer;
         private ScrollView _logScrollView;
-        private ListView _logListView;
-        private HistoryListAdapter _historyListAdapter;
         private ScrollView _autoCompleteContainer;
         private VisualElement _autoCompleteViewport;
         private VisualElement _logViewport;
@@ -535,7 +577,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
             TerminalProvider.Register(this);
 
             _launcherViewController = new LauncherViewController(this);
-            _historyListAdapter = new HistoryListAdapter(this, _logListItems);
 
 #if UNITY_EDITOR
             _serializedObject = new SerializedObject(this);
@@ -992,6 +1033,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
             if (_state == TerminalState.OpenSmall || _state == TerminalState.OpenFull)
             {
+                LoadStandardScrollSnapshotForState(_state);
                 _isClosingStandard = false;
                 if (_hasCachedStandardScroll)
                 {
@@ -1002,31 +1044,41 @@ namespace WallstopStudios.DxCommandTerminal.UI
                         {
                             _restoreStandardScrollPending = false;
                             _needsScrollToEnd = true;
+                            LogScrollDiagnostic(
+                                $"SetState {_state}: cached at end, will scroll to end"
+                            );
                         }
                         else
                         {
                             _restoreStandardScrollPending = true;
                             _needsScrollToEnd = false;
+                            LogScrollDiagnostic(
+                                $"SetState {_state}: cached mid-history, restore pending"
+                            );
                         }
                     }
                     else
                     {
                         _restoreStandardScrollPending = false;
                         _needsScrollToEnd = true;
+                        LogScrollDiagnostic($"SetState {_state}: cache stale, will scroll to end");
                     }
                 }
                 else
                 {
                     _needsScrollToEnd = true;
+                    LogScrollDiagnostic($"SetState {_state}: no cache, will scroll to end");
                 }
+                LogScrollDiagnostic(
+                    $"SetState {_state}: restorePending={_restoreStandardScrollPending} needsScrollToEnd={_needsScrollToEnd}"
+                );
             }
             else if (!_isClosingStandard)
             {
                 _restoreStandardScrollPending = false;
-            }
-            if (_isClosingStandard)
-            {
-                _historyListAdapter?.SetJustification(Justify.FlexEnd);
+                LogScrollDiagnostic(
+                    $"SetState {_state}: cleared restore flag (not closing standard)"
+                );
             }
             ResetWindowIdempotent();
             if (_state != TerminalState.Closed)
@@ -1073,47 +1125,142 @@ namespace WallstopStudios.DxCommandTerminal.UI
         {
             if (_logScrollView == null)
             {
-                _hasCachedStandardScroll = false;
-                _cachedStandardScrollValue = 0f;
-                _cachedStandardScrollNormalized = 0f;
-                _cachedStandardScrollLowValue = 0f;
-                _cachedStandardScrollHighValue = 0f;
-                _cachedStandardScrollAtEnd = false;
-                _cachedStandardLogVersion = -1;
+                ResetStandardScrollCacheFields();
                 _restoreStandardScrollPending = false;
+                ResetStandardScrollCacheForState(_state);
                 return;
             }
 
             Scroller scroller = _logScrollView.verticalScroller;
             if (scroller == null)
             {
-                _hasCachedStandardScroll = false;
-                _cachedStandardScrollValue = 0f;
-                _cachedStandardScrollNormalized = 0f;
-                _cachedStandardScrollLowValue = 0f;
-                _cachedStandardScrollHighValue = 0f;
-                _cachedStandardScrollAtEnd = false;
-                _cachedStandardLogVersion = -1;
+                ResetStandardScrollCacheFields();
                 _restoreStandardScrollPending = false;
+                ResetStandardScrollCacheForState(_state);
                 return;
             }
 
             CommandLog log = ActiveLog;
             float scrollerValue = scroller.value;
             float lowValue = scroller.lowValue;
-            float highValue = scroller.highValue;
-            float range = highValue - lowValue;
+            float scrollerHighValue = scroller.highValue;
+            float geometryRange = GetGeometryScrollRange(_logScrollView);
+            float effectiveHighValue = Mathf.Max(scrollerHighValue, geometryRange);
+            if (effectiveHighValue < scrollerValue)
+            {
+                effectiveHighValue = scrollerValue;
+            }
+
+            float range = effectiveHighValue - lowValue;
 
             _cachedStandardScrollValue = scrollerValue;
             _cachedStandardScrollLowValue = lowValue;
-            _cachedStandardScrollHighValue = highValue;
+            _cachedStandardScrollHighValue = effectiveHighValue;
             _cachedStandardScrollNormalized =
                 range > 0.0001f ? Mathf.Clamp01((scrollerValue - lowValue) / range) : 0f;
-            bool hasOverflow = highValue > 0.01f;
-            _cachedStandardScrollAtEnd = !hasOverflow || scrollerValue >= highValue - 0.5f;
+            bool hasOverflow = effectiveHighValue > 0.01f;
+            _cachedStandardScrollAtEnd = !hasOverflow || scrollerValue >= effectiveHighValue - 0.5f;
             _cachedStandardLogVersion = log?.Version ?? -1;
             _hasCachedStandardScroll = true;
             _restoreStandardScrollPending = false;
+            _standardRestoreRetryCount = 0;
+            StoreStandardScrollSnapshot(_state);
+            LogScrollDiagnostic(
+                $"CacheStandardScrollPosition state={_state} value={scrollerValue:F3} low={lowValue:F3} high={effectiveHighValue:F3} normalized={_cachedStandardScrollNormalized:F3} atEnd={_cachedStandardScrollAtEnd}"
+            );
+        }
+
+        private void ResetStandardScrollCacheFields()
+        {
+            _hasCachedStandardScroll = false;
+            _cachedStandardScrollValue = 0f;
+            _cachedStandardScrollNormalized = 0f;
+            _cachedStandardScrollLowValue = 0f;
+            _cachedStandardScrollHighValue = 0f;
+            _cachedStandardScrollAtEnd = false;
+            _cachedStandardLogVersion = -1;
+            _standardRestoreRetryCount = 0;
+        }
+
+        private void ResetStandardScrollCacheForState(TerminalState state)
+        {
+            switch (state)
+            {
+                case TerminalState.OpenSmall:
+                    _smallStandardScrollCache.Reset();
+                    break;
+                case TerminalState.OpenFull:
+                    _fullStandardScrollCache.Reset();
+                    break;
+            }
+        }
+
+        private void StoreStandardScrollSnapshot(TerminalState state)
+        {
+            if (state != TerminalState.OpenSmall && state != TerminalState.OpenFull)
+            {
+                return;
+            }
+
+            StandardScrollSnapshot snapshot = new StandardScrollSnapshot
+            {
+                HasCache = _hasCachedStandardScroll,
+                Value = _cachedStandardScrollValue,
+                Normalized = _cachedStandardScrollNormalized,
+                Low = _cachedStandardScrollLowValue,
+                High = _cachedStandardScrollHighValue,
+                AtEnd = _cachedStandardScrollAtEnd,
+                LogVersion = _cachedStandardLogVersion,
+            };
+
+            if (state == TerminalState.OpenSmall)
+            {
+                _smallStandardScrollCache = snapshot;
+            }
+            else
+            {
+                _fullStandardScrollCache = snapshot;
+            }
+
+            LogScrollDiagnostic(
+                $"Stored standard scroll snapshot for {state}: hasCache={snapshot.HasCache}, value={snapshot.Value:F3}, normalized={snapshot.Normalized:F3}, low={snapshot.Low:F3}, high={snapshot.High:F3}, atEnd={snapshot.AtEnd}"
+            );
+        }
+
+        private void LoadStandardScrollSnapshotForState(TerminalState state)
+        {
+            if (state != TerminalState.OpenSmall && state != TerminalState.OpenFull)
+            {
+                ResetStandardScrollCacheFields();
+                _restoreStandardScrollPending = false;
+                return;
+            }
+
+            StandardScrollSnapshot snapshot =
+                state == TerminalState.OpenSmall
+                    ? _smallStandardScrollCache
+                    : _fullStandardScrollCache;
+
+            if (snapshot.HasCache)
+            {
+                _hasCachedStandardScroll = true;
+                _cachedStandardScrollValue = snapshot.Value;
+                _cachedStandardScrollNormalized = snapshot.Normalized;
+                _cachedStandardScrollLowValue = snapshot.Low;
+                _cachedStandardScrollHighValue = snapshot.High;
+                _cachedStandardScrollAtEnd = snapshot.AtEnd;
+                _cachedStandardLogVersion = snapshot.LogVersion;
+            }
+            else
+            {
+                ResetStandardScrollCacheFields();
+            }
+
+            _restoreStandardScrollPending = false;
+            _standardRestoreRetryCount = 0;
+            LogScrollDiagnostic(
+                $"Loaded standard scroll snapshot for {state}: hasCache={snapshot.HasCache}, value={_cachedStandardScrollValue:F3}, normalized={_cachedStandardScrollNormalized:F3}, low={_cachedStandardScrollLowValue:F3}, high={_cachedStandardScrollHighValue:F3}, atEnd={_cachedStandardScrollAtEnd}"
+            );
         }
 
         private static bool ListsEqual<T>(List<T> a, List<T> b)
@@ -1201,9 +1348,28 @@ namespace WallstopStudios.DxCommandTerminal.UI
             _uiDocument.rootVisualElement.style.height = new StyleLength(_realWindowHeight);
             _terminalContainer.style.height = new StyleLength(_realWindowHeight);
             root.Add(_terminalContainer);
-
-            _historyListAdapter.EnsureInitialized(_terminalContainer);
-            _logListView = _historyListAdapter.ListView;
+            _logScrollView = new ScrollView { name = "LogScrollView" };
+            _logScrollView.AddToClassList("log-scroll-view");
+            _terminalContainer.Add(_logScrollView);
+            InitializeScrollView(_logScrollView);
+            _logViewport = _logScrollView.contentViewport;
+            if (_logViewport != null)
+            {
+                _logViewport.style.flexDirection = FlexDirection.Column;
+                _logViewport.style.flexGrow = 1f;
+                _logViewport.style.flexShrink = 1f;
+                _logViewport.style.minHeight = 0f;
+                _logViewport.style.overflow = Overflow.Hidden;
+            }
+            VisualElement logContent = _logScrollView.contentContainer;
+            if (logContent != null)
+            {
+                logContent.style.flexDirection = FlexDirection.Column;
+                logContent.style.alignItems = Align.FlexStart;
+                logContent.style.minHeight = 0f;
+                SetHistoryJustification(Justify.FlexEnd);
+                logContent.RegisterCallback<GeometryChangedEvent>(OnLogContentGeometryChanged);
+            }
 
             _autoCompleteContainer = new ScrollView(ScrollViewMode.Horizontal)
             {
@@ -1678,26 +1844,144 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
         }
 
+        private float GetGeometryScrollRange(ScrollView scrollView)
+        {
+            if (scrollView == null)
+            {
+                return 0f;
+            }
+
+            float viewportHeight = 0f;
+            VisualElement viewport = scrollView.contentViewport;
+            if (viewport != null)
+            {
+                viewportHeight = viewport.layout.height;
+                if (float.IsNaN(viewportHeight) || viewportHeight <= 0.0001f)
+                {
+                    viewportHeight = viewport.resolvedStyle.height;
+                    if (float.IsNaN(viewportHeight))
+                    {
+                        viewportHeight = 0f;
+                    }
+                }
+            }
+
+            if (viewportHeight <= 0.0001f)
+            {
+                if (_logViewport != null)
+                {
+                    float resolvedViewportHeight = _logViewport.resolvedStyle.height;
+                    if (!float.IsNaN(resolvedViewportHeight) && resolvedViewportHeight > 0.0001f)
+                    {
+                        viewportHeight = resolvedViewportHeight;
+                    }
+                }
+
+                if (viewportHeight <= 0.0001f)
+                {
+                    float inputHeight =
+                        _inputContainer != null ? _inputContainer.resolvedStyle.height : 0f;
+                    float containerHeight =
+                        _terminalContainer != null ? _terminalContainer.resolvedStyle.height : 0f;
+                    if (float.IsNaN(inputHeight))
+                    {
+                        inputHeight = 0f;
+                    }
+                    if (float.IsNaN(containerHeight) || containerHeight <= 0.0001f)
+                    {
+                        containerHeight = _currentWindowHeight;
+                    }
+
+                    float fallbackViewport = Mathf.Max(0f, containerHeight - inputHeight);
+                    if (fallbackViewport > viewportHeight)
+                    {
+                        viewportHeight = fallbackViewport;
+                    }
+                }
+            }
+
+            float contentHeight = 0f;
+            VisualElement content = scrollView.contentContainer;
+            if (content != null)
+            {
+                contentHeight = content.layout.height;
+                if (float.IsNaN(contentHeight) || contentHeight <= 0.0001f)
+                {
+                    contentHeight = content.resolvedStyle.height;
+                    if (float.IsNaN(contentHeight))
+                    {
+                        contentHeight = 0f;
+                    }
+                }
+            }
+
+            if (contentHeight <= 0.0001f)
+            {
+                int itemCount = _logListItems != null ? _logListItems.Count : 0;
+                if (itemCount > 0)
+                {
+                    float estimatedHeight = itemCount * StandardEstimatedHistoryRowHeight;
+                    if (estimatedHeight > contentHeight)
+                    {
+                        contentHeight = estimatedHeight;
+                    }
+                }
+            }
+
+            return Mathf.Max(0f, contentHeight - viewportHeight);
+        }
+
+        private float GetEffectiveScrollHighValue(ScrollView scrollView, Scroller scroller)
+        {
+            if (scroller == null)
+            {
+                return 0f;
+            }
+
+            float currentHighValue = Mathf.Max(0f, scroller.highValue);
+            float geometryHighValue = GetGeometryScrollRange(scrollView);
+            float candidateHighValue = Mathf.Max(currentHighValue, geometryHighValue);
+
+            if (_restoreStandardScrollPending && _hasCachedStandardScroll)
+            {
+                float cachedHigh = Mathf.Max(0f, _cachedStandardScrollHighValue);
+                if (cachedHigh > candidateHighValue)
+                {
+                    candidateHighValue = cachedHigh;
+                }
+            }
+
+            return Mathf.Max(0f, candidateHighValue);
+        }
+
         private bool ScrollToEnd()
         {
-            _restoreStandardScrollPending = false;
-
-            if (_logScrollView == null)
+            if (_restoreStandardScrollPending)
             {
+                LogScrollDiagnostic("ScrollToEnd aborted: restore pending");
                 return false;
             }
 
-            bool immediateSuccess = TryApplyScrollToEnd(_logScrollView);
+            if (_logScrollView == null)
+            {
+                LogScrollDiagnostic("ScrollToEnd aborted: _logScrollView is null");
+                return false;
+            }
+
+            bool immediateSuccess = TryApplyScrollToEnd(_logScrollView, "immediate");
             _logScrollView
                 .schedule.Execute(() =>
                 {
-                    bool scheduledSuccess = TryApplyScrollToEnd(_logScrollView);
+                    bool scheduledSuccess = TryApplyScrollToEnd(_logScrollView, "scheduled");
                     if (scheduledSuccess)
                     {
                         _needsScrollToEnd = false;
                     }
                     else
                     {
+                        LogScrollDiagnostic(
+                            "ScrollToEnd scheduled retry deferred; will reschedule"
+                        );
                         _needsScrollToEnd = true;
                     }
                 })
@@ -1705,30 +1989,105 @@ namespace WallstopStudios.DxCommandTerminal.UI
             return immediateSuccess;
         }
 
-        private bool TryApplyScrollToEnd(ScrollView scrollView)
+        private bool TryApplyScrollToEnd(ScrollView scrollView, string phase)
         {
             if (scrollView == null)
             {
+                LogScrollDiagnostic($"TryApplyScrollToEnd ({phase}) aborted: scrollView null");
                 return false;
             }
 
             Scroller scroller = scrollView.verticalScroller;
             if (scroller == null)
             {
+                LogScrollDiagnostic($"TryApplyScrollToEnd ({phase}) waiting for scroller");
                 return false;
             }
 
-            float highValue = scroller.highValue;
-            float target = highValue;
-            if (target <= 0.01f)
+            float highValue = GetEffectiveScrollHighValue(scrollView, scroller);
+            if (highValue <= 0.01f)
             {
+                LogScrollDiagnostic(
+                    $"TryApplyScrollToEnd ({phase}) skipped, highValue={highValue:F4}"
+                );
                 return false;
             }
 
-            scroller.value = target;
+            if (highValue > scroller.highValue + 0.001f)
+            {
+                scroller.highValue = highValue;
+            }
 
-            UpdateStandardScrollAlignment(target);
+            if (highValue < scroller.lowValue)
+            {
+                highValue = scroller.lowValue;
+            }
+
+            scroller.value = highValue;
+            Vector2 offset = scrollView.scrollOffset;
+            if (!Mathf.Approximately(offset.y, highValue))
+            {
+                scrollView.scrollOffset = new Vector2(offset.x, highValue);
+            }
+            LogScrollDiagnostic($"TryApplyScrollToEnd ({phase}) set scroller.value={highValue:F4}");
+
+            UpdateStandardScrollAlignment(highValue);
             return true;
+        }
+
+        private void LogScrollDiagnostic(string message)
+        {
+            if (!enableScrollDiagnostics)
+            {
+                return;
+            }
+
+            float now = Time.realtimeSinceStartup;
+            float elapsed = now - _lastScrollDiagnosticTimestamp;
+            if (elapsed < ScrollDiagnosticMinimumIntervalSeconds)
+            {
+                _suppressedScrollDiagnosticCount++;
+                _pendingScrollDiagnosticMessage = message;
+                return;
+            }
+
+            if (_suppressedScrollDiagnosticCount > 0)
+            {
+                string latestMessage =
+                    _pendingScrollDiagnosticMessage
+                    ?? _lastScrollDiagnosticMessage
+                    ?? "no details available";
+                Debug.Log(
+                    $"[TerminalUI Scroll][{id}] (suppressed {_suppressedScrollDiagnosticCount} messages, latest: {latestMessage})",
+                    this
+                );
+                _suppressedScrollDiagnosticCount = 0;
+                _pendingScrollDiagnosticMessage = null;
+            }
+
+            _lastScrollDiagnosticMessage = message;
+            _lastScrollDiagnosticTimestamp = now;
+            Debug.Log($"[TerminalUI Scroll][{id}] {message}", this);
+        }
+
+        private void LogFadeDiagnostic(string message)
+        {
+            if (!enableFadeDiagnostics)
+            {
+                return;
+            }
+
+            Debug.Log($"[TerminalUI Fade][{id}] {message}", this);
+        }
+
+        private void LogLauncherDiagnostic(string message)
+        {
+            if (!enableLauncherDiagnostics)
+            {
+                return;
+            }
+
+            Debug.Log($"[TerminalUI Launcher][{id}] {message}", this);
         }
 
         public Font SetRandomFont(bool persist = false)
@@ -2022,8 +2381,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         internal ScrollView LogScrollViewForTests => _logScrollView;
 
-        internal ListView LogListViewForTests => _logListView;
-
         internal VisualElement LogContentForTests => _logScrollView?.contentContainer;
 
         internal void UpdateTerminalVisibilityForTests()
@@ -2130,32 +2487,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
         }
 
-        internal static void ConfigureEmptyLabelForTests(ListView listView)
-        {
-            ConfigureEmptyLabel(listView);
-        }
-
-        private static void ConfigureEmptyLabel(ListView listView)
-        {
-            if (listView == null)
-            {
-                return;
-            }
-
-            void HideLabel()
-            {
-                Label emptyLabel = listView.Q<Label>("unity-list-view__empty-label");
-                if (emptyLabel != null)
-                {
-                    emptyLabel.style.display = DisplayStyle.None;
-                    emptyLabel.text = string.Empty;
-                }
-            }
-
-            HideLabel();
-            listView.schedule.Execute(HideLabel).ExecuteLater(0);
-        }
-
         internal void SetWindowHeightsForTests(
             float currentHeight,
             float targetHeight,
@@ -2210,31 +2541,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             _inputContainer = inputContainer;
             _logScrollView = logScrollView;
             InjectAutoCompleteContainerForTests(autoCompleteContainer);
-        }
-
-        internal void AttachHistoryAdapterForTests(ListView listView, ScrollView scrollView)
-        {
-            if (_historyListAdapter == null)
-            {
-                _historyListAdapter = new HistoryListAdapter(this, _logListItems);
-            }
-
-            if (listView != null)
-            {
-                _logListView = listView;
-            }
-
-            if (scrollView != null)
-            {
-                _logScrollView = scrollView;
-            }
-
-            _historyListAdapter.InjectForTests(listView, scrollView);
-
-            if (_logListView == null)
-            {
-                _logListView = _historyListAdapter.ListView;
-            }
+            InitializeInjectedScrollViewForTests();
         }
 
         internal void SetHintDisplayModeForTests(HintDisplayMode mode)
@@ -2247,6 +2554,37 @@ namespace WallstopStudios.DxCommandTerminal.UI
             ResetWindowIdempotent();
         }
 
+        private void InitializeInjectedScrollViewForTests()
+        {
+            if (_logScrollView == null)
+            {
+                return;
+            }
+
+            InitializeScrollView(_logScrollView);
+            _logScrollView.AddToClassList("log-scroll-view");
+
+            VisualElement viewport = _logScrollView.contentViewport;
+            if (viewport != null)
+            {
+                viewport.style.flexDirection = FlexDirection.Column;
+                viewport.style.flexGrow = 1f;
+                viewport.style.flexShrink = 1f;
+                viewport.style.minHeight = 0f;
+                viewport.style.overflow = Overflow.Hidden;
+            }
+
+            VisualElement content = _logScrollView.contentContainer;
+            if (content != null)
+            {
+                content.style.flexDirection = FlexDirection.Column;
+                content.style.alignItems = Align.FlexStart;
+                content.style.minHeight = 0f;
+                SetHistoryJustification(Justify.FlexEnd);
+                content.RegisterCallback<GeometryChangedEvent>(OnLogContentGeometryChanged);
+            }
+        }
+
         private void ResetLauncherSettings()
         {
             Debug.LogWarning(
@@ -2255,6 +2593,17 @@ namespace WallstopStudios.DxCommandTerminal.UI
             );
             _launcherSettings = new TerminalLauncherSettings();
             ResetWindowIdempotent();
+        }
+
+        internal void SetHistoryJustification(Justify justify)
+        {
+            VisualElement content = _logScrollView?.contentContainer;
+            if (content == null)
+            {
+                return;
+            }
+
+            content.style.justifyContent = justify;
         }
 
         public void EnterCommand()

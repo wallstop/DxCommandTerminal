@@ -334,6 +334,100 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 #endif
 
         [UnityTest]
+        public IEnumerator LauncherHistoryShowsScrollbarAndOpacityGradient()
+        {
+            yield return TestSceneHelpers.DestroyTerminalAndWait();
+
+            yield return SpawnTerminal(
+                resetStateOnInit: true,
+                configure: terminal =>
+                {
+                    terminal.disableUIForTests = true;
+                }
+            );
+
+            TerminalUI terminal = TerminalUI.Instance;
+            Assert.IsNotNull(terminal);
+
+            CommandHistory history = terminal.Runtime.History;
+            Assert.IsNotNull(history);
+            history.Clear();
+
+            const int visibleCount = 3;
+            const int totalEntries = visibleCount + 2;
+            for (int i = 0; i < totalEntries; ++i)
+            {
+                history.Push($"command-{i}", success: true, errorFree: true);
+            }
+
+            LauncherLayoutMetrics metrics = new LauncherLayoutMetrics(
+                width: 640f,
+                height: 240f,
+                left: 80f,
+                top: 120f,
+                historyHeight: 180f,
+                cornerRadius: 12f,
+                insetPadding: 8f,
+                historyVisibleEntryCount: visibleCount,
+                historyFadeExponent: 2f,
+                snapOpen: true,
+                animationDuration: 0.05f
+            );
+
+            ScrollView logScroll = new ScrollView();
+            ScrollView autoComplete = new ScrollView(ScrollViewMode.Horizontal);
+            VisualElement terminalContainer = new VisualElement();
+            VisualElement inputContainer = new VisualElement();
+
+            terminal.InjectLayoutElementsForTests(
+                terminalContainer,
+                inputContainer,
+                autoComplete,
+                logScroll
+            );
+            terminal.SetLauncherMetricsForTests(metrics);
+            terminal.SetWindowHeightsForTests(metrics.Height, metrics.Height);
+
+            terminal.SetState(TerminalState.OpenLauncher);
+            terminal.RefreshUIForTests();
+            terminal.RefreshLauncherHistoryForTests();
+            terminal.RefreshUIForTests();
+
+            Assert.That(logScroll.verticalScrollerVisibility, Is.EqualTo(ScrollerVisibility.Auto));
+
+            Scroller scroller = logScroll.verticalScroller;
+            Assert.IsNotNull(scroller);
+            Assert.That(scroller.highValue, Is.GreaterThan(0.01f));
+            Assert.That(scroller.resolvedStyle.display, Is.Not.EqualTo(DisplayStyle.None));
+
+            VisualElement content = logScroll.contentContainer;
+            Assert.IsNotNull(content);
+            Assert.That(content.childCount, Is.EqualTo(totalEntries));
+
+            Label newest = content[0] as Label;
+            Assert.IsNotNull(newest);
+            Assert.That(newest!.text, Is.EqualTo($"command-{totalEntries - 1}"));
+            Assert.That(newest.style.opacity.value, Is.EqualTo(1f).Within(0.001f));
+
+            Label middle = content[1] as Label;
+            Assert.IsNotNull(middle);
+            Assert.That(
+                middle!.style.opacity.value,
+                Is.LessThan(newest.style.opacity.value)
+                    .And.GreaterThan(terminal.LauncherFadeMinimumForTests)
+            );
+
+            Label oldest = content[totalEntries - 1] as Label;
+            Assert.IsNotNull(oldest);
+            Assert.That(
+                oldest!.style.opacity.value,
+                Is.EqualTo(terminal.LauncherFadeMinimumForTests).Within(0.001f)
+            );
+
+            yield return TestSceneHelpers.DestroyTerminalAndWait();
+        }
+
+        [UnityTest]
         public IEnumerator RuntimeModeOptionsFallbackToFirstWhenSelectionMissing()
         {
             yield return TestSceneHelpers.DestroyTerminalAndWait();

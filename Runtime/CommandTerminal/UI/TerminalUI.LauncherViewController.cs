@@ -8,6 +8,9 @@ namespace WallstopStudios.DxCommandTerminal.UI
         private sealed class LauncherViewController
         {
             private readonly TerminalUI _owner;
+            private const float FadeMomentumWindowSeconds = 0.35f;
+            private IVisualElementScheduledItem _fadeMomentumSchedule;
+            private float _fadeMomentumExpiry;
 
             internal LauncherViewController(TerminalUI owner)
             {
@@ -16,13 +19,13 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             internal void ConfigureForStandardMode()
             {
-                _owner._historyListAdapter?.SetJustification(Justify.FlexEnd);
+                _owner.SetHistoryJustification(Justify.FlexEnd);
                 ClearFade();
             }
 
             internal void ConfigureForLauncherMode()
             {
-                _owner._historyListAdapter?.SetJustification(Justify.FlexStart);
+                _owner.SetHistoryJustification(Justify.FlexStart);
             }
 
             internal void ClampScroll()
@@ -49,7 +52,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             internal void UpdateFade()
             {
                 if (
-                    !CanFade(
+                    !_owner.TryGetLauncherFadeContext(
                         out ScrollView scrollView,
                         out VisualElement viewport,
                         out VisualElement historyContent
@@ -66,6 +69,15 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 {
                     return;
                 }
+
+                Scroller scroller = scrollView.verticalScroller;
+                float scrollerHigh = scroller != null ? scroller.highValue : 0f;
+                _owner.LogFadeDiagnostic(
+                    $"UpdateFade viewportHeight={viewportHeight:F3} childCount={historyContent.childCount} scrollerHigh={scrollerHigh:F3}"
+                );
+                _owner.LogLauncherDiagnostic(
+                    $"UpdateFade viewport={viewportHeight:F3} scrollerHigh={scrollerHigh:F3} childCount={historyContent.childCount}"
+                );
 
                 float viewportTop = viewportWorld.yMin;
                 float viewportBottom = viewportWorld.yMax;
@@ -131,15 +143,32 @@ namespace WallstopStudios.DxCommandTerminal.UI
                     return;
                 }
 
+                _owner.LogLauncherDiagnostic("ScheduleFade requested");
                 scrollView.schedule.Execute(UpdateFade).ExecuteLater(0);
+                StartFadeMomentumMonitor(scrollView);
             }
 
             internal void HandleScrollValueChanged(float value)
             {
-                if (!_owner.IsLauncherActive || !_owner._launcherMetricsInitialized)
+                if (
+                    !_owner.TryGetLauncherFadeContext(
+                        out ScrollView scrollView,
+                        out VisualElement viewport,
+                        out VisualElement historyContent
+                    )
+                )
                 {
                     return;
                 }
+
+                _owner.LogFadeDiagnostic(
+                    $"HandleScrollValueChanged value={value:F3} viewportHeight={viewport.resolvedStyle.height:F3} contentChildren={historyContent.childCount}"
+                );
+                Scroller scroller = scrollView.verticalScroller;
+                float scrollerHigh = scroller != null ? scroller.highValue : 0f;
+                _owner.LogLauncherDiagnostic(
+                    $"HandleScrollValueChanged value={value:F3} scrollerHigh={scrollerHigh:F3}"
+                );
 
                 ClampScroll();
                 UpdateFade();
@@ -148,6 +177,8 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             internal void ClearFade()
             {
+                StopFadeMomentumMonitor();
+
                 ScrollView scrollView = _owner._logScrollView;
                 if (scrollView == null)
                 {
@@ -168,20 +199,51 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 }
             }
 
-            private bool CanFade(
-                out ScrollView scrollView,
-                out VisualElement viewport,
-                out VisualElement historyContent
-            )
+            private void StartFadeMomentumMonitor(ScrollView scrollView)
             {
-                scrollView = _owner._logScrollView;
-                viewport = scrollView?.contentViewport;
-                historyContent = scrollView?.contentContainer;
-                return _owner.IsLauncherActive
-                    && _owner._launcherMetricsInitialized
-                    && scrollView != null
-                    && viewport != null
-                    && historyContent != null;
+                if (scrollView == null)
+                {
+                    return;
+                }
+
+                _fadeMomentumExpiry = Time.unscaledTime + FadeMomentumWindowSeconds;
+
+                if (_fadeMomentumSchedule != null)
+                {
+                    return;
+                }
+
+                _owner.LogFadeDiagnostic("Starting fade momentum monitor");
+                _fadeMomentumSchedule = scrollView.schedule.Execute(FadeMomentumTick).Every(16);
+            }
+
+            private void StopFadeMomentumMonitor()
+            {
+                if (_fadeMomentumSchedule == null)
+                {
+                    return;
+                }
+
+                _owner.LogFadeDiagnostic("Stopping fade momentum monitor");
+                _fadeMomentumSchedule.Pause();
+                _fadeMomentumSchedule = null;
+            }
+
+            private void FadeMomentumTick()
+            {
+                if (_fadeMomentumSchedule == null)
+                {
+                    return;
+                }
+
+                if (Time.unscaledTime >= _fadeMomentumExpiry || !_owner.IsLauncherActive)
+                {
+                    StopFadeMomentumMonitor();
+                    return;
+                }
+
+                _owner.LogFadeDiagnostic("Fade momentum tick");
+                UpdateFade();
             }
 
             private static void ApplyOpacity(VisualElement entry, float opacity)

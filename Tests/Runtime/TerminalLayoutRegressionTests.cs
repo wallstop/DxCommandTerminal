@@ -1,11 +1,14 @@
 namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 {
+    using System.Collections;
     using System.Collections.Generic;
     using Backend;
     using NUnit.Framework;
     using UI;
     using UnityEngine;
+    using UnityEngine.TestTools;
     using UnityEngine.UIElements;
+    using WallstopStudios.DxCommandTerminal.Tests.Runtime.Components;
 
     public sealed class TerminalLayoutRegressionTests
     {
@@ -317,7 +320,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     autoComplete,
                     log
                 );
-                terminal.AttachHistoryAdapterForTests(null, log);
 
                 terminal.ConfigureStandardLayoutForTests(800f);
 
@@ -356,6 +358,120 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             {
                 Object.DestroyImmediate(go);
             }
+        }
+
+        [UnityTest]
+        public IEnumerator StandardScrollRestoresAfterReopen()
+        {
+            yield return TerminalTests.SpawnTerminal(
+                resetStateOnInit: true,
+                configure: terminal => terminal.disableUIForTests = true,
+                ensureLargeLogBuffer: true
+            );
+
+            TerminalUI terminal = TerminalUI.Instance;
+            Assert.IsNotNull(terminal);
+
+            VisualElement terminalContainer = new VisualElement();
+            VisualElement inputContainer = new VisualElement();
+            ScrollView autoComplete = new ScrollView(ScrollViewMode.Horizontal);
+            ScrollView logScroll = new ScrollView();
+
+            terminal.InjectLayoutElementsForTests(
+                terminalContainer,
+                inputContainer,
+                autoComplete,
+                logScroll
+            );
+
+            terminal.SetState(TerminalState.OpenFull);
+
+            CommandLog logBuffer = terminal.Runtime.Log;
+            logBuffer.HandleLog("first message", TerminalLogType.Message, includeStackTrace: false);
+            logBuffer.HandleLog(
+                "second message",
+                TerminalLogType.Message,
+                includeStackTrace: false
+            );
+            logBuffer.HandleLog("third message", TerminalLogType.Message, includeStackTrace: false);
+
+            terminal.RefreshUIForTests();
+
+            Scroller scroller = logScroll.verticalScroller;
+            Assert.IsNotNull(scroller);
+            scroller.highValue = 200f;
+            scroller.value = 80f;
+            logScroll.scrollOffset = new Vector2(0f, 80f);
+
+            terminal.SetState(TerminalState.Closed);
+            terminal.RefreshUIForTests();
+
+            terminal.SetState(TerminalState.OpenFull);
+            terminal.RefreshUIForTests();
+            yield return TestSceneHelpers.WaitFrames(1);
+
+            scroller = logScroll.verticalScroller;
+            Assert.IsNotNull(scroller);
+            Assert.That(scroller.value, Is.EqualTo(80f).Within(0.001f));
+
+            yield return TestSceneHelpers.DestroyTerminalAndWait();
+        }
+
+        [UnityTest]
+        public IEnumerator StandardScrollStaysPutWhenNewLogsArrive()
+        {
+            yield return TerminalTests.SpawnTerminal(
+                resetStateOnInit: true,
+                configure: terminal => terminal.disableUIForTests = true,
+                ensureLargeLogBuffer: true
+            );
+
+            TerminalUI terminal = TerminalUI.Instance;
+            Assert.IsNotNull(terminal);
+
+            VisualElement terminalContainer = new VisualElement();
+            VisualElement inputContainer = new VisualElement();
+            ScrollView autoComplete = new ScrollView(ScrollViewMode.Horizontal);
+            ScrollView logScroll = new ScrollView();
+
+            terminal.InjectLayoutElementsForTests(
+                terminalContainer,
+                inputContainer,
+                autoComplete,
+                logScroll
+            );
+
+            terminal.SetState(TerminalState.OpenFull);
+
+            CommandLog logBuffer = terminal.Runtime.Log;
+            for (int i = 0; i < 5; ++i)
+            {
+                logBuffer.HandleLog(
+                    $"initial-message-{i}",
+                    TerminalLogType.Message,
+                    includeStackTrace: false
+                );
+            }
+
+            terminal.RefreshUIForTests();
+            yield return null;
+
+            Scroller scroller = logScroll.verticalScroller;
+            Assert.IsNotNull(scroller);
+            scroller.highValue = 200f;
+            scroller.value = 80f;
+            logScroll.scrollOffset = new Vector2(0f, 80f);
+
+            logBuffer.HandleLog("new-message", TerminalLogType.Message, includeStackTrace: false);
+
+            terminal.RefreshUIForTests();
+            yield return null;
+
+            scroller = logScroll.verticalScroller;
+            Assert.IsNotNull(scroller);
+            Assert.That(scroller.value, Is.EqualTo(80f).Within(0.001f));
+
+            yield return TestSceneHelpers.DestroyTerminalAndWait();
         }
 
         [Test]
@@ -426,7 +542,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     autoComplete,
                     log
                 );
-                terminal.AttachHistoryAdapterForTests(null, log);
                 terminal.ArrangeLauncherVisualHierarchyForTests();
                 terminal.ForceStateForTests(TerminalState.OpenLauncher);
 
@@ -791,19 +906,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             {
                 Object.DestroyImmediate(go);
             }
-        }
-
-        [Test]
-        public void LogEmptyLabelHidden()
-        {
-            ListView listView = new ListView();
-            TerminalUI.ConfigureEmptyLabelForTests(listView);
-
-            Label emptyLabel = new Label("List is empty") { name = "unity-list-view__empty-label" };
-            listView.Add(emptyLabel);
-            TerminalUI.ConfigureEmptyLabelForTests(listView);
-            Assert.That(emptyLabel.text, Is.Empty);
-            Assert.That(emptyLabel.style.display.value, Is.EqualTo(DisplayStyle.None));
         }
     }
 }
