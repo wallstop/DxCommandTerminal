@@ -8,6 +8,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     using Themes;
     using UI;
     using UnityEngine;
+    using Debug = UnityEngine.Debug;
 
     // ReSharper disable once UnusedType.Global
     public static class BuiltInCommands

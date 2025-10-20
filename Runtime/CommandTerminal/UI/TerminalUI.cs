@@ -54,7 +54,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
         }
 
         // Cache log callback to reduce allocations
-        private static readonly Application.LogCallback UnityLogCallback = HandleUnityLog;
+        private readonly Application.LogCallback UnityLogCallback = HandleUnityLog;
 
         public static TerminalUI Instance { get; private set; }
 
@@ -3059,7 +3059,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
         }
 
-        private static void HandleUnityLog(string message, string stackTrace, LogType type)
+        private void HandleUnityLog(string message, string stackTrace, LogType type)
         {
             ITerminalRuntime runtime = RuntimeScope?.ActiveRuntime;
             if (runtime == null)
