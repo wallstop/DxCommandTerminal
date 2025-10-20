@@ -71,14 +71,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return TestSceneHelpers.CleanRestart(resetStateOnInit: true);
 
             TerminalUI terminal = TerminalUI.Instance;
-            CommandShell shell = Terminal.Shell;
+            CommandShell shell = TestRuntimeScope.Shell;
             Dictionary<string, CommandInfo> shellCommands = shell.Commands.ToDictionary(
                 kvp => kvp.Key,
                 kvp => kvp.Value
             );
-            CommandHistory history = Terminal.History;
-            CommandLog buffer = Terminal.Buffer;
-            CommandAutoComplete autoComplete = Terminal.AutoComplete;
+            CommandHistory history = TestRuntimeScope.History;
+            CommandLog buffer = TestRuntimeScope.Buffer;
+            CommandAutoComplete autoComplete = TestRuntimeScope.AutoComplete;
 
             shell.RunCommand("log");
 
@@ -89,9 +89,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             terminal.resetStateOnInit = false;
             terminal.ignoreDefaultCommands = !terminal.ignoreDefaultCommands;
             terminal.enabled = true;
-            Assert.AreSame(shell, Terminal.Shell);
+            Assert.AreSame(shell, TestRuntimeScope.Shell);
             Assert.AreNotEqual(shellCommands.Count, shell.Commands.Count);
-            Assert.AreSame(history, Terminal.History);
+            Assert.AreSame(history, TestRuntimeScope.History);
             string[] currentEvents = history
                 .GetHistory(onlySuccess: true, onlyErrorFree: true)
                 .ToArray();
@@ -100,8 +100,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             {
                 Assert.AreEqual(events[i], currentEvents[i], $"History event {i} wasn't the same!");
             }
-            Assert.AreSame(buffer, Terminal.Buffer);
-            Assert.AreSame(autoComplete, Terminal.AutoComplete);
+            Assert.AreSame(buffer, TestRuntimeScope.Buffer);
+            Assert.AreSame(autoComplete, TestRuntimeScope.AutoComplete);
         }
 
         [UnityTest]
@@ -111,13 +111,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             TerminalUI terminal1 = TerminalUI.Instance;
             Assert.IsNotNull(terminal1);
-            CommandShell shell = Terminal.Shell;
+            CommandShell shell = TestRuntimeScope.Shell;
             Assert.IsNotNull(shell);
-            CommandHistory history = Terminal.History;
+            CommandHistory history = TestRuntimeScope.History;
             Assert.IsNotNull(history);
-            CommandLog buffer = Terminal.Buffer;
+            CommandLog buffer = TestRuntimeScope.Buffer;
             Assert.IsNotNull(buffer);
-            CommandAutoComplete autoComplete = Terminal.AutoComplete;
+            CommandAutoComplete autoComplete = TestRuntimeScope.AutoComplete;
             Assert.IsNotNull(autoComplete);
 
             yield return TestSceneHelpers.CleanRestart(resetStateOnInit: false);
@@ -125,24 +125,24 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             TerminalUI terminal2 = TerminalUI.Instance;
             Assert.IsNotNull(TerminalUI.Instance);
             Assert.AreNotSame(terminal1, TerminalUI.Instance);
-            Assert.AreSame(shell, Terminal.Shell);
-            Assert.AreSame(history, Terminal.History);
-            Assert.AreSame(buffer, Terminal.Buffer);
-            Assert.AreSame(autoComplete, Terminal.AutoComplete);
+            Assert.AreSame(shell, TestRuntimeScope.Shell);
+            Assert.AreSame(history, TestRuntimeScope.History);
+            Assert.AreSame(buffer, TestRuntimeScope.Buffer);
+            Assert.AreSame(autoComplete, TestRuntimeScope.AutoComplete);
 
             yield return TestSceneHelpers.CleanRestart(resetStateOnInit: true);
 
             Assert.IsNotNull(TerminalUI.Instance);
             Assert.AreNotSame(terminal2, TerminalUI.Instance);
             Assert.AreNotSame(terminal1, TerminalUI.Instance);
-            Assert.AreNotSame(shell, Terminal.Shell);
-            Assert.IsNotNull(Terminal.Shell);
-            Assert.AreNotSame(history, Terminal.History);
-            Assert.IsNotNull(Terminal.History);
-            Assert.AreNotSame(buffer, Terminal.Buffer);
-            Assert.IsNotNull(Terminal.Buffer);
-            Assert.AreNotSame(autoComplete, Terminal.AutoComplete);
-            Assert.IsNotNull(Terminal.AutoComplete);
+            Assert.AreNotSame(shell, TestRuntimeScope.Shell);
+            Assert.IsNotNull(TestRuntimeScope.Shell);
+            Assert.AreNotSame(history, TestRuntimeScope.History);
+            Assert.IsNotNull(TestRuntimeScope.History);
+            Assert.AreNotSame(buffer, TestRuntimeScope.Buffer);
+            Assert.IsNotNull(TestRuntimeScope.Buffer);
+            Assert.AreNotSame(autoComplete, TestRuntimeScope.AutoComplete);
+            Assert.IsNotNull(TestRuntimeScope.AutoComplete);
         }
 
         internal static IEnumerator SpawnTerminal(
@@ -179,9 +179,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             go.SetActive(true);
             yield return new WaitUntil(() => startTracker.Started);
             // Ensure the buffer is large enough for concurrency tests
-            if (ensureLargeLogBuffer && Terminal.Buffer != null)
+            if (ensureLargeLogBuffer && TestRuntimeScope.Buffer != null)
             {
-                Terminal.Buffer.Resize(4096);
+                TestRuntimeScope.Buffer.Resize(4096);
             }
         }
 
@@ -191,26 +191,26 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             // Start with reset and capture instances
             yield return TestSceneHelpers.CleanRestart(resetStateOnInit: true);
 
-            CommandShell shell1 = Terminal.Shell;
-            CommandHistory history1 = Terminal.History;
-            CommandLog buffer1 = Terminal.Buffer;
-            CommandAutoComplete auto1 = Terminal.AutoComplete;
+            CommandShell shell1 = TestRuntimeScope.Shell;
+            CommandHistory history1 = TestRuntimeScope.History;
+            CommandLog buffer1 = TestRuntimeScope.Buffer;
+            CommandAutoComplete auto1 = TestRuntimeScope.AutoComplete;
             Assert.IsNotNull(shell1);
             Assert.IsNotNull(history1);
 
             // Clean restart without reset should keep instances
             yield return TestSceneHelpers.CleanRestart(resetStateOnInit: false);
-            Assert.AreSame(shell1, Terminal.Shell);
-            Assert.AreSame(history1, Terminal.History);
-            Assert.AreSame(buffer1, Terminal.Buffer);
-            Assert.AreSame(auto1, Terminal.AutoComplete);
+            Assert.AreSame(shell1, TestRuntimeScope.Shell);
+            Assert.AreSame(history1, TestRuntimeScope.History);
+            Assert.AreSame(buffer1, TestRuntimeScope.Buffer);
+            Assert.AreSame(auto1, TestRuntimeScope.AutoComplete);
 
             // Clean restart with reset should replace instances
             yield return TestSceneHelpers.CleanRestart(resetStateOnInit: true);
-            Assert.AreNotSame(shell1, Terminal.Shell);
-            Assert.AreNotSame(history1, Terminal.History);
-            Assert.AreNotSame(buffer1, Terminal.Buffer);
-            Assert.AreNotSame(auto1, Terminal.AutoComplete);
+            Assert.AreNotSame(shell1, TestRuntimeScope.Shell);
+            Assert.AreNotSame(history1, TestRuntimeScope.History);
+            Assert.AreNotSame(buffer1, TestRuntimeScope.Buffer);
+            Assert.AreNotSame(auto1, TestRuntimeScope.AutoComplete);
         }
 
         [UnityTest]
@@ -402,10 +402,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.IsFalse(terminal.makeHintsClickable);
             Assert.AreEqual(
                 TerminalHistoryFadeTargets.Launcher,
-                terminal.HistoryFadeTargetsForTests
+                TestRuntimeScope.HistoryFadeTargetsForTests
             );
             Assert.AreEqual(250, terminal.CursorBlinkRateForTests);
-            Assert.IsTrue(terminal.LogUnityMessagesForTests);
+            Assert.IsTrue(TestRuntimeScope.LogUnityMessagesForTests);
 
             ScriptableObject.DestroyImmediate(profile);
             _appearanceProfileUnderTest = null;

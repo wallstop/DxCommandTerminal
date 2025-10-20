@@ -23,7 +23,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public IEnumerator HelpShowsUsage()
         {
             yield return TestSceneHelpers.CleanRestart(resetStateOnInit: true);
-            CommandShell shell = Terminal.Shell;
+            CommandShell shell = TestRuntimeScope.Shell;
             Assert.IsNotNull(shell);
 
             // Query help for a known command without hint but known args: time-scale has 1 arg

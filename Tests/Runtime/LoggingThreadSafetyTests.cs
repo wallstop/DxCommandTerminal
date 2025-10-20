@@ -24,7 +24,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             yield return TestSceneHelpers.CleanRestart(resetStateOnInit: true);
 
-            CommandLog buffer = Terminal.Buffer;
+            CommandLog buffer = TestRuntimeScope.Buffer;
             Assert.IsNotNull(buffer);
 
             int initial = buffer.Logs.Count;
@@ -37,7 +37,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 {
                     for (int i = 0; i < toProduce; ++i)
                     {
-                        Terminal.Log(TerminalLogType.Message, "threaded log {0}", i);
+                        TestRuntimeScope.Log(TerminalLogType.Message, "threaded log {0}", i);
                     }
                 });
             }

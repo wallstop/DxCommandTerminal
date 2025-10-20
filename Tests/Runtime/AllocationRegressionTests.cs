@@ -23,8 +23,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.IsNotNull(terminal);
 
             // Warm up caches
-            Terminal.Shell.RunCommand("help");
-            Terminal.Buffer?.DrainPending();
+            TestRuntimeScope.Shell.RunCommand("help");
+            TestRuntimeScope.Buffer?.DrainPending();
             yield return null;
 
             using ProfilerRecorder recorder = ProfilerRecorder.StartNew(MemoryCategory, "GC.Alloc");
@@ -33,8 +33,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 const int iterations = 24;
                 for (int i = 0; i < iterations; ++i)
                 {
-                    Terminal.Shell.RunCommand("log test-message");
-                    Terminal.Buffer?.DrainPending();
+                    TestRuntimeScope.Shell.RunCommand("log test-message");
+                    TestRuntimeScope.Buffer?.DrainPending();
                 }
 
                 terminal.HandleNext();

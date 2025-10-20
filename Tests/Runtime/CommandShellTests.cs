@@ -35,9 +35,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Application.logMessageReceived += HandleMessageReceived;
             try
             {
-                CommandShell shell = Terminal.Shell;
+                CommandShell shell = TestRuntimeScope.Shell;
                 Assert.IsNotNull(shell);
-                CommandHistory history = Terminal.History;
+                CommandHistory history = TestRuntimeScope.History;
                 Assert.IsNotNull(history);
 
                 int expectedLogCount = 0;
@@ -108,9 +108,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Application.logMessageReceived += HandleMessageReceived;
             try
             {
-                CommandShell shell = Terminal.Shell;
+                CommandShell shell = TestRuntimeScope.Shell;
                 Assert.IsNotNull(shell);
-                CommandHistory history = Terminal.History;
+                CommandHistory history = TestRuntimeScope.History;
                 Assert.IsNotNull(history);
 
                 int expectedLogCount = 0;
@@ -315,8 +315,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
                 StringBuilder errorBuilder = new();
                 bool anyError = false;
-                bool initialHadError = Terminal.Shell.HasErrors;
-                while (Terminal.Shell.TryConsumeErrorMessage(out string errorMessage))
+                bool initialHadError = TestRuntimeScope.Shell.HasErrors;
+                while (TestRuntimeScope.Shell.TryConsumeErrorMessage(out string errorMessage))
                 {
                     anyError = true;
                     errorBuilder.AppendLine(errorMessage);
@@ -355,9 +355,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             yield return TestSceneHelpers.CleanRestart(resetStateOnInit: true);
 
-            CommandShell shell = Terminal.Shell;
+            CommandShell shell = TestRuntimeScope.Shell;
             Assert.IsNotNull(shell);
-            CommandHistory history = Terminal.History;
+            CommandHistory history = TestRuntimeScope.History;
             Assert.IsNotNull(history);
 
             bool executed = shell.RunCommand("log test-history");

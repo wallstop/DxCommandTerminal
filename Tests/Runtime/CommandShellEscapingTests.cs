@@ -33,7 +33,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Application.logMessageReceived += HandleMessageReceived;
             try
             {
-                CommandShell shell = Terminal.Shell;
+                CommandShell shell = TestRuntimeScope.Shell;
                 Assert.IsNotNull(shell);
                 shell.RunCommand(command);
                 Assert.AreEqual(1, logCount);

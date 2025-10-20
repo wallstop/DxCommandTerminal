@@ -76,7 +76,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             yield return RestartTerminal();
 
-            CommandShell shell = Terminal.Shell;
+            CommandShell shell = TestRuntimeScope.Shell;
             Assert.IsNotNull(shell);
 
             HashSet<string> expected = new(
@@ -118,15 +118,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             yield return RestartTerminal();
 
-            CommandShell shell = Terminal.Shell;
-            CommandHistory history = Terminal.History;
+            CommandShell shell = TestRuntimeScope.Shell;
+            CommandHistory history = TestRuntimeScope.History;
             Assert.IsNotNull(shell);
             Assert.IsNotNull(history);
 
             Assert.IsTrue(shell.RunCommand("log test-history"));
-            Terminal.Buffer?.DrainPending();
+            TestRuntimeScope.Buffer?.DrainPending();
 
-            string[] suggestions = Terminal.AutoComplete.Complete("clear history");
+            string[] suggestions = TestRuntimeScope.AutoComplete.Complete("clear history");
             CollectionAssert.Contains(suggestions, "clear-history");
 
             bool executed = shell.RunCommand("clear history");
@@ -142,15 +142,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             yield return RestartTerminal();
 
-            Terminal.Log(TerminalLogType.Message, "one");
-            Terminal.Buffer?.DrainPending();
-            Assert.Greater(Terminal.Buffer.Logs.Count, 0);
+            TestRuntimeScope.Log(TerminalLogType.Message, "one");
+            TestRuntimeScope.Buffer?.DrainPending();
+            Assert.Greater(TestRuntimeScope.Buffer.Logs.Count, 0);
 
-            bool executed = Terminal.Shell.RunCommand("clear-console");
+            bool executed = TestRuntimeScope.Shell.RunCommand("clear-console");
             Assert.IsTrue(executed);
 
-            Terminal.Buffer?.DrainPending();
-            Assert.AreEqual(0, Terminal.Buffer.Logs.Count);
+            TestRuntimeScope.Buffer?.DrainPending();
+            Assert.AreEqual(0, TestRuntimeScope.Buffer.Logs.Count);
             yield break;
         }
 
@@ -159,17 +159,17 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             yield return RestartTerminal();
 
-            CommandLog buffer = Terminal.Buffer;
+            CommandLog buffer = TestRuntimeScope.Buffer;
             Assert.IsNotNull(buffer);
 
             buffer.Clear();
-            Terminal.Log(TerminalLogType.Input, "alpha");
-            Terminal.Log(TerminalLogType.Message, "visible");
+            TestRuntimeScope.Log(TerminalLogType.Input, "alpha");
+            TestRuntimeScope.Log(TerminalLogType.Message, "visible");
             buffer.DrainPending();
             Assert.IsTrue(buffer.Logs.Any(log => log.type == TerminalLogType.Input));
             Assert.IsTrue(buffer.Logs.Any(log => log.type == TerminalLogType.Message));
 
-            CommandShell shell = Terminal.Shell;
+            CommandShell shell = TestRuntimeScope.Shell;
             Assert.IsNotNull(shell);
             Assert.IsTrue(shell.RunCommand("clear-history"));
 
@@ -183,20 +183,20 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             yield return RestartTerminal();
 
-            CommandShell shell = Terminal.Shell;
-            int initialCount = Terminal.Buffer.Logs.Count;
+            CommandShell shell = TestRuntimeScope.Shell;
+            int initialCount = TestRuntimeScope.Buffer.Logs.Count;
 
             bool executed = shell.RunCommand("time log-terminal timed-message");
             Assert.IsTrue(executed);
 
-            Terminal.Buffer?.DrainPending();
+            TestRuntimeScope.Buffer?.DrainPending();
             LogItem timeLog = GetLastLog(
-                Terminal.Buffer,
+                TestRuntimeScope.Buffer,
                 item =>
                     item.type == TerminalLogType.ShellMessage && item.message.StartsWith("Time:")
             );
             StringAssert.StartsWith("Time:", timeLog.message);
-            Assert.Greater(Terminal.Buffer.Logs.Count, initialCount);
+            Assert.Greater(TestRuntimeScope.Buffer.Logs.Count, initialCount);
             yield break;
         }
 
@@ -205,7 +205,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             yield return RestartTerminal();
 
-            CommandShell shell = Terminal.Shell;
+            CommandShell shell = TestRuntimeScope.Shell;
             float originalScale = Time.timeScale;
 
             try
@@ -230,15 +230,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Application.logMessageReceived += HandleLog;
             try
             {
-                Assert.IsTrue(Terminal.Shell.RunCommand("log-terminal captured"));
-                Terminal.Buffer?.DrainPending();
+                Assert.IsTrue(TestRuntimeScope.Shell.RunCommand("log-terminal captured"));
+                TestRuntimeScope.Buffer?.DrainPending();
                 LogItem bufferLog = GetLastLog(
-                    Terminal.Buffer,
+                    TestRuntimeScope.Buffer,
                     item => item.type == TerminalLogType.ShellMessage && item.message == "captured"
                 );
                 Assert.AreEqual("captured", bufferLog.message);
 
-                Assert.IsTrue(Terminal.Shell.RunCommand("log unity-log"));
+                Assert.IsTrue(TestRuntimeScope.Shell.RunCommand("log unity-log"));
                 Assert.IsTrue(captured.Any(entry => entry.message == "unity-log"));
             }
             finally
@@ -259,24 +259,24 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             yield return RestartTerminal();
 
-            CommandShell shell = Terminal.Shell;
+            CommandShell shell = TestRuntimeScope.Shell;
 
             Assert.IsTrue(shell.RunCommand("trace"));
-            Terminal.Buffer?.DrainPending();
+            TestRuntimeScope.Buffer?.DrainPending();
             LogItem warningLog = GetLastLog(
-                Terminal.Buffer,
+                TestRuntimeScope.Buffer,
                 item => item.type == TerminalLogType.Warning
             );
             StringAssert.Contains("Nothing to trace", warningLog.message);
 
-            Terminal.Log(TerminalLogType.Message, "trace-target");
-            Terminal.Buffer?.DrainPending();
-            LogItem previousLog = GetLastLog(Terminal.Buffer);
+            TestRuntimeScope.Log(TerminalLogType.Message, "trace-target");
+            TestRuntimeScope.Buffer?.DrainPending();
+            LogItem previousLog = GetLastLog(TestRuntimeScope.Buffer);
             Assert.IsFalse(string.IsNullOrWhiteSpace(previousLog.stackTrace));
 
             Assert.IsTrue(shell.RunCommand("trace"));
-            Terminal.Buffer?.DrainPending();
-            LogItem traceLog = GetLastLog(Terminal.Buffer);
+            TestRuntimeScope.Buffer?.DrainPending();
+            LogItem traceLog = GetLastLog(TestRuntimeScope.Buffer);
             Assert.AreEqual(previousLog.stackTrace, traceLog.message);
             yield break;
         }
@@ -286,23 +286,23 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             yield return RestartTerminal();
 
-            CommandShell shell = Terminal.Shell;
+            CommandShell shell = TestRuntimeScope.Shell;
 
             Assert.IsTrue(shell.RunCommand("set-variable foo \"bar baz\""));
             Assert.IsTrue(shell.Variables.ContainsKey("foo"));
 
             Assert.IsTrue(shell.RunCommand("get-variable foo"));
-            Terminal.Buffer?.DrainPending();
+            TestRuntimeScope.Buffer?.DrainPending();
             LogItem getLog = GetLastLog(
-                Terminal.Buffer,
+                TestRuntimeScope.Buffer,
                 item => item.type == TerminalLogType.ShellMessage
             );
             StringAssert.Contains("bar baz", getLog.message);
 
             Assert.IsTrue(shell.RunCommand("list-variables"));
-            Terminal.Buffer?.DrainPending();
+            TestRuntimeScope.Buffer?.DrainPending();
             LogItem listLog = GetLastLog(
-                Terminal.Buffer,
+                TestRuntimeScope.Buffer,
                 item => item.type == TerminalLogType.ShellMessage
             );
             StringAssert.Contains("foo", listLog.message);
@@ -318,9 +318,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreEqual(0, shell.Variables.Count);
 
             Assert.IsTrue(shell.RunCommand("list-variables"));
-            Terminal.Buffer?.DrainPending();
+            TestRuntimeScope.Buffer?.DrainPending();
             LogItem emptyLog = GetLastLog(
-                Terminal.Buffer,
+                TestRuntimeScope.Buffer,
                 item => item.type == TerminalLogType.Warning
             );
             StringAssert.Contains("No variables found", emptyLog.message);
@@ -332,37 +332,37 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             yield return RestartTerminal();
 
-            CommandShell shell = Terminal.Shell;
+            CommandShell shell = TestRuntimeScope.Shell;
 
             Assert.IsTrue(shell.RunCommand("list-themes"));
-            Terminal.Buffer?.DrainPending();
+            TestRuntimeScope.Buffer?.DrainPending();
             LogItem listLog = GetLastLog(
-                Terminal.Buffer,
+                TestRuntimeScope.Buffer,
                 item => item.type == TerminalLogType.Message
             );
             string expectedThemeName = ThemeNameHelper.GetFriendlyThemeName("test-theme");
             StringAssert.Contains(expectedThemeName, listLog.message);
 
             Assert.IsTrue(shell.RunCommand("get-theme"));
-            Terminal.Buffer?.DrainPending();
+            TestRuntimeScope.Buffer?.DrainPending();
             LogItem getLog = GetLastLog(
-                Terminal.Buffer,
+                TestRuntimeScope.Buffer,
                 item => item.type == TerminalLogType.Message
             );
             StringAssert.Contains("Current terminal theme", getLog.message);
 
             Assert.IsTrue(shell.RunCommand("set-theme test-theme"));
-            Terminal.Buffer?.DrainPending();
+            TestRuntimeScope.Buffer?.DrainPending();
             LogItem setLog = GetLastLog(
-                Terminal.Buffer,
+                TestRuntimeScope.Buffer,
                 item => item.type == TerminalLogType.Message
             );
             StringAssert.Contains("test-theme", setLog.message);
 
             Assert.IsTrue(shell.RunCommand("set-random-theme"));
-            Terminal.Buffer?.DrainPending();
+            TestRuntimeScope.Buffer?.DrainPending();
             LogItem randomLog = GetLastLog(
-                Terminal.Buffer,
+                TestRuntimeScope.Buffer,
                 item => item.type == TerminalLogType.Message
             );
             StringAssert.Contains("set theme", randomLog.message);
@@ -374,14 +374,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             yield return RestartTerminal();
 
-            CommandShell shell = Terminal.Shell;
+            CommandShell shell = TestRuntimeScope.Shell;
 
             Assert.IsTrue(shell.RunCommand("list-fonts"));
-            int startIndex = Terminal.Buffer.Logs.Count;
-            Terminal.Buffer?.DrainPending();
+            int startIndex = TestRuntimeScope.Buffer.Logs.Count;
+            TestRuntimeScope.Buffer?.DrainPending();
             Assert.IsTrue(
                 TryFindLogSince(
-                    Terminal.Buffer,
+                    TestRuntimeScope.Buffer,
                     startIndex,
                     item => item.type == TerminalLogType.Message,
                     out LogItem listLog
@@ -391,11 +391,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.IsNotNull(listLog);
 
             Assert.IsTrue(shell.RunCommand("get-font"));
-            startIndex = Terminal.Buffer.Logs.Count;
-            Terminal.Buffer?.DrainPending();
+            startIndex = TestRuntimeScope.Buffer.Logs.Count;
+            TestRuntimeScope.Buffer?.DrainPending();
             Assert.IsTrue(
                 TryFindLogSince(
-                    Terminal.Buffer,
+                    TestRuntimeScope.Buffer,
                     startIndex,
                     item => item.type == TerminalLogType.Message,
                     out LogItem getLog
@@ -405,11 +405,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             StringAssert.Contains("null", getLog.message);
 
             Assert.IsTrue(shell.RunCommand("set-font missing-font"));
-            startIndex = Terminal.Buffer.Logs.Count;
-            Terminal.Buffer?.DrainPending();
+            startIndex = TestRuntimeScope.Buffer.Logs.Count;
+            TestRuntimeScope.Buffer?.DrainPending();
             Assert.IsTrue(
                 TryFindLogSince(
-                    Terminal.Buffer,
+                    TestRuntimeScope.Buffer,
                     startIndex,
                     item => item.type == TerminalLogType.Warning,
                     out LogItem warningLog
@@ -419,8 +419,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             StringAssert.Contains("not found", warningLog.message);
 
             Assert.IsTrue(shell.RunCommand("set-random-font"));
-            Terminal.Buffer?.DrainPending();
-            bool hasNoFontsWarning = Terminal.Buffer.Logs.Any(item =>
+            TestRuntimeScope.Buffer?.DrainPending();
+            bool hasNoFontsWarning = TestRuntimeScope.Buffer.Logs.Any(item =>
                 !string.IsNullOrEmpty(item.message)
                 && item.message.IndexOf("No fonts available", StringComparison.OrdinalIgnoreCase)
                     >= 0
@@ -428,7 +428,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Assert.IsTrue(
                 hasNoFontsWarning,
-                $"Expected 'No fonts available' warning. Logs: {string.Join(" | ", Terminal.Buffer.Logs.Select(log => log.message))}"
+                $"Expected 'No fonts available' warning. Logs: {string.Join(" | ", TestRuntimeScope.Buffer.Logs.Select(log => log.message))}"
             );
             yield break;
         }
@@ -438,11 +438,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             yield return RestartTerminal();
 
-            CommandShell shell = Terminal.Shell;
+            CommandShell shell = TestRuntimeScope.Shell;
 
-            int initialCount = Terminal.Buffer.Logs.Count;
+            int initialCount = TestRuntimeScope.Buffer.Logs.Count;
             Assert.IsTrue(shell.RunCommand("help"));
-            Terminal.Buffer?.DrainPending();
+            TestRuntimeScope.Buffer?.DrainPending();
             bool hasUsage = Terminal
                 .Buffer.Logs.Skip(initialCount)
                 .Any(item =>
@@ -450,11 +450,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 );
             Assert.IsTrue(hasUsage);
 
-            initialCount = Terminal.Buffer.Logs.Count;
+            initialCount = TestRuntimeScope.Buffer.Logs.Count;
             Assert.IsTrue(shell.RunCommand("help clear-history"));
-            Terminal.Buffer?.DrainPending();
+            TestRuntimeScope.Buffer?.DrainPending();
             LogItem specificLog = GetLastLog(
-                Terminal.Buffer,
+                TestRuntimeScope.Buffer,
                 item =>
                     item.type == TerminalLogType.ShellMessage
                     && item.message.Contains("clear-history")
@@ -468,8 +468,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             yield return RestartTerminal();
 
-            CommandShell shell = Terminal.Shell;
-            CommandHistory history = Terminal.History;
+            CommandShell shell = TestRuntimeScope.Shell;
+            CommandHistory history = TestRuntimeScope.History;
 
             Assert.IsTrue(shell.RunCommand("no-op"));
             string[] entries = history.GetHistory(false, false).ToArray();
@@ -482,7 +482,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             yield return RestartTerminal();
 
-            CommandShell shell = Terminal.Shell;
+            CommandShell shell = TestRuntimeScope.Shell;
             Assert.IsTrue(shell.Commands.ContainsKey("quit"));
             yield break;
         }

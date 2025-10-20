@@ -30,12 +30,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Components
             Random random = new();
             foreach (int i in Enumerable.Range(0, count).OrderBy(_ => random.Next()))
             {
-                Terminal.Shell?.RunCommand(
+                TestRuntimeScope.Shell?.RunCommand(
                     "log " + string.Join("a", Enumerable.Range(0, i).Select(_ => string.Empty))
                 );
             }
 
-            Terminal.Shell?.RunCommand(
+            TestRuntimeScope.Shell?.RunCommand(
                 "log " + string.Join("a", Enumerable.Range(0, 1_000).Select(_ => string.Empty))
             );
         }
@@ -48,7 +48,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Components
                 count = 1_000_000;
             }
 
-            CommandShell shell = Terminal.Shell;
+            CommandShell shell = TestRuntimeScope.Shell;
             if (shell == null)
             {
                 return;
@@ -63,7 +63,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Components
                 for (int i = 0; i < count; ++i)
                 {
                     shell.RunCommand("no-op");
-                    Terminal.Log(TerminalLogType.Input, logMessages[i]);
+                    TestRuntimeScope.Log(TerminalLogType.Input, logMessages[i]);
                 }
             }
             finally

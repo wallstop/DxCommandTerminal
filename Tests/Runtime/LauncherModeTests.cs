@@ -96,7 +96,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             terminal.SetState(TerminalState.OpenLauncher);
             terminal.RefreshLauncherHistoryForTests();
 
-            VisualElement content = terminal.LogScrollViewForTests.contentContainer;
+            VisualElement content = TestRuntimeScope.LogScrollViewForTests.contentContainer;
             Assert.That(content.childCount, Is.EqualTo(3));
 
             // Verify newest entry is first and fully opaque

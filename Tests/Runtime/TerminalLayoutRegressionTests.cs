@@ -147,8 +147,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     suggestionHeight: 0f
                 );
 
-                terminal.LogItemsForTests.Clear();
-                terminal.LogItemsForTests.Add(
+                TestRuntimeScope.LogItemsForTests.Clear();
+                TestRuntimeScope.LogItemsForTests.Add(
                     new LogItem(TerminalLogType.Input, "entry", string.Empty)
                 );
 
@@ -162,7 +162,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 Assert.That(log.style.marginTop.value, Is.EqualTo(0f).Within(0.001f));
                 Assert.That(log.style.marginBottom.value, Is.EqualTo(0f).Within(0.001f));
 
-                terminal.LogItemsForTests.Add(
+                TestRuntimeScope.LogItemsForTests.Add(
                     new LogItem(TerminalLogType.Input, "entry-2", string.Empty)
                 );
                 terminal.RefreshLauncherHistoryForTests();
@@ -239,17 +239,17 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 terminal.SetLauncherMetricsForTests(metrics);
                 terminal.SetWindowHeightsForTests(metrics.Height, metrics.Height);
 
-                terminal.LogItemsForTests.Clear();
-                terminal.LogItemsForTests.Add(
+                TestRuntimeScope.LogItemsForTests.Clear();
+                TestRuntimeScope.LogItemsForTests.Add(
                     new LogItem(TerminalLogType.Input, "first", string.Empty)
                 );
-                terminal.LogItemsForTests.Add(
+                TestRuntimeScope.LogItemsForTests.Add(
                     new LogItem(TerminalLogType.Input, "second", string.Empty)
                 );
-                terminal.LogItemsForTests.Add(
+                TestRuntimeScope.LogItemsForTests.Add(
                     new LogItem(TerminalLogType.Input, "third", string.Empty)
                 );
-                terminal.LogItemsForTests.Add(
+                TestRuntimeScope.LogItemsForTests.Add(
                     new LogItem(TerminalLogType.Input, "fourth", string.Empty)
                 );
 
@@ -568,7 +568,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
                 VisualElement suggestion = new VisualElement();
                 suggestion.style.display = DisplayStyle.Flex;
-                terminal.AutoCompleteContainerForTests.contentContainer.Add(suggestion);
+                TestRuntimeScope.AutoCompleteContainerForTests.contentContainer.Add(suggestion);
 
                 terminal.SetLauncherContentHeightsForTests(
                     historyHeight: metrics.HistoryHeight * 0.5f,
@@ -579,7 +579,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 float marginWithSuggestions = log.contentContainer.style.marginTop.value.value;
                 Assert.That(marginWithSuggestions, Is.GreaterThan(0f));
 
-                terminal.AutoCompleteContainerForTests.contentContainer.Clear();
+                TestRuntimeScope.AutoCompleteContainerForTests.contentContainer.Clear();
                 terminal.SetLauncherContentHeightsForTests(
                     historyHeight: metrics.HistoryHeight * 0.5f,
                     suggestionHeight: 0f
@@ -745,8 +745,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     suggestionHeight: 0f
                 );
 
-                terminal.LogItemsForTests.Clear();
-                terminal.LogItemsForTests.Add(
+                TestRuntimeScope.LogItemsForTests.Clear();
+                TestRuntimeScope.LogItemsForTests.Add(
                     new LogItem(TerminalLogType.Input, "run-tests", string.Empty)
                 );
 
@@ -758,7 +758,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 Assert.That(autoComplete.style.display.value, Is.EqualTo(DisplayStyle.None));
                 Assert.That(autoComplete.style.marginTop.value, Is.EqualTo(0f).Within(0.001f));
 
-                terminal.LogItemsForTests.Clear();
+                TestRuntimeScope.LogItemsForTests.Clear();
                 terminal.UpdateLauncherLayoutMetricsForTests();
 
                 Assert.That(log.style.display.value, Is.EqualTo(DisplayStyle.None));
@@ -817,11 +817,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
                 terminal.RefreshLauncherHistoryForTests();
 
-                Assert.That(terminal.LogItemsForTests.Count, Is.EqualTo(3));
-                Assert.That(terminal.LogItemsForTests[0].message, Is.EqualTo("third"));
-                Assert.That(terminal.LogItemsForTests[0].type, Is.EqualTo(TerminalLogType.Input));
-                Assert.That(terminal.LogItemsForTests[1].message, Is.EqualTo("second"));
-                Assert.That(terminal.LogItemsForTests[2].message, Is.EqualTo("first"));
+                Assert.That(TestRuntimeScope.LogItemsForTests.Count, Is.EqualTo(3));
+                Assert.That(TestRuntimeScope.LogItemsForTests[0].message, Is.EqualTo("third"));
+                Assert.That(
+                    TestRuntimeScope.LogItemsForTests[0].type,
+                    Is.EqualTo(TerminalLogType.Input)
+                );
+                Assert.That(TestRuntimeScope.LogItemsForTests[1].message, Is.EqualTo("second"));
+                Assert.That(TestRuntimeScope.LogItemsForTests[2].message, Is.EqualTo("first"));
             }
             finally
             {

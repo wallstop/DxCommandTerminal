@@ -36,7 +36,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 new List<CommandArg>(),
                 "b",
                 0,
-                Terminal.Shell
+                TestRuntimeScope.Shell
             );
 
             List<string> results = new(completer.Complete(ctx));
@@ -75,7 +75,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 new List<CommandArg>(),
                 "co",
                 0,
-                Terminal.Shell
+                TestRuntimeScope.Shell
             );
 
             List<string> results = new(completer.Complete(ctx));

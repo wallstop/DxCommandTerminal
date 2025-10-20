@@ -38,8 +38,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             TestTerminalInput input = terminal.GetComponent<TestTerminalInput>();
             Assert.IsNotNull(input);
 
-            Terminal.Shell.AddCommand("cycle-first", _ => { });
-            Terminal.Shell.AddCommand("cycle-second", _ => { });
+            TestRuntimeScope.Shell.AddCommand("cycle-first", _ => { });
+            TestRuntimeScope.Shell.AddCommand("cycle-second", _ => { });
 
             terminal.SetState(TerminalState.OpenFull);
             yield return null;
@@ -65,7 +65,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             TestTerminalInput input = terminal.GetComponent<TestTerminalInput>();
             Assert.IsNotNull(input);
 
-            CommandShell shell = Terminal.Shell;
+            CommandShell shell = TestRuntimeScope.Shell;
             bool added = shell.AddCommand(
                 "set-theme",
                 _ => { },
@@ -84,16 +84,16 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             terminal.CompleteCommand();
             Assert.AreEqual("set-theme dark", input.CommandText);
-            Assert.IsTrue(Terminal.AutoComplete.LastCompletionUsedCompleter);
-            Assert.AreEqual("set-theme ", Terminal.AutoComplete.LastCompleterPrefix);
+            Assert.IsTrue(TestRuntimeScope.AutoComplete.LastCompletionUsedCompleter);
+            Assert.AreEqual("set-theme ", TestRuntimeScope.AutoComplete.LastCompleterPrefix);
 
             terminal.CompleteCommand();
             Assert.AreEqual("set-theme light", input.CommandText);
-            Assert.AreEqual("set-theme ", Terminal.AutoComplete.LastCompleterPrefix);
+            Assert.AreEqual("set-theme ", TestRuntimeScope.AutoComplete.LastCompleterPrefix);
 
             terminal.CompleteCommand(searchForward: false);
             Assert.AreEqual("set-theme dark", input.CommandText);
-            Assert.AreEqual("set-theme ", Terminal.AutoComplete.LastCompleterPrefix);
+            Assert.AreEqual("set-theme ", TestRuntimeScope.AutoComplete.LastCompleterPrefix);
         }
 
         private static IEnumerator SetupTerminalWithCustomInput(bool resetStateOnInit)
