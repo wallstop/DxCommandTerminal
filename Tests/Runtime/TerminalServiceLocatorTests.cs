@@ -27,14 +27,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void ServiceLocatorOverridesStaticAccessors()
         {
-            StubTerminalProvider terminalProvider = new StubTerminalProvider();
-            StubRuntimeConfigurator runtimeConfigurator = new StubRuntimeConfigurator();
-            StubInputProvider inputProvider = new StubInputProvider();
-            StubRuntimeProvider runtimeProvider = new StubRuntimeProvider();
-            StubRuntimeScope runtimeScope = new StubRuntimeScope();
-            StubRuntimeConfiguratorService runtimeConfiguratorService =
-                new StubRuntimeConfiguratorService();
-            StubRuntimePool runtimePool = new StubRuntimePool();
+            StubTerminalProvider terminalProvider = new();
+            StubRuntimeConfigurator runtimeConfigurator = new();
+            StubInputProvider inputProvider = new();
+            StubRuntimeProvider runtimeProvider = new();
+            StubRuntimeScope runtimeScope = new();
+            StubRuntimeConfiguratorService runtimeConfiguratorService = new();
+            StubRuntimePool runtimePool = new();
 
             ITerminalServiceLocator locator = new StubServiceLocator(
                 terminalProvider,
@@ -74,9 +73,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void RuntimeScopeReceivesRegistrations()
         {
-            StubRuntimeScope runtimeScope = new StubRuntimeScope();
-            StubRuntimePool runtimePool = new StubRuntimePool();
-            MutableTerminalServiceLocator locator = new MutableTerminalServiceLocator(
+            StubRuntimeScope runtimeScope = new();
+            StubRuntimePool runtimePool = new();
+            MutableTerminalServiceLocator locator = new(
                 new TerminalRegistry(),
                 new StubRuntimeConfigurator(),
                 new StubInputProvider(),
@@ -88,7 +87,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             TerminalUI.ServiceLocator = locator;
 
-            GameObject go = new GameObject("TerminalServiceLocator_RuntimeScope");
+            GameObject go = new("TerminalServiceLocator_RuntimeScope");
             go.SetActive(false);
             TerminalUI terminal = go.AddComponent<TerminalUI>();
             terminal.disableUIForTests = true;
@@ -122,7 +121,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             bindingAsset.SetTerminalProviderForTests(provider);
 
-            GameObject go = new GameObject("TerminalServiceBindingAssetTest");
+            GameObject go = new("TerminalServiceBindingAssetTest");
             go.SetActive(false);
             TerminalUI terminal = go.AddComponent<TerminalUI>();
             terminal.disableUIForTests = true;
@@ -155,14 +154,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 ScriptableObject.CreateInstance<ScriptableTerminalProvider>();
             bindingAsset.SetTerminalProviderForTests(provider);
 
-            GameObject componentGo = new GameObject("TerminalServiceLocator_Component");
+            GameObject componentGo = new("TerminalServiceLocator_Component");
             componentGo.SetActive(false);
             TerminalServiceBindingComponent component =
                 componentGo.AddComponent<TerminalServiceBindingComponent>();
             component.SetBindingAssetForTests(bindingAsset);
             componentGo.SetActive(true);
 
-            GameObject terminalGo = new GameObject("TerminalServiceLocator_Component_Terminal");
+            GameObject terminalGo = new("TerminalServiceLocator_Component_Terminal");
             terminalGo.SetActive(false);
             TerminalUI terminal = terminalGo.AddComponent<TerminalUI>();
             terminal.disableUIForTests = true;
@@ -197,7 +196,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             TerminalServiceBindingSettings.SetDefaultBindingForTests(bindingAsset);
 
-            GameObject go = new GameObject("TerminalServiceLocator_Settings");
+            GameObject go = new("TerminalServiceLocator_Settings");
             go.SetActive(false);
             TerminalUI terminal = go.AddComponent<TerminalUI>();
             terminal.disableUIForTests = true;
@@ -279,7 +278,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         private sealed class StubTerminalProvider : ITerminalProvider
         {
-            private readonly List<TerminalUI> _terminals = new List<TerminalUI>();
+            private readonly List<TerminalUI> _terminals = new();
 
             public TerminalUI ActiveTerminal
             {
@@ -315,7 +314,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         private sealed class ScriptableTerminalProvider : ScriptableObject, ITerminalProvider
         {
-            private readonly List<TerminalUI> _terminals = new List<TerminalUI>();
+            private readonly List<TerminalUI> _terminals = new();
 
             public TerminalUI ActiveTerminal
             {

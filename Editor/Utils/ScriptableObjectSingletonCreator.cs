@@ -56,7 +56,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.Utils
                 EnsureFolder(ResourcesRoot);
 
                 // Collect all concrete types deriving from our singleton base
-                List<Type> candidates = new List<Type>();
+                List<Type> candidates = new();
                 foreach (Assembly asm in AppDomain.CurrentDomain.GetAssemblies())
                 {
                     Type[] types;
@@ -66,7 +66,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.Utils
                     }
                     catch (ReflectionTypeLoadException ex)
                     {
-                        List<Type> tmp = new List<Type>();
+                        List<Type> tmp = new();
                         if (ex.Types != null)
                         {
                             for (int i = 0; i < ex.Types.Length; ++i)
@@ -91,9 +91,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.Utils
                 }
 
                 // Simple collision detection by simple name
-                Dictionary<string, List<Type>> nameGroups = new Dictionary<string, List<Type>>(
-                    StringComparer.OrdinalIgnoreCase
-                );
+                Dictionary<string, List<Type>> nameGroups = new(StringComparer.OrdinalIgnoreCase);
                 for (int i = 0; i < candidates.Count; ++i)
                 {
                     Type t = candidates[i];
@@ -105,9 +103,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.Utils
                     }
                     list.Add(t);
                 }
-                Dictionary<string, List<Type>> collisions = new Dictionary<string, List<Type>>(
-                    StringComparer.OrdinalIgnoreCase
-                );
+                Dictionary<string, List<Type>> collisions = new(StringComparer.OrdinalIgnoreCase);
                 foreach (KeyValuePair<string, List<Type>> kv in nameGroups)
                 {
                     if (kv.Value != null && kv.Value.Count > 1)
@@ -121,7 +117,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.Utils
                     if (collisions.ContainsKey(type.Name))
                     {
                         List<Type> coll = collisions[type.Name];
-                        StringBuilder sb = new StringBuilder();
+                        StringBuilder sb = new();
                         for (int i = 0; i < coll.Count; ++i)
                         {
                             if (i > 0)

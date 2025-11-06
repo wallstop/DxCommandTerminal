@@ -15,7 +15,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void LauncherMetricsRespectSizingModes()
         {
-            TerminalLauncherSettings settings = new TerminalLauncherSettings
+            TerminalLauncherSettings settings = new()
             {
                 width = LauncherDimension.RelativeToScreen(0.5f),
                 height = LauncherDimension.RelativeToScreen(0.33f),
@@ -76,7 +76,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             history.Push("second", true, true);
             history.Push("third", true, true);
 
-            LauncherLayoutMetrics metrics = new LauncherLayoutMetrics(
+            LauncherLayoutMetrics metrics = new(
                 width: 640f,
                 height: 160f,
                 left: 100f,
@@ -90,7 +90,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 animationDuration: 0.1f
             );
 
-            ScrollView scroll = new ScrollView();
+            ScrollView scroll = new();
             terminal.SetLogScrollViewForTests(scroll);
             terminal.SetLauncherMetricsForTests(metrics);
             terminal.SetState(TerminalState.OpenLauncher);

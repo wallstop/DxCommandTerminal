@@ -1,6 +1,5 @@
 namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 {
-    using System;
     using Backend.Parsers;
     using NUnit.Framework;
 

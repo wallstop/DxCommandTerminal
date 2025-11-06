@@ -26,10 +26,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void AwakeInvokesRuntimeConfigurator()
         {
-            StubConfigurator configurator = new StubConfigurator();
+            StubConfigurator configurator = new();
             TerminalUI.RuntimeConfigurator = configurator;
 
-            GameObject go = new GameObject("RuntimeConfiguratorTest");
+            GameObject go = new("RuntimeConfiguratorTest");
             go.SetActive(false);
             TerminalUI terminal = go.AddComponent<TerminalUI>();
             terminal.disableUIForTests = true;

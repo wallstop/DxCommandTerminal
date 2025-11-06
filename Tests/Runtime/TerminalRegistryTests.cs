@@ -29,8 +29,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void RegisterAndUnregisterUpdatesActiveTerminal()
         {
-            GameObject first = new GameObject("TerminalRegistry_First");
-            GameObject second = new GameObject("TerminalRegistry_Second");
+            GameObject first = new("TerminalRegistry_First");
+            GameObject second = new("TerminalRegistry_Second");
             try
             {
                 TerminalUI firstTerminal = first.AddComponent<TerminalUI>();

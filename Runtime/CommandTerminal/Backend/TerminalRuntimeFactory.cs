@@ -7,7 +7,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     {
         public ITerminalRuntime CreateRuntime(ITerminalSettingsProvider settingsProvider)
         {
-            TerminalRuntime runtime = new TerminalRuntime();
+            TerminalRuntime runtime = new();
             if (settingsProvider != null)
             {
                 TerminalRuntimeSettings settings = settingsProvider.BuildSettings();

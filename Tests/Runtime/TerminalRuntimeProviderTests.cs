@@ -28,12 +28,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void AwakeUsesInjectedRuntimeConfiguratorAndProvider()
         {
-            StubConfigurator configurator = new StubConfigurator();
-            StubRuntimeProvider provider = new StubRuntimeProvider();
+            StubConfigurator configurator = new();
+            StubRuntimeProvider provider = new();
             TerminalUI.RuntimeConfigurator = configurator;
             TerminalUI.RuntimeProvider = provider;
 
-            GameObject go = new GameObject("TerminalRuntimeProviderTest");
+            GameObject go = new("TerminalRuntimeProviderTest");
             go.SetActive(false);
             TerminalUI terminal = go.AddComponent<TerminalUI>();
             terminal.disableUIForTests = true;

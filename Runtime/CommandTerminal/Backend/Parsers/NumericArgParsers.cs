@@ -5,7 +5,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend.Parsers
 
     public sealed class FloatArgParser : ArgParser<float>
     {
-        public static readonly FloatArgParser Instance = new FloatArgParser();
+        public static readonly FloatArgParser Instance = new();
 
         protected override bool TryParseTyped(string input, out float value)
         {
@@ -20,7 +20,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend.Parsers
 
     public sealed class IntArgParser : ArgParser<int>
     {
-        public static readonly IntArgParser Instance = new IntArgParser();
+        public static readonly IntArgParser Instance = new();
 
         protected override bool TryParseTyped(string input, out int value)
         {
@@ -35,7 +35,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend.Parsers
 
     public sealed class UIntArgParser : ArgParser<uint>
     {
-        public static readonly UIntArgParser Instance = new UIntArgParser();
+        public static readonly UIntArgParser Instance = new();
 
         protected override bool TryParseTyped(string input, out uint value)
         {
@@ -50,7 +50,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend.Parsers
 
     public sealed class LongArgParser : ArgParser<long>
     {
-        public static readonly LongArgParser Instance = new LongArgParser();
+        public static readonly LongArgParser Instance = new();
 
         protected override bool TryParseTyped(string input, out long value)
         {
@@ -65,7 +65,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend.Parsers
 
     public sealed class ULongArgParser : ArgParser<ulong>
     {
-        public static readonly ULongArgParser Instance = new ULongArgParser();
+        public static readonly ULongArgParser Instance = new();
 
         protected override bool TryParseTyped(string input, out ulong value)
         {
@@ -80,7 +80,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend.Parsers
 
     public sealed class DoubleArgParser : ArgParser<double>
     {
-        public static readonly DoubleArgParser Instance = new DoubleArgParser();
+        public static readonly DoubleArgParser Instance = new();
 
         protected override bool TryParseTyped(string input, out double value)
         {
@@ -95,7 +95,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend.Parsers
 
     public sealed class ShortArgParser : ArgParser<short>
     {
-        public static readonly ShortArgParser Instance = new ShortArgParser();
+        public static readonly ShortArgParser Instance = new();
 
         protected override bool TryParseTyped(string input, out short value)
         {
@@ -110,7 +110,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend.Parsers
 
     public sealed class UShortArgParser : ArgParser<ushort>
     {
-        public static readonly UShortArgParser Instance = new UShortArgParser();
+        public static readonly UShortArgParser Instance = new();
 
         protected override bool TryParseTyped(string input, out ushort value)
         {
@@ -125,7 +125,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend.Parsers
 
     public sealed class ByteArgParser : ArgParser<byte>
     {
-        public static readonly ByteArgParser Instance = new ByteArgParser();
+        public static readonly ByteArgParser Instance = new();
 
         protected override bool TryParseTyped(string input, out byte value)
         {
@@ -140,7 +140,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend.Parsers
 
     public sealed class SByteArgParser : ArgParser<sbyte>
     {
-        public static readonly SByteArgParser Instance = new SByteArgParser();
+        public static readonly SByteArgParser Instance = new();
 
         protected override bool TryParseTyped(string input, out sbyte value)
         {
@@ -155,7 +155,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend.Parsers
 
     public sealed class DecimalArgParser : ArgParser<decimal>
     {
-        public static readonly DecimalArgParser Instance = new DecimalArgParser();
+        public static readonly DecimalArgParser Instance = new();
 
         protected override bool TryParseTyped(string input, out decimal value)
         {
@@ -170,7 +170,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend.Parsers
 
     public sealed class BigIntegerArgParser : ArgParser<BigInteger>
     {
-        public static readonly BigIntegerArgParser Instance = new BigIntegerArgParser();
+        public static readonly BigIntegerArgParser Instance = new();
 
         protected override bool TryParseTyped(string input, out BigInteger value)
         {

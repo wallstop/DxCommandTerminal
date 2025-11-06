@@ -20,11 +20,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend.Profiles
         private int _historyBufferSize = 512;
 
         [SerializeField]
-        private TerminalCommandFilterConfiguration _commandFilters =
-            new TerminalCommandFilterConfiguration();
+        private TerminalCommandFilterConfiguration _commandFilters = new();
 
         [SerializeField]
-        private TerminalLogFilterConfiguration _logFilters = new TerminalLogFilterConfiguration();
+        private TerminalLogFilterConfiguration _logFilters = new();
 
         public int LogBufferSize => Mathf.Max(0, _logBufferSize);
 

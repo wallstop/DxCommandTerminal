@@ -4,7 +4,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
     internal sealed class TerminalRuntimePool : ITerminalRuntimePool
     {
-        private readonly Stack<ITerminalRuntime> _pool = new Stack<ITerminalRuntime>();
+        private readonly Stack<ITerminalRuntime> _pool = new();
 
         public bool TryRent(out ITerminalRuntime runtime)
         {

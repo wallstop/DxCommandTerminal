@@ -54,7 +54,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void ResolvePaddingFallsBackToStyleValue()
         {
-            StyleLength stylePadding = new StyleLength(12f);
+            StyleLength stylePadding = new(12f);
             float resolved = 0f;
 
             float result = LayoutMeasurementUtility.ResolvePadding(resolved, stylePadding);

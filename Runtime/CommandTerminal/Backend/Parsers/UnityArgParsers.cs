@@ -6,7 +6,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend.Parsers
 
     public sealed class Vector2ArgParser : ArgParser<Vector2>
     {
-        public static readonly Vector2ArgParser Instance = new Vector2ArgParser();
+        public static readonly Vector2ArgParser Instance = new();
 
         protected override bool TryParseTyped(string input, out Vector2 value)
         {
@@ -104,7 +104,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend.Parsers
 
     public sealed class Vector3ArgParser : ArgParser<Vector3>
     {
-        public static readonly Vector3ArgParser Instance = new Vector3ArgParser();
+        public static readonly Vector3ArgParser Instance = new();
 
         protected override bool TryParseTyped(string input, out Vector3 value)
         {
@@ -204,7 +204,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend.Parsers
 
     public sealed class Vector4ArgParser : ArgParser<Vector4>
     {
-        public static readonly Vector4ArgParser Instance = new Vector4ArgParser();
+        public static readonly Vector4ArgParser Instance = new();
 
         protected override bool TryParseTyped(string input, out Vector4 value)
         {
@@ -337,7 +337,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend.Parsers
 
     public sealed class Vector2IntArgParser : ArgParser<Vector2Int>
     {
-        public static readonly Vector2IntArgParser Instance = new Vector2IntArgParser();
+        public static readonly Vector2IntArgParser Instance = new();
 
         protected override bool TryParseTyped(string input, out Vector2Int value)
         {
@@ -433,7 +433,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend.Parsers
 
     public sealed class Vector3IntArgParser : ArgParser<Vector3Int>
     {
-        public static readonly Vector3IntArgParser Instance = new Vector3IntArgParser();
+        public static readonly Vector3IntArgParser Instance = new();
 
         protected override bool TryParseTyped(string input, out Vector3Int value)
         {
@@ -533,7 +533,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend.Parsers
 
     public sealed class ColorArgParser : ArgParser<Color>
     {
-        public static readonly ColorArgParser Instance = new ColorArgParser();
+        public static readonly ColorArgParser Instance = new();
 
         protected override bool TryParseTyped(string input, out Color value)
         {
@@ -657,7 +657,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend.Parsers
 
     public sealed class QuaternionArgParser : ArgParser<Quaternion>
     {
-        public static readonly QuaternionArgParser Instance = new QuaternionArgParser();
+        public static readonly QuaternionArgParser Instance = new();
 
         protected override bool TryParseTyped(string input, out Quaternion value)
         {
@@ -743,7 +743,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend.Parsers
 
     public sealed class RectArgParser : ArgParser<Rect>
     {
-        public static readonly RectArgParser Instance = new RectArgParser();
+        public static readonly RectArgParser Instance = new();
 
         protected override bool TryParseTyped(string input, out Rect value)
         {
@@ -829,7 +829,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend.Parsers
 
     public sealed class RectIntArgParser : ArgParser<RectInt>
     {
-        public static readonly RectIntArgParser Instance = new RectIntArgParser();
+        public static readonly RectIntArgParser Instance = new();
 
         protected override bool TryParseTyped(string input, out RectInt value)
         {

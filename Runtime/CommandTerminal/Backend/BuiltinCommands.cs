@@ -642,7 +642,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
 
             int variableCount = shell.Variables.Count;
-            List<string> variableNames = new List<string>(shell.Variables.Keys);
+            List<string> variableNames = new(shell.Variables.Keys);
             foreach (string variable in variableNames)
             {
                 shell.ClearVariable(variable);

@@ -12,13 +12,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     {
         [Header("Commands")]
         [SerializeField]
-        private Profiles.TerminalCommandFilterConfiguration _commandFilters =
-            new Profiles.TerminalCommandFilterConfiguration();
+        private Profiles.TerminalCommandFilterConfiguration _commandFilters = new();
 
         [Header("Logs")]
         [SerializeField]
-        private Profiles.TerminalLogFilterConfiguration _logFilters =
-            new Profiles.TerminalLogFilterConfiguration();
+        private Profiles.TerminalLogFilterConfiguration _logFilters = new();
 
         public Profiles.TerminalCommandFilterConfiguration CommandFilters => _commandFilters;
 

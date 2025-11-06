@@ -30,7 +30,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
 
             ThemeArgumentCompleter completer = new();
-            CommandCompletionContext ctx = new CommandCompletionContext(
+            CommandCompletionContext ctx = new(
                 "set-theme ",
                 "set-theme",
                 new List<CommandArg>(),
@@ -52,9 +52,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             TestFontPack fontPack = ScriptableObject.CreateInstance<TestFontPack>();
             // Create test fonts with names (Font is a UnityEngine.Object, not a ScriptableObject)
-            Font f1 = new Font { name = "Consolas" };
-            Font f2 = new Font { name = "Cousine" };
-            Font f3 = new Font
+            Font f1 = new() { name = "Consolas" };
+            Font f2 = new() { name = "Cousine" };
+            Font f3 = new()
             {
                 name = "consolas", // duplicate name differing by case
             };
@@ -69,7 +69,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
 
             FontArgumentCompleter completer = new();
-            CommandCompletionContext ctx = new CommandCompletionContext(
+            CommandCompletionContext ctx = new(
                 "set-font ",
                 "set-font",
                 new List<CommandArg>(),

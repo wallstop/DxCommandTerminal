@@ -8,7 +8,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     using Components;
     using NUnit.Framework;
     using Themes;
-    using UI;
     using UnityEngine;
     using UnityEngine.TestTools;
     using LogType = UnityEngine.LogType;

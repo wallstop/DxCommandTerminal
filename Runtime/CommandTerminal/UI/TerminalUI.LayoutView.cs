@@ -1,7 +1,6 @@
 namespace WallstopStudios.DxCommandTerminal.UI
 {
     using System;
-    using System.Collections.Generic;
     using UnityEngine;
     using UnityEngine.UIElements;
 
@@ -608,7 +607,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
             else
             {
-                StyleLength historyLength = new StyleLength(availableForHistory);
+                StyleLength historyLength = new(availableForHistory);
                 ApplyLogDisplay(
                     DisplayStyle.Flex,
                     historyLength,
@@ -1124,10 +1123,11 @@ namespace WallstopStudios.DxCommandTerminal.UI
                     ? Justify.Center
                     : Justify.FlexStart;
 
-            Button primaryButton;
-            Button secondaryButton;
-            Button launcherButton;
-            EnsureButtons(out primaryButton, out secondaryButton, out launcherButton);
+            EnsureButtons(
+                out Button primaryButton,
+                out Button secondaryButton,
+                out Button launcherButton
+            );
 
             DisplayStyle buttonDisplay = showGUIButtons ? DisplayStyle.Flex : DisplayStyle.None;
 

@@ -6,7 +6,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend.Parsers
 
     public sealed class GuidArgParser : ArgParser<Guid>
     {
-        public static readonly GuidArgParser Instance = new GuidArgParser();
+        public static readonly GuidArgParser Instance = new();
 
         protected override bool TryParseTyped(string input, out Guid value)
         {
@@ -16,7 +16,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend.Parsers
 
     public sealed class DateTimeArgParser : ArgParser<DateTime>
     {
-        public static readonly DateTimeArgParser Instance = new DateTimeArgParser();
+        public static readonly DateTimeArgParser Instance = new();
 
         protected override bool TryParseTyped(string input, out DateTime value)
         {
@@ -40,7 +40,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend.Parsers
 
     public sealed class DateTimeOffsetArgParser : ArgParser<DateTimeOffset>
     {
-        public static readonly DateTimeOffsetArgParser Instance = new DateTimeOffsetArgParser();
+        public static readonly DateTimeOffsetArgParser Instance = new();
 
         protected override bool TryParseTyped(string input, out DateTimeOffset value)
         {
@@ -55,7 +55,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend.Parsers
 
     public sealed class CharArgParser : ArgParser<char>
     {
-        public static readonly CharArgParser Instance = new CharArgParser();
+        public static readonly CharArgParser Instance = new();
 
         protected override bool TryParseTyped(string input, out char value)
         {
@@ -65,7 +65,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend.Parsers
 
     public sealed class TimeSpanArgParser : ArgParser<TimeSpan>
     {
-        public static readonly TimeSpanArgParser Instance = new TimeSpanArgParser();
+        public static readonly TimeSpanArgParser Instance = new();
 
         protected override bool TryParseTyped(string input, out TimeSpan value)
         {
@@ -75,7 +75,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend.Parsers
 
     public sealed class VersionArgParser : ArgParser<Version>
     {
-        public static readonly VersionArgParser Instance = new VersionArgParser();
+        public static readonly VersionArgParser Instance = new();
 
         protected override bool TryParseTyped(string input, out Version value)
         {
@@ -85,7 +85,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend.Parsers
 
     public sealed class IPAddressArgParser : ArgParser<IPAddress>
     {
-        public static readonly IPAddressArgParser Instance = new IPAddressArgParser();
+        public static readonly IPAddressArgParser Instance = new();
 
         protected override bool TryParseTyped(string input, out IPAddress value)
         {

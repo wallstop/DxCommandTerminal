@@ -111,7 +111,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             ITerminalServiceLocator currentLocator =
                 _serviceLocator ?? TerminalServiceLocator.Default;
-            MutableTerminalServiceLocator replacement = new MutableTerminalServiceLocator(
+            MutableTerminalServiceLocator replacement = new(
                 currentLocator.TerminalProvider,
                 currentLocator.RuntimeConfigurator,
                 currentLocator.InputProvider,
@@ -470,8 +470,9 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         private TerminalRuntimeModeFlags ResolveRuntimeModeFlags()
         {
-            TerminalRuntimeModeFlags resolved;
-            bool resolvedFromOptions = TryResolveRuntimeModeFromOptions(out resolved);
+            bool resolvedFromOptions = TryResolveRuntimeModeFromOptions(
+                out TerminalRuntimeModeFlags resolved
+            );
             if (resolvedFromOptions)
             {
                 return resolved;
@@ -1418,7 +1419,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 return;
             }
 
-            StandardScrollSnapshot snapshot = new StandardScrollSnapshot
+            StandardScrollSnapshot snapshot = new()
             {
                 HasCache = _hasCachedStandardScroll,
                 Value = _cachedStandardScrollValue,
@@ -2524,7 +2525,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                     return;
                 }
 
-                List<string> loadedThemes = new List<string>();
+                List<string> loadedThemes = new();
                 foreach (string cls in terminalRoot.GetClasses())
                 {
                     if (ThemeNameHelper.IsThemeName(cls))

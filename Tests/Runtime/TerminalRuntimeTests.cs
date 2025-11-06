@@ -11,7 +11,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void ConfigureCreatesRuntimeComponents()
         {
-            TerminalRuntime runtime = new TerminalRuntime();
+            TerminalRuntime runtime = new();
             TerminalRuntimeUpdateResult result = runtime.Configure(
                 CreateSettings(),
                 forceReset: true
@@ -31,7 +31,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void ConfigureWithoutForceReusesExistingInstances()
         {
-            TerminalRuntime runtime = new TerminalRuntime();
+            TerminalRuntime runtime = new();
             runtime.Configure(CreateSettings(), forceReset: true);
 
             CommandLog initialLog = runtime.Log;
@@ -58,7 +58,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void ConfigureDetectsCommandConfigurationChanges()
         {
-            TerminalRuntime runtime = new TerminalRuntime();
+            TerminalRuntime runtime = new();
             runtime.Configure(CreateSettings(), forceReset: true);
 
             TerminalRuntimeUpdateResult updated = runtime.Configure(
@@ -73,7 +73,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void ConfigureHonorsCommandAllowList()
         {
-            TerminalRuntime runtime = new TerminalRuntime();
+            TerminalRuntime runtime = new();
             runtime.Configure(CreateSettings(allowedCommands: new[] { "help" }), forceReset: true);
 
             CollectionAssert.AreEquivalent(new[] { "help" }, runtime.Shell.AutoRegisteredCommands);
@@ -82,7 +82,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void ConfigureHonorsLogAllowList()
         {
-            TerminalRuntime runtime = new TerminalRuntime();
+            TerminalRuntime runtime = new();
             runtime.Configure(
                 CreateSettings(allowedLogTypes: new[] { TerminalLogType.Message }),
                 forceReset: true
@@ -101,7 +101,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void LogMessageAppendsToCommandLog()
         {
-            TerminalRuntime runtime = new TerminalRuntime();
+            TerminalRuntime runtime = new();
             runtime.Configure(CreateSettings(), forceReset: true);
 
             bool logged = runtime.LogMessage(TerminalLogType.Message, "hello {0}", "world");
@@ -118,7 +118,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void ConfigureWithoutChangesAvoidsAllocations()
         {
-            TerminalRuntime runtime = new TerminalRuntime();
+            TerminalRuntime runtime = new();
             TerminalRuntimeSettings settings = CreateSettings();
             runtime.Configure(settings, forceReset: true);
 

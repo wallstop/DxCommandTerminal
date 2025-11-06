@@ -422,7 +422,7 @@ namespace WallstopStudios.DxCommandTerminal.Input
                 return;
             }
 
-            if (!TryGetComponent<ITerminalInputTarget>(out ITerminalInputTarget resolvedTarget))
+            if (!TryGetComponent(out ITerminalInputTarget resolvedTarget))
             {
                 MonoBehaviour[] behaviours = GetComponents<MonoBehaviour>();
                 for (int i = 0; i < behaviours.Length && resolvedTarget == null; ++i)

@@ -222,7 +222,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 ScriptableObject.CreateInstance<TerminalConfigurationAsset>();
             _configurationAssetUnderTest = configurationAsset;
 
-            CapturingRuntimeFactory runtimeFactory = new CapturingRuntimeFactory();
+            CapturingRuntimeFactory runtimeFactory = new();
 
             yield return SpawnTerminal(
                 resetStateOnInit: true,
@@ -257,7 +257,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 blockedCommands: Array.Empty<string>()
             );
 
-            CapturingRuntimeFactory runtimeFactory = new CapturingRuntimeFactory();
+            CapturingRuntimeFactory runtimeFactory = new();
 
             yield return SpawnTerminal(
                 resetStateOnInit: true,
@@ -279,7 +279,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             yield return TestSceneHelpers.DestroyTerminalAndWait();
 
-            CapturingRuntimeFactory runtimeFactory = new CapturingRuntimeFactory();
+            CapturingRuntimeFactory runtimeFactory = new();
 
             yield return SpawnTerminal(
                 resetStateOnInit: true,
@@ -305,13 +305,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             TerminalUI.RuntimeModeOption[] options = new TerminalUI.RuntimeModeOption[]
             {
-                new TerminalUI.RuntimeModeOption
+                new()
                 {
                     id = "editor",
                     displayName = "Editor Only",
                     modes = TerminalRuntimeModeFlags.Editor,
                 },
-                new TerminalUI.RuntimeModeOption
+                new()
                 {
                     id = "production",
                     displayName = "Production Only",
@@ -472,7 +472,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 history.Push($"command-{i}", success: true, errorFree: true);
             }
 
-            LauncherLayoutMetrics metrics = new LauncherLayoutMetrics(
+            LauncherLayoutMetrics metrics = new(
                 width: 640f,
                 height: 240f,
                 left: 80f,
@@ -486,10 +486,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 animationDuration: 0.05f
             );
 
-            ScrollView logScroll = new ScrollView();
-            ScrollView autoComplete = new ScrollView(ScrollViewMode.Horizontal);
-            VisualElement terminalContainer = new VisualElement();
-            VisualElement inputContainer = new VisualElement();
+            ScrollView logScroll = new();
+            ScrollView autoComplete = new(ScrollViewMode.Horizontal);
+            VisualElement terminalContainer = new();
+            VisualElement inputContainer = new();
 
             terminal.InjectLayoutElementsForTests(
                 terminalContainer,
@@ -548,13 +548,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             TerminalUI.RuntimeModeOption[] options = new TerminalUI.RuntimeModeOption[]
             {
-                new TerminalUI.RuntimeModeOption
+                new()
                 {
                     id = "development",
                     displayName = "Development",
                     modes = TerminalRuntimeModeFlags.Development,
                 },
-                new TerminalUI.RuntimeModeOption
+                new()
                 {
                     id = "production",
                     displayName = "Production",
@@ -580,13 +580,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             TerminalUI.RuntimeModeOption[] options = new TerminalUI.RuntimeModeOption[]
             {
-                new TerminalUI.RuntimeModeOption
+                new()
                 {
                     id = "editor",
                     displayName = "Editor",
                     modes = TerminalRuntimeModeFlags.Editor,
                 },
-                new TerminalUI.RuntimeModeOption
+                new()
                 {
                     id = "production",
                     displayName = "Production",

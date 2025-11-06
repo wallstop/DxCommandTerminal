@@ -718,7 +718,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return string.Empty;
             }
 
-            StringBuilder sb = new StringBuilder();
+            StringBuilder sb = new();
             for (int i = 0; i < parameters.Length; ++i)
             {
                 if (i > 0)

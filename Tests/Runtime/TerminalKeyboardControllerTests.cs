@@ -3,7 +3,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 {
     using System.Collections;
     using System.Collections.Generic;
-    using Backend;
     using Components;
     using Input;
     using NUnit.Framework;

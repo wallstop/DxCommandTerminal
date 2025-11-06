@@ -24,10 +24,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void UsesCustomInputProviderWhenComponentMissing()
         {
-            StubInputProvider provider = new StubInputProvider();
+            StubInputProvider provider = new();
             TerminalUI.InputProvider = provider;
 
-            GameObject go = new GameObject("TerminalInputProviderTest");
+            GameObject go = new("TerminalInputProviderTest");
             go.SetActive(false);
             TerminalUI terminal = go.AddComponent<TerminalUI>();
             terminal.disableUIForTests = true;

@@ -15,7 +15,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void AutoCompleteContainerCollapsesWhenHintsCleared()
         {
-            GameObject go = new GameObject("AutoCompleteRegressionTest");
+            GameObject go = new("AutoCompleteRegressionTest");
             go.SetActive(false);
             TerminalUI terminal = go.AddComponent<TerminalUI>();
             terminal.disableUIForTests = true;
@@ -24,7 +24,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             try
             {
-                ScrollView autoComplete = new ScrollView();
+                ScrollView autoComplete = new();
                 terminal.InjectAutoCompleteContainerForTests(autoComplete);
                 terminal.SetHintDisplayModeForTests(HintDisplayMode.Always);
 
@@ -50,7 +50,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void StandardLayoutPlacesInputAtBottom()
         {
-            GameObject go = new GameObject("StandardLayoutRegressionTest");
+            GameObject go = new("StandardLayoutRegressionTest");
             go.SetActive(false);
             TerminalUI terminal = go.AddComponent<TerminalUI>();
             terminal.disableUIForTests = true;
@@ -58,12 +58,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             try
             {
-                VisualElement terminalContainer = new VisualElement();
+                VisualElement terminalContainer = new();
                 terminalContainer.style.paddingTop = 10f;
                 terminalContainer.style.paddingBottom = 5f;
-                VisualElement inputContainer = new VisualElement();
-                ScrollView autoComplete = new ScrollView();
-                ScrollView log = new ScrollView();
+                VisualElement inputContainer = new();
+                ScrollView autoComplete = new();
+                ScrollView log = new();
 
                 terminal.InjectLayoutElementsForTests(
                     terminalContainer,
@@ -105,7 +105,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void LauncherHistoryUsesAvailableHeight()
         {
-            GameObject go = new GameObject("LauncherHistoryHeightTest");
+            GameObject go = new("LauncherHistoryHeightTest");
             go.SetActive(false);
             TerminalUI terminal = go.AddComponent<TerminalUI>();
             terminal.disableUIForTests = true;
@@ -113,10 +113,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             try
             {
-                VisualElement terminalContainer = new VisualElement();
-                VisualElement inputContainer = new VisualElement();
-                ScrollView autoComplete = new ScrollView();
-                ScrollView log = new ScrollView();
+                VisualElement terminalContainer = new();
+                VisualElement inputContainer = new();
+                ScrollView autoComplete = new();
+                ScrollView log = new();
                 terminal.InjectLayoutElementsForTests(
                     terminalContainer,
                     inputContainer,
@@ -126,7 +126,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 terminal.ArrangeLauncherVisualHierarchyForTests();
                 terminal.ForceStateForTests(TerminalState.OpenLauncher);
 
-                LauncherLayoutMetrics metrics = new LauncherLayoutMetrics(
+                LauncherLayoutMetrics metrics = new(
                     width: 640f,
                     height: 260f,
                     left: 0f,
@@ -192,14 +192,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void LauncherLayoutSnapshotReflectsHistoryAllocation()
         {
-            GameObject go = new GameObject("LauncherSnapshotTest");
+            GameObject go = new("LauncherSnapshotTest");
             go.SetActive(false);
             TerminalUI terminal = go.AddComponent<TerminalUI>();
             terminal.disableUIForTests = true;
             go.SetActive(true);
 
-            List<TerminalUI.LauncherLayoutSnapshot> snapshots =
-                new List<TerminalUI.LauncherLayoutSnapshot>();
+            List<TerminalUI.LauncherLayoutSnapshot> snapshots = new();
 
             void CaptureSnapshot(TerminalUI.LauncherLayoutSnapshot snapshot)
             {
@@ -208,10 +207,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             try
             {
-                VisualElement terminalContainer = new VisualElement();
-                VisualElement inputContainer = new VisualElement();
-                ScrollView autoComplete = new ScrollView();
-                ScrollView log = new ScrollView();
+                VisualElement terminalContainer = new();
+                VisualElement inputContainer = new();
+                ScrollView autoComplete = new();
+                ScrollView log = new();
 
                 terminal.InjectLayoutElementsForTests(
                     terminalContainer,
@@ -222,7 +221,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 terminal.ArrangeLauncherVisualHierarchyForTests();
                 terminal.ForceStateForTests(TerminalState.OpenLauncher);
 
-                LauncherLayoutMetrics metrics = new LauncherLayoutMetrics(
+                LauncherLayoutMetrics metrics = new(
                     width: 620f,
                     height: 240f,
                     left: 0f,
@@ -301,7 +300,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void HistoryAdapterSwitchesJustificationBetweenModes()
         {
-            GameObject go = new GameObject("HistoryAdapterAlignmentTest");
+            GameObject go = new("HistoryAdapterAlignmentTest");
             go.SetActive(false);
             TerminalUI terminal = go.AddComponent<TerminalUI>();
             terminal.disableUIForTests = true;
@@ -309,10 +308,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             try
             {
-                VisualElement terminalContainer = new VisualElement();
-                VisualElement inputContainer = new VisualElement();
-                ScrollView autoComplete = new ScrollView();
-                ScrollView log = new ScrollView();
+                VisualElement terminalContainer = new();
+                VisualElement inputContainer = new();
+                ScrollView autoComplete = new();
+                ScrollView log = new();
 
                 terminal.InjectLayoutElementsForTests(
                     terminalContainer,
@@ -331,7 +330,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 terminal.ArrangeLauncherVisualHierarchyForTests();
                 terminal.ForceStateForTests(TerminalState.OpenLauncher);
 
-                LauncherLayoutMetrics metrics = new LauncherLayoutMetrics(
+                LauncherLayoutMetrics metrics = new(
                     width: 600f,
                     height: 300f,
                     left: 100f,
@@ -372,10 +371,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             TerminalUI terminal = TerminalUI.Instance;
             Assert.IsNotNull(terminal);
 
-            VisualElement terminalContainer = new VisualElement();
-            VisualElement inputContainer = new VisualElement();
-            ScrollView autoComplete = new ScrollView(ScrollViewMode.Horizontal);
-            ScrollView logScroll = new ScrollView();
+            VisualElement terminalContainer = new();
+            VisualElement inputContainer = new();
+            ScrollView autoComplete = new(ScrollViewMode.Horizontal);
+            ScrollView logScroll = new();
 
             terminal.InjectLayoutElementsForTests(
                 terminalContainer,
@@ -429,10 +428,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             TerminalUI terminal = TerminalUI.Instance;
             Assert.IsNotNull(terminal);
 
-            VisualElement terminalContainer = new VisualElement();
-            VisualElement inputContainer = new VisualElement();
-            ScrollView autoComplete = new ScrollView(ScrollViewMode.Horizontal);
-            ScrollView logScroll = new ScrollView();
+            VisualElement terminalContainer = new();
+            VisualElement inputContainer = new();
+            ScrollView autoComplete = new(ScrollViewMode.Horizontal);
+            ScrollView logScroll = new();
 
             terminal.InjectLayoutElementsForTests(
                 terminalContainer,
@@ -477,7 +476,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void LauncherOpacityRespectsFadeCurve()
         {
-            GameObject go = new GameObject("LauncherOpacityTest");
+            GameObject go = new("LauncherOpacityTest");
             go.SetActive(false);
             TerminalUI terminal = go.AddComponent<TerminalUI>();
             terminal.disableUIForTests = true;
@@ -486,7 +485,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             try
             {
                 terminal.ForceStateForTests(TerminalState.OpenLauncher);
-                LauncherLayoutMetrics metrics = new LauncherLayoutMetrics(
+                LauncherLayoutMetrics metrics = new(
                     width: 580f,
                     height: 300f,
                     left: 0f,
@@ -523,7 +522,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void LauncherSpacingResetsWhenSuggestionsDisappear()
         {
-            GameObject go = new GameObject("LauncherSpacingTest");
+            GameObject go = new("LauncherSpacingTest");
             go.SetActive(false);
             TerminalUI terminal = go.AddComponent<TerminalUI>();
             terminal.disableUIForTests = true;
@@ -531,10 +530,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             try
             {
-                VisualElement terminalContainer = new VisualElement();
-                VisualElement inputContainer = new VisualElement();
-                ScrollView autoComplete = new ScrollView();
-                ScrollView log = new ScrollView();
+                VisualElement terminalContainer = new();
+                VisualElement inputContainer = new();
+                ScrollView autoComplete = new();
+                ScrollView log = new();
 
                 terminal.InjectLayoutElementsForTests(
                     terminalContainer,
@@ -545,7 +544,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 terminal.ArrangeLauncherVisualHierarchyForTests();
                 terminal.ForceStateForTests(TerminalState.OpenLauncher);
 
-                LauncherLayoutMetrics metrics = new LauncherLayoutMetrics(
+                LauncherLayoutMetrics metrics = new(
                     width: 620f,
                     height: 240f,
                     left: 0f,
@@ -562,11 +561,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 terminal.SetLauncherMetricsForTests(metrics);
                 terminal.SetWindowHeightsForTests(metrics.Height, metrics.Height);
 
-                VisualElement historyEntry = new VisualElement();
+                VisualElement historyEntry = new();
                 historyEntry.style.display = DisplayStyle.Flex;
                 log.contentContainer.Add(historyEntry);
 
-                VisualElement suggestion = new VisualElement();
+                VisualElement suggestion = new();
                 suggestion.style.display = DisplayStyle.Flex;
                 TestRuntimeScope.AutoCompleteContainerForTests.contentContainer.Add(suggestion);
 
@@ -598,7 +597,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void ClosedTerminalHidesContainer()
         {
-            GameObject go = new GameObject("TerminalVisibilityTest");
+            GameObject go = new("TerminalVisibilityTest");
             go.SetActive(false);
             TerminalUI terminal = go.AddComponent<TerminalUI>();
             terminal.disableUIForTests = true;
@@ -606,10 +605,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             try
             {
-                VisualElement terminalContainer = new VisualElement();
-                VisualElement inputContainer = new VisualElement();
-                ScrollView autoComplete = new ScrollView();
-                ScrollView log = new ScrollView();
+                VisualElement terminalContainer = new();
+                VisualElement inputContainer = new();
+                ScrollView autoComplete = new();
+                ScrollView log = new();
                 terminal.InjectLayoutElementsForTests(
                     terminalContainer,
                     inputContainer,
@@ -644,7 +643,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void LauncherPaddingIsSymmetric()
         {
-            GameObject go = new GameObject("LauncherPaddingTest");
+            GameObject go = new("LauncherPaddingTest");
             go.SetActive(false);
             TerminalUI terminal = go.AddComponent<TerminalUI>();
             terminal.disableUIForTests = true;
@@ -652,10 +651,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             try
             {
-                VisualElement terminalContainer = new VisualElement();
-                VisualElement inputContainer = new VisualElement();
-                ScrollView autoComplete = new ScrollView();
-                ScrollView log = new ScrollView();
+                VisualElement terminalContainer = new();
+                VisualElement inputContainer = new();
+                ScrollView autoComplete = new();
+                ScrollView log = new();
                 terminal.InjectLayoutElementsForTests(
                     terminalContainer,
                     inputContainer,
@@ -664,7 +663,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 );
                 terminal.ForceStateForTests(TerminalState.OpenLauncher);
 
-                LauncherLayoutMetrics metrics = new LauncherLayoutMetrics(
+                LauncherLayoutMetrics metrics = new(
                     width: 640f,
                     height: 260f,
                     left: 0f,
@@ -697,7 +696,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void LauncherHistoryRemainsVisibleWhenItemsExist()
         {
-            GameObject go = new GameObject("LauncherHistoryRegressionTest");
+            GameObject go = new("LauncherHistoryRegressionTest");
             go.SetActive(false);
             TerminalUI terminal = go.AddComponent<TerminalUI>();
             terminal.disableUIForTests = true;
@@ -705,10 +704,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             try
             {
-                VisualElement terminalContainer = new VisualElement();
-                VisualElement inputContainer = new VisualElement();
-                ScrollView autoComplete = new ScrollView();
-                ScrollView log = new ScrollView();
+                VisualElement terminalContainer = new();
+                VisualElement inputContainer = new();
+                ScrollView autoComplete = new();
+                ScrollView log = new();
                 terminal.InjectLayoutElementsForTests(
                     terminalContainer,
                     inputContainer,
@@ -772,7 +771,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void LauncherHistoryNewestEntryAppearsNearInput()
         {
-            GameObject go = new GameObject("LauncherHistoryOrderTest");
+            GameObject go = new("LauncherHistoryOrderTest");
             go.SetActive(false);
             TerminalUI terminal = go.AddComponent<TerminalUI>();
             terminal.disableUIForTests = true;
@@ -780,10 +779,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             try
             {
-                VisualElement terminalContainer = new VisualElement();
-                VisualElement inputContainer = new VisualElement();
-                ScrollView autoComplete = new ScrollView();
-                ScrollView log = new ScrollView();
+                VisualElement terminalContainer = new();
+                VisualElement inputContainer = new();
+                ScrollView autoComplete = new();
+                ScrollView log = new();
                 terminal.InjectLayoutElementsForTests(
                     terminalContainer,
                     inputContainer,
@@ -835,7 +834,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void LauncherSuggestionsUseTightSpacing()
         {
-            GameObject go = new GameObject("LauncherSuggestionSpacingTest");
+            GameObject go = new("LauncherSuggestionSpacingTest");
             go.SetActive(false);
             TerminalUI terminal = go.AddComponent<TerminalUI>();
             terminal.disableUIForTests = true;
@@ -843,10 +842,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             try
             {
-                VisualElement terminalContainer = new VisualElement();
-                VisualElement inputContainer = new VisualElement();
-                ScrollView autoComplete = new ScrollView();
-                ScrollView log = new ScrollView();
+                VisualElement terminalContainer = new();
+                VisualElement inputContainer = new();
+                ScrollView autoComplete = new();
+                ScrollView log = new();
                 terminal.InjectLayoutElementsForTests(
                     terminalContainer,
                     inputContainer,
@@ -856,7 +855,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 terminal.ArrangeLauncherVisualHierarchyForTests();
                 terminal.ForceStateForTests(TerminalState.OpenLauncher);
 
-                LauncherLayoutMetrics metrics = new LauncherLayoutMetrics(
+                LauncherLayoutMetrics metrics = new(
                     width: 640f,
                     height: 240f,
                     left: 0f,

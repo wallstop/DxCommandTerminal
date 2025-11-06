@@ -1,109 +1,217 @@
-# Launcher Scrollbar & Fade Remediation Plan
+# Terminal Architecture Modernization Plan
 
-## Goals
+## Vision
 
-- Surface a reliable vertical scrollbar in launcher mode only when history content exceeds the visible viewport.
-- Restore launcher history fading so entries further from the input bar render with progressively lower opacity.
-- Keep the solution maintainable even if that means trading away UI Toolkit virtualization for correctness.
+Deliver a SOLID, dependency-injected terminal stack free of legacy singletons:
 
-## Current Behaviour
+- Runtime core (log/history/shell) remains framework-agnostic and receives settings through well-defined interfaces.
+- UI/presentation layers bind to runtime via injected services or ScriptableObject registries; no hard-coded `TerminalUI.Instance`.
+- Editor tooling manipulates configuration assets rather than reaching into runtime objects.
+- Tests target interfaces and profiles directly, eliminating “for tests” hooks.
 
-- Launcher mode clamps history height via `ApplyLauncherLayout` in `Runtime/CommandTerminal/UI/TerminalUI.LayoutView.cs:195`, yet the vertical scroller element inside the list view never appears despite mouse-wheel scrolling working.
-- `LauncherViewController.UpdateFade` (`Runtime/CommandTerminal/UI/TerminalUI.LauncherViewController.cs:49`) runs, but rendered entries keep full opacity; neither the entry container nor nested label reflects the expected gradient.
-- Standard terminal currently restores alignment but still loses scroll position after large log updates or terminal toggles.
-- A white highlight appears on history rows when hovered/selected due to default UI Toolkit classes.
+## Phase 0 – Baseline Audit (1 day)
 
-## Root-Cause Hypotheses
+**Status:** _Working_
 
-### Scrollbar Absence
+### 0.1 Inventory static/singleton entry points ✅
 
-1. The scroller VisualElement (`unity-scroller--vertical`) might be forced to `display:none` or zero width by USS overrides in `Styles/BaseStyles.uss:32` (e.g., the tracker/dragger classes) once launcher classes are applied.
-2. `InitializeScrollView` (`Runtime/CommandTerminal/UI/TerminalUI.cs:1426`) wires callbacks but never forces `scrollView.showVerticalScroller = true`; relying on `ScrollerVisibility.Auto` may fail because the computed `highValue` stays at `lowValue` while content still scrolls via pointer events.
-3. Dynamic-height virtualization on `ListView` (`Runtime/CommandTerminal/UI/TerminalUI.HistoryListAdapter.cs:60`) could suppress the scroller element when realized child count stays below the configured viewport height, leaving no trigger for the scrollbar to become visible.
+- `Runtime/CommandTerminal/UI/TerminalUI` exposes multiple globals:
+  - `Instance`, `ActiveTerminal`, `ActiveTerminals`, plus static provider hooks (`TerminalProvider`, `RuntimeConfigurator`, `InputProvider`, `RuntimeProvider`).
+  - Static `UnityLogCallback` registered via `Application.logMessageReceived`.
+- `Runtime/CommandTerminal/UI/TerminalRegistry.Default` (and similar `*Proxy.Default` types) bake in lazy singletons for provider interfaces.
+- `Runtime/CommandTerminal/Backend/TerminalRuntimeConfig` retains the legacy static configuration surface (`SetMode`, `EditorAutoDiscover`, `TryAutoDiscoverParsers`) with private fallback fields.
+- `Runtime/CommandTerminal/Backend/TerminalRuntimeCache` holds pooled `TerminalRuntime` instances via static members.
+- Editor-side tooling (`Editor/CustomEditors/TerminalUIEditor`, `Editor/LauncherLayoutDiagnostics`, `Editor/TerminalAssetPackPostProcessor`) declares additional static state and event hooks.
+- Utility singletons (array pools, parser instances) are intentionally stateless helpers—note for dependency review but lower priority.
 
-### Fade Breakdown
+### Next Steps (0.1)
 
-1. The fade pipeline is gated on `_launcherMetricsInitialized` (`Runtime/CommandTerminal/UI/TerminalUI.LayoutView.cs:386`) and may exit early whenever launcher layout updates run before the scroll view resolves geometry, leaving `UpdateFade` with an empty viewport rectangle.
-2. Virtualization rebinding calls `BindLogListItem` (`Runtime/CommandTerminal/UI/TerminalUI.LogView.cs:29`), which resets `element.style.opacity = 1f` for launcher mode; if `HandleScrollValueChanged` is not invoked afterwards (e.g., touchpad inertial scroll), entries keep the reset opacity.
-3. Project setups can exclude `TerminalHistoryFadeTargets.Launcher` from the appearance profile (`Runtime/CommandTerminal/UI/TerminalAppearanceProfile.cs:26`), so we need to confirm configuration is not simply disabling the effect.
+1. Map dependency graph (profiles → runtime → UI/editor) highlighting where Unity-specific code crosses layers.
+2. Catalogue other legacy assumptions uncovered during the audit (e.g., `internal` serialized fields, editor accessors) for mitigation planning in later phases.
 
-### Standard Terminal Scroll Persistence
+### 0.2 Legacy coupling observations ✅
 
-- ScrollView `highValue` is undefined until geometry settles; caching scroller value on close must wait for `highValue` before restoration.
-- Log buffer mutations reset the non-virtualized listview, invalidating cached offsets.
-- Auto-scroll-on-open fights manual cached position.
+- `TerminalUI` exposes many `[SerializeField] internal` members (`_runtime`, `_commandProfile`, `_fontPack`, etc.) relied upon by editor tooling and tests, reinforcing tight coupling.
+- Editor scripts (`TerminalUIEditor`, diagnostics utilities) invoke `internal` setters (`SetBlockedCommandsForTests`, `_terminalContainer`, etc.) and manipulate runtime collections directly, bypassing encapsulation.
+- `TerminalRuntimeCache` and `TerminalRuntimeConfig` maintain static fallback state that bypasses profile-driven configuration and can reintroduce singleton behaviour even if providers are swapped.
+- Tests depend on `ConfigureForTests` helpers and other backdoor APIs, signalling the need for DI-friendly constructors and factories in subsequent phases.
 
-### History Hover Styling
+### Next Steps (0.2)
 
-- USS defaults for `.unity-list-view__item--hovered` and `.unity-list-view__item--selected` introduce light backgrounds in dark themes.
+Begin Phase 0.3: produce a lightweight dependency map showing flow between configuration assets, runtime services, UI, and editor tooling to inform Phase 1 refactors.
 
-## Investigation Tasks
+### 0.3 Dependency Map ✅
 
-1. Reproduce in-editor with UI Toolkit Debugger attached; inspect `unity-scroller--vertical` during overflow to confirm visibility, size, and USS state.
-2. Instrument `LauncherLayoutSnapshot` outputs (already piped through diagnostics) to log `Scroller.highValue`, `lowValue`, `contentContainer.resolvedStyle.height`, and `verticalScrollerVisibility` when history entries exceed the cap.
-3. Temporarily toggle `ListView.virtualizationMethod` to `CollectionVirtualizationMethod.None` to see if scrollbar/fade behaviour immediately returns, confirming a virtualization interaction.
-4. Trace `HandleScrollValueChanged` invocations (subscribe to `_logScrollView.verticalScroller.valueChanged`) to ensure fade recalculations fire after `BindLogListItem` resets opacity and after momentum scrolling completes.
-5. Verify the active `TerminalAppearanceProfile` in scenes/prefabs retains the `Launcher` flag for `_historyFadeTargets`; capture asset GUID if a custom profile overrides defaults.
-6. Add temporary logging around `_cachedStandardScrollValue`, `scroller.highValue`, and `_restoreStandardScrollPending` transitions to confirm restoration timing.
-7. Identify all USS selectors contributing hover/highlight styling and override them at the base theme.
+#### Configuration Assets / Profiles
 
-## Implementation Strategy
+- `TerminalRuntimeProfile`, `TerminalCommandProfile`, `TerminalInputProfile`, `TerminalAppearanceProfile`, `TerminalThemePersistenceProfile`.
+- Aggregated ad hoc inside `TerminalUI`; editor scripts reach directly into serialized fields.
 
-### Scrollbar Visibility _(In Progress)_
+#### Runtime Core
 
-- [x] Added overflow detection and explicit vertical scroller toggling in `Runtime/CommandTerminal/UI/TerminalUI.LayoutView.cs` to gate visibility.
-- [x] Reworked scroller API usage to remain compatible with Unity 2021.3 (no `showVerticalScroller`, preferring `ScrollerVisibility` and style toggles).
-- [x] Restored standard terminal alignment switching so flex justification snaps to `FlexStart` whenever the user scrolls away from the bottom, eliminating white-space overrun while preserving bottom alignment by default.
-- [ ] Validate virtualization interactions and adjust scroller range calculations if Unity still suppresses the dragger.
+- `TerminalRuntime` orchestrates `CommandLog`, `CommandHistory`, `CommandShell`, `CommandAutoComplete`.
+- `TerminalRuntimeCache` (static) optionally stores runtime instances for reuse.
+- `TerminalRuntimeConfig` exposes static configuration (mode flags, parser autodiscovery).
 
-### History Fade _(In Progress)_
+#### Presentation Layer
 
-- [x] Ensure launcher bindings default to computed opacity and immediately request fade recomputation to avoid resets.
-- [ ] Observe geometry-driven fade output under momentum scrolling and update diagnostics if needed.
+- `TerminalUI` MonoBehaviour owns serialized references to profiles, runtime containers, input controllers, layout metrics, etc.
+- `TerminalKeyboardController`, presenters (`LauncherViewController`, `TerminalUI.LogView`, etc.) are partial classes on `TerminalUI`.
+- `TerminalUI` interacts with runtime via static providers (`TerminalRuntimeProvider`, `TerminalRuntimeConfigurator`).
 
-### Animation & Launcher Layout _(In Progress)_
+#### Editor Tooling
 
-- [x] Prevent launcher snap logic from running while closing so the exit tween respects the configured curves.
-- [x] Keep the container visible while height animation plays and reset launcher timing flags once the tween completes.
-- [x] Defer clearing launcher metrics while closing so shortcut-based closes reuse launcher layout/scrolling until the tween ends.
-- [x] Expand overflow heuristics and defer scroller recalculation to eliminate the transient gap at the bottom of launcher history when commands stream in.
-- [ ] Ensure standard closing tween keeps the log content anchored beneath the input (In Progress – scroller now forced to follow the current bottom offset whenever `_isClosingStandard` is true; needs in-editor validation).
-- [x] Disable virtualization on the launcher/terminal history list to keep entries realized during close/overflow transitions (verified safe on 2021.3).
-- [ ] Stress-test launcher with rapid command bursts to confirm the bottom padding no longer flashes before the first manual scroll.
+- `TerminalUIEditor` manipulates `TerminalUI` serialized/internal fields; registers menu items.
+- Diagnostics (`LauncherLayoutDiagnostics`, `TerminalRuntimeInspectorWindow`) subscribe to static events and reference `TerminalUI`.
+- Asset post-processors create theme/font packs using static lists.
 
-### Standard Terminal Scroll Persistence _(In Progress)_
+#### Key Flows
 
-- [x] Cache scroller value and log version on close; suppress auto-scroll when restoring.
-- [x] Delay restoration until `RestoreStandardScrollBounds` runs with valid `highValue`.
-- [x] Clamp cached value and honor bottom-alignment when `highValue` is zero.
-- [x] Detect when the user closed while pinned to the latest entry and fall back to `ScrollToEnd` instead of replaying a normalized offset.
-- [x] Retry `ScrollToEnd` after layout settles and compute fallback targets from content/viewport height so reopening at the bottom no longer depends on `highValue`.
-- [x] Keep retrying restoration until the scroller exposes a valid range, applying the cached normalized value once ready so mid-history positions persist.
-- [ ] Validate cached scroll replay after close/reopen (In Progress – normalized caching wired to restore offsets; needs runtime confirmation after the closing-time anchoring settles the scroll view).
-- [ ] Add conditional diagnostics around `ScrollToEnd`/`TryApplyScrollToEnd` capturing `highValue`, fallback targets, and cached metadata whenever restoration fails, to assist future debugging.
-- [ ] Add diagnostics and possibly a fallback auto-scroll once geometry stabilizes if cached state becomes stale (e.g., buffer cleared).
-- [ ] Investigate caching per terminal state (small/full) to avoid cross-state interference.
+1. Scene/Prefab serialized `TerminalUI` references profiles → `TerminalUI` builds `TerminalRuntimeSettings` → calls static providers to configure `TerminalRuntime`.
+2. Editor scripts mutate `TerminalUI` internal state directly, bypassing profiles and services.
+3. Tests consume `TerminalUI` and runtime via “ForTests” setters, implying tight coupling.
 
-### History Hover Styling _(Done)_
+#### Implications
 
-- [x] Override all `.unity-list-view__item` hover/focus/selected classes to remain transparent in dark themes.
+- Phases 1–2 must introduce service factories/DI to isolate runtime from `TerminalUI`.
+- Need aggregated configuration asset to replace scattered serialized fields.
+- Editor tooling should pivot to profile-focused inspectors once runtime wiring is refactored.
 
-### Shared Cleanup
+### Next Steps (0.3)
 
-- Centralise scroll/fade state checks into a tiny helper so both `BindLogListItem` and `LauncherViewController` consult the same readiness predicate (active state, metrics initialised, scroller present).
-- Add optional editor gizmo or log entry showing the normalized distance used for opacity to aid future tuning.
+Transition to Phase 1: define interfaces/factories to decouple runtime creation (`ITerminalRuntimeFactory`, `ITerminalSettingsProvider`) and plan removal of static caches/configs.
 
-## Testing & Validation
+### Phase 1 Prep – Interface & Seam Identification ✅
 
-- Manual: With 2, 5, and 10 history entries, verify the scrollbar appears only once the viewport height cap is exceeded and that dragging the thumb scrolls correctly.
-- Manual: Check opacity gradient before and after scrolling with mouse wheel, touchpad momentum, and keyboard navigation.
-- Manual: Toggle standard terminal (small/full) with history scrolled, confirming scroll restoration matches cached position.
-- Automated: Extend `Tests/Runtime/TerminalTests.cs` with a launcher-focused test that feeds > `historyVisibleEntryCount` entries, asserts `_logScrollView.verticalScrollerVisibility == ScrollerVisibility.Visible`, and inspects the realized child opacities.
-- Regression: Run existing runtime test suite to ensure non-launcher behaviours remain intact.
+#### Static entry points earmarked for replacement
 
-## Deliverables
+- `TerminalUI.Instance`, `ActiveTerminal`, `ActiveTerminals` → replace with `ITerminalProvider` instances resolved via injected or serialized service registry.
+- Provider proxies (`TerminalRegistry.Default`, `TerminalRuntimeConfiguratorProxy.Default`, `TerminalRuntimeProviderProxy.Default`, `TerminalInputProviderProxy.Default`) → convert into ScriptableObject assets or DI registrations that honour per-scene configuration.
+- `TerminalRuntimeCache` → remove or hide behind `ITerminalRuntimeFactory` that manages pooling explicitly; eliminate static reuse.
+- `TerminalRuntimeConfig` static surface → wrap in `ITerminalRuntimeConfigurator` backed by configuration assets; deprecate global fallback fields.
+- Editor diagnostics hooking static events (`LauncherLayoutDiagnostics`, `TerminalRuntimeInspectorWindow`) → rework to subscribe via provider interfaces once DI is in place.
 
-- Updated runtime/UI code implementing the fixes and helper abstractions.
-- USS adjustments (if needed) with before/after screenshots for documentation.
-- New or updated tests proving scrollbar toggling and fade logic.
-- Short developer note explaining the decision around virtualization for launcher history.
+#### Proposed interface seams
+
+- `ITerminalSettingsProvider`: supplies immutable runtime settings (`TerminalRuntimeSettings`) per terminal instance; implemented by a new `TerminalConfigurationAsset` or `TerminalConfigurationComponent`.
+- `ITerminalRuntimeFactory`: responsible for creating/configuring `ITerminalRuntime` given an `ITerminalSettingsProvider` plus optional services (logging, time, diagnostics).
+- `ITerminalServiceLocator`: ScriptableObject/MonoBehaviour that exposes configured providers to both runtime and editor tooling (small DI container).
+- `ITerminalLog`, `ITerminalShell`, `ITerminalHistory` (optional wrappers) to hide concrete types if further decoupling required.
+
+#### Separation plan
+
+- Phase 1.1: Introduce `ITerminalSettingsProvider` + `TerminalRuntimeFactory` alongside existing static creation. TerminalUI swaps to new factory; static pathways left for backward compat temporarily.
+- Phase 1.2: Refactor provider proxies to resolve from `ITerminalServiceLocator`; deprecate static `Default` singletons.
+- Phase 1.3: Remove `TerminalRuntimeCache` & static config fallbacks, ensuring tests use factories rather than backdoor helpers.
+
+### Next Steps (Phase 1 Prep)
+
+- Kick off Phase 1.1 by scaffolding `ITerminalSettingsProvider` and `TerminalRuntimeFactory` interfaces/classes.
+- Update tests to construct runtime via the new factory to validate the seam before removing static singletons.
+
+## Phase 1 – Core Runtime Decoupling (3–4 days)
+
+1. Extract interfaces:
+   - `ITerminalRuntimeFactory`, `ITerminalLog`, `ITerminalShell`.
+   - `ITerminalSettingsProvider` (wrap `TerminalRuntimeSettings` / profiles).
+2. Convert `TerminalRuntime`/friends to pure C# services:
+   - Constructors accept `ITerminalSettingsProvider` and optional dependencies (`ITimeProvider`, `ILogger`).
+   - Replace scratch lists with pooled structures or dedicated `FilterState` structs.
+3. Introduce DI-friendly bootstrapper (ScriptableObject or MonoBehaviour) that instantiates runtime services per terminal instance.
+
+## Phase 2 – UI Presenter Refactor (4–5 days)
+
+1. Split `TerminalUI` into:
+   - `TerminalView` (MonoBehaviour managing UIDocument bindings).
+   - `TerminalController` (non-Mono class handling mode transitions, animations, fade logic).
+   - `TerminalServiceConnector` (wires controller to DI container).
+2. Replace static `TerminalUI.Instance` with:
+   - `ITerminalProvider` registered via serialized reference (ScriptableObject asset or Scene service locator).
+   - Views request providers via serialized field or `FindObjectOfType<TerminalProvider>()` (temporary).
+3. Update inspector/editor scripts to work against profiles and view components; remove direct field access to runtime internals.
+
+## Phase 3 – Configuration & Profiles (2–3 days)
+
+1. Formalize “chunks”:
+   - `TerminalRuntimeProfile` handles capacities + filters.
+   - `TerminalInputProfile`, `TerminalAppearanceProfile`, `TerminalThemePersistenceProfile` already exist; add `TerminalAnimationProfile` if needed.
+2. Create a `TerminalConfigurationAsset` ScriptableObject aggregating active profiles; `TerminalServiceConnector` consumes this.
+3. Provide migration tool/editor menu: convert legacy serialized fields to new asset references.
+
+## Phase 4 – Editor Tooling Overhaul (3 days)
+
+1. Replace `TerminalUIEditor` with:
+   - Profile-specific custom editors (`TerminalRuntimeProfileEditor`, `TerminalCommandProfileEditor`).
+   - Lightweight `TerminalViewEditor` for layout/preview controls only.
+2. Implement runtime dashboards (e.g., `TerminalRuntimeInspector`) that operate via public interfaces rather than internal fields.
+3. Update diagnostics toggles/logging to route through service interfaces.
+
+## Phase 5 – Testing & CI Updates (2 days)
+
+1. Rewrite unit tests to construct runtime services via interfaces and test fixtures.
+2. Introduce integration tests for:
+   - Dependency injection end-to-end (instantiate TerminalConfigurationAsset, spawn TerminalView, assert behaviours).
+   - Editor-time profile editing (using UnityEditor tests).
+3. Update CI scripts to run new test suites; ensure coverage remains high.
+
+## Phase 6 – Cleanup & Release Prep (1–2 days)
+
+1. Remove deprecated `*ForTests` APIs and obsolete fields.
+2. Update README/CHANGELOG to reflect new architecture and migration path.
+3. Provide upgrade guide for users migrating from singleton-based access to service-based approach.
+
+## Sequencing Notes
+
+- Phase 1 dependency: None (can start immediately).
+- Phase 2 depends on Phase 1 interfaces being available.
+- Phase 3 requires Phase 2 connectors to consume new configuration asset.
+- Phases 4 and 5 can run in parallel once phases 1–3 stabilize.
+- Each phase should conclude with regression tests + documentation updates.
+
+### Phase 1.1 Progress (Completed)
+
+- Introduced ITerminalSettingsProvider and ITerminalRuntimeFactory interfaces, plus default TerminalRuntimeFactory implementation.
+- Added TerminalConfigurationAsset ScriptableObject wrapping existing runtime profile to bridge new provider pipeline.
+- TerminalUI now acquires runtime instances through ResolveRuntimeFactory/SettingsProvider, defaulting to new factory while keeping TerminalRuntimeCache compatibility.
+- Updated serialized state to track allowed/blocked command/log lists accordingly.
+- Added test-only seams on TerminalUI so runtime factories can be injected and settings provider selection can be observed.
+- Extended playmode tests to validate configuration-asset, runtime-profile, and default-provider paths; tear-down now cleans configuration assets to isolate cases.
+
+### Phase 1.2 Progress (In Progress)
+
+- Introduced ITerminalServiceLocator with default and mutable implementations to broker provider access.
+- TerminalUI now resolves ITerminalProvider/ITerminalRuntimeConfigurator/ITerminalInputProvider/ITerminalRuntimeProvider through the locator, keeping legacy static setters as thin shims.
+- Added runtime tests verifying locator overrides and mutable fallbacks so future DI work has safety nets.
+- Added TerminalServiceBindingAsset ScriptableObject plus a scene-level TerminalServiceBindingComponent so bindings can be serialized or applied automatically. TerminalUI now falls back to the global TerminalServiceBindingSettings default when no local binding is provided.
+- TerminalUIEditor now provisions service binding/settings assets, attaches a binding component on the same prefab, and exposes inspector summaries with quick navigation so dependency wiring is visible and consistent by default.
+- Editor diagnostics now read runtime data through the locator-backed scope, and runtime provider/scope abstractions no longer depend on the legacy `Terminal` static (now marked obsolete).
+- Built-in commands now consume the locator-backed runtime scope (`ITerminalServiceLocator` + `ITerminalRuntimeScope`) instead of hitting `Terminal.*` singletons directly, paving the way for Editor/runtime tooling migration.
+- Drafted ITerminalRuntimeScope and ITerminalRuntimeConfiguratorService interfaces with default adapters so existing static surfaces can be composed through the locator. TerminalUI now delegates runtime registration/logging to the scoped service.
+- TerminalUI lifecycle now clears and returns runtime instances through the locator-provided `ITerminalRuntimePool`, only falling back to the legacy cache when no pool is present so existing overrides continue to function.
+- TerminalRuntimeScope now bridges registration back into the deprecated `Terminal` facade so existing editor tooling and tests relying on static access remain functional while new consumers adopt the locator.
+- Static dependency audit highlights remaining targets:
+  - `Terminal` static facade still mirrors runtime state; we need to migrate remaining direct callers onto the locator-driven scope and ultimately remove the facade.
+  - `TerminalRuntimeConfig` retains static setters/getters plus fallback fields; `TerminalRuntimeConfiguratorProxy` depends on these and will need a service-backed configuration asset.
+  - `TerminalRuntimeCache` now serves purely as a compatibility fallback; once pool-backed tests land we can remove the remaining references.
+  - Editor utilities (`TerminalUIEditor`, diagnostics windows) set/reset `TerminalUI.Instance` and static providers directly; they should be updated to request the locator or serialized references instead.
+- Runtime test shims now expose the locator-provided runtime pool (`StubRuntimePool`) so the suite compiles against the expanded interface surface and continues validating locator overrides.
+- Playmode harness (`TestRuntimeScope`) now routes launcher UI assertions through `TerminalUI`'s existing test hooks instead of relying on internal/runtime scope knowledge, keeping coverage intact while respecting the new locator boundaries.
+- Appearance-profile assertions in playmode tests now pull history fade targets and Unity-log capture status through `TerminalUI`'s public test hooks, eliminating the last direct scope-only reads in the harness and aligning them with the locator-driven architecture.
+- Service locator regression tests inject stub runtime pools and assert binding overrides against the asset itself, ensuring the expanded interface surface and binding workflow stay covered by unit tests.
+
+#### TerminalRuntimeCache Retirement Draft
+
+- ✅ Introduce an `ITerminalRuntimePool` abstraction exposed via the service locator so runtime reuse becomes an injectable concern.
+- ✅ Provide a default pool implementation that mirrors current cache semantics while honouring scene/prefab overrides.
+- ✅ Update `TerminalUI` (and tests) to obtain runtimes from the pool rather than the static cache, ensuring deterministic lifetimes.
+- Mark `TerminalRuntimeCache` obsolete with a transition shim delegating to the pool, then remove once all call sites migrate.
+- Add regression tests covering pooled reuse/disposal scenarios to guard against regressions when the cache is retired.
+
+Next:
+
+- Capture runtime pooling behaviour in playmode tests (rent/return cycle, reset clearing).
+- Migrate remaining `Terminal.*` call sites to request `ITerminalRuntimeScope` from the service locator so the facade can be retired safely.
+- Update configurator proxies and editor tooling to consume locator-provided services instead of static fallbacks.
+- Plan removal window for `TerminalRuntimeCache` fallback once consumers and tests migrate.
+- Audit remaining test helpers for `Terminal` static usage and transition them to locator-backed access to unblock facade removal.
+- Extend editor tooling coverage to exercise the binding asset/component flow, validating the new pool injection path in the editor pipeline.
