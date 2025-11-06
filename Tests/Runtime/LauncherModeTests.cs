@@ -1,0 +1,254 @@
+namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
+{
+    using System.Collections;
+    using System.Reflection;
+    using Backend;
+    using Components;
+    using NUnit.Framework;
+    using UI;
+    using UnityEngine;
+    using UnityEngine.TestTools;
+    using UnityEngine.UIElements;
+
+    public sealed class LauncherModeTests
+    {
+        [Test]
+        public void LauncherMetricsRespectSizingModes()
+        {
+            TerminalLauncherSettings settings = new()
+            {
+                width = LauncherDimension.RelativeToScreen(0.5f),
+                height = LauncherDimension.RelativeToScreen(0.33f),
+                historyHeight = LauncherDimension.RelativeToLauncher(0.5f),
+                minimumWidth = 300f,
+                minimumHeight = 120f,
+                screenPadding = 40f,
+                historyVisibleEntryCount = 4,
+                historyFadeExponent = 2f,
+            };
+
+            LauncherLayoutMetrics metrics = settings.ComputeMetrics(1920, 1080);
+
+            Assert.That(metrics.Width, Is.EqualTo(960f).Within(0.001f));
+            Assert.That(metrics.Height, Is.EqualTo(356.4f).Within(0.001f));
+            Assert.That(metrics.Left, Is.EqualTo(480f).Within(0.001f));
+            Assert.That(metrics.Top, Is.EqualTo(361.8f).Within(0.5f));
+            Assert.That(metrics.HistoryHeight, Is.EqualTo(metrics.Height * 0.5f).Within(0.001f));
+            Assert.That(metrics.HistoryVisibleEntryCount, Is.EqualTo(4));
+            Assert.That(metrics.HistoryFadeExponent, Is.EqualTo(2f).Within(0.001f));
+        }
+
+        [UnityTest]
+        public IEnumerator ToggleLauncherTogglesState()
+        {
+            yield return TestSceneHelpers.CleanRestart(resetStateOnInit: true);
+
+            TerminalUI terminal = TerminalUI.Instance;
+            Assert.IsNotNull(terminal);
+            Assert.That(terminal.IsClosed, Is.True);
+
+            terminal.ToggleLauncher();
+            yield return TestSceneHelpers.WaitFrames(2);
+
+            Assert.That(terminal.CurrentStateForTests, Is.EqualTo(TerminalState.OpenLauncher));
+            Assert.That(terminal.IsClosed, Is.False);
+
+            terminal.ToggleLauncher();
+            yield return TestSceneHelpers.WaitFrames(2);
+
+            Assert.That(terminal.CurrentStateForTests, Is.EqualTo(TerminalState.Closed));
+            Assert.That(terminal.IsClosed, Is.True);
+        }
+
+        [UnityTest]
+        public IEnumerator RefreshLauncherHistoryProducesFadedEntries()
+        {
+            yield return TestSceneHelpers.CleanRestart(resetStateOnInit: true);
+
+            TerminalUI terminal = TerminalUI.Instance;
+            Assert.IsNotNull(terminal);
+
+            CommandHistory history = terminal.Runtime.History;
+            Assert.IsNotNull(history);
+            history.Clear();
+
+            history.Push("first", true, true);
+            history.Push("second", true, true);
+            history.Push("third", true, true);
+
+            LauncherLayoutMetrics metrics = new(
+                width: 640f,
+                height: 160f,
+                left: 100f,
+                top: 200f,
+                historyHeight: 120f,
+                cornerRadius: 14f,
+                insetPadding: 12f,
+                historyVisibleEntryCount: 3,
+                historyFadeExponent: 2f,
+                snapOpen: true,
+                animationDuration: 0.1f
+            );
+
+            ScrollView scroll = new();
+            terminal.SetLogScrollViewForTests(scroll);
+            terminal.SetLauncherMetricsForTests(metrics);
+            terminal.SetState(TerminalState.OpenLauncher);
+            terminal.RefreshLauncherHistoryForTests();
+
+            VisualElement content = TestRuntimeScope.LogScrollViewForTests.contentContainer;
+            Assert.That(content.childCount, Is.EqualTo(3));
+
+            // Verify newest entry is first and fully opaque
+            Label newest = content[0] as Label;
+            Assert.IsNotNull(newest);
+            Assert.That(newest!.text, Is.EqualTo("third"));
+            Assert.That(newest.style.opacity.value, Is.EqualTo(1f).Within(0.001f));
+
+            // Middle entry has partial opacity
+            Label middle = content[1] as Label;
+            Assert.IsNotNull(middle);
+            Assert.That(middle!.text, Is.EqualTo("second"));
+            Assert.That(middle.style.opacity.value, Is.LessThan(1f).And.GreaterThan(0.35f));
+
+            // Oldest entry is faded out
+            Label oldest = content[2] as Label;
+            Assert.IsNotNull(oldest);
+            Assert.That(oldest!.text, Is.EqualTo("first"));
+            Assert.That(oldest.style.opacity.value, Is.EqualTo(0.35f).Within(0.001f));
+
+            yield return TestSceneHelpers.DestroyTerminalAndWait();
+        }
+
+        [UnityTest]
+        public IEnumerator LauncherResetMaintainsDynamicTargetHeight()
+        {
+            yield return TestSceneHelpers.CleanRestart(resetStateOnInit: true);
+
+            TerminalUI terminal = TerminalUI.Instance;
+            Assert.IsNotNull(terminal);
+
+            terminal.ToggleLauncher();
+            yield return TestSceneHelpers.WaitFrames(2);
+
+            Assert.That(terminal.CurrentStateForTests, Is.EqualTo(TerminalState.OpenLauncher));
+            Assert.That(terminal.LauncherMetricsInitializedForTests, Is.True);
+
+            float launcherMaxHeight = terminal.LauncherMetricsForTests.Height;
+            Assert.That(launcherMaxHeight, Is.GreaterThan(0f));
+
+            float reducedTarget = Mathf.Max(60f, launcherMaxHeight * 0.25f);
+            terminal.SetWindowHeightsForTests(reducedTarget, reducedTarget);
+
+            Assert.That(
+                terminal.TargetWindowHeightForTests,
+                Is.EqualTo(reducedTarget).Within(0.001f)
+            );
+
+            terminal.ResetWindowForTests();
+
+            Assert.That(
+                terminal.TargetWindowHeightForTests,
+                Is.EqualTo(reducedTarget).Within(0.001f)
+            );
+
+            float excessiveTarget = launcherMaxHeight * 1.5f;
+            terminal.SetWindowHeightsForTests(excessiveTarget, excessiveTarget);
+
+            terminal.ResetWindowForTests();
+
+            Assert.That(
+                terminal.TargetWindowHeightForTests,
+                Is.EqualTo(terminal.LauncherMetricsForTests.Height).Within(0.001f)
+            );
+
+            yield return TestSceneHelpers.DestroyTerminalAndWait();
+        }
+
+        [Test]
+        public void LauncherWithoutContentCollapsesToInputPadding()
+        {
+            GameObject go = new("LauncherTest");
+            go.SetActive(false);
+            TerminalUI terminal = go.AddComponent<TerminalUI>();
+            terminal.disableUIForTests = true;
+            go.SetActive(true);
+
+            try
+            {
+                LauncherLayoutMetrics metrics = new(
+                    width: 640f,
+                    height: 200f,
+                    left: 100f,
+                    top: 200f,
+                    historyHeight: 0f,
+                    cornerRadius: 16f,
+                    insetPadding: 14f,
+                    historyVisibleEntryCount: 5,
+                    historyFadeExponent: 2f,
+                    snapOpen: true,
+                    animationDuration: 0.1f
+                );
+
+                ScrollView autoComplete = new(ScrollViewMode.Horizontal);
+                ScrollView log = new();
+                VisualElement input = new();
+
+                SetPrivateField(terminal, "_state", TerminalState.OpenLauncher);
+                SetPrivateField(terminal, "_launcherMetricsInitialized", true);
+                SetPrivateField(terminal, "_launcherMetrics", metrics);
+                SetPrivateField(terminal, "_autoCompleteContainer", autoComplete);
+                SetPrivateField(terminal, "_autoCompleteViewport", autoComplete.contentViewport);
+                SetPrivateField(terminal, "_logScrollView", log);
+                SetPrivateField(terminal, "_inputContainer", input);
+                SetPrivateField(terminal, "_currentWindowHeight", metrics.Height);
+                SetPrivateField(terminal, "_targetWindowHeight", metrics.Height);
+                SetPrivateField(terminal, "_launcherSuggestionContentHeight", 0f);
+                SetPrivateField(terminal, "_launcherHistoryContentHeight", 0f);
+
+                MethodInfo updateMetrics = typeof(TerminalUI).GetMethod(
+                    "UpdateLauncherLayoutMetrics",
+                    BindingFlags.Instance | BindingFlags.NonPublic
+                );
+                Assert.IsNotNull(updateMetrics);
+
+                updateMetrics!.Invoke(terminal, null);
+
+                float fallbackHeight = (float)
+                    typeof(TerminalUI)
+                        .GetField(
+                            "LauncherInputFallbackHeight",
+                            BindingFlags.Static | BindingFlags.NonPublic
+                        )
+                        ?.GetValue(null);
+                Assert.Greater(fallbackHeight, 0f);
+
+                float expectedPadding = Mathf.Max(4f, metrics.InsetPadding * 0.5f);
+                float expectedHeight = (expectedPadding * 2f) + fallbackHeight;
+
+                Assert.That(
+                    terminal.TargetWindowHeightForTests,
+                    Is.EqualTo(expectedHeight).Within(0.001f)
+                );
+                Assert.That(
+                    terminal.CurrentWindowHeightForTests,
+                    Is.EqualTo(expectedHeight).Within(0.001f)
+                );
+            }
+            finally
+            {
+                Object.DestroyImmediate(go);
+            }
+        }
+
+        private static void SetPrivateField<T>(TerminalUI terminal, string fieldName, T value)
+        {
+            FieldInfo field = typeof(TerminalUI).GetField(
+                fieldName,
+                BindingFlags.Instance | BindingFlags.NonPublic
+            );
+            Assert.IsNotNull(field, $"Expected field '{fieldName}' to exist.");
+            field!.SetValue(terminal, value);
+        }
+    }
+}

@@ -2,33 +2,43 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 {
     using System;
     using System.Collections.Generic;
-    using System.Linq;
-    using System.Net;
-    using System.Numerics;
     using System.Reflection;
-    using UnityEngine;
-    using Quaternion = UnityEngine.Quaternion;
-    using Vector2 = UnityEngine.Vector2;
-    using Vector3 = UnityEngine.Vector3;
-    using Vector4 = UnityEngine.Vector4;
+    using Parsers;
 
     public delegate bool CommandArgParser<T>(string input, out T parsed);
 
     public readonly struct CommandArg
     {
+        static CommandArg()
+        {
+            // Register built-in object parsers once for quick lookup
+            RegisterDefaultObjectParsers();
+        }
+
         private static readonly Lazy<MethodInfo> TryGetMethod = new(() =>
-            typeof(CommandArg)
-                .GetMethods(BindingFlags.Instance | BindingFlags.Public)
-                .Where(method => method.Name == nameof(TryGet))
-                .FirstOrDefault(method => method.GetParameters().Length == 1)
-        );
+        {
+            MethodInfo[] methods = typeof(CommandArg).GetMethods(
+                BindingFlags.Instance | BindingFlags.Public
+            );
+            for (int i = 0; i < methods.Length; ++i)
+            {
+                MethodInfo m = methods[i];
+                if (m.Name != nameof(TryGet))
+                {
+                    continue;
+                }
+                ParameterInfo[] p = m.GetParameters();
+                if (p != null && p.Length == 1)
+                {
+                    return m;
+                }
+            }
+            return null;
+        });
         private static readonly Dictionary<Type, object> RegisteredParsers = new();
-        private static readonly Dictionary<
-            Type,
-            Dictionary<string, PropertyInfo>
-        > StaticProperties = new();
-        private static readonly Dictionary<Type, Dictionary<string, FieldInfo>> ConstFields = new();
-        private static readonly Dictionary<Type, object> EnumValues = new();
+        private static readonly Dictionary<Type, IArgParser> RegisteredObjectParsers = new();
+
+        // Removed caches for static members and enum values; moved to dedicated parsers
 
         // Public to allow custom-mutation, if desired
         public static readonly HashSet<char> Delimiters = new() { ',', ';', ':', '_', '/', '\\' };
@@ -65,15 +75,14 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             get
             {
                 string cleanedString = contents;
-                cleanedString = IgnoredValuesForCleanedTypes.Aggregate(
-                    cleanedString,
-                    (current, ignoredValue) =>
-                        current.Replace(
-                            ignoredValue,
-                            string.Empty,
-                            StringComparison.OrdinalIgnoreCase
-                        )
-                );
+                foreach (string ignoredValue in IgnoredValuesForCleanedTypes)
+                {
+                    cleanedString = cleanedString.Replace(
+                        ignoredValue,
+                        string.Empty,
+                        StringComparison.OrdinalIgnoreCase
+                    );
+                }
                 return cleanedString;
             }
         }
@@ -120,429 +129,36 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 parsed = (T)Convert.ChangeType(stringValue, type);
                 return true;
             }
-            if (TryGetTypeDefined(stringValue, out parsed))
+            if (StaticMemberParser<T>.TryParse(stringValue, out parsed))
             {
                 return true;
             }
 
-            // TODO: Slap into a dictionary of built-in type -> parser mapping
-            if (type == typeof(bool))
+            if (TryGetObjectParser(type, out IArgParser objectParser))
             {
-                return InnerParse<bool>(stringValue, bool.TryParse, out parsed);
+                if (objectParser.TryParse(stringValue, out object objectValue))
+                {
+                    parsed = (T)objectValue;
+                    return true;
+                }
             }
-            if (type == typeof(float))
-            {
-                return InnerParse<float>(stringValue, float.TryParse, out parsed);
-            }
-            if (type == typeof(int))
-            {
-                return InnerParse<int>(stringValue, int.TryParse, out parsed);
-            }
-            if (type == typeof(uint))
-            {
-                return InnerParse<uint>(stringValue, uint.TryParse, out parsed);
-            }
-            if (type == typeof(long))
-            {
-                return InnerParse<long>(stringValue, long.TryParse, out parsed);
-            }
-            if (type == typeof(ulong))
-            {
-                return InnerParse<ulong>(stringValue, ulong.TryParse, out parsed);
-            }
-            if (type == typeof(double))
-            {
-                return InnerParse<double>(stringValue, double.TryParse, out parsed);
-            }
-            if (type == typeof(short))
-            {
-                return InnerParse<short>(stringValue, short.TryParse, out parsed);
-            }
-            if (type == typeof(ushort))
-            {
-                return InnerParse<ushort>(stringValue, ushort.TryParse, out parsed);
-            }
-            if (type == typeof(byte))
-            {
-                return InnerParse<byte>(stringValue, byte.TryParse, out parsed);
-            }
-            if (type == typeof(sbyte))
-            {
-                return InnerParse<sbyte>(stringValue, sbyte.TryParse, out parsed);
-            }
-            if (type == typeof(Guid))
-            {
-                return InnerParse<Guid>(stringValue, Guid.TryParse, out parsed);
-            }
-            if (type == typeof(DateTime))
-            {
-                return InnerParse<DateTime>(stringValue, DateTime.TryParse, out parsed);
-            }
-            if (type == typeof(DateTimeOffset))
-            {
-                return InnerParse<DateTimeOffset>(stringValue, DateTimeOffset.TryParse, out parsed);
-            }
-            if (type == typeof(char))
-            {
-                return InnerParse<char>(stringValue, char.TryParse, out parsed);
-            }
-            if (type == typeof(decimal))
-            {
-                return InnerParse<decimal>(stringValue, decimal.TryParse, out parsed);
-            }
-            if (type == typeof(BigInteger))
-            {
-                return InnerParse<BigInteger>(stringValue, BigInteger.TryParse, out parsed);
-            }
-            if (type == typeof(TimeSpan))
-            {
-                return InnerParse<TimeSpan>(stringValue, TimeSpan.TryParse, out parsed);
-            }
-            if (type == typeof(Version))
-            {
-                return InnerParse<Version>(stringValue, Version.TryParse, out parsed);
-            }
-            if (type == typeof(IPAddress))
-            {
-                return InnerParse<IPAddress>(stringValue, IPAddress.TryParse, out parsed);
-            }
+
+            // Enums (hot path via cached values)
             if (type.IsEnum)
             {
-                if (Enum.IsDefined(type, stringValue))
+                if (EnumArgParser.TryParse(type, stringValue, out object enumObject))
                 {
-                    bool parseOk = Enum.TryParse(type, stringValue, out object parsedObject);
-                    if (parseOk)
-                    {
-                        parsed = (T)Convert.ChangeType(parsedObject, type);
-                        return true;
-                    }
-                }
-
-                if (int.TryParse(stringValue, out int enumIntValue))
-                {
-                    if (!EnumValues.TryGetValue(type, out object enumValues))
-                    {
-                        enumValues = Enum.GetValues(type).OfType<T>().ToArray();
-                        EnumValues[type] = enumValues;
-                    }
-
-                    T[] values = (T[])enumValues;
-                    if (0 <= enumIntValue && enumIntValue < values.Length)
-                    {
-                        parsed = values[enumIntValue];
-                        return true;
-                    }
-                }
-            }
-            if (type == typeof(Vector2))
-            {
-                string[] split = StripAndSplit(stringValue);
-                switch (split.Length)
-                {
-                    case 2
-                        when float.TryParse(split[0], out float x)
-                            && float.TryParse(split[1], out float y):
-                        parsed = (T)Convert.ChangeType(new Vector2(x, y), type);
-                        return true;
-                    case 3
-                        when float.TryParse(split[0], out float x)
-                            && float.TryParse(split[1], out float y)
-                            && float.TryParse(split[2], out float z):
-                        parsed = (T)Convert.ChangeType((Vector2)new Vector3(x, y, z), type);
-                        return true;
-                }
-            }
-            else if (type == typeof(Vector3))
-            {
-                string[] split = StripAndSplit(stringValue);
-                switch (split.Length)
-                {
-                    case 2
-                        when float.TryParse(split[0], out float x)
-                            && float.TryParse(split[1], out float y):
-                        parsed = (T)Convert.ChangeType(new Vector3(x, y), type);
-                        return true;
-                    case 3
-                        when float.TryParse(split[0], out float x)
-                            && float.TryParse(split[1], out float y)
-                            && float.TryParse(split[2], out float z):
-                        parsed = (T)Convert.ChangeType(new Vector3(x, y, z), type);
-                        return true;
-                }
-            }
-            else if (type == typeof(Vector4))
-            {
-                string[] split = StripAndSplit(stringValue);
-                switch (split.Length)
-                {
-                    case 2
-                        when float.TryParse(split[0], out float x)
-                            && float.TryParse(split[1], out float y):
-                        parsed = (T)Convert.ChangeType(new Vector4(x, y), type);
-                        return true;
-                    case 3
-                        when float.TryParse(split[0], out float x)
-                            && float.TryParse(split[1], out float y)
-                            && float.TryParse(split[2], out float z):
-                        parsed = (T)Convert.ChangeType(new Vector4(x, y, z), type);
-                        return true;
-                    case 4
-                        when float.TryParse(split[0], out float x)
-                            && float.TryParse(split[1], out float y)
-                            && float.TryParse(split[2], out float z)
-                            && float.TryParse(split[3], out float w):
-                        parsed = (T)Convert.ChangeType(new Vector4(x, y, z, w), type);
-                        return true;
-                }
-            }
-            else if (type == typeof(Vector2Int))
-            {
-                string[] split = StripAndSplit(stringValue);
-                switch (split.Length)
-                {
-                    case 2
-                        when int.TryParse(split[0], out int x) && int.TryParse(split[1], out int y):
-                        parsed = (T)Convert.ChangeType(new Vector2Int(x, y), type);
-                        return true;
-                    case 3
-                        when int.TryParse(split[0], out int x)
-                            && int.TryParse(split[1], out int y)
-                            && int.TryParse(split[2], out int z):
-                        parsed = (T)Convert.ChangeType((Vector2Int)new Vector3Int(x, y, z), type);
-                        return true;
-                }
-            }
-            else if (type == typeof(Vector3Int))
-            {
-                string[] split = StripAndSplit(stringValue);
-                switch (split.Length)
-                {
-                    case 2
-                        when int.TryParse(split[0], out int x) && int.TryParse(split[1], out int y):
-                        parsed = (T)Convert.ChangeType(new Vector3Int(x, y), type);
-                        return true;
-                    case 3
-                        when int.TryParse(split[0], out int x)
-                            && int.TryParse(split[1], out int y)
-                            && int.TryParse(split[2], out int z):
-                        parsed = (T)Convert.ChangeType(new Vector3Int(x, y, z), type);
-                        return true;
-                }
-            }
-            else if (type == typeof(Color))
-            {
-                string colorString = stringValue;
-                if (colorString.StartsWith("RGBA", StringComparison.OrdinalIgnoreCase))
-                {
-                    colorString = colorString.Replace(
-                        "RGBA",
-                        string.Empty,
-                        StringComparison.OrdinalIgnoreCase
-                    );
-                }
-
-                string[] split = StripAndSplit(colorString);
-                switch (split.Length)
-                {
-                    case 3
-                        when float.TryParse(split[0], out float r)
-                            && float.TryParse(split[1], out float g)
-                            && float.TryParse(split[2], out float b):
-                        parsed = (T)Convert.ChangeType(new Color(r, g, b), type);
-                        return true;
-                    case 4
-                        when float.TryParse(split[0], out float r)
-                            && float.TryParse(split[1], out float g)
-                            && float.TryParse(split[2], out float b)
-                            && float.TryParse(split[3], out float a):
-                        parsed = (T)Convert.ChangeType(new Color(r, g, b, a), type);
-                        return true;
-                }
-            }
-            else if (type == typeof(Quaternion))
-            {
-                string[] split = StripAndSplit(stringValue);
-                switch (split.Length)
-                {
-                    case 4
-                        when float.TryParse(split[0], out float x)
-                            && float.TryParse(split[1], out float y)
-                            && float.TryParse(split[2], out float z)
-                            && float.TryParse(split[3], out float w):
-                        parsed = (T)Convert.ChangeType(new Quaternion(x, y, z, w), type);
-                        return true;
-                }
-            }
-            else if (type == typeof(Rect))
-            {
-                string[] split = StripAndSplit(stringValue);
-                switch (split.Length)
-                {
-                    case 4
-                        when float.TryParse(
-                            split[0]
-                                .Replace("x:", string.Empty, StringComparison.OrdinalIgnoreCase),
-                            out float x
-                        )
-                            && float.TryParse(
-                                split[1]
-                                    .Replace(
-                                        "y:",
-                                        string.Empty,
-                                        StringComparison.OrdinalIgnoreCase
-                                    ),
-                                out float y
-                            )
-                            && float.TryParse(
-                                split[2]
-                                    .Replace(
-                                        "width:",
-                                        string.Empty,
-                                        StringComparison.OrdinalIgnoreCase
-                                    ),
-                                out float width
-                            )
-                            && float.TryParse(
-                                split[3]
-                                    .Replace(
-                                        "height:",
-                                        string.Empty,
-                                        StringComparison.OrdinalIgnoreCase
-                                    ),
-                                out float height
-                            ):
-                        parsed = (T)Convert.ChangeType(new Rect(x, y, width, height), type);
-                        return true;
-                }
-            }
-            else if (type == typeof(RectInt))
-            {
-                string[] split = StripAndSplit(stringValue);
-                switch (split.Length)
-                {
-                    case 4
-                        when int.TryParse(
-                            split[0]
-                                .Replace("x:", string.Empty, StringComparison.OrdinalIgnoreCase),
-                            out int x
-                        )
-                            && int.TryParse(
-                                split[1]
-                                    .Replace(
-                                        "y:",
-                                        string.Empty,
-                                        StringComparison.OrdinalIgnoreCase
-                                    ),
-                                out int y
-                            )
-                            && int.TryParse(
-                                split[2]
-                                    .Replace(
-                                        "width:",
-                                        string.Empty,
-                                        StringComparison.OrdinalIgnoreCase
-                                    ),
-                                out int width
-                            )
-                            && int.TryParse(
-                                split[3]
-                                    .Replace(
-                                        "height:",
-                                        string.Empty,
-                                        StringComparison.OrdinalIgnoreCase
-                                    ),
-                                out int height
-                            ):
-                        parsed = (T)Convert.ChangeType(new RectInt(x, y, width, height), type);
-                        return true;
+                    parsed = (T)enumObject;
+                    return true;
                 }
             }
 
             parsed = default;
             return false;
-
-            static bool InnerParse<TParsed>(
-                string input,
-                CommandArgParser<TParsed> typedParser,
-                out T parsed
-            )
-            {
-                bool parseOk = typedParser(input, out TParsed value);
-                if (parseOk)
-                {
-                    parsed = (T)Convert.ChangeType(value, typeof(T));
-                }
-                else
-                {
-                    parsed = default;
-                }
-
-                return parseOk;
-            }
-
-            static string[] StripAndSplit(string input)
-            {
-                string strippedInput = IgnoredValuesForComplexTypes
-                    .Where(ignored => !string.IsNullOrEmpty(ignored))
-                    .Aggregate(
-                        input,
-                        (current, ignored) =>
-                            current.Replace(
-                                ignored,
-                                string.Empty,
-                                StringComparison.OrdinalIgnoreCase
-                            )
-                    );
-
-                foreach (char delimiter in Delimiters)
-                {
-                    if (strippedInput.Contains(delimiter))
-                    {
-                        return strippedInput.Split(delimiter);
-                    }
-                }
-
-                return new[] { strippedInput };
-            }
-
-            static bool TryGetTypeDefined(string input, out T value)
-            {
-                Type type = typeof(T);
-                if (
-                    !StaticProperties.TryGetValue(
-                        type,
-                        out Dictionary<string, PropertyInfo> properties
-                    )
-                )
-                {
-                    properties = LoadStaticPropertiesForType<T>();
-                    StaticProperties[type] = properties;
-                }
-
-                if (properties.TryGetValue(input, out PropertyInfo property))
-                {
-                    object resolved = property.GetValue(null);
-                    value = (T)Convert.ChangeType(resolved, type);
-                    return true;
-                }
-
-                if (!ConstFields.TryGetValue(type, out Dictionary<string, FieldInfo> fields))
-                {
-                    fields = LoadStaticFieldsForType<T>();
-                    ConstFields[type] = fields;
-                }
-
-                if (fields.TryGetValue(input, out FieldInfo field))
-                {
-                    object resolved = field.GetValue(null);
-                    value = (T)Convert.ChangeType(resolved, type);
-                    return true;
-                }
-
-                value = default;
-                return false;
-            }
+            // static member resolution moved to StaticMemberParser<T>
         }
+
+        // Consolidated parsing helpers moved to Backend.Parsers.CommandArgParserCommon
 
         public CommandArg(string contents, char? startQuote = null, char? endQuote = null)
         {
@@ -597,29 +213,176 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             return parserCount;
         }
 
-        private static Dictionary<string, PropertyInfo> LoadStaticPropertiesForType<T>()
+        // Object parser registration (IArgParser)
+        public static bool RegisterObjectParser(IArgParser parser, bool force = false)
         {
-            Type type = typeof(T);
-            return type.GetProperties(BindingFlags.Static | BindingFlags.Public)
-                .Where(property => property.PropertyType == type)
-                .ToDictionary(
-                    property => property.Name,
-                    property => property,
-                    StringComparer.OrdinalIgnoreCase
-                );
+            if (parser == null || parser.TargetType == null)
+            {
+                return false;
+            }
+
+            Type type = parser.TargetType;
+            if (force)
+            {
+                RegisteredObjectParsers[type] = parser;
+                return true;
+            }
+
+            return RegisteredObjectParsers.TryAdd(type, parser);
         }
 
-        private static Dictionary<string, FieldInfo> LoadStaticFieldsForType<T>()
+        public static bool TryGetObjectParser(Type type, out IArgParser parser)
         {
-            Type type = typeof(T);
-            return type.GetFields(BindingFlags.Static | BindingFlags.Public)
-                .Where(field => field.FieldType == type)
-                .ToDictionary(
-                    field => field.Name,
-                    field => field,
-                    StringComparer.OrdinalIgnoreCase
-                );
+            return RegisteredObjectParsers.TryGetValue(type, out parser);
         }
+
+        public static bool UnregisterObjectParser(Type type)
+        {
+            return RegisteredObjectParsers.Remove(type);
+        }
+
+        public static int UnregisterAllObjectParsers()
+        {
+            int count = RegisteredObjectParsers.Count;
+            RegisteredObjectParsers.Clear();
+            return count;
+        }
+
+        public static IReadOnlyCollection<Type> GetRegisteredObjectParserTypes()
+        {
+            // Snapshot for thread-safety and immutability to callers
+            return new List<Type>(RegisteredObjectParsers.Keys);
+        }
+
+        public static int DiscoverAndRegisterParsers(bool replaceExisting = false)
+        {
+            int added = 0;
+            foreach (Assembly asm in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                Type[] types;
+                try
+                {
+                    types = asm.GetTypes();
+                }
+                catch (ReflectionTypeLoadException e)
+                {
+                    List<Type> tmp = new();
+                    if (e.Types != null)
+                    {
+                        for (int i = 0; i < e.Types.Length; ++i)
+                        {
+                            Type t = e.Types[i];
+                            if (t != null)
+                            {
+                                tmp.Add(t);
+                            }
+                        }
+                    }
+                    types = tmp.ToArray();
+                }
+
+                foreach (Type t in types)
+                {
+                    if (t == null || t.IsAbstract || t.IsGenericTypeDefinition)
+                    {
+                        continue;
+                    }
+                    if (!typeof(IArgParser).IsAssignableFrom(t))
+                    {
+                        continue;
+                    }
+
+                    IArgParser instance = null;
+                    // Prefer public static Instance singleton if available
+                    PropertyInfo instProp = t.GetProperty(
+                        "Instance",
+                        BindingFlags.Public | BindingFlags.Static
+                    );
+                    if (
+                        instProp != null
+                        && typeof(IArgParser).IsAssignableFrom(instProp.PropertyType)
+                    )
+                    {
+                        instance = (IArgParser)instProp.GetValue(null);
+                    }
+                    else
+                    {
+                        FieldInfo instField = t.GetField(
+                            "Instance",
+                            BindingFlags.Public | BindingFlags.Static
+                        );
+                        if (
+                            instField != null
+                            && typeof(IArgParser).IsAssignableFrom(instField.FieldType)
+                        )
+                        {
+                            instance = (IArgParser)instField.GetValue(null);
+                        }
+                    }
+
+                    if (instance == null)
+                    {
+                        // Fall back to parameterless constructor
+                        ConstructorInfo ctor = t.GetConstructor(Type.EmptyTypes);
+                        if (ctor != null)
+                        {
+                            instance = (IArgParser)Activator.CreateInstance(t);
+                        }
+                    }
+
+                    if (instance == null || instance.TargetType == null)
+                    {
+                        continue;
+                    }
+
+                    if (RegisterObjectParser(instance, replaceExisting))
+                    {
+                        added++;
+                    }
+                }
+            }
+            return added;
+        }
+
+        private static void RegisterDefaultObjectParsers()
+        {
+            // Numerics
+            RegisterObjectParser(BoolArgParser.Instance, true);
+            RegisterObjectParser(FloatArgParser.Instance, true);
+            RegisterObjectParser(IntArgParser.Instance, true);
+            RegisterObjectParser(UIntArgParser.Instance, true);
+            RegisterObjectParser(LongArgParser.Instance, true);
+            RegisterObjectParser(ULongArgParser.Instance, true);
+            RegisterObjectParser(DoubleArgParser.Instance, true);
+            RegisterObjectParser(ShortArgParser.Instance, true);
+            RegisterObjectParser(UShortArgParser.Instance, true);
+            RegisterObjectParser(ByteArgParser.Instance, true);
+            RegisterObjectParser(SByteArgParser.Instance, true);
+            RegisterObjectParser(DecimalArgParser.Instance, true);
+            RegisterObjectParser(BigIntegerArgParser.Instance, true);
+
+            // Misc
+            RegisterObjectParser(GuidArgParser.Instance, true);
+            RegisterObjectParser(DateTimeArgParser.Instance, true);
+            RegisterObjectParser(DateTimeOffsetArgParser.Instance, true);
+            RegisterObjectParser(CharArgParser.Instance, true);
+            RegisterObjectParser(TimeSpanArgParser.Instance, true);
+            RegisterObjectParser(VersionArgParser.Instance, true);
+            RegisterObjectParser(IPAddressArgParser.Instance, true);
+
+            // Unity types
+            RegisterObjectParser(Vector2ArgParser.Instance, true);
+            RegisterObjectParser(Vector3ArgParser.Instance, true);
+            RegisterObjectParser(Vector4ArgParser.Instance, true);
+            RegisterObjectParser(Vector2IntArgParser.Instance, true);
+            RegisterObjectParser(Vector3IntArgParser.Instance, true);
+            RegisterObjectParser(ColorArgParser.Instance, true);
+            RegisterObjectParser(QuaternionArgParser.Instance, true);
+            RegisterObjectParser(RectArgParser.Instance, true);
+            RegisterObjectParser(RectIntArgParser.Instance, true);
+        }
+
+        // Static member reflection helpers moved to Parsers.StaticMemberParser<T>
 
         public override string ToString()
         {

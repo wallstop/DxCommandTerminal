@@ -3,7 +3,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     using System;
     using System.Collections.Generic;
     using System.Collections.Immutable;
-    using System.Linq;
     using System.Reflection;
     using System.Text;
     using Attributes;
@@ -22,66 +21,93 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             const BindingFlags methodFlags =
                 BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
 
-            Assembly[] ourAssembly = { typeof(BuiltInCommands).Assembly };
-            foreach (
-                Type type in AppDomain
-                    .CurrentDomain.GetAssemblies()
-                    /*
-                        Force our assembly to be processed last so user commands,
-                        if they conflict with in-built ones, are always registered first.
-                     */
-                    .Except(ourAssembly)
-                    .Concat(ourAssembly)
-                    .SelectMany(assembly => assembly.GetTypes())
+            Assembly ourAsm = typeof(BuiltInCommands).Assembly;
+            Assembly[] assemblies = AppDomain.CurrentDomain.GetAssemblies();
+
+            // First process all but our assembly
+            for (int ai = 0; ai < assemblies.Length; ++ai)
+            {
+                Assembly asm = assemblies[ai];
+                if (asm == ourAsm)
+                {
+                    continue;
+                }
+                ProcessAssembly(asm, methodFlags, commands);
+            }
+
+            // Then process our assembly last
+            ProcessAssembly(ourAsm, methodFlags, commands);
+
+            return commands.ToArray();
+
+            static void ProcessAssembly(
+                Assembly assembly,
+                BindingFlags methodFlags,
+                List<(MethodInfo, RegisterCommandAttribute)> commands
             )
             {
+                Type[] types;
                 try
                 {
-                    foreach (MethodInfo method in type.GetMethods(methodFlags))
-                    {
-                        try
-                        {
-                            if (
-                                Attribute.GetCustomAttribute(
-                                    method,
-                                    typeof(RegisterCommandAttribute)
-                                )
-                                is not RegisterCommandAttribute attribute
-                            )
-                            {
-                                continue;
-                            }
-
-                            attribute.NormalizeName(method);
-                            commands.Add((method, attribute));
-                        }
-                        catch (Exception e)
-                        {
-                            if (ShouldIgnoreExceptionForType(type))
-                            {
-                                continue;
-                            }
-
-                            Debug.LogError(
-                                $"Failed to resolve method {method.Name} of type {type.FullName} with exception {e}"
-                            );
-                        }
-                    }
+                    types = assembly.GetTypes();
                 }
-                catch (Exception e)
+                catch
                 {
-                    if (ShouldIgnoreExceptionForType(type))
+                    return;
+                }
+
+                for (int ti = 0; ti < types.Length; ++ti)
+                {
+                    Type type = types[ti];
+                    if (type == null)
                     {
                         continue;
                     }
-
-                    Debug.LogError(
-                        $"Failed to resolve methods for type {type.FullName} with exception {e}"
-                    );
+                    try
+                    {
+                        MethodInfo[] methods = type.GetMethods(methodFlags);
+                        for (int mi = 0; mi < methods.Length; ++mi)
+                        {
+                            MethodInfo method = methods[mi];
+                            try
+                            {
+                                if (
+                                    Attribute.GetCustomAttribute(
+                                        method,
+                                        typeof(RegisterCommandAttribute)
+                                    )
+                                    is not RegisterCommandAttribute attribute
+                                )
+                                {
+                                    continue;
+                                }
+                                attribute.NormalizeName(method);
+                                commands.Add((method, attribute));
+                            }
+                            catch (Exception e)
+                            {
+                                if (ShouldIgnoreExceptionForType(type))
+                                {
+                                    continue;
+                                }
+                                Debug.LogError(
+                                    $"Failed to resolve method {method.Name} of type {type.FullName} with exception {e}"
+                                );
+                            }
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        if (ShouldIgnoreExceptionForType(type))
+                        {
+                            continue;
+                        }
+                        Debug.LogError(
+                            $"Failed to resolve methods for type {type.FullName} with exception {e}"
+                        );
+                    }
                 }
             }
-
-            return commands.ToArray();
         });
 
         private readonly List<CommandArg> _arguments = new(); // Cache for performance
@@ -89,6 +115,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         private readonly HashSet<string> _autoRegisteredCommands = new(
             StringComparer.OrdinalIgnoreCase
         );
+        private readonly HashSet<string> _allowedCommands = new(StringComparer.OrdinalIgnoreCase);
 
         private readonly StringBuilder _commandBuilder = new();
 
@@ -121,6 +148,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             ImmutableHashSet<string>.Empty;
 
         public ImmutableHashSet<string> IgnoredCommands { get; private set; } =
+            ImmutableHashSet<string>.Empty;
+        public ImmutableHashSet<string> AllowedCommands { get; private set; } =
             ImmutableHashSet<string>.Empty;
 
         public bool IgnoringDefaultCommands { get; private set; }
@@ -174,19 +203,31 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         public void InitializeAutoRegisteredCommands(
             IEnumerable<string> ignoredCommands = null,
-            bool ignoreDefaultCommands = false
+            bool ignoreDefaultCommands = false,
+            IEnumerable<string> allowedCommands = null
         )
         {
             IgnoringDefaultCommands = ignoreDefaultCommands;
             ClearAutoRegisteredCommands();
             _ignoredCommands.Clear();
-            _ignoredCommands.UnionWith(ignoredCommands ?? Enumerable.Empty<string>());
+            if (ignoredCommands != null)
+            {
+                _ignoredCommands.UnionWith(ignoredCommands);
+            }
+
             foreach (string ignoredCommand in _ignoredCommands)
             {
                 _commands.Remove(ignoredCommand);
             }
 
             IgnoredCommands = _ignoredCommands.ToImmutableHashSet(StringComparer.OrdinalIgnoreCase);
+            _allowedCommands.Clear();
+            if (allowedCommands != null)
+            {
+                _allowedCommands.UnionWith(allowedCommands);
+            }
+            AllowedCommands = _allowedCommands.ToImmutableHashSet(StringComparer.OrdinalIgnoreCase);
+            bool hasAllowList = _allowedCommands.Count > 0;
             _rejectedCommands.Clear();
 
             foreach (
@@ -228,13 +269,23 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 Action<CommandArg[]> proc =
                     (Action<CommandArg[]>)
                         Delegate.CreateDelegate(typeof(Action<CommandArg[]>), method);
+                // Try resolve optional completer via CommandCompleterAttribute
+                IArgumentCompleter completer = ResolveCompleter(method);
+
+                if (hasAllowList && !_allowedCommands.Contains(commandName))
+                {
+                    continue;
+                }
+
                 bool success = AddCommand(
                     commandName,
                     proc,
                     attribute.MinArgCount,
                     attribute.MaxArgCount,
                     attribute.Help,
-                    attribute.Hint
+                    attribute.Hint,
+                    completer,
+                    attribute.IncludeInHistory
                 );
                 if (success)
                 {
@@ -251,7 +302,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 IssueErrorMessage(
                     $"{command.Key} has an invalid signature. "
                         + $"Expected: {command.Value.Name}(CommandArg[]). "
-                        + $"Found: {command.Value.Name}({string.Join(",", command.Value.GetParameters().Select(p => p.ParameterType.Name))})"
+                        + $"Found: {command.Value.Name}("
+                        + GetParameterTypeNames(command.Value)
+                        + ")"
                 );
             }
         }
@@ -301,8 +354,28 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
 
             string commandName = _arguments[0].contents ?? string.Empty;
-            // Remove command name from arguments
-            _arguments.RemoveAt(0);
+            int commandSegments = 1;
+
+            if (!TryResolveCommand(commandName, out _, out _))
+            {
+                StringBuilder spacedBuilder = null;
+                for (int i = 1; i < _arguments.Count; ++i)
+                {
+                    spacedBuilder ??= new StringBuilder(commandName);
+                    spacedBuilder.Append(' ');
+                    spacedBuilder.Append(_arguments[i].contents);
+                    string candidate = spacedBuilder.ToString();
+
+                    if (TryResolveCommand(candidate, out _, out _))
+                    {
+                        commandName = candidate;
+                        commandSegments = i + 1;
+                        break;
+                    }
+                }
+            }
+
+            _arguments.RemoveRange(0, commandSegments);
 
             return RunCommand(
                 commandName,
@@ -311,6 +384,179 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         }
 
         public bool RunCommand(string commandName, CommandArg[] arguments)
+        {
+            string originalCommandName = commandName ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(originalCommandName))
+            {
+                IssueErrorMessage($"Invalid command name '{originalCommandName}'");
+                return false;
+            }
+
+            if (
+                !TryResolveCommand(
+                    originalCommandName,
+                    out string canonicalName,
+                    out CommandInfo command
+                )
+            )
+            {
+                string originalLine = BuildCommandLine(originalCommandName, arguments);
+                IssueErrorMessage($"Command {originalCommandName} not found");
+                _history.Push(originalLine, false, false);
+                return false;
+            }
+
+            string line = BuildCommandLine(canonicalName, arguments);
+
+            int argCount = arguments.Length;
+            string errorMessage = null;
+            int requiredArg = 0;
+
+            if (argCount < command.minArgCount)
+            {
+                errorMessage = command.minArgCount == command.maxArgCount ? "exactly" : "at least";
+                requiredArg = command.minArgCount;
+            }
+            else if (0 <= command.maxArgCount && command.maxArgCount < argCount)
+            {
+                // Do not check max allowed number of arguments if it is -1
+                errorMessage = command.minArgCount == command.maxArgCount ? "exactly" : "at most";
+                requiredArg = command.maxArgCount;
+            }
+
+            if (!string.IsNullOrEmpty(errorMessage))
+            {
+                string pluralFix = requiredArg == 1 ? "" : "s";
+
+                string invalidMessage =
+                    $"{canonicalName} requires {errorMessage} {requiredArg} argument{pluralFix}";
+                if (!string.IsNullOrWhiteSpace(command.hint))
+                {
+                    invalidMessage += $"\n    -> Usage: {command.hint}";
+                }
+
+                _errorMessages.Enqueue(invalidMessage);
+                if (command.includeInHistory)
+                {
+                    _history.Push(line, false, false);
+                }
+                return false;
+            }
+
+            int errorCount = _errorMessages.Count;
+            command.proc?.Invoke(arguments);
+            if (command.includeInHistory)
+            {
+                _history.Push(line, true, errorCount == _errorMessages.Count);
+            }
+            return true;
+        }
+
+        // ReSharper disable once MemberCanBePrivate.Global
+        public bool AddCommand(string name, CommandInfo info)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                IssueErrorMessage($"Invalid Command Name: {name}");
+                return false;
+            }
+
+            if (name.Contains(' '))
+            {
+                name = name.Replace(" ", string.Empty, StringComparison.OrdinalIgnoreCase);
+            }
+
+            string normalizedCandidate = NormalizeCommandKey(name);
+            if (string.IsNullOrEmpty(normalizedCandidate))
+            {
+                IssueErrorMessage($"Invalid Command Name: {name}");
+                return false;
+            }
+
+            foreach (string existingName in _commands.Keys)
+            {
+                if (string.Equals(existingName, name, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (
+                    string.Equals(
+                        NormalizeCommandKey(existingName),
+                        normalizedCandidate,
+                        StringComparison.Ordinal
+                    )
+                )
+                {
+                    IssueErrorMessage(
+                        $"Command {name} conflicts with existing command {existingName}."
+                    );
+                    return false;
+                }
+            }
+
+            if (!_commands.TryAdd(name, info))
+            {
+                IssueErrorMessage($"Command {name} is already defined.");
+                return false;
+            }
+
+            return true;
+        }
+
+        private bool TryResolveCommand(
+            string inputName,
+            out string canonicalName,
+            out CommandInfo command
+        )
+        {
+            canonicalName = string.Empty;
+            command = default;
+
+            if (string.IsNullOrWhiteSpace(inputName))
+            {
+                return false;
+            }
+
+            string candidate = inputName;
+            if (candidate.Contains(' '))
+            {
+                candidate = candidate.Replace(
+                    " ",
+                    string.Empty,
+                    StringComparison.OrdinalIgnoreCase
+                );
+            }
+
+            string normalizedInput = NormalizeCommandKey(candidate);
+
+            foreach (KeyValuePair<string, CommandInfo> entry in _commands)
+            {
+                if (string.Equals(entry.Key, candidate, StringComparison.OrdinalIgnoreCase))
+                {
+                    canonicalName = entry.Key;
+                    command = entry.Value;
+                    return true;
+                }
+
+                if (
+                    string.Equals(
+                        NormalizeCommandKey(entry.Key),
+                        normalizedInput,
+                        StringComparison.Ordinal
+                    )
+                )
+                {
+                    canonicalName = entry.Key;
+                    command = entry.Value;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private string BuildCommandLine(string commandName, CommandArg[] arguments)
         {
             _commandBuilder.Clear();
             _commandBuilder.Append(commandName);
@@ -339,90 +585,28 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 }
             }
 
-            string line = _commandBuilder.ToString();
-
-            if (string.IsNullOrWhiteSpace(commandName))
-            {
-                IssueErrorMessage($"Invalid command name '{commandName}'");
-                // Don't log empty commands
-                return false;
-            }
-
-            if (commandName.Contains(' '))
-            {
-                commandName = commandName.Replace(
-                    " ",
-                    string.Empty,
-                    StringComparison.OrdinalIgnoreCase
-                );
-            }
-
-            if (!_commands.TryGetValue(commandName, out CommandInfo command))
-            {
-                IssueErrorMessage($"Command {commandName} not found");
-                _history.Push(line, false, false);
-                return false;
-            }
-
-            int argCount = arguments.Length;
-            string errorMessage = null;
-            int requiredArg = 0;
-
-            if (argCount < command.minArgCount)
-            {
-                errorMessage = command.minArgCount == command.maxArgCount ? "exactly" : "at least";
-                requiredArg = command.minArgCount;
-            }
-            else if (0 <= command.maxArgCount && command.maxArgCount < argCount)
-            {
-                // Do not check max allowed number of arguments if it is -1
-                errorMessage = command.minArgCount == command.maxArgCount ? "exactly" : "at most";
-                requiredArg = command.maxArgCount;
-            }
-
-            if (!string.IsNullOrEmpty(errorMessage))
-            {
-                string pluralFix = requiredArg == 1 ? "" : "s";
-
-                string invalidMessage =
-                    $"{commandName} requires {errorMessage} {requiredArg} argument{pluralFix}";
-                if (!string.IsNullOrWhiteSpace(command.hint))
-                {
-                    invalidMessage += $"\n    -> Usage: {command.hint}";
-                }
-
-                _errorMessages.Enqueue(invalidMessage);
-                _history.Push(line, false, false);
-                return false;
-            }
-
-            int errorCount = _errorMessages.Count;
-            command.proc?.Invoke(arguments);
-            _history.Push(line, true, errorCount == _errorMessages.Count);
-            return true;
+            return _commandBuilder.ToString();
         }
 
-        // ReSharper disable once MemberCanBePrivate.Global
-        public bool AddCommand(string name, CommandInfo info)
+        internal static string NormalizeCommandKey(string name)
         {
             if (string.IsNullOrWhiteSpace(name))
             {
-                IssueErrorMessage($"Invalid Command Name: {name}");
-                return false;
+                return string.Empty;
             }
 
-            if (name.Contains(' '))
+            StringBuilder builder = null;
+            for (int i = 0; i < name.Length; ++i)
             {
-                name = name.Replace(" ", string.Empty, StringComparison.OrdinalIgnoreCase);
+                char ch = name[i];
+                if (char.IsLetterOrDigit(ch))
+                {
+                    builder ??= new StringBuilder(name.Length);
+                    builder.Append(char.ToLowerInvariant(ch));
+                }
             }
 
-            if (!_commands.TryAdd(name, info))
-            {
-                IssueErrorMessage($"Command {name} is already defined.");
-                return false;
-            }
-
-            return true;
+            return builder == null ? string.Empty : builder.ToString();
         }
 
         // ReSharper disable once MemberCanBePrivate.Global
@@ -432,10 +616,12 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             int minArgs = 0,
             int maxArgs = -1,
             string help = "",
-            string hint = null
+            string hint = null,
+            IArgumentCompleter completer = null,
+            bool includeInHistory = true
         )
         {
-            CommandInfo info = new(proc, minArgs, maxArgs, help, hint);
+            CommandInfo info = new(proc, minArgs, maxArgs, help, hint, completer, includeInHistory);
             return AddCommand(name, info);
         }
 
@@ -479,6 +665,19 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             return true;
         }
 
+        internal void CopyCommandNamesTo(List<string> buffer)
+        {
+            if (buffer == null)
+            {
+                return;
+            }
+            buffer.Clear();
+            foreach (string key in _commands.Keys)
+            {
+                buffer.Add(key);
+            }
+        }
+
         // ReSharper disable once UnusedMember.Global
         public bool TryGetVariable(string name, out CommandArg variable)
         {
@@ -506,6 +705,33 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             _errorMessages.Enqueue(formattedMessage);
         }
 
+        private static string GetParameterTypeNames(MethodInfo method)
+        {
+            if (method == null)
+            {
+                return string.Empty;
+            }
+
+            ParameterInfo[] parameters = method.GetParameters();
+            if (parameters == null || parameters.Length == 0)
+            {
+                return string.Empty;
+            }
+
+            StringBuilder sb = new();
+            for (int i = 0; i < parameters.Length; ++i)
+            {
+                if (i > 0)
+                {
+                    sb.Append(',');
+                }
+                ParameterInfo p = parameters[i];
+                Type pt = p != null ? p.ParameterType : null;
+                sb.Append(pt != null ? pt.Name : string.Empty);
+            }
+            return sb.ToString();
+        }
+
         public static bool TryEatArgument(ref string stringValue, out CommandArg arg)
         {
             stringValue = stringValue.TrimStart();
@@ -525,8 +751,19 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 {
                     if (stringValue[i] == firstChar)
                     {
-                        closingQuoteIndex = i;
-                        break;
+                        // Check if this quote is escaped by an odd number of backslashes
+                        int backslashCount = 0;
+                        int j = i - 1;
+                        while (1 <= j && stringValue[j] == '\\')
+                        {
+                            backslashCount++;
+                            j--;
+                        }
+                        if ((backslashCount % 2) == 0)
+                        {
+                            closingQuoteIndex = i;
+                            break;
+                        }
                     }
                 }
 
@@ -534,6 +771,14 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 {
                     // No closing quote was found; consume the rest of the string (excluding the opening quote).
                     string input = stringValue.Substring(1);
+                    if (firstChar == '\'')
+                    {
+                        input = input.Replace("\\'", "'").Replace("\\\\", "\\");
+                    }
+                    else if (firstChar == '"')
+                    {
+                        input = input.Replace("\\\"", "\"").Replace("\\\\", "\\");
+                    }
                     arg = new CommandArg(input, firstChar);
                     stringValue = string.Empty;
                 }
@@ -541,6 +786,15 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 {
                     // Extract the argument inside the quotes.
                     string input = stringValue.Substring(1, closingQuoteIndex - 1);
+                    // Unescape the matching quote and backslashes
+                    if (firstChar == '\'')
+                    {
+                        input = input.Replace("\\'", "'").Replace("\\\\", "\\");
+                    }
+                    else if (firstChar == '"')
+                    {
+                        input = input.Replace("\\\"", "\"").Replace("\\\\", "\\");
+                    }
                     arg = new CommandArg(input, firstChar, firstChar);
                     // Remove the parsed argument (including the quotes) from the input.
                     stringValue = stringValue.Substring(closingQuoteIndex + 1);
@@ -564,6 +818,61 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
 
             return true;
+        }
+
+        private static IArgumentCompleter ResolveCompleter(MethodInfo method)
+        {
+            try
+            {
+                object attr = Attribute.GetCustomAttribute(
+                    method,
+                    typeof(CommandCompleterAttribute)
+                );
+                if (attr is not CommandCompleterAttribute cca)
+                {
+                    return null;
+                }
+
+                Type t = cca.CompleterType;
+                // Prefer a public static Instance property
+                PropertyInfo instProp = t.GetProperty(
+                    "Instance",
+                    BindingFlags.Public | BindingFlags.Static
+                );
+                if (
+                    instProp != null
+                    && typeof(IArgumentCompleter).IsAssignableFrom(instProp.PropertyType)
+                )
+                {
+                    return (IArgumentCompleter)instProp.GetValue(null);
+                }
+
+                // Or a public static Instance field
+                FieldInfo instField = t.GetField(
+                    "Instance",
+                    BindingFlags.Public | BindingFlags.Static
+                );
+                if (
+                    instField != null
+                    && typeof(IArgumentCompleter).IsAssignableFrom(instField.FieldType)
+                )
+                {
+                    return (IArgumentCompleter)instField.GetValue(null);
+                }
+
+                // Else use parameterless constructor
+                ConstructorInfo ctor = t.GetConstructor(Type.EmptyTypes);
+                if (ctor != null)
+                {
+                    return (IArgumentCompleter)Activator.CreateInstance(t);
+                }
+            }
+            catch (Exception)
+            {
+                // Swallow and treat as no-completer; errors surface in logs elsewhere
+            }
+
+            return null;
         }
     }
 }

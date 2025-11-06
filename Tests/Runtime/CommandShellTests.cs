@@ -5,6 +5,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     using System.Linq;
     using System.Text;
     using Backend;
+    using Components;
     using NUnit.Framework;
     using UI;
     using UnityEngine;
@@ -25,7 +26,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [UnityTest]
         public IEnumerator UnescapedQuotes()
         {
-            yield return TerminalTests.SpawnTerminal(resetStateOnInit: true);
+            yield return TestSceneHelpers.CleanRestart(resetStateOnInit: true);
 
             int logCount = 0;
             Exception exception = null;
@@ -34,9 +35,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Application.logMessageReceived += HandleMessageReceived;
             try
             {
-                CommandShell shell = Terminal.Shell;
+                CommandShell shell = TestRuntimeScope.Shell;
                 Assert.IsNotNull(shell);
-                CommandHistory history = Terminal.History;
+                CommandHistory history = TestRuntimeScope.History;
                 Assert.IsNotNull(history);
 
                 int expectedLogCount = 0;
@@ -98,7 +99,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [UnityTest]
         public IEnumerator RunCommandLineNominal()
         {
-            yield return TerminalTests.SpawnTerminal(resetStateOnInit: true);
+            yield return TestSceneHelpers.CleanRestart(resetStateOnInit: true);
 
             int logCount = 0;
             Exception exception = null;
@@ -107,9 +108,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Application.logMessageReceived += HandleMessageReceived;
             try
             {
-                CommandShell shell = Terminal.Shell;
+                CommandShell shell = TestRuntimeScope.Shell;
                 Assert.IsNotNull(shell);
-                CommandHistory history = Terminal.History;
+                CommandHistory history = TestRuntimeScope.History;
                 Assert.IsNotNull(history);
 
                 int expectedLogCount = 0;
@@ -314,8 +315,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
                 StringBuilder errorBuilder = new();
                 bool anyError = false;
-                bool initialHadError = Terminal.Shell.HasErrors;
-                while (Terminal.Shell.TryConsumeErrorMessage(out string errorMessage))
+                bool initialHadError = TestRuntimeScope.Shell.HasErrors;
+                while (TestRuntimeScope.Shell.TryConsumeErrorMessage(out string errorMessage))
                 {
                     anyError = true;
                     errorBuilder.AppendLine(errorMessage);
@@ -347,6 +348,32 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     throw;
                 }
             }
+        }
+
+        [UnityTest]
+        public IEnumerator ClearHistoryCommandClearsWithoutPersistingCommand()
+        {
+            yield return TestSceneHelpers.CleanRestart(resetStateOnInit: true);
+
+            CommandShell shell = TestRuntimeScope.Shell;
+            Assert.IsNotNull(shell);
+            CommandHistory history = TestRuntimeScope.History;
+            Assert.IsNotNull(history);
+
+            bool executed = shell.RunCommand("log test-history");
+            Assert.IsTrue(executed, "Expected log command to execute successfully");
+
+            string[] entries = history
+                .GetHistory(onlySuccess: false, onlyErrorFree: false)
+                .ToArray();
+            CollectionAssert.Contains(entries, "log test-history");
+
+            shell.RunCommand("clear-history");
+
+            entries = history.GetHistory(onlySuccess: false, onlyErrorFree: false).ToArray();
+            Assert.IsEmpty(entries, "History should be empty after invoking clear-history");
+
+            yield break;
         }
     }
 }

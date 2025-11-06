@@ -9,13 +9,17 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         public readonly int maxArgCount;
         public readonly string help;
         public readonly string hint;
+        public readonly IArgumentCompleter completer;
+        public readonly bool includeInHistory;
 
         public CommandInfo(
             Action<CommandArg[]> proc,
             int minArgCount,
             int maxArgCount,
             string help,
-            string hint
+            string hint,
+            IArgumentCompleter completer = null,
+            bool includeInHistory = true
         )
         {
             this.proc = proc;
@@ -23,6 +27,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             this.minArgCount = minArgCount;
             this.help = help;
             this.hint = hint;
+            this.completer = completer;
+            this.includeInHistory = includeInHistory;
         }
     }
 }

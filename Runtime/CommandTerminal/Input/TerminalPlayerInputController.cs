@@ -120,6 +120,19 @@ namespace WallstopStudios.DxCommandTerminal.Input
             terminal.ToggleFull();
         }
 
+        public virtual void OnToggleLauncher(InputValue inputValue)
+        {
+            if (!_enabled)
+            {
+                return;
+            }
+            if (terminal == null)
+            {
+                return;
+            }
+            terminal.ToggleLauncher();
+        }
+
         public virtual void OnCompleteCommand(InputValue input)
         {
             if (!_enabled)

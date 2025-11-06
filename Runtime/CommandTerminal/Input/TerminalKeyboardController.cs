@@ -2,21 +2,40 @@ namespace WallstopStudios.DxCommandTerminal.Input
 {
     using System;
     using System.Collections.Generic;
-    using System.Linq;
     using UI;
     using UnityEngine;
 
     [DisallowMultipleComponent]
     public class TerminalKeyboardController : MonoBehaviour, IInputHandler
     {
-        protected static readonly TerminalControlTypes[] ControlTypes = Enum.GetValues(
-                typeof(TerminalControlTypes)
-            )
-            .OfType<TerminalControlTypes>()
+        protected static readonly TerminalControlTypes[] ControlTypes = BuildControlTypes();
+
+        protected readonly HashSet<string> _missing = new();
+        protected readonly HashSet<TerminalControlTypes> _terminalControlTypes = new();
+        protected ITerminalInputTarget _inputTarget;
+        private ITerminalInputSource _inputSource;
+        private bool _missingTargetLogged;
+
+        private static TerminalControlTypes[] BuildControlTypes()
+        {
+            Array values = Enum.GetValues(typeof(TerminalControlTypes));
+            List<TerminalControlTypes> list = new();
+            for (int i = 0; i < values.Length; ++i)
+            {
+                object v = values.GetValue(i);
+                if (v is TerminalControlTypes t)
+                {
 #pragma warning disable CS0612 // Type or member is obsolete
-            .Except(new[] { TerminalControlTypes.None })
+                    if (t == TerminalControlTypes.None)
+                    {
+                        continue;
+                    }
 #pragma warning restore CS0612 // Type or member is obsolete
-            .ToArray();
+                    list.Add(t);
+                }
+            }
+            return list.ToArray();
+        }
 
         public bool ShouldHandleInputThisFrame
         {
@@ -24,11 +43,7 @@ namespace WallstopStudios.DxCommandTerminal.Input
             {
                 foreach (TerminalControlTypes controlType in _controlOrder)
                 {
-                    if (!_inputChecks.TryGetValue(controlType, out Func<bool> inputCheck))
-                    {
-                        continue;
-                    }
-                    if (inputCheck())
+                    if (IsControlPressed(controlType))
                     {
                         return true;
                     }
@@ -47,82 +62,44 @@ namespace WallstopStudios.DxCommandTerminal.Input
 #endif
         public TerminalUI terminal;
 
+        [Header("Profiles")]
+        [SerializeField]
+        private TerminalInputProfile _inputProfile;
+
         [Header("Hotkeys")]
-        [SerializeField]
         public string toggleHotkey = "`";
-
-        [SerializeField]
         public string toggleFullHotkey = "#`";
-
-        [SerializeField]
+        public string toggleLauncherHotkey = "#space";
         public string completeHotkey = "tab";
-
-        [SerializeField]
         public string reverseCompleteHotkey = "#tab";
-
-        [SerializeField]
         public string previousHotkey = "up";
-
-        [SerializeField]
         public List<string> _completeCommandHotkeys = new() { "enter", "return" };
-
-        [SerializeField]
         public string closeHotkey = "escape";
-
-        [SerializeField]
         public string nextHotkey = "down";
 
         [SerializeField]
         [Tooltip("Re-order these to choose what priority you want input to be checked in")]
-        protected List<TerminalControlTypes> _controlOrder = new()
+        protected internal List<TerminalControlTypes> _controlOrder = new()
         {
             TerminalControlTypes.Close,
             TerminalControlTypes.EnterCommand,
             TerminalControlTypes.Previous,
             TerminalControlTypes.Next,
+            TerminalControlTypes.ToggleLauncher,
             TerminalControlTypes.ToggleFull,
             TerminalControlTypes.ToggleSmall,
             TerminalControlTypes.CompleteBackward,
             TerminalControlTypes.CompleteForward,
         };
 
-        protected readonly Dictionary<TerminalControlTypes, Func<bool>> _inputChecks = new();
-        protected readonly Dictionary<TerminalControlTypes, Action> _controlHandlerActions = new();
-
-        public TerminalKeyboardController()
-        {
-            _inputChecks.Clear();
-            _inputChecks[TerminalControlTypes.Close] = IsClosePressed;
-            _inputChecks[TerminalControlTypes.EnterCommand] = IsEnterCommandPressed;
-            _inputChecks[TerminalControlTypes.Previous] = IsPreviousPressed;
-            _inputChecks[TerminalControlTypes.Next] = IsNextPressed;
-            _inputChecks[TerminalControlTypes.ToggleFull] = IsToggleFullPressed;
-            _inputChecks[TerminalControlTypes.ToggleSmall] = IsToggleSmallPressed;
-            _inputChecks[TerminalControlTypes.CompleteBackward] = IsCompleteBackwardPressed;
-            _inputChecks[TerminalControlTypes.CompleteForward] = IsCompletePressed;
-
-            _controlHandlerActions.Clear();
-            _controlHandlerActions[TerminalControlTypes.Close] = Close;
-            _controlHandlerActions[TerminalControlTypes.EnterCommand] = EnterCommand;
-            _controlHandlerActions[TerminalControlTypes.Previous] = Previous;
-            _controlHandlerActions[TerminalControlTypes.Next] = Next;
-            _controlHandlerActions[TerminalControlTypes.ToggleFull] = ToggleFull;
-            _controlHandlerActions[TerminalControlTypes.ToggleSmall] = ToggleSmall;
-            _controlHandlerActions[TerminalControlTypes.CompleteBackward] = CompleteBackward;
-            _controlHandlerActions[TerminalControlTypes.CompleteForward] = Complete;
-        }
+        public TerminalKeyboardController() { }
 
         protected virtual void Awake()
         {
-            if (terminal != null)
-            {
-                return;
-            }
+            ResolveInputTarget();
+            ResolveInputSource();
 
-            if (!TryGetComponent(out terminal))
-            {
-                Debug.LogError("Failed to find TerminalUI, Input will not work.", this);
-            }
+            ApplyProfileIfAvailable();
 
             if (_controlOrder is not { Count: > 0 })
             {
@@ -138,17 +115,51 @@ namespace WallstopStudios.DxCommandTerminal.Input
         {
             if (!Application.isPlaying)
             {
+                ResolveInputTarget();
+                ApplyProfileIfAvailable();
                 VerifyControlOrderIntegrity();
+                ResolveInputSource();
             }
         }
 
         private void VerifyControlOrderIntegrity()
         {
-            if (!_controlOrder.ToHashSet().SetEquals(ControlTypes))
+            // Verify set equality without LINQ
+            _terminalControlTypes.Clear();
+            foreach (TerminalControlTypes controlType in _controlOrder)
             {
+                _terminalControlTypes.Add(controlType);
+            }
+            bool equal = _terminalControlTypes.Count == ControlTypes.Length;
+            if (equal)
+            {
+                for (int i = 0; i < ControlTypes.Length; ++i)
+                {
+                    if (!_terminalControlTypes.Contains(ControlTypes[i]))
+                    {
+                        equal = false;
+                        break;
+                    }
+                }
+            }
+
+            if (!equal && _controlOrder is { Count: > 0 })
+            {
+                _missing.Clear();
+                for (int i = 0; i < ControlTypes.Length; ++i)
+                {
+                    TerminalControlTypes t = ControlTypes[i];
+                    if (!_terminalControlTypes.Contains(t))
+                    {
+                        _missing.Add(t.ToString());
+                    }
+                }
+
                 Debug.LogWarning(
-                    $"Control Order is missing the following controls: [{string.Join(", ", ControlTypes.Except(_controlOrder))}]. "
-                        + "Input for these will not be handled. Is this intentional?",
+                    $"Control Order is missing the following controls: [{string.Join(", ", _missing)}]. "
+                        + "Input for these will not be handled. Is this intentional?"
+                        + $"\nTerminal Control Types: [{string.Join(", ", ControlTypes)}]"
+                        + $"\nExisting Control Types: [{string.Join(", ", _terminalControlTypes)}]",
                     this
                 );
             }
@@ -156,6 +167,24 @@ namespace WallstopStudios.DxCommandTerminal.Input
 
         protected virtual void Update()
         {
+            if (_inputTarget == null)
+            {
+                ResolveInputTarget();
+                if (_inputTarget == null)
+                {
+                    return;
+                }
+            }
+
+            if (_inputSource == null)
+            {
+                ResolveInputSource();
+                if (_inputSource == null)
+                {
+                    return;
+                }
+            }
+
             if (_controlOrder is not { Count: > 0 })
             {
                 return;
@@ -163,22 +192,12 @@ namespace WallstopStudios.DxCommandTerminal.Input
 
             foreach (TerminalControlTypes controlType in _controlOrder)
             {
-                if (!_inputChecks.TryGetValue(controlType, out Func<bool> inputCheck))
+                if (!IsControlPressed(controlType))
                 {
                     continue;
                 }
 
-                if (!inputCheck())
-                {
-                    continue;
-                }
-
-                if (!_controlHandlerActions.TryGetValue(controlType, out Action action))
-                {
-                    continue;
-                }
-
-                action();
+                ExecuteControl(controlType);
                 break;
             }
         }
@@ -187,76 +206,85 @@ namespace WallstopStudios.DxCommandTerminal.Input
 
         protected virtual void Close()
         {
-            if (terminal == null)
+            if (_inputTarget == null)
             {
                 return;
             }
 
-            terminal.Close();
+            _inputTarget.Close();
         }
 
         protected virtual void EnterCommand()
         {
-            if (terminal == null)
+            if (_inputTarget == null)
             {
                 return;
             }
-            terminal.EnterCommand();
+            _inputTarget.EnterCommand();
         }
 
         protected virtual void Previous()
         {
-            if (terminal == null)
+            if (_inputTarget == null)
             {
                 return;
             }
-            terminal.HandlePrevious();
+            _inputTarget.HandlePrevious();
         }
 
         protected virtual void Next()
         {
-            if (terminal == null)
+            if (_inputTarget == null)
             {
                 return;
             }
-            terminal.HandleNext();
+            _inputTarget.HandleNext();
         }
 
         protected virtual void ToggleFull()
         {
-            if (terminal == null)
+            if (_inputTarget == null)
             {
                 return;
             }
-            terminal.ToggleFull();
+            _inputTarget.ToggleFull();
+        }
+
+        protected virtual void ToggleLauncher()
+        {
+            if (_inputTarget == null)
+            {
+                return;
+            }
+            _inputTarget.ToggleLauncher();
         }
 
         protected virtual void ToggleSmall()
         {
-            if (terminal == null)
+            if (_inputTarget == null)
             {
                 return;
             }
-            terminal.ToggleSmall();
+            _inputTarget.ToggleSmall();
         }
 
         protected virtual void Complete()
         {
-            if (terminal == null)
+            if (_inputTarget == null)
             {
                 return;
             }
 
-            terminal.CompleteCommand(searchForward: true);
+            _inputTarget.CompleteCommand(searchForward: true);
         }
 
         protected virtual void CompleteBackward()
         {
-            if (terminal == null)
+            if (_inputTarget == null)
             {
                 return;
             }
-            terminal.CompleteCommand(searchForward: false);
+            _inputTarget.CompleteCommand(searchForward: false);
         }
 
         #endregion
@@ -266,37 +294,42 @@ namespace WallstopStudios.DxCommandTerminal.Input
 
         protected virtual bool IsClosePressed()
         {
-            return InputHelpers.IsKeyPressed(closeHotkey, inputMode);
+            return _inputSource != null && _inputSource.IsKeyPressed(closeHotkey);
         }
 
         protected virtual bool IsPreviousPressed()
         {
-            return InputHelpers.IsKeyPressed(previousHotkey, inputMode);
+            return _inputSource != null && _inputSource.IsKeyPressed(previousHotkey);
         }
 
         protected virtual bool IsNextPressed()
         {
-            return InputHelpers.IsKeyPressed(nextHotkey, inputMode);
+            return _inputSource != null && _inputSource.IsKeyPressed(nextHotkey);
         }
 
         protected virtual bool IsToggleFullPressed()
         {
-            return InputHelpers.IsKeyPressed(toggleFullHotkey, inputMode);
+            return _inputSource != null && _inputSource.IsKeyPressed(toggleFullHotkey);
+        }
+
+        protected virtual bool IsToggleLauncherPressed()
+        {
+            return _inputSource != null && _inputSource.IsKeyPressed(toggleLauncherHotkey);
         }
 
         protected virtual bool IsToggleSmallPressed()
         {
-            return InputHelpers.IsKeyPressed(toggleHotkey, inputMode);
+            return _inputSource != null && _inputSource.IsKeyPressed(toggleHotkey);
         }
 
         protected virtual bool IsCompleteBackwardPressed()
         {
-            return InputHelpers.IsKeyPressed(reverseCompleteHotkey, inputMode);
+            return _inputSource != null && _inputSource.IsKeyPressed(reverseCompleteHotkey);
         }
 
         protected virtual bool IsCompletePressed()
         {
-            return InputHelpers.IsKeyPressed(completeHotkey, inputMode);
+            return _inputSource != null && _inputSource.IsKeyPressed(completeHotkey);
         }
 
         protected virtual bool IsEnterCommandPressed()
@@ -308,7 +341,7 @@ namespace WallstopStudios.DxCommandTerminal.Input
 
             foreach (string command in _completeCommandHotkeys)
             {
-                if (InputHelpers.IsKeyPressed(command, inputMode))
+                if (_inputSource != null && _inputSource.IsKeyPressed(command))
                 {
                     return true;
                 }
@@ -318,5 +351,132 @@ namespace WallstopStudios.DxCommandTerminal.Input
         }
 
         #endregion
+
+        private bool IsControlPressed(TerminalControlTypes controlType)
+        {
+            switch (controlType)
+            {
+                case TerminalControlTypes.Close:
+                    return IsClosePressed();
+                case TerminalControlTypes.EnterCommand:
+                    return IsEnterCommandPressed();
+                case TerminalControlTypes.Previous:
+                    return IsPreviousPressed();
+                case TerminalControlTypes.Next:
+                    return IsNextPressed();
+                case TerminalControlTypes.ToggleFull:
+                    return IsToggleFullPressed();
+                case TerminalControlTypes.ToggleSmall:
+                    return IsToggleSmallPressed();
+                case TerminalControlTypes.ToggleLauncher:
+                    return IsToggleLauncherPressed();
+                case TerminalControlTypes.CompleteBackward:
+                    return IsCompleteBackwardPressed();
+                case TerminalControlTypes.CompleteForward:
+                    return IsCompletePressed();
+                default:
+                    return false;
+            }
+        }
+
+        protected virtual void ExecuteControl(TerminalControlTypes controlType)
+        {
+            switch (controlType)
+            {
+                case TerminalControlTypes.Close:
+                    Close();
+                    break;
+                case TerminalControlTypes.EnterCommand:
+                    EnterCommand();
+                    break;
+                case TerminalControlTypes.Previous:
+                    Previous();
+                    break;
+                case TerminalControlTypes.Next:
+                    Next();
+                    break;
+                case TerminalControlTypes.ToggleFull:
+                    ToggleFull();
+                    break;
+                case TerminalControlTypes.ToggleSmall:
+                    ToggleSmall();
+                    break;
+                case TerminalControlTypes.ToggleLauncher:
+                    ToggleLauncher();
+                    break;
+                case TerminalControlTypes.CompleteBackward:
+                    CompleteBackward();
+                    break;
+                case TerminalControlTypes.CompleteForward:
+                    Complete();
+                    break;
+            }
+        }
+
+        private void ResolveInputTarget()
+        {
+            if (terminal != null)
+            {
+                _inputTarget = terminal;
+                _missingTargetLogged = false;
+                return;
+            }
+
+            if (!TryGetComponent(out ITerminalInputTarget resolvedTarget))
+            {
+                MonoBehaviour[] behaviours = GetComponents<MonoBehaviour>();
+                for (int i = 0; i < behaviours.Length && resolvedTarget == null; ++i)
+                {
+                    if (behaviours[i] is ITerminalInputTarget candidate)
+                    {
+                        resolvedTarget = candidate;
+                    }
+                }
+            }
+
+            if (resolvedTarget != null)
+            {
+                _inputTarget = resolvedTarget;
+                terminal = resolvedTarget as TerminalUI;
+                _missingTargetLogged = false;
+            }
+            else if (!_missingTargetLogged)
+            {
+                Debug.LogWarning(
+                    "Failed to locate a terminal input target. Input will not work.",
+                    this
+                );
+                _missingTargetLogged = true;
+            }
+        }
+
+#if UNITY_EDITOR || UNITY_INCLUDE_TESTS
+        internal void ExecuteControlForTests(TerminalControlTypes controlType)
+        {
+            ExecuteControl(controlType);
+        }
+
+        internal void SetInputProfileForTests(TerminalInputProfile profile)
+        {
+            _inputProfile = profile;
+            ApplyProfileIfAvailable();
+        }
+#endif
+
+        private void ApplyProfileIfAvailable()
+        {
+            if (_inputProfile == null)
+            {
+                return;
+            }
+
+            _inputProfile.ApplyTo(this);
+            ResolveInputSource();
+        }
+
+        private void ResolveInputSource()
+        {
+            _inputSource = TerminalInputSourceFactory.Create(inputMode);
+        }
     }
 }

@@ -15,8 +15,53 @@ repos:
         description: Install the .NET tools listed at .config/dotnet-tools.json.
       - id: csharpier
         name: Run CSharpier on C# files
-        entry: dotnet tool run Csharpier format
+        entry: dotnet tool run csharpier format .
         language: system
-        types:
-          - c#
+        # Run across the whole repo so it matches CI's full-repo check
+        pass_filenames: false
+        always_run: true
         description: CSharpier is an opinionated C# formatter inspired by Prettier.
+
+  - repo: local
+    hooks:
+      - id: prettier
+        name: Prettier (Markdown, JSON, asmdef, asmref, YAML)
+        entry: npx --yes prettier --write .
+        language: system
+        # Run across the whole repo to match CI (filter still documents scope)
+        pass_filenames: false
+        always_run: true
+        files: '(?i)\.(md|markdown|json|asmdef|asmref|ya?ml)$'
+        description: Use the repo's Prettier version from package.json.
+
+  - repo: local
+    hooks:
+      - id: markdownlint
+        name: markdownlint (respect repo config)
+        entry: npx --yes markdownlint-cli --config .markdownlint.json --ignore-path .markdownlintignore
+        language: system
+        files: '(?i)\.(md|markdown)$'
+
+  - repo: local
+    hooks:
+      - id: yamllint
+        name: yamllint (if available)
+        entry: bash -c 'if command -v yamllint >/dev/null 2>&1; then yamllint -c .yamllint.yaml "$@"; else echo "yamllint not installed; skipping"; fi' --
+        language: system
+        files: '(?i)\.(ya?ml)$'
+
+  - repo: local
+    hooks:
+      - id: check-eol-bom
+        name: Enforce CRLF + no BOM (auto-fix)
+        entry: pwsh -NoProfile -File scripts/check-eol.ps1 -Fix
+        language: system
+        pass_filenames: false
+        always_run: true
+        description: Normalizes line endings to CRLF and strips UTF-8 BOM.
+      - id: lint-doc-links
+        name: Lint relative Markdown links
+        entry: pwsh -NoProfile -File scripts/lint-doc-links.ps1
+        language: system
+        pass_filenames: false
+        files: '(?i)\.(md|markdown)$'

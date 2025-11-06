@@ -52,12 +52,24 @@
 }
 
 .log-scroll-view .unity-scroller .unity-base-slider__dragger {
-    border-radius: 4px;
-    border-width: 0;
-    min-width: 0;
-    width: 10px;
-    left: 0;
+    background-color: var(--scroll-color);
+    transition: background-color 0.1s ease;
 }
+
+.log-scroll-view .unity-list-view__item,
+.log-scroll-view .unity-list-view__item:hover,
+.log-scroll-view .unity-list-view__item:focus,
+.log-scroll-view .unity-list-view__item--hovered,
+.log-scroll-view .unity-list-view__item--selected,
+.log-scroll-view .unity-list-view__item--selected:hover,
+.log-scroll-view .unity-list-view__item--focused,
+.log-scroll-view .unity-list-view__item--focus-visible,
+.log-scroll-view .unity-list-view__drag-area {
+    background-color: transparent;
+    border-color: transparent;
+    -unity-background-image-tint-color: transparent;
+}
+
 
 .log-scroll-view .unity-scroller .unity-scroller__low-button,
 .log-scroll-view .unity-scroller .unity-scroller__high-button {
@@ -79,7 +91,7 @@
     background-color: transparent;
     flex-direction: row;
     flex-shrink: 0;
-    left: 2px;
+    overflow: visible;
 }
 
 .autocomplete-popup #unity-low-button,
@@ -88,12 +100,44 @@
     display: none;
 }
 
+.autocomplete-popup .unity-scroll-view__content-viewport,
+.log-scroll-view .unity-scroll-view__content-viewport {
+    background-color: transparent;
+    height: 100%;
+    min-height: 0;
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+
+.autocomplete-popup .unity-scroll-view__content-viewport {
+    overflow: visible;
+}
+
+.log-scroll-view .unity-scroll-view__content-viewport {
+    overflow: hidden;
+}
+
+.autocomplete-popup .unity-scroll-view__content-container {
+    padding: 0;
+    min-height: 0;
+    flex-direction: row;
+    align-items: center;
+    flex-grow: 1;
+}
+
+.log-scroll-view .unity-scroll-view__content-container {
+    padding: 0;
+    min-height: 0;
+    flex-direction: column;
+    flex-grow: 1;
+}
+
 .input-container {
     flex-direction: row;
     flex-shrink: 0;
     padding: 0;
     margin: 0;
-    height: 30px;
+    height: 24px;
     align-items: center;
 }
 
@@ -101,6 +145,7 @@
     position: absolute;
     flex-direction: row;
     left: 2px;
+    align-items: center;
 }
 
 .terminal-output-label {
@@ -128,7 +173,7 @@
     border-bottom-left-radius: 4px;
     flex-grow: 0;
     flex-shrink: 0;
-    height: 22px;
+    height: 20px;
     align-items: center;
     padding: 2px 0;
     margin: 0;
@@ -138,7 +183,7 @@
     background-color: transparent;
     border-top-right-radius: 4px;
     border-bottom-right-radius: 4px;
-    height: 22px;
+    height: 20px;
     flex-grow: 1;
     flex-shrink: 1;
     padding: 0;
@@ -166,9 +211,53 @@
     background-color: var(--terminal-bg);
 }
 
+.terminal-container--launcher {
+    background-color: var(--terminal-bg);
+    border-radius: 16px;
+    border-top-width: 1px;
+    border-right-width: 1px;
+    border-bottom-width: 1px;
+    border-left-width: 1px;
+    border-top-color: rgba(255, 255, 255, 0.05);
+    border-right-color: rgba(255, 255, 255, 0.05);
+    border-bottom-color: rgba(255, 255, 255, 0.05);
+    border-left-color: rgba(255, 255, 255, 0.05);
+    transition: transform 0.12s ease, opacity 0.12s ease;
+}
+
+.terminal-button-active {
+    background-color: var(--button-selected-bg);
+    color: var(--button-selected-text);
+}
+
+.terminal-button-active:hover {
+    background-color: var(--button-selected-bg);
+    color: var(--button-selected-text);
+}
+
 .log-scroll-view .unity-scroller .unity-base-slider__dragger {
     background-color: var(--scroll-color);
     transition: background-color 0.1s ease;
+}
+
+.log-scroll-view .unity-list-view__item,
+.log-scroll-view .unity-list-view__item:hover,
+.log-scroll-view .unity-list-view__item:focus,
+.log-scroll-view .unity-list-view__item--hovered,
+.log-scroll-view .unity-list-view__item--selected,
+.log-scroll-view .unity-list-view__item--selected:hover,
+.log-scroll-view .unity-list-view__item--focused,
+.log-scroll-view .unity-list-view__item--focus-visible,
+.log-scroll-view .unity-list-view__drag-area {
+    background-color: transparent;
+    border-color: transparent;
+    -unity-background-image-tint-color: transparent;
+}
+
+
+.log-scroll-view .unity-list-view__item--hovered,
+.log-scroll-view .unity-list-view__item--selected {
+    background-color: transparent;
 }
 
 .log-scroll-view .unity-scroller .unity-base-slider__dragger:hover,
@@ -249,3 +338,9 @@
 .terminal-output-label--error {
     color: var(--text-error);
 }
+
+.unity-list-view__empty-label {
+    display: none;
+    color: transparent;
+}
+

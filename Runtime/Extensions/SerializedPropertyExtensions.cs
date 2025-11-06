@@ -9,11 +9,18 @@ namespace WallstopStudios.DxCommandTerminal.Extensions
     using UnityEditor;
     using UnityEngine;
 
+    public interface ISerializedPropertyAccessor
+    {
+        object GetValue(SerializedProperty property);
+
+        object GetEnclosingObject(SerializedProperty property, out FieldInfo fieldInfo);
+    }
+
     internal static class FieldAccessorFactory
     {
         internal static Func<object, object> CreateFieldGetter(FieldInfo field)
         {
-#if WEB_GL
+#if ENABLE_IL2CPP || UNITY_WEBGL
             return field.GetValue;
 #else
             DynamicMethod dynamicMethod = new(
@@ -44,6 +51,13 @@ namespace WallstopStudios.DxCommandTerminal.Extensions
 
     internal static class SerializedPropertyExtensions
     {
+        private static ISerializedPropertyAccessor _customAccessor;
+
+        public static void SetAccessor(ISerializedPropertyAccessor accessor)
+        {
+            _customAccessor = accessor;
+        }
+
         private static readonly Dictionary<
             Type,
             Dictionary<string, Func<object, object>>
@@ -56,6 +70,11 @@ namespace WallstopStudios.DxCommandTerminal.Extensions
 
         public static object GetValue(this SerializedProperty property)
         {
+            if (_customAccessor != null)
+            {
+                return _customAccessor.GetValue(property);
+            }
+
             switch (property.propertyType)
             {
                 case SerializedPropertyType.Integer:
@@ -165,6 +184,11 @@ namespace WallstopStudios.DxCommandTerminal.Extensions
             out FieldInfo fieldInfo
         )
         {
+            if (_customAccessor != null)
+            {
+                return _customAccessor.GetEnclosingObject(property, out fieldInfo);
+            }
+
             fieldInfo = null;
             object obj = property.serializedObject.targetObject;
             if (obj == null)
