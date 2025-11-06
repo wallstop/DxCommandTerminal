@@ -55,6 +55,9 @@ namespace WallstopStudios.DxCommandTerminal.Input
         public string toggleFullHotkey = "#`";
 
         [SerializeField]
+        public string toggleLauncherHotkey = "#space";
+
+        [SerializeField]
         public string completeHotkey = "tab";
 
         [SerializeField]
@@ -80,6 +83,7 @@ namespace WallstopStudios.DxCommandTerminal.Input
             TerminalControlTypes.EnterCommand,
             TerminalControlTypes.Previous,
             TerminalControlTypes.Next,
+            TerminalControlTypes.ToggleLauncher,
             TerminalControlTypes.ToggleFull,
             TerminalControlTypes.ToggleSmall,
             TerminalControlTypes.CompleteBackward,
@@ -98,6 +102,7 @@ namespace WallstopStudios.DxCommandTerminal.Input
             _inputChecks[TerminalControlTypes.Next] = IsNextPressed;
             _inputChecks[TerminalControlTypes.ToggleFull] = IsToggleFullPressed;
             _inputChecks[TerminalControlTypes.ToggleSmall] = IsToggleSmallPressed;
+            _inputChecks[TerminalControlTypes.ToggleLauncher] = IsToggleLauncherPressed;
             _inputChecks[TerminalControlTypes.CompleteBackward] = IsCompleteBackwardPressed;
             _inputChecks[TerminalControlTypes.CompleteForward] = IsCompletePressed;
 
@@ -108,6 +113,7 @@ namespace WallstopStudios.DxCommandTerminal.Input
             _controlHandlerActions[TerminalControlTypes.Next] = Next;
             _controlHandlerActions[TerminalControlTypes.ToggleFull] = ToggleFull;
             _controlHandlerActions[TerminalControlTypes.ToggleSmall] = ToggleSmall;
+            _controlHandlerActions[TerminalControlTypes.ToggleLauncher] = ToggleLauncher;
             _controlHandlerActions[TerminalControlTypes.CompleteBackward] = CompleteBackward;
             _controlHandlerActions[TerminalControlTypes.CompleteForward] = Complete;
         }
@@ -240,6 +246,15 @@ namespace WallstopStudios.DxCommandTerminal.Input
             terminal.ToggleSmall();
         }
 
+        protected virtual void ToggleLauncher()
+        {
+            if (terminal == null)
+            {
+                return;
+            }
+            terminal.ToggleLauncher();
+        }
+
         protected virtual void Complete()
         {
             if (terminal == null)
@@ -287,6 +302,11 @@ namespace WallstopStudios.DxCommandTerminal.Input
         protected virtual bool IsToggleSmallPressed()
         {
             return InputHelpers.IsKeyPressed(toggleHotkey, inputMode);
+        }
+
+        protected virtual bool IsToggleLauncherPressed()
+        {
+            return InputHelpers.IsKeyPressed(toggleLauncherHotkey, inputMode);
         }
 
         protected virtual bool IsCompleteBackwardPressed()
