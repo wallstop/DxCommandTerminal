@@ -273,5 +273,64 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.IsTrue(entries.Contains("log after1"), "Should contain 'log after1'");
             Assert.IsTrue(entries.Contains("log after2"), "Should contain 'log after2'");
         }
+
+        [UnityTest]
+        public IEnumerator CommandWithAddToHistoryFalseAndInvalidArgsDoesNotPushToHistory()
+        {
+            // clear-history has AddToHistory = false. When called with wrong args,
+            // it should still NOT be recorded in history.
+            yield return TerminalTests.SpawnTerminal(resetStateOnInit: true);
+
+            CommandShell shell = Terminal.Shell;
+            Assert.IsNotNull(shell, "Terminal.Shell should not be null after SpawnTerminal");
+            CommandHistory history = Terminal.History;
+            Assert.IsNotNull(history, "Terminal.History should not be null after SpawnTerminal");
+
+            // Run some commands to populate history
+            shell.RunCommand("log test1");
+            shell.RunCommand("log test2");
+
+            string[] entriesBefore = history.GetHistory(false, false).ToArray();
+            Assert.AreEqual(2, entriesBefore.Length, "Should have 2 history entries before invalid clear-history");
+
+            // Run clear-history with an extra argument (should fail arg validation)
+            shell.RunCommand("clear-history somearg");
+
+            string[] entriesAfter = history.GetHistory(false, false).ToArray();
+            Assert.IsFalse(
+                entriesAfter.Contains("clear-history somearg"),
+                "clear-history somearg should NOT appear in history when AddToHistory is false"
+            );
+            Assert.AreEqual(
+                2,
+                entriesAfter.Length,
+                $"History should still have 2 entries, but contained: {string.Join(", ", entriesAfter)}"
+            );
+            Assert.IsTrue(entriesAfter.Contains("log test1"), "Should still contain 'log test1'");
+            Assert.IsTrue(entriesAfter.Contains("log test2"), "Should still contain 'log test2'");
+        }
+
+        [UnityTest]
+        public IEnumerator CommandWithAddToHistoryTrueAndInvalidArgsPushesToHistory()
+        {
+            // set-theme has AddToHistory = true (default). When called with wrong args,
+            // it should still be recorded in history.
+            yield return TerminalTests.SpawnTerminal(resetStateOnInit: true);
+
+            CommandShell shell = Terminal.Shell;
+            Assert.IsNotNull(shell, "Terminal.Shell should not be null after SpawnTerminal");
+            CommandHistory history = Terminal.History;
+            Assert.IsNotNull(history, "Terminal.History should not be null after SpawnTerminal");
+
+            // Run set-theme with no arguments (it requires exactly 1)
+            shell.RunCommand("set-theme");
+
+            string[] entries = history.GetHistory(false, false).ToArray();
+            Assert.AreEqual(1, entries.Length, "Should have 1 history entry after invalid set-theme");
+            Assert.IsTrue(
+                entries.Contains("set-theme"),
+                "set-theme should appear in history when AddToHistory is true"
+            );
+        }
     }
 }

@@ -297,6 +297,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
             if (_arguments.Count == 0)
             {
+                // No command identified, unconditional push
                 _history.Push(line, false, true);
                 return false;
             }
@@ -361,6 +362,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             if (!_commands.TryGetValue(commandName, out CommandInfo command))
             {
                 IssueErrorMessage($"Command {commandName} not found");
+                // Unknown command, unconditional push
                 _history.Push(line, false, false);
                 return false;
             }
@@ -393,12 +395,17 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 }
 
                 _errorMessages.Enqueue(invalidMessage);
-                _history.Push(line, false, false);
+                // Known command with invalid arguments, respect addToHistory flag
+                if (command.addToHistory)
+                {
+                    _history.Push(line, false, false);
+                }
                 return false;
             }
 
             int errorCount = _errorMessages.Count;
             command.proc?.Invoke(arguments);
+            // Known command executed, respect addToHistory flag
             if (command.addToHistory)
             {
                 _history.Push(line, true, errorCount == _errorMessages.Count);
