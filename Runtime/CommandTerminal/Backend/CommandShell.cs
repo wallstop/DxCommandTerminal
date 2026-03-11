@@ -2,11 +2,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 {
     using System;
     using System.Collections.Generic;
-    using System.Collections.Immutable;
     using System.Linq;
     using System.Reflection;
     using System.Text;
     using Attributes;
+    using DataStructures;
     using UnityEngine;
 
     public sealed class CommandShell
@@ -117,11 +117,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         public IReadOnlyDictionary<string, CommandInfo> Commands => _commands;
         public IReadOnlyDictionary<string, CommandArg> Variables => _variables;
 
-        public ImmutableHashSet<string> AutoRegisteredCommands { get; private set; } =
-            ImmutableHashSet<string>.Empty;
+        public ReadOnlyHashSet<string> AutoRegisteredCommands { get; private set; } =
+            ReadOnlyHashSet<string>.Empty;
 
-        public ImmutableHashSet<string> IgnoredCommands { get; private set; } =
-            ImmutableHashSet<string>.Empty;
+        public ReadOnlyHashSet<string> IgnoredCommands { get; private set; } =
+            ReadOnlyHashSet<string>.Empty;
 
         public bool IgnoringDefaultCommands { get; private set; }
 
@@ -168,7 +168,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
 
             _autoRegisteredCommands.Clear();
-            AutoRegisteredCommands = ImmutableHashSet<string>.Empty;
+            AutoRegisteredCommands = ReadOnlyHashSet<string>.Empty;
             return count;
         }
 
@@ -186,7 +186,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 _commands.Remove(ignoredCommand);
             }
 
-            IgnoredCommands = _ignoredCommands.ToImmutableHashSet(StringComparer.OrdinalIgnoreCase);
+            IgnoredCommands = _ignoredCommands.ToReadOnlyHashSet(StringComparer.OrdinalIgnoreCase);
             _rejectedCommands.Clear();
 
             foreach (
@@ -234,7 +234,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                     attribute.MinArgCount,
                     attribute.MaxArgCount,
                     attribute.Help,
-                    attribute.Hint
+                    attribute.Hint,
+                    attribute.AddToHistory
                 );
                 if (success)
                 {
@@ -242,7 +243,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 }
             }
 
-            AutoRegisteredCommands = _autoRegisteredCommands.ToImmutableHashSet(
+            AutoRegisteredCommands = _autoRegisteredCommands.ToReadOnlyHashSet(
                 StringComparer.OrdinalIgnoreCase
             );
 
@@ -296,6 +297,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
             if (_arguments.Count == 0)
             {
+                // No command identified, unconditional push
                 _history.Push(line, false, true);
                 return false;
             }
@@ -360,6 +362,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             if (!_commands.TryGetValue(commandName, out CommandInfo command))
             {
                 IssueErrorMessage($"Command {commandName} not found");
+                // Unknown command, unconditional push
                 _history.Push(line, false, false);
                 return false;
             }
@@ -392,13 +395,21 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 }
 
                 _errorMessages.Enqueue(invalidMessage);
-                _history.Push(line, false, false);
+                // Known command with invalid arguments, respect addToHistory flag
+                if (command.addToHistory)
+                {
+                    _history.Push(line, false, false);
+                }
                 return false;
             }
 
             int errorCount = _errorMessages.Count;
             command.proc?.Invoke(arguments);
-            _history.Push(line, true, errorCount == _errorMessages.Count);
+            // Known command executed, respect addToHistory flag
+            if (command.addToHistory)
+            {
+                _history.Push(line, true, errorCount == _errorMessages.Count);
+            }
             return true;
         }
 
@@ -432,10 +443,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             int minArgs = 0,
             int maxArgs = -1,
             string help = "",
-            string hint = null
+            string hint = null,
+            bool addToHistory = true
         )
         {
-            CommandInfo info = new(proc, minArgs, maxArgs, help, hint);
+            CommandInfo info = new(proc, minArgs, maxArgs, help, hint, addToHistory);
             return AddCommand(name, info);
         }
 

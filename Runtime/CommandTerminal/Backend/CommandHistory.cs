@@ -9,6 +9,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     {
         public int Capacity => _history.Capacity;
 
+        public int Count => _history.Count;
+
         private readonly CyclicBuffer<(string text, bool? success, bool? errorFree)> _history;
 
         private int _position;

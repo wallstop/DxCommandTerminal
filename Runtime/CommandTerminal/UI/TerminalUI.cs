@@ -1,7 +1,3 @@
-using System.Runtime.CompilerServices;
-
-[assembly: InternalsVisibleTo("WallstopStudios.DxCommandTerminal.Editor")]
-
 namespace WallstopStudios.DxCommandTerminal.UI
 {
     using System;

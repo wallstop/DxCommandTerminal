@@ -35,15 +35,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             try
             {
                 CommandShell shell = Terminal.Shell;
-                Assert.IsNotNull(shell);
+                Assert.IsNotNull(shell, "Terminal.Shell should not be null after SpawnTerminal");
                 CommandHistory history = Terminal.History;
-                Assert.IsNotNull(history);
+                Assert.IsNotNull(history, "Terminal.History should not be null after SpawnTerminal");
 
                 int expectedLogCount = 0;
-                assertion = message => Assert.AreEqual(string.Empty, message);
+                assertion = message => Assert.AreEqual(string.Empty, message, "Expected empty log message for lone single-quote argument");
                 string command = "log '             ";
                 shell.RunCommand(command);
-                Assert.AreEqual(++expectedLogCount, logCount);
+                Assert.AreEqual(++expectedLogCount, logCount, $"Log count mismatch after running: {command}");
                 Assert.IsNull(exception, $"Error running {command}: {exception}");
                 string[] logs = history.GetHistory(true, true).ToArray();
                 Assert.AreEqual(
@@ -53,14 +53,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 );
                 Assert.IsTrue(
                     logs.Contains("log"),
-                    $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}"
+                    $"Expected history to contain 'log':{Environment.NewLine}{string.Join(Environment.NewLine, logs)}"
                 );
 
                 string expected = "' abd      \"   ";
-                assertion = message => Assert.AreEqual(expected.Substring(1), message);
+                assertion = message => Assert.AreEqual(expected.Substring(1), message, "Unescaped quote should consume rest of string excluding opening quote");
                 command = "log " + expected;
                 shell.RunCommand(command);
-                Assert.AreEqual(++expectedLogCount, logCount);
+                Assert.AreEqual(++expectedLogCount, logCount, $"Log count mismatch after running: {command}");
                 Assert.IsNull(exception, $"Error running {command}: {exception}");
                 logs = history.GetHistory(true, true).ToArray();
                 Assert.AreEqual(
