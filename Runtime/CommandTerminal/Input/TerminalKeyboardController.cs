@@ -144,10 +144,11 @@ namespace WallstopStudios.DxCommandTerminal.Input
 
         private void VerifyControlOrderIntegrity()
         {
-            if (!_controlOrder.ToHashSet().SetEquals(ControlTypes))
+            TerminalControlTypes[] missingControls = ControlTypes.Except(_controlOrder).ToArray();
+            if (missingControls.Length > 0)
             {
                 Debug.LogWarning(
-                    $"Control Order is missing the following controls: [{string.Join(", ", ControlTypes.Except(_controlOrder))}]. "
+                    $"Control Order is missing the following controls: [{string.Join(", ", missingControls)}]. "
                         + "Input for these will not be handled. Is this intentional?",
                     this
                 );

@@ -19,6 +19,8 @@ namespace WallstopStudios.DxCommandTerminal.Attributes
 
         public bool DevelopmentOnly { get; set; }
 
+        public bool AddToHistory { get; set; } = true;
+
         public RegisterCommandAttribute(string commandName = null)
         {
             commandName = commandName?.Replace(" ", string.Empty).Trim();
@@ -26,7 +28,10 @@ namespace WallstopStudios.DxCommandTerminal.Attributes
         }
 
         internal RegisterCommandAttribute(bool isDefault)
-            : this(string.Empty) { }
+            : this(string.Empty)
+        {
+            Default = isDefault;
+        }
 
         public void NormalizeName(MethodInfo method)
         {
