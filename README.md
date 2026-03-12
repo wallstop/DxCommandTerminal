@@ -1,9 +1,6 @@
 DX Command Terminal
 ======================
 
-# CI/CD Status
-![Npm Publish](https://github.com/wallstop/dxcommandterminal/actions/workflows/npm-publish.yml/badge.svg)
-
 # Notice
 
 This is a fork of [Command Terminal](https://github.com/stillwwater/command_terminal) for Unity, mainly to address usability gaps and add maintenance
