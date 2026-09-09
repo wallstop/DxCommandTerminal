@@ -1,0 +1,88 @@
+name: LLM Instructions Lint
+
+on:
+  push:
+    branches:
+      - master
+      - main
+    paths:
+      - ".llm/**"
+      - "AGENTS.md"
+      - "CLAUDE.md"
+      - ".cursorrules"
+      - ".github/copilot-instructions.md"
+      - "scripts/generate-skills-index.ps1"
+      - "scripts/lint-llm-instructions.ps1"
+      - "scripts/lint-skill-sizes.ps1"
+      - "scripts/tests/**"
+      - ".github/workflows/llm-instructions-lint.yml"
+  pull_request:
+    paths:
+      - ".llm/**"
+      - "AGENTS.md"
+      - "CLAUDE.md"
+      - ".cursorrules"
+      - ".github/copilot-instructions.md"
+      - "scripts/generate-skills-index.ps1"
+      - "scripts/lint-llm-instructions.ps1"
+      - "scripts/lint-skill-sizes.ps1"
+      - "scripts/tests/**"
+      - ".github/workflows/llm-instructions-lint.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  lint-llm-instructions:
+    # Run on BOTH Ubuntu and Windows so the skills-index generator's cross-OS
+    # determinism (ordinal sort, UTF-8 no BOM, LF) is enforced in CI, not just
+    # assumed. An OS-only drift (e.g. a BOM) fails exactly one leg.
+    name: lint-llm-instructions (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Lint LLM instructions
+        shell: pwsh
+        run: ./scripts/lint-llm-instructions.ps1 -VerboseOutput
+
+      - name: Check skill file sizes
+        shell: pwsh
+        run: ./scripts/lint-skill-sizes.ps1 -VerboseOutput
+
+      - name: Test LLM instructions lint
+        shell: pwsh
+        run: ./scripts/tests/test-llm-instructions-lint.ps1 -VerboseOutput
+
+      - name: Test skill size linter
+        shell: pwsh
+        run: ./scripts/tests/test-lint-skill-sizes.ps1 -VerboseOutput
+
+      - name: Test skills index generator
+        shell: pwsh
+        run: ./scripts/tests/test-generate-skills-index.ps1 -VerboseOutput
+
+      - name: Validate skills index is up-to-date
+        # Regenerate the file and fail if it differs from the committed bytes.
+        # --porcelain catches BOTH a drifted (modified) and a never-committed
+        # (untracked) index.md, unlike `git diff` which ignores untracked files.
+        shell: pwsh
+        run: |
+          ./scripts/generate-skills-index.ps1
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $status = git status --porcelain -- .llm/skills/index.md
+          if ($status) {
+            Write-Host "::error::.llm/skills/index.md is out of date or uncommitted. Run: pwsh -NoProfile -File scripts/generate-skills-index.ps1 and commit it."
+            git diff -- .llm/skills/index.md
+            exit 1
+          }
+          Write-Host "Skills index is up-to-date."
