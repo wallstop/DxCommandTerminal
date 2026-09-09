@@ -247,6 +247,59 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
         }
 
+        [Test]
+        public void PreviousSkipsNonAdjacentDuplicates()
+        {
+            CommandHistory history = new(10);
+            history.Push("a", true, true);
+            history.Push("b", true, true);
+            history.Push("a", true, true);
+
+            Assert.AreEqual(
+                "a",
+                history.Previous(true),
+                "First Previous should return the newest entry"
+            );
+            Assert.AreEqual("b", history.Previous(true), "Second Previous should return 'b'");
+            Assert.AreEqual(
+                string.Empty,
+                history.Previous(true),
+                "Third Previous should skip the non-adjacent duplicate 'a' and return empty"
+            );
+        }
+
+        [Test]
+        public void NextSkipsNonAdjacentDuplicates()
+        {
+            CommandHistory history = new(10);
+            history.Push("a", true, true);
+            history.Push("b", true, true);
+            history.Push("x", true, true);
+            history.Push("b", true, true);
+            history.Push("c", true, true);
+
+            Assert.AreEqual(
+                "c",
+                history.Previous(true),
+                "First Previous should return the newest entry"
+            );
+            Assert.AreEqual("b", history.Previous(true), "Second Previous should return 'b'");
+            Assert.AreEqual("x", history.Previous(true), "Third Previous should return 'x'");
+            Assert.AreEqual(
+                "a",
+                history.Previous(true),
+                "Fourth Previous should skip duplicate 'b' and return 'a'"
+            );
+
+            Assert.AreEqual("b", history.Next(true), "Next should replay entries going forward");
+            Assert.AreEqual("x", history.Next(true), "Second Next should return 'x'");
+            Assert.AreEqual(
+                "c",
+                history.Next(true),
+                "Third Next should skip the non-adjacent duplicate 'b' and return 'c'"
+            );
+        }
+
         [UnityTest]
         public IEnumerator ClearHistoryCommandResultsInEmptyHistory()
         {
