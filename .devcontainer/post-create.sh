@@ -210,7 +210,7 @@ main() {
     # land in a writable home directory.
     log_header "Repairing Cache Mount Permissions"
     # shellcheck source=.devcontainer/cache-contract.sh
-    if ! source "${SCRIPT_DIR}/cache-contract.sh" && cache_contract_repair_permissions; then
+    if source "${SCRIPT_DIR}/cache-contract.sh" && cache_contract_repair_permissions; then
         log_success "Cache mounts are user-writable (no sudo needed anywhere)"
     else
         log_error "Volume permission repair failed; cannot continue safely."
