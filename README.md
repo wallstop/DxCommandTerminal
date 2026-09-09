@@ -1,6 +1,19 @@
 DX Command Terminal
 ======================
 
+# Disclosure
+
+> DxCommandTerminal builds on the original Command Terminal project. The initial development
+> of this fork was entirely human-authored, involving months of code study, refactoring,
+> testing, and refinement. Recent development is LLM-assisted, including generated code.
+> I, wallstop, heavily review user-facing code changes and will continue to do so, but those
+> changes should no longer be understood as entirely human-authored. This approach makes
+> continued development practical within the time I can commit and allows faster iteration.
+>
+> This project is MIT licensed and will remain so. There are no plans for paid features,
+> subscriptions, or mechanisms for charging users. This disclosure is provided so you can
+> decide whether the project fits your preferences.
+
 # Notice
 
 This is a fork of [Command Terminal](https://github.com/stillwwater/command_terminal) for Unity, mainly to address usability gaps and add maintenance
