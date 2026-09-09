@@ -45,3 +45,16 @@ repos:
         description: >
           Keeps authored LLM context minimal: every authored file under .llm/ must stay at or
           below 300 lines (270+ is a critical warning); the generated skills index is exempt.
+      - id: unity-meta-lint
+        name: Lint Unity .meta hygiene (orphans, missing metas, guid uniqueness)
+        entry: pwsh -NoProfile -File scripts/lint-unity-meta.ps1
+        language: system
+        always_run: true
+        pass_filenames: false
+        stages:
+          - pre-commit
+          - pre-push
+        description: >
+          Validates Unity .meta hygiene over tracked files: every .meta has its target
+          tracked (no orphan metas for gitignored/generated data), every Unity-visible
+          file/directory has a tracked .meta, and every meta declares a unique 32-hex guid.

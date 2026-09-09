@@ -53,7 +53,17 @@ TextScriptImporter:
 
 ## Verification
 
-- `git status` after the change: every new visible file has exactly one new `.meta`, and no
-  `.meta` exists for dot-prefixed paths.
-- GUIDs must be unique across the package; `grep -r "guid:" --include="*.meta" -h | sort | uniq -d`
-  must be empty.
+Run `pwsh -NoProfile -File scripts/lint-unity-meta.ps1` (also enforced by pre-commit and
+CI). It checks, over tracked files only:
+
+1. Every tracked `.meta` has its target tracked (no orphan metas for gitignored or
+   locally generated data); a folder meta is valid when its directory still contains
+   tracked files.
+2. Every Unity-visible tracked file/directory (no dot-prefixed or `~`-suffixed segment)
+   has a tracked `.meta`, so Unity never auto-generates a stub.
+3. Every `.meta` declares exactly one 32-hex `guid:`, and GUIDs are unique across the
+   package.
+
+Conventions: dot-prefixed paths (`.llm/`, `.github/`, `.config/`, `.git/`) are ignored by
+Unity and never get `.meta` files; the folder meta template uses `folderAsset: yes` (some
+historical folder metas omit it and remain valid).
