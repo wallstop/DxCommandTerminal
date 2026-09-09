@@ -1,0 +1,189 @@
+// =============================================================================
+// DxCommandTerminal Development Container Configuration
+// =============================================================================
+// For format details, see https://aka.ms/devcontainer.json
+// Project: DxCommandTerminal | Unity UPM package (min 2021.3, host editor 6000.4)
+// The Unity Editor stays on the host; this container ships the .NET / Node /
+// PowerShell toolchain plus every agent CLI and MCP server, and drives the host
+// editor through the unity-mcp bridge (scripts/mcp/unity-mcp.mjs).
+// =============================================================================
+{
+  "name": "DxCommandTerminal Dev",
+  // ---------------------------------------------------------------------------
+  // Build Configuration
+  // ---------------------------------------------------------------------------
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  // ---------------------------------------------------------------------------
+  // Dev Container Features
+  // ---------------------------------------------------------------------------
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "installZsh": true,
+      "configureZshAsDefaultShell": false,
+      "upgradePackages": false
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  // ---------------------------------------------------------------------------
+  // Mount Configuration
+  // ---------------------------------------------------------------------------
+  // Volume names are deterministic (no ${devcontainerId}) so they survive
+  // rebuilds and are shared across dev container instances of this project.
+  // Keep these aligned with .devcontainer/cache-contract.sh. The final bind
+  // mount exposes the enclosing Unity project (two levels up) read-write so
+  // agentic capture can install Assets/Editor tooling and read host artifacts.
+  "mounts": [
+    "source=dxt-nuget-cache,target=/home/vscode/.nuget,type=volume",
+    "source=dxt-dotnet-tools,target=/home/vscode/.dotnet/tools,type=volume",
+    "source=dxt-powershell-modules,target=/home/vscode/.local/share/powershell,type=volume",
+    "source=dxt-python-cache,target=/home/vscode/.cache/pip,type=volume",
+    "source=dxt-npm-cache,target=/home/vscode/.npm,type=volume",
+    "source=dxt-node-modules,target=${containerWorkspaceFolder}/node_modules,type=volume",
+    "source=${localWorkspaceFolder}/../..,target=/unity-project,type=bind,consistency=cached"
+  ],
+  // ---------------------------------------------------------------------------
+  // Container Environment
+  // ---------------------------------------------------------------------------
+  "containerEnv": {
+    "DOTNET_CLI_TELEMETRY_OPTOUT": "1",
+    "DOTNET_NOLOGO": "1",
+    "NPM_CONFIG_CACHE": "/home/vscode/.npm",
+    "NPM_CONFIG_PREFIX": "/home/vscode/.local"
+  },
+  // Forward host-side env vars into the container. ${localEnv:VAR} captures the
+  // host value (or empty string) at attach time; empty forwarded values never
+  // hide values from .env.local because the MCP tooling skips empty entries.
+  "remoteEnv": {
+    "PATH": "/home/vscode/.local/bin:${containerEnv:PATH}",
+    "Z_AI_API_KEY": "${localEnv:Z_AI_API_KEY}",
+    "ZAI_API_KEY": "${localEnv:ZAI_API_KEY}",
+    "OPENROUTER_API_KEY": "${localEnv:OPENROUTER_API_KEY}",
+    "GITHUB_TOKEN": "${localEnv:GITHUB_TOKEN}",
+    "GH_TOKEN": "${localEnv:GH_TOKEN}",
+    "GITHUB_PERSONAL_ACCESS_TOKEN": "${localEnv:GITHUB_PERSONAL_ACCESS_TOKEN}",
+    "GITHUB_PAT": "${localEnv:GITHUB_PAT}",
+    "UNITY_PROJECT_PATH": "${localEnv:UNITY_PROJECT_PATH}",
+    "UNITY_MCP_BRIDGE_HOST": "${localEnv:UNITY_MCP_BRIDGE_HOST}",
+    "UNITY_MCP_BRIDGE_PORT": "${localEnv:UNITY_MCP_BRIDGE_PORT}",
+    "WORKSPACE_FOLDER": "${containerWorkspaceFolder}",
+    "LOCAL_WORKSPACE_FOLDER": "${localWorkspaceFolder}",
+    "COPILOT_HOME": "${containerWorkspaceFolder}/.copilot",
+    "NANOCODER_MCPSERVERS_FILE": "${containerWorkspaceFolder}/.nanocoder/mcp.json"
+  },
+  // ---------------------------------------------------------------------------
+  // Lifecycle Commands
+  // ---------------------------------------------------------------------------
+  "updateContentCommand": "bash .devcontainer/post-start.sh --prepare",
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "postStartCommand": "bash .devcontainer/post-start.sh",
+  "postAttachCommand": "bash .devcontainer/post-start.sh",
+  "waitFor": "updateContentCommand",
+  // ---------------------------------------------------------------------------
+  // Host Requirements
+  // ---------------------------------------------------------------------------
+  "hostRequirements": {
+    "cpus": 4,
+    "memory": "8gb",
+    "storage": "32gb"
+  },
+  // ---------------------------------------------------------------------------
+  // Container User
+  // ---------------------------------------------------------------------------
+  "init": true,
+  "runArgs": ["--add-host=host.docker.internal:host-gateway"],
+  "userEnvProbe": "none",
+  "updateRemoteUserUID": true,
+  "remoteUser": "vscode",
+  // ---------------------------------------------------------------------------
+  // VS Code Customizations
+  // ---------------------------------------------------------------------------
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        // ----- C# / .NET Development -----
+        "ms-dotnettools.csharp",
+        "ms-dotnettools.csdevkit",
+        "csharpier.csharpier-vscode",
+        // ----- Unity Development -----
+        "visualstudiotoolsforunity.vstuc",
+        // ----- Code Quality & Linting -----
+        "editorconfig.editorconfig",
+        "streetsidesoftware.code-spell-checker",
+        "usernamehw.errorlens",
+        "pkief.material-icon-theme",
+        // ----- AI / LLM Integration -----
+        "GitHub.copilot",
+        "GitHub.copilot-chat",
+        "anthropic.claude-code",
+        "openai.chatgpt",
+        "sst-dev.opencode",
+        // ----- Git & CI -----
+        "eamodio.gitlens",
+        "github.vscode-github-actions",
+        // ----- Docs -----
+        "DavidAnson.vscode-markdownlint",
+        "yzhang.markdown-all-in-one"
+      ],
+      "settings": {
+        // ----- Terminal -----
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "terminal.integrated.shellIntegration.enabled": true,
+        "terminal.integrated.shellIntegration.decorationsEnabled": "both",
+        "terminal.integrated.scrollback": 10000,
+        // ----- Editor -----
+        "editor.formatOnSave": true,
+        "editor.rulers": [120],
+        "editor.stickyScroll.enabled": true,
+        "editor.bracketPairColorization.enabled": true,
+        "editor.guides.bracketPairs": "active",
+        "editor.minimap.enabled": false,
+        "[csharp]": {
+          "editor.defaultFormatter": "csharpier.csharpier-vscode"
+        },
+        // ----- Workspace hygiene: never watch generated or host trees -----
+        "files.watcherExclude": {
+          "**/node_modules/**": true,
+          "**/.artifacts/**": true,
+          "**/.git/objects/**": true,
+          "**/Library/**": true,
+          "**/Temp/**": true,
+          "**/obj/**": true,
+          "**/Logs/**": true,
+          "**/UserSettings/**": true
+        },
+        "search.exclude": {
+          "**/node_modules": true,
+          "**/.artifacts": true,
+          "**/Library": true,
+          "**/Temp": true
+        },
+        // ----- C# -----
+        "dotnet.defaultSolution": "disable",
+        "dotnet.suppressDotnetRestoreNotification": true,
+        "dotnet.backgroundAnalysis.analyzerDiagnosticsScope": "openFiles",
+        // ----- Git -----
+        "git.autofetch": true,
+        "git.confirmSync": false,
+        "git.enableSmartCommit": true,
+        // ----- Spell checker: repo vocabulary -----
+        "cSpell.words": [
+          "wallstop",
+          "DxCommandTerminal",
+          "DxTerminal",
+          "DxMessaging",
+          "csharpier",
+          "nanocoder",
+          "opencode",
+          "zai",
+          "ZAI",
+          "upm",
+          "asmdef",
+          "Playmode"
+        ]
+      }
+    }
+  }
+}

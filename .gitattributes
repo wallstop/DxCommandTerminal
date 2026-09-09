@@ -1,0 +1,10 @@
+# Byte-stable agent context and tooling: LF in the working tree on every OS.
+# Matches the .editorconfig overrides; keeps generated content and shell
+# scripts intact on CRLF-configured checkouts (autocrlf=true).
+.llm/** text eol=lf
+scripts/** text eol=lf
+AGENTS.md text eol=lf
+CLAUDE.md text eol=lf
+.cursorrules text eol=lf
+.github/copilot-instructions.md text eol=lf
+.devcontainer/** text eol=lf

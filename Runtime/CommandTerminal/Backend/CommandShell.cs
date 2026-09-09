@@ -2,12 +2,14 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics;
     using System.Linq;
     using System.Reflection;
     using System.Text;
     using Attributes;
     using DataStructures;
     using UnityEngine;
+    using Debug = UnityEngine.Debug;
 
     public sealed class CommandShell
     {
@@ -18,68 +20,124 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             RegisterCommandAttribute attribute
         )[]> RegisteredCommands = new(() =>
         {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            Stopwatch stopwatch = Stopwatch.StartNew();
+#endif
             List<(MethodInfo, RegisterCommandAttribute)> commands = new();
             const BindingFlags methodFlags =
                 BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
 
-            Assembly[] ourAssembly = { typeof(BuiltInCommands).Assembly };
-            foreach (
-                Type type in AppDomain
-                    .CurrentDomain.GetAssemblies()
-                    /*
-                        Force our assembly to be processed last so user commands,
-                        if they conflict with in-built ones, are always registered first.
-                     */
-                    .Except(ourAssembly)
-                    .Concat(ourAssembly)
-                    .SelectMany(assembly => assembly.GetTypes())
-            )
+            Assembly ourAssembly = typeof(BuiltInCommands).Assembly;
+            AssemblyName self = ourAssembly.GetName();
+            Assembly[] loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies();
+
+            /*
+                Only assemblies that reference this one can contain
+                RegisterCommandAttribute, so everything else is skipped without
+                loading a single type. Our assembly is processed last so user
+                commands, if they conflict with in-built ones, are always
+                registered first.
+             */
+            List<Assembly> scanCandidates = new(loadedAssemblies.Length);
+            for (int i = 0; i < loadedAssemblies.Length; i++)
             {
+                Assembly assembly = loadedAssemblies[i];
                 try
                 {
-                    foreach (MethodInfo method in type.GetMethods(methodFlags))
-                    {
-                        try
-                        {
-                            if (
-                                Attribute.GetCustomAttribute(
-                                    method,
-                                    typeof(RegisterCommandAttribute)
-                                )
-                                is not RegisterCommandAttribute attribute
-                            )
-                            {
-                                continue;
-                            }
-
-                            attribute.NormalizeName(method);
-                            commands.Add((method, attribute));
-                        }
-                        catch (Exception e)
-                        {
-                            if (ShouldIgnoreExceptionForType(type))
-                            {
-                                continue;
-                            }
-
-                            Debug.LogError(
-                                $"Failed to resolve method {method.Name} of type {type.FullName} with exception {e}"
-                            );
-                        }
-                    }
-                }
-                catch (Exception e)
-                {
-                    if (ShouldIgnoreExceptionForType(type))
+                    if (AssemblyName.ReferenceMatchesDefinition(assembly.GetName(), self))
                     {
                         continue;
                     }
 
-                    Debug.LogError(
-                        $"Failed to resolve methods for type {type.FullName} with exception {e}"
-                    );
+                    if (MayContainCommands(assembly, self))
+                    {
+                        scanCandidates.Add(assembly);
+                    }
+                }
+                catch (Exception)
+                {
+                    // Classification must never be able to fail discovery; if
+                    // an assembly cannot be classified, scan it.
+                    scanCandidates.Add(assembly);
                 }
             }
+
+            scanCandidates.Add(ourAssembly);
+
+            for (int i = 0; i < scanCandidates.Count; i++)
+            {
+                if (!TryGetScanTypes(scanCandidates[i], out Type[] types))
+                {
+                    continue;
+                }
+
+                for (int j = 0; j < types.Length; j++)
+                {
+                    Type type = types[j];
+                    if (type == null)
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        foreach (MethodInfo method in type.GetMethods(methodFlags))
+                        {
+                            try
+                            {
+                                if (!method.IsDefined(typeof(RegisterCommandAttribute), false))
+                                {
+                                    continue;
+                                }
+
+                                if (
+                                    Attribute.GetCustomAttribute(
+                                        method,
+                                        typeof(RegisterCommandAttribute)
+                                    )
+                                    is not RegisterCommandAttribute attribute
+                                )
+                                {
+                                    continue;
+                                }
+
+                                attribute.NormalizeName(method);
+                                commands.Add((method, attribute));
+                            }
+                            catch (Exception e)
+                            {
+                                if (ShouldIgnoreExceptionForType(type))
+                                {
+                                    continue;
+                                }
+
+                                Debug.LogError(
+                                    $"Failed to resolve method {method.Name} of type {type.FullName} with exception {e}"
+                                );
+                            }
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        if (ShouldIgnoreExceptionForType(type))
+                        {
+                            continue;
+                        }
+
+                        Debug.LogError(
+                            $"Failed to resolve methods for type {type.FullName} with exception {e}"
+                        );
+                    }
+                }
+            }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            Debug.Log(
+                $"[DxCommandTerminal] Discovered {commands.Count} auto-registered commands in "
+                    + $"{stopwatch.Elapsed.TotalMilliseconds:F2} ms (scanned {scanCandidates.Count} of "
+                    + $"{loadedAssemblies.Length} loaded assemblies)"
+            );
+#endif
 
             return commands.ToArray();
         });
@@ -138,6 +196,64 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
 
             return false;
+        }
+
+        // Internal for test coverage of the discovery filter (see
+        // WallstopStudios.DxCommandTerminal.Tests.Runtime).
+        internal static bool MayContainCommands(Assembly assembly, AssemblyName self)
+        {
+            if (assembly.IsDynamic)
+            {
+                return false;
+            }
+
+            try
+            {
+                AssemblyName[] referencedAssemblies = assembly.GetReferencedAssemblies();
+                for (int i = 0; i < referencedAssemblies.Length; i++)
+                {
+                    if (AssemblyName.ReferenceMatchesDefinition(referencedAssemblies[i], self))
+                    {
+                        return true;
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                // Metadata reads can fail for exotic assemblies; scanning them
+                // is cheaper than silently dropping commands they might carry.
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool TryGetScanTypes(Assembly assembly, out Type[] types)
+        {
+            try
+            {
+                types = assembly.GetTypes();
+                return true;
+            }
+            catch (ReflectionTypeLoadException e)
+            {
+                // Scan the subset that loaded; one unloadable type must not
+                // break discovery for the entire session.
+                types = e.Types;
+                Debug.LogWarning(
+                    $"Some types of assembly {assembly.FullName} failed to load; "
+                        + $"command discovery continues with the {e.Types.Length} types that loaded"
+                );
+                return true;
+            }
+            catch (Exception e)
+            {
+                types = Array.Empty<Type>();
+                Debug.LogError(
+                    $"Failed to enumerate types for assembly {assembly.FullName} with exception {e}"
+                );
+                return false;
+            }
         }
 
         public bool TryConsumeErrorMessage(out string errorMessage)

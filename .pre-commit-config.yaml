@@ -20,3 +20,41 @@ repos:
         types:
           - c#
         description: CSharpier is an opinionated C# formatter inspired by Prettier.
+      - id: llm-instructions-lint
+        name: Lint .llm instructions (SKILL.md spec, index freshness, pointer delegation)
+        entry: pwsh -NoProfile -File scripts/lint-llm-instructions.ps1
+        language: system
+        always_run: true
+        pass_filenames: false
+        stages:
+          - pre-commit
+          - pre-push
+        description: >
+          Validates the agentic context contract: SKILL.md frontmatter (agentskills.io format),
+          generated index freshness and byte-determinism, UTF-8 no BOM / LF encoding, context.md
+          structure, and front-end pointer-file delegation to .llm/context.md.
+      - id: llm-skill-sizes
+        name: Enforce .llm line limits (300 hard, 270 critical)
+        entry: pwsh -NoProfile -File scripts/lint-skill-sizes.ps1
+        language: system
+        always_run: true
+        pass_filenames: false
+        stages:
+          - pre-commit
+          - pre-push
+        description: >
+          Keeps authored LLM context minimal: every authored file under .llm/ must stay at or
+          below 300 lines (270+ is a critical warning); the generated skills index is exempt.
+      - id: unity-meta-lint
+        name: Lint Unity .meta hygiene (orphans, missing metas, guid uniqueness)
+        entry: pwsh -NoProfile -File scripts/lint-unity-meta.ps1
+        language: system
+        always_run: true
+        pass_filenames: false
+        stages:
+          - pre-commit
+          - pre-push
+        description: >
+          Validates Unity .meta hygiene over tracked files: every .meta has its target
+          tracked (no orphan metas for gitignored/generated data), every Unity-visible
+          file/directory has a tracked .meta, and every meta declares a unique 32-hex guid.

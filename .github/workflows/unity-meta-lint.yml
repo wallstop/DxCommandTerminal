@@ -1,0 +1,30 @@
+name: Unity Meta Lint
+
+on:
+  push:
+    branches:
+      - master
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  lint-unity-meta:
+    # No path filter: a .meta can lose its target (or a target its .meta) from
+    # any commit, so the check runs on every push/PR. The job only queries
+    # git ls-files and reads text metas; it stays fast and Unity-free.
+    name: lint-unity-meta (ubuntu-latest)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Lint Unity meta hygiene
+        shell: pwsh
+        run: ./scripts/lint-unity-meta.ps1

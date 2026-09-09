@@ -26,8 +26,22 @@
   "author": "wallstop studios <wallstop@wallstopstudios.com> (https://wallstopstudios.com)",
   "homepage": "https://github.com/wallstop/DxCommandTerminal/blob/master/README.md",
   "main": "README.md",
+  "engines": {
+    "node": ">=22.7.0"
+  },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test \"scripts/mcp/__tests__/*.test.mjs\"",
+    "unity:mcp:probe": "node scripts/mcp/unity-mcp.mjs probe",
+    "unity:mcp:configure": "node scripts/mcp/unity-mcp.mjs configure",
+    "unity:mcp:bridge": "node scripts/mcp/unity-mcp.mjs bridge",
+    "unity:mcp:install-capture": "node scripts/mcp/unity-mcp.mjs install-capture",
+    "unity:capture": "node scripts/mcp/unity-mcp.mjs capture",
+    "ai:backends": "bash .devcontainer/ai-backends.sh"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "jsonc-parser": "3.3.1",
+    "smol-toml": "1.8.0"
   }
 }
 
