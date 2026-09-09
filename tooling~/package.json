@@ -7,6 +7,7 @@
   },
   "scripts": {
     "test": "node --test \"scripts/mcp/__tests__/*.test.mjs\"",
+    "package:validate": "node scripts/release/validate-package-contents.mjs",
     "unity:mcp:probe": "node scripts/mcp/unity-mcp.mjs probe",
     "unity:mcp:configure": "node scripts/mcp/unity-mcp.mjs configure",
     "unity:mcp:bridge": "node scripts/mcp/unity-mcp.mjs bridge",
