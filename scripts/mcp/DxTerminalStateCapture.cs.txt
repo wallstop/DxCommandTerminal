@@ -1,0 +1,628 @@
+// DxTerminalStateCapture - maintained source for agentic Unity editor/game state capture.
+// Installed by `npm run unity:mcp:install-capture` (or the capture flow) into the host
+// project's Assets/Editor, where Unity compiles it into Assembly-CSharp-Editor.
+// The passive observer writes editor-state.json once per second under the package's
+// .artifacts/unity-state directory (dot-prefixed, so Unity never imports the artifacts).
+namespace DxTerminalDevTools
+{
+    using System;
+    using System.Collections;
+    using System.Collections.Generic;
+    using System.Globalization;
+    using System.IO;
+    using System.Reflection;
+    using System.Text;
+    using UnityEditor;
+    using UnityEngine;
+    using UnityEngine.SceneManagement;
+
+    [InitializeOnLoad]
+    internal static class DxTerminalStateCapture
+    {
+        private const int MaxConsoleEntries = 500;
+        private const int MaxHierarchyNodes = 20000;
+        private const int MaxTerminalItems = 500;
+        private const double ObserverIntervalSeconds = 1d;
+        private const string PackageName = "com.wallstop-studios.dxcommandterminal";
+        private const string ManifestFileName = "manifest.json";
+        private const string EditorStateFileName = "editor-state.json";
+
+        private static readonly object ConsoleGate = new object();
+        private static readonly List<string> ConsoleEntries = new List<string>(MaxConsoleEntries);
+        private static readonly int[] ConsoleCounts = new int[5];
+
+        private static double _nextObserverAt;
+        private static string _lastObserverJson = string.Empty;
+        private static string _gameViewPath;
+        private static string _gameViewDirectory;
+        private static double _gameViewDeadline;
+        private static bool _gameViewRequested;
+        private static bool _gameViewFailed;
+
+        static DxTerminalStateCapture()
+        {
+            Application.logMessageReceived += OnLogMessageReceived;
+            EditorApplication.update += ObserverTick;
+            _nextObserverAt = EditorApplication.timeSinceStartup + ObserverIntervalSeconds;
+        }        [MenuItem("Tools/Dx Terminal State/Capture Now")]
+        private static void CaptureNowMenu()
+        {
+            string outputDirectory = Path.Combine(ArtifactRoot(), DateTime.UtcNow.ToString("yyyy-MM-dd'T'HH-mm-ss-fff'Z'", CultureInfo.InvariantCulture));
+            string summary = CaptureAll(outputDirectory);
+            Debug.Log($"DxTerminalStateCapture: {summary}");
+        }
+
+        [MenuItem("Tools/Dx Terminal State/Open Artifacts Folder")]
+        private static void OpenArtifactsMenu()
+        {
+            EditorUtility.RevealInFinder(ArtifactRoot());
+        }
+
+        public static string ObserverSnapshot()
+        {
+            return BuildObserverJson(DateTime.UtcNow);
+        }
+
+        public static string CaptureStatus(string outputDirectory)
+        {
+            string directory = outputDirectory;
+            if (string.IsNullOrWhiteSpace(directory))
+            {
+                string root = ArtifactRoot();
+                if (Directory.Exists(root))
+                {
+                    string[] candidates = Directory.GetDirectories(root);
+                    Array.Sort(candidates, StringComparer.Ordinal);
+                    for (int index = candidates.Length - 1; index >= 0; index--)
+                    {
+                        string manifest = Path.Combine(candidates[index], ManifestFileName);
+                        if (File.Exists(manifest))
+                        {
+                            directory = candidates[index];
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(directory))
+            {
+                return "{\"complete\":false,\"missing\":true}";
+            }
+
+            string manifestPath = Path.Combine(directory, ManifestFileName);
+            if (!File.Exists(manifestPath))
+            {
+                return "{\"complete\":false,\"missing\":true}";
+            }
+
+            return File.ReadAllText(manifestPath);
+        }
+
+        public static string CaptureAll(string outputDirectory)
+        {
+            if (string.IsNullOrWhiteSpace(outputDirectory))
+            {
+                throw new ArgumentException("Capture needs an output directory.", nameof(outputDirectory));
+            }
+
+            Directory.CreateDirectory(outputDirectory);
+            List<string> artifacts = new List<string>();
+            List<string> errors = new List<string>();
+            int hierarchyNodes = 0;
+            int consoleTotal;
+            int terminalItems = 0;
+            string terminalError = null;
+            bool gameViewRequested = false;
+
+            lock (ConsoleGate)
+            {
+                consoleTotal = ConsoleEntries.Count;
+            }
+
+            try
+            {
+                WriteHierarchy(Path.Combine(outputDirectory, "hierarchy.json"), ref hierarchyNodes);
+                artifacts.Add("hierarchy.json");
+            }
+            catch (Exception exception)
+            {
+                errors.Add($"hierarchy: {exception.Message}");
+            }
+
+            try
+            {
+                WriteConsole(Path.Combine(outputDirectory, "console-log.json"));
+                artifacts.Add("console-log.json");
+            }
+            catch (Exception exception)
+            {
+                errors.Add($"console: {exception.Message}");
+            }
+
+            try
+            {
+                terminalItems = WriteTerminalLog(Path.Combine(outputDirectory, "terminal-log.txt"), out terminalError);
+                if (terminalError == null)
+                {
+                    artifacts.Add("terminal-log.txt");
+                }
+            }
+            catch (Exception exception)
+            {
+                errors.Add($"terminal: {exception.Message}");
+            }
+
+            try
+            {
+                File.WriteAllText(
+                    Path.Combine(outputDirectory, "editor-state.json"),
+                    BuildObserverJson(DateTime.UtcNow),
+                    new UTF8Encoding(false)
+                );
+                artifacts.Add("editor-state.json");
+            }
+            catch (Exception exception)
+            {
+                errors.Add($"editor-state: {exception.Message}");
+            }
+
+            if (EditorApplication.isPlaying)
+            {
+                try
+                {
+                    RequestGameViewCapture(outputDirectory);
+                    gameViewRequested = true;
+                }
+                catch (Exception exception)
+                {
+                    errors.Add($"game-view: {exception.Message}");
+                }
+            }
+
+            StringBuilder manifest = new StringBuilder(2048);
+            manifest.Append("{\"complete\":").Append(gameViewRequested ? "false" : "true");
+            manifest.Append(",\"outputDirectory\":").Append(Json(outputDirectory.Replace("\\", "/")));
+            manifest.Append(",\"capturedUtc\":").Append(Json(DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture)));
+            manifest.Append(",\"unityVersion\":").AppendJson(Application.unityVersion);
+            manifest.Append(",\"productName\":").AppendJson(Application.productName);
+            manifest.Append(",\"projectPath\":").AppendJson(Directory.GetParent(Application.dataPath).FullName.Replace("\\", "/"));
+            manifest.Append(",\"isCompiling\":").Append(EditorApplication.isCompiling ? "true" : "false");
+            manifest.Append(",\"isUpdating\":").Append(EditorApplication.isUpdating ? "true" : "false");
+            manifest.Append(",\"isPlaying\":").Append(EditorApplication.isPlaying ? "true" : "false");
+            manifest.Append(",\"isPaused\":").Append(EditorApplication.isPaused ? "true" : "false");
+            manifest.Append(",\"hierarchyNodes\":").Append(hierarchyNodes);
+            manifest.Append(",\"consoleEntries\":").Append(consoleTotal);
+            manifest.Append(",\"consoleCounts\":{\"log\":").Append(ConsoleCounts[(int)LogType.Log])
+                .Append(",\"warning\":").Append(ConsoleCounts[(int)LogType.Warning])
+                .Append(",\"error\":").Append(ConsoleCounts[(int)LogType.Error])
+                .Append(",\"exception\":").Append(ConsoleCounts[(int)LogType.Exception])
+                .Append(",\"assert\":").Append(ConsoleCounts[(int)LogType.Assert])
+                .Append("}");
+            manifest.Append(",\"terminalItems\":").Append(terminalItems);
+            if (terminalError != null)
+            {
+                manifest.Append(",\"terminalError\":").AppendJson(terminalError);
+            }
+            manifest.Append(",\"gameView\":").Append(gameViewRequested ? "\"pending\"" : "\"skipped\"");
+            manifest.Append(",\"artifacts\":[");
+            for (int index = 0; index < artifacts.Count; index++)
+            {
+                if (index > 0)
+                {
+                    manifest.Append(',');
+                }
+                manifest.AppendJson(artifacts[index]);
+            }
+            manifest.Append("],\"errors\":[");
+            for (int index = 0; index < errors.Count; index++)
+            {
+                if (index > 0)
+                {
+                    manifest.Append(',');
+                }
+                manifest.AppendJson(errors[index]);
+            }
+            manifest.Append("]}");
+
+            string manifestJson = manifest.ToString();
+            File.WriteAllText(Path.Combine(outputDirectory, ManifestFileName), manifestJson, new UTF8Encoding(false));
+            return manifestJson;
+        }
+
+        private static void OnLogMessageReceived(string condition, string stackTrace, LogType type)
+        {
+            lock (ConsoleGate)
+            {
+                ConsoleCounts[(int)type]++;
+                if (ConsoleEntries.Count >= MaxConsoleEntries)
+                {
+                    ConsoleEntries.RemoveAt(0);
+                }
+                ConsoleEntries.Add(string.Concat(
+                    DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture),
+                    " [",
+                    type.ToString(),
+                    "] ",
+                    condition
+                ));
+            }
+        }
+
+        private static void ObserverTick()
+        {
+            if (EditorApplication.timeSinceStartup < _nextObserverAt)
+            {
+                return;
+            }
+
+            _nextObserverAt = EditorApplication.timeSinceStartup + ObserverIntervalSeconds;
+            if (_gameViewRequested && !_gameViewFailed)
+            {
+                PollGameViewCapture();
+            }
+
+            string json = BuildObserverJson(DateTime.UtcNow);
+            if (string.Equals(json, _lastObserverJson, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            try
+            {
+                File.WriteAllText(Path.Combine(ArtifactRoot(), EditorStateFileName), json, new UTF8Encoding(false));
+                _lastObserverJson = json;
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
+        }
+
+        private static string BuildObserverJson(DateTime utcNow)
+        {
+            StringBuilder builder = new StringBuilder(512);
+            builder.Append("{\"observedUtc\":").AppendJson(utcNow.ToString("o", CultureInfo.InvariantCulture));
+            builder.Append(",\"isCompiling\":").Append(EditorApplication.isCompiling ? "true" : "false");
+            builder.Append(",\"isUpdating\":").Append(EditorApplication.isUpdating ? "true" : "false");
+            builder.Append(",\"isPlaying\":").Append(EditorApplication.isPlaying ? "true" : "false");
+            builder.Append(",\"isPaused\":").Append(EditorApplication.isPaused ? "true" : "false");
+            builder.Append(",\"unityVersion\":").AppendJson(Application.unityVersion);
+            builder.Append(",\"productName\":").AppendJson(Application.productName);
+            builder.Append(",\"activeScene\":").AppendJson(SceneManager.GetActiveScene().path);
+            builder.Append(",\"loadedScenes\":").Append(SceneManager.sceneCount);
+            builder.Append(",\"idle\":").Append(!EditorApplication.isCompiling && !EditorApplication.isUpdating ? "true" : "false");
+            builder.Append("}");
+            return builder.ToString();
+        }
+
+        private static void RequestGameViewCapture(string outputDirectory)
+        {
+            _gameViewDirectory = outputDirectory;
+            _gameViewPath = Path.Combine(outputDirectory, "game-view.png");
+            _gameViewRequested = true;
+            _gameViewFailed = false;
+            _gameViewDeadline = EditorApplication.timeSinceStartup + 15d;
+            string projectRoot = Directory.GetParent(Application.dataPath).FullName;
+            string relative = Path.GetRelativePath(projectRoot, _gameViewPath).Replace("\\", "/");
+            ScreenCapture.CaptureScreenshot(relative, 1);
+            EditorApplication.update += PollGameViewCaptureTick;
+        }
+
+        private static void PollGameViewCapture()
+        {
+            if (!_gameViewRequested || _gameViewFailed)
+            {
+                EditorApplication.update -= PollGameViewCaptureTick;
+                return;
+            }
+
+            if (EditorApplication.timeSinceStartup > _gameViewDeadline)
+            {
+                _gameViewFailed = true;
+                FinalizeGameView("game view capture timed out");
+                return;
+            }
+
+            if (File.Exists(_gameViewPath) && new FileInfo(_gameViewPath).Length > 0)
+            {
+                FinalizeGameView(null);
+            }
+        }
+
+        private static void PollGameViewCaptureTick()
+        {
+            PollGameViewCapture();
+        }
+
+        private static void FinalizeGameView(string error)
+        {
+            EditorApplication.update -= PollGameViewCaptureTick;
+            _gameViewRequested = false;
+            try
+            {
+                string manifestPath = Path.Combine(_gameViewDirectory, ManifestFileName);
+                if (!File.Exists(manifestPath))
+                {
+                    return;
+                }
+
+                string manifest = File.ReadAllText(manifestPath);
+                string gameView = error == null
+                    ? "\"done\""
+                    : string.Concat("{\"error\":", Json(error), "}");
+                manifest = manifest.Replace("\"gameView\":\"pending\"", $"\"gameView\":{gameView}");
+                manifest = manifest.Replace("\"complete\":false", "\"complete\":true");
+                if (error != null)
+                {
+                    manifest = manifest.Insert(manifest.Length - 1, $",\"gameViewError\":{Json(error)}");
+                }
+                if (error == null && File.Exists(_gameViewPath))
+                {
+                    long bytes = new FileInfo(_gameViewPath).Length;
+                    manifest = manifest.Insert(manifest.Length - 1, $",\"gameViewBytes\":{bytes}");
+                }
+                File.WriteAllText(manifestPath, manifest, new UTF8Encoding(false));
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning($"DxTerminalStateCapture manifest update failed: {exception.Message}");
+            }
+        }
+
+        private static void WriteHierarchy(string outputPath, ref int nodeCount)
+        {
+            StringBuilder builder = new StringBuilder(4096);
+            builder.Append("{\"scenes\":[");
+            int sceneCount = SceneManager.sceneCount;
+            for (int sceneIndex = 0; sceneIndex < sceneCount; sceneIndex++)
+            {
+                Scene scene = SceneManager.GetSceneAt(sceneIndex);
+                if (sceneIndex > 0)
+                {
+                    builder.Append(',');
+                }
+
+                builder.Append("{\"path\":").AppendJson(scene.path);
+                builder.Append(",\"name\":").AppendJson(scene.name);
+                builder.Append(",\"isLoaded\":").Append(scene.isLoaded ? "true" : "false");
+                builder.Append(",\"isDirty\":").Append(scene.isDirty ? "true" : "false");
+                builder.Append(",\"buildIndex\":").Append(scene.buildIndex);
+                builder.Append(",\"roots\":");
+                if (!scene.isLoaded)
+                {
+                    builder.Append("[]}");
+                    continue;
+                }
+
+                builder.Append('[');
+                GameObject[] roots = scene.GetRootGameObjects();
+                bool firstRoot = true;
+                foreach (GameObject root in roots)
+                {
+                    if (!firstRoot)
+                    {
+                        builder.Append(',');
+                    }
+                    firstRoot = false;
+                    AppendTransform(builder, root.transform, 0, ref nodeCount);
+                }
+                builder.Append(']');
+                builder.Append('}');
+            }
+            builder.Append("]}");
+            File.WriteAllText(outputPath, builder.ToString(), new UTF8Encoding(false));
+        }
+
+        private static void AppendTransform(StringBuilder builder, Transform transform, int depth, ref int nodeCount)
+        {
+            nodeCount++;
+            GameObject gameObject = transform.gameObject;
+            builder.Append("{\"name\":").AppendJson(gameObject.name);
+            builder.Append(",\"activeSelf\":").Append(gameObject.activeSelf ? "true" : "false");
+            builder.Append(",\"activeInHierarchy\":").Append(gameObject.activeInHierarchy ? "true" : "false");
+            builder.Append(",\"tag\":").AppendJson(gameObject.tag);
+            builder.Append(",\"layer\":").AppendJson(LayerMask.LayerToName(gameObject.layer));
+            builder.Append(",\"position\":[")
+                .Append(Round(transform.localPosition.x)).Append(',')
+                .Append(Round(transform.localPosition.y)).Append(',')
+                .Append(Round(transform.localPosition.z)).Append(']');
+            builder.Append(",\"components\":[");
+            Component[] components = gameObject.GetComponents<Component>();
+            bool firstComponent = true;
+            foreach (Component component in components)
+            {
+                if (component == null)
+                {
+                    continue;
+                }
+                if (!firstComponent)
+                {
+                    builder.Append(',');
+                }
+                firstComponent = false;
+                builder.AppendJson(component.GetType().FullName);
+            }
+            builder.Append(']');
+
+            if (depth < 24 && transform.childCount > 0 && nodeCount < MaxHierarchyNodes)
+            {
+                builder.Append(",\"children\":[");
+                bool firstChild = true;
+                foreach (Transform child in transform)
+                {
+                    if (!firstChild)
+                    {
+                        builder.Append(',');
+                    }
+                    firstChild = false;
+                    AppendTransform(builder, child, depth + 1, ref nodeCount);
+                }
+                builder.Append(']');
+            }
+            else
+            {
+                builder.Append(",\"children\":[]");
+            }
+            builder.Append('}');
+        }
+
+        private static void WriteConsole(string outputPath)
+        {
+            StringBuilder builder = new StringBuilder(2048);
+            builder.Append("{\"counts\":{\"log\":").Append(ConsoleCounts[(int)LogType.Log])
+                .Append(",\"warning\":").Append(ConsoleCounts[(int)LogType.Warning])
+                .Append(",\"error\":").Append(ConsoleCounts[(int)LogType.Error])
+                .Append(",\"exception\":").Append(ConsoleCounts[(int)LogType.Exception])
+                .Append(",\"assert\":").Append(ConsoleCounts[(int)LogType.Assert])
+                .Append("},\"entries\":[");
+            lock (ConsoleGate)
+            {
+                for (int index = 0; index < ConsoleEntries.Count; index++)
+                {
+                    if (index > 0)
+                    {
+                        builder.Append(',');
+                    }
+                    builder.AppendJson(ConsoleEntries[index]);
+                }
+            }
+            builder.Append("]}");
+            File.WriteAllText(outputPath, builder.ToString(), new UTF8Encoding(false));
+        }
+
+        private static int WriteTerminalLog(string outputPath, out string error)
+        {
+            error = null;
+            Type terminalType = FindType("WallstopStudios.DxCommandTerminal.Backend.Terminal");
+            PropertyInfo bufferProperty = terminalType?.GetProperty(
+                "Buffer",
+                BindingFlags.Public | BindingFlags.Static
+            );
+            object buffer = bufferProperty?.GetValue(null);
+            if (buffer == null)
+            {
+                error = "DxCommandTerminal Terminal.Buffer is not available in this project.";
+                return 0;
+            }
+
+            IEnumerable logs = buffer.GetType().GetProperty("Logs")?.GetValue(buffer) as IEnumerable;
+            if (logs == null)
+            {
+                error = "CommandLog.Logs could not be resolved.";
+                return 0;
+            }
+
+            StringBuilder builder = new StringBuilder(2048);
+            int count = 0;
+            int skipped = 0;
+            foreach (object item in logs)
+            {
+                if (count >= MaxTerminalItems)
+                {
+                    skipped++;
+                    continue;
+                }
+
+                string message = item.GetType().GetField("message")?.GetValue(item) as string;
+                string type = item.GetType().GetField("type")?.GetValue(item)?.ToString();
+                if (count > 0)
+                {
+                    builder.Append('\n');
+                }
+                builder.Append('[').Append(type).Append("] ").Append(message);
+                count++;
+            }
+            if (skipped > 0)
+            {
+                builder.Append('\n').Append($"[truncated] {skipped} older entries omitted");
+            }
+            File.WriteAllText(outputPath, builder.ToString(), new UTF8Encoding(false));
+            return count;
+        }
+
+        private static string ArtifactRoot()
+        {
+            string projectRoot = Directory.GetParent(Application.dataPath).FullName;
+            string packageRoot = Path.Combine(projectRoot, "Packages", PackageName);
+            string root = Directory.Exists(packageRoot)
+                ? Path.Combine(packageRoot, ".artifacts", "unity-state")
+                : Path.Combine(projectRoot, "Library", "DxTerminalStateCapture");
+            Directory.CreateDirectory(root);
+            return root;
+        }
+
+        private static Type FindType(string fullName)
+        {
+            Assembly[] assemblies = AppDomain.CurrentDomain.GetAssemblies();
+            for (int index = 0; index < assemblies.Length; index++)
+            {
+                Type type = assemblies[index].GetType(fullName, throwOnError: false);
+                if (type != null)
+                {
+                    return type;
+                }
+            }
+            return null;
+        }
+
+        private static string Round(float value)
+        {
+            return value.ToString("0.####", CultureInfo.InvariantCulture);
+        }
+
+        internal static string Json(string value)
+        {
+            if (value == null)
+            {
+                return "null";
+            }
+
+            StringBuilder builder = new StringBuilder(value.Length + 2);
+            builder.Append('"');
+            foreach (char character in value)
+            {
+                switch (character)
+                {
+                    case '"':
+                        builder.Append("\\\"");
+                        break;
+                    case '\\':
+                        builder.Append("\\\\");
+                        break;
+                    case '\n':
+                        builder.Append("\\n");
+                        break;
+                    case '\r':
+                        builder.Append("\\r");
+                        break;
+                    case '\t':
+                        builder.Append("\\t");
+                        break;
+                    default:
+                        if (character < ' ')
+                        {
+                            builder.Append("\\u").Append(((int)character).ToString("x4", CultureInfo.InvariantCulture));
+                        }
+                        else
+                        {
+                            builder.Append(character);
+                        }
+                        break;
+                }
+            }
+            builder.Append('"');
+            return builder.ToString();
+        }
+    }
+
+    internal static class DxTerminalStateCaptureJsonExtensions
+    {
+        internal static void AppendJson(this StringBuilder builder, string value)
+        {
+            builder.Append(DxTerminalStateCapture.Json(value));
+        }
+    }
+}

@@ -1,0 +1,23 @@
+# Keep the Docker build context to image inputs only. Env files never enter it.
+node_modules
+.artifacts
+.env.local
+.env.*.local
+.mcp.json
+opencode.jsonc
+.codex
+.cursor
+.copilot
+.nanocoder
+.vscode
+.git
+.DS_Store
+Media
+Fonts
+Packs
+Styles
+Runtime
+Editor
+Tests
+.llm
+.qodo
