@@ -60,7 +60,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             history.Push("command2", true, true);
             history.Push("command3", true, true);
 
-            Assert.AreEqual(3, history.Clear(), "Clear should return the number of entries cleared");
+            Assert.AreEqual(
+                3,
+                history.Clear(),
+                "Clear should return the number of entries cleared"
+            );
         }
 
         [Test]
@@ -87,8 +91,16 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             history.Clear();
 
             // After clear, Previous and Next should return empty
-            Assert.AreEqual(string.Empty, history.Previous(false), "Previous should return empty after clear");
-            Assert.AreEqual(string.Empty, history.Next(false), "Next should return empty after clear");
+            Assert.AreEqual(
+                string.Empty,
+                history.Previous(false),
+                "Previous should return empty after clear"
+            );
+            Assert.AreEqual(
+                string.Empty,
+                history.Next(false),
+                "Next should return empty after clear"
+            );
         }
 
         [Test]
@@ -104,7 +116,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreEqual(1, history.Count, "Count should be 1 after push following clear");
 
             string[] entries = history.GetHistory(false, false).ToArray();
-            Assert.AreEqual(1, entries.Length, "Should have exactly one entry after push following clear");
+            Assert.AreEqual(
+                1,
+                entries.Length,
+                "Should have exactly one entry after push following clear"
+            );
             Assert.AreEqual("new1", entries[0], "Entry should be the newly pushed command");
         }
 
@@ -146,7 +162,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Assert.IsFalse(history.Push(null, true, true), "Push should reject null");
             Assert.IsFalse(history.Push("", true, true), "Push should reject empty string");
-            Assert.IsFalse(history.Push("   ", true, true), "Push should reject whitespace-only string");
+            Assert.IsFalse(
+                history.Push("   ", true, true),
+                "Push should reject whitespace-only string"
+            );
             Assert.AreEqual(0, history.Count, "Count should remain 0 after rejected pushes");
         }
 
@@ -202,8 +221,16 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             history.Push("cmd2", true, true);
             history.Clear();
 
-            Assert.AreEqual(string.Empty, history.Previous(true), "Previous with skip should return empty after Clear.");
-            Assert.AreEqual(string.Empty, history.Next(true), "Next with skip should return empty after Clear.");
+            Assert.AreEqual(
+                string.Empty,
+                history.Previous(true),
+                "Previous with skip should return empty after Clear."
+            );
+            Assert.AreEqual(
+                string.Empty,
+                history.Next(true),
+                "Next with skip should return empty after Clear."
+            );
 
             // Push duplicates after clear and navigate with skip
             history.Push("cmd1", true, true);
@@ -213,7 +240,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             string prev1 = history.Previous(true);
             Assert.AreEqual("cmd2", prev1, "Previous with skip should return 'cmd2'.");
             string prev2 = history.Previous(true);
-            Assert.AreEqual("cmd1", prev2, "Previous with skip should skip duplicate and return 'cmd1'.");
+            Assert.AreEqual(
+                "cmd1",
+                prev2,
+                "Previous with skip should skip duplicate and return 'cmd1'."
+            );
         }
 
         [UnityTest]
@@ -234,7 +265,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             shell.RunCommand("log test3");
 
             string[] entries = history.GetHistory(false, false).ToArray();
-            Assert.AreEqual(3, entries.Length, "Should have 3 history entries before clear-history");
+            Assert.AreEqual(
+                3,
+                entries.Length,
+                "Should have 3 history entries before clear-history"
+            );
 
             // Run clear-history
             shell.RunCommand("clear-history");
@@ -269,7 +304,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             shell.RunCommand("log after2");
 
             string[] entries = history.GetHistory(false, false).ToArray();
-            Assert.AreEqual(2, entries.Length, "Should have 2 entries after clear-history followed by 2 commands");
+            Assert.AreEqual(
+                2,
+                entries.Length,
+                "Should have 2 entries after clear-history followed by 2 commands"
+            );
             Assert.IsTrue(entries.Contains("log after1"), "Should contain 'log after1'");
             Assert.IsTrue(entries.Contains("log after2"), "Should contain 'log after2'");
         }
@@ -291,7 +330,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             shell.RunCommand("log test2");
 
             string[] entriesBefore = history.GetHistory(false, false).ToArray();
-            Assert.AreEqual(2, entriesBefore.Length, "Should have 2 history entries before invalid clear-history");
+            Assert.AreEqual(
+                2,
+                entriesBefore.Length,
+                "Should have 2 history entries before invalid clear-history"
+            );
 
             // Run clear-history with an extra argument (should fail arg validation)
             shell.RunCommand("clear-history somearg");
@@ -326,7 +369,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             shell.RunCommand("set-theme");
 
             string[] entries = history.GetHistory(false, false).ToArray();
-            Assert.AreEqual(1, entries.Length, "Should have 1 history entry after invalid set-theme");
+            Assert.AreEqual(
+                1,
+                entries.Length,
+                "Should have 1 history entry after invalid set-theme"
+            );
             Assert.IsTrue(
                 entries.Contains("set-theme"),
                 "set-theme should appear in history when AddToHistory is true"
