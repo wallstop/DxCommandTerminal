@@ -1,6 +1,11 @@
 ﻿# NPM
 node_modules/
 
+# npm lockfiles are intentionally not committed for Unity packages (reviewer
+# decision): the package ships no Node code, and a lockfile would churn with
+# every dev environment. Install with `npm install` to work on the tooling.
+package-lock.json
+
 # Local credentials - never commit (preferred credential source; see .env.example)
 .env.local
 .env.*.local
