@@ -8,7 +8,7 @@ metadata:
 # Unity MCP Bridge and Agent Backends
 
 Unity runs on the host; agents (in the devcontainer or on the host) reach it through
-`scripts/mcp/unity-mcp.mjs`. Full reference: `scripts/mcp/README.md`.
+`tooling~/scripts/mcp/unity-mcp.mjs`. Full reference: `tooling~/scripts/mcp/README.md`.
 
 ## Commands
 
@@ -35,7 +35,7 @@ automatically); `GET /healthz` is the only unauthenticated endpoint.
   `.env.local`; the same `unity-mcp` server name in each checkout then reaches that
   checkout's editor.
 - Keep the bridge alive under the host's service manager (launchd on macOS) if it
-  must survive terminal closure: host `node <repo>/scripts/mcp/unity-mcp.mjs bridge`.
+  must survive terminal closure: host `node <repo>/tooling~/scripts/mcp/unity-mcp.mjs bridge`.
 - Backend selection: `--backend cli` (default; Unity 6 CLI `unity mcp --project-path`)
   or `--backend relay` (legacy AI Assistant under `~/.unity/relay/`). If `unity list
   --project-path <project> --format json` shows no Pipeline tools, use relay.

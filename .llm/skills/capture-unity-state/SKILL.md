@@ -18,7 +18,7 @@ manifest to complete. Artifacts land inside this package's `.artifacts/unity-sta
    passing from where you run capture.
 2. Capture script compiled in the editor. Install it host-side with
    `npm run unity:mcp:install-capture -- --project <host-project>` (it copies
-   `scripts/mcp/DxTerminalStateCapture.cs.txt` to `<project>/Assets/Editor/`,
+   `tooling~/scripts/mcp/DxTerminalStateCapture.cs.txt` to `<project>/Assets/Editor/`,
    backing up any previous copy under `.artifacts/unity-state/backup/`). `capture`
    performs this install itself when the project directory is reachable locally
    (host runs, or the container's `/unity-project` bind mount).

@@ -56,16 +56,18 @@ Styles/                               # USS/TSS stylesheets consumed by Terminal
 Tests/Runtime/                        # PlayMode tests (asmdef: ...Tests.Runtime)
   Components/                         # Test harness components (TestCommands, TerminalInputHandler)
 Media/                                # Screenshots and demo GIFs
-scripts/                              # Repo tooling (PowerShell + Node; not shipped in the UPM artifact)
-  mcp/                                # unity-mcp.mjs: Unity MCP bridge/probe/configure/capture + tests
-  tests/                              # Script regression suites (pwsh + bash)
+tooling~/                             # Unity-hidden tooling (tilde-suffixed; not shipped in the UPM artifact)
+  package.json                        # npm manifest (devDependencies; root package.json delegates via --prefix)
+  scripts/                            # Repo tooling (PowerShell + Node)
+    mcp/                              # unity-mcp.mjs: Unity MCP bridge/probe/configure/capture + tests
+    tests/                            # Script regression suites (pwsh + bash)
 .devcontainer/                        # VS Code devcontainer (Dockerfile, lifecycle, Z.AI launchers)
 ```
 
-### Dev tooling (scripts/, .devcontainer/)
+### Dev tooling (tooling~/scripts/, .devcontainer/)
 
 `npm run unity:mcp:probe|configure|bridge|capture` drives the host Unity editor
-over the authenticated MCP bridge in `scripts/mcp/unity-mcp.mjs` (see the
+over the authenticated MCP bridge in `tooling~/scripts/mcp/unity-mcp.mjs` (see the
 [unity-mcp](./skills/unity-mcp/SKILL.md) and
 [capture-unity-state](./skills/capture-unity-state/SKILL.md) skills). Credentials
 live in gitignored `.env.local` (see `.env.example`); agent MCP configs are
@@ -76,8 +78,8 @@ generated, never hand-edited; `npm test` runs the Node tooling suite.
 ## Skills Reference
 
 See the generated [Skills Index](./skills/index.md). Regenerate it after adding or editing any
-skill: `pwsh -NoProfile -File scripts/generate-skills-index.ps1` (validated by
-`scripts/lint-llm-instructions.ps1`).
+skill: `pwsh -NoProfile -File tooling~/scripts/generate-skills-index.ps1` (validated by
+`tooling~/scripts/lint-llm-instructions.ps1`).
 
 ### SKILL.md Contract
 
@@ -164,13 +166,13 @@ frontmatter validity, index freshness, and pointer-file delegation; see
 
 1. **Line limits**: every authored file under `.llm/` MUST stay at or below 300 lines; 270+ gets
    a critical warning. The generated `.llm/skills/index.md` is exempt (machine-written).
-   Enforced by `scripts/lint-skill-sizes.ps1` (pre-commit + CI + tests).
+   Enforced by `tooling~/scripts/lint-skill-sizes.ps1` (pre-commit + CI + tests).
 2. **SKILL.md validity + index freshness + pointer delegation**: enforced by
-   `scripts/lint-llm-instructions.ps1` (pre-commit + CI + tests).
+   `tooling~/scripts/lint-llm-instructions.ps1` (pre-commit + CI + tests).
 3. **Generated files are byte-stable**: UTF-8 without BOM, LF line endings, ordinal sorting, no
    timestamps. Never hand-edit `.llm/skills/index.md`.
 4. **Encoding overrides**: `.editorconfig` forces UTF-8 (no BOM) + LF for `.llm/**` and
-   `scripts/**` regardless of the repo defaults for C# assets.
+   `tooling~/**` regardless of the repo defaults for C# assets.
 5. `.editorconfig` charset/line-ending defaults for C# assets remain BOM/CRLF per repo
    convention; only the LLM-context paths above are overridden.
 

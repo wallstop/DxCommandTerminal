@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Red-green tests for scripts/lint-llm-instructions.ps1.
+    Red-green tests for tooling~/scripts/lint-llm-instructions.ps1.
 
 .DESCRIPTION
     Builds isolated fixture repos and asserts both failure paths (red) and the
@@ -9,7 +9,7 @@
     pointer-file delegation. Also verifies -Fix repairs a stale index.
 
 .EXAMPLE
-    pwsh -NoProfile -File scripts/tests/test-llm-instructions-lint.ps1
+    pwsh -NoProfile -File tooling~/scripts/tests/test-llm-instructions-lint.ps1
 #>
 Param(
     [switch]$VerboseOutput

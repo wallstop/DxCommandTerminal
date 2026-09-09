@@ -26,28 +26,37 @@
   "author": "wallstop studios <wallstop@wallstopstudios.com> (https://wallstopstudios.com)",
   "homepage": "https://github.com/wallstop/DxCommandTerminal/blob/master/README.md",
   "main": "README.md",
-  "engines": {
-    "node": ">=22.7.0"
-  },
+  "files": [
+    "Runtime",
+    "Runtime.meta",
+    "Editor",
+    "Editor.meta",
+    "Packs",
+    "Packs.meta",
+    "Styles",
+    "Styles.meta",
+    "Tests",
+    "Tests.meta",
+    "Media",
+    "Media.meta",
+    "Fonts",
+    "Fonts.meta",
+    "CHANGELOG.md",
+    "CHANGELOG.md.meta",
+    "LICENSE",
+    "LICENSE.meta",
+    "README.md",
+    "README.md.meta",
+    "package.json.meta"
+  ],
   "scripts": {
-    "test": "node --test \"scripts/mcp/__tests__/*.test.mjs\"",
-    "unity:mcp:probe": "node scripts/mcp/unity-mcp.mjs probe",
-    "unity:mcp:configure": "node scripts/mcp/unity-mcp.mjs configure",
-    "unity:mcp:bridge": "node scripts/mcp/unity-mcp.mjs bridge",
-    "unity:mcp:install-capture": "node scripts/mcp/unity-mcp.mjs install-capture",
-    "unity:capture": "node scripts/mcp/unity-mcp.mjs capture",
-    "ai:backends": "bash .devcontainer/ai-backends.sh"
-  },
-  "devDependencies": {
-    "@modelcontextprotocol/sdk": "1.30.0",
-    "jsonc-parser": "3.3.1",
-    "smol-toml": "1.8.0"
+    "test": "npm --prefix tooling~ run test --",
+    "package:validate": "npm --prefix tooling~ run package:validate --",
+    "unity:mcp:probe": "npm --prefix tooling~ run unity:mcp:probe --",
+    "unity:mcp:configure": "npm --prefix tooling~ run unity:mcp:configure --",
+    "unity:mcp:bridge": "npm --prefix tooling~ run unity:mcp:bridge --",
+    "unity:mcp:install-capture": "npm --prefix tooling~ run unity:mcp:install-capture --",
+    "unity:capture": "npm --prefix tooling~ run unity:capture --",
+    "ai:backends": "npm --prefix tooling~ run ai:backends --"
   }
 }
-
-
-
-
-
-
-

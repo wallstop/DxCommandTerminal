@@ -2,7 +2,7 @@
 
 A fast, reliable VS Code devcontainer for this Unity UPM package. The Unity Editor
 stays on the **host** (licensing + GUI); the container ships every CLI tool, drives the
-host editor through the [unity-mcp bridge](../scripts/mcp/README.md), and needs **zero
+host editor through the [unity-mcp bridge](../tooling~/scripts/mcp/README.md), and needs **zero
 sudo** anywhere.
 
 ```
@@ -41,7 +41,7 @@ sudo** anywhere.
    per-project port, so multiple editors never collide):
 
    ```bash
-   npm install        # host checkout of this repo (one time)
+   npm --prefix tooling~ install   # host checkout of this repo (one time)
    npm run unity:mcp  # bridge: host editor -> authenticated HTTP
    ```
 
@@ -143,7 +143,7 @@ Z.AI overrides: `CODEX_ZAI_MODEL`, `CODEX_ZAI_REASONING_EFFORT`, `CLAUDE_ZAI_*_M
 `ZAI_API_TIMEOUT_MS` (default 3000000, matching the GLM coding-plan guidance),
 `CLAUDE_ZAI_CONFIG_DIR`, `AI_BACKENDS_CONTAINER_MODE`,
 `CLAUDE_ZAI_SUBPROCESS_ENV_SCRUB`. The launchers are regression-tested
-(`scripts/tests/test-ai-backends.sh`).
+(`tooling~/scripts/tests/test-ai-backends.sh`).
 
 ### OpenRouter (API key, any model)
 
@@ -181,7 +181,7 @@ from workspace watching; the workspace itself remains the package repository.
 ## Verify
 
 ```bash
-npm test                                   # node --test scripts/mcp/__tests__
-bash scripts/tests/test-ai-backends.sh     # Z.AI launcher regression suite
+npm test                                   # node --test tooling~/scripts/mcp/__tests__
+bash tooling~/scripts/tests/test-ai-backends.sh     # Z.AI launcher regression suite
 npm run unity:mcp:probe                    # host editor readiness (bridge running)
 ```

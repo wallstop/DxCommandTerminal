@@ -7,12 +7,12 @@ on:
       - main
     paths:
       - "package.json"
-      - "scripts/**"
+      - "tooling~/**"
       - ".github/workflows/tooling-tests.yml"
   pull_request:
     paths:
       - "package.json"
-      - "scripts/**"
+      - "tooling~/**"
       - ".github/workflows/tooling-tests.yml"
 
 permissions:
@@ -30,7 +30,9 @@ jobs:
     #
     # Installs with `npm install`: no lockfile is committed for this Unity
     # package (reviewer decision), so there is nothing for `npm ci` to pin
-    # and setup-node's npm cache cannot be keyed.
+    # and setup-node's npm cache cannot be keyed. The npm project lives under
+    # `tooling~/` (Unity-hidden via the tilde suffix, so editors never import
+    # node_modules); root package.json scripts delegate with `npm --prefix`.
     name: node-tests (${{ matrix.os }})
     strategy:
       fail-fast: false
@@ -39,15 +41,35 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Setup Node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 24
 
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm --prefix tooling~ install --no-audit --no-fund
 
       - name: Test tooling
-        run: npm test
+        run: npm --prefix tooling~ test
+
+  package-content:
+    # Clean-install guard for the UPM artifact (issue #22, PLAN.md T02
+    # "package-content validators"): packs the package exactly like npm/UPM
+    # consumers receive it and asserts required artifacts ship, tooling and
+    # repo-internal files do not, and every shipped file carries its .meta.
+    # Unity-free: node stdlib + npm pack + system tar only.
+    name: package-content
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Setup Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+
+      - name: Validate package contents
+        run: npm --prefix tooling~ run package:validate

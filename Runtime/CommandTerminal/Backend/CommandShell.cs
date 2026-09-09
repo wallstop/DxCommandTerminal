@@ -13,8 +13,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
     public sealed class CommandShell
     {
-        private static readonly string[] IgnoredTypes = { "JetBrains.Rider" };
-
         public static readonly Lazy<(
             MethodInfo method,
             RegisterCommandAttribute attribute
@@ -106,11 +104,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                             }
                             catch (Exception e)
                             {
-                                if (ShouldIgnoreExceptionForType(type))
-                                {
-                                    continue;
-                                }
-
                                 Debug.LogError(
                                     $"Failed to resolve method {method.Name} of type {type.FullName} with exception {e}"
                                 );
@@ -119,11 +112,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                     }
                     catch (Exception e)
                     {
-                        if (ShouldIgnoreExceptionForType(type))
-                        {
-                            continue;
-                        }
-
                         Debug.LogError(
                             $"Failed to resolve methods for type {type.FullName} with exception {e}"
                         );
@@ -184,19 +172,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         public bool IgnoringDefaultCommands { get; private set; }
 
         public bool HasErrors => 0 < _errorMessages.Count;
-
-        private static bool ShouldIgnoreExceptionForType(Type type)
-        {
-            foreach (string ignoredType in IgnoredTypes)
-            {
-                if (type.FullName?.IndexOf(ignoredType, StringComparison.OrdinalIgnoreCase) >= 0)
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
 
         // Internal for test coverage of the discovery filter (see
         // WallstopStudios.DxCommandTerminal.Tests.Runtime).

@@ -1,6 +1,6 @@
 ---
 name: valid-skill
-description: Valid fixture skill used by the automated linter tests. Use only inside scripts/tests fixtures.
+description: Valid fixture skill used by the automated linter tests. Use only inside tooling~/scripts/tests fixtures.
 metadata:
   category: Feature
 ---

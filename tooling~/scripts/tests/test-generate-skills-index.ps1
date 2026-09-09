@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Red-green tests for scripts/generate-skills-index.ps1.
+    Red-green tests for tooling~/scripts/generate-skills-index.ps1.
 
 .DESCRIPTION
     Asserts the generator's contract: cross-run byte determinism, ordinal
@@ -8,7 +8,7 @@
     parsing (quoted strings), and graceful skipping of malformed skills.
 
 .EXAMPLE
-    pwsh -NoProfile -File scripts/tests/test-generate-skills-index.ps1
+    pwsh -NoProfile -File tooling~/scripts/tests/test-generate-skills-index.ps1
 #>
 Param(
     [switch]$VerboseOutput

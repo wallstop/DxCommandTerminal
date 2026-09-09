@@ -1,6 +1,6 @@
 ---
 name: manage-skills
-description: Create, edit, or remove agentic skills (.llm/skills/*/SKILL.md), regenerate the skills index, or fix lint failures around SKILL.md frontmatter, line limits, or pointer-file delegation. Use when adding new skills, changing skill descriptions/categories, touching .llm/**, or when scripts/lint-llm-instructions.ps1 or lint-skill-sizes.ps1 fail.
+description: Create, edit, or remove agentic skills (.llm/skills/*/SKILL.md), regenerate the skills index, or fix lint failures around SKILL.md frontmatter, line limits, or pointer-file delegation. Use when adding new skills, changing skill descriptions/categories, touching .llm/**, or when tooling~/scripts/lint-llm-instructions.ps1 or lint-skill-sizes.ps1 fail.
 metadata:
   category: Core
 ---
@@ -15,7 +15,7 @@ metadata:
   skills/
     index.md                     # GENERATED - never hand-edit
     <skill-name>/SKILL.md        # One directory per skill (agentskills.io format)
-scripts/
+tooling~/scripts/
   generate-skills-index.ps1      # Index generator (deterministic)
   lint-llm-instructions.ps1      # Contract linter (-Fix regenerates the index)
   lint-skill-sizes.ps1           # Line-limit linter
@@ -35,12 +35,12 @@ scripts/
 3. Body: instructions, examples, edge cases. Reference sibling files with relative paths from the
    skill root. Keep the file at or below 300 lines (`lint-skill-sizes.ps1`; 270+ warns).
 4. Regenerate the index:
-   `pwsh -NoProfile -File scripts/generate-skills-index.ps1`
+   `pwsh -NoProfile -File tooling~/scripts/generate-skills-index.ps1`
 5. Run both linters; commit `.llm/skills/index.md` together with the skill.
 
 ```sh
-pwsh -NoProfile -File scripts/lint-llm-instructions.ps1 -Fix
-pwsh -NoProfile -File scripts/lint-skill-sizes.ps1 -VerboseOutput
+pwsh -NoProfile -File tooling~/scripts/lint-llm-instructions.ps1 -Fix
+pwsh -NoProfile -File tooling~/scripts/lint-skill-sizes.ps1 -VerboseOutput
 ```
 
 ## Editing a skill

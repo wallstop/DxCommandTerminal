@@ -3,7 +3,7 @@
 `unity-mcp.mjs` is the single entry point for agent access to the host Unity editor:
 
 ```
-node scripts/mcp/unity-mcp.mjs <probe|configure|bridge|install-capture|capture> [options]
+node tooling~/scripts/mcp/unity-mcp.mjs <probe|configure|bridge|install-capture|capture> [options]
 ```
 
 Unity stays on the host. The `bridge` command (host) exposes the editor through an
@@ -71,5 +71,5 @@ Details: [capture-unity-state](../../.llm/skills/capture-unity-state/SKILL.md).
 ## Tests
 
 ```bash
-npm test   # node --test scripts/mcp/__tests__/ (dotenv, ports, configs, capture paths)
+npm test   # node --test tooling~/scripts/mcp/__tests__/ (dotenv, ports, configs, capture paths)
 ```

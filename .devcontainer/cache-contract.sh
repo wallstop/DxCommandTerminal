@@ -49,7 +49,7 @@ readonly CACHE_MOUNT_TARGETS=(
     "/home/vscode/.local/share/powershell"
     "/home/vscode/.cache/pip"
     "/home/vscode/.npm"
-    "${CACHE_WORKSPACE_ROOT}/node_modules"
+    "${CACHE_WORKSPACE_ROOT}/tooling~/node_modules"
 )
 
 cache_contract_validate_shape() {
@@ -106,7 +106,7 @@ cache_contract_repair_permissions() {
     for target in "${CACHE_MOUNT_TARGETS[@]}" "${HOME}/.local"; do
         cache_contract_repair_directory "$target" "$current_uid" "$current_gid" || return 1
     done
-    for target in "${HOME}/.npmrc" "${CACHE_WORKSPACE_ROOT}/package-lock.json" \
+    for target in "${HOME}/.npmrc" "${CACHE_WORKSPACE_ROOT}/tooling~/package-lock.json" \
         "${CACHE_WORKSPACE_ROOT}/package.json"; do
         if [[ -f "$target" && ! -w "$target" ]]; then
             # Host bind mounts can be writable without supporting ownership changes.

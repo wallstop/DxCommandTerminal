@@ -13,6 +13,17 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         private readonly CyclicBuffer<(string text, bool? success, bool? errorFree)> _history;
 
+        /*
+            Commands already shown during the current traversal direction. Next
+            and Previous skip entries listed here, so neither adjacent runs nor
+            non-adjacent repeats get re-displayed in one sweep. The set resets
+            on Push, Clear, Resize, and whenever the traversal direction
+            flips, replaying the passed entries on the way back.
+         */
+        private readonly HashSet<string> _seenInDirection = new(StringComparer.OrdinalIgnoreCase);
+
+        private int _direction;
+
         private int _position;
 
         public CommandHistory(int capacity)
@@ -31,6 +42,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         public void Resize(int newCapacity)
         {
             _history.Resize(newCapacity);
+            _seenInDirection.Clear();
+            _direction = 0;
         }
 
         public bool Push(string commandString, bool? success, bool? errorFree)
@@ -42,41 +55,35 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
             _history.Add((commandString, success, errorFree));
             _position = _history.Count;
+            _seenInDirection.Clear();
+            _direction = 0;
             return true;
         }
 
         public string Next(bool skipSameCommands)
         {
-            int initialPosition = _position;
             ++_position;
+            if (_direction != 1)
+            {
+                _seenInDirection.Clear();
+            }
+            _direction = 1;
 
             while (
                 skipSameCommands
-                && 0 <= initialPosition
-                && initialPosition < _history.Count
                 && 0 <= _position
                 && _position < _history.Count
+                && _seenInDirection.Contains(_history[_position].text)
             )
             {
-                if (
-                    string.Equals(
-                        _history[initialPosition].text,
-                        _history[_position].text,
-                        StringComparison.OrdinalIgnoreCase
-                    )
-                )
-                {
-                    ++_position;
-                }
-                else
-                {
-                    break;
-                }
+                ++_position;
             }
 
             if (0 <= _position && _position < _history.Count)
             {
-                return _history[_position].text;
+                string text = _history[_position].text;
+                _seenInDirection.Add(text);
+                return text;
             }
 
             _position = _history.Count;
@@ -85,36 +92,28 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         public string Previous(bool skipSameCommands)
         {
-            int initialPosition = _position;
             --_position;
+            if (_direction != -1)
+            {
+                _seenInDirection.Clear();
+            }
+            _direction = -1;
 
             while (
                 skipSameCommands
-                && 0 <= initialPosition
-                && initialPosition < _history.Count
                 && 0 <= _position
                 && _position < _history.Count
+                && _seenInDirection.Contains(_history[_position].text)
             )
             {
-                if (
-                    string.Equals(
-                        _history[initialPosition].text,
-                        _history[_position].text,
-                        StringComparison.OrdinalIgnoreCase
-                    )
-                )
-                {
-                    --_position;
-                }
-                else
-                {
-                    break;
-                }
+                --_position;
             }
 
             if (0 <= _position && _position < _history.Count)
             {
-                return _history[_position].text;
+                string text = _history[_position].text;
+                _seenInDirection.Add(text);
+                return text;
             }
 
             _position = -1;
@@ -126,6 +125,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             int count = _history.Count;
             _history.Clear();
             _position = 0;
+            _seenInDirection.Clear();
+            _direction = 0;
             return count;
         }
     }

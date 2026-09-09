@@ -53,7 +53,7 @@ TextScriptImporter:
 
 ## Verification
 
-Run `pwsh -NoProfile -File scripts/lint-unity-meta.ps1` (also enforced by pre-commit and
+Run `pwsh -NoProfile -File tooling~/scripts/lint-unity-meta.ps1` (also enforced by pre-commit and
 CI). It checks, over tracked files only:
 
 1. Every tracked `.meta` has its target tracked (no orphan metas for gitignored or

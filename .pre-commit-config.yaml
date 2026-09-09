@@ -22,7 +22,7 @@ repos:
         description: CSharpier is an opinionated C# formatter inspired by Prettier.
       - id: llm-instructions-lint
         name: Lint .llm instructions (SKILL.md spec, index freshness, pointer delegation)
-        entry: pwsh -NoProfile -File scripts/lint-llm-instructions.ps1
+        entry: pwsh -NoProfile -File tooling~/scripts/lint-llm-instructions.ps1
         language: system
         always_run: true
         pass_filenames: false
@@ -35,7 +35,7 @@ repos:
           structure, and front-end pointer-file delegation to .llm/context.md.
       - id: llm-skill-sizes
         name: Enforce .llm line limits (300 hard, 270 critical)
-        entry: pwsh -NoProfile -File scripts/lint-skill-sizes.ps1
+        entry: pwsh -NoProfile -File tooling~/scripts/lint-skill-sizes.ps1
         language: system
         always_run: true
         pass_filenames: false
@@ -47,7 +47,7 @@ repos:
           below 300 lines (270+ is a critical warning); the generated skills index is exempt.
       - id: unity-meta-lint
         name: Lint Unity .meta hygiene (orphans, missing metas, guid uniqueness)
-        entry: pwsh -NoProfile -File scripts/lint-unity-meta.ps1
+        entry: pwsh -NoProfile -File tooling~/scripts/lint-unity-meta.ps1
         language: system
         always_run: true
         pass_filenames: false

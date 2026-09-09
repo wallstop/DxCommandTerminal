@@ -5,7 +5,7 @@
 // Project: DxCommandTerminal | Unity UPM package (min 2021.3, host editor 6000.4)
 // The Unity Editor stays on the host; this container ships the .NET / Node /
 // PowerShell toolchain plus every agent CLI and MCP server, and drives the host
-// editor through the unity-mcp bridge (scripts/mcp/unity-mcp.mjs).
+// editor through the unity-mcp bridge (tooling~/scripts/mcp/unity-mcp.mjs).
 // =============================================================================
 {
   "name": "DxCommandTerminal Dev",
@@ -41,7 +41,7 @@
     "source=dxt-powershell-modules,target=/home/vscode/.local/share/powershell,type=volume",
     "source=dxt-python-cache,target=/home/vscode/.cache/pip,type=volume",
     "source=dxt-npm-cache,target=/home/vscode/.npm,type=volume",
-    "source=dxt-node-modules,target=${containerWorkspaceFolder}/node_modules,type=volume",
+    "source=dxt-node-modules,target=${containerWorkspaceFolder}/tooling~/node_modules,type=volume",
     "source=${localWorkspaceFolder}/../..,target=/unity-project,type=bind,consistency=cached"
   ],
   // ---------------------------------------------------------------------------
