@@ -10,7 +10,7 @@ export NPM_CONFIG_PREFIX="${HOME}/.local"
 
 # Configuration is local and works with the image's baked dependencies before npm
 # install. Finish it before clients start, without probing a sleeping host.
-mcp_script="${SCRIPT_DIR}/../tooling~/tooling~/scripts/mcp/unity-mcp.mjs"
+mcp_script="${SCRIPT_DIR}/../tooling~/scripts/mcp/unity-mcp.mjs"
 mcp_lock="${TMPDIR:-/tmp}/dxt-mcp-configure.lock"
 if command -v flock >/dev/null 2>&1; then
     flock -w 30 "${mcp_lock}" node "${mcp_script}" configure --offline

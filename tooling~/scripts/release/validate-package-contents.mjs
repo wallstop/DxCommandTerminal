@@ -136,6 +136,13 @@ function main() {
     }
   }
 
+  for (const directory of impliedDirectories) {
+    check(
+      entrySet.has(`${directory}.meta`),
+      `shipped directory without its folder meta: ${directory}`
+    );
+  }
+
   for (const file of shippedFiles) {
     if (file.endsWith(".meta")) {
       const target = file.slice(0, -".meta".length);

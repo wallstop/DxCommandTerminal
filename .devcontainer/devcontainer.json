@@ -5,7 +5,7 @@
 // Project: DxCommandTerminal | Unity UPM package (min 2021.3, host editor 6000.4)
 // The Unity Editor stays on the host; this container ships the .NET / Node /
 // PowerShell toolchain plus every agent CLI and MCP server, and drives the host
-// editor through the unity-mcp bridge (tooling~/tooling~/scripts/mcp/unity-mcp.mjs).
+// editor through the unity-mcp bridge (tooling~/scripts/mcp/unity-mcp.mjs).
 // =============================================================================
 {
   "name": "DxCommandTerminal Dev",

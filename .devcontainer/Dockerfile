@@ -123,7 +123,7 @@ RUN npm install --global --prefix /usr/local \
 # MCP configuration must work before the workspace volume has dependencies.
 # jq extracts exactly the devDependencies the MCP script needs; the length guard
 # fails the build when the manifest drops a required package.
-COPY package.json /tmp/dxt-tooling-package.json
+COPY tooling~/package.json /tmp/dxt-tooling-package.json
 RUN mkdir -p /opt/dxt-mcp \
     && jq '{private: true, dependencies: (.devDependencies | with_entries(select(.key as $k | ["@modelcontextprotocol/sdk", "smol-toml", "jsonc-parser"] | index($k))))}' /tmp/dxt-tooling-package.json > /opt/dxt-mcp/package.json \
     && test "$(jq '.dependencies | length' /opt/dxt-mcp/package.json)" -eq 3 \
