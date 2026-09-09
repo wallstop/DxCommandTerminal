@@ -13,3 +13,6 @@ updates:
       - wallstop
     reviewers:
       - wallstop
+    # Repo policy: all action refs are pinned to commit SHAs with a "# vX"
+    # version comment (issue #39). Dependabot updates SHA-pinned refs and
+    # preserves the comment; keep the comment in sync with each bump.
