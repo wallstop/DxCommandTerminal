@@ -106,9 +106,13 @@ test("configure writes every client schema with the unity endpoint", () => {
     assert.match(codex, /startup_timeout_sec = 30/);
     assert.match(codex, /tool_timeout_sec = 300/);
 
-    for (const filePath of Object.values(paths)) {
-      const mode = fs.statSync(filePath).mode & 0o777;
-      assert.equal(mode, 0o600, `${filePath} must be 0600`);
+    // Windows has no POSIX permission bits (fs.chmodSync only toggles the
+    // read-only attribute), so the 0600 contract is only assertable on POSIX.
+    if (process.platform !== "win32") {
+      for (const filePath of Object.values(paths)) {
+        const mode = fs.statSync(filePath).mode & 0o777;
+        assert.equal(mode, 0o600, `${filePath} must be 0600`);
+      }
     }
   } finally {
     fs.rmSync(repoRoot, { recursive: true, force: true });
