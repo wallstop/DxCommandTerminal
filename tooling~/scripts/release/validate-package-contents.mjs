@@ -87,6 +87,11 @@ function extractFile(tarball, entry) {
   });
 }
 
+function trackedFiles() {
+  const stdout = execFileSync("git", ["ls-files"], { cwd: REPO_ROOT, encoding: "utf8" });
+  return new Set(stdout.split(/\r?\n/).filter(Boolean));
+}
+
 function main() {
   const rootManifest = JSON.parse(
     fs.readFileSync(path.join(REPO_ROOT, "package.json"), "utf8")
@@ -109,6 +114,33 @@ function main() {
     `shipped manifest identity mismatch: expected ${rootManifest.name}@${rootManifest.version}, ` +
       `got ${shippedManifest.name}@${shippedManifest.version}`
   );
+
+  const allowlist = rootManifest.files;
+  check(
+    Array.isArray(allowlist) && 0 < allowlist.length,
+    "package.json must declare an npm files allowlist"
+  );
+  if (Array.isArray(allowlist)) {
+    const tracked = trackedFiles();
+    const expected = new Set(["package.json"]);
+    for (const entry of tracked) {
+      if (allowlist.some((root) => entry === root || entry.startsWith(`${root}/`))) {
+        expected.add(entry);
+      }
+    }
+    for (const missing of expected) {
+      if (!entrySet.has(missing)) {
+        fail(`tracked file missing from tarball: ${missing}`);
+        problems += 1;
+      }
+    }
+    for (const extra of entrySet) {
+      if (!expected.has(extra)) {
+        fail(`untracked or unallowed file shipped in tarball: ${extra}`);
+        problems += 1;
+      }
+    }
+  }
 
   for (const required of REQUIRED_FILES) {
     check(entrySet.has(required), `required file missing from tarball: ${required}`);

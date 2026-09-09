@@ -50,20 +50,13 @@
     "package.json.meta"
   ],
   "scripts": {
-    "test": "npm --prefix tooling~ run test",
-    "package:validate": "npm --prefix tooling~ run package:validate",
-    "unity:mcp:probe": "npm --prefix tooling~ run unity:mcp:probe",
-    "unity:mcp:configure": "npm --prefix tooling~ run unity:mcp:configure",
-    "unity:mcp:bridge": "npm --prefix tooling~ run unity:mcp:bridge",
-    "unity:mcp:install-capture": "npm --prefix tooling~ run unity:mcp:install-capture",
-    "unity:capture": "npm --prefix tooling~ run unity:capture",
-    "ai:backends": "npm --prefix tooling~ run ai:backends"
+    "test": "npm --prefix tooling~ run test --",
+    "package:validate": "npm --prefix tooling~ run package:validate --",
+    "unity:mcp:probe": "npm --prefix tooling~ run unity:mcp:probe --",
+    "unity:mcp:configure": "npm --prefix tooling~ run unity:mcp:configure --",
+    "unity:mcp:bridge": "npm --prefix tooling~ run unity:mcp:bridge --",
+    "unity:mcp:install-capture": "npm --prefix tooling~ run unity:mcp:install-capture --",
+    "unity:capture": "npm --prefix tooling~ run unity:capture --",
+    "ai:backends": "npm --prefix tooling~ run ai:backends --"
   }
 }
-
-
-
-
-
-
-
