@@ -1,0 +1,52 @@
+name: Tooling Tests
+
+on:
+  push:
+    branches:
+      - master
+      - main
+    paths:
+      - "package.json"
+      - "package-lock.json"
+      - "scripts/**"
+      - ".github/workflows/tooling-tests.yml"
+  pull_request:
+    paths:
+      - "package.json"
+      - "package-lock.json"
+      - "scripts/**"
+      - ".github/workflows/tooling-tests.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  node-tests:
+    # Run on BOTH Ubuntu and Windows so the bridge's cross-OS behavior (env
+    # parsing, path handling, port derivation) is enforced in CI, not just
+    # assumed. Mirrors the lint-llm-instructions matrix.
+    name: node-tests (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test tooling
+        run: npm test

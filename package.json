@@ -26,6 +26,10 @@
   "author": "wallstop studios <wallstop@wallstopstudios.com> (https://wallstopstudios.com)",
   "homepage": "https://github.com/wallstop/DxCommandTerminal/blob/master/README.md",
   "main": "README.md",
+  "type": "module",
+  "engines": {
+    "node": ">=22.7.0"
+  },
   "scripts": {
     "test": "node --test \"scripts/mcp/__tests__/*.test.js\"",
     "unity:mcp:probe": "node scripts/mcp/unity-mcp.mjs probe",

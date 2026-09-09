@@ -8,12 +8,17 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     using Attributes;
     using Backend;
     using NUnit.Framework;
-    using UnityEngine;
 
     public sealed class CommandDiscoveryTests
     {
         private const BindingFlags DiscoveryFlags =
             BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+
+#if UNITY_EDITOR
+        // Defined once: dynamic assemblies are non-collectible, and IL2CPP
+        // players do not support Reflection.Emit, so this case is editor-only.
+        private static readonly Assembly DynamicAssembly = CreateDynamicAssembly();
+#endif
 
         // Declared in this test assembly (a consumer-style assembly that only
         // references the runtime) so discovery from non-builtin assemblies is
@@ -39,9 +44,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return new TestCaseData(coreAssembly, false).SetName(
                 "coreAssemblyMayNotContainCommands"
             );
-            yield return new TestCaseData(CreateDynamicAssembly(), false).SetName(
+#if UNITY_EDITOR
+            yield return new TestCaseData(DynamicAssembly, false).SetName(
                 "dynamicAssemblyMayNotContainCommands"
             );
+#endif
         }
 
         [Test]
@@ -114,6 +121,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 {
                     types = e.Types;
                 }
+                catch (Exception)
+                {
+                    // Mirrors production TryGetScanTypes: an assembly that
+                    // cannot be enumerated contributes no commands.
+                    continue;
+                }
 
                 foreach (Type type in types.Where(type => type != null))
                 {
@@ -129,10 +142,23 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
                     foreach (MethodInfo method in methods)
                     {
-                        if (
-                            Attribute.GetCustomAttribute(method, typeof(RegisterCommandAttribute))
-                            is not RegisterCommandAttribute attribute
-                        )
+                        RegisterCommandAttribute attribute;
+                        try
+                        {
+                            attribute =
+                                Attribute.GetCustomAttribute(
+                                    method,
+                                    typeof(RegisterCommandAttribute)
+                                ) as RegisterCommandAttribute;
+                        }
+                        catch (Exception)
+                        {
+                            // Mirrors production: attribute resolution failures
+                            // are contained, not fatal.
+                            continue;
+                        }
+
+                        if (attribute == null)
                         {
                             continue;
                         }

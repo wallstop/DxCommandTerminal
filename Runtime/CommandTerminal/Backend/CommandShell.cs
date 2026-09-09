@@ -20,7 +20,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             RegisterCommandAttribute attribute
         )[]> RegisteredCommands = new(() =>
         {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
             Stopwatch stopwatch = Stopwatch.StartNew();
+#endif
             List<(MethodInfo, RegisterCommandAttribute)> commands = new();
             const BindingFlags methodFlags =
                 BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
@@ -40,13 +42,22 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             for (int i = 0; i < loadedAssemblies.Length; i++)
             {
                 Assembly assembly = loadedAssemblies[i];
-                if (AssemblyName.ReferenceMatchesDefinition(assembly.GetName(), self))
+                try
                 {
-                    continue;
-                }
+                    if (AssemblyName.ReferenceMatchesDefinition(assembly.GetName(), self))
+                    {
+                        continue;
+                    }
 
-                if (MayContainCommands(assembly, self))
+                    if (MayContainCommands(assembly, self))
+                    {
+                        scanCandidates.Add(assembly);
+                    }
+                }
+                catch (Exception)
                 {
+                    // Classification must never be able to fail discovery; if
+                    // an assembly cannot be classified, scan it.
                     scanCandidates.Add(assembly);
                 }
             }
