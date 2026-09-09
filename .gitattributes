@@ -1,0 +1,8 @@
+# Byte-stable agent context and tooling: LF in the working tree on every OS.
+# Matches the .editorconfig overrides; the LLM lint fails on CR.
+.llm/** text eol=lf
+scripts/** text eol=lf
+AGENTS.md text eol=lf
+CLAUDE.md text eol=lf
+.cursorrules text eol=lf
+.github/copilot-instructions.md text eol=lf
