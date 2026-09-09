@@ -33,7 +33,7 @@ on every commit and fails fast when tools are missing.
 - Modifier order: `public private protected internal file new static abstract virtual sealed
   readonly override extern unsafe volatile async required`.
 - Files: UTF-8 BOM + CRLF for C# assets (repo default). Do not "fix" line endings on untouched
-  files - that pollutes diffs. Exceptions: `.llm/**` and `scripts/**` are UTF-8 no BOM + LF
+  files - that pollutes diffs. Exceptions: `.llm/**` and `tooling~/scripts/**` are UTF-8 no BOM + LF
   (enforced by `.editorconfig` overrides and the LLM linters).
 
 ## Pre-commit hooks

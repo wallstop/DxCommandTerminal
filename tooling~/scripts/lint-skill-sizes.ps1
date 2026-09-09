@@ -10,7 +10,7 @@
     - <=269 lines: OK
 
     The generated .llm/skills/index.md is exempt: it is machine-written by
-    scripts/generate-skills-index.ps1, not an authored file.
+    tooling~/scripts/generate-skills-index.ps1, not an authored file.
 
     Skill/context messages use [skill-sizes] / [context-size] prefixes.
 
@@ -24,8 +24,8 @@
     Repository root. Defaults to the parent of this script's directory.
 
 .EXAMPLE
-    pwsh -NoProfile -File scripts/lint-skill-sizes.ps1
-    pwsh -NoProfile -File scripts/lint-skill-sizes.ps1 -VerboseOutput
+    pwsh -NoProfile -File tooling~/scripts/lint-skill-sizes.ps1
+    pwsh -NoProfile -File tooling~/scripts/lint-skill-sizes.ps1 -VerboseOutput
 #>
 Param(
     [switch]$VerboseOutput,
@@ -49,7 +49,7 @@ function Write-SuccessMsg($msg, $prefix = "[skill-sizes]") {
 }
 
 if (-not $RepoRoot) {
-    $RepoRoot = (Get-Item $PSScriptRoot).Parent.FullName
+    $RepoRoot = (Get-Item $PSScriptRoot).Parent.Parent.FullName
 }
 
 $llmDir = Join-Path -Path $RepoRoot -ChildPath '.llm'

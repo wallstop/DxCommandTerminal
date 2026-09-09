@@ -27,4 +27,4 @@ jobs:
 
       - name: Lint Unity meta hygiene
         shell: pwsh
-        run: ./scripts/lint-unity-meta.ps1
+        run: ./tooling~/scripts/lint-unity-meta.ps1

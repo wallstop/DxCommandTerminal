@@ -19,7 +19,7 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BACKENDS="${SCRIPT_DIR}/../../.devcontainer/ai-backends.sh"
+BACKENDS="${SCRIPT_DIR}/../../../.devcontainer/ai-backends.sh"
 WORK="$(mktemp -d)"
 trap 'rm -rf "${WORK}"' EXIT
 
@@ -470,7 +470,7 @@ out="${WORK}/env-precedence.txt"
 assert_contains "${out}" "^export ZAI_API_KEY='env-zai-wins'\$" "env honors environment precedence"
 
 echo "== env-autoload: rc snippet exports .env.local credentials for native agents =="
-AUTOLOAD="${SCRIPT_DIR}/../../.devcontainer/env-autoload.sh"
+AUTOLOAD="${SCRIPT_DIR}/../../../.devcontainer/env-autoload.sh"
 assert "env-autoload snippet exists" test -f "${AUTOLOAD}"
 mkdir -p "${WORK}/autoload-root/.devcontainer"
 cp "${BACKENDS}" "${WORK}/autoload-root/.devcontainer/ai-backends.sh"
@@ -514,7 +514,7 @@ touch "${out}/.bashrc" "${out}/.profile"
 (
     # Sourcing post-create.sh only defines functions and enables -euo pipefail
     # (main is guarded); relax the flags for the assertions below.
-    . "${SCRIPT_DIR}/../../.devcontainer/post-create.sh"
+    . "${SCRIPT_DIR}/../../../.devcontainer/post-create.sh"
     set +e +u
     HOME="${WORK}/pc-home"; export HOME
     ensure_env_local_autoload "${WORK}/autoload-root"

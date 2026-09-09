@@ -27,8 +27,8 @@
     Repository root. Defaults to the parent of this script's directory.
 
 .EXAMPLE
-    pwsh -NoProfile -File scripts/lint-unity-meta.ps1
-    pwsh -NoProfile -File scripts/lint-unity-meta.ps1 -VerboseOutput
+    pwsh -NoProfile -File tooling~/scripts/lint-unity-meta.ps1
+    pwsh -NoProfile -File tooling~/scripts/lint-unity-meta.ps1 -VerboseOutput
 #>
 Param(
     [switch]$VerboseOutput,
@@ -47,7 +47,7 @@ function Write-SuccessMsg($msg) {
 }
 
 if (-not $RepoRoot) {
-    $RepoRoot = (Get-Item $PSScriptRoot).Parent.FullName
+    $RepoRoot = (Get-Item $PSScriptRoot).Parent.Parent.FullName
 }
 
 Push-Location $RepoRoot

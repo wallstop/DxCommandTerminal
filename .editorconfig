@@ -184,9 +184,9 @@ indent_size = 4
 tab_width = 4
 
 # LLM context and tooling: UTF-8 without BOM + LF for byte-stable cross-OS
-# generation (enforced by scripts/lint-llm-instructions.ps1). Overrides the
+# generation (enforced by tooling~/scripts/lint-llm-instructions.ps1). Overrides the
 # repo-wide BOM/CRLF defaults, which remain for C# assets.
-[{.llm/**,scripts/**,.devcontainer/**,.github/copilot-instructions.md,AGENTS.md,CLAUDE.md,.cursorrules}]
+[{.llm/**,tooling~/**,.devcontainer/**,.github/copilot-instructions.md,AGENTS.md,CLAUDE.md,.cursorrules}]
 charset = utf-8
 end_of_line = lf
 insert_final_newline = true

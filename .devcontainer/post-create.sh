@@ -106,7 +106,7 @@ EOF
 }
 
 configure_agent_mcps() {
-    local configure=(node "${WORKSPACE_DIR}/scripts/mcp/unity-mcp.mjs" configure --offline)
+    local configure=(node "${WORKSPACE_DIR}/tooling~/tooling~/scripts/mcp/unity-mcp.mjs" configure --offline)
     if command -v flock >/dev/null 2>&1; then
         flock -w 180 "${MCP_CONFIGURE_LOCK}" "${configure[@]}"
         return
@@ -228,7 +228,8 @@ main() {
     cd "${WORKSPACE_DIR}"
     run_optional "Restoring .NET local tools (CSharpier)" dotnet tool restore
     # npm install reuses the persistent modules tree; npm ci would remove it.
-    run_optional "Installing workspace npm dependencies" npm install --prefer-offline --no-audit --no-fund
+    # The npm project lives under tooling~/ so Unity never imports node_modules.
+    run_optional "Installing workspace npm dependencies" npm --prefix tooling~ install --prefer-offline --no-audit --no-fund
     run_optional "Configuring MCP servers for every agent front end" configure_agent_mcps
     run_optional "Installing Z.AI and OpenRouter agent launchers" \
         bash "${SCRIPT_DIR}/ai-backends.sh" install

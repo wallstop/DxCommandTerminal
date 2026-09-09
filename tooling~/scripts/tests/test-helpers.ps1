@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Shared helpers for the pwsh test scripts under scripts/tests/.
+    Shared helpers for the pwsh test scripts under tooling~/scripts/tests/.
 
 .DESCRIPTION
     Minimal test harness: named test cases with automatic pass/fail tracking,

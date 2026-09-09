@@ -42,7 +42,7 @@ const [
     "jsonc-parser"
   ].map(dependency)
 );
-export const REPO_ROOT = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
+export const REPO_ROOT = path.resolve(fileURLToPath(new URL("../../..", import.meta.url)));
 export const GITHUB_MCP_URL = "https://api.githubcopilot.com/mcp/";
 export const DEFAULTS = Object.freeze({
   bindHost: "0.0.0.0",
@@ -1478,7 +1478,7 @@ const CAPTURE_TYPE_PROBE =
 const CAPTURE_REFRESH_EXPRESSION = "UnityEditor.AssetDatabase.Refresh()";
 
 export function captureScriptSourcePath(repoRoot = REPO_ROOT) {
-  return path.join(repoRoot, "scripts", "mcp", CAPTURE_SOURCE_NAME);
+  return path.join(repoRoot, "tooling~", "scripts", "mcp", CAPTURE_SOURCE_NAME);
 }
 
 export function captureInstallTarget(projectPath) {
@@ -1724,7 +1724,7 @@ async function waitForEditorIdle(client, evalCall, deadline) {
 
 function usage() {
   return [
-    "Usage: node scripts/mcp/unity-mcp.mjs <probe|configure|bridge|install-capture|capture> [options]",
+    "Usage: node tooling~/scripts/mcp/unity-mcp.mjs <probe|configure|bridge|install-capture|capture> [options]",
     "",
     "  probe           Discover Unity tools and check editor readiness.",
     "  configure       Configure agent MCP servers, discovering Unity unless --offline is set.",

@@ -1,0 +1,22 @@
+{
+  "name": "dxcommandterminal-tooling",
+  "private": true,
+  "description": "npm tooling for the DxCommandTerminal repository. Lives under tooling~/ (tilde-suffixed) so Unity never imports it or its node_modules when the repository is used as a local package. The root UPM package.json delegates here via `npm --prefix tooling~`.",
+  "engines": {
+    "node": ">=22.7.0"
+  },
+  "scripts": {
+    "test": "node --test \"scripts/mcp/__tests__/*.test.mjs\"",
+    "unity:mcp:probe": "node scripts/mcp/unity-mcp.mjs probe",
+    "unity:mcp:configure": "node scripts/mcp/unity-mcp.mjs configure",
+    "unity:mcp:bridge": "node scripts/mcp/unity-mcp.mjs bridge",
+    "unity:mcp:install-capture": "node scripts/mcp/unity-mcp.mjs install-capture",
+    "unity:capture": "node scripts/mcp/unity-mcp.mjs capture",
+    "ai:backends": "bash ../.devcontainer/ai-backends.sh"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "jsonc-parser": "3.3.1",
+    "smol-toml": "1.8.0"
+  }
+}

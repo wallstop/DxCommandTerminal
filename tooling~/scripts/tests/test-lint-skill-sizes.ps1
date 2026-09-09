@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Red-green tests for scripts/lint-skill-sizes.ps1.
+    Red-green tests for tooling~/scripts/lint-skill-sizes.ps1.
 
 .DESCRIPTION
     Builds isolated fixture repos and asserts boundary behavior of the line
@@ -8,7 +8,7 @@
     exemption, recursive coverage, and the -FailOnCritical switch.
 
 .EXAMPLE
-    pwsh -NoProfile -File scripts/tests/test-lint-skill-sizes.ps1
+    pwsh -NoProfile -File tooling~/scripts/tests/test-lint-skill-sizes.ps1
 #>
 Param(
     [switch]$VerboseOutput

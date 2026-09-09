@@ -29,8 +29,8 @@
     Repository root. Defaults to the parent of this script's directory.
 
 .EXAMPLE
-    pwsh -NoProfile -File scripts/lint-llm-instructions.ps1
-    pwsh -NoProfile -File scripts/lint-llm-instructions.ps1 -Fix
+    pwsh -NoProfile -File tooling~/scripts/lint-llm-instructions.ps1
+    pwsh -NoProfile -File tooling~/scripts/lint-llm-instructions.ps1 -Fix
 #>
 Param(
     [switch]$Fix,
@@ -54,7 +54,7 @@ function Write-SuccessMsg($msg) {
 }
 
 if (-not $RepoRoot) {
-    $RepoRoot = (Get-Item $PSScriptRoot).Parent.FullName
+    $RepoRoot = (Get-Item $PSScriptRoot).Parent.Parent.FullName
 }
 
 $skillsDir = Join-Path -Path $RepoRoot -ChildPath '.llm/skills'
@@ -253,7 +253,7 @@ try {
             Write-SuccessMsg "Generated missing $indexFileName"
         }
         else {
-            Write-ErrorMsg "$indexFileName does not exist. Run: pwsh -NoProfile -File scripts/generate-skills-index.ps1"
+            Write-ErrorMsg "$indexFileName does not exist. Run: pwsh -NoProfile -File tooling~/scripts/generate-skills-index.ps1"
             exit 1
         }
     }
@@ -286,7 +286,7 @@ try {
                     $shown++
                 }
             }
-            Write-Host "Run: pwsh -NoProfile -File scripts/generate-skills-index.ps1 (or this lint with -Fix)" -ForegroundColor Cyan
+            Write-Host "Run: pwsh -NoProfile -File tooling~/scripts/generate-skills-index.ps1 (or this lint with -Fix)" -ForegroundColor Cyan
             $exitCode = 1
         }
     }
