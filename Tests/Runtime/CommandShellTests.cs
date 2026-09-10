@@ -31,19 +31,35 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Exception exception = null;
             Action<string> assertion = null;
 
+            // These tests assert per-command logging only; applying deferred
+            // registration up front keeps its readiness log out of the window.
+            Terminal.Shell.EnsureAutoCommandsRegistered();
+
             Application.logMessageReceived += HandleMessageReceived;
             try
             {
                 CommandShell shell = Terminal.Shell;
                 Assert.IsNotNull(shell, "Terminal.Shell should not be null after SpawnTerminal");
                 CommandHistory history = Terminal.History;
-                Assert.IsNotNull(history, "Terminal.History should not be null after SpawnTerminal");
+                Assert.IsNotNull(
+                    history,
+                    "Terminal.History should not be null after SpawnTerminal"
+                );
 
                 int expectedLogCount = 0;
-                assertion = message => Assert.AreEqual(string.Empty, message, "Expected empty log message for lone single-quote argument");
+                assertion = message =>
+                    Assert.AreEqual(
+                        string.Empty,
+                        message,
+                        "Expected empty log message for lone single-quote argument"
+                    );
                 string command = "log '             ";
                 shell.RunCommand(command);
-                Assert.AreEqual(++expectedLogCount, logCount, $"Log count mismatch after running: {command}");
+                Assert.AreEqual(
+                    ++expectedLogCount,
+                    logCount,
+                    $"Log count mismatch after running: {command}"
+                );
                 Assert.IsNull(exception, $"Error running {command}: {exception}");
                 string[] logs = history.GetHistory(true, true).ToArray();
                 Assert.AreEqual(
@@ -57,10 +73,19 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 );
 
                 string expected = "' abd      \"   ";
-                assertion = message => Assert.AreEqual(expected.Substring(1), message, "Unescaped quote should consume rest of string excluding opening quote");
+                assertion = message =>
+                    Assert.AreEqual(
+                        expected.Substring(1),
+                        message,
+                        "Unescaped quote should consume rest of string excluding opening quote"
+                    );
                 command = "log " + expected;
                 shell.RunCommand(command);
-                Assert.AreEqual(++expectedLogCount, logCount, $"Log count mismatch after running: {command}");
+                Assert.AreEqual(
+                    ++expectedLogCount,
+                    logCount,
+                    $"Log count mismatch after running: {command}"
+                );
                 Assert.IsNull(exception, $"Error running {command}: {exception}");
                 logs = history.GetHistory(true, true).ToArray();
                 Assert.AreEqual(
@@ -103,6 +128,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             int logCount = 0;
             Exception exception = null;
             Action<string> assertion = null;
+
+            // These tests assert per-command logging only; applying deferred
+            // registration up front keeps its readiness log out of the window.
+            Terminal.Shell.EnsureAutoCommandsRegistered();
 
             Application.logMessageReceived += HandleMessageReceived;
             try
