@@ -33,6 +33,11 @@ static void CommandAdd(CommandArg[] args)
   Assemblies without a catalog (precompiled DLLs, or when analyzers are unavailable) fall back
   to reflection over terminal-referencing assemblies; user assemblies take precedence over
   built-ins with the same name either way.
+- Registration is deferred to first use: the terminal applies its ignored/default configuration
+  when enabled, but the discovery scan and delegate materialization run at the first command
+  request (first `RunCommand`, first read of `Terminal.Shell.Commands`, or an explicit
+  `Terminal.Shell.EnsureAutoCommandsRegistered()` call). `Terminal.Shell.AutoCommandsRegistered`
+  reports whether registration has been applied.
 
 ## Attribute knobs
 
