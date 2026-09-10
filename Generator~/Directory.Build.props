@@ -1,0 +1,11 @@
+<Project>
+  <!--
+    Compiler warnings are errors here, at the maximum warning level, for every project under
+    Generator~. Adapted from the unity-helpers Generator~/Directory.Build.props pattern
+    (MIT, Ambiguous-Interactive) so both repositories share the same shipped-analyzer hygiene.
+  -->
+  <PropertyGroup>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <WarningLevel>9999</WarningLevel>
+  </PropertyGroup>
+</Project>

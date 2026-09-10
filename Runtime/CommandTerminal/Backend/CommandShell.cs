@@ -5,6 +5,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     using System.Diagnostics;
     using System.Linq;
     using System.Reflection;
+    using System.Runtime.CompilerServices;
     using System.Text;
     using Attributes;
     using DataStructures;
@@ -13,6 +14,29 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
     public sealed class CommandShell
     {
+        private const string CatalogTypeName =
+            "WallstopStudios.DxCommandTerminal.Generated.CommandCatalog";
+
+        private const string CatalogCollectMethodName = "Collect";
+
+        private const BindingFlags CatalogBindingFlags =
+            BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+
+        private const BindingFlags ReflectedMethodBindingFlags =
+            BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+
+        /*
+            Generated catalogs expose `public static void Collect(
+            List<CommandCatalogEntry> entries)`. Probes and bindings are cached
+            per assembly for the lifetime of the domain; the weak table keeps
+            unloaded-collectible editor assemblies collectible.
+         */
+        private static readonly ConditionalWeakTable<
+            Assembly,
+            StrongBox<Action<List<CommandCatalogEntry>>>
+        > CatalogCollectors =
+            new ConditionalWeakTable<Assembly, StrongBox<Action<List<CommandCatalogEntry>>>>();
+
         public static readonly Lazy<(
             MethodInfo method,
             RegisterCommandAttribute attribute
@@ -22,101 +46,14 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             Stopwatch stopwatch = Stopwatch.StartNew();
 #endif
             List<(MethodInfo, RegisterCommandAttribute)> commands = new();
-            const BindingFlags methodFlags =
-                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
 
             Assembly ourAssembly = typeof(BuiltInCommands).Assembly;
-            AssemblyName self = ourAssembly.GetName();
             Assembly[] loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies();
-
-            /*
-                Only assemblies that reference this one can contain
-                RegisterCommandAttribute, so everything else is skipped without
-                loading a single type. Our assembly is processed last so user
-                commands, if they conflict with in-built ones, are always
-                registered first.
-             */
-            List<Assembly> scanCandidates = new(loadedAssemblies.Length);
-            for (int i = 0; i < loadedAssemblies.Length; i++)
-            {
-                Assembly assembly = loadedAssemblies[i];
-                try
-                {
-                    if (AssemblyName.ReferenceMatchesDefinition(assembly.GetName(), self))
-                    {
-                        continue;
-                    }
-
-                    if (MayContainCommands(assembly, self))
-                    {
-                        scanCandidates.Add(assembly);
-                    }
-                }
-                catch (Exception)
-                {
-                    // Classification must never be able to fail discovery; if
-                    // an assembly cannot be classified, scan it.
-                    scanCandidates.Add(assembly);
-                }
-            }
-
-            scanCandidates.Add(ourAssembly);
+            List<Assembly> scanCandidates = CollectScanCandidates(loadedAssemblies, ourAssembly);
 
             for (int i = 0; i < scanCandidates.Count; i++)
             {
-                if (!TryGetScanTypes(scanCandidates[i], out Type[] types))
-                {
-                    continue;
-                }
-
-                for (int j = 0; j < types.Length; j++)
-                {
-                    Type type = types[j];
-                    if (type == null)
-                    {
-                        continue;
-                    }
-
-                    try
-                    {
-                        foreach (MethodInfo method in type.GetMethods(methodFlags))
-                        {
-                            try
-                            {
-                                if (!method.IsDefined(typeof(RegisterCommandAttribute), false))
-                                {
-                                    continue;
-                                }
-
-                                if (
-                                    Attribute.GetCustomAttribute(
-                                        method,
-                                        typeof(RegisterCommandAttribute)
-                                    )
-                                    is not RegisterCommandAttribute attribute
-                                )
-                                {
-                                    continue;
-                                }
-
-                                attribute.NormalizeName(method);
-                                commands.Add((method, attribute));
-                            }
-                            catch (Exception e)
-                            {
-                                Debug.LogError(
-                                    $"Failed to resolve method {method.Name} of type {type.FullName} with exception {e}"
-                                );
-                            }
-                        }
-                    }
-                    catch (Exception e)
-                    {
-                        Debug.LogError(
-                            $"Failed to resolve methods for type {type.FullName} with exception {e}"
-                        );
-                    }
-                }
+                CollectReflectedCommands(scanCandidates[i], commands);
             }
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
@@ -203,6 +140,367 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             return false;
         }
 
+        /*
+            Only assemblies that reference this one can contain
+            RegisterCommandAttribute, so everything else is skipped without
+            loading a single type. Our assembly is processed last so user
+            commands, if they conflict with in-built ones, are always
+            registered first.
+         */
+        private static List<Assembly> CollectScanCandidates(
+            Assembly[] loadedAssemblies,
+            Assembly ourAssembly
+        )
+        {
+            AssemblyName self = ourAssembly.GetName();
+            List<Assembly> scanCandidates = new(loadedAssemblies.Length);
+            for (int i = 0; i < loadedAssemblies.Length; i++)
+            {
+                Assembly assembly = loadedAssemblies[i];
+                try
+                {
+                    if (AssemblyName.ReferenceMatchesDefinition(assembly.GetName(), self))
+                    {
+                        continue;
+                    }
+
+                    if (MayContainCommands(assembly, self))
+                    {
+                        scanCandidates.Add(assembly);
+                    }
+                }
+                catch (Exception)
+                {
+                    // Classification must never be able to fail discovery; if
+                    // an assembly cannot be classified, scan it.
+                    scanCandidates.Add(assembly);
+                }
+            }
+
+            scanCandidates.Add(ourAssembly);
+            return scanCandidates;
+        }
+
+        private static void CollectReflectedCommands(
+            Assembly assembly,
+            List<(MethodInfo method, RegisterCommandAttribute attribute)> commands
+        )
+        {
+            if (!TryGetScanTypes(assembly, out Type[] types))
+            {
+                return;
+            }
+
+            for (int j = 0; j < types.Length; j++)
+            {
+                Type type = types[j];
+                if (type == null)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    foreach (MethodInfo method in type.GetMethods(ReflectedMethodBindingFlags))
+                    {
+                        try
+                        {
+                            if (!method.IsDefined(typeof(RegisterCommandAttribute), false))
+                            {
+                                continue;
+                            }
+
+                            if (
+                                Attribute.GetCustomAttribute(
+                                    method,
+                                    typeof(RegisterCommandAttribute)
+                                )
+                                is not RegisterCommandAttribute attribute
+                            )
+                            {
+                                continue;
+                            }
+
+                            attribute.NormalizeName(method);
+                            commands.Add((method, attribute));
+                        }
+                        catch (Exception e)
+                        {
+                            Debug.LogError(
+                                $"Failed to resolve method {method.Name} of type {type.FullName} with exception {e}"
+                            );
+                        }
+                    }
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError(
+                        $"Failed to resolve methods for type {type.FullName} with exception {e}"
+                    );
+                }
+            }
+        }
+
+        /*
+            One generated command registration, shared by the generated-catalog
+            path and the reflection compatibility path so both apply identical
+            filtering, validation, and diagnostics.
+         */
+        private readonly struct AutoCommand
+        {
+            public readonly string Name;
+            public readonly string MethodName;
+            public readonly int MinArgCount;
+            public readonly int MaxArgCount;
+            public readonly string Help;
+            public readonly string Hint;
+            public readonly bool AddToHistory;
+            public readonly bool EditorOnly;
+            public readonly bool DevelopmentOnly;
+            public readonly bool IsDefault;
+
+            // Non-null for valid (CommandArg[]) signatures. Null marks a
+            // rejected command; diagnostics then come from MethodAccessor.
+            public readonly Func<Action<CommandArg[]>> Binder;
+
+            public readonly Func<MethodInfo> MethodAccessor;
+
+            private AutoCommand(
+                string name,
+                string methodName,
+                int minArgCount,
+                int maxArgCount,
+                string help,
+                string hint,
+                bool addToHistory,
+                bool editorOnly,
+                bool developmentOnly,
+                bool isDefault,
+                Func<Action<CommandArg[]>> binder,
+                Func<MethodInfo> methodAccessor
+            )
+            {
+                Name = name;
+                MethodName = methodName;
+                MinArgCount = minArgCount;
+                MaxArgCount = maxArgCount;
+                Help = help;
+                Hint = hint;
+                AddToHistory = addToHistory;
+                EditorOnly = editorOnly;
+                DevelopmentOnly = developmentOnly;
+                IsDefault = isDefault;
+                Binder = binder;
+                MethodAccessor = methodAccessor;
+            }
+
+            public static AutoCommand FromCatalog(CommandCatalogEntry entry)
+            {
+                return new AutoCommand(
+                    entry.Name,
+                    entry.MethodName,
+                    entry.MinArgCount,
+                    entry.MaxArgCount,
+                    entry.Help,
+                    entry.Hint,
+                    entry.AddToHistory,
+                    entry.EditorOnly,
+                    entry.DevelopmentOnly,
+                    entry.IsDefault,
+                    entry.Binder,
+                    entry.MethodAccessor
+                );
+            }
+
+            public static AutoCommand FromReflected(
+                MethodInfo method,
+                RegisterCommandAttribute attribute
+            )
+            {
+                bool valid = IsValidSignature(method);
+                return new AutoCommand(
+                    attribute.Name,
+                    method.Name,
+                    attribute.MinArgCount,
+                    attribute.MaxArgCount,
+                    attribute.Help,
+                    attribute.Hint,
+                    attribute.AddToHistory,
+                    attribute.EditorOnly,
+                    attribute.DevelopmentOnly,
+                    attribute.Default,
+                    valid
+                        ? () =>
+                            (Action<CommandArg[]>)
+                                Delegate.CreateDelegate(typeof(Action<CommandArg[]>), method)
+                        : null,
+                    () => method
+                );
+            }
+
+            private static bool IsValidSignature(MethodInfo method)
+            {
+                ParameterInfo[] methodParams = method.GetParameters();
+                return methodParams.Length == 1
+                    && methodParams[0].ParameterType == typeof(CommandArg[]);
+            }
+        }
+
+        /*
+            Probes the assembly for its generated `CommandCatalog` and binds its
+            Collect method. One targeted metadata lookup per assembly; results
+            are cached per assembly for the domain.
+         */
+        private static bool TryGetCatalogCollector(
+            Assembly assembly,
+            out Action<List<CommandCatalogEntry>> collector
+        )
+        {
+            if (
+                CatalogCollectors.TryGetValue(
+                    assembly,
+                    out StrongBox<Action<List<CommandCatalogEntry>>> box
+                )
+            )
+            {
+                collector = box.Value;
+                return collector != null;
+            }
+
+            collector = BindCatalogCollector(assembly);
+            CatalogCollectors.AddOrUpdate(
+                assembly,
+                new StrongBox<Action<List<CommandCatalogEntry>>>(collector)
+            );
+            return collector != null;
+        }
+
+        private static Action<List<CommandCatalogEntry>> BindCatalogCollector(Assembly assembly)
+        {
+            Type catalogType;
+            try
+            {
+                catalogType = assembly.GetType(CatalogTypeName, false);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning(
+                    $"[DxCommandTerminal] Failed to probe for a generated command catalog in "
+                        + $"{assembly.GetName().Name}: {e.Message}"
+                );
+                return null;
+            }
+
+            if (catalogType == null)
+            {
+                return null;
+            }
+
+            MethodInfo collectMethod;
+            try
+            {
+                collectMethod = catalogType.GetMethod(
+                    CatalogCollectMethodName,
+                    CatalogBindingFlags,
+                    null,
+                    new Type[] { typeof(List<CommandCatalogEntry>) },
+                    null
+                );
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning(
+                    $"[DxCommandTerminal] Found a generated command catalog in "
+                        + $"{assembly.GetName().Name} but failed to bind it: {e.Message}"
+                );
+                return null;
+            }
+
+            if (collectMethod == null || collectMethod.ReturnType != typeof(void))
+            {
+                return null;
+            }
+
+            try
+            {
+                return (Action<List<CommandCatalogEntry>>)
+                    Delegate.CreateDelegate(
+                        typeof(Action<List<CommandCatalogEntry>>),
+                        collectMethod
+                    );
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning(
+                    $"[DxCommandTerminal] Found a generated command catalog in "
+                        + $"{assembly.GetName().Name} but failed to bind it: {e.Message}"
+                );
+                return null;
+            }
+        }
+
+        /*
+            Collects auto-registered commands for one assembly: from its
+            generated catalog when the generator produced one, otherwise from
+            the reflection compatibility walk. Never walks types for an
+            assembly that produced a non-empty catalog. Returns whether the
+            catalog path was used.
+         */
+        private static bool CollectAutoCommands(Assembly assembly, List<AutoCommand> commands)
+        {
+            if (!TryGetCatalogCollector(assembly, out Action<List<CommandCatalogEntry>> collector))
+            {
+                CollectReflectedAutoCommands(assembly, commands);
+                return false;
+            }
+
+            List<CommandCatalogEntry> entries = new();
+            bool collected = false;
+            try
+            {
+                collector(entries);
+                collected = true;
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning(
+                    $"[DxCommandTerminal] Generated command catalog in "
+                        + $"{assembly.GetName().Name} failed to collect: {e.Message}; "
+                        + $"falling back to reflection discovery"
+                );
+            }
+
+            if (collected && 0 < entries.Count)
+            {
+                for (int i = 0; i < entries.Count; i++)
+                {
+                    commands.Add(AutoCommand.FromCatalog(entries[i]));
+                }
+
+                return true;
+            }
+
+            // An empty or failed catalog is not proof that the assembly has no
+            // commands; the reflection walk below stays compatible with it.
+            CollectReflectedAutoCommands(assembly, commands);
+            return false;
+        }
+
+        private static void CollectReflectedAutoCommands(
+            Assembly assembly,
+            List<AutoCommand> commands
+        )
+        {
+            List<(MethodInfo method, RegisterCommandAttribute attribute)> reflected = new();
+            CollectReflectedCommands(assembly, reflected);
+            for (int i = 0; i < reflected.Count; i++)
+            {
+                commands.Add(
+                    AutoCommand.FromReflected(reflected[i].method, reflected[i].attribute)
+                );
+            }
+        }
+
         private static bool TryGetScanTypes(Assembly assembly, out Type[] types)
         {
             try
@@ -280,57 +578,99 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             IgnoredCommands = _ignoredCommands.ToReadOnlyHashSet(StringComparer.OrdinalIgnoreCase);
             _rejectedCommands.Clear();
 
-            foreach (
-                (MethodInfo method, RegisterCommandAttribute attribute) in RegisteredCommands.Value
-            )
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            Stopwatch stopwatch = Stopwatch.StartNew();
+#endif
+            int registeredCount = 0;
+            int catalogAssemblies = 0;
+            int reflectedAssemblies = 0;
+
+            Assembly[] loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies();
+            List<Assembly> scanCandidates = CollectScanCandidates(
+                loadedAssemblies,
+                typeof(BuiltInCommands).Assembly
+            );
+
+            List<AutoCommand> autoCommands = new();
+            for (int i = 0; i < scanCandidates.Count; i++)
             {
-                string commandName = attribute.Name;
+                if (CollectAutoCommands(scanCandidates[i], autoCommands))
+                {
+                    catalogAssemblies++;
+                }
+                else
+                {
+                    reflectedAssemblies++;
+                }
+            }
+
+            for (int i = 0; i < autoCommands.Count; i++)
+            {
+                AutoCommand command = autoCommands[i];
+                string commandName = command.Name;
                 if (_ignoredCommands.Contains(commandName))
                 {
                     continue;
                 }
 
-                if (ignoreDefaultCommands && attribute.Default)
+                if (ignoreDefaultCommands && command.IsDefault)
                 {
                     continue;
                 }
 
-                if (attribute.EditorOnly && !Application.isEditor)
+                if (command.EditorOnly && !Application.isEditor)
                 {
                     continue;
                 }
 
-                if (attribute.DevelopmentOnly && !Application.isEditor && !Debug.isDebugBuild)
+                if (command.DevelopmentOnly && !Application.isEditor && !Debug.isDebugBuild)
                 {
                     continue;
                 }
 
-                ParameterInfo[] methodsParams = method.GetParameters();
-                if (
-                    methodsParams.Length != 1
-                    || methodsParams[0].ParameterType != typeof(CommandArg[])
-                )
+                if (command.Binder == null)
                 {
-                    _rejectedCommands.TryAdd(commandName, method);
+                    RegisterRejectedCommand(command, commandName);
+                    continue;
+                }
+
+                Action<CommandArg[]> proc;
+                try
+                {
+                    proc = command.Binder();
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError(
+                        $"[DxCommandTerminal] Failed to bind command {commandName} "
+                            + $"(method {command.MethodName}): {e.Message}"
+                    );
+                    continue;
+                }
+
+                if (proc == null)
+                {
+                    Debug.LogError(
+                        $"[DxCommandTerminal] Failed to bind command {commandName} "
+                            + $"(method {command.MethodName}): no handler was produced"
+                    );
                     continue;
                 }
 
                 // Perf boost, much cheaper than running reflection on invoking the method
-                Action<CommandArg[]> proc =
-                    (Action<CommandArg[]>)
-                        Delegate.CreateDelegate(typeof(Action<CommandArg[]>), method);
                 bool success = AddCommand(
                     commandName,
                     proc,
-                    attribute.MinArgCount,
-                    attribute.MaxArgCount,
-                    attribute.Help,
-                    attribute.Hint,
-                    attribute.AddToHistory
+                    command.MinArgCount,
+                    command.MaxArgCount,
+                    command.Help,
+                    command.Hint,
+                    command.AddToHistory
                 );
                 if (success)
                 {
                     _autoRegisteredCommands.Add(commandName);
+                    registeredCount++;
                 }
             }
 
@@ -346,6 +686,44 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                         + $"Found: {command.Value.Name}({string.Join(",", command.Value.GetParameters().Select(p => p.ParameterType.Name))})"
                 );
             }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            Debug.Log(
+                $"[DxCommandTerminal] Registered {registeredCount} auto-registered commands in "
+                    + $"{stopwatch.Elapsed.TotalMilliseconds:F2} ms "
+                    + $"({catalogAssemblies} generated catalog(s), {reflectedAssemblies} reflection-scanned assembly(ies))"
+            );
+#endif
+        }
+
+        private void RegisterRejectedCommand(AutoCommand command, string commandName)
+        {
+            MethodInfo method = null;
+            if (command.MethodAccessor != null)
+            {
+                try
+                {
+                    method = command.MethodAccessor();
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning(
+                        $"[DxCommandTerminal] Failed to resolve rejected command {commandName} "
+                            + $"(method {command.MethodName}) for diagnostics: {e.Message}"
+                    );
+                }
+            }
+
+            if (method == null)
+            {
+                IssueErrorMessage(
+                    $"{commandName} has an invalid signature. "
+                        + $"Expected: {command.MethodName}(CommandArg[])."
+                );
+                return;
+            }
+
+            _rejectedCommands.TryAdd(commandName, method);
         }
 
         /// <summary>

@@ -30,3 +30,7 @@ opencode.jsonc
 GOAL.md*
 progress/
 progress.meta
+
+# DotNet build outputs under the Unity-hidden generator directory
+Generator~/**/bin/
+Generator~/**/obj/
