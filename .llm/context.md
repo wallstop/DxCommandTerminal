@@ -154,9 +154,9 @@ what the code cannot say. Details: [simple-writing](./skills/simple-writing/SKIL
 
 ### LLM Attribution (GitHub)
 
-All GitHub content posts through wallstop's credentials. LLM-generated comments, issues,
-PR descriptions, and reviews open with an LLM-generated disclosure at the top. Never
-auto-respond to outside contributors; collect their input and wait for wallstop.
+LLM-generated comments, issues, PR descriptions, and reviews start with
+`DISCLOSURE: LLM-GENERATED TEXT` as the first line. Never auto-respond to outside
+contributors; summarize and wait for wallstop.
 Details: [llm-attribution](./skills/llm-attribution/SKILL.md).
 
 ### Argument Parsing (Quick Reference)
