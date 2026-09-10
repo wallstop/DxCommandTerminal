@@ -141,6 +141,14 @@ frontmatter validity, index freshness, and pointer-file delegation; see
 - Non-static commands register manually: `Terminal.Shell.AddCommand(name, handler, min, max, help)`.
 - Details: [register-terminal-command](./skills/register-terminal-command/SKILL.md).
 
+### User-Facing Copy (STE)
+
+All text a human reads (PR titles, PR descriptions, commit messages, review comments,
+code comments, issues) uses Simplified Technical English: short sentences, active voice,
+present tense, common words, ASCII only. PRs and commits follow a "Why" / "How" /
+"What changed" order; omit sections that add nothing. Code comments stay minimal - only
+what the code cannot say. Details: [simple-writing](./skills/simple-writing/SKILL.md).
+
 ### Argument Parsing (Quick Reference)
 
 - `args[i].TryGet<T>(out T value)` returns `false` on failure instead of silently defaulting.
