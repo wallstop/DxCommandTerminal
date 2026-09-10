@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 
 - `TerminalUI` no longer runs command discovery on its enable frame. Commands register at the first command request (typically the first command run or completion query), bounded by the same discovery path measured at 1.5-1.8 ms for 25 commands in the test project. The terminal re-applies its command configuration on every refresh, so auto commands cleared through `CommandShell.ClearAutoRegisteredCommands` return on the next first use after a terminal enable, instead of the previous enable-time registration.
+- User commands now keep a name registered manually before first use: the colliding auto command is skipped with a console warning instead of queueing a duplicate `already defined` error for the first command request. This also applies at enable time when a user command shadows a built-in command.
 - Registering a static command whose signature is valid but not bindable (for example a generic method definition, a non-void handler, or a method inside an open generic type) now logs a contained error instead of aborting shell initialization, matching the catalog path's handling of rejected signatures.
 - An assembly holding commands inside private nested or file-local classes gets no generated catalog; the shell falls back to reflection for that assembly so no command is lost.
 

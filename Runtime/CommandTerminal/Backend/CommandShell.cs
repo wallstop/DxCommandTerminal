@@ -765,6 +765,21 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                     continue;
                 }
 
+                /*
+                    User commands win over auto ones (built-ins included). The
+                    collision is a console warning, not a queued terminal
+                    error, so readiness never surfaces it mid-session.
+                 */
+                if (_commands.ContainsKey(commandName))
+                {
+                    Debug.LogWarning(
+                        $"[DxCommandTerminal] Auto command {commandName} "
+                            + $"(method {command.MethodName}) skipped: a command with "
+                            + $"that name is already registered"
+                    );
+                    continue;
+                }
+
                 // Perf boost, much cheaper than running reflection on invoking the method
                 bool success = AddCommand(
                     commandName,

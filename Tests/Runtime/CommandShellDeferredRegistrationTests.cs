@@ -183,6 +183,38 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         [Test]
+        public void DeferredRegistrationLetsManualCommandsWinWithoutQueuedErrors()
+        {
+            string knownCommand = KnownAutoCommandNames[0];
+
+            CommandHistory history = new CommandHistory(16);
+            CommandShell shell = new CommandShell(history);
+            shell.InitializeAutoRegisteredCommands(deferRegistration: true);
+
+            // A manual registration between enable and first use keeps the
+            // name; readiness must not queue a duplicate error for it.
+            Assert.IsTrue(
+                shell.AddCommand(knownCommand, _ => { }, 0, -1, "manual override"),
+                $"Sanity: registering '{knownCommand}' manually on an empty shell must succeed"
+            );
+
+            shell.EnsureAutoCommandsRegistered();
+
+            Assert.IsFalse(
+                shell.AutoRegisteredCommands.Contains(knownCommand),
+                $"The auto command '{knownCommand}' must lose to the manual registration"
+            );
+            Assert.IsTrue(
+                shell.Commands.ContainsKey(knownCommand),
+                $"The manual registration of '{knownCommand}' must remain"
+            );
+            Assert.IsFalse(
+                shell.HasErrors,
+                "A manual override must not queue a terminal error at readiness"
+            );
+        }
+
+        [Test]
         public void ClearAutoRegisteredCommandsCancelsDeferredRegistration()
         {
             string knownCommand = KnownAutoCommandNames[0];
