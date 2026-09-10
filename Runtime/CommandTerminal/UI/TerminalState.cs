@@ -9,5 +9,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
         Closed = 1,
         OpenSmall = 2,
         OpenFull = 3,
+        OpenLauncher = 4,
     }
 }

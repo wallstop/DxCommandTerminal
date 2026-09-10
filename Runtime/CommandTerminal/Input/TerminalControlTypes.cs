@@ -14,5 +14,6 @@ namespace WallstopStudios.DxCommandTerminal.Input
         ToggleSmall = 6,
         CompleteForward = 7,
         CompleteBackward = 8,
+        ToggleLauncher = 9,
     }
 }

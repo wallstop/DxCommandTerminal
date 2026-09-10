@@ -35,6 +35,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
         public bool IsClosed =>
             _state != TerminalState.OpenFull
             && _state != TerminalState.OpenSmall
+            && _state != TerminalState.OpenLauncher
             && Mathf.Approximately(_currentWindowHeight, _targetWindowHeight);
 
         public string CurrentTheme =>
@@ -79,6 +80,27 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         [Tooltip("Duration for the ease-in animation in seconds")]
         public float easeInTime = 0.5f;
+
+        [Header("Launcher")]
+        [Range(0.2f, 1f)]
+        [Tooltip("Width of the launcher as a ratio of screen width")]
+        public float launcherWidth = 0.5f;
+
+        [Range(100f, 600f)]
+        [Tooltip("Base height of the launcher in pixels")]
+        public float launcherBaseHeight = 250f;
+
+        [Range(20f, 100f)]
+        [Tooltip("Height per history item in launcher mode")]
+        public float launcherHistoryItemHeight = 25f;
+
+        [Range(1, 10)]
+        [Tooltip("Maximum history items to show in launcher")]
+        public int launcherMaxHistoryItems = 5;
+
+        [Range(20f, 100f)]
+        [Tooltip("Height per autocomplete item in launcher mode")]
+        public float launcherAutoCompleteItemHeight = 30f;
 
         [Header("System")]
         [SerializeField]
@@ -666,6 +688,12 @@ namespace WallstopStudios.DxCommandTerminal.UI
                     {
                         _lastCompletionBuffer.Add(completion);
                     }
+
+                    // Recalculate height if in launcher mode
+                    if (_state == TerminalState.OpenLauncher)
+                    {
+                        ResetWindowIdempotent();
+                    }
                 }
             }
             else
@@ -696,6 +724,12 @@ namespace WallstopStudios.DxCommandTerminal.UI
                         _targetWindowHeight = _realWindowHeight;
                         break;
                     }
+                    case TerminalState.OpenLauncher:
+                    {
+                        _realWindowHeight = CalculateLauncherHeight();
+                        _targetWindowHeight = _realWindowHeight;
+                        break;
+                    }
                     default:
                     {
                         _realWindowHeight = height * maxHeight * smallTerminalRatio;
@@ -712,6 +746,28 @@ namespace WallstopStudios.DxCommandTerminal.UI
                     StartHeightAnimation();
                 }
             }
+        }
+
+        private float CalculateLauncherHeight()
+        {
+            float height = launcherBaseHeight;
+
+            // Add height for history items
+            int historyCount = Terminal.History?.Count ?? 0;
+            int visibleHistoryItems = Mathf.Min(historyCount, launcherMaxHistoryItems);
+            height += visibleHistoryItems * launcherHistoryItemHeight;
+
+            // Add height for autocomplete if active
+            if (hintDisplayMode is HintDisplayMode.Always or HintDisplayMode.AutoCompleteOnly)
+            {
+                int autoCompleteCount = _lastCompletionBuffer?.Count ?? 0;
+                if (autoCompleteCount > 0)
+                {
+                    height += autoCompleteCount * launcherAutoCompleteItemHeight;
+                }
+            }
+
+            return Mathf.Clamp(height, launcherBaseHeight, Screen.height * 0.8f);
         }
 
         private void SetupUI()
@@ -1101,7 +1157,27 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             _uiDocument.rootVisualElement.style.height = _currentWindowHeight;
             _terminalContainer.style.height = _currentWindowHeight;
-            _terminalContainer.style.width = Screen.width;
+
+            // Position and size based on state
+            if (_state == TerminalState.OpenLauncher)
+            {
+                // Center the launcher and use limited width
+                float width = Screen.width * launcherWidth;
+                float left = (Screen.width - width) / 2f;
+                _terminalContainer.style.width = width;
+                _terminalContainer.style.left = left;
+                _terminalContainer.style.top = 0;
+                _terminalContainer.style.position = Position.Absolute;
+            }
+            else
+            {
+                // Full width for normal terminal modes
+                _terminalContainer.style.width = Screen.width;
+                _terminalContainer.style.left = 0;
+                _terminalContainer.style.top = 0;
+                _terminalContainer.style.position = Position.Relative;
+            }
+
             DisplayStyle commandInputStyle =
                 _currentWindowHeight <= 30 ? DisplayStyle.None : DisplayStyle.Flex;
 
@@ -1590,6 +1666,16 @@ namespace WallstopStudios.DxCommandTerminal.UI
                         secondButton.text = smallButtonText;
                     }
                     break;
+                case TerminalState.OpenLauncher:
+                    if (!string.IsNullOrWhiteSpace(closeButtonText))
+                    {
+                        firstButton.text = closeButtonText;
+                    }
+                    if (!string.IsNullOrWhiteSpace(smallButtonText))
+                    {
+                        secondButton.text = smallButtonText;
+                    }
+                    break;
                 default:
                     throw new InvalidEnumArgumentException(
                         nameof(_state),
@@ -1611,6 +1697,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                         break;
                     case TerminalState.OpenSmall:
                     case TerminalState.OpenFull:
+                    case TerminalState.OpenLauncher:
                         if (!string.IsNullOrWhiteSpace(closeButtonText))
                         {
                             SetState(TerminalState.Closed);
@@ -1637,6 +1724,12 @@ namespace WallstopStudios.DxCommandTerminal.UI
                         }
                         break;
                     case TerminalState.OpenFull:
+                        if (!string.IsNullOrWhiteSpace(smallButtonText))
+                        {
+                            SetState(TerminalState.OpenSmall);
+                        }
+                        break;
+                    case TerminalState.OpenLauncher:
                         if (!string.IsNullOrWhiteSpace(smallButtonText))
                         {
                             SetState(TerminalState.OpenSmall);
@@ -1912,6 +2005,11 @@ namespace WallstopStudios.DxCommandTerminal.UI
             ToggleState(TerminalState.OpenFull);
         }
 
+        public void ToggleLauncher()
+        {
+            ToggleState(TerminalState.OpenLauncher);
+        }
+
         public void EnterCommand()
         {
             if (_state == TerminalState.Closed)
@@ -2038,6 +2136,12 @@ namespace WallstopStudios.DxCommandTerminal.UI
                             _lastCompletionBuffer.Add(item);
                         }
                         _previousLastCompletionIndex = null;
+
+                        // Recalculate height if in launcher mode
+                        if (_state == TerminalState.OpenLauncher)
+                        {
+                            ResetWindowIdempotent();
+                        }
                     }
 
                     _previousLastCompletionIndex ??= _lastCompletionIndex;
