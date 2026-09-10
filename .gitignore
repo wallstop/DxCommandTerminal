@@ -17,6 +17,10 @@ package-lock.json
 # Generated agent MCP configs (written by `npm run unity:mcp:configure`, contain tokens)
 .mcp.json
 opencode.jsonc
+# Unity regenerates these stubs for gitignored targets on local/embedded opens;
+# committing them would trip the orphan-meta half of the meta lint (issue #39)
+opencode.jsonc.meta
+node_modules.meta
 .codex/
 .cursor/mcp.json
 .copilot/

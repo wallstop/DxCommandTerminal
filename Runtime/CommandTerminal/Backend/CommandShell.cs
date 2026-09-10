@@ -343,6 +343,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
          */
         private sealed class DiscoveryCache
         {
+            /*
+                Written once per assembly on first initialization (Unity main
+                thread); worst case under unexpected concurrency is a harmless
+                redundant re-probe.
+             */
             public Action<List<CommandCatalogEntry>> Collector;
             public bool CollectorProbed;
             public List<AutoCommand> ReflectedCommands;
