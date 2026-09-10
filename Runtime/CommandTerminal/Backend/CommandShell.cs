@@ -7,6 +7,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     using System.Reflection;
     using System.Runtime.CompilerServices;
     using System.Text;
+    using System.Threading;
     using Attributes;
     using DataStructures;
     using UnityEngine;
@@ -61,7 +62,13 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             StringComparer.OrdinalIgnoreCase
         );
 
-        private bool _autoCommandsPending;
+        /*
+            1 while a deferred registration is waiting to run. The readiness
+            handoff uses Interlocked so two concurrent first uses cannot both
+            run the registration; command state itself stays single-threaded
+            like the rest of the shell.
+         */
+        private int _autoCommandsPending;
 
         private readonly StringBuilder _commandBuilder = new();
 
@@ -103,6 +110,12 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         public IReadOnlyDictionary<string, CommandArg> Variables => _variables;
 
+        /// <summary>
+        ///     Auto commands registered by this shell. Empty until registration
+        ///     is applied; a shell initialized with deferred registration stays
+        ///     empty past enable, and the first command request or an explicit
+        ///     <see cref="EnsureAutoCommandsRegistered"/> call fills it.
+        /// </summary>
         public ReadOnlyHashSet<string> AutoRegisteredCommands { get; private set; } =
             ReadOnlyHashSet<string>.Empty;
 
@@ -359,15 +372,15 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             Probes the assembly for its generated `CommandCatalog` and binds its
             Collect method, and caches the reflection-compatibility result for
             assemblies without one. Both are computed once per assembly per
-            domain; the weak table keeps unloaded-collectible editor
-            assemblies collectible.
+            domain on whatever thread first triggers readiness; the weak table
+            keeps unloaded-collectible editor assemblies collectible.
          */
         private sealed class DiscoveryCache
         {
             /*
-                Written once per assembly on first initialization (Unity main
-                thread); worst case under unexpected concurrency is a harmless
-                redundant re-probe.
+                Written once per assembly on first initialization; concurrent
+                first uses share one cache through the weak table, so the
+                worst case is a harmless redundant re-probe.
              */
             public Action<List<CommandCatalogEntry>> Collector;
             public bool CollectorProbed;
@@ -598,11 +611,17 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         //public bool RemoveCommand
 
+        /// <summary>
+        ///     Removes every registered auto command from this shell and cancels
+        ///     a pending deferred registration. The owning terminal re-applies
+        ///     its configuration on its next refresh, which restores auto
+        ///     commands on the following readiness.
+        /// </summary>
         public int ClearAutoRegisteredCommands()
         {
             // A pending registration would resurrect the commands this call
             // removes, so cancellation is part of clearing.
-            _autoCommandsPending = false;
+            Interlocked.Exchange(ref _autoCommandsPending, 0);
             AutoCommandsRegistered = false;
             int count = _autoRegisteredCommands.Count;
             foreach (string command in _autoRegisteredCommands)
@@ -643,7 +662,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
             if (deferRegistration)
             {
-                _autoCommandsPending = true;
+                Interlocked.Exchange(ref _autoCommandsPending, 1);
                 return;
             }
 
@@ -656,7 +675,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         /// </summary>
         public void EnsureAutoCommandsRegistered()
         {
-            if (!_autoCommandsPending)
+            if (Interlocked.Exchange(ref _autoCommandsPending, 0) == 0)
             {
                 return;
             }
@@ -666,8 +685,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         private void RegisterAutoCommands()
         {
-            _autoCommandsPending = false;
-
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             Stopwatch stopwatch = Stopwatch.StartNew();
 #endif
