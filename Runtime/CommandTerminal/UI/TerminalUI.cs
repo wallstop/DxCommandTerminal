@@ -455,7 +455,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             if (
                 Terminal.Shell.IgnoringDefaultCommands != ignoreDefaultCommands
-                || Terminal.Shell.Commands.Count <= 0
+                || !Terminal.Shell.AutoCommandsRegistered
                 || !Terminal.Shell.IgnoredCommands.SetEquals(
                     _disabledCommands ?? Enumerable.Empty<string>()
                 )
@@ -464,7 +464,8 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 Terminal.Shell.ClearAutoRegisteredCommands();
                 Terminal.Shell.InitializeAutoRegisteredCommands(
                     ignoredCommands: _disabledCommands,
-                    ignoreDefaultCommands: ignoreDefaultCommands
+                    ignoreDefaultCommands: ignoreDefaultCommands,
+                    deferRegistration: true
                 );
 
                 if (_started)
@@ -1178,7 +1179,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 dirty = true;
                 if (content.childCount < logs.Count)
                 {
-                    for (int i = 0; i < logs.Count - content.childCount; ++i)
+                    while (content.childCount < logs.Count)
                     {
                         Label logText = new();
                         logText.AddToClassList("terminal-output-label");

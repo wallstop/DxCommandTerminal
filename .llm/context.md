@@ -152,6 +152,13 @@ present tense, common words, ASCII only. PRs and commits follow a "Why" / "How" 
 "What changed" order; omit sections that add nothing. Code comments stay minimal - only
 what the code cannot say. Details: [simple-writing](./skills/simple-writing/SKILL.md).
 
+### LLM Attribution (GitHub)
+
+LLM-generated comments, issues, PR descriptions, and reviews start with
+`DISCLOSURE: LLM-GENERATED TEXT` as the first line. Never auto-respond to outside
+contributors; summarize and wait for wallstop.
+Details: [llm-attribution](./skills/llm-attribution/SKILL.md).
+
 ### Argument Parsing (Quick Reference)
 
 - `args[i].TryGet<T>(out T value)` returns `false` on failure instead of silently defaulting.

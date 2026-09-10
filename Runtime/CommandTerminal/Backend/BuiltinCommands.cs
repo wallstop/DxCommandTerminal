@@ -602,14 +602,16 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         private static string JoinArguments(CommandArg[] args, int start = 0)
         {
             StringBuilder.Clear();
+            bool first = true;
             for (int i = start; i < args.Length; i++)
             {
-                StringBuilder.Append(args[i].contents);
-
-                if (i < args.Length - 1)
+                if (!first)
                 {
                     StringBuilder.Append(' ');
                 }
+
+                first = false;
+                StringBuilder.Append(args[i].contents);
             }
 
             return StringBuilder.ToString();

@@ -1,5 +1,6 @@
 namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 {
+    using System;
     using System.Collections;
     using System.Linq;
     using Backend;
@@ -23,7 +24,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             if (TerminalUI.Instance != null)
             {
-                Object.Destroy(TerminalUI.Instance.gameObject);
+                UnityEngine.Object.Destroy(TerminalUI.Instance.gameObject);
             }
         }
 
@@ -247,6 +248,50 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     $"Default command '{command}' should be registered when ignoreDefaultCommands is false"
                 );
             }
+        }
+
+        [UnityTest]
+        public IEnumerator TerminalUIDefersAutoCommandRegistrationUntilFirstUse()
+        {
+            yield return SpawnTerminal(resetStateOnInit: true);
+
+            CommandShell shell = Terminal.Shell;
+            Assert.IsNotNull(shell, "Terminal.Shell should not be null after SpawnTerminal");
+            Assert.IsFalse(
+                shell.AutoCommandsRegistered,
+                "Terminal enabling must not register auto commands; registration is "
+                    + "deferred to the first command request"
+            );
+            Assert.IsEmpty(
+                shell.AutoRegisteredCommands,
+                "Auto commands must stay unregistered before the first use"
+            );
+
+            // Pick a zero-argument auto command that is safe to run inside a
+            // test session (never quit/exit).
+            string knownCommand = CommandShell
+                .RegisteredCommands.Value.Where(tuple =>
+                    tuple.attribute.MinArgCount == 0
+                    && tuple.attribute.MaxArgCount == 0
+                    && !tuple.attribute.Name.Equals("quit", StringComparison.OrdinalIgnoreCase)
+                )
+                .Select(tuple => tuple.attribute.Name)
+                .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+                .First();
+
+            Assert.IsTrue(
+                shell.RunCommand(knownCommand),
+                $"First command request '{knownCommand}' should apply the deferred "
+                    + "registration and run"
+            );
+            Assert.IsTrue(
+                shell.AutoCommandsRegistered,
+                "The first command request should complete the deferred registration"
+            );
+            Assert.IsNotEmpty(
+                shell.AutoRegisteredCommands,
+                "Deferred registration should surface auto commands on first use"
+            );
         }
 
         internal static IEnumerator SpawnTerminal(bool resetStateOnInit)

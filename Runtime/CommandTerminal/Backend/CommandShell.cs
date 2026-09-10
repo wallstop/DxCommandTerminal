@@ -7,6 +7,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     using System.Reflection;
     using System.Runtime.CompilerServices;
     using System.Text;
+    using System.Threading;
     using Attributes;
     using DataStructures;
     using UnityEngine;
@@ -61,6 +62,14 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             StringComparer.OrdinalIgnoreCase
         );
 
+        /*
+            1 while a deferred registration is waiting to run. The readiness
+            handoff uses Interlocked so two concurrent first uses cannot both
+            run the registration; command state itself stays single-threaded
+            like the rest of the shell.
+         */
+        private int _autoCommandsPending;
+
         private readonly StringBuilder _commandBuilder = new();
 
         private readonly SortedDictionary<string, CommandInfo> _commands = new(
@@ -85,9 +94,30 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             _history = history ?? throw new ArgumentNullException(nameof(history));
         }
 
-        public IReadOnlyDictionary<string, CommandInfo> Commands => _commands;
+        /*
+            Readiness boundary: the first observation of command state applies
+            any deferred auto registration before returning, so a single-
+            threaded caller never sees a half-initialized catalog. Concurrent
+            callers are out of contract, like all shell command state.
+         */
+        public IReadOnlyDictionary<string, CommandInfo> Commands
+        {
+            get
+            {
+                EnsureAutoCommandsRegistered();
+                return _commands;
+            }
+        }
+
         public IReadOnlyDictionary<string, CommandArg> Variables => _variables;
 
+        /// <summary>
+        ///     Auto commands registered by this shell. Empty until registration
+        ///     is applied; a shell initialized with deferred registration stays
+        ///     empty past enable, and the first command request, the first read
+        ///     of <see cref="Commands"/>, or an explicit
+        ///     <see cref="EnsureAutoCommandsRegistered"/> call fills it.
+        /// </summary>
         public ReadOnlyHashSet<string> AutoRegisteredCommands { get; private set; } =
             ReadOnlyHashSet<string>.Empty;
 
@@ -95,6 +125,14 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             ReadOnlyHashSet<string>.Empty;
 
         public bool IgnoringDefaultCommands { get; private set; }
+
+        /// <summary>
+        ///     True once auto command registration has been applied to this shell.
+        ///     A shell initialized with deferred registration stays false until the
+        ///     first command request or an explicit
+        ///     <see cref="EnsureAutoCommandsRegistered"/> call applies it.
+        /// </summary>
+        public bool AutoCommandsRegistered { get; private set; }
 
         public bool HasErrors => 0 < _errorMessages.Count;
 
@@ -336,15 +374,15 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             Probes the assembly for its generated `CommandCatalog` and binds its
             Collect method, and caches the reflection-compatibility result for
             assemblies without one. Both are computed once per assembly per
-            domain; the weak table keeps unloaded-collectible editor
-            assemblies collectible.
+            domain on whatever thread first triggers readiness; the weak table
+            keeps unloaded-collectible editor assemblies collectible.
          */
         private sealed class DiscoveryCache
         {
             /*
-                Written once per assembly on first initialization (Unity main
-                thread); worst case under unexpected concurrency is a harmless
-                redundant re-probe.
+                Written once per assembly on first initialization; concurrent
+                first uses share one cache through the weak table, so the
+                worst case is a harmless redundant re-probe.
              */
             public Action<List<CommandCatalogEntry>> Collector;
             public bool CollectorProbed;
@@ -575,8 +613,18 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         //public bool RemoveCommand
 
+        /// <summary>
+        ///     Removes every registered auto command from this shell and cancels
+        ///     a pending deferred registration. The owning terminal re-applies
+        ///     its configuration on its next refresh, which restores auto
+        ///     commands on the following readiness.
+        /// </summary>
         public int ClearAutoRegisteredCommands()
         {
+            // A pending registration would resurrect the commands this call
+            // removes, so cancellation is part of clearing.
+            Interlocked.Exchange(ref _autoCommandsPending, 0);
+            AutoCommandsRegistered = false;
             int count = _autoRegisteredCommands.Count;
             foreach (string command in _autoRegisteredCommands)
             {
@@ -588,9 +636,18 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             return count;
         }
 
+        /// <summary>
+        ///     Applies the auto command configuration and registers discovered
+        ///     commands. With <paramref name="deferRegistration"/>, the discovery
+        ///     scan and delegate materialization run at the first command request
+        ///     (see <see cref="EnsureAutoCommandsRegistered"/>) or the first read
+        ///     of <see cref="Commands"/>, keeping terminal enabling cheap; the
+        ///     ignored/default configuration itself is applied immediately.
+        /// </summary>
         public void InitializeAutoRegisteredCommands(
             IEnumerable<string> ignoredCommands = null,
-            bool ignoreDefaultCommands = false
+            bool ignoreDefaultCommands = false,
+            bool deferRegistration = false
         )
         {
             IgnoringDefaultCommands = ignoreDefaultCommands;
@@ -605,6 +662,31 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             IgnoredCommands = _ignoredCommands.ToReadOnlyHashSet(StringComparer.OrdinalIgnoreCase);
             _rejectedCommands.Clear();
 
+            if (deferRegistration)
+            {
+                Interlocked.Exchange(ref _autoCommandsPending, 1);
+                return;
+            }
+
+            RegisterAutoCommands();
+        }
+
+        /// <summary>
+        ///     Applies deferred auto command registration exactly once. Subsequent
+        ///     calls observe the completed registration and do no work.
+        /// </summary>
+        public void EnsureAutoCommandsRegistered()
+        {
+            if (Interlocked.Exchange(ref _autoCommandsPending, 0) == 0)
+            {
+                return;
+            }
+
+            RegisterAutoCommands();
+        }
+
+        private void RegisterAutoCommands()
+        {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             Stopwatch stopwatch = Stopwatch.StartNew();
 #endif
@@ -639,7 +721,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                     continue;
                 }
 
-                if (ignoreDefaultCommands && command.IsDefault)
+                if (IgnoringDefaultCommands && command.IsDefault)
                 {
                     continue;
                 }
@@ -683,6 +765,21 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                     continue;
                 }
 
+                /*
+                    User commands win over auto ones (built-ins included). The
+                    collision is a console warning, not a queued terminal
+                    error, so readiness never surfaces it mid-session.
+                 */
+                if (_commands.ContainsKey(commandName))
+                {
+                    Debug.LogWarning(
+                        $"[DxCommandTerminal] Auto command {commandName} "
+                            + $"(method {command.MethodName}) skipped: a command with "
+                            + $"that name is already registered"
+                    );
+                    continue;
+                }
+
                 // Perf boost, much cheaper than running reflection on invoking the method
                 bool success = AddCommand(
                     commandName,
@@ -712,6 +809,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                         + $"Found: {command.Value.Name}({string.Join(",", command.Value.GetParameters().Select(p => p.ParameterType.Name))})"
                 );
             }
+
+            AutoCommandsRegistered = true;
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             Debug.Log(
@@ -809,6 +908,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         public bool RunCommand(string commandName, CommandArg[] arguments)
         {
+            // A first command request is an explicit readiness boundary: any
+            // deferred registration must be applied before this lookup.
+            EnsureAutoCommandsRegistered();
             _commandBuilder.Clear();
             _commandBuilder.Append(commandName);
             if (arguments.Length != 0)
