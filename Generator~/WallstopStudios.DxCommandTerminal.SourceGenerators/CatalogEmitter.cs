@@ -228,13 +228,11 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                     builder.AppendLine(Indent6 + "null,");
                     builder.AppendLine(Indent6 + "new global::System.Type[]");
                     builder.AppendLine(Indent6 + "{");
-                    for (int i = 0; i < command.ParameterTypeExpressions.Length; i++)
-                    {
-                        string suffix = i == command.ParameterTypeExpressions.Length - 1 ? "" : ",";
-                        builder.AppendLine(
-                            Indent6 + "    " + command.ParameterTypeExpressions[i] + suffix
-                        );
-                    }
+                    AppendParameterExpressions(
+                        builder,
+                        command.ParameterTypeExpressions,
+                        Indent6 + "    "
+                    );
 
                     builder.AppendLine(Indent6 + "},");
                     builder.AppendLine(Indent6 + "null");
@@ -325,13 +323,11 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             builder.AppendLine(Indent6 + "    null,");
             builder.AppendLine(Indent6 + "    new global::System.Type[]");
             builder.AppendLine(Indent6 + "    {");
-            for (int i = 0; i < command.ParameterTypeExpressions.Length; i++)
-            {
-                string suffix = i == command.ParameterTypeExpressions.Length - 1 ? "" : ",";
-                builder.AppendLine(
-                    Indent6 + "        " + command.ParameterTypeExpressions[i] + suffix
-                );
-            }
+            AppendParameterExpressions(
+                builder,
+                command.ParameterTypeExpressions,
+                Indent6 + "        "
+            );
 
             builder.AppendLine(Indent6 + "    },");
             builder.AppendLine(Indent6 + "    null");
@@ -341,6 +337,25 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             builder.AppendLine();
             builder.AppendLine(Indent4 + "return " + fieldName + ";");
             builder.AppendLine(Indent3 + "}");
+        }
+
+        /*
+            Emits one parameter typeof-expression per line. The separator is
+            a comma prefix (all but the first element) so the loop needs no
+            index.
+         */
+        private static void AppendParameterExpressions(
+            StringBuilder builder,
+            string[] parameterTypeExpressions,
+            string indent
+        )
+        {
+            bool first = true;
+            foreach (string expression in parameterTypeExpressions)
+            {
+                builder.AppendLine(indent + (first ? "" : ",") + expression);
+                first = false;
+            }
         }
 
         private static void AppendLiteral(StringBuilder builder, string value)

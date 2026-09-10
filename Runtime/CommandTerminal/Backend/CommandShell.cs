@@ -39,9 +39,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             Assembly[] loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies();
             List<Assembly> scanCandidates = CollectScanCandidates(loadedAssemblies, ourAssembly);
 
-            for (int i = 0; i < scanCandidates.Count; i++)
+            foreach (Assembly assembly in scanCandidates)
             {
-                CollectReflectedCommands(scanCandidates[i], commands);
+                CollectReflectedCommands(assembly, commands);
             }
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
@@ -110,9 +110,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             try
             {
                 AssemblyName[] referencedAssemblies = assembly.GetReferencedAssemblies();
-                for (int i = 0; i < referencedAssemblies.Length; i++)
+                foreach (AssemblyName referencedAssembly in referencedAssemblies)
                 {
-                    if (AssemblyName.ReferenceMatchesDefinition(referencedAssemblies[i], self))
+                    if (AssemblyName.ReferenceMatchesDefinition(referencedAssembly, self))
                     {
                         return true;
                     }
@@ -142,9 +142,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         {
             AssemblyName self = ourAssembly.GetName();
             List<Assembly> scanCandidates = new(loadedAssemblies.Length);
-            for (int i = 0; i < loadedAssemblies.Length; i++)
+            foreach (Assembly assembly in loadedAssemblies)
             {
-                Assembly assembly = loadedAssemblies[i];
                 try
                 {
                     if (AssemblyName.ReferenceMatchesDefinition(assembly.GetName(), self))
@@ -179,9 +178,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return;
             }
 
-            for (int j = 0; j < types.Length; j++)
+            foreach (Type type in types)
             {
-                Type type = types[j];
                 if (type == null)
                 {
                     continue;
@@ -500,9 +498,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
                 if (collected && 0 < entries.Count)
                 {
-                    for (int i = 0; i < entries.Count; i++)
+                    foreach (CommandCatalogEntry entry in entries)
                     {
-                        commands.Add(AutoCommand.FromCatalog(entries[i]));
+                        commands.Add(AutoCommand.FromCatalog(entry));
                     }
 
                     return true;
@@ -518,11 +516,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 List<(MethodInfo method, RegisterCommandAttribute attribute)> reflected = new();
                 CollectReflectedCommands(assembly, reflected);
                 List<AutoCommand> cached = new(reflected.Count);
-                for (int i = 0; i < reflected.Count; i++)
+                foreach ((MethodInfo method, RegisterCommandAttribute attribute) in reflected)
                 {
-                    cached.Add(
-                        AutoCommand.FromReflected(reflected[i].method, reflected[i].attribute)
-                    );
+                    cached.Add(AutoCommand.FromReflected(method, attribute));
                 }
 
                 cache.ReflectedCommands = cached;
@@ -623,9 +619,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             );
 
             List<AutoCommand> autoCommands = new();
-            for (int i = 0; i < scanCandidates.Count; i++)
+            foreach (Assembly assembly in scanCandidates)
             {
-                if (CollectAutoCommands(scanCandidates[i], autoCommands))
+                if (CollectAutoCommands(assembly, autoCommands))
                 {
                     catalogAssemblies++;
                 }
@@ -635,9 +631,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 }
             }
 
-            for (int i = 0; i < autoCommands.Count; i++)
+            foreach (AutoCommand command in autoCommands)
             {
-                AutoCommand command = autoCommands[i];
                 string commandName = command.Name;
                 if (_ignoredCommands.Contains(commandName))
                 {
@@ -821,9 +816,16 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 _commandBuilder.Append(' ');
             }
 
-            for (int i = 0; i < arguments.Length; ++i)
+            bool firstArgument = true;
+            foreach (CommandArg argument in arguments)
             {
-                CommandArg argument = arguments[i];
+                if (!firstArgument)
+                {
+                    _commandBuilder.Append(' ');
+                }
+
+                firstArgument = false;
+
                 if (argument.startQuote != null)
                 {
                     _commandBuilder.Append(argument.startQuote.Value);
@@ -833,11 +835,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 if (argument.endQuote != null)
                 {
                     _commandBuilder.Append(argument.endQuote.Value);
-                }
-
-                if (i != arguments.Length - 1)
-                {
-                    _commandBuilder.Append(' ');
                 }
             }
 

@@ -119,6 +119,9 @@ frontmatter validity, index freshness, and pointer-file delegation; see
    Editor and Tests.Runtime assemblies (`Runtime/AssemblyInfo.cs`).
 10. Annotate format-string methods with `[StringFormatMethod("...")]` (JetBrains) so callers get
     format checking.
+11. `foreach` over collections with value-typed enumerables (`List<T>`, arrays, structs).
+    Counting `for` only when the index is used, the collection is `IReadonlyList`, or the
+    count direction/skip matters. Convert last-element separator logic to a first/last flag.
 
 ### Unity Package Rules
 
