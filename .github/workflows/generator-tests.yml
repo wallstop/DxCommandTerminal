@@ -8,7 +8,7 @@ on:
     paths:
       - "Generator~/**"
       - "Runtime/Analyzers/**"
-      - "Runtime/CommandTerminal/Attributes/RegisterCommandAttribute.cs"
+      - "Runtime/Attributes/RegisterCommandAttribute.cs"
       - "Runtime/CommandTerminal/Backend/CommandArg.cs"
       - "Runtime/CommandTerminal/Backend/CommandCatalogEntry.cs"
       - "tooling~/scripts/verify-analyzer-payload.ps1"
@@ -17,7 +17,7 @@ on:
     paths:
       - "Generator~/**"
       - "Runtime/Analyzers/**"
-      - "Runtime/CommandTerminal/Attributes/RegisterCommandAttribute.cs"
+      - "Runtime/Attributes/RegisterCommandAttribute.cs"
       - "Runtime/CommandTerminal/Backend/CommandArg.cs"
       - "Runtime/CommandTerminal/Backend/CommandCatalogEntry.cs"
       - "tooling~/scripts/verify-analyzer-payload.ps1"

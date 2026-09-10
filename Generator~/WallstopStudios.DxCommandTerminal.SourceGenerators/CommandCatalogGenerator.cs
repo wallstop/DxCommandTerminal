@@ -2,6 +2,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
 {
     using System;
     using System.Collections.Generic;
+    using System.Collections.Immutable;
     using System.Globalization;
     using System.Threading;
     using Microsoft.CodeAnalysis;
@@ -43,19 +44,14 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                 emit nothing so discovery falls back to reflection instead of
                 breaking the consumer build.
              */
-            if (compilation.GetTypeByMetadataName(EntryMetadataName) == null)
-            {
-                return;
-            }
-
-            if (compilation.GetTypeByMetadataName(ArgumentMetadataName) == null)
-            {
-                return;
-            }
-
+            ITypeSymbol entryType = compilation.GetTypeByMetadataName(EntryMetadataName);
             ITypeSymbol commandArgumentType = compilation.GetTypeByMetadataName(
                 ArgumentMetadataName
             );
+            if (entryType == null || commandArgumentType == null)
+            {
+                return;
+            }
 
             List<CommandModel> commands = new List<CommandModel>();
             HashSet<IMethodSymbol> seenMethods = new HashSet<IMethodSymbol>(
@@ -63,6 +59,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             );
             foreach (MethodDeclarationSyntax candidate in receiver.Candidates)
             {
+                context.CancellationToken.ThrowIfCancellationRequested();
                 SemanticModel semanticModel = compilation.GetSemanticModel(candidate.SyntaxTree);
                 IMethodSymbol method = semanticModel.GetDeclaredSymbol(
                     candidate,
@@ -108,6 +105,24 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                 return;
             }
 
+            /*
+                The generated catalog can only name types whose declaration
+                chain is accessible from same-assembly code. For a handler in
+                a private nested or file-local class, every emission path
+                (method-group bind, cached binder, rejected-command accessor)
+                would emit an illegal typeof(...). Dropping just that command
+                would silently lose it, so the assembly gets no catalog at all
+                and the shell falls back to reflection, which finds everything
+                the compatibility path has always found.
+             */
+            foreach (CommandModel command in commands)
+            {
+                if (!command.TypeChainNameable)
+                {
+                    return;
+                }
+            }
+
             string source = CatalogEmitter.Emit(commands);
             context.AddSource(GeneratedHintName, source);
         }
@@ -139,17 +154,29 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                     continue;
                 }
 
+                /*
+                    AllowMultiple defaults to false on the attribute, so a
+                    method carries at most one match and the first is the only
+                    one. Named arguments always win over constructor arguments,
+                    matching C# application order.
+                 */
                 attribute = new CommandAttributeData();
-                foreach (TypedConstant constructorArgument in attributeData.ConstructorArguments)
+                INamedTypeSymbol attributeClass = attributeData.AttributeClass;
+                IMethodSymbol attributeConstructor = attributeData.AttributeConstructor;
+                ImmutableArray<IParameterSymbol> constructorParameters =
+                    attributeConstructor.Parameters;
+                ImmutableArray<TypedConstant> constructorArguments =
+                    attributeData.ConstructorArguments;
+                for (int i = 0; i < constructorArguments.Length; i++)
                 {
-                    if (constructorArgument.Value is string explicitName)
-                    {
-                        attribute.ExplicitName = explicitName;
-                    }
-                    else if (constructorArgument.Value is bool isDefault)
-                    {
-                        attribute.IsDefault = isDefault;
-                    }
+                    // Resolve constructor arguments by parameter name instead
+                    // of type, so overload or order changes in the attribute
+                    // cannot silently bind to the wrong field.
+                    ApplyArgument(
+                        attribute,
+                        constructorParameters[i].Name,
+                        constructorArguments[i]
+                    );
                 }
 
                 foreach (
@@ -159,60 +186,54 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                     > namedArgument in attributeData.NamedArguments
                 )
                 {
-                    switch (namedArgument.Key)
-                    {
-                        case "Name":
-                            attribute.ExplicitName = namedArgument.Value.Value as string;
-                            break;
-                        case "MinArgCount":
-                            if (namedArgument.Value.Value is int minArgCount)
-                            {
-                                attribute.MinArgCount = minArgCount;
-                            }
-                            break;
-                        case "MaxArgCount":
-                            if (namedArgument.Value.Value is int maxArgCount)
-                            {
-                                attribute.MaxArgCount = maxArgCount;
-                            }
-                            break;
-                        case "Help":
-                            attribute.Help = namedArgument.Value.Value as string;
-                            break;
-                        case "Hint":
-                            attribute.Hint = namedArgument.Value.Value as string;
-                            break;
-                        case "AddToHistory":
-                            if (namedArgument.Value.Value is bool addToHistory)
-                            {
-                                attribute.AddToHistory = addToHistory;
-                            }
-                            break;
-                        case "EditorOnly":
-                            if (namedArgument.Value.Value is bool editorOnly)
-                            {
-                                attribute.EditorOnly = editorOnly;
-                            }
-                            break;
-                        case "DevelopmentOnly":
-                            if (namedArgument.Value.Value is bool developmentOnly)
-                            {
-                                attribute.DevelopmentOnly = developmentOnly;
-                            }
-                            break;
-                        case "Default":
-                            if (namedArgument.Value.Value is bool isDefault)
-                            {
-                                attribute.IsDefault = isDefault;
-                            }
-                            break;
-                    }
+                    ApplyArgument(attribute, namedArgument.Key, namedArgument.Value);
                 }
 
                 return true;
             }
 
             return false;
+        }
+
+        private static void ApplyArgument(
+            CommandAttributeData attribute,
+            string argumentName,
+            TypedConstant argument
+        )
+        {
+            switch (argumentName)
+            {
+                case "commandName":
+                case "Name":
+                    attribute.ExplicitName = argument.Value as string;
+                    break;
+                case "isDefault":
+                case "Default":
+                    attribute.IsDefault = argument.Value is bool isDefault && isDefault;
+                    break;
+                case "MinArgCount":
+                    attribute.MinArgCount = argument.Value is int minArgCount ? minArgCount : 0;
+                    break;
+                case "MaxArgCount":
+                    attribute.MaxArgCount = argument.Value is int maxArgCount ? maxArgCount : -1;
+                    break;
+                case "Help":
+                    attribute.Help = argument.Value as string;
+                    break;
+                case "Hint":
+                    attribute.Hint = argument.Value as string;
+                    break;
+                case "AddToHistory":
+                    attribute.AddToHistory = argument.Value is bool addToHistory && addToHistory;
+                    break;
+                case "EditorOnly":
+                    attribute.EditorOnly = argument.Value is bool editorOnly && editorOnly;
+                    break;
+                case "DevelopmentOnly":
+                    attribute.DevelopmentOnly =
+                        argument.Value is bool developmentOnly && developmentOnly;
+                    break;
+            }
         }
     }
 
@@ -245,10 +266,23 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
         // Non-null for valid (CommandArg[]) signatures.
         public bool HasValidSignature;
 
-        // Valid signatures only: accessible handlers bind by direct delegate
-        // creation; inaccessible ones by a cached exact-identity reflection
-        // binding.
+        /*
+            Valid signatures only. True when the generated catalog can bind
+            the handler without reflection: accessible method, accessible
+            declaration chain, and a void return (the shell dispatches
+            Action<CommandArg[]>; any other return type fails delegate
+            creation exactly as the reflection path does).
+         */
         public bool DirectlyBindable;
+
+        /*
+            Whether every declaration in the containing-type chain can be
+            named from same-assembly code. False for private nested and
+            file-local holders; such commands force the whole assembly to the
+            reflection path because every emission form needs a legal
+            typeof(...) for the chain.
+         */
+        public bool TypeChainNameable;
 
         public string ContainingTypeDisplay;
 
@@ -265,9 +299,13 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
         // or otherwise not addressable by an exact typeof signature.
         public bool ExactSignatureAddressable;
 
-        // Full typeof-able expressions per parameter, in declaration order.
-        // Managed references (ref/out/in) are emitted as
-        // typeof(T).MakeByRefType() because typeof(T&) is not legal C#.
+        /*
+            Full typeof-able expressions per parameter, in declaration order.
+            Managed references (ref/out/in) are emitted as
+            typeof(T).MakeByRefType() because typeof(T&) is not legal C#.
+            Null when nothing needs them (valid signatures that bind directly);
+            the unbound finder only consumes the length.
+         */
         public string[] ParameterTypeExpressions;
     }
 
@@ -310,11 +348,14 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
 
             BuildSignature(method, commandArgumentType, containingTypeIsUnbound, model);
 
-            if (model.HasValidSignature)
+            if (model.HasValidSignature && model.DirectlyBindable)
             {
-                model.DirectlyBindable = IsAccessibleFromCatalog(method);
+                // Nothing else is needed; the emitter binds the method group
+                // without parameter expressions.
+                return model;
             }
 
+            BuildParameterExpressions(method, model);
             return model;
         }
 
@@ -329,21 +370,55 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             // themselves) can never be bound to a closed delegate; legacy
             // discovery would fail inside Delegate.CreateDelegate for them.
             bool methodIsOpen = method.IsGenericMethod;
+            bool signatureAddressable = !methodIsOpen && !containingTypeIsUnbound;
 
             List<IParameterSymbol> parameterList = new List<IParameterSymbol>(method.Parameters);
 
-            List<string> parameterExpressions = new List<string>();
-            bool exactSignatureAddressable = !methodIsOpen && !containingTypeIsUnbound;
+            /*
+                Validity first, without building any strings: one value
+                parameter of type CommandArg[], mirroring the reflection
+                signature check exactly (managed references make the CLR
+                parameter type CommandArg[]&).
+             */
+            model.HasValidSignature =
+                signatureAddressable
+                && parameterList.Count == 1
+                && parameterList[0].RefKind == RefKind.None
+                && IsCommandArgArray(parameterList[0].Type, commandArgumentType);
 
+            model.DirectlyBindable =
+                model.HasValidSignature && method.ReturnsVoid && IsAccessibleFromCatalog(method);
+
+            /*
+                Exact-signature addressability drives the rejected-command
+                accessor form; parameter types that typeof cannot name (open
+                generics, dynamic) fall back to the name-based finder.
+             */
+            bool exactSignatureAddressable = signatureAddressable;
             foreach (IParameterSymbol parameter in parameterList)
             {
-                ITypeSymbol parameterType = parameter.Type;
-                if (!IsAddressableType(parameterType))
+                if (!IsAddressableType(parameter.Type))
                 {
                     exactSignatureAddressable = false;
+                    break;
                 }
+            }
 
-                string display = parameterType.ToDisplayString(CatalogEmitter.FullyQualified);
+            model.ExactSignatureAddressable = exactSignatureAddressable;
+            model.TypeChainNameable = IsTypeChainNameable(method.ContainingType);
+        }
+
+        /*
+            Builds the parameter typeof-expressions used by cached reflection
+            binders and rejected-command accessors. Skipped for handlers the
+            emitter binds directly, which is the common all-public case.
+         */
+        private static void BuildParameterExpressions(IMethodSymbol method, CommandModel model)
+        {
+            List<string> parameterExpressions = new List<string>(method.Parameters.Length);
+            foreach (IParameterSymbol parameter in method.Parameters)
+            {
+                string display = parameter.Type.ToDisplayString(CatalogEmitter.FullyQualified);
                 parameterExpressions.Add(
                     parameter.RefKind == RefKind.None
                         ? "typeof(" + display + ")"
@@ -352,23 +427,6 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             }
 
             model.ParameterTypeExpressions = parameterExpressions.ToArray();
-            model.ExactSignatureAddressable = exactSignatureAddressable;
-
-            if (methodIsOpen || containingTypeIsUnbound)
-            {
-                model.HasValidSignature = false;
-                return;
-            }
-
-            /*
-                Mirrors the reflection signature check exactly: one parameter,
-                passed by value (managed references make the CLR parameter type
-                CommandArg[]&), of type CommandArg[].
-             */
-            model.HasValidSignature =
-                parameterList.Count == 1
-                && parameterList[0].RefKind == RefKind.None
-                && IsCommandArgArray(parameterList[0].Type, commandArgumentType);
         }
 
         private static bool IsCommandArgArray(ITypeSymbol type, ITypeSymbol commandArgumentType)
@@ -446,20 +504,31 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             return false;
         }
 
+        /*
+            Whether the method itself can be named from same-assembly code.
+            The containing-type chain is judged separately by
+            IsTypeChainNameable.
+         */
         private static bool IsAccessibleFromCatalog(IMethodSymbol method)
         {
-            if (!IsAccessibleDeclaration(method.DeclaredAccessibility))
-            {
-                return false;
-            }
+            return IsAccessibleDeclaration(method.DeclaredAccessibility);
+        }
 
+        /*
+            A type can be written in the generated catalog only when every
+            declaration in its chain is visible to same-assembly code. Note
+            `protected internal` qualifies (the internal half applies inside
+            the assembly), but plain `protected` and `private` do not.
+         */
+        private static bool IsTypeChainNameable(INamedTypeSymbol containingType)
+        {
             for (
-                INamedTypeSymbol containingType = method.ContainingType;
-                containingType != null;
-                containingType = containingType.ContainingType
+                INamedTypeSymbol current = containingType;
+                current != null;
+                current = current.ContainingType
             )
             {
-                if (!IsAccessibleDeclaration(containingType.DeclaredAccessibility))
+                if (!IsAccessibleDeclaration(current.DeclaredAccessibility))
                 {
                     return false;
                 }
@@ -484,17 +553,34 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
         /*
             Mirrors RegisterCommandAttribute.NormalizeName exactly: explicit
             names are stripped of spaces at construction, blank names fall
-            back to inference, and the final name is space-stripped again.
+            back to inference, and the final result is space-stripped again.
+            The guards make the mirror allocation-free when there is nothing
+            to strip (string.Replace and string.Trim return the original
+            instance unchanged, but only after a search).
          */
         public static string NormalizeName(string explicitName, string methodName)
         {
-            string name = explicitName?.Replace(" ", string.Empty).Trim();
+            string name = explicitName;
+            if (name != null && name.Contains(" "))
+            {
+                name = name.Replace(" ", string.Empty);
+            }
+
             if (string.IsNullOrWhiteSpace(name))
             {
                 name = InferCommandName(methodName);
             }
 
-            return name.Replace(" ", string.Empty).Trim();
+            // Method names are identifiers, so inference cannot produce
+            // spaces or surrounding whitespace; the guard keeps this a
+            // no-op pass for the common case while preserving the runtime
+            // attribute's exact semantics.
+            if (name.Contains(" "))
+            {
+                name = name.Replace(" ", string.Empty);
+            }
+
+            return name.Trim();
         }
 
         private static string InferCommandName(string methodName)
@@ -615,7 +701,9 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
 
             if (arity > 0)
             {
-                return name + "<" + new string(',', arity - 1) + ">";
+                // Generator-time formatting only; string.Concat keeps the
+                // arity suffix a single allocation.
+                return string.Concat(name, "<", new string(',', arity - 1), ">");
             }
 
             return name;

@@ -378,6 +378,97 @@ namespace Fixtures
     }
 }";
 
+        private const string NonVoidHandlerFixture =
+            @"
+namespace Fixtures
+{
+    using System.Threading.Tasks;
+    using WallstopStudios.DxCommandTerminal.Attributes;
+    using WallstopStudios.DxCommandTerminal.Backend;
+
+    public static class NonVoidCommands
+    {
+        [RegisterCommand(Help = ""returns a value"")]
+        public static int NonVoidValue(CommandArg[] args)
+        {
+            return 0;
+        }
+
+        [RegisterCommand]
+        public static Task NonVoidTask(CommandArg[] args)
+        {
+            return Task.CompletedTask;
+        }
+
+        [RegisterCommand]
+        public static void VoidCommand(CommandArg[] args)
+        {
+        }
+    }
+}";
+
+        private const string InaccessibleHolderFixture =
+            @"
+namespace Fixtures
+{
+    using WallstopStudios.DxCommandTerminal.Attributes;
+    using WallstopStudios.DxCommandTerminal.Backend;
+
+    public class CommandHost
+    {
+        private static class PrivateHolder
+        {
+            [RegisterCommand(Help = ""private nested holder"")]
+            public static void Hidden(CommandArg[] args)
+            {
+            }
+        }
+    }
+}";
+
+        private const string InaccessibleMixedFixture =
+            @"
+namespace Fixtures
+{
+    using WallstopStudios.DxCommandTerminal.Attributes;
+    using WallstopStudios.DxCommandTerminal.Backend;
+
+    public static class VisibleCommands
+    {
+        [RegisterCommand(Help = ""visible"")]
+        public static void Visible(CommandArg[] args)
+        {
+        }
+    }
+
+    public class CommandHost
+    {
+        private static class PrivateHolder
+        {
+            [RegisterCommand]
+            public static void Hidden(CommandArg[] args)
+            {
+            }
+        }
+    }
+}";
+
+        private const string KeywordNamedHolderFixture =
+            @"
+namespace Fixtures
+{
+    using WallstopStudios.DxCommandTerminal.Attributes;
+    using WallstopStudios.DxCommandTerminal.Backend;
+
+    public static class @object
+    {
+        [RegisterCommand(Help = ""holder named after a keyword"")]
+        public static void Run(CommandArg[] args)
+        {
+        }
+    }
+}";
+
         private const string PartialMethodFixture =
             @"
 namespace Fixtures
@@ -696,6 +787,132 @@ namespace Fixtures
             CatalogView catalog = CatalogView.Load(assembly);
             Assert.Equal(2, catalog.Entries.Count);
             Assert.All(catalog.Entries, entry => Assert.Equal("Heal", catalog.NameOf(entry)));
+        }
+
+        [Fact]
+        public void NonVoidHandlerEmitCachedBinderThatThrowsLikeReflection()
+        {
+            Assembly assembly = TestCompilationFactory.CompileAndLoad(
+                TestCompilationFactory
+                    .RunGenerator(
+                        TestCompilationFactory.CreateCompilation(
+                            "NonVoidHandlers",
+                            NonVoidHandlerFixture
+                        )
+                    )
+                    .output
+            );
+
+            CatalogView catalog = CatalogView.Load(assembly);
+            object value = catalog.Entries.Single(entry => catalog.NameOf(entry) == "NonVoidValue");
+            Assert.True(catalog.HasValidSignature(value));
+            object[] args =
+            {
+                Array.CreateInstance(
+                    assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"),
+                    0
+                ),
+            };
+            Assert.ThrowsAny<Exception>(() => catalog.BinderOf(value)(args));
+        }
+
+        [Fact]
+        public void NonVoidTaskHandlerEmitCachedBinderThatThrowsLikeReflection()
+        {
+            Assembly assembly = TestCompilationFactory.CompileAndLoad(
+                TestCompilationFactory
+                    .RunGenerator(
+                        TestCompilationFactory.CreateCompilation(
+                            "NonVoidHandlersTask",
+                            NonVoidHandlerFixture
+                        )
+                    )
+                    .output
+            );
+
+            CatalogView catalog = CatalogView.Load(assembly);
+            object task = catalog.Entries.Single(entry => catalog.NameOf(entry) == "NonVoidTask");
+            object[] args =
+            {
+                Array.CreateInstance(
+                    assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"),
+                    0
+                ),
+            };
+            Assert.ThrowsAny<Exception>(() => catalog.BinderOf(task)(args));
+        }
+
+        [Fact]
+        public void NonVoidFixtureKeepsVoidHandlerDirectlyBindable()
+        {
+            Assembly assembly = TestCompilationFactory.CompileAndLoad(
+                TestCompilationFactory
+                    .RunGenerator(
+                        TestCompilationFactory.CreateCompilation(
+                            "NonVoidHandlersVoid",
+                            NonVoidHandlerFixture
+                        )
+                    )
+                    .output
+            );
+
+            CatalogView catalog = CatalogView.Load(assembly);
+            object voidCommand = catalog.Entries.Single(entry => catalog.NameOf(entry) == "Void");
+            Assert.True(catalog.HasValidSignature(voidCommand));
+            object[] args =
+            {
+                Array.CreateInstance(
+                    assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"),
+                    0
+                ),
+            };
+            catalog.BinderOf(voidCommand)(args);
+        }
+
+        [Fact]
+        public void InaccessibleHoldersSkipTheCatalogForTheWholeAssembly()
+        {
+            (SyntaxTree generated, _) = TestCompilationFactory.RunGenerator(
+                TestCompilationFactory.CreateCompilation(
+                    "InaccessibleHolder",
+                    InaccessibleHolderFixture
+                )
+            );
+
+            Assert.Null(generated);
+        }
+
+        [Fact]
+        public void InaccessibleHoldersForceReflectionEvenWhenOtherCommandsExist()
+        {
+            (SyntaxTree generated, _) = TestCompilationFactory.RunGenerator(
+                TestCompilationFactory.CreateCompilation(
+                    "InaccessibleMixed",
+                    InaccessibleMixedFixture
+                )
+            );
+
+            Assert.Null(generated);
+        }
+
+        [Fact]
+        public void KeywordNamedHoldersEmitCompilableCatalogs()
+        {
+            Assembly assembly = TestCompilationFactory.CompileAndLoad(
+                TestCompilationFactory
+                    .RunGenerator(
+                        TestCompilationFactory.CreateCompilation(
+                            "KeywordHolder",
+                            KeywordNamedHolderFixture
+                        )
+                    )
+                    .output
+            );
+
+            CatalogView catalog = CatalogView.Load(assembly);
+            object entry = Assert.Single(catalog.Entries);
+            Assert.Equal("Run", catalog.NameOf(entry));
+            Assert.True(catalog.HasValidSignature(entry));
         }
     }
 }
