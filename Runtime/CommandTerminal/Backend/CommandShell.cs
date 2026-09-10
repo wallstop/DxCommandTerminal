@@ -96,8 +96,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         /*
             Readiness boundary: the first observation of command state applies
-            any deferred auto registration before returning, so a caller never
-            sees a half-initialized catalog.
+            any deferred auto registration before returning, so a single-
+            threaded caller never sees a half-initialized catalog. Concurrent
+            callers are out of contract, like all shell command state.
          */
         public IReadOnlyDictionary<string, CommandInfo> Commands
         {
@@ -113,7 +114,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         /// <summary>
         ///     Auto commands registered by this shell. Empty until registration
         ///     is applied; a shell initialized with deferred registration stays
-        ///     empty past enable, and the first command request or an explicit
+        ///     empty past enable, and the first command request, the first read
+        ///     of <see cref="Commands"/>, or an explicit
         ///     <see cref="EnsureAutoCommandsRegistered"/> call fills it.
         /// </summary>
         public ReadOnlyHashSet<string> AutoRegisteredCommands { get; private set; } =
