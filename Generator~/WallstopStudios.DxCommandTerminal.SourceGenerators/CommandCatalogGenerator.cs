@@ -58,6 +58,9 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             );
 
             List<CommandModel> commands = new List<CommandModel>();
+            HashSet<IMethodSymbol> seenMethods = new HashSet<IMethodSymbol>(
+                SymbolEqualityComparer.Default
+            );
             foreach (MethodDeclarationSyntax candidate in receiver.Candidates)
             {
                 SemanticModel semanticModel = compilation.GetSemanticModel(candidate.SyntaxTree);
@@ -73,6 +76,17 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                     continue;
                 }
 
+                /*
+                    Partial methods surface as two distinct symbols (the
+                    definition part and the implementation part); canonicalize
+                    on the definition so the merged symbol is emitted once,
+                    exactly as reflection's type.GetMethods sees it.
+                 */
+                IMethodSymbol canonicalMethod = method.PartialDefinitionPart ?? method;
+                if (!seenMethods.Add(canonicalMethod))
+                {
+                    continue;
+                }
                 if (!TryParseAttribute(method, out CommandAttributeData attribute))
                 {
                     continue;
@@ -236,11 +250,16 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
         // binding.
         public bool DirectlyBindable;
 
-        // typeof-able display of the containing type. For open (unbindable)
-        // shapes this is the unbound generic form.
         public string ContainingTypeDisplay;
 
         public bool ContainingTypeIsUnbound;
+
+        // The handler method name escaped for use as a C# identifier
+        // (keyword names such as `@params`).
+        public string MethodNameIdentifierDisplay;
+
+        // Whether the handler method itself is a generic method definition.
+        public bool IsMethodGeneric;
 
         // False when a parameter type or the method itself is open, dynamic,
         // or otherwise not addressable by an exact typeof signature.
@@ -280,6 +299,8 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                 EditorOnly = attribute.EditorOnly,
                 DevelopmentOnly = attribute.DevelopmentOnly,
                 IsDefault = attribute.IsDefault,
+                MethodNameIdentifierDisplay = EscapeIdentifier(method.Name),
+                IsMethodGeneric = method.IsGenericMethod,
                 ContainingTypeDisplay = BuildContainingTypeDisplay(
                     method.ContainingType,
                     out bool containingTypeIsUnbound
@@ -543,6 +564,16 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             }
 
             return false;
+        }
+
+        private static string EscapeIdentifier(string identifier)
+        {
+            if (SyntaxFacts.GetKeywordKind(identifier) != SyntaxKind.None)
+            {
+                return "@" + identifier;
+            }
+
+            return identifier;
         }
 
         /*

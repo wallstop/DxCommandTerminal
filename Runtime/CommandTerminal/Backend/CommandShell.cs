@@ -25,18 +25,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         private const BindingFlags ReflectedMethodBindingFlags =
             BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
 
-        /*
-            Generated catalogs expose `public static void Collect(
-            List<CommandCatalogEntry> entries)`. Probes and bindings are cached
-            per assembly for the lifetime of the domain; the weak table keeps
-            unloaded-collectible editor assemblies collectible.
-         */
-        private static readonly ConditionalWeakTable<
-            Assembly,
-            StrongBox<Action<List<CommandCatalogEntry>>>
-        > CatalogCollectors =
-            new ConditionalWeakTable<Assembly, StrongBox<Action<List<CommandCatalogEntry>>>>();
-
         public static readonly Lazy<(
             MethodInfo method,
             RegisterCommandAttribute attribute
@@ -348,30 +336,56 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         /*
             Probes the assembly for its generated `CommandCatalog` and binds its
-            Collect method. One targeted metadata lookup per assembly; results
-            are cached per assembly for the domain.
+            Collect method, and caches the reflection-compatibility result for
+            assemblies without one. Both are computed once per assembly per
+            domain; the weak table keeps unloaded-collectible editor
+            assemblies collectible.
          */
+        private sealed class DiscoveryCache
+        {
+            public Action<List<CommandCatalogEntry>> Collector;
+            public bool CollectorProbed;
+            public List<AutoCommand> ReflectedCommands;
+        }
+
+        private static readonly ConditionalWeakTable<Assembly, DiscoveryCache> DiscoveryCaches =
+            new ConditionalWeakTable<Assembly, DiscoveryCache>();
+
+        private static DiscoveryCache GetOrCreateDiscoveryCache(Assembly assembly)
+        {
+            if (DiscoveryCaches.TryGetValue(assembly, out DiscoveryCache cache))
+            {
+                return cache;
+            }
+
+            cache = new DiscoveryCache();
+            try
+            {
+                DiscoveryCaches.Add(assembly, cache);
+            }
+            catch (ArgumentException)
+            {
+                // A concurrent initialization registered its cache first;
+                // sharing it is equivalent to having won the race.
+                DiscoveryCaches.TryGetValue(assembly, out cache);
+            }
+
+            return cache ?? new DiscoveryCache();
+        }
+
         private static bool TryGetCatalogCollector(
             Assembly assembly,
+            DiscoveryCache cache,
             out Action<List<CommandCatalogEntry>> collector
         )
         {
-            if (
-                CatalogCollectors.TryGetValue(
-                    assembly,
-                    out StrongBox<Action<List<CommandCatalogEntry>>> box
-                )
-            )
+            if (!cache.CollectorProbed)
             {
-                collector = box.Value;
-                return collector != null;
+                cache.Collector = BindCatalogCollector(assembly);
+                cache.CollectorProbed = true;
             }
 
-            collector = BindCatalogCollector(assembly);
-            CatalogCollectors.AddOrUpdate(
-                assembly,
-                new StrongBox<Action<List<CommandCatalogEntry>>>(collector)
-            );
+            collector = cache.Collector;
             return collector != null;
         }
 
@@ -445,60 +459,72 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             the reflection compatibility walk. Never walks types for an
             assembly that produced a non-empty catalog. Returns whether the
             catalog path was used.
+
+            Constraint: a non-empty catalog replaces reflection for its
+            assembly. Commands emitted into that assembly by a *different*
+            source generator (invisible to this generator's syntax receiver)
+            would be dropped, so such assemblies must register manually or
+            through their own catalog-compatible surface.
          */
         private static bool CollectAutoCommands(Assembly assembly, List<AutoCommand> commands)
         {
-            if (!TryGetCatalogCollector(assembly, out Action<List<CommandCatalogEntry>> collector))
+            DiscoveryCache cache = GetOrCreateDiscoveryCache(assembly);
+            if (
+                TryGetCatalogCollector(
+                    assembly,
+                    cache,
+                    out Action<List<CommandCatalogEntry>> collector
+                )
+            )
             {
-                CollectReflectedAutoCommands(assembly, commands);
-                return false;
-            }
-
-            List<CommandCatalogEntry> entries = new();
-            bool collected = false;
-            try
-            {
-                collector(entries);
-                collected = true;
-            }
-            catch (Exception e)
-            {
-                Debug.LogWarning(
-                    $"[DxCommandTerminal] Generated command catalog in "
-                        + $"{assembly.GetName().Name} failed to collect: {e.Message}; "
-                        + $"falling back to reflection discovery"
-                );
-            }
-
-            if (collected && 0 < entries.Count)
-            {
-                for (int i = 0; i < entries.Count; i++)
+                List<CommandCatalogEntry> entries = new();
+                bool collected = false;
+                try
                 {
-                    commands.Add(AutoCommand.FromCatalog(entries[i]));
+                    collector(entries);
+                    collected = true;
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning(
+                        $"[DxCommandTerminal] Generated command catalog in "
+                            + $"{assembly.GetName().Name} failed to collect: {e.Message}; "
+                            + $"falling back to reflection discovery"
+                    );
                 }
 
-                return true;
+                if (collected && 0 < entries.Count)
+                {
+                    for (int i = 0; i < entries.Count; i++)
+                    {
+                        commands.Add(AutoCommand.FromCatalog(entries[i]));
+                    }
+
+                    return true;
+                }
+
+                // An empty or failed catalog is not proof that the assembly has
+                // no commands; the reflection walk below stays compatible with
+                // it.
             }
 
-            // An empty or failed catalog is not proof that the assembly has no
-            // commands; the reflection walk below stays compatible with it.
-            CollectReflectedAutoCommands(assembly, commands);
-            return false;
-        }
-
-        private static void CollectReflectedAutoCommands(
-            Assembly assembly,
-            List<AutoCommand> commands
-        )
-        {
-            List<(MethodInfo method, RegisterCommandAttribute attribute)> reflected = new();
-            CollectReflectedCommands(assembly, reflected);
-            for (int i = 0; i < reflected.Count; i++)
+            if (cache.ReflectedCommands == null)
             {
-                commands.Add(
-                    AutoCommand.FromReflected(reflected[i].method, reflected[i].attribute)
-                );
+                List<(MethodInfo method, RegisterCommandAttribute attribute)> reflected = new();
+                CollectReflectedCommands(assembly, reflected);
+                List<AutoCommand> cached = new(reflected.Count);
+                for (int i = 0; i < reflected.Count; i++)
+                {
+                    cached.Add(
+                        AutoCommand.FromReflected(reflected[i].method, reflected[i].attribute)
+                    );
+                }
+
+                cache.ReflectedCommands = cached;
             }
+
+            commands.AddRange(cache.ReflectedCommands);
+            return false;
         }
 
         private static bool TryGetScanTypes(Assembly assembly, out Type[] types)

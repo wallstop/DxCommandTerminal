@@ -9,9 +9,14 @@ metadata:
 
 ## The constraint
 
-Attribute-based command discovery uses reflection over loaded assemblies. IL2CPP managed
-stripping can remove the attributes/methods it cannot see referenced, so the terminal "forgets"
-its commands in WebGL builds.
+Attribute-based command discovery is catalog-first: the bundled source generator emits an
+internal `WallstopStudios.DxCommandTerminal.Generated.CommandCatalog` into every assembly that
+declares `[RegisterCommand]` methods, and the shell binds those catalogs directly. Catalogs
+still address handler methods by name (direct delegate creation for accessible methods, exact
+reflection identity for private ones), so IL2CPP managed stripping can still remove attributed
+methods the generated code cannot prove referenced - the failure mode is the same, just
+narrower. Assemblies without a catalog (precompiled DLLs) fall back to the reflection scan,
+which has the original full exposure.
 
 **Required setting** (Player > WebGL > Other Settings > Optimizations > Managed Stripping Level):
 `Low`, `Minimal`, or `None`. `Medium` or `High` breaks command registration.

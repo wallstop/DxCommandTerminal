@@ -19,19 +19,48 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         /// <summary>
         ///     The normalized command name, exactly as
         ///     <see cref="Attributes.RegisterCommandAttribute"/> normalization would
-        ///     produce it for the handler method.
+        ///     produce it for the handler method. May be blank when inference
+        ///     stripped the method name to empty; the shell rejects it with the
+        ///     standard "Invalid Command Name" diagnostic.
         /// </summary>
         public string Name { get; }
 
         /// <summary>The name of the handler method, used for diagnostics.</summary>
         public string MethodName { get; }
 
+        /// <summary>Minimum number of arguments the command accepts.</summary>
         public int MinArgCount { get; }
+
+        /// <summary>
+        ///     Maximum number of arguments the command accepts, or a negative
+        ///     value for unbounded. Stored as declared; the shell applies the
+        ///     same argument-count rules as reflection discovery.
+        /// </summary>
         public int MaxArgCount { get; }
+
+        /// <summary>Help text shown by the built-in <c>help</c> command.</summary>
         public string Help { get; }
+
+        /// <summary>Usage hint appended to argument-count errors.</summary>
         public string Hint { get; }
+
+        /// <summary>
+        ///     Whether invocations are recorded in the command history. Mirrors
+        ///     <see cref="Attributes.RegisterCommandAttribute.AddToHistory"/>.
+        /// </summary>
         public bool AddToHistory { get; }
+
+        /// <summary>
+        ///     Whether the command is available only in the Unity Editor.
+        ///     Mirrors <see cref="Attributes.RegisterCommandAttribute.EditorOnly"/>.
+        /// </summary>
         public bool EditorOnly { get; }
+
+        /// <summary>
+        ///     Whether the command is available only in development builds and
+        ///     the Editor. Mirrors
+        ///     <see cref="Attributes.RegisterCommandAttribute.DevelopmentOnly"/>.
+        /// </summary>
         public bool DevelopmentOnly { get; }
 
         /// <summary>
@@ -75,12 +104,16 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             Func<MethodInfo> methodAccessor
         )
         {
-            if (string.IsNullOrWhiteSpace(name))
+            /*
+                A blank name is legal here: the legacy discovery path produces
+                it for handlers whose inferred name strips to empty (for
+                example a method named `Command`), and the shell rejects it at
+                registration with the same "Invalid Command Name" diagnostic
+                reflection discovery has always produced.
+             */
+            if (name == null)
             {
-                throw new ArgumentException(
-                    "Command name must not be null or blank.",
-                    nameof(name)
-                );
+                throw new ArgumentNullException(nameof(name));
             }
 
             if (string.IsNullOrWhiteSpace(methodName))

@@ -11,19 +11,50 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
         internal static SymbolDisplayFormat FullyQualified =>
             SymbolDisplayFormat.FullyQualifiedFormat;
 
+        /*
+            Generated code references every type through fully qualified
+            global:: names so a consumer type declared in an enclosing
+            namespace (for example `WallstopStudios.DxCommandTerminal.Func`)
+            cannot hijack resolution; no using directives are emitted.
+         */
+        private const string ArgumentType =
+            "global::WallstopStudios.DxCommandTerminal.Backend.CommandArg";
+
+        private const string HandlerType = ArgumentType + "[]";
+
+        private const string BinderType = "global::System.Action<" + HandlerType + ">";
+
+        private const string BinderFactoryType = "global::System.Func<" + BinderType + ">";
+
+        private const string EntryType =
+            "global::WallstopStudios.DxCommandTerminal.Backend.CommandCatalogEntry";
+
+        private const string EntryListType =
+            "global::System.Collections.Generic.List<" + EntryType + ">";
+
+        private const string BindingFlagsType = "global::System.Reflection.BindingFlags";
+
+        private const string BindingFlagsExpression =
+            BindingFlagsType
+            + ".Static | "
+            + BindingFlagsType
+            + ".Public | "
+            + BindingFlagsType
+            + ".NonPublic";
+
         private const string BinderFieldNameFormat = "_boundHandler{0}";
         private const string BinderMethodNameFormat = "BindHandler{0}";
 
         internal static string Emit(List<CommandModel> commands)
         {
             StringBuilder builder = new StringBuilder(4096);
-            bool needsReflection = false;
+            bool needsUnboundFinder = false;
 
             foreach (CommandModel command in commands)
             {
-                if (!command.HasValidSignature || !command.DirectlyBindable)
+                if (!command.HasValidSignature && !command.ExactSignatureAddressable)
                 {
-                    needsReflection = true;
+                    needsUnboundFinder = true;
                     break;
                 }
             }
@@ -40,47 +71,35 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             builder.Append("\n");
             builder.Append("namespace WallstopStudios.DxCommandTerminal.Generated\n");
             builder.Append("{\n");
-            builder.Append("    using System;\n");
-            builder.Append("    using System.Collections.Generic;\n");
-            if (needsReflection)
-            {
-                builder.Append("    using System.Reflection;\n");
-            }
-            builder.Append("    using global::WallstopStudios.DxCommandTerminal.Backend;\n");
-            builder.Append("\n");
             builder.Append("    internal static class CommandCatalog\n");
             builder.Append("    {\n");
             builder.Append(
-                "        private static readonly List<CommandCatalogEntry> Entries = Build();\n"
+                "        private static readonly " + EntryListType + " Entries = Build();\n"
             );
             builder.Append("\n");
-            builder.Append(
-                "        public static void Collect(List<CommandCatalogEntry> entries)\n"
-            );
+            builder.Append("        public static void Collect(");
+            builder.Append(EntryListType);
+            builder.Append(" entries)\n");
             builder.Append("        {\n");
             builder.Append("            if (entries == null)\n");
             builder.Append("            {\n");
-            builder.Append("                throw new ArgumentNullException(\"entries\");\n");
+            builder.Append(
+                "                throw new global::System.ArgumentNullException(\"entries\");\n"
+            );
             builder.Append("            }\n");
             builder.Append("\n");
             builder.Append("            entries.AddRange(Entries);\n");
             builder.Append("        }\n");
             builder.Append("\n");
-            builder.Append("        private static List<CommandCatalogEntry> Build()\n");
+            builder.Append("        private static " + EntryListType + " Build()\n");
             builder.Append("        {\n");
-            builder.Append(
-                "            List<CommandCatalogEntry> entries = new List<CommandCatalogEntry>();\n"
-            );
+            builder.Append("            " + EntryListType + " entries = new ");
+            builder.Append(EntryListType);
+            builder.Append("();\n");
 
-            int commandIndex = 0;
-            bool needsUnboundFinder = false;
             for (int i = 0; i < commands.Count; i++)
             {
-                CommandModel command = commands[i];
-                if (EmitCommand(builder, commandIndex, command, ref needsUnboundFinder))
-                {
-                    commandIndex++;
-                }
+                EmitCommand(builder, i, commands[i]);
             }
 
             builder.Append("            return entries;\n");
@@ -105,11 +124,10 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             return builder.ToString();
         }
 
-        private static bool EmitCommand(
+        private static void EmitCommand(
             StringBuilder builder,
             int commandIndex,
-            CommandModel command,
-            ref bool needsUnboundFinder
+            CommandModel command
         )
         {
             builder.Append("\n");
@@ -121,7 +139,9 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                 .Append("' from method ")
                 .Append(command.MethodName)
                 .Append('\n');
-            builder.Append("            entries.Add(new CommandCatalogEntry(\n");
+            builder.Append("            entries.Add(new ");
+            builder.Append(EntryType);
+            builder.Append("(\n");
             AppendLiteral(builder, command.CommandName, depth: 4);
             builder.Append(",\n");
             AppendLiteral(builder, command.MethodName, depth: 4);
@@ -153,30 +173,36 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             {
                 if (command.DirectlyBindable)
                 {
-                    builder.Append("                new Func<Action<CommandArg[]>>(delegate\n");
+                    builder.Append("                new ");
+                    builder.Append(BinderFactoryType);
+                    builder.Append("(delegate\n");
                     builder.Append("                {\n");
-                    builder
-                        .Append("                    return new Action<CommandArg[]>(")
-                        .Append(command.ContainingTypeDisplay)
-                        .Append('.')
-                        .Append(command.MethodName)
-                        .Append(");\n");
+                    builder.Append("                    return new ");
+                    builder.Append(BinderType);
+                    builder.Append("(");
+                    builder.Append(command.ContainingTypeDisplay);
+                    builder.Append('.');
+                    builder.Append(command.MethodNameIdentifierDisplay);
+                    builder.Append(");\n");
                     builder.Append("                }),\n");
                     builder.Append("                null\n");
                 }
                 else
                 {
-                    builder
-                        .Append("                new Func<Action<CommandArg[]>>(")
-                        .Append(Format(BinderMethodNameFormat, commandIndex))
-                        .Append("),\n");
+                    builder.Append("                new ");
+                    builder.Append(BinderFactoryType);
+                    builder.Append("(");
+                    builder.Append(Format(BinderMethodNameFormat, commandIndex));
+                    builder.Append("),\n");
                     builder.Append("                null\n");
                 }
             }
             else
             {
                 builder.Append("                null,\n");
-                builder.Append("                new Func<MethodInfo>(delegate\n");
+                builder.Append(
+                    "                new global::System.Func<global::System.Reflection.MethodInfo>(delegate\n"
+                );
                 builder.Append("                {\n");
                 if (command.ExactSignatureAddressable)
                 {
@@ -185,11 +211,11 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                     builder.Append(").GetMethod(\n");
                     AppendLiteral(builder, command.MethodName, depth: 6);
                     builder.Append(",\n");
-                    builder.Append(
-                        "                        BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic,\n"
-                    );
+                    builder.Append("                        ");
+                    builder.Append(BindingFlagsExpression);
+                    builder.Append(",\n");
                     builder.Append("                        null,\n");
-                    builder.Append("                        new Type[]\n");
+                    builder.Append("                        new global::System.Type[]\n");
                     builder.Append("                        {\n");
                     for (int i = 0; i < command.ParameterTypeExpressions.Length; i++)
                     {
@@ -205,51 +231,61 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                 }
                 else
                 {
-                    needsUnboundFinder = true;
                     builder.Append("                    return FindMethodByName(\n");
                     builder.Append("                        typeof(");
                     builder.Append(command.ContainingTypeDisplay);
                     builder.Append("),\n");
                     AppendLiteral(builder, command.MethodName, depth: 6);
                     builder.Append(",\n");
-                    builder
-                        .Append("                        ")
-                        .Append(
-                            command.ParameterTypeExpressions.Length.ToString(
-                                System.Globalization.CultureInfo.InvariantCulture
-                            )
+                    builder.Append("                        ");
+                    builder.Append(
+                        command.ParameterTypeExpressions.Length.ToString(
+                            System.Globalization.CultureInfo.InvariantCulture
                         )
-                        .Append("\n");
+                    );
+                    builder.Append(",\n");
+                    builder.Append("                        ");
+                    builder.Append(command.IsMethodGeneric ? "true" : "false");
+                    builder.Append("\n");
                     builder.Append("                    );\n");
                 }
                 builder.Append("                })\n");
             }
 
             builder.Append("            ));\n");
-            return true;
         }
 
         private static void EmitUnboundMethodFinder(StringBuilder builder)
         {
             builder.Append("\n");
-            builder.Append("        private static MethodInfo FindMethodByName(\n");
-            builder.Append("            Type type,\n");
+            builder.Append(
+                "        private static global::System.Reflection.MethodInfo FindMethodByName(\n"
+            );
+            builder.Append("            global::System.Type type,\n");
             builder.Append("            string name,\n");
-            builder.Append("            int parameterCount\n");
+            builder.Append("            int parameterCount,\n");
+            builder.Append("            bool isGeneric\n");
             builder.Append("        )\n");
             builder.Append("        {\n");
-            builder.Append("            MethodInfo[] methods = type.GetMethods(\n");
             builder.Append(
-                "                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic\n"
+                "            global::System.Reflection.MethodInfo[] methods = type.GetMethods(\n"
             );
+            builder.Append("                ");
+            builder.Append(BindingFlagsExpression);
+            builder.Append("\n");
             builder.Append("            );\n");
             builder.Append("            for (int i = 0; i < methods.Length; i++)\n");
             builder.Append("            {\n");
-            builder.Append("                MethodInfo method = methods[i];\n");
+            builder.Append(
+                "                global::System.Reflection.MethodInfo method = methods[i];\n"
+            );
             builder.Append("                if (\n");
             builder.Append("                    method.Name == name\n");
             builder.Append(
                 "                    && method.GetParameters().Length == parameterCount\n"
+            );
+            builder.Append(
+                "                    && method.IsGenericMethodDefinition == isGeneric\n"
             );
             builder.Append("                )\n");
             builder.Append("                {\n");
@@ -272,33 +308,42 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
 
             builder.Append("\n");
             builder
-                .Append("        private static Action<CommandArg[]> ")
+                .Append("        private static ")
+                .Append(BinderType)
+                .Append(" ")
                 .Append(fieldName)
                 .Append(";\n");
             builder.Append("\n");
             builder
-                .Append("        private static Action<CommandArg[]> ")
+                .Append("        private static ")
+                .Append(BinderType)
+                .Append(" ")
                 .Append(methodName)
                 .Append("()\n");
             builder.Append("        {\n");
-            builder.Append("            if (").Append(fieldName).Append(" == null)\n");
+            builder.Append("            if (");
+            builder.Append(fieldName);
+            builder.Append(" == null)\n");
             builder.Append("            {\n");
-            builder
-                .Append("                ")
-                .Append(fieldName)
-                .Append(" = (Action<CommandArg[]>)\n");
-            builder.Append("                    Delegate.CreateDelegate(\n");
-            builder.Append("                        typeof(Action<CommandArg[]>),\n");
+            builder.Append("                ");
+            builder.Append(fieldName);
+            builder.Append(" = (");
+            builder.Append(BinderType);
+            builder.Append(")\n");
+            builder.Append("                    global::System.Delegate.CreateDelegate(\n");
+            builder.Append("                        typeof(");
+            builder.Append(BinderType);
+            builder.Append("),\n");
             builder.Append("                        typeof(");
             builder.Append(command.ContainingTypeDisplay);
             builder.Append(").GetMethod(\n");
             AppendLiteral(builder, command.MethodName, depth: 6);
             builder.Append(",\n");
-            builder.Append(
-                "                            BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic,\n"
-            );
+            builder.Append("                            ");
+            builder.Append(BindingFlagsExpression);
+            builder.Append(",\n");
             builder.Append("                            null,\n");
-            builder.Append("                            new Type[]\n");
+            builder.Append("                            new global::System.Type[]\n");
             builder.Append("                            {\n");
             for (int i = 0; i < command.ParameterTypeExpressions.Length; i++)
             {

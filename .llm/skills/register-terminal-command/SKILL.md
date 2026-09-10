@@ -27,8 +27,12 @@ static void CommandAdd(CommandArg[] args)
   Override with `[RegisterCommand("myname")]` or `Name = "myname"` (spaces are stripped).
 - `MinArgCount` / `MaxArgCount` (`-1` = unbounded) make the shell issue an error before your
   handler runs when arity is wrong; you may then index `args` safely.
-- Discovery is reflection-based over all loaded assemblies; user assemblies take precedence over
-  built-ins with the same name.
+- Discovery is catalog-first: the bundled source generator emits one internal
+  `WallstopStudios.DxCommandTerminal.Generated.CommandCatalog` per assembly that declares
+  `[RegisterCommand]` methods, and `CommandShell` binds those catalogs without walking types.
+  Assemblies without a catalog (precompiled DLLs, or when analyzers are unavailable) fall back
+  to reflection over terminal-referencing assemblies; user assemblies take precedence over
+  built-ins with the same name either way.
 
 ## Attribute knobs
 

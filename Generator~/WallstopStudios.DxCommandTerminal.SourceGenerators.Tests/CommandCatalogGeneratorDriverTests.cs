@@ -321,6 +321,112 @@ namespace Fixtures
             Assert.Equal("Third", catalog.NameOf(catalog.Entries[2]));
         }
 
+        private const string PositionalNameFixture =
+            @"
+namespace Fixtures
+{
+    using WallstopStudios.DxCommandTerminal.Attributes;
+    using WallstopStudios.DxCommandTerminal.Backend;
+
+    public static class PositionalCommands
+    {
+        [RegisterCommand(""positional-name"")]
+        public static void PositionalCommand(CommandArg[] args)
+        {
+        }
+    }
+}";
+
+        private const string KeywordMethodFixture =
+            @"
+namespace Fixtures
+{
+    using WallstopStudios.DxCommandTerminal.Attributes;
+    using WallstopStudios.DxCommandTerminal.Backend;
+
+    public static class KeywordCommands
+    {
+        public static int KeywordInvocations;
+
+        [RegisterCommand]
+        public static void @params(CommandArg[] args)
+        {
+            KeywordInvocations++;
+        }
+
+        [RegisterCommand(Help = ""keyword void"")]
+        private static void @void(CommandArg[] args)
+        {
+            KeywordInvocations += 10;
+        }
+    }
+}";
+
+        private const string BlankNameFixture =
+            @"
+namespace Fixtures
+{
+    using WallstopStudios.DxCommandTerminal.Attributes;
+    using WallstopStudios.DxCommandTerminal.Backend;
+
+    public static class BlankNameCommands
+    {
+        [RegisterCommand]
+        public static void Command(CommandArg[] args)
+        {
+        }
+    }
+}";
+
+        private const string PartialMethodFixture =
+            @"
+namespace Fixtures
+{
+    using System;
+    using WallstopStudios.DxCommandTerminal.Attributes;
+    using WallstopStudios.DxCommandTerminal.Backend;
+
+    public static partial class PartialCommands
+    {
+        [RegisterCommand]
+        public static partial void PartialCommand(CommandArg[] args);
+    }
+
+    public static partial class PartialCommands
+    {
+        // Both parts carry attribute lists, but only the declaration carries
+        // RegisterCommand; the receiver must not emit the merged symbol twice.
+        [Obsolete(""marker"")]
+        public static partial void PartialCommand(CommandArg[] args)
+        {
+        }
+    }
+}";
+
+        private const string DuplicateNameFixture =
+            @"
+namespace Fixtures
+{
+    using WallstopStudios.DxCommandTerminal.Attributes;
+    using WallstopStudios.DxCommandTerminal.Backend;
+
+    public static class DuplicateCommandsA
+    {
+        [RegisterCommand]
+        public static void CommandHeal(CommandArg[] args)
+        {
+        }
+    }
+
+    public static class DuplicateCommandsB
+    {
+        [RegisterCommand]
+        public static void CommandHeal(CommandArg[] args)
+        {
+        }
+    }
+}";
+
         private const string NoCommandsFixture =
             @"
 namespace Fixtures
@@ -466,6 +572,130 @@ namespace Fixtures
                     tree.FilePath == TestCompilationFactory.GeneratedHintName
                 )
             );
+        }
+
+        [Fact]
+        public void RegistersPositionalConstructorNames()
+        {
+            Assembly assembly = TestCompilationFactory.CompileAndLoad(
+                TestCompilationFactory
+                    .RunGenerator(
+                        TestCompilationFactory.CreateCompilation(
+                            "PositionalName",
+                            PositionalNameFixture
+                        )
+                    )
+                    .output
+            );
+
+            CatalogView catalog = CatalogView.Load(assembly);
+            object entry = Assert.Single(catalog.Entries);
+            Assert.Equal("positional-name", catalog.NameOf(entry));
+            Assert.True(catalog.HasValidSignature(entry));
+            Assert.NotNull(catalog.BinderOf(entry));
+        }
+
+        [Fact]
+        public void EmitsCompilableCodeForKeywordMethodNames()
+        {
+            Assembly assembly = TestCompilationFactory.CompileAndLoad(
+                TestCompilationFactory
+                    .RunGenerator(
+                        TestCompilationFactory.CreateCompilation(
+                            "KeywordMethods",
+                            KeywordMethodFixture
+                        )
+                    )
+                    .output
+            );
+
+            CatalogView catalog = CatalogView.Load(assembly);
+            Assert.Equal(2, catalog.Entries.Count);
+            Assert.Equal("params", catalog.NameOf(catalog.Entries[0]));
+            Assert.Equal("params", catalog.MethodNameOf(catalog.Entries[0]));
+            Assert.Equal("void", catalog.NameOf(catalog.Entries[1]));
+
+            FieldInfo invocations = assembly
+                .GetType("Fixtures.KeywordCommands")
+                .GetField("KeywordInvocations");
+            Assert.Equal(0, invocations.GetValue(null));
+            catalog.BinderOf(catalog.Entries[0])(
+                new object[]
+                {
+                    Array.CreateInstance(
+                        assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"),
+                        0
+                    ),
+                }
+            );
+            Assert.Equal(1, invocations.GetValue(null));
+            catalog.BinderOf(catalog.Entries[1])(
+                new object[]
+                {
+                    Array.CreateInstance(
+                        assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"),
+                        0
+                    ),
+                }
+            );
+            Assert.Equal(11, invocations.GetValue(null));
+        }
+
+        [Fact]
+        public void BlankInferredNamesAreEmittedAndRejectedLikeLegacy()
+        {
+            Assembly assembly = TestCompilationFactory.CompileAndLoad(
+                TestCompilationFactory
+                    .RunGenerator(
+                        TestCompilationFactory.CreateCompilation("BlankName", BlankNameFixture)
+                    )
+                    .output
+            );
+
+            // The catalog is loadable: a blank inferred name must not poison
+            // the assembly's static initializer.
+            CatalogView catalog = CatalogView.Load(assembly);
+            object entry = Assert.Single(catalog.Entries);
+            Assert.Equal(string.Empty, catalog.NameOf(entry));
+            Assert.True(catalog.HasValidSignature(entry));
+        }
+
+        [Fact]
+        public void PartialMethodDeclarationsProduceOneEntry()
+        {
+            Assembly assembly = TestCompilationFactory.CompileAndLoad(
+                TestCompilationFactory
+                    .RunGenerator(
+                        TestCompilationFactory.CreateCompilation(
+                            "PartialMethods",
+                            PartialMethodFixture
+                        )
+                    )
+                    .output
+            );
+
+            CatalogView catalog = CatalogView.Load(assembly);
+            object entry = Assert.Single(catalog.Entries);
+            Assert.Equal("Partial", catalog.NameOf(entry));
+        }
+
+        [Fact]
+        public void DuplicateInferredNamesEachProduceAnEntry()
+        {
+            Assembly assembly = TestCompilationFactory.CompileAndLoad(
+                TestCompilationFactory
+                    .RunGenerator(
+                        TestCompilationFactory.CreateCompilation(
+                            "DuplicateNames",
+                            DuplicateNameFixture
+                        )
+                    )
+                    .output
+            );
+
+            CatalogView catalog = CatalogView.Load(assembly);
+            Assert.Equal(2, catalog.Entries.Count);
+            Assert.All(catalog.Entries, entry => Assert.Equal("Heal", catalog.NameOf(entry)));
         }
     }
 }
