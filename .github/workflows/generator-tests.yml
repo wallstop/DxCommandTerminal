@@ -1,0 +1,56 @@
+name: Generator Tests
+
+on:
+  push:
+    branches:
+      - master
+      - main
+    paths:
+      - "Generator~/**"
+      - "Runtime/Analyzers/**"
+      - "Runtime/Attributes/RegisterCommandAttribute.cs"
+      - "Runtime/CommandTerminal/Backend/CommandArg.cs"
+      - "Runtime/CommandTerminal/Backend/CommandCatalogEntry.cs"
+      - "tooling~/scripts/verify-analyzer-payload.ps1"
+      - ".github/workflows/generator-tests.yml"
+  pull_request:
+    paths:
+      - "Generator~/**"
+      - "Runtime/Analyzers/**"
+      - "Runtime/Attributes/RegisterCommandAttribute.cs"
+      - "Runtime/CommandTerminal/Backend/CommandArg.cs"
+      - "Runtime/CommandTerminal/Backend/CommandCatalogEntry.cs"
+      - "tooling~/scripts/verify-analyzer-payload.ps1"
+      - ".github/workflows/generator-tests.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  generator-tests:
+    # Unity-free CI for the shell-discovery generator: the byte-compare needs
+    # the pinned SDK (stable compilation → stable byte-compare), the test
+    # suite needs the harness, and the payload check needs pwsh
+    # (preinstalled on ubuntu-latest). Inspired by the unity-helpers'
+    # generator CI contract.
+    name: generator-tests (ubuntu-latest)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup DotNet
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 9.0.306
+
+      - name: Run generator tests
+        run: dotnet test "Generator~/WallstopStudios.DxCommandTerminal.SourceGenerators.Tests/WallstopStudios.DxCommandTerminal.SourceGenerators.Tests.csproj" -c Release
+
+      - name: Verify shipped analyzer payload
+        shell: pwsh
+        run: ./tooling~/scripts/verify-analyzer-payload.ps1

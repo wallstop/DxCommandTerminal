@@ -6,7 +6,7 @@
     "node": ">=22.7.0"
   },
   "scripts": {
-    "test": "node --test \"scripts/mcp/__tests__/*.test.mjs\"",
+    "test": "node --test \"scripts/mcp/__tests__/*.test.mjs\" \"scripts/tests/*.test.mjs\"",
     "package:validate": "node scripts/release/validate-package-contents.mjs",
     "unity:mcp:probe": "node scripts/mcp/unity-mcp.mjs probe",
     "unity:mcp:configure": "node scripts/mcp/unity-mcp.mjs configure",
