@@ -18,8 +18,15 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
         private const string EntryMetadataName =
             "WallstopStudios.DxCommandTerminal.Backend.CommandCatalogEntry";
 
+        private const string ContextsMetadataName =
+            "WallstopStudios.DxCommandTerminal.Backend.CommandExecutionContexts";
+
         internal const string ArgumentMetadataName =
             "WallstopStudios.DxCommandTerminal.Backend.CommandArg";
+
+        // Matches RegisterCommandAttribute's Contexts default so attributed
+        // commands that omit Contexts keep unrestricted eligibility.
+        internal const int AllExecutionContexts = 7;
 
         private const string GeneratedHintName = "DxCommandTerminalCommandCatalog.g.cs";
 
@@ -48,7 +55,8 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             ITypeSymbol commandArgumentType = compilation.GetTypeByMetadataName(
                 ArgumentMetadataName
             );
-            if (entryType == null || commandArgumentType == null)
+            ITypeSymbol contextsType = compilation.GetTypeByMetadataName(ContextsMetadataName);
+            if (entryType == null || commandArgumentType == null || contextsType == null)
             {
                 return;
             }
@@ -233,6 +241,11 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                     attribute.DevelopmentOnly =
                         argument.Value is bool developmentOnly && developmentOnly;
                     break;
+                case "Contexts":
+                    attribute.Contexts = argument.Value is int contexts
+                        ? contexts
+                        : AllExecutionContexts;
+                    break;
             }
         }
     }
@@ -248,6 +261,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
         public bool AddToHistory = true;
         public bool EditorOnly;
         public bool DevelopmentOnly;
+        public int Contexts = CommandCatalogGenerator.AllExecutionContexts;
     }
 
     internal sealed class CommandModel
@@ -262,6 +276,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
         public bool EditorOnly;
         public bool DevelopmentOnly;
         public bool IsDefault;
+        public int Contexts;
 
         // Non-null for valid (CommandArg[]) signatures.
         public bool HasValidSignature;
@@ -337,6 +352,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                 EditorOnly = attribute.EditorOnly,
                 DevelopmentOnly = attribute.DevelopmentOnly,
                 IsDefault = attribute.IsDefault,
+                Contexts = attribute.Contexts,
                 MethodNameIdentifierDisplay = EscapeIdentifier(method.Name),
                 IsMethodGeneric = method.IsGenericMethod,
                 ContainingTypeDisplay = BuildContainingTypeDisplay(

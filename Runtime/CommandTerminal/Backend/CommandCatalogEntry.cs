@@ -70,6 +70,13 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         public bool IsDefault { get; }
 
         /// <summary>
+        ///     Environments the command may run in. Mirrors
+        ///     <see cref="Attributes.RegisterCommandAttribute.Contexts"/>;
+        ///     eligibility is enforced at dispatch.
+        /// </summary>
+        public CommandExecutionContexts Contexts { get; }
+
+        /// <summary>
         ///     Binds the handler to a runnable delegate. Non-null only for commands
         ///     with a valid <c>(CommandArg[])</c> signature; accessible handlers are
         ///     bound by direct delegate creation, inaccessible ones by a cached,
@@ -101,7 +108,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             bool developmentOnly,
             bool isDefault,
             Func<Action<CommandArg[]>> binder,
-            Func<MethodInfo> methodAccessor
+            Func<MethodInfo> methodAccessor,
+            CommandExecutionContexts contexts = CommandExecutionContexts.All
         )
         {
             /*
@@ -144,6 +152,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             IsDefault = isDefault;
             Binder = binder;
             MethodAccessor = methodAccessor;
+            Contexts = contexts;
         }
     }
 }

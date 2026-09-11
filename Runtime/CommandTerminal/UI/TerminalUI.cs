@@ -10,9 +10,11 @@ namespace WallstopStudios.DxCommandTerminal.UI
     using Helper;
     using Input;
     using Themes;
-    using UnityEditor;
     using UnityEngine;
     using UnityEngine.UIElements;
+#if UNITY_EDITOR
+    using UnityEditor;
+#endif
 
     [DisallowMultipleComponent]
     public sealed class TerminalUI : MonoBehaviour
@@ -189,7 +191,10 @@ namespace WallstopStudios.DxCommandTerminal.UI
         private ScrollView _logScrollView;
         private ScrollView _autoCompleteContainer;
         private VisualElement _inputContainer;
-        private TextField _commandInput;
+
+        // Internal for test coverage of token completion (see
+        // WallstopStudios.DxCommandTerminal.Tests.Runtime).
+        internal TextField _commandInput;
         private Button _runButton;
         private VisualElement _stateButtonContainer;
         private VisualElement _textInput;
@@ -197,15 +202,45 @@ namespace WallstopStudios.DxCommandTerminal.UI
         private bool _lastKnownHintsClickable;
         private IVisualElementScheduledItem _cursorBlinkSchedule;
 
-        private readonly List<string> _lastCompletionBuffer = new();
+        /*
+            Internal for test coverage of hint suppression (see
+            WallstopStudios.DxCommandTerminal.Tests.Runtime).
+         */
+        internal readonly List<string> _lastCompletionBuffer = new();
         private readonly List<string> _lastCompletionBufferTempCache = new();
         private readonly HashSet<string> _lastCompletionBufferTempSet = new(
             StringComparer.OrdinalIgnoreCase
         );
         private readonly List<VisualElement> _autoCompleteChildren = new();
 
-        // Cached for performance (avoids allocations)
-        private readonly Action _focusInput;
+        /*
+            Provider-based token completion state. Cycled the same way the
+            history completion buffer is cycled; reset whenever the input
+            changes or the terminal state resets.
+         */
+        private readonly List<CommandCompletion> _tokenCompletions = new();
+        private readonly List<CommandCompletion> _tokenCompletionsTemp = new();
+        private int? _tokenCompletionIndex;
+        private string _tokenCompletionInput;
+        private int _tokenCompletionCaret;
+        private string _tokenCompletionAppliedText;
+        private int _tokenCompletionReplacementStart;
+        private int _tokenCompletionReplacementLength;
+        private bool _tokenCompletionQuoted;
+
+        /*
+            Caret to restore on the next focus pass; negative keeps the
+            focus-at-end behavior. Token completions set it.
+         */
+        private int _pendingCaretIndex = -1;
+
+        /*
+            The last value RefreshUI wrote to the field. The panel re-emits it
+            as a synthetic change event; matching it keeps that echo from
+            resetting completion state like user input.
+         */
+        private string _lastCodeSyncedValue;
+
 #if UNITY_EDITOR
         private readonly EditorApplication.CallbackFunction _checkForChanges;
 #endif
@@ -213,7 +248,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         public TerminalUI()
         {
-            _focusInput = FocusInput;
 #if UNITY_EDITOR
             _checkForChanges = CheckForChanges;
 #endif
@@ -631,6 +665,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
         private void ResetAutoComplete()
         {
             _lastKnownCommandText = _input.CommandText ?? string.Empty;
+            ResetTokenCompletion();
             if (hintDisplayMode == HintDisplayMode.Always)
             {
                 _lastCompletionBufferTempCache.Clear();
@@ -675,6 +710,235 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 _previousLastCompletionIndex = null;
                 _lastCompletionBuffer.Clear();
             }
+        }
+
+        private int NormalizeCaret(int caret)
+        {
+            string input = _input.CommandText ?? string.Empty;
+            return caret < 0 || input.Length < caret ? input.Length : caret;
+        }
+
+        private void ResetTokenCompletion()
+        {
+            _tokenCompletionIndex = null;
+            _tokenCompletionInput = null;
+            _tokenCompletionCaret = 0;
+            _tokenCompletionReplacementStart = 0;
+            _tokenCompletionReplacementLength = 0;
+            _tokenCompletionQuoted = false;
+            _tokenCompletionAppliedText = null;
+            _pendingCaretIndex = -1;
+            _tokenCompletions.Clear();
+        }
+
+        /*
+            Provider-based token completion. Runs before the legacy
+            history-based completion: when the command under the caret has a
+            completion provider, cycling replaces only the active token, and
+            full-line history suggestions are suppressed so they cannot
+            overwrite unrelated input. Returns false (and leaves the legacy
+            path in charge) when there is no provider to answer.
+         */
+        private bool TryTokenComplete(bool searchForward)
+        {
+            CommandShell shell = Terminal.Shell;
+            if (shell == null || _commandInput == null)
+            {
+                return false;
+            }
+
+            /*
+                The snapshot is taken on the first press of a cycle and
+                survives applications; a caret move that is not ours
+                restarts the request from the live state.
+             */
+            string currentInput = _input.CommandText ?? string.Empty;
+            int liveCaret = _commandInput.cursorIndex;
+            /*
+                The applied-input branch matches text only: panel handling
+                can move the caret after a programmatic sync, so a caret
+                check would drop cycles. Typing restarts the request.
+             */
+            bool keepRequest =
+                _tokenCompletionInput != null
+                && (
+                    string.Equals(
+                        currentInput,
+                        _tokenCompletionAppliedText,
+                        StringComparison.Ordinal
+                    )
+                    || (
+                        string.Equals(currentInput, _tokenCompletionInput, StringComparison.Ordinal)
+                        && NormalizeCaret(liveCaret) == _tokenCompletionCaret
+                    )
+                );
+            if (!keepRequest)
+            {
+                _tokenCompletionInput = currentInput;
+                _tokenCompletionCaret = NormalizeCaret(liveCaret);
+            }
+
+            _tokenCompletionsTemp.Clear();
+            bool hasProvider = shell.TryComplete(
+                CommandExecutionContext.Current,
+                _tokenCompletionInput,
+                _tokenCompletionCaret,
+                _tokenCompletionsTemp,
+                out CommandCompletionContext completionContext
+            );
+            if (!hasProvider)
+            {
+                ResetTokenCompletion();
+                return false;
+            }
+
+            _tokenCompletionReplacementStart = completionContext.ReplacementStart;
+            _tokenCompletionReplacementLength = completionContext.ReplacementLength;
+            _tokenCompletionQuoted = completionContext.IsQuoted;
+
+            /*
+                A provider-attached command owns its input shape: stale
+                full-line history hints go away until the next input
+                change re-derives them.
+             */
+            _lastCompletionBuffer.Clear();
+            _lastCompletionIndex = null;
+
+            if (_tokenCompletionsTemp.Count == 0)
+            {
+                // A provider is attached but has nothing to offer; do not
+                // substitute full-line history suggestions for the token.
+                return true;
+            }
+
+            bool equivalent =
+                _tokenCompletionIndex != null
+                && TokenCompletionsEquivalent(_tokenCompletionsTemp, _tokenCompletions);
+            if (!equivalent)
+            {
+                _tokenCompletions.Clear();
+                _tokenCompletions.AddRange(_tokenCompletionsTemp);
+                _tokenCompletionIndex = searchForward ? 0 : _tokenCompletions.Count - 1;
+            }
+            else if (searchForward)
+            {
+                _tokenCompletionIndex = (_tokenCompletionIndex.Value + 1) % _tokenCompletions.Count;
+            }
+            else
+            {
+                _tokenCompletionIndex =
+                    (_tokenCompletionIndex.Value - 1 + _tokenCompletions.Count)
+                    % _tokenCompletions.Count;
+            }
+
+            ApplyTokenCompletion(_tokenCompletions[_tokenCompletionIndex.Value]);
+            return true;
+        }
+
+        private static bool TokenCompletionsEquivalent(
+            List<CommandCompletion> candidates,
+            List<CommandCompletion> current
+        )
+        {
+            if (candidates.Count != current.Count)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < candidates.Count; ++i)
+            {
+                CommandCompletion candidate = candidates[i];
+                CommandCompletion active = current[i];
+                if (
+                    candidate.InsertionText != active.InsertionText
+                    || candidate.ReplacementStart != active.ReplacementStart
+                    || candidate.ReplacementLength != active.ReplacementLength
+                )
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private void ApplyTokenCompletion(CommandCompletion completion)
+        {
+            string input = _tokenCompletionInput ?? string.Empty;
+            int replacementStart = completion.HasReplacementOverride
+                ? completion.ReplacementStart
+                : _tokenCompletionReplacementStart;
+            int replacementLength = completion.HasReplacementOverride
+                ? completion.ReplacementLength
+                : _tokenCompletionReplacementLength;
+            if (
+                replacementStart < 0
+                || replacementLength < 0
+                || input.Length < replacementStart
+                || input.Length - replacementStart < replacementLength
+            )
+            {
+                return;
+            }
+
+            string insertion = QuoteInsertionIfNeeded(
+                completion.InsertionText,
+                _tokenCompletionQuoted
+            );
+            string newInput = input
+                .Remove(replacementStart, replacementLength)
+                .Insert(replacementStart, insertion);
+            _tokenCompletionAppliedText = newInput;
+            _pendingCaretIndex = replacementStart + insertion.Length;
+
+            _input.CommandText = newInput;
+            _needsFocus = true;
+        }
+
+        private static string QuoteInsertionIfNeeded(string insertion, bool tokenQuoted)
+        {
+            if (tokenQuoted)
+            {
+                return insertion;
+            }
+
+            bool containsSpace = false;
+            bool containsDoubleQuote = false;
+            bool containsSingleQuote = false;
+            foreach (char character in insertion)
+            {
+                switch (character)
+                {
+                    case ' ':
+                        containsSpace = true;
+                        break;
+                    case '"':
+                        containsDoubleQuote = true;
+                        break;
+                    case '\'':
+                        containsSingleQuote = true;
+                        break;
+                }
+            }
+
+            if (!containsSpace && !containsDoubleQuote && !containsSingleQuote)
+            {
+                return insertion;
+            }
+
+            if (!containsDoubleQuote)
+            {
+                return "\"" + insertion + "\"";
+            }
+
+            if (!containsSingleQuote)
+            {
+                return "'" + insertion + "'";
+            }
+
+            // The insertion mixes both quote characters; insert it verbatim
+            // rather than producing an untokenizable quoting.
+            return insertion;
         }
 
         private void ResetWindowIdempotent()
@@ -795,6 +1059,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             _commandInput.name = "CommandInput";
             _commandInput.AddToClassList("terminal-input-field");
             _commandInput.pickingMode = PickingMode.Position;
+            _lastCodeSyncedValue = _input.CommandText;
             _commandInput.value = _input.CommandText;
             _commandInput.RegisterCallback<ChangeEvent<string>, TerminalUI>(
                 (evt, context) =>
@@ -809,6 +1074,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                     {
                         if (!string.Equals(context._commandInput.value, context._input.CommandText))
                         {
+                            context._lastCodeSyncedValue = context._input.CommandText;
                             context._commandInput.value = context._input.CommandText;
                         }
                         evt.StopPropagation();
@@ -817,13 +1083,29 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
                     context._input.CommandText = evt.newValue;
 
+                    bool echoFromCode = context._isCommandFromCode;
+                    if (
+                        !echoFromCode
+                        && string.Equals(
+                            evt.newValue,
+                            context._lastCodeSyncedValue,
+                            StringComparison.Ordinal
+                        )
+                    )
+                    {
+                        // One echo follows each programmatic write; a later
+                        // same-value edit is a genuine edit, not an echo.
+                        context._lastCodeSyncedValue = null;
+                        echoFromCode = true;
+                    }
+
                     context._runButton.style.display =
                         context.showGUIButtons
                         && !string.IsNullOrWhiteSpace(context._input.CommandText)
                         && !string.IsNullOrWhiteSpace(context.runButtonText)
                             ? DisplayStyle.Flex
                             : DisplayStyle.None;
-                    if (!context._isCommandFromCode)
+                    if (!echoFromCode)
                     {
                         context.ResetAutoComplete();
                     }
@@ -835,6 +1117,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             );
 
             _inputContainer.Add(_commandInput);
+            ResetTokenCompletion();
             _textInput = _commandInput.Q<VisualElement>("unity-text-input");
 
             _stateButtonContainer = new VisualElement { name = "StateButtonContainer" };
@@ -1117,10 +1400,13 @@ namespace WallstopStudios.DxCommandTerminal.UI
             if (!string.Equals(_commandInput.value, commandInput))
             {
                 _isCommandFromCode = true;
+                _lastCodeSyncedValue = commandInput;
                 _commandInput.value = commandInput;
             }
             else if (
                 _needsFocus
+                && _textInput != null
+                && _textInput.focusController != null
                 && _textInput.focusable
                 && _textInput.resolvedStyle.display != DisplayStyle.None
                 && _commandInput.resolvedStyle.display != DisplayStyle.None
@@ -1128,7 +1414,13 @@ namespace WallstopStudios.DxCommandTerminal.UI
             {
                 if (_textInput.focusController.focusedElement != _textInput)
                 {
-                    _textInput.schedule.Execute(_focusInput).ExecuteLater(0);
+                    /*
+                        Retry focus only: the scheduled pass must not re-run
+                        the caret-to-end behavior of a fresh focus, which
+                        would clobber a caret the user or a completion placed
+                        in the meantime.
+                     */
+                    _textInput.schedule.Execute(_textInput.Focus).ExecuteLater(0);
                     FocusInput();
                 }
 
@@ -1143,6 +1435,10 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 ScrollToEnd();
                 _needsScrollToEnd = false;
             }
+
+            // Pending carets are consumed on every pass: an accepted
+            // completion can be a text no-op that must still move the caret.
+            ApplyPendingCaret();
             RefreshStateButtons();
         }
 
@@ -1153,10 +1449,47 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 return;
             }
 
+            bool alreadyFocused = _textInput.focusController.focusedElement == _textInput;
+            if (alreadyFocused || 0 <= _pendingCaretIndex)
+            {
+                /*
+                    The field already holds focus, or a completion queued a
+                    caret position for input the field has not received yet:
+                    keep the caret. RefreshUI applies the queued position once
+                    the field value is synced.
+                 */
+                _textInput.Focus();
+                return;
+            }
+
+            // A fresh focus places the caret at the end of the input.
             _textInput.Focus();
             int textEndPosition = _commandInput.value.Length;
             _commandInput.cursorIndex = textEndPosition;
             _commandInput.selectIndex = textEndPosition;
+        }
+
+        private void ApplyPendingCaret()
+        {
+            if (_pendingCaretIndex < 0 || _commandInput == null)
+            {
+                return;
+            }
+
+            if (_commandInput.value.Length < _pendingCaretIndex)
+            {
+                /*
+                    The queued position targets input the field does not hold
+                    yet; the value sync in RefreshUI applies it right after
+                    the field catches up.
+                 */
+                return;
+            }
+
+            int caretPosition = _pendingCaretIndex;
+            _pendingCaretIndex = -1;
+            _commandInput.cursorIndex = caretPosition;
+            _commandInput.selectIndex = caretPosition;
         }
 
         private void RefreshLogs()
@@ -1960,6 +2293,17 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             try
             {
+                /*
+                    Commands with a completion provider own completion for
+                    their input shape: cycling replaces only the active token.
+                    Without a provider the legacy history-based completion
+                    below runs unchanged.
+                 */
+                if (TryTokenComplete(searchForward))
+                {
+                    return;
+                }
+
                 _lastKnownCommandText ??= _input.CommandText ?? string.Empty;
                 _lastCompletionBufferTempCache.Clear();
                 Terminal.AutoComplete?.Complete(

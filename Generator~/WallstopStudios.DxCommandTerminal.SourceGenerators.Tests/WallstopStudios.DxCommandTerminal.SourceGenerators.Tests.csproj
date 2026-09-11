@@ -23,6 +23,7 @@
     <Compile Include="$(RepoRoot)/Runtime/Attributes/RegisterCommandAttribute.cs" />
     <Compile Include="$(RepoRoot)/Runtime/CommandTerminal/Backend/CommandArg.cs" />
     <Compile Include="$(RepoRoot)/Runtime/CommandTerminal/Backend/CommandCatalogEntry.cs" />
+    <Compile Include="$(RepoRoot)/Runtime/CommandTerminal/Backend/CommandExecutionContexts.cs" />
     <Compile Include="*.cs" />
   </ItemGroup>
 

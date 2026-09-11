@@ -148,9 +148,11 @@ frontmatter validity, index freshness, and pointer-file delegation; see
 
 All text a human reads (PR titles, PR descriptions, commit messages, review comments,
 code comments, issues) uses Simplified Technical English: short sentences, active voice,
-present tense, common words, ASCII only. PRs and commits follow a "Why" / "How" /
-"What changed" order; omit sections that add nothing. Code comments stay minimal - only
-what the code cannot say. Details: [simple-writing](./skills/simple-writing/SKILL.md).
+present tense, common words, ASCII only. PRs and commits follow a "Why" / "What changed" /
+"How we know" order; omit sections that add nothing. Length budgets are hard limits:
+PR descriptions stay at or under ~20 lines, commit bodies at or under ~12, one line per
+bullet, no nested bullets. Code comments stay minimal - only what the code cannot say.
+Details: [simple-writing](./skills/simple-writing/SKILL.md).
 
 ### LLM Attribution (GitHub)
 

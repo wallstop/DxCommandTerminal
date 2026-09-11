@@ -556,6 +556,69 @@ namespace Fixtures
             Assert.NotNull(catalog.BinderOf(notDefault));
         }
 
+        private const string ContextsFixture =
+            @"
+namespace Fixtures
+{
+    using WallstopStudios.DxCommandTerminal.Attributes;
+    using WallstopStudios.DxCommandTerminal.Backend;
+
+    public static class ContextCommands
+    {
+        [RegisterCommand(
+            Name = ""edit-mode-only"",
+            Contexts = CommandExecutionContexts.EditorEditMode
+        )]
+        public static void EditModeOnly(CommandArg[] args)
+        {
+        }
+
+        [RegisterCommand(
+            Name = ""gameplay-only"",
+            Contexts = CommandExecutionContexts.EditorPlayMode
+                | CommandExecutionContexts.Player
+        )]
+        public static void GameplayOnly(CommandArg[] args)
+        {
+        }
+
+        [RegisterCommand(Name = ""unrestricted"")]
+        public static void Unrestricted(CommandArg[] args)
+        {
+        }
+
+        [RegisterCommand(Name = ""numeric-contexts"", Contexts = (CommandExecutionContexts)5)]
+        public static void NumericContexts(CommandArg[] args)
+        {
+        }
+    }
+}";
+
+        [Fact]
+        public void CarriesExecutionContextsIntoCatalogEntries()
+        {
+            Assembly assembly = TestCompilationFactory.CompileAndLoad(
+                TestCompilationFactory
+                    .RunGenerator(
+                        TestCompilationFactory.CreateCompilation("Contexts", ContextsFixture)
+                    )
+                    .output
+            );
+
+            /*
+                Entries are emitted in declaration order. The omitted case
+                must match RegisterCommandAttribute's default (All = 7), so
+                attributed commands without Contexts keep unrestricted
+                eligibility through the catalog path too.
+             */
+            CatalogView catalog = CatalogView.Load(assembly);
+            Assert.Equal(4, catalog.Entries.Count);
+            Assert.Equal(1, catalog.ContextsOf(catalog.Entries[0]));
+            Assert.Equal(6, catalog.ContextsOf(catalog.Entries[1]));
+            Assert.Equal(7, catalog.ContextsOf(catalog.Entries[2]));
+            Assert.Equal(5, catalog.ContextsOf(catalog.Entries[3]));
+        }
+
         [Fact]
         public void RegistersCommandsWithExactSignatureAccessors()
         {

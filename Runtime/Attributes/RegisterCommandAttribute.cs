@@ -2,6 +2,7 @@ namespace WallstopStudios.DxCommandTerminal.Attributes
 {
     using System;
     using System.Reflection;
+    using Backend;
 
     [AttributeUsage(AttributeTargets.Method)]
     public sealed class RegisterCommandAttribute : Attribute
@@ -20,6 +21,17 @@ namespace WallstopStudios.DxCommandTerminal.Attributes
         public bool DevelopmentOnly { get; set; }
 
         public bool AddToHistory { get; set; } = true;
+
+        /// <summary>
+        ///     Environments the command may run in. Defaults to
+        ///     <see cref="CommandExecutionContexts.All"/> so attributed commands
+        ///     keep their previous availability everywhere, Edit Mode
+        ///     included. Set a narrower set to opt out of environments; the
+        ///     Edit-Mode opt-in rule applies to new
+        ///     <see cref="Backend.CommandDefinition"/> metadata, whose
+        ///     default is <see cref="CommandExecutionContexts.Gameplay"/>.
+        /// </summary>
+        public CommandExecutionContexts Contexts { get; set; } = CommandExecutionContexts.All;
 
         public RegisterCommandAttribute(string commandName = null)
         {

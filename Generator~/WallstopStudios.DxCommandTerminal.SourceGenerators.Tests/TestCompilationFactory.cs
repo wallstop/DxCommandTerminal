@@ -33,6 +33,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators.Tests
             {
                 "Runtime/Attributes/RegisterCommandAttribute.cs",
                 "Runtime/CommandTerminal/Backend/CommandArg.cs",
+                "Runtime/CommandTerminal/Backend/CommandExecutionContexts.cs",
             }
         );
 
@@ -317,6 +318,8 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators.Tests
         public bool DevelopmentOnlyOf(object entry) => (bool)GetValue(entry, "DevelopmentOnly");
 
         public bool IsDefaultOf(object entry) => (bool)GetValue(entry, "IsDefault");
+
+        public int ContextsOf(object entry) => (int)GetValue(entry, "Contexts");
 
         public Func<object[], object> BinderOf(object entry)
         {
