@@ -5,6 +5,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     using System.Diagnostics;
     using System.Text;
     using Attributes;
+    using Helper;
     using Themes;
     using UI;
     using UnityEngine;
@@ -13,6 +14,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     public static class BuiltInCommands
     {
         private const string BulkSeparator = "    ";
+
+        private const int AverageThemeNameCapacity = 24;
+
+        private const int AverageFontNameCapacity = 32;
 
         private static readonly StringBuilder StringBuilder = new();
 
@@ -38,18 +43,29 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
 
             List<string> themeNames = terminal._themePack._themeNames;
-            StringBuilder themes = new StringBuilder();
-            for (int index = 0; index < themeNames.Count; ++index)
+            StringBuilder themes = CachedStringBuilder.Rent(
+                themeNames.Count * AverageThemeNameCapacity
+            );
+            try
             {
-                if (0 < index)
+                bool first = true;
+                foreach (string themeName in themeNames)
                 {
-                    themes.Append(BulkSeparator);
+                    if (!first)
+                    {
+                        themes.Append(BulkSeparator);
+                    }
+
+                    themes.Append(ThemeNameHelper.GetFriendlyThemeName(themeName));
+                    first = false;
                 }
 
-                themes.Append(ThemeNameHelper.GetFriendlyThemeName(themeNames[index]));
+                Terminal.Log(TerminalLogType.Message, themes.ToString());
             }
-
-            Terminal.Log(TerminalLogType.Message, themes.ToString());
+            finally
+            {
+                CachedStringBuilder.Return(themes);
+            }
         }
 
         [RegisterCommand(
@@ -74,18 +90,29 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
 
             List<Font> fonts = terminal._fontPack._fonts;
-            StringBuilder fontNames = new StringBuilder();
-            for (int index = 0; index < fonts.Count; ++index)
+            StringBuilder fontNames = CachedStringBuilder.Rent(
+                fonts.Count * AverageFontNameCapacity
+            );
+            try
             {
-                if (0 < index)
+                bool first = true;
+                foreach (Font font in fonts)
                 {
-                    fontNames.Append(BulkSeparator);
+                    if (!first)
+                    {
+                        fontNames.Append(BulkSeparator);
+                    }
+
+                    fontNames.Append(font.name);
+                    first = false;
                 }
 
-                fontNames.Append(fonts[index].name);
+                Terminal.Log(TerminalLogType.Message, fontNames.ToString());
             }
-
-            Terminal.Log(TerminalLogType.Message, fontNames.ToString());
+            finally
+            {
+                CachedStringBuilder.Return(fontNames);
+            }
         }
 
         [RegisterCommand(
@@ -479,17 +506,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return;
             }
 
-            int variableCount = shell.Variables.Count;
-            List<string> variableNames = new List<string>(variableCount);
-            foreach (string variable in shell.Variables.Keys)
-            {
-                variableNames.Add(variable);
-            }
-
-            foreach (string variable in variableNames)
-            {
-                shell.ClearVariable(variable);
-            }
+            int variableCount = shell.ClearVariables();
 
             Terminal.Log(
                 variableCount == 0

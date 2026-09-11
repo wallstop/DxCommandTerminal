@@ -163,6 +163,21 @@ frontmatter validity, index freshness, and pointer-file delegation; see
     intermediate sequences. `List<T>.ToArray()`/`CopyTo` instance methods stay legal.
     Tests and `Generator~` tooling are exempt. Enforced by
     `npm --prefix tooling~ run lint:linq-production` (pre-commit + CI; no `:fix` by design).
+23. Replacing LINQ is not enough - the loop must not re-introduce the allocation. Rules
+    that came out of the PR #60 allocation review:
+    - String assembly on repeated paths rents a builder:
+      `CachedStringBuilder.Rent(capacity)` / `Return(builder)` in `Runtime/Helper/`
+      (ThreadStatic, capacity retained). Never `new StringBuilder()` per call.
+    - Derived data drawn every `OnGUI`/editor tick is cached against its source
+      (reference + count stamp) and rebuilt only when the source changes - e.g. the
+      popup option arrays and font-key arrays in `TerminalUIEditor`. A fresh array or
+      list per frame is a regression even when the loop itself is allocation-free.
+    - Snapshot-then-mutate patterns (clear all variables while iterating a dictionary)
+      live on the owning type with a cached buffer field (`CommandShell.ClearVariables`),
+      not in command handlers that build throwaway lists.
+    - When converting LINQ, enumerate with `foreach` over the concrete type (struct
+      enumerator, bounds-check elision); keep counting loops only where the index is
+      genuinely used, per rule 11.
 
 ### Unity Package Rules
 

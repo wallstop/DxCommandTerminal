@@ -9,6 +9,7 @@
     using System.Threading;
     using Attributes;
     using DataStructures;
+    using Helper;
     using UnityEngine;
     using Debug = UnityEngine.Debug;
 
@@ -129,6 +130,8 @@
         private readonly SortedDictionary<string, CommandArg> _variables = new(
             StringComparer.OrdinalIgnoreCase
         );
+
+        private readonly List<string> _variableClearBuffer = new();
 
         /*
             Depth-scoped parse buffers: one per active RunCommand/TryComplete
@@ -1023,6 +1026,28 @@
             return _variables.Remove(name);
         }
 
+        /*
+            Clears every variable in one call. The snapshot list is cached so
+            repeated bulk clears (or a clear run from inside a command while
+            the shell is iterating) never allocate; dictionary keys cannot be
+            enumerated while entries are being removed.
+         */
+        public int ClearVariables()
+        {
+            _variableClearBuffer.Clear();
+            foreach (string variable in _variables.Keys)
+            {
+                _variableClearBuffer.Add(variable);
+            }
+
+            foreach (string variable in _variableClearBuffer)
+            {
+                _variables.Remove(variable);
+            }
+
+            return _variableClearBuffer.Count;
+        }
+
         // ReSharper disable once MemberCanBePrivate.Global
         public bool SetVariable(string name, CommandArg value)
         {
@@ -1190,23 +1215,33 @@
             foreach (KeyValuePair<string, MethodInfo> command in _rejectedCommands)
             {
                 ParameterInfo[] parameters = command.Value.GetParameters();
-                StringBuilder found = new StringBuilder(command.Value.Name).Append('(');
-                for (int index = 0; index < parameters.Length; ++index)
+                StringBuilder found = CachedStringBuilder.Rent(64);
+                try
                 {
-                    if (0 < index)
+                    found.Append(command.Value.Name).Append('(');
+                    bool first = true;
+                    foreach (ParameterInfo parameter in parameters)
                     {
-                        found.Append(',');
+                        if (!first)
+                        {
+                            found.Append(',');
+                        }
+
+                        found.Append(parameter.ParameterType.Name);
+                        first = false;
                     }
 
-                    found.Append(parameters[index].ParameterType.Name);
+                    found.Append(')');
+                    IssueErrorMessage(
+                        $"{command.Key} has an invalid signature. "
+                            + $"Expected: {command.Value.Name}(CommandArg[]). "
+                            + $"Found: {found}"
+                    );
                 }
-
-                found.Append(')');
-                IssueErrorMessage(
-                    $"{command.Key} has an invalid signature. "
-                        + $"Expected: {command.Value.Name}(CommandArg[]). "
-                        + $"Found: {found}"
-                );
+                finally
+                {
+                    CachedStringBuilder.Return(found);
+                }
             }
 
             AutoCommandsRegistered = true;

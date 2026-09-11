@@ -32,9 +32,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         public IEnumerable<string> GetHistory(bool onlySuccess, bool onlyErrorFree)
         {
-            for (int index = 0; index < _history.Count; ++index)
+            foreach ((string text, bool? success, bool? errorFree) entry in _history)
             {
-                (string text, bool? success, bool? errorFree) entry = _history[index];
                 if (onlySuccess && entry.success != true)
                 {
                     continue;
@@ -143,14 +142,14 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         /*
             Fills a caller-owned buffer without allocating: the completion
             hot path iterates history on every keystroke-driven query, so it
-            must not pay for enumerators or iterator state machines.
+            must not pay for enumerators or iterator state machines. The
+            buffer's struct enumerator keeps this loop allocation-free.
          */
         internal void CopyHistory(bool onlySuccess, bool onlyErrorFree, List<string> results)
         {
             results.Clear();
-            for (int index = 0; index < _history.Count; ++index)
+            foreach ((string text, bool? success, bool? errorFree) entry in _history)
             {
-                (string text, bool? success, bool? errorFree) entry = _history[index];
                 if (onlySuccess && entry.success != true)
                 {
                     continue;
