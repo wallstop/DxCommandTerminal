@@ -79,7 +79,8 @@
 
             CSharpCompilation output = (CSharpCompilation)outputCompilation;
             SyntaxTree generated = output.SyntaxTrees.FirstOrDefault(tree =>
-                tree.FilePath == GeneratedHintName || tree.FilePath.EndsWith(GeneratedHintName)
+                tree.FilePath == GeneratedHintName
+                || tree.FilePath.EndsWith(GeneratedHintName, StringComparison.Ordinal)
             );
             return (generated, output);
         }
@@ -132,7 +133,8 @@
                 }
 
                 SyntaxTree generatedTree = compilation.SyntaxTrees.FirstOrDefault(tree =>
-                    tree.FilePath == GeneratedHintName || tree.ToString().Contains("auto-generated")
+                    tree.FilePath == GeneratedHintName
+                    || tree.ToString().Contains("auto-generated", StringComparison.Ordinal)
                 );
                 if (generatedTree != null)
                 {

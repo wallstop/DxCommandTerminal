@@ -2,6 +2,7 @@
 {
     using System;
     using System.Collections.Generic;
+    using System.Globalization;
     using System.Linq;
     using System.Net;
     using System.Numerics;
@@ -192,7 +193,7 @@
 
             if (type == typeof(string))
             {
-                parsed = (T)Convert.ChangeType(stringValue, type);
+                parsed = (T)(object)stringValue;
                 return true;
             }
             if (TryGetTypeDefined(stringValue, out parsed))
@@ -207,43 +208,43 @@
             }
             if (type == typeof(float))
             {
-                return InnerParse<float>(stringValue, float.TryParse, out parsed);
+                return InnerParse<float>(stringValue, ParseFloatInvariant, out parsed);
             }
             if (type == typeof(int))
             {
-                return InnerParse<int>(stringValue, int.TryParse, out parsed);
+                return InnerParse<int>(stringValue, ParseIntInvariant, out parsed);
             }
             if (type == typeof(uint))
             {
-                return InnerParse<uint>(stringValue, uint.TryParse, out parsed);
+                return InnerParse<uint>(stringValue, ParseUintInvariant, out parsed);
             }
             if (type == typeof(long))
             {
-                return InnerParse<long>(stringValue, long.TryParse, out parsed);
+                return InnerParse<long>(stringValue, ParseLongInvariant, out parsed);
             }
             if (type == typeof(ulong))
             {
-                return InnerParse<ulong>(stringValue, ulong.TryParse, out parsed);
+                return InnerParse<ulong>(stringValue, ParseUlongInvariant, out parsed);
             }
             if (type == typeof(double))
             {
-                return InnerParse<double>(stringValue, double.TryParse, out parsed);
+                return InnerParse<double>(stringValue, ParseDoubleInvariant, out parsed);
             }
             if (type == typeof(short))
             {
-                return InnerParse<short>(stringValue, short.TryParse, out parsed);
+                return InnerParse<short>(stringValue, ParseShortInvariant, out parsed);
             }
             if (type == typeof(ushort))
             {
-                return InnerParse<ushort>(stringValue, ushort.TryParse, out parsed);
+                return InnerParse<ushort>(stringValue, ParseUshortInvariant, out parsed);
             }
             if (type == typeof(byte))
             {
-                return InnerParse<byte>(stringValue, byte.TryParse, out parsed);
+                return InnerParse<byte>(stringValue, ParseByteInvariant, out parsed);
             }
             if (type == typeof(sbyte))
             {
-                return InnerParse<sbyte>(stringValue, sbyte.TryParse, out parsed);
+                return InnerParse<sbyte>(stringValue, ParseSbyteInvariant, out parsed);
             }
             if (type == typeof(Guid))
             {
@@ -251,11 +252,15 @@
             }
             if (type == typeof(DateTime))
             {
-                return InnerParse<DateTime>(stringValue, DateTime.TryParse, out parsed);
+                return InnerParse<DateTime>(stringValue, ParseDateTimeInvariant, out parsed);
             }
             if (type == typeof(DateTimeOffset))
             {
-                return InnerParse<DateTimeOffset>(stringValue, DateTimeOffset.TryParse, out parsed);
+                return InnerParse<DateTimeOffset>(
+                    stringValue,
+                    ParseDateTimeOffsetInvariant,
+                    out parsed
+                );
             }
             if (type == typeof(char))
             {
@@ -263,15 +268,15 @@
             }
             if (type == typeof(decimal))
             {
-                return InnerParse<decimal>(stringValue, decimal.TryParse, out parsed);
+                return InnerParse<decimal>(stringValue, ParseDecimalInvariant, out parsed);
             }
             if (type == typeof(BigInteger))
             {
-                return InnerParse<BigInteger>(stringValue, BigInteger.TryParse, out parsed);
+                return InnerParse<BigInteger>(stringValue, ParseBigIntegerInvariant, out parsed);
             }
             if (type == typeof(TimeSpan))
             {
-                return InnerParse<TimeSpan>(stringValue, TimeSpan.TryParse, out parsed);
+                return InnerParse<TimeSpan>(stringValue, ParseTimeSpanInvariant, out parsed);
             }
             if (type == typeof(Version))
             {
@@ -288,12 +293,19 @@
                     bool parseOk = Enum.TryParse(type, stringValue, out object parsedObject);
                     if (parseOk)
                     {
-                        parsed = (T)Convert.ChangeType(parsedObject, type);
+                        parsed = (T)parsedObject;
                         return true;
                     }
                 }
 
-                if (int.TryParse(stringValue, out int enumIntValue))
+                if (
+                    int.TryParse(
+                        stringValue,
+                        NumberStyles.Integer,
+                        CultureInfo.InvariantCulture,
+                        out int enumIntValue
+                    )
+                )
                 {
                     if (!EnumValues.TryGetValue(type, out object enumValues))
                     {
@@ -315,15 +327,15 @@
                 switch (split.Length)
                 {
                     case 2
-                        when float.TryParse(split[0], out float x)
-                            && float.TryParse(split[1], out float y):
-                        parsed = (T)Convert.ChangeType(new Vector2(x, y), type);
+                        when ParseFloatInvariant(split[0], out float x)
+                            && ParseFloatInvariant(split[1], out float y):
+                        parsed = (T)(object)new Vector2(x, y);
                         return true;
                     case 3
-                        when float.TryParse(split[0], out float x)
-                            && float.TryParse(split[1], out float y)
-                            && float.TryParse(split[2], out float z):
-                        parsed = (T)Convert.ChangeType((Vector2)new Vector3(x, y, z), type);
+                        when ParseFloatInvariant(split[0], out float x)
+                            && ParseFloatInvariant(split[1], out float y)
+                            && ParseFloatInvariant(split[2], out float z):
+                        parsed = (T)(object)(Vector2)new Vector3(x, y, z);
                         return true;
                 }
             }
@@ -333,15 +345,15 @@
                 switch (split.Length)
                 {
                     case 2
-                        when float.TryParse(split[0], out float x)
-                            && float.TryParse(split[1], out float y):
-                        parsed = (T)Convert.ChangeType(new Vector3(x, y), type);
+                        when ParseFloatInvariant(split[0], out float x)
+                            && ParseFloatInvariant(split[1], out float y):
+                        parsed = (T)(object)new Vector3(x, y);
                         return true;
                     case 3
-                        when float.TryParse(split[0], out float x)
-                            && float.TryParse(split[1], out float y)
-                            && float.TryParse(split[2], out float z):
-                        parsed = (T)Convert.ChangeType(new Vector3(x, y, z), type);
+                        when ParseFloatInvariant(split[0], out float x)
+                            && ParseFloatInvariant(split[1], out float y)
+                            && ParseFloatInvariant(split[2], out float z):
+                        parsed = (T)(object)new Vector3(x, y, z);
                         return true;
                 }
             }
@@ -351,22 +363,22 @@
                 switch (split.Length)
                 {
                     case 2
-                        when float.TryParse(split[0], out float x)
-                            && float.TryParse(split[1], out float y):
-                        parsed = (T)Convert.ChangeType(new Vector4(x, y), type);
+                        when ParseFloatInvariant(split[0], out float x)
+                            && ParseFloatInvariant(split[1], out float y):
+                        parsed = (T)(object)new Vector4(x, y);
                         return true;
                     case 3
-                        when float.TryParse(split[0], out float x)
-                            && float.TryParse(split[1], out float y)
-                            && float.TryParse(split[2], out float z):
-                        parsed = (T)Convert.ChangeType(new Vector4(x, y, z), type);
+                        when ParseFloatInvariant(split[0], out float x)
+                            && ParseFloatInvariant(split[1], out float y)
+                            && ParseFloatInvariant(split[2], out float z):
+                        parsed = (T)(object)new Vector4(x, y, z);
                         return true;
                     case 4
-                        when float.TryParse(split[0], out float x)
-                            && float.TryParse(split[1], out float y)
-                            && float.TryParse(split[2], out float z)
-                            && float.TryParse(split[3], out float w):
-                        parsed = (T)Convert.ChangeType(new Vector4(x, y, z, w), type);
+                        when ParseFloatInvariant(split[0], out float x)
+                            && ParseFloatInvariant(split[1], out float y)
+                            && ParseFloatInvariant(split[2], out float z)
+                            && ParseFloatInvariant(split[3], out float w):
+                        parsed = (T)(object)new Vector4(x, y, z, w);
                         return true;
                 }
             }
@@ -376,14 +388,15 @@
                 switch (split.Length)
                 {
                     case 2
-                        when int.TryParse(split[0], out int x) && int.TryParse(split[1], out int y):
-                        parsed = (T)Convert.ChangeType(new Vector2Int(x, y), type);
+                        when ParseIntInvariant(split[0], out int x)
+                            && ParseIntInvariant(split[1], out int y):
+                        parsed = (T)(object)new Vector2Int(x, y);
                         return true;
                     case 3
-                        when int.TryParse(split[0], out int x)
-                            && int.TryParse(split[1], out int y)
-                            && int.TryParse(split[2], out int z):
-                        parsed = (T)Convert.ChangeType((Vector2Int)new Vector3Int(x, y, z), type);
+                        when ParseIntInvariant(split[0], out int x)
+                            && ParseIntInvariant(split[1], out int y)
+                            && ParseIntInvariant(split[2], out int z):
+                        parsed = (T)(object)(Vector2Int)new Vector3Int(x, y, z);
                         return true;
                 }
             }
@@ -393,14 +406,15 @@
                 switch (split.Length)
                 {
                     case 2
-                        when int.TryParse(split[0], out int x) && int.TryParse(split[1], out int y):
-                        parsed = (T)Convert.ChangeType(new Vector3Int(x, y), type);
+                        when ParseIntInvariant(split[0], out int x)
+                            && ParseIntInvariant(split[1], out int y):
+                        parsed = (T)(object)new Vector3Int(x, y);
                         return true;
                     case 3
-                        when int.TryParse(split[0], out int x)
-                            && int.TryParse(split[1], out int y)
-                            && int.TryParse(split[2], out int z):
-                        parsed = (T)Convert.ChangeType(new Vector3Int(x, y, z), type);
+                        when ParseIntInvariant(split[0], out int x)
+                            && ParseIntInvariant(split[1], out int y)
+                            && ParseIntInvariant(split[2], out int z):
+                        parsed = (T)(object)new Vector3Int(x, y, z);
                         return true;
                 }
             }
@@ -420,17 +434,17 @@
                 switch (split.Length)
                 {
                     case 3
-                        when float.TryParse(split[0], out float r)
-                            && float.TryParse(split[1], out float g)
-                            && float.TryParse(split[2], out float b):
-                        parsed = (T)Convert.ChangeType(new Color(r, g, b), type);
+                        when ParseFloatInvariant(split[0], out float r)
+                            && ParseFloatInvariant(split[1], out float g)
+                            && ParseFloatInvariant(split[2], out float b):
+                        parsed = (T)(object)new Color(r, g, b);
                         return true;
                     case 4
-                        when float.TryParse(split[0], out float r)
-                            && float.TryParse(split[1], out float g)
-                            && float.TryParse(split[2], out float b)
-                            && float.TryParse(split[3], out float a):
-                        parsed = (T)Convert.ChangeType(new Color(r, g, b, a), type);
+                        when ParseFloatInvariant(split[0], out float r)
+                            && ParseFloatInvariant(split[1], out float g)
+                            && ParseFloatInvariant(split[2], out float b)
+                            && ParseFloatInvariant(split[3], out float a):
+                        parsed = (T)(object)new Color(r, g, b, a);
                         return true;
                 }
             }
@@ -440,11 +454,11 @@
                 switch (split.Length)
                 {
                     case 4
-                        when float.TryParse(split[0], out float x)
-                            && float.TryParse(split[1], out float y)
-                            && float.TryParse(split[2], out float z)
-                            && float.TryParse(split[3], out float w):
-                        parsed = (T)Convert.ChangeType(new Quaternion(x, y, z, w), type);
+                        when ParseFloatInvariant(split[0], out float x)
+                            && ParseFloatInvariant(split[1], out float y)
+                            && ParseFloatInvariant(split[2], out float z)
+                            && ParseFloatInvariant(split[3], out float w):
+                        parsed = (T)(object)new Quaternion(x, y, z, w);
                         return true;
                 }
             }
@@ -454,12 +468,12 @@
                 switch (split.Length)
                 {
                     case 4
-                        when float.TryParse(
+                        when ParseFloatInvariant(
                             split[0]
                                 .Replace("x:", string.Empty, StringComparison.OrdinalIgnoreCase),
                             out float x
                         )
-                            && float.TryParse(
+                            && ParseFloatInvariant(
                                 split[1]
                                     .Replace(
                                         "y:",
@@ -468,7 +482,7 @@
                                     ),
                                 out float y
                             )
-                            && float.TryParse(
+                            && ParseFloatInvariant(
                                 split[2]
                                     .Replace(
                                         "width:",
@@ -477,7 +491,7 @@
                                     ),
                                 out float width
                             )
-                            && float.TryParse(
+                            && ParseFloatInvariant(
                                 split[3]
                                     .Replace(
                                         "height:",
@@ -486,7 +500,7 @@
                                     ),
                                 out float height
                             ):
-                        parsed = (T)Convert.ChangeType(new Rect(x, y, width, height), type);
+                        parsed = (T)(object)new Rect(x, y, width, height);
                         return true;
                 }
             }
@@ -496,12 +510,12 @@
                 switch (split.Length)
                 {
                     case 4
-                        when int.TryParse(
+                        when ParseIntInvariant(
                             split[0]
                                 .Replace("x:", string.Empty, StringComparison.OrdinalIgnoreCase),
                             out int x
                         )
-                            && int.TryParse(
+                            && ParseIntInvariant(
                                 split[1]
                                     .Replace(
                                         "y:",
@@ -510,7 +524,7 @@
                                     ),
                                 out int y
                             )
-                            && int.TryParse(
+                            && ParseIntInvariant(
                                 split[2]
                                     .Replace(
                                         "width:",
@@ -519,7 +533,7 @@
                                     ),
                                 out int width
                             )
-                            && int.TryParse(
+                            && ParseIntInvariant(
                                 split[3]
                                     .Replace(
                                         "height:",
@@ -528,13 +542,129 @@
                                     ),
                                 out int height
                             ):
-                        parsed = (T)Convert.ChangeType(new RectInt(x, y, width, height), type);
+                        parsed = (T)(object)new RectInt(x, y, width, height);
                         return true;
                 }
             }
 
             parsed = default;
             return false;
+
+            /*
+                Console input must parse identically on every machine, so every
+                culture-sensitive TryParse pins NumberStyles and InvariantCulture
+                explicitly. The style flags mirror each overload's default so only
+                the culture is pinned, never the accepted syntax.
+             */
+            static bool ParseFloatInvariant(string input, out float parsed) =>
+                float.TryParse(
+                    input,
+                    NumberStyles.Float | NumberStyles.AllowThousands,
+                    CultureInfo.InvariantCulture,
+                    out parsed
+                );
+
+            static bool ParseDoubleInvariant(string input, out double parsed) =>
+                double.TryParse(
+                    input,
+                    NumberStyles.Float | NumberStyles.AllowThousands,
+                    CultureInfo.InvariantCulture,
+                    out parsed
+                );
+
+            static bool ParseDecimalInvariant(string input, out decimal parsed) =>
+                decimal.TryParse(
+                    input,
+                    NumberStyles.Number,
+                    CultureInfo.InvariantCulture,
+                    out parsed
+                );
+
+            static bool ParseIntInvariant(string input, out int parsed) =>
+                int.TryParse(input, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed);
+
+            static bool ParseUintInvariant(string input, out uint parsed) =>
+                uint.TryParse(
+                    input,
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out parsed
+                );
+
+            static bool ParseLongInvariant(string input, out long parsed) =>
+                long.TryParse(
+                    input,
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out parsed
+                );
+
+            static bool ParseUlongInvariant(string input, out ulong parsed) =>
+                ulong.TryParse(
+                    input,
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out parsed
+                );
+
+            static bool ParseShortInvariant(string input, out short parsed) =>
+                short.TryParse(
+                    input,
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out parsed
+                );
+
+            static bool ParseUshortInvariant(string input, out ushort parsed) =>
+                ushort.TryParse(
+                    input,
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out parsed
+                );
+
+            static bool ParseByteInvariant(string input, out byte parsed) =>
+                byte.TryParse(
+                    input,
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out parsed
+                );
+
+            static bool ParseSbyteInvariant(string input, out sbyte parsed) =>
+                sbyte.TryParse(
+                    input,
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out parsed
+                );
+
+            static bool ParseBigIntegerInvariant(string input, out BigInteger parsed) =>
+                BigInteger.TryParse(
+                    input,
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out parsed
+                );
+
+            static bool ParseDateTimeInvariant(string input, out DateTime parsed) =>
+                DateTime.TryParse(
+                    input,
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out parsed
+                );
+
+            static bool ParseDateTimeOffsetInvariant(string input, out DateTimeOffset parsed) =>
+                DateTimeOffset.TryParse(
+                    input,
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out parsed
+                );
+
+            static bool ParseTimeSpanInvariant(string input, out TimeSpan parsed) =>
+                TimeSpan.TryParse(input, CultureInfo.InvariantCulture, out parsed);
 
             static bool InnerParse<TParsed>(
                 string input,
@@ -545,7 +675,7 @@
                 bool parseOk = typedParser(input, out TParsed value);
                 if (parseOk)
                 {
-                    parsed = (T)Convert.ChangeType(value, typeof(T));
+                    parsed = (T)Convert.ChangeType(value, typeof(T), CultureInfo.InvariantCulture);
                 }
                 else
                 {
@@ -571,7 +701,7 @@
 
                 foreach (char delimiter in Delimiters)
                 {
-                    if (strippedInput.Contains(delimiter))
+                    if (0 <= strippedInput.IndexOf(delimiter, StringComparison.Ordinal))
                     {
                         return strippedInput.Split(delimiter);
                     }
@@ -597,7 +727,7 @@
                 if (properties.TryGetValue(input, out PropertyInfo property))
                 {
                     object resolved = property.GetValue(null);
-                    value = (T)Convert.ChangeType(resolved, type);
+                    value = (T)resolved;
                     return true;
                 }
 
@@ -610,7 +740,7 @@
                 if (fields.TryGetValue(input, out FieldInfo field))
                 {
                     object resolved = field.GetValue(null);
-                    value = (T)Convert.ChangeType(resolved, type);
+                    value = (T)resolved;
                     return true;
                 }
 

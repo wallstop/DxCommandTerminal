@@ -4,6 +4,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     using System.Collections.Generic;
     using System.Globalization;
     using System.Linq;
+    using System.Threading;
     using Backend;
     using JetBrains.Annotations;
     using NUnit.Framework;
@@ -2642,6 +2643,57 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             {
                 parsed = 1;
                 return false;
+            }
+        }
+
+        [Test]
+        [TestCase("tr-TR")]
+        [TestCase("de-DE")]
+        [TestCase("ru-RU")]
+        [TestCase("fr-FR")]
+        public void ParsingIsCultureInvariant(string cultureName)
+        {
+            CultureInfo culture;
+            try
+            {
+                culture = new CultureInfo(cultureName);
+            }
+            catch (CultureNotFoundException)
+            {
+                Assert.Ignore($"Culture {cultureName} is not installed on this machine.");
+                return;
+            }
+
+            CultureInfo originalCulture = Thread.CurrentThread.CurrentCulture;
+            Thread.CurrentThread.CurrentCulture = culture;
+            try
+            {
+                CommandArg arg = new("1.5");
+                Assert.IsTrue(arg.TryGet(out float floatValue), cultureName);
+                Assert.AreEqual(1.5f, floatValue, cultureName);
+
+                arg = new CommandArg("1.25");
+                Assert.IsTrue(arg.TryGet(out double doubleValue), cultureName);
+                Assert.AreEqual(1.25, doubleValue, cultureName);
+
+                arg = new CommandArg("1.5");
+                Assert.IsTrue(arg.TryGet(out decimal decimalValue), cultureName);
+                Assert.AreEqual(1.5m, decimalValue, cultureName);
+
+                arg = new CommandArg("01/02/2026");
+                Assert.IsTrue(arg.TryGet(out DateTime date), cultureName);
+                Assert.AreEqual(new DateTime(2026, 1, 2), date, cultureName);
+
+                arg = new CommandArg("1.5, 2.5");
+                Assert.IsTrue(arg.TryGet(out Vector2 vector), cultureName);
+                Assert.IsTrue(
+                    Approximately(1.5f, vector.x) && Approximately(2.5f, vector.y),
+                    $"{cultureName}: expected (1.5, 2.5), got {vector}"
+                );
+            }
+            finally
+            {
+                Thread.CurrentThread.CurrentCulture = originalCulture;
             }
         }
 

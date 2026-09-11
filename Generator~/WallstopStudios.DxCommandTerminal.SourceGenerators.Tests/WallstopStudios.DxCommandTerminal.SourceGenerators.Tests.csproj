@@ -13,6 +13,22 @@
       sources pulls in the .NET CA analyzers by default.
     -->
         <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+        <!-- Analyzer diagnostics are errors (Directory.Build.props), but compiler warnings
+      are not: fixtures deliberately exercise attributed members the runtime treats as
+      rejected or ignored (invalid signatures, generic shapes). -->
+        <!-- Suppressed by contract, not by accident:
+      - CA1002/CA1051: the shipped public API is field- and List-based by design and stays
+        source-compatible (the plan forbids breaking public API changes); the shim
+        deliberately mirrors UnityEngine's public-field shape.
+      - CA1815: CommandArg is intentionally not value-comparable; shim structs are placeholders.
+      - CA1515: shipped and shim types are intentionally public for reflection-parity tests.
+      - CA2225: shim properties mirror UnityEngine naming, not .NET conventions.
+      - CA1019: RegisterCommandAttribute's Name must stay writable (name normalization mutates
+        it), which is exactly what CA1019 asks attribute ctor-backed properties not to do.
+      - CA1510: ArgumentNullException.ThrowIfNull is .NET 6+, above the Unity BCL floor.
+      - CA2211: fixture invocation counters are mutable statics by necessity (the generated
+        binders are static). -->
+        <NoWarn>$(NoWarn);CA1002;CA1051;CA1515;CA1815;CA2225;CA1019;CA1510;CA2211</NoWarn>
     </PropertyGroup>
     <ItemGroup>
         <!-- The real runtime sources, compiled Unity-free. CommandArg.cs is the one file that

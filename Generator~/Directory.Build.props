@@ -7,5 +7,11 @@
     <PropertyGroup>
         <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
         <WarningLevel>9999</WarningLevel>
+        <!-- The SDK's built-in Roslyn analyzers (CA rules) run on every compilation, in the
+         most aggressive mode: every rule, and every analyzer diagnostic is an error. They ship
+         with the .NET SDK, so enforcement adds no dependency. -->
+        <EnableNETAnalyzers>true</EnableNETAnalyzers>
+        <AnalysisMode>All</AnalysisMode>
+        <CodeAnalysisTreatWarningsAsErrors>true</CodeAnalysisTreatWarningsAsErrors>
     </PropertyGroup>
 </Project>

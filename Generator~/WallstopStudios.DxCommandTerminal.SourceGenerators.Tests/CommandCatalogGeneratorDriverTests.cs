@@ -425,7 +425,7 @@ namespace Fixtures
         private static void AssertConditional(int defineCount, int expectedEntryCount)
         {
             string[] defines =
-                defineCount == 0 ? new string[0]
+                defineCount == 0 ? Array.Empty<string>()
                 : defineCount == 1 ? new[] { "UNITY_EDITOR" }
                 : new[] { "UNITY_EDITOR", "DEVELOPMENT_BUILD" };
 
