@@ -47,6 +47,11 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    # DIAGNOSTIC: issues write lets the failure-report step post the log tail to
+    # PR #53 for review without admin log access. Remove once green.
+    permissions:
+      contents: read
+      issues: write
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -60,25 +65,27 @@ jobs:
         run: npm --prefix tooling~ install --no-audit --no-fund
 
       - name: Test tooling
-        # DIAGNOSTIC: surface failing output as check annotations so the failure is
-        # reviewable without admin log access. Remove once green.
+        # DIAGNOSTIC: capture the full test output to a file for the report step.
         shell: bash
         run: |
           cd tooling~
           set -o pipefail
           node --test "scripts/mcp/__tests__/*.test.mjs" "scripts/tests/*.test.mjs" 2>&1 | tee ../test-output.log
-          code=$?
-          if [ $code -ne 0 ]; then
-            echo "code=$code" > ../diag.txt
-            wc -l ../test-output.log >> ../diag.txt
-            tail -n 30 ../test-output.log >> ../diag.txt
-            i=0
-            while IFS= read -r line; do
-              i=$((i + 1))
-              echo "::error::DIAG$i ${line:0:200}"
-            done < ../diag.txt
-            exit $code
-          fi
+          exit $?
+
+      - name: Report failures to PR (diagnostic)
+        if: failure()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo "### node-tests ${{ matrix.os }} tail"
+            echo '```'
+            tail -c 6000 test-output.log
+            echo '```'
+          } > body.txt
+          gh api repos/wallstop/DxCommandTerminal/issues/53/comments -F body=@body.txt > /dev/null
 
   csharp-style:
     # C# style gates that are pure Node stdlib, so they run Unity-free on both OSes the
