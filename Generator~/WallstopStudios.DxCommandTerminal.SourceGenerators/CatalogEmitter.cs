@@ -30,6 +30,9 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
         private const string EntryType =
             "global::WallstopStudios.DxCommandTerminal.Backend.CommandCatalogEntry";
 
+        private const string ContextsType =
+            "global::WallstopStudios.DxCommandTerminal.Backend.CommandExecutionContexts";
+
         private const string EntryListType =
             "global::System.Collections.Generic.List<" + EntryType + ">";
 
@@ -195,7 +198,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                             + ");"
                     );
                     builder.AppendLine(Indent4 + "    }),");
-                    builder.AppendLine(Indent4 + "    null");
+                    builder.AppendLine(Indent4 + "    null,");
                 }
                 else
                 {
@@ -207,7 +210,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                             + Format(BinderMethodNameFormat, commandIndex)
                             + "),"
                     );
-                    builder.AppendLine(Indent4 + "    null");
+                    builder.AppendLine(Indent4 + "    null,");
                 }
             }
             else
@@ -255,9 +258,22 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                     builder.AppendLine(Indent5 + ");");
                 }
 
-                builder.AppendLine(Indent4 + "    })");
+                builder.AppendLine(Indent4 + "    }),");
             }
 
+            /*
+                The execution-context set is emitted as a numeric cast: the
+                catalog must not depend on enum member names staying stable
+                across runtime versions, and the cast round-trips any
+                combination the attribute carried.
+             */
+            builder.AppendLine(
+                Indent4
+                    + "    ("
+                    + ContextsType
+                    + ")"
+                    + command.Contexts.ToString(CultureInfo.InvariantCulture)
+            );
             builder.AppendLine(Indent4 + "));");
         }
 

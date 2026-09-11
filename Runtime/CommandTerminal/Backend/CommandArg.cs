@@ -12,8 +12,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     using Vector3 = UnityEngine.Vector3;
     using Vector4 = UnityEngine.Vector4;
 
-    public delegate bool CommandArgParser<T>(string input, out T parsed);
-
     public readonly struct CommandArg
     {
         private static readonly Lazy<MethodInfo> TryGetMethod = new(() =>

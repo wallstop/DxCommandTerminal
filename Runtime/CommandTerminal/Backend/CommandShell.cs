@@ -56,8 +56,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             return commands.ToArray();
         });
 
-        private readonly List<CommandArg> _arguments = new(); // Cache for performance
-
         private readonly HashSet<string> _autoRegisteredCommands = new(
             StringComparer.OrdinalIgnoreCase
         );
@@ -282,6 +280,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             public readonly bool EditorOnly;
             public readonly bool DevelopmentOnly;
             public readonly bool IsDefault;
+            public readonly CommandExecutionContexts Contexts;
 
             // Non-null for valid (CommandArg[]) signatures. Null marks a
             // rejected command; diagnostics then come from MethodAccessor.
@@ -300,6 +299,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 bool editorOnly,
                 bool developmentOnly,
                 bool isDefault,
+                CommandExecutionContexts contexts,
                 Func<Action<CommandArg[]>> binder,
                 Func<MethodInfo> methodAccessor
             )
@@ -314,6 +314,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 EditorOnly = editorOnly;
                 DevelopmentOnly = developmentOnly;
                 IsDefault = isDefault;
+                Contexts = contexts;
                 Binder = binder;
                 MethodAccessor = methodAccessor;
             }
@@ -331,6 +332,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                     entry.EditorOnly,
                     entry.DevelopmentOnly,
                     entry.IsDefault,
+                    entry.Contexts,
                     entry.Binder,
                     entry.MethodAccessor
                 );
@@ -353,6 +355,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                     attribute.EditorOnly,
                     attribute.DevelopmentOnly,
                     attribute.Default,
+                    attribute.Contexts,
                     valid
                         ? () =>
                             (Action<CommandArg[]>)
@@ -781,15 +784,18 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 }
 
                 // Perf boost, much cheaper than running reflection on invoking the method
-                bool success = AddCommand(
-                    commandName,
+                CommandInfo info = new(
                     proc,
+                    null,
+                    null,
+                    command.Contexts,
                     command.MinArgCount,
                     command.MaxArgCount,
                     command.Help,
                     command.Hint,
                     command.AddToHistory
                 );
+                bool success = AddCommand(commandName, info);
                 if (success)
                 {
                     _autoRegisteredCommands.Add(commandName);
@@ -851,59 +857,109 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             _rejectedCommands.TryAdd(commandName, method);
         }
 
+        /*
+            Depth-scoped parse buffers: one per active RunCommand/TryComplete
+            level, so nested dispatches cannot corrupt outer arguments.
+            Arrays materialized for legacy handlers are fresh per invocation,
+            never pooled.
+         */
+        private readonly List<List<CommandArg>> _dispatchScopes = new();
+
+        private readonly List<List<CommandToken>> _tokenScopes = new();
+
+        private readonly HashSet<string> _completionDeduplication = new(StringComparer.Ordinal);
+
+        private int _dispatchDepth;
+
+        private List<CommandArg> GetDispatchScope(int depth)
+        {
+            while (_dispatchScopes.Count <= depth)
+            {
+                _dispatchScopes.Add(new List<CommandArg>());
+            }
+
+            List<CommandArg> scope = _dispatchScopes[depth];
+            scope.Clear();
+            return scope;
+        }
+
+        private List<CommandToken> GetTokenScope(int depth)
+        {
+            while (_tokenScopes.Count <= depth)
+            {
+                _tokenScopes.Add(new List<CommandToken>());
+            }
+
+            List<CommandToken> scope = _tokenScopes[depth];
+            scope.Clear();
+            return scope;
+        }
+
         /// <summary>
         ///     Parses an input line into a command and runs that command.
         /// </summary>
         public bool RunCommand(string line)
         {
-            string remaining = line;
-            _arguments.Clear();
-
-            while (!string.IsNullOrWhiteSpace(remaining))
+            // A first command request is an explicit readiness boundary: any
+            // deferred registration must be applied before this parse.
+            EnsureAutoCommandsRegistered();
+            _dispatchDepth++;
+            try
             {
-                if (!TryEatArgument(ref remaining, out CommandArg argument))
+                List<CommandToken> tokens = GetTokenScope(_dispatchDepth);
+                List<CommandArg> arguments = GetDispatchScope(_dispatchDepth);
+                CommandTokenizer.Tokenize(line, tokens);
+
+                foreach (CommandToken token in tokens)
                 {
-                    continue;
-                }
-
-                string argumentString = argument.contents;
-                if (argument.endQuote == null)
-                {
-                    if (string.IsNullOrWhiteSpace(argumentString))
+                    CommandArg argument = token.ToArgument();
+                    string argumentString = argument.contents;
+                    if (argument.endQuote == null)
                     {
-                        continue;
-                    }
-
-                    if (argumentString.StartsWith('$'))
-                    {
-                        string variableName = argumentString[1..];
-
-                        if (_variables.TryGetValue(variableName, out CommandArg variable))
+                        if (string.IsNullOrWhiteSpace(argumentString))
                         {
-                            // Replace variable argument if it's defined
-                            argument = variable;
+                            continue;
+                        }
+
+                        if (argumentString.StartsWith('$'))
+                        {
+                            string variableName = argumentString[1..];
+
+                            if (_variables.TryGetValue(variableName, out CommandArg variable))
+                            {
+                                // Replace variable argument if it's defined
+                                argument = variable;
+                            }
                         }
                     }
+
+                    arguments.Add(argument);
                 }
 
-                _arguments.Add(argument);
-            }
+                if (arguments.Count == 0)
+                {
+                    // No command identified, unconditional push
+                    _history.Push(line, false, true);
+                    return false;
+                }
 
-            if (_arguments.Count == 0)
+                string commandName = arguments[0].contents ?? string.Empty;
+                // Remove command name from arguments
+                arguments.RemoveAt(0);
+
+                // History lines rebuild lazily, only when a push happens.
+
+                return RunCommandCore(
+                    CommandExecutionContext.Current,
+                    commandName,
+                    arguments,
+                    historyLine: null
+                );
+            }
+            finally
             {
-                // No command identified, unconditional push
-                _history.Push(line, false, true);
-                return false;
+                _dispatchDepth--;
             }
-
-            string commandName = _arguments[0].contents ?? string.Empty;
-            // Remove command name from arguments
-            _arguments.RemoveAt(0);
-
-            return RunCommand(
-                commandName,
-                _arguments.Count == 0 ? Array.Empty<CommandArg>() : _arguments.ToArray()
-            );
         }
 
         public bool RunCommand(string commandName, CommandArg[] arguments)
@@ -911,9 +967,174 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             // A first command request is an explicit readiness boundary: any
             // deferred registration must be applied before this lookup.
             EnsureAutoCommandsRegistered();
+            string line = BuildHistoryLine(commandName, arguments);
+            return RunCommandCore(CommandExecutionContext.Current, commandName, arguments, line);
+        }
+
+        /// <summary>
+        ///     Context-aware dispatch over a caller-owned argument list. The
+        ///     list is read during the invocation only; a context-aware
+        ///     handler (<see cref="CommandInfo.handler"/>) receives a borrowed
+        ///     read-only view over it, so the caller can reuse the list once
+        ///     this method returns. A legacy handler receives a fresh owned
+        ///     array per invocation; that array is never pooled. History
+        ///     reconstruction happens only when the command's history policy
+        ///     actually pushes, so commands registered with
+        ///     <c>AddToHistory = false</c> dispatch without rebuilding the
+        ///     line.
+        /// </summary>
+        public bool RunCommand(
+            CommandExecutionContext context,
+            string commandName,
+            List<CommandArg> arguments
+        )
+        {
+            // A first command request is an explicit readiness boundary: any
+            // deferred registration must be applied before this lookup.
+            EnsureAutoCommandsRegistered();
+            return RunCommandCore(context, commandName, arguments, historyLine: null);
+        }
+
+        /*
+            Shared dispatch for every RunCommand shape: eligibility, argument
+            validation, history accounting, and invocation are identical for
+            array, list, and parsed-line callers.
+         */
+        private bool RunCommandCore(
+            CommandExecutionContext context,
+            string commandName,
+            IReadOnlyList<CommandArg> arguments,
+            string historyLine
+        )
+        {
+            if (string.IsNullOrWhiteSpace(commandName))
+            {
+                IssueErrorMessage($"Invalid command name '{commandName}'");
+                // Don't log empty commands
+                return false;
+            }
+
+            if (commandName.Contains(' '))
+            {
+                commandName = commandName.Replace(
+                    " ",
+                    string.Empty,
+                    StringComparison.OrdinalIgnoreCase
+                );
+            }
+
+            if (!_commands.TryGetValue(commandName, out CommandInfo command))
+            {
+                IssueErrorMessage($"Command {commandName} not found");
+                // Unknown command, unconditional push
+                _history.Push(
+                    historyLine ?? BuildHistoryLine(commandName, arguments),
+                    false,
+                    false
+                );
+                return false;
+            }
+
+            if (!context.IsEligibleFor(command.executionContexts))
+            {
+                _errorMessages.Enqueue(
+                    $"{commandName} is not available in the current execution context"
+                );
+                // Known but unavailable command, respect addToHistory flag
+                if (command.addToHistory)
+                {
+                    _history.Push(
+                        historyLine ?? BuildHistoryLine(commandName, arguments),
+                        false,
+                        false
+                    );
+                }
+
+                return false;
+            }
+
+            int argCount = arguments.Count;
+            string errorMessage = null;
+            int requiredArg = 0;
+
+            if (argCount < command.minArgCount)
+            {
+                errorMessage = command.minArgCount == command.maxArgCount ? "exactly" : "at least";
+                requiredArg = command.minArgCount;
+            }
+            else if (command.maxArgCount is int maxArgCount && maxArgCount < argCount)
+            {
+                errorMessage = command.minArgCount == command.maxArgCount ? "exactly" : "at most";
+                requiredArg = maxArgCount;
+            }
+
+            if (!string.IsNullOrEmpty(errorMessage))
+            {
+                string pluralFix = requiredArg == 1 ? "" : "s";
+
+                string invalidMessage =
+                    $"{commandName} requires {errorMessage} {requiredArg} argument{pluralFix}";
+                if (!string.IsNullOrWhiteSpace(command.hint))
+                {
+                    invalidMessage += $"\n    -> Usage: {command.hint}";
+                }
+
+                _errorMessages.Enqueue(invalidMessage);
+                // Known command with invalid arguments, respect addToHistory flag
+                if (command.addToHistory)
+                {
+                    _history.Push(
+                        historyLine ?? BuildHistoryLine(commandName, arguments),
+                        false,
+                        false
+                    );
+                }
+
+                return false;
+            }
+
+            int errorCount = _errorMessages.Count;
+            if (command.handler != null)
+            {
+                command.handler(context, new BorrowedCommandArguments(arguments));
+            }
+            else if (arguments is CommandArg[] ownedArguments)
+            {
+                // Array callers dispatch their own array, as before.
+                command.proc?.Invoke(ownedArguments);
+            }
+            else
+            {
+                // Legacy handlers may retain their argument array, so each
+                // invocation materializes a fresh one. The array is never
+                // pooled or reused after the handler returns.
+                CommandArg[] materialized = new CommandArg[arguments.Count];
+                for (int i = 0; i < materialized.Length; ++i)
+                {
+                    materialized[i] = arguments[i];
+                }
+
+                command.proc?.Invoke(materialized);
+            }
+
+            // Known command executed, respect addToHistory flag
+            if (command.addToHistory)
+            {
+                _history.Push(
+                    historyLine ?? BuildHistoryLine(commandName, arguments),
+                    true,
+                    errorCount == _errorMessages.Count
+                );
+            }
+
+            return true;
+        }
+
+        private string BuildHistoryLine(string commandName, IReadOnlyList<CommandArg> arguments)
+        {
             _commandBuilder.Clear();
             _commandBuilder.Append(commandName);
-            if (arguments.Length != 0)
+            if (arguments.Count != 0)
             {
                 _commandBuilder.Append(' ');
             }
@@ -940,76 +1161,169 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 }
             }
 
-            string line = _commandBuilder.ToString();
+            return _commandBuilder.ToString();
+        }
 
-            if (string.IsNullOrWhiteSpace(commandName))
+        /// <summary>
+        ///     Requests argument completions for the command named in
+        ///     <paramref name="input"/> from its registered completion
+        ///     provider. Returns false when the command is unknown, has no
+        ///     provider, or the caret is completing the command name itself;
+        ///     callers fall back to their own history-based suggestions in
+        ///     those cases. Returns true otherwise — including when the
+        ///     provider produced zero candidates or threw — so a provider
+        ///     attached to a command keeps full-line history suggestions from
+        ///     overwriting the token being edited.
+        /// </summary>
+        /// <remarks>
+        ///     Results are deduplicated by insertion text (ordinal, first
+        ///     occurrence wins) and preserve provider order. The buffer is
+        ///     caller-owned and reusable. Provider exceptions are contained:
+        ///     partial results are discarded, an error is reported, and later
+        ///     completion requests are unaffected. When true is returned,
+        ///     <paramref name="completionContext"/> describes the request the
+        ///     provider answered, including the replacement range an accepted
+        ///     completion applies to.
+        /// </remarks>
+        public bool TryComplete(
+            CommandExecutionContext context,
+            string input,
+            int caretIndex,
+            List<CommandCompletion> results,
+            out CommandCompletionContext completionContext
+        )
+        {
+            if (results == null)
             {
-                IssueErrorMessage($"Invalid command name '{commandName}'");
-                // Don't log empty commands
-                return false;
+                throw new ArgumentNullException(nameof(results));
             }
 
-            if (commandName.Contains(' '))
+            // The buffer is caller-owned and reusable; clear stale results.
+
+            results.Clear();
+            completionContext = default;
+
+            EnsureAutoCommandsRegistered();
+
+            _dispatchDepth++;
+            try
             {
-                commandName = commandName.Replace(
-                    " ",
-                    string.Empty,
-                    StringComparison.OrdinalIgnoreCase
+                List<CommandToken> tokens = GetTokenScope(_dispatchDepth);
+                List<CommandArg> precedingArguments = GetDispatchScope(_dispatchDepth);
+                CommandTokenizer.Tokenize(input, tokens);
+                if (
+                    !CommandTokenizer.TryFindActiveToken(
+                        input,
+                        caretIndex,
+                        tokens,
+                        out int activeTokenIndex,
+                        out int replacementStart,
+                        out int replacementLength,
+                        out bool isNewArgument
+                    )
+                    || activeTokenIndex == 0
+                )
+                {
+                    // Command-name completion is the caller's territory.
+                    completionContext = default;
+                    return false;
+                }
+
+                string commandName = tokens[0].Contents;
+                if (
+                    string.IsNullOrWhiteSpace(commandName)
+                    || !_commands.TryGetValue(commandName, out CommandInfo command)
+                    || command.completionProvider == null
+                )
+                {
+                    completionContext = default;
+                    return false;
+                }
+
+                for (int i = 1; i < activeTokenIndex; ++i)
+                {
+                    precedingArguments.Add(tokens[i].ToArgument());
+                }
+
+                string token;
+                bool isQuoted;
+                char? quoteCharacter;
+                if (isNewArgument)
+                {
+                    token = string.Empty;
+                    isQuoted = false;
+                    quoteCharacter = null;
+                }
+                else
+                {
+                    CommandToken activeToken = tokens[activeTokenIndex];
+                    int clampedCaret = Math.Clamp(caretIndex, 0, input.Length);
+                    token = input.Substring(activeToken.Start, clampedCaret - activeToken.Start);
+                    isQuoted = activeToken.StartQuote != null;
+                    quoteCharacter = activeToken.StartQuote;
+                }
+
+                completionContext = new CommandCompletionContext(
+                    context,
+                    input,
+                    caretIndex,
+                    // Stages count arguments after the command name.
+                    activeTokenIndex - 1,
+                    precedingArguments,
+                    token,
+                    replacementStart,
+                    replacementLength,
+                    isQuoted,
+                    quoteCharacter
                 );
-            }
 
-            if (!_commands.TryGetValue(commandName, out CommandInfo command))
-            {
-                IssueErrorMessage($"Command {commandName} not found");
-                // Unknown command, unconditional push
-                _history.Push(line, false, false);
-                return false;
-            }
-
-            int argCount = arguments.Length;
-            string errorMessage = null;
-            int requiredArg = 0;
-
-            if (argCount < command.minArgCount)
-            {
-                errorMessage = command.minArgCount == command.maxArgCount ? "exactly" : "at least";
-                requiredArg = command.minArgCount;
-            }
-            else if (0 <= command.maxArgCount && command.maxArgCount < argCount)
-            {
-                // Do not check max allowed number of arguments if it is -1
-                errorMessage = command.minArgCount == command.maxArgCount ? "exactly" : "at most";
-                requiredArg = command.maxArgCount;
-            }
-
-            if (!string.IsNullOrEmpty(errorMessage))
-            {
-                string pluralFix = requiredArg == 1 ? "" : "s";
-
-                string invalidMessage =
-                    $"{commandName} requires {errorMessage} {requiredArg} argument{pluralFix}";
-                if (!string.IsNullOrWhiteSpace(command.hint))
+                try
                 {
-                    invalidMessage += $"\n    -> Usage: {command.hint}";
+                    command.completionProvider(completionContext, results);
+                }
+                catch (Exception e)
+                {
+                    results.Clear();
+                    Debug.LogError(
+                        $"[DxCommandTerminal] Completion provider for '{commandName}' failed: {e.Message}"
+                    );
+                    return true;
                 }
 
-                _errorMessages.Enqueue(invalidMessage);
-                // Known command with invalid arguments, respect addToHistory flag
-                if (command.addToHistory)
+                // Drop empty candidates and duplicate insertion texts; first
+                // occurrence wins and provider order is preserved.
+                int writeIndex = 0;
+                _completionDeduplication.Clear();
+                for (int readIndex = 0; readIndex < results.Count; ++readIndex)
                 {
-                    _history.Push(line, false, false);
-                }
-                return false;
-            }
+                    CommandCompletion completion = results[readIndex];
+                    if (string.IsNullOrEmpty(completion.InsertionText))
+                    {
+                        continue;
+                    }
 
-            int errorCount = _errorMessages.Count;
-            command.proc?.Invoke(arguments);
-            // Known command executed, respect addToHistory flag
-            if (command.addToHistory)
-            {
-                _history.Push(line, true, errorCount == _errorMessages.Count);
+                    if (_completionDeduplication.Add(completion.InsertionText))
+                    {
+                        if (writeIndex != readIndex)
+                        {
+                            results[writeIndex] = completion;
+                        }
+
+                        ++writeIndex;
+                    }
+                }
+
+                if (writeIndex < results.Count)
+                {
+                    results.RemoveRange(writeIndex, results.Count - writeIndex);
+                }
+
+                return true;
             }
-            return true;
+            finally
+            {
+                _dispatchDepth--;
+            }
         }
 
         // ReSharper disable once MemberCanBePrivate.Global
@@ -1040,13 +1354,61 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             string name,
             Action<CommandArg[]> proc,
             int minArgs = 0,
-            int maxArgs = -1,
+            int? maxArgs = null,
             string help = "",
             string hint = null,
             bool addToHistory = true
         )
         {
             CommandInfo info = new(proc, minArgs, maxArgs, help, hint, addToHistory);
+            return AddCommand(name, info);
+        }
+
+        /// <summary>
+        ///     Registers a context-aware command from a
+        ///     <see cref="CommandDefinition"/>. The definition's current
+        ///     values are snapshotted into the shell, so later edits to the
+        ///     definition do not affect the registration. Exactly one handler
+        ///     must be set; name and duplicate rules match the other
+        ///     <see cref="AddCommand"/> overloads.
+        /// </summary>
+        public bool AddCommand(CommandDefinition definition)
+        {
+            if (definition == null)
+            {
+                throw new ArgumentNullException(nameof(definition));
+            }
+
+            string name = definition.Name;
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                IssueErrorMessage($"Invalid Command Name: {name}");
+                return false;
+            }
+
+            Action<CommandArg[]> legacyHandler = definition.LegacyHandler;
+            CommandHandler handler = definition.Handler;
+            if ((legacyHandler == null) == (handler == null))
+            {
+                IssueErrorMessage(
+                    $"Command {name} must declare exactly one handler "
+                        + $"({nameof(CommandDefinition.Handler)} or "
+                        + $"{nameof(CommandDefinition.LegacyHandler)})."
+                );
+                return false;
+            }
+
+            CommandInfo info = new(
+                legacyHandler,
+                handler,
+                definition.CompletionProvider,
+                definition.Contexts,
+                definition.MinArgCount,
+                definition.MaxArgCount,
+                definition.Help,
+                definition.Hint,
+                definition.AddToHistory
+            );
             return AddCommand(name, info);
         }
 

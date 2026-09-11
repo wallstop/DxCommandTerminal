@@ -6,8 +6,7 @@ namespace WallstopStudios.DxCommandTerminal.DataStructures
 
     public sealed class ReadOnlyHashSet<T> : IReadOnlyCollection<T>
     {
-        public static ReadOnlyHashSet<T> Empty { get; } =
-            new ReadOnlyHashSet<T>(Array.Empty<T>());
+        public static ReadOnlyHashSet<T> Empty { get; } = new ReadOnlyHashSet<T>(Array.Empty<T>());
 
         private readonly HashSet<T> _set;
 
@@ -17,7 +16,10 @@ namespace WallstopStudios.DxCommandTerminal.DataStructures
 
         public ReadOnlyHashSet(IEnumerable<T> source, IEqualityComparer<T> comparer = null)
         {
-            _set = new HashSet<T>(source ?? throw new ArgumentNullException(nameof(source)), comparer);
+            _set = new HashSet<T>(
+                source ?? throw new ArgumentNullException(nameof(source)),
+                comparer
+            );
         }
 
         public bool Contains(T item)
