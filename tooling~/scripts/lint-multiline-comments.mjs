@@ -85,7 +85,13 @@ export function commentRuns(text) {
     if (c === "/" && text[i + 1] === "/") {
       const end = text.indexOf("\n", i);
       const stop = end < 0 ? length : end;
-      if (!text.startsWith("///", i)) {
+      /*
+          Comment-only lines only. A `//` that trails code on its line is outside this
+          rule: the fixer replaces whole lines, so treating it as a run member would
+          delete the code it trails.
+       */
+      const isCommentOnly = text.slice(lineStarts[line], i).trim() === "";
+      if (isCommentOnly && !text.startsWith("///", i)) {
         entries.push({
           line,
           start: i,

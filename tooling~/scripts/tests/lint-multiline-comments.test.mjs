@@ -83,6 +83,16 @@ const EXEMPT = [
     "a preprocessor directive breaking the run",
     "// first\n#if UNITY_EDITOR\n// second",
   ],
+
+  [
+    "trailing comments after code are outside the rule",
+    "int a = 1; // one\nint b = 2; // two",
+  ],
+
+  [
+    "a trailing comment between comment-only lines stays outside",
+    "// one\nint a = 1; // trailing\n// two",
+  ],
 ];
 
 /** Shapes that ARE stacked comments. Every one is caught. */
