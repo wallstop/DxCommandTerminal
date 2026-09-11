@@ -60,7 +60,20 @@ jobs:
         run: npm --prefix tooling~ install --no-audit --no-fund
 
       - name: Test tooling
-        run: npm --prefix tooling~ test
+        # DIAGNOSTIC: surface failing test names as check annotations so the
+        # failure is reviewable without admin log access. Remove once green.
+        shell: bash
+        run: |
+          cd tooling~
+          set -o pipefail
+          node --test "scripts/mcp/__tests__/*.test.mjs" "scripts/tests/*.test.mjs" 2>&1 | tee ../test-output.log
+          code=$?
+          if [ $code -ne 0 ]; then
+            grep -E "✖|not ok" ../test-output.log | head -20 | while IFS= read -r line; do
+              echo "::error::WINTEST $line"
+            done
+            exit $code
+          fi
 
   csharp-style:
     # C# style gates that are pure Node stdlib, so they run Unity-free on both OSes the
