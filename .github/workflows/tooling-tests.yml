@@ -60,8 +60,8 @@ jobs:
         run: npm --prefix tooling~ install --no-audit --no-fund
 
       - name: Test tooling
-        # DIAGNOSTIC: surface failing test names as check annotations so the
-        # failure is reviewable without admin log access. Remove once green.
+        # DIAGNOSTIC: surface failing output as check annotations so the failure is
+        # reviewable without admin log access. Remove once green.
         shell: bash
         run: |
           cd tooling~
@@ -69,9 +69,14 @@ jobs:
           node --test "scripts/mcp/__tests__/*.test.mjs" "scripts/tests/*.test.mjs" 2>&1 | tee ../test-output.log
           code=$?
           if [ $code -ne 0 ]; then
-            grep -E "✖|not ok" ../test-output.log | head -20 | while IFS= read -r line; do
-              echo "::error::WINTEST $line"
-            done
+            echo "code=$code" > ../diag.txt
+            wc -l ../test-output.log >> ../diag.txt
+            tail -n 30 ../test-output.log >> ../diag.txt
+            i=0
+            while IFS= read -r line; do
+              i=$((i + 1))
+              echo "::error::DIAG$i ${line:0:200}"
+            done < ../diag.txt
             exit $code
           fi
 
