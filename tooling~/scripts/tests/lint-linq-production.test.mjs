@@ -89,6 +89,16 @@ const EXEMPT = [
   ],
 
   [
+    "a verbatim identifier that is not a string",
+    "T value = @event;",
+  ],
+
+  [
+    "an unterminated quote",
+    'string never = "unterminated',
+  ],
+
+  [
     "a type whose name merely contains Enumerable",
     "sealed class EnumerableFactory\n{\n    void Make() { }\n}",
   ],

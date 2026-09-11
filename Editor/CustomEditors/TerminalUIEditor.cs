@@ -611,7 +611,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
         {
             return RefreshCache(
                 themeNames,
-                static name => name,
+                static name => FriendlyThemeName(name),
                 ref _themeDisplayNameSource,
                 ref _themeDisplayNames
             );

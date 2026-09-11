@@ -58,6 +58,17 @@ export function stripComments(text) {
     const ch = text[i];
     if (ch === '"' || ch === "'" || ch === "@" || ch === "$") {
       const literal = consumeLiteral(text, i);
+      if (literal === null) {
+        /*
+            A quote-like character that does not open a string (verbatim
+            identifiers such as `@event`, a dangling quote): copy the
+            character verbatim and keep scanning.
+         */
+        out += ch;
+        i++;
+        continue;
+      }
+
       /*
           Mask literal contents too: banned vocabulary inside a string is
           data, not code, and must not read as a violation.
