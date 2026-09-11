@@ -65,12 +65,11 @@ jobs:
         run: npm --prefix tooling~ install --no-audit --no-fund
 
       - name: Test tooling
-        # DIAGNOSTIC: capture the full test output to a file for the report step.
+        # Keep the full test output in a file so the report step can post it.
         shell: bash
         run: |
           cd tooling~
-          set -o pipefail
-          node --test "scripts/mcp/__tests__/*.test.mjs" "scripts/tests/*.test.mjs" 2>&1 | tee ../test-output.log
+          npm test 2>&1 | tee ../test-output.log
           exit $?
 
       - name: Report failures to PR (diagnostic)
