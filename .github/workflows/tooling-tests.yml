@@ -76,22 +76,31 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set +e
+          cd "$GITHUB_WORKSPACE"
           {
-            echo "### node-tests ${{ matrix.os }} tail"
-            echo '```'
-            tail -c 6000 test-output.log
-            echo '```'
-          } > body.txt
-          gh api repos/wallstop/DxCommandTerminal/issues/53/comments -F body=@body.txt > comment-result.txt 2>&1 || true
-          {
-            echo "comment-result:"
-            cat comment-result.txt
-          } > diag-output.log 2>&1 || true
+            echo "--- pwd ---"
+            pwd
+            echo "--- workspace ls ---"
+            ls -la
+            echo "--- test-output.log tail ---"
+            tail -n 200 test-output.log 2>&1
+            echo "--- comment attempt ---"
+            {
+              echo "### node-tests ${{ matrix.os }}"
+              echo '```'
+              tail -c 6000 test-output.log 2>&1
+              echo '```'
+            } > body.txt
+            gh api repos/wallstop/DxCommandTerminal/issues/53/comments -F body=@body.txt 2>&1
+            echo "gh exit: $?"
+          } > diag-output.log 2>&1
           git config user.email "ci-diagnostic@users.noreply.github.com"
           git config user.name "ci-diagnostic"
-          git add -f test-output.log diag-output.log body.txt
-          git commit -m "CI diagnostic output (node-tests ${{ matrix.os }})" --no-verify
-          git push origin "HEAD:modernization/session-6-style-linters"
+          git add -A -f diag-output.log body.txt test-output.log 2>&1
+          git commit -m "CI diagnostic output (node-tests ${{ matrix.os }})" --no-verify 2>&1
+          git push origin "HEAD:modernization/session-6-style-linters" 2>&1
+          exit 0
 
   csharp-style:
     # C# style gates that are pure Node stdlib, so they run Unity-free on both OSes the
