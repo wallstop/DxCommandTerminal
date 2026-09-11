@@ -42,6 +42,13 @@ metadata:
    component; reuse its setup helpers.
 4. Keep runtime allocations in assertions minimal; suites run in PlayMode on every change.
 
+## Driving tests from agents
+
+After editing files outside Unity, confirm the editor compiled the intended
+content before trusting a run: the host sync can lag, and stale assemblies
+produce misleading failures. Check a canary (a log line, an assert message, or
+a shifted line number in the failure stack) against the current file.
+
 ## Debugging failures
 
 - Errors are queued on the terminal (not only the last one) - assert on the full error set where
