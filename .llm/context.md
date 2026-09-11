@@ -139,6 +139,18 @@ frontmatter validity, index freshness, and pointer-file delegation; see
     (Unity does not de-virtualize `IReadOnlyList` indexers); arrays are preferred (bound-check
     elision). Copy with `Array.Copy` / `CopyTo`, not element loops; reserve `Clone()` for
     cases where its `object` return is acceptable.
+19. Comparison operators read left-to-right in ascending order: only `<`, `<=` and `==`. Never
+    `>` or `>=` -- write `0 <= index` and `b < a`, not `index >= 0` or `a > b` (issue #51).
+    Enforced by `npm --prefix tooling~ run lint:comparison-direction` (pre-commit + CI; `:fix`
+    swaps operands, refusing rewrites where both sides can have side effects).
+20. One member ordering across every C# type: const, events, delegates, static properties,
+    static fields, properties, fields, constructors, static methods, methods; each tier
+    public > protected > internal > private, and nested types go at the END of their containing
+    type (issue #50, per the unity-helpers rule). Static properties come before static fields
+    and properties before fields by design; const takes the accessibility ordering too.
+    Enforced by `npm --prefix tooling~ run lint:member-ordering` (pre-commit + CI; `:fix` is a
+    permutation-only reorder that never crosses `#if` boundaries or type-load-initializer
+    dependencies).
 
 ### Unity Package Rules
 

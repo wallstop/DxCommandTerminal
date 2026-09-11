@@ -84,7 +84,7 @@ namespace WallstopStudios.DxCommandTerminal.Extensions
             for (int i = 1; i < list.Count; ++i)
             {
                 T current = list[i];
-                if (comparer.Compare(previous, current) > 0)
+                if (0 < comparer.Compare(previous, current))
                 {
                     return false;
                 }

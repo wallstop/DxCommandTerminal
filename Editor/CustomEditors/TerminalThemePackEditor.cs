@@ -22,12 +22,6 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
         private string _lastSelectedDirectory;
         private GUIStyle _impactButtonStyle;
 
-        private void OnEnable()
-        {
-            _styleCache.Clear();
-            _invalidStyles.Clear();
-        }
-
         public override void OnInspectorGUI()
         {
             _impactButtonStyle ??= new GUIStyle(GUI.skin.button)
@@ -203,6 +197,12 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                     }
                 }
             }
+        }
+
+        private void OnEnable()
+        {
+            _styleCache.Clear();
+            _invalidStyles.Clear();
         }
     }
 #endif

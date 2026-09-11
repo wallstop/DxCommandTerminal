@@ -19,6 +19,22 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             .Select(tuple => tuple.attribute.Name)
             .ToArray();
 
+        internal static IEnumerator SpawnTerminal(bool resetStateOnInit)
+        {
+            return SpawnTerminal(resetStateOnInit, ignoreDefaultCommands: false);
+        }
+
+        internal static IEnumerator SpawnTerminal(bool resetStateOnInit, bool ignoreDefaultCommands)
+        {
+            LogAssert.Expect(LogType.Error, "No UIDocument assigned, cannot setup UI.");
+            GameObject go = new("Terminal", typeof(StartTracker), typeof(TerminalUI));
+            TerminalUI terminal = go.GetComponent<TerminalUI>();
+            terminal.resetStateOnInit = resetStateOnInit;
+            terminal.ignoreDefaultCommands = ignoreDefaultCommands;
+            StartTracker startTracker = go.GetComponent<StartTracker>();
+            yield return new WaitUntil(() => startTracker.Started);
+        }
+
         [TearDown]
         public void TearDown()
         {
@@ -292,22 +308,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 shell.AutoRegisteredCommands,
                 "Deferred registration should surface auto commands on first use"
             );
-        }
-
-        internal static IEnumerator SpawnTerminal(bool resetStateOnInit)
-        {
-            return SpawnTerminal(resetStateOnInit, ignoreDefaultCommands: false);
-        }
-
-        internal static IEnumerator SpawnTerminal(bool resetStateOnInit, bool ignoreDefaultCommands)
-        {
-            LogAssert.Expect(LogType.Error, "No UIDocument assigned, cannot setup UI.");
-            GameObject go = new("Terminal", typeof(StartTracker), typeof(TerminalUI));
-            TerminalUI terminal = go.GetComponent<TerminalUI>();
-            terminal.resetStateOnInit = resetStateOnInit;
-            terminal.ignoreDefaultCommands = ignoreDefaultCommands;
-            StartTracker startTracker = go.GetComponent<StartTracker>();
-            yield return new WaitUntil(() => startTracker.Started);
         }
     }
 }

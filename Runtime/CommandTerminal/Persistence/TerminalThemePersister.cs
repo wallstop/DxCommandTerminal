@@ -30,6 +30,26 @@ namespace WallstopStudios.DxCommandTerminal.Persistence
         protected bool _persisting;
         protected Coroutine _persistence;
 
+        public virtual TerminalThemeConfiguration? GetConfiguration()
+        {
+            if (terminal == null)
+            {
+                return null;
+            }
+
+            if (string.IsNullOrWhiteSpace(terminal.id))
+            {
+                return null;
+            }
+
+            return new TerminalThemeConfiguration
+            {
+                terminalId = terminal.id,
+                font = terminal.CurrentFont == null ? string.Empty : terminal.CurrentFont.name,
+                theme = terminal.CurrentTheme ?? string.Empty,
+            };
+        }
+
         protected virtual void Awake()
         {
             if (terminal != null)
@@ -283,26 +303,6 @@ namespace WallstopStudios.DxCommandTerminal.Persistence
                 _persisting = false;
                 _persistence = null;
             }
-        }
-
-        public virtual TerminalThemeConfiguration? GetConfiguration()
-        {
-            if (terminal == null)
-            {
-                return null;
-            }
-
-            if (string.IsNullOrWhiteSpace(terminal.id))
-            {
-                return null;
-            }
-
-            return new TerminalThemeConfiguration
-            {
-                terminalId = terminal.id,
-                font = terminal.CurrentFont == null ? string.Empty : terminal.CurrentFont.name,
-                theme = terminal.CurrentTheme ?? string.Empty,
-            };
         }
     }
 }

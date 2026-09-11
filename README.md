@@ -112,7 +112,7 @@ Planned improvements:
 
 A simple and highly performant in-game drop down Console.
 
-![gif](./Media/demo.gif)
+![gif](https://raw.githubusercontent.com/wallstop/DxCommandTerminal/master/Media/demo.gif)
 
 Command Terminal is based on [an implementation by Jonathan Blow](https://youtu.be/N2UdveBwWY4) done in the Jai programming language.
 
@@ -307,7 +307,7 @@ By default, command parameter input is stripped of whitespace characters. This, 
 # Hotkeys
 All actions are now fully configurable by either explicit keybindings, for keyboard controls, or via [new Input System](#new-input-system) bindings.
 
-![png](./Media/Hotkeys.png)
+![png](https://raw.githubusercontent.com/wallstop/DxCommandTerminal/master/Media/Hotkeys.png)
 
 Keyboard hotkey bindings are now intelligent as they can be about shift key interaction. There are three ways to create a `shift+<binding>`:
 1. Prefix the binding with the `#` symbol. For example, `#tab` will be interpreted as `shift+tab`
@@ -347,13 +347,13 @@ This order is irrelevant when using PlayerInput.
 # Web GL
 If you are relying on `RegisterCommandAttribute` to wire up your commands to the CommandShell instead of manually registering them, you will need to set `Managed Stripping Level` to `Low`, `Minimal`, or `None` under `Player > WebGL > Other Settings > Optimizations > Managed Stripping Level` in order for command registration to work. Settings of `Medium` or higher will break the reflection code that loads the commands, causing the terminal to forget about its capabilities.
 
-![png](./Media/ManagedStrippingLevel.png)
+![png](https://raw.githubusercontent.com/wallstop/DxCommandTerminal/master/Media/ManagedStrippingLevel.png)
 
 See [Unity docs on Managed Stripping Level](https://docs.unity3d.com/2022.3/Documentation/ScriptReference/ManagedStrippingLevel.html) for more details.
 
 # Hints
 AutoComplete has gotten a major upgrade in this fork. Completion is now not only case-insensitive, but it will now also search (unique) commands that have been executed, ignoring any irrelevant input. Pressing the complete key multiple times now selects available options in a persistent fashion. Completion can be walked both forward and backwards. Results are now presented in a new UI that intelligently adapts to screen space and current selection position. When completion is no longer relevant, the UI is disabled. However, you can opt to always show the available commands by toggling the new `Display Hints` option in the Terminal configuration. There are also several new theming options for hints, with controls over the currently selected hint v unselected hints.
 
-![png](./Media/AutoComplete.png)
+![png](https://raw.githubusercontent.com/wallstop/DxCommandTerminal/master/Media/AutoComplete.png)
 
 **Note**: Currently, if `Make Hints Clickable` is checked, there is a minor bug where, occasionally, for ~1 frame after auto-completing or deleting a character from a completed word, the text is selected and then unselected. I think it's something to do with the Layout v Repaint events, but I've tried a lot of solutions and none of them worked. Marking this as "won't fix" for now. Open to PRs!

@@ -29,12 +29,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             );
         }
 
-        public bool HandleLog(string message, TerminalLogType type, bool includeStackTrace = true)
-        {
-            string stackTrace = includeStackTrace ? GetAccurateStackTrace() : string.Empty;
-            return HandleLog(message, stackTrace, type);
-        }
-
         private static string GetAccurateStackTrace()
         {
             string fullStackTrace = StackTraceUtility.ExtractStackTrace();
@@ -61,6 +55,12 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             return lines.Length <= startIndex
                 ? string.Empty
                 : string.Join(JoinSeparator, lines, startIndex, lines.Length - startIndex);
+        }
+
+        public bool HandleLog(string message, TerminalLogType type, bool includeStackTrace = true)
+        {
+            string stackTrace = includeStackTrace ? GetAccurateStackTrace() : string.Empty;
+            return HandleLog(message, stackTrace, type);
         }
 
         public bool HandleLog(string message, string stackTrace, TerminalLogType type)

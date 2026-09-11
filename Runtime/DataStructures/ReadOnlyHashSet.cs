@@ -8,11 +8,11 @@ namespace WallstopStudios.DxCommandTerminal.DataStructures
     {
         public static ReadOnlyHashSet<T> Empty { get; } = new ReadOnlyHashSet<T>(Array.Empty<T>());
 
-        private readonly HashSet<T> _set;
-
         public int Count => _set.Count;
 
         public IEqualityComparer<T> Comparer => _set.Comparer;
+
+        private readonly HashSet<T> _set;
 
         public ReadOnlyHashSet(IEnumerable<T> source, IEqualityComparer<T> comparer = null)
         {

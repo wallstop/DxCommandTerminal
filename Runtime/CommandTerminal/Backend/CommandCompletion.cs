@@ -30,6 +30,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         /// </summary>
         public CommandCompletionReplacement? Replacement { get; }
 
+        public bool HasReplacementOverride => Replacement is CommandCompletionReplacement;
+
+        /// <summary>Effective display label, never null.</summary>
+        public string EffectiveDisplayLabel => DisplayLabel ?? InsertionText;
+
         public CommandCompletion(
             string insertionText,
             string displayLabel = null,
@@ -42,10 +47,5 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             Description = description;
             Replacement = replacement;
         }
-
-        public bool HasReplacementOverride => Replacement is CommandCompletionReplacement;
-
-        /// <summary>Effective display label, never null.</summary>
-        public string EffectiveDisplayLabel => DisplayLabel ?? InsertionText;
     }
 }

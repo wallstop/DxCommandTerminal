@@ -30,43 +30,23 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators.Tests
             PublicInvocations++;
         }
 
-        [RegisterCommand]
-        private static void CommandSecret(CommandArg[] args)
-        {
-            SecretInvocations++;
-        }
-
         [RegisterCommand(Help = "Invalid signature")]
         public static void FixtureBrokenCommand(int wrong, List<string> alsoWrong) { }
 
         [RegisterCommand]
         public static void FixtureGenericCommand<T>(CommandArg[] args) { }
+
+        [RegisterCommand]
+        private static void CommandSecret(CommandArg[] args)
+        {
+            SecretInvocations++;
+        }
     }
 
     public sealed class GeneratedCatalogIntegrationTests
     {
         private const string CatalogTypeName =
             "WallstopStudios.DxCommandTerminal.Generated.CommandCatalog";
-
-        private static Type BindCatalogType()
-        {
-            Type catalogType = typeof(GeneratedCatalogIntegrationTests).Assembly.GetType(
-                CatalogTypeName,
-                false
-            );
-            Assert.NotNull(catalogType);
-            return catalogType;
-        }
-
-        private static List<CommandCatalogEntry> Collect()
-        {
-            MethodInfo collect = BindCatalogType()
-                .GetMethod("Collect", BindingFlags.Public | BindingFlags.Static);
-            Assert.NotNull(collect);
-            List<CommandCatalogEntry> entries = new List<CommandCatalogEntry>();
-            collect.Invoke(null, new object[] { entries });
-            return entries;
-        }
 
         /*
             The reflection oracle: what the compatibility discovery path sees
@@ -96,6 +76,26 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators.Tests
             }
 
             return legacy;
+        }
+
+        private static Type BindCatalogType()
+        {
+            Type catalogType = typeof(GeneratedCatalogIntegrationTests).Assembly.GetType(
+                CatalogTypeName,
+                false
+            );
+            Assert.NotNull(catalogType);
+            return catalogType;
+        }
+
+        private static List<CommandCatalogEntry> Collect()
+        {
+            MethodInfo collect = BindCatalogType()
+                .GetMethod("Collect", BindingFlags.Public | BindingFlags.Static);
+            Assert.NotNull(collect);
+            List<CommandCatalogEntry> entries = new List<CommandCatalogEntry>();
+            collect.Invoke(null, new object[] { entries });
+            return entries;
         }
 
         [Fact]

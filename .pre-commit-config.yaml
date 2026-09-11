@@ -20,6 +20,33 @@ repos:
         types:
           - c#
         description: CSharpier is an opinionated C# formatter inspired by Prettier.
+      - id: comparison-direction-lint
+        name: Lint C# comparison direction (only '<' and '<='; issue #51)
+        entry: node tooling~/scripts/lint-comparison-direction.mjs
+        language: system
+        always_run: true
+        pass_filenames: false
+        stages:
+          - pre-commit
+          - pre-push
+        description: >
+          Every C# comparison reads left-to-right using only '<', '<=' and '=='. A '>'
+          that is a comparison (not a generic closer, shift, lambda arrow, or relational
+          pattern) fails the hook; use `--fix` to swap operands.
+      - id: member-ordering-lint
+        name: Lint C# member ordering and nested-type placement (issue #50)
+        entry: node tooling~/scripts/lint-member-ordering.mjs
+        language: system
+        always_run: true
+        pass_filenames: false
+        stages:
+          - pre-commit
+          - pre-push
+        description: >
+          One member ordering (const, events, delegates, static properties, static fields,
+          properties, fields, constructors, static methods, methods; each tier public >
+          protected > internal > private) and nested types at the end of their containing type.
+          Use `--fix` for a permutation-only reorder.
       - id: llm-instructions-lint
         name: Lint .llm instructions (SKILL.md spec, index freshness, pointer delegation)
         entry: pwsh -NoProfile -File tooling~/scripts/lint-llm-instructions.ps1

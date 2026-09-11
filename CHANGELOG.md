@@ -24,6 +24,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Registering a static command whose signature is valid but not bindable (for example a generic method definition, a non-void handler, or a method inside an open generic type) now logs a contained error instead of aborting shell initialization, matching the catalog path's handling of rejected signatures.
 - An assembly holding commands inside private nested or file-local classes gets no generated catalog; the shell falls back to reflection for that assembly so no command is lost.
 - Nested command dispatches use per-depth parse scopes; legacy handlers still receive a fresh owned array per invocation, never pooled.
+- Comparison operators read left-to-right in ascending order (only `<`, `<=`, and `==`) and every C# type follows one member ordering: const, events, delegates, static properties, static fields, properties, fields, constructors, static methods, methods, each tier public > protected > internal > private, with nested types at the end of their containing type. Both rules are enforced by pre-commit hooks, a CI lane, and contract tests, and the codebase is swept to compliance.
+- The npm tarball no longer ships `Media/` (README screenshots and the demo GIF). The README references them through absolute repository URLs so rendering on GitHub and npm is unchanged. This cuts 7.5 MB from the tarball consumers download.
+- The command-catalog source generator emits with fewer allocations: a thread-cached, capacity-sized builder instead of per-line concatenation temporaries, and attribute matching that skips the display-string build for every non-matching attribute. The shipped analyzer payload stays byte-verified as the Release build of the generator sources.
 
 ### Fixed
 

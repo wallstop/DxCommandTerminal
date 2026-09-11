@@ -19,9 +19,6 @@ namespace WallstopStudios.DxCommandTerminal.Attributes
         public string Help { get; set; }
         public string Hint { get; set; }
 
-        // Should not be used by client code - internal flag to indicate that this is a "Default", or in-built command
-        internal bool Default { get; set; }
-
         public bool EditorOnly { get; set; }
 
         public bool DevelopmentOnly { get; set; }
@@ -39,6 +36,9 @@ namespace WallstopStudios.DxCommandTerminal.Attributes
         /// </summary>
         public CommandExecutionContexts Contexts { get; set; } = CommandExecutionContextSets.All;
 
+        // Should not be used by client code - internal flag to indicate that this is a "Default", or in-built command
+        internal bool Default { get; set; }
+
         public RegisterCommandAttribute(string commandName = null)
         {
             commandName = commandName?.Replace(" ", string.Empty).Trim();
@@ -51,16 +51,6 @@ namespace WallstopStudios.DxCommandTerminal.Attributes
             Default = isDefault;
         }
 
-        public void NormalizeName(MethodInfo method)
-        {
-            if (string.IsNullOrWhiteSpace(Name))
-            {
-                Name = InferCommandName(method.Name);
-            }
-
-            Name = Name.Replace(" ", string.Empty).Trim();
-        }
-
         private static string InferCommandName(string methodName)
         {
             const string commandId = "COMMAND";
@@ -71,6 +61,16 @@ namespace WallstopStudios.DxCommandTerminal.Attributes
                 0 <= index ? methodName.Remove(index, commandId.Length) : methodName;
 
             return commandName;
+        }
+
+        public void NormalizeName(MethodInfo method)
+        {
+            if (string.IsNullOrWhiteSpace(Name))
+            {
+                Name = InferCommandName(method.Name);
+            }
+
+            Name = Name.Replace(" ", string.Empty).Trim();
         }
     }
 }

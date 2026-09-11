@@ -11,82 +11,45 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
     public sealed class CommandArgTests
     {
-        private readonly struct TestStruct1 : IEquatable<TestStruct1>
-        {
-            private readonly Guid _id;
-
-            public TestStruct1(Guid id)
-            {
-                _id = id;
-            }
-
-            public override bool Equals(object obj)
-            {
-                return obj is TestStruct1 other && Equals(other);
-            }
-
-            public bool Equals(TestStruct1 other)
-            {
-                return _id.Equals(other._id);
-            }
-
-            public override int GetHashCode()
-            {
-                return _id.GetHashCode();
-            }
-        }
-
-        private enum TestEnum1
-        {
-            [UsedImplicitly]
-            Value1,
-
-            [UsedImplicitly]
-            Value2,
-
-            [UsedImplicitly]
-            Value3,
-
-            [UsedImplicitly]
-            Value4,
-
-            [UsedImplicitly]
-            Value5,
-        }
-
-        private enum TestEnum2
-        {
-            [UsedImplicitly]
-            Value1,
-
-            [UsedImplicitly]
-            Value2,
-
-            [UsedImplicitly]
-            Value3,
-
-            [UsedImplicitly]
-            Value4,
-
-            [UsedImplicitly]
-            Value5,
-
-            [UsedImplicitly]
-            Value6,
-
-            [UsedImplicitly]
-            Value7,
-
-            [UsedImplicitly]
-            Value8,
-        }
-
         private const int NumTries = 5_000;
 
         private readonly System.Random _random = new();
 
         private readonly List<string> _prepend = new() { "(", "[", "<", "{" };
         private readonly List<string> _append = new() { ")", "]", ">", "}" };
+
+        private static bool Approximately(float a, float b, float tolerance = 0.0001f)
+        {
+            float delta = Math.Abs(a - b);
+            // Check ToString representations too, the numbers may be crazy small or crazy big, outside the scope of our tolerance
+            return delta <= tolerance
+                || a.ToString(CultureInfo.InvariantCulture)
+                    .Equals(b.ToString(CultureInfo.InvariantCulture));
+        }
+
+        private static bool Approximately(decimal a, decimal b, decimal? tolerance = null)
+        {
+            if (a == b)
+            {
+                return true;
+            }
+
+            tolerance ??= new decimal(0.0001);
+
+            decimal delta = Math.Abs(a - b);
+            return delta <= tolerance
+                || a.ToString(CultureInfo.InvariantCulture)
+                    .Equals(b.ToString(CultureInfo.InvariantCulture));
+        }
+
+        private static bool Approximately(double a, double b, double tolerance = 0.0001)
+        {
+            double delta = Math.Abs(a - b);
+            // Check ToString representations too, the numbers may be crazy small or crazy big, outside the scope of our tolerance
+            return delta <= tolerance
+                || a.ToString(CultureInfo.InvariantCulture)
+                    .Equals(b.ToString(CultureInfo.InvariantCulture));
+        }
 
         [SetUp]
         [TearDown]
@@ -2682,37 +2645,74 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             }
         }
 
-        private static bool Approximately(float a, float b, float tolerance = 0.0001f)
+        private readonly struct TestStruct1 : IEquatable<TestStruct1>
         {
-            float delta = Math.Abs(a - b);
-            // Check ToString representations too, the numbers may be crazy small or crazy big, outside the scope of our tolerance
-            return delta <= tolerance
-                || a.ToString(CultureInfo.InvariantCulture)
-                    .Equals(b.ToString(CultureInfo.InvariantCulture));
-        }
+            private readonly Guid _id;
 
-        private static bool Approximately(decimal a, decimal b, decimal? tolerance = null)
-        {
-            if (a == b)
+            public TestStruct1(Guid id)
             {
-                return true;
+                _id = id;
             }
 
-            tolerance ??= new decimal(0.0001);
+            public override bool Equals(object obj)
+            {
+                return obj is TestStruct1 other && Equals(other);
+            }
 
-            decimal delta = Math.Abs(a - b);
-            return delta <= tolerance
-                || a.ToString(CultureInfo.InvariantCulture)
-                    .Equals(b.ToString(CultureInfo.InvariantCulture));
+            public bool Equals(TestStruct1 other)
+            {
+                return _id.Equals(other._id);
+            }
+
+            public override int GetHashCode()
+            {
+                return _id.GetHashCode();
+            }
         }
 
-        private static bool Approximately(double a, double b, double tolerance = 0.0001)
+        private enum TestEnum1
         {
-            double delta = Math.Abs(a - b);
-            // Check ToString representations too, the numbers may be crazy small or crazy big, outside the scope of our tolerance
-            return delta <= tolerance
-                || a.ToString(CultureInfo.InvariantCulture)
-                    .Equals(b.ToString(CultureInfo.InvariantCulture));
+            [UsedImplicitly]
+            Value1,
+
+            [UsedImplicitly]
+            Value2,
+
+            [UsedImplicitly]
+            Value3,
+
+            [UsedImplicitly]
+            Value4,
+
+            [UsedImplicitly]
+            Value5,
+        }
+
+        private enum TestEnum2
+        {
+            [UsedImplicitly]
+            Value1,
+
+            [UsedImplicitly]
+            Value2,
+
+            [UsedImplicitly]
+            Value3,
+
+            [UsedImplicitly]
+            Value4,
+
+            [UsedImplicitly]
+            Value5,
+
+            [UsedImplicitly]
+            Value6,
+
+            [UsedImplicitly]
+            Value7,
+
+            [UsedImplicitly]
+            Value8,
         }
     }
 }

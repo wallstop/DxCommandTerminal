@@ -1,4 +1,4 @@
-namespace WallstopStudios.DxCommandTerminal.Input
+﻿namespace WallstopStudios.DxCommandTerminal.Input
 {
     using System;
     using System.Collections.Generic;
@@ -139,19 +139,6 @@ namespace WallstopStudios.DxCommandTerminal.Input
             if (!Application.isPlaying)
             {
                 VerifyControlOrderIntegrity();
-            }
-        }
-
-        private void VerifyControlOrderIntegrity()
-        {
-            TerminalControlTypes[] missingControls = ControlTypes.Except(_controlOrder).ToArray();
-            if (missingControls.Length > 0)
-            {
-                Debug.LogWarning(
-                    $"Control Order is missing the following controls: [{string.Join(", ", missingControls)}]. "
-                        + "Input for these will not be handled. Is this intentional?",
-                    this
-                );
             }
         }
 
@@ -318,6 +305,18 @@ namespace WallstopStudios.DxCommandTerminal.Input
             return false;
         }
 
+        private void VerifyControlOrderIntegrity()
+        {
+            TerminalControlTypes[] missingControls = ControlTypes.Except(_controlOrder).ToArray();
+            if (0 < missingControls.Length)
+            {
+                Debug.LogWarning(
+                    $"Control Order is missing the following controls: [{string.Join(", ", missingControls)}]. "
+                        + "Input for these will not be handled. Is this intentional?",
+                    this
+                );
+            }
+        }
         #endregion
     }
 }
