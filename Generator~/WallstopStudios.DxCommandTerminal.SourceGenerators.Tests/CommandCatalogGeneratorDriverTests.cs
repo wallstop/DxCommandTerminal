@@ -174,153 +174,6 @@ namespace Fixtures
     }
 }";
 
-        [Fact]
-        public void RegistersExplicitAttributes()
-        {
-            (SyntaxTree generated, CSharpCompilation output) = TestCompilationFactory.RunGenerator(
-                TestCompilationFactory.CreateCompilation("ExplicitAttributes", StandardFixture)
-            );
-            Assembly assembly = TestCompilationFactory.CompileAndLoad(output);
-
-            CatalogView catalog = CatalogView.Load(assembly);
-            Assert.Equal(2, catalog.Entries.Count);
-
-            object first = catalog.Entries[0];
-            Assert.Equal("greet", catalog.NameOf(first));
-            Assert.Equal("Greet", catalog.MethodNameOf(first));
-            Assert.Equal(1, catalog.MinArgCountOf(first));
-            Assert.Equal(2, catalog.MaxArgCountOf(first));
-            Assert.Equal("Greets", catalog.HelpOf(first));
-            Assert.Equal("greet <name>", catalog.HintOf(first));
-            Assert.False(catalog.AddToHistoryOf(first));
-            Assert.True(catalog.EditorOnlyOf(first));
-            Assert.True(catalog.DevelopmentOnlyOf(first));
-            Assert.False(catalog.IsDefaultOf(first));
-            Assert.True(catalog.HasValidSignature(first));
-            Assert.Null(catalog.MethodAccessorOf(first));
-            Assert.NotNull(catalog.BinderOf(first));
-
-            object second = catalog.Entries[1];
-            Assert.Equal("Secret", catalog.NameOf(second));
-            Assert.Equal("CommandSecret", catalog.MethodNameOf(second));
-            Assert.True(catalog.HasValidSignature(second));
-            Assert.NotNull(catalog.BinderOf(second));
-            Assert.Null(catalog.MethodAccessorOf(second));
-        }
-
-        [Fact]
-        public void ExecutesPublicAndPrivateBinders()
-        {
-            Assembly assembly = TestCompilationFactory.CompileAndLoad(
-                TestCompilationFactory
-                    .RunGenerator(
-                        TestCompilationFactory.CreateCompilation("BinderExecution", StandardFixture)
-                    )
-                    .output
-            );
-
-            CatalogView catalog = CatalogView.Load(assembly);
-            Type commandsType = assembly.GetType("Fixtures.Commands");
-            FieldInfo publicInvocations = commandsType.GetField("PublicInvocations");
-            FieldInfo secretInvocations = commandsType.GetField("SecretInvocations");
-            Assert.Equal(0, publicInvocations.GetValue(null));
-            Assert.Equal(0, secretInvocations.GetValue(null));
-
-            Type argType = assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg");
-
-            // CommandArg is a value type, so its arrays cannot be cast to
-            // object[]; the arguments are boxed inside a one-element object[].
-            Array publicArgs = Array.CreateInstance(argType, 1);
-            catalog.BinderOf(catalog.Entries[0])(new object[] { publicArgs });
-            Assert.Equal(1, publicInvocations.GetValue(null));
-
-            Array secretArgs = Array.CreateInstance(argType, 0);
-            catalog.BinderOf(catalog.Entries[1])(new object[] { secretArgs });
-            Assert.Equal(1, secretInvocations.GetValue(null));
-        }
-
-        [Fact]
-        public void RespectsConditionalCompilation()
-        {
-            AssertConditional(0, 1);
-            AssertConditional(1, 2);
-            AssertConditional(2, 3);
-        }
-
-        private static void AssertConditional(int defineCount, int expectedEntryCount)
-        {
-            string[] defines =
-                defineCount == 0 ? new string[0]
-                : defineCount == 1 ? new[] { "UNITY_EDITOR" }
-                : new[] { "UNITY_EDITOR", "DEVELOPMENT_BUILD" };
-
-            Assembly assembly = TestCompilationFactory.CompileAndLoad(
-                TestCompilationFactory
-                    .RunGenerator(
-                        TestCompilationFactory.CreateCompilation(
-                            "ConditionalDefines" + defineCount,
-                            ConditionalFixture,
-                            defines
-                        )
-                    )
-                    .output
-            );
-
-            CatalogView catalog = CatalogView.Load(assembly);
-            Assert.Equal(expectedEntryCount, catalog.Entries.Count);
-            Assert.Contains(catalog.Entries, entry => catalog.NameOf(entry) == "Always");
-        }
-
-        [Fact]
-        public void RegistersAliasesAndQualifiedAttributes()
-        {
-            Assembly assembly = TestCompilationFactory.CompileAndLoad(
-                TestCompilationFactory
-                    .RunGenerator(TestCompilationFactory.CreateCompilation("Aliases", AliasFixture))
-                    .output
-            );
-
-            CatalogView catalog = CatalogView.Load(assembly);
-            Assert.Equal(2, catalog.Entries.Count);
-            Assert.Equal("Aliased", catalog.NameOf(catalog.Entries[0]));
-            Assert.Equal("Qualified", catalog.NameOf(catalog.Entries[1]));
-        }
-
-        [Fact]
-        public void GeneratedTextIsDeterministic()
-        {
-            string first = TestCompilationFactory
-                .RunGenerator(
-                    TestCompilationFactory.CreateCompilation("DeterminismA", DeterminismFixture)
-                )
-                .generated?.ToString();
-            string second = TestCompilationFactory
-                .RunGenerator(
-                    TestCompilationFactory.CreateCompilation("DeterminismB", DeterminismFixture)
-                )
-                .generated?.ToString();
-
-            Assert.Equal(first, second);
-        }
-
-        [Fact]
-        public void EntryOrderMatchesDeclarationOrder()
-        {
-            Assembly assembly = TestCompilationFactory.CompileAndLoad(
-                TestCompilationFactory
-                    .RunGenerator(
-                        TestCompilationFactory.CreateCompilation("EntryOrder", DeterminismFixture)
-                    )
-                    .output
-            );
-
-            CatalogView catalog = CatalogView.Load(assembly);
-            Assert.Equal(3, catalog.Entries.Count);
-            Assert.Equal("First", catalog.NameOf(catalog.Entries[0]));
-            Assert.Equal("Second", catalog.NameOf(catalog.Entries[1]));
-            Assert.Equal("Third", catalog.NameOf(catalog.Entries[2]));
-        }
-
         private const string PositionalNameFixture =
             @"
 namespace Fixtures
@@ -531,31 +384,6 @@ namespace Fixtures
     }
 }";
 
-        [Fact]
-        public void RegistersDefaultishInternalConstructor()
-        {
-            Assembly assembly = TestCompilationFactory.CompileAndLoad(
-                TestCompilationFactory
-                    .RunGenerator(
-                        TestCompilationFactory.CreateCompilation("Defaultish", DefaultishFixture)
-                    )
-                    .output
-            );
-
-            CatalogView catalog = CatalogView.Load(assembly);
-            Assert.Equal(2, catalog.Entries.Count);
-
-            object defaultish = catalog.Entries[0];
-            Assert.True(catalog.IsDefaultOf(defaultish));
-            Assert.Equal("builtin-ish", catalog.NameOf(defaultish));
-            Assert.True(catalog.HasValidSignature(defaultish));
-
-            object notDefault = catalog.Entries[1];
-            Assert.False(catalog.IsDefaultOf(notDefault));
-            Assert.True(catalog.HasValidSignature(notDefault));
-            Assert.NotNull(catalog.BinderOf(notDefault));
-        }
-
         private const string ContextsFixture =
             @"
 namespace Fixtures
@@ -593,6 +421,178 @@ namespace Fixtures
         }
     }
 }";
+
+        private static void AssertConditional(int defineCount, int expectedEntryCount)
+        {
+            string[] defines =
+                defineCount == 0 ? new string[0]
+                : defineCount == 1 ? new[] { "UNITY_EDITOR" }
+                : new[] { "UNITY_EDITOR", "DEVELOPMENT_BUILD" };
+
+            Assembly assembly = TestCompilationFactory.CompileAndLoad(
+                TestCompilationFactory
+                    .RunGenerator(
+                        TestCompilationFactory.CreateCompilation(
+                            "ConditionalDefines" + defineCount,
+                            ConditionalFixture,
+                            defines
+                        )
+                    )
+                    .output
+            );
+
+            CatalogView catalog = CatalogView.Load(assembly);
+            Assert.Equal(expectedEntryCount, catalog.Entries.Count);
+            Assert.Contains(catalog.Entries, entry => catalog.NameOf(entry) == "Always");
+        }
+
+        [Fact]
+        public void RegistersExplicitAttributes()
+        {
+            (SyntaxTree generated, CSharpCompilation output) = TestCompilationFactory.RunGenerator(
+                TestCompilationFactory.CreateCompilation("ExplicitAttributes", StandardFixture)
+            );
+            Assembly assembly = TestCompilationFactory.CompileAndLoad(output);
+
+            CatalogView catalog = CatalogView.Load(assembly);
+            Assert.Equal(2, catalog.Entries.Count);
+
+            object first = catalog.Entries[0];
+            Assert.Equal("greet", catalog.NameOf(first));
+            Assert.Equal("Greet", catalog.MethodNameOf(first));
+            Assert.Equal(1, catalog.MinArgCountOf(first));
+            Assert.Equal(2, catalog.MaxArgCountOf(first));
+            Assert.Equal("Greets", catalog.HelpOf(first));
+            Assert.Equal("greet <name>", catalog.HintOf(first));
+            Assert.False(catalog.AddToHistoryOf(first));
+            Assert.True(catalog.EditorOnlyOf(first));
+            Assert.True(catalog.DevelopmentOnlyOf(first));
+            Assert.False(catalog.IsDefaultOf(first));
+            Assert.True(catalog.HasValidSignature(first));
+            Assert.Null(catalog.MethodAccessorOf(first));
+            Assert.NotNull(catalog.BinderOf(first));
+
+            object second = catalog.Entries[1];
+            Assert.Equal("Secret", catalog.NameOf(second));
+            Assert.Equal("CommandSecret", catalog.MethodNameOf(second));
+            Assert.True(catalog.HasValidSignature(second));
+            Assert.NotNull(catalog.BinderOf(second));
+            Assert.Null(catalog.MethodAccessorOf(second));
+        }
+
+        [Fact]
+        public void ExecutesPublicAndPrivateBinders()
+        {
+            Assembly assembly = TestCompilationFactory.CompileAndLoad(
+                TestCompilationFactory
+                    .RunGenerator(
+                        TestCompilationFactory.CreateCompilation("BinderExecution", StandardFixture)
+                    )
+                    .output
+            );
+
+            CatalogView catalog = CatalogView.Load(assembly);
+            Type commandsType = assembly.GetType("Fixtures.Commands");
+            FieldInfo publicInvocations = commandsType.GetField("PublicInvocations");
+            FieldInfo secretInvocations = commandsType.GetField("SecretInvocations");
+            Assert.Equal(0, publicInvocations.GetValue(null));
+            Assert.Equal(0, secretInvocations.GetValue(null));
+
+            Type argType = assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg");
+
+            // CommandArg is a value type, so its arrays cannot be cast to
+            // object[]; the arguments are boxed inside a one-element object[].
+            Array publicArgs = Array.CreateInstance(argType, 1);
+            catalog.BinderOf(catalog.Entries[0])(new object[] { publicArgs });
+            Assert.Equal(1, publicInvocations.GetValue(null));
+
+            Array secretArgs = Array.CreateInstance(argType, 0);
+            catalog.BinderOf(catalog.Entries[1])(new object[] { secretArgs });
+            Assert.Equal(1, secretInvocations.GetValue(null));
+        }
+
+        [Fact]
+        public void RespectsConditionalCompilation()
+        {
+            AssertConditional(0, 1);
+            AssertConditional(1, 2);
+            AssertConditional(2, 3);
+        }
+
+        [Fact]
+        public void RegistersAliasesAndQualifiedAttributes()
+        {
+            Assembly assembly = TestCompilationFactory.CompileAndLoad(
+                TestCompilationFactory
+                    .RunGenerator(TestCompilationFactory.CreateCompilation("Aliases", AliasFixture))
+                    .output
+            );
+
+            CatalogView catalog = CatalogView.Load(assembly);
+            Assert.Equal(2, catalog.Entries.Count);
+            Assert.Equal("Aliased", catalog.NameOf(catalog.Entries[0]));
+            Assert.Equal("Qualified", catalog.NameOf(catalog.Entries[1]));
+        }
+
+        [Fact]
+        public void GeneratedTextIsDeterministic()
+        {
+            string first = TestCompilationFactory
+                .RunGenerator(
+                    TestCompilationFactory.CreateCompilation("DeterminismA", DeterminismFixture)
+                )
+                .generated?.ToString();
+            string second = TestCompilationFactory
+                .RunGenerator(
+                    TestCompilationFactory.CreateCompilation("DeterminismB", DeterminismFixture)
+                )
+                .generated?.ToString();
+
+            Assert.Equal(first, second);
+        }
+
+        [Fact]
+        public void EntryOrderMatchesDeclarationOrder()
+        {
+            Assembly assembly = TestCompilationFactory.CompileAndLoad(
+                TestCompilationFactory
+                    .RunGenerator(
+                        TestCompilationFactory.CreateCompilation("EntryOrder", DeterminismFixture)
+                    )
+                    .output
+            );
+
+            CatalogView catalog = CatalogView.Load(assembly);
+            Assert.Equal(3, catalog.Entries.Count);
+            Assert.Equal("First", catalog.NameOf(catalog.Entries[0]));
+            Assert.Equal("Second", catalog.NameOf(catalog.Entries[1]));
+            Assert.Equal("Third", catalog.NameOf(catalog.Entries[2]));
+        }
+
+        [Fact]
+        public void RegistersDefaultishInternalConstructor()
+        {
+            Assembly assembly = TestCompilationFactory.CompileAndLoad(
+                TestCompilationFactory
+                    .RunGenerator(
+                        TestCompilationFactory.CreateCompilation("Defaultish", DefaultishFixture)
+                    )
+                    .output
+            );
+
+            CatalogView catalog = CatalogView.Load(assembly);
+            Assert.Equal(2, catalog.Entries.Count);
+
+            object defaultish = catalog.Entries[0];
+            Assert.True(catalog.IsDefaultOf(defaultish));
+            Assert.Equal("builtin-ish", catalog.NameOf(defaultish));
+            Assert.True(catalog.HasValidSignature(defaultish));
+
+            object notDefault = catalog.Entries[1];
+            Assert.False(catalog.IsDefaultOf(notDefault));
+            Assert.True(catalog.HasValidSignature(notDefault));
+            Assert.NotNull(catalog.BinderOf(notDefault));
+        }
 
         [Fact]
         public void CarriesExecutionContextsIntoCatalogEntries()

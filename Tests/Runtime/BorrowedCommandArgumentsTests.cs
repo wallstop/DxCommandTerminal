@@ -8,6 +8,19 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
     public sealed class BorrowedCommandArgumentsTests
     {
+        private static BorrowedCommandArguments CreateView(object source)
+        {
+            // The shell constructs views from arrays, lists, and arbitrary
+            // read-only lists; cover all three construction paths.
+            return source switch
+            {
+                CommandArg[] array => new BorrowedCommandArguments(array),
+                List<CommandArg> list => new BorrowedCommandArguments(list),
+                IReadOnlyList<CommandArg> readOnly => new BorrowedCommandArguments(readOnly),
+                _ => throw new ArgumentException($"Unexpected source type: {source?.GetType()}"),
+            };
+        }
+
         [Test]
         public void ArrayBackedViewExposesArguments()
         {
@@ -90,19 +103,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             listSource.Clear();
             listSource.Add(new CommandArg("reused"));
             Assert.AreEqual("two", listCopy[1].contents);
-        }
-
-        private static BorrowedCommandArguments CreateView(object source)
-        {
-            // The shell constructs views from arrays, lists, and arbitrary
-            // read-only lists; cover all three construction paths.
-            return source switch
-            {
-                CommandArg[] array => new BorrowedCommandArguments(array),
-                List<CommandArg> list => new BorrowedCommandArguments(list),
-                IReadOnlyList<CommandArg> readOnly => new BorrowedCommandArguments(readOnly),
-                _ => throw new ArgumentException($"Unexpected source type: {source?.GetType()}"),
-            };
         }
     }
 }

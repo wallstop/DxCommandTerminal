@@ -111,7 +111,7 @@ namespace WallstopStudios.DxCommandTerminal.Helper
                 int startIndex = projectRoot.EndsWith("/", StringComparison.OrdinalIgnoreCase)
                     ? projectRoot.Length
                     : projectRoot.Length + 1;
-                return absolutePath.Length > startIndex ? absolutePath[startIndex..] : string.Empty;
+                return startIndex < absolutePath.Length ? absolutePath[startIndex..] : string.Empty;
             }
             if (absolutePath.StartsWith(projectRoot, StringComparison.OrdinalIgnoreCase))
             {

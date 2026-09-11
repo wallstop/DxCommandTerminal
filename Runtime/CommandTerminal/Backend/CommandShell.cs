@@ -1,4 +1,4 @@
-namespace WallstopStudios.DxCommandTerminal.Backend
+﻿namespace WallstopStudios.DxCommandTerminal.Backend
 {
     using System;
     using System.Collections.Generic;
@@ -35,7 +35,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             Stopwatch stopwatch = Stopwatch.StartNew();
 #endif
             List<(MethodInfo, RegisterCommandAttribute)> commands = new();
-
             Assembly ourAssembly = typeof(BuiltInCommands).Assembly;
             Assembly[] loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies();
             List<Assembly> scanCandidates = CollectScanCandidates(loadedAssemblies, ourAssembly);
@@ -56,41 +55,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             return commands.ToArray();
         });
 
-        private readonly HashSet<string> _autoRegisteredCommands = new(
-            StringComparer.OrdinalIgnoreCase
-        );
-
-        /*
-            1 while a deferred registration is waiting to run. The readiness
-            handoff uses Interlocked so two concurrent first uses cannot both
-            run the registration; command state itself stays single-threaded
-            like the rest of the shell.
-         */
-        private int _autoCommandsPending;
-
-        private readonly StringBuilder _commandBuilder = new();
-
-        private readonly SortedDictionary<string, CommandInfo> _commands = new(
-            StringComparer.OrdinalIgnoreCase
-        );
-
-        private readonly Queue<string> _errorMessages = new();
-
-        private readonly CommandHistory _history;
-        private readonly HashSet<string> _ignoredCommands = new(StringComparer.OrdinalIgnoreCase);
-
-        private readonly SortedDictionary<string, MethodInfo> _rejectedCommands = new(
-            StringComparer.OrdinalIgnoreCase
-        );
-
-        private readonly SortedDictionary<string, CommandArg> _variables = new(
-            StringComparer.OrdinalIgnoreCase
-        );
-
-        public CommandShell(CommandHistory history)
-        {
-            _history = history ?? throw new ArgumentNullException(nameof(history));
-        }
+        private static readonly ConditionalWeakTable<Assembly, DiscoveryCache> DiscoveryCaches =
+            new ConditionalWeakTable<Assembly, DiscoveryCache>();
 
         /*
             Readiness boundary: the first observation of command state applies
@@ -134,8 +100,118 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         public bool HasErrors => 0 < _errorMessages.Count;
 
+        private readonly HashSet<string> _autoRegisteredCommands = new(
+            StringComparer.OrdinalIgnoreCase
+        );
+
+        /*
+            1 while a deferred registration is waiting to run. The readiness
+            handoff uses Interlocked so two concurrent first uses cannot both
+            run the registration; command state itself stays single-threaded
+            like the rest of the shell.
+         */
+        private int _autoCommandsPending;
+
+        private readonly StringBuilder _commandBuilder = new();
+
+        private readonly SortedDictionary<string, CommandInfo> _commands = new(
+            StringComparer.OrdinalIgnoreCase
+        );
+
+        private readonly Queue<string> _errorMessages = new();
+
+        private readonly CommandHistory _history;
+        private readonly HashSet<string> _ignoredCommands = new(StringComparer.OrdinalIgnoreCase);
+
+        private readonly SortedDictionary<string, MethodInfo> _rejectedCommands = new(
+            StringComparer.OrdinalIgnoreCase
+        );
+
+        private readonly SortedDictionary<string, CommandArg> _variables = new(
+            StringComparer.OrdinalIgnoreCase
+        );
+
+        /*
+            Depth-scoped parse buffers: one per active RunCommand/TryComplete
+            level, so nested dispatches cannot corrupt outer arguments.
+            Arrays materialized for legacy handlers are fresh per invocation,
+            never pooled.
+         */
+        private readonly List<List<CommandArg>> _dispatchScopes = new();
+
+        private readonly List<List<CommandToken>> _tokenScopes = new();
+
+        private readonly HashSet<string> _completionDeduplication = new(StringComparer.Ordinal);
+
+        private int _dispatchDepth;
+
+        public CommandShell(CommandHistory history)
+        {
+            _history = history ?? throw new ArgumentNullException(nameof(history));
+        }
+
         // Internal for test coverage of the discovery filter (see
         // WallstopStudios.DxCommandTerminal.Tests.Runtime).
+        public static bool TryEatArgument(ref string stringValue, out CommandArg arg)
+        {
+            stringValue = stringValue.TrimStart();
+            if (stringValue.Length == 0)
+            {
+                arg = default;
+                return false;
+            }
+
+            char firstChar = stringValue[0];
+            if (CommandArg.Quotes.Contains(firstChar))
+            {
+                int closingQuoteIndex = -1;
+
+                // Find the matching closing quote.
+                for (int i = 1; i < stringValue.Length; ++i)
+                {
+                    if (stringValue[i] == firstChar)
+                    {
+                        closingQuoteIndex = i;
+                        break;
+                    }
+                }
+
+                if (closingQuoteIndex < 0)
+                {
+                    // No closing quote was found; consume the rest of the string (excluding the opening quote).
+                    string input = stringValue.Substring(1);
+                    arg = new CommandArg(input, firstChar);
+                    stringValue = string.Empty;
+                }
+                else
+                {
+                    // Extract the argument inside the quotes.
+                    string input = stringValue.Substring(1, closingQuoteIndex - 1);
+                    arg = new CommandArg(input, firstChar, firstChar);
+                    // Remove the parsed argument (including the quotes) from the input.
+                    stringValue = stringValue.Substring(closingQuoteIndex + 1);
+                }
+            }
+            else
+            {
+                // Unquoted argument: find the next space.
+                int spaceIndex = stringValue.IndexOf(' ');
+                if (spaceIndex < 0)
+                {
+                    arg = new CommandArg(stringValue);
+                    stringValue = string.Empty;
+                }
+                else
+                {
+                    string input = stringValue.Substring(0, spaceIndex);
+                    arg = new CommandArg(input);
+                    stringValue = stringValue.Substring(spaceIndex + 1);
+                }
+            }
+
+            return true;
+        }
+
         internal static bool MayContainCommands(Assembly assembly, AssemblyName self)
         {
             if (assembly.IsDynamic)
@@ -262,138 +338,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 }
             }
         }
-
-        /*
-            One generated command registration, shared by the generated-catalog
-            path and the reflection compatibility path so both apply identical
-            filtering, validation, and diagnostics.
-         */
-        private readonly struct AutoCommand
-        {
-            public readonly string Name;
-            public readonly string MethodName;
-            public readonly int MinArgCount;
-            public readonly int MaxArgCount;
-            public readonly string Help;
-            public readonly string Hint;
-            public readonly bool AddToHistory;
-            public readonly bool EditorOnly;
-            public readonly bool DevelopmentOnly;
-            public readonly bool IsDefault;
-            public readonly CommandExecutionContexts Contexts;
-
-            // Non-null for valid (CommandArg[]) signatures. Null marks a
-            // rejected command; diagnostics then come from MethodAccessor.
-            public readonly Func<Action<CommandArg[]>> Binder;
-
-            public readonly Func<MethodInfo> MethodAccessor;
-
-            private AutoCommand(
-                string name,
-                string methodName,
-                int minArgCount,
-                int maxArgCount,
-                string help,
-                string hint,
-                bool addToHistory,
-                bool editorOnly,
-                bool developmentOnly,
-                bool isDefault,
-                CommandExecutionContexts contexts,
-                Func<Action<CommandArg[]>> binder,
-                Func<MethodInfo> methodAccessor
-            )
-            {
-                Name = name;
-                MethodName = methodName;
-                MinArgCount = minArgCount;
-                MaxArgCount = maxArgCount;
-                Help = help;
-                Hint = hint;
-                AddToHistory = addToHistory;
-                EditorOnly = editorOnly;
-                DevelopmentOnly = developmentOnly;
-                IsDefault = isDefault;
-                Contexts = contexts;
-                Binder = binder;
-                MethodAccessor = methodAccessor;
-            }
-
-            public static AutoCommand FromCatalog(CommandCatalogEntry entry)
-            {
-                return new AutoCommand(
-                    entry.Name,
-                    entry.MethodName,
-                    entry.MinArgCount,
-                    entry.MaxArgCount,
-                    entry.Help,
-                    entry.Hint,
-                    entry.AddToHistory,
-                    entry.EditorOnly,
-                    entry.DevelopmentOnly,
-                    entry.IsDefault,
-                    entry.Contexts,
-                    entry.Binder,
-                    entry.MethodAccessor
-                );
-            }
-
-            public static AutoCommand FromReflected(
-                MethodInfo method,
-                RegisterCommandAttribute attribute
-            )
-            {
-                bool valid = IsValidSignature(method);
-                return new AutoCommand(
-                    attribute.Name,
-                    method.Name,
-                    attribute.MinArgCount,
-                    attribute.MaxArgCount,
-                    attribute.Help,
-                    attribute.Hint,
-                    attribute.AddToHistory,
-                    attribute.EditorOnly,
-                    attribute.DevelopmentOnly,
-                    attribute.Default,
-                    attribute.Contexts,
-                    valid
-                        ? () =>
-                            (Action<CommandArg[]>)
-                                Delegate.CreateDelegate(typeof(Action<CommandArg[]>), method)
-                        : null,
-                    () => method
-                );
-            }
-
-            private static bool IsValidSignature(MethodInfo method)
-            {
-                ParameterInfo[] methodParams = method.GetParameters();
-                return methodParams.Length == 1
-                    && methodParams[0].ParameterType == typeof(CommandArg[]);
-            }
-        }
-
-        /*
-            Probes the assembly for its generated `CommandCatalog` and binds its
-            Collect method, and caches the reflection-compatibility result for
-            assemblies without one. Both are computed once per assembly per
-            domain on whatever thread first triggers readiness; the weak table
-            keeps unloaded-collectible editor assemblies collectible.
-         */
-        private sealed class DiscoveryCache
-        {
-            /*
-                Written once per assembly on first initialization; concurrent
-                first uses share one cache through the weak table, so the
-                worst case is a harmless redundant re-probe.
-             */
-            public Action<List<CommandCatalogEntry>> Collector;
-            public bool CollectorProbed;
-            public List<AutoCommand> ReflectedCommands;
-        }
-
-        private static readonly ConditionalWeakTable<Assembly, DiscoveryCache> DiscoveryCaches =
-            new ConditionalWeakTable<Assembly, DiscoveryCache>();
 
         private static DiscoveryCache GetOrCreateDiscoveryCache(Assembly assembly)
         {
@@ -688,213 +632,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             RegisterAutoCommands();
         }
 
-        private void RegisterAutoCommands()
-        {
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-            Stopwatch stopwatch = Stopwatch.StartNew();
-#endif
-            int registeredCount = 0;
-            int catalogAssemblies = 0;
-            int reflectedAssemblies = 0;
-
-            Assembly[] loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies();
-            List<Assembly> scanCandidates = CollectScanCandidates(
-                loadedAssemblies,
-                typeof(BuiltInCommands).Assembly
-            );
-
-            List<AutoCommand> autoCommands = new();
-            foreach (Assembly assembly in scanCandidates)
-            {
-                if (CollectAutoCommands(assembly, autoCommands))
-                {
-                    catalogAssemblies++;
-                }
-                else
-                {
-                    reflectedAssemblies++;
-                }
-            }
-
-            foreach (AutoCommand command in autoCommands)
-            {
-                string commandName = command.Name;
-                if (_ignoredCommands.Contains(commandName))
-                {
-                    continue;
-                }
-
-                if (IgnoringDefaultCommands && command.IsDefault)
-                {
-                    continue;
-                }
-
-                if (command.EditorOnly && !Application.isEditor)
-                {
-                    continue;
-                }
-
-                if (command.DevelopmentOnly && !Application.isEditor && !Debug.isDebugBuild)
-                {
-                    continue;
-                }
-
-                if (command.Binder == null)
-                {
-                    RegisterRejectedCommand(command, commandName);
-                    continue;
-                }
-
-                Action<CommandArg[]> proc;
-                try
-                {
-                    proc = command.Binder();
-                }
-                catch (Exception e)
-                {
-                    Debug.LogError(
-                        $"[DxCommandTerminal] Failed to bind command {commandName} "
-                            + $"(method {command.MethodName}): {e.Message}"
-                    );
-                    continue;
-                }
-
-                if (proc == null)
-                {
-                    Debug.LogError(
-                        $"[DxCommandTerminal] Failed to bind command {commandName} "
-                            + $"(method {command.MethodName}): no handler was produced"
-                    );
-                    continue;
-                }
-
-                /*
-                    User commands win over auto ones (built-ins included). The
-                    collision is a console warning, not a queued terminal
-                    error, so readiness never surfaces it mid-session.
-                 */
-                if (_commands.ContainsKey(commandName))
-                {
-                    Debug.LogWarning(
-                        $"[DxCommandTerminal] Auto command {commandName} "
-                            + $"(method {command.MethodName}) skipped: a command with "
-                            + $"that name is already registered"
-                    );
-                    continue;
-                }
-
-                // Perf boost, much cheaper than running reflection on invoking the method
-                CommandInfo info = new(
-                    proc,
-                    null,
-                    null,
-                    command.Contexts,
-                    command.MinArgCount,
-                    command.MaxArgCount,
-                    command.Help,
-                    command.Hint,
-                    command.AddToHistory
-                );
-                bool success = AddCommand(commandName, info);
-                if (success)
-                {
-                    _autoRegisteredCommands.Add(commandName);
-                    registeredCount++;
-                }
-            }
-
-            AutoRegisteredCommands = _autoRegisteredCommands.ToReadOnlyHashSet(
-                StringComparer.OrdinalIgnoreCase
-            );
-
-            foreach (KeyValuePair<string, MethodInfo> command in _rejectedCommands)
-            {
-                IssueErrorMessage(
-                    $"{command.Key} has an invalid signature. "
-                        + $"Expected: {command.Value.Name}(CommandArg[]). "
-                        + $"Found: {command.Value.Name}({string.Join(",", command.Value.GetParameters().Select(p => p.ParameterType.Name))})"
-                );
-            }
-
-            AutoCommandsRegistered = true;
-
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-            Debug.Log(
-                $"[DxCommandTerminal] Registered {registeredCount} auto-registered commands in "
-                    + $"{stopwatch.Elapsed.TotalMilliseconds:F2} ms "
-                    + $"({catalogAssemblies} generated catalog(s), {reflectedAssemblies} reflection-scanned assembly(ies))"
-            );
-#endif
-        }
-
-        private void RegisterRejectedCommand(AutoCommand command, string commandName)
-        {
-            MethodInfo method = null;
-            if (command.MethodAccessor != null)
-            {
-                try
-                {
-                    method = command.MethodAccessor();
-                }
-                catch (Exception e)
-                {
-                    Debug.LogWarning(
-                        $"[DxCommandTerminal] Failed to resolve rejected command {commandName} "
-                            + $"(method {command.MethodName}) for diagnostics: {e.Message}"
-                    );
-                }
-            }
-
-            if (method == null)
-            {
-                IssueErrorMessage(
-                    $"{commandName} has an invalid signature. "
-                        + $"Expected: {command.MethodName}(CommandArg[])."
-                );
-                return;
-            }
-
-            _rejectedCommands.TryAdd(commandName, method);
-        }
-
-        /*
-            Depth-scoped parse buffers: one per active RunCommand/TryComplete
-            level, so nested dispatches cannot corrupt outer arguments.
-            Arrays materialized for legacy handlers are fresh per invocation,
-            never pooled.
-         */
-        private readonly List<List<CommandArg>> _dispatchScopes = new();
-
-        private readonly List<List<CommandToken>> _tokenScopes = new();
-
-        private readonly HashSet<string> _completionDeduplication = new(StringComparer.Ordinal);
-
-        private int _dispatchDepth;
-
-        private List<CommandArg> GetDispatchScope(int depth)
-        {
-            while (_dispatchScopes.Count <= depth)
-            {
-                _dispatchScopes.Add(new List<CommandArg>());
-            }
-
-            List<CommandArg> scope = _dispatchScopes[depth];
-            scope.Clear();
-            return scope;
-        }
-
-        private List<CommandToken> GetTokenScope(int depth)
-        {
-            while (_tokenScopes.Count <= depth)
-            {
-                _tokenScopes.Add(new List<CommandToken>());
-            }
-
-            List<CommandToken> scope = _tokenScopes[depth];
-            scope.Clear();
-            return scope;
-        }
-
         /// <summary>
         ///     Parses an input line into a command and runs that command.
         /// </summary>
@@ -993,175 +730,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             // deferred registration must be applied before this lookup.
             EnsureAutoCommandsRegistered();
             return RunCommandCore(context, commandName, arguments, historyLine: null);
-        }
-
-        /*
-            Shared dispatch for every RunCommand shape: eligibility, argument
-            validation, history accounting, and invocation are identical for
-            array, list, and parsed-line callers.
-         */
-        private bool RunCommandCore(
-            CommandExecutionContext context,
-            string commandName,
-            IReadOnlyList<CommandArg> arguments,
-            string historyLine
-        )
-        {
-            if (string.IsNullOrWhiteSpace(commandName))
-            {
-                IssueErrorMessage($"Invalid command name '{commandName}'");
-                // Don't log empty commands
-                return false;
-            }
-
-            if (commandName.Contains(' '))
-            {
-                commandName = commandName.Replace(
-                    " ",
-                    string.Empty,
-                    StringComparison.OrdinalIgnoreCase
-                );
-            }
-
-            if (!_commands.TryGetValue(commandName, out CommandInfo command))
-            {
-                IssueErrorMessage($"Command {commandName} not found");
-                // Unknown command, unconditional push
-                _history.Push(
-                    historyLine ?? BuildHistoryLine(commandName, arguments),
-                    false,
-                    false
-                );
-                return false;
-            }
-
-            if (!context.IsEligibleFor(command.executionContexts))
-            {
-                _errorMessages.Enqueue(
-                    $"{commandName} is not available in the current execution context"
-                );
-                // Known but unavailable command, respect addToHistory flag
-                if (command.addToHistory)
-                {
-                    _history.Push(
-                        historyLine ?? BuildHistoryLine(commandName, arguments),
-                        false,
-                        false
-                    );
-                }
-
-                return false;
-            }
-
-            int argCount = arguments.Count;
-            string errorMessage = null;
-            int requiredArg = 0;
-
-            if (argCount < command.minArgCount)
-            {
-                errorMessage = command.minArgCount == command.maxArgCount ? "exactly" : "at least";
-                requiredArg = command.minArgCount;
-            }
-            else if (command.maxArgCount is int maxArgCount && maxArgCount < argCount)
-            {
-                errorMessage = command.minArgCount == command.maxArgCount ? "exactly" : "at most";
-                requiredArg = maxArgCount;
-            }
-
-            if (!string.IsNullOrEmpty(errorMessage))
-            {
-                string pluralFix = requiredArg == 1 ? "" : "s";
-
-                string invalidMessage =
-                    $"{commandName} requires {errorMessage} {requiredArg} argument{pluralFix}";
-                if (!string.IsNullOrWhiteSpace(command.hint))
-                {
-                    invalidMessage += $"\n    -> Usage: {command.hint}";
-                }
-
-                _errorMessages.Enqueue(invalidMessage);
-                // Known command with invalid arguments, respect addToHistory flag
-                if (command.addToHistory)
-                {
-                    _history.Push(
-                        historyLine ?? BuildHistoryLine(commandName, arguments),
-                        false,
-                        false
-                    );
-                }
-
-                return false;
-            }
-
-            int errorCount = _errorMessages.Count;
-            if (command.handler != null)
-            {
-                command.handler(context, new BorrowedCommandArguments(arguments));
-            }
-            else if (arguments is CommandArg[] ownedArguments)
-            {
-                // Array callers dispatch their own array, as before.
-                command.proc?.Invoke(ownedArguments);
-            }
-            else
-            {
-                // Legacy handlers may retain their argument array, so each
-                // invocation materializes a fresh one. The array is never
-                // pooled or reused after the handler returns.
-                CommandArg[] materialized = new CommandArg[arguments.Count];
-                for (int i = 0; i < materialized.Length; ++i)
-                {
-                    materialized[i] = arguments[i];
-                }
-
-                command.proc?.Invoke(materialized);
-            }
-
-            // Known command executed, respect addToHistory flag
-            if (command.addToHistory)
-            {
-                _history.Push(
-                    historyLine ?? BuildHistoryLine(commandName, arguments),
-                    true,
-                    errorCount == _errorMessages.Count
-                );
-            }
-
-            return true;
-        }
-
-        private string BuildHistoryLine(string commandName, IReadOnlyList<CommandArg> arguments)
-        {
-            _commandBuilder.Clear();
-            _commandBuilder.Append(commandName);
-            if (arguments.Count != 0)
-            {
-                _commandBuilder.Append(' ');
-            }
-
-            bool firstArgument = true;
-            foreach (CommandArg argument in arguments)
-            {
-                if (!firstArgument)
-                {
-                    _commandBuilder.Append(' ');
-                }
-
-                firstArgument = false;
-
-                if (argument.startQuote != null)
-                {
-                    _commandBuilder.Append(argument.startQuote.Value);
-                }
-
-                _commandBuilder.Append(argument.contents);
-                if (argument.endQuote != null)
-                {
-                    _commandBuilder.Append(argument.endQuote.Value);
-                }
-            }
-
-            return _commandBuilder.ToString();
         }
 
         /// <summary>
@@ -1479,64 +1047,495 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             _errorMessages.Enqueue(formattedMessage);
         }
 
-        public static bool TryEatArgument(ref string stringValue, out CommandArg arg)
+        private void RegisterAutoCommands()
         {
-            stringValue = stringValue.TrimStart();
-            if (stringValue.Length == 0)
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            Stopwatch stopwatch = Stopwatch.StartNew();
+#endif
+            int registeredCount = 0;
+            int catalogAssemblies = 0;
+            int reflectedAssemblies = 0;
+
+            Assembly[] loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies();
+            List<Assembly> scanCandidates = CollectScanCandidates(
+                loadedAssemblies,
+                typeof(BuiltInCommands).Assembly
+            );
+
+            List<AutoCommand> autoCommands = new();
+            foreach (Assembly assembly in scanCandidates)
             {
-                arg = default;
+                if (CollectAutoCommands(assembly, autoCommands))
+                {
+                    catalogAssemblies++;
+                }
+                else
+                {
+                    reflectedAssemblies++;
+                }
+            }
+
+            foreach (AutoCommand command in autoCommands)
+            {
+                string commandName = command.Name;
+                if (_ignoredCommands.Contains(commandName))
+                {
+                    continue;
+                }
+
+                if (IgnoringDefaultCommands && command.IsDefault)
+                {
+                    continue;
+                }
+
+                if (command.EditorOnly && !Application.isEditor)
+                {
+                    continue;
+                }
+
+                if (command.DevelopmentOnly && !Application.isEditor && !Debug.isDebugBuild)
+                {
+                    continue;
+                }
+
+                if (command.Binder == null)
+                {
+                    RegisterRejectedCommand(command, commandName);
+                    continue;
+                }
+
+                Action<CommandArg[]> proc;
+                try
+                {
+                    proc = command.Binder();
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError(
+                        $"[DxCommandTerminal] Failed to bind command {commandName} "
+                            + $"(method {command.MethodName}): {e.Message}"
+                    );
+                    continue;
+                }
+
+                if (proc == null)
+                {
+                    Debug.LogError(
+                        $"[DxCommandTerminal] Failed to bind command {commandName} "
+                            + $"(method {command.MethodName}): no handler was produced"
+                    );
+                    continue;
+                }
+
+                /*
+                    User commands win over auto ones (built-ins included). The
+                    collision is a console warning, not a queued terminal
+                    error, so readiness never surfaces it mid-session.
+                 */
+                if (_commands.ContainsKey(commandName))
+                {
+                    Debug.LogWarning(
+                        $"[DxCommandTerminal] Auto command {commandName} "
+                            + $"(method {command.MethodName}) skipped: a command with "
+                            + $"that name is already registered"
+                    );
+                    continue;
+                }
+
+                // Perf boost, much cheaper than running reflection on invoking the method
+                CommandInfo info = new(
+                    proc,
+                    null,
+                    null,
+                    command.Contexts,
+                    command.MinArgCount,
+                    command.MaxArgCount,
+                    command.Help,
+                    command.Hint,
+                    command.AddToHistory
+                );
+                bool success = AddCommand(commandName, info);
+                if (success)
+                {
+                    _autoRegisteredCommands.Add(commandName);
+                    registeredCount++;
+                }
+            }
+
+            AutoRegisteredCommands = _autoRegisteredCommands.ToReadOnlyHashSet(
+                StringComparer.OrdinalIgnoreCase
+            );
+
+            foreach (KeyValuePair<string, MethodInfo> command in _rejectedCommands)
+            {
+                IssueErrorMessage(
+                    $"{command.Key} has an invalid signature. "
+                        + $"Expected: {command.Value.Name}(CommandArg[]). "
+                        + $"Found: {command.Value.Name}({string.Join(",", command.Value.GetParameters().Select(p => p.ParameterType.Name))})"
+                );
+            }
+
+            AutoCommandsRegistered = true;
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            Debug.Log(
+                $"[DxCommandTerminal] Registered {registeredCount} auto-registered commands in "
+                    + $"{stopwatch.Elapsed.TotalMilliseconds:F2} ms "
+                    + $"({catalogAssemblies} generated catalog(s), {reflectedAssemblies} reflection-scanned assembly(ies))"
+            );
+#endif
+        }
+
+        private void RegisterRejectedCommand(AutoCommand command, string commandName)
+        {
+            MethodInfo method = null;
+            if (command.MethodAccessor != null)
+            {
+                try
+                {
+                    method = command.MethodAccessor();
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning(
+                        $"[DxCommandTerminal] Failed to resolve rejected command {commandName} "
+                            + $"(method {command.MethodName}) for diagnostics: {e.Message}"
+                    );
+                }
+            }
+
+            if (method == null)
+            {
+                IssueErrorMessage(
+                    $"{commandName} has an invalid signature. "
+                        + $"Expected: {command.MethodName}(CommandArg[])."
+                );
+                return;
+            }
+
+            _rejectedCommands.TryAdd(commandName, method);
+        }
+
+        private List<CommandArg> GetDispatchScope(int depth)
+        {
+            while (_dispatchScopes.Count <= depth)
+            {
+                _dispatchScopes.Add(new List<CommandArg>());
+            }
+
+            List<CommandArg> scope = _dispatchScopes[depth];
+            scope.Clear();
+            return scope;
+        }
+
+        private List<CommandToken> GetTokenScope(int depth)
+        {
+            while (_tokenScopes.Count <= depth)
+            {
+                _tokenScopes.Add(new List<CommandToken>());
+            }
+
+            List<CommandToken> scope = _tokenScopes[depth];
+            scope.Clear();
+            return scope;
+        }
+
+        /*
+            Shared dispatch for every RunCommand shape: eligibility, argument
+            validation, history accounting, and invocation are identical for
+            array, list, and parsed-line callers.
+         */
+        private bool RunCommandCore(
+            CommandExecutionContext context,
+            string commandName,
+            IReadOnlyList<CommandArg> arguments,
+            string historyLine
+        )
+        {
+            if (string.IsNullOrWhiteSpace(commandName))
+            {
+                IssueErrorMessage($"Invalid command name '{commandName}'");
+                // Don't log empty commands
                 return false;
             }
 
-            char firstChar = stringValue[0];
-            if (CommandArg.Quotes.Contains(firstChar))
+            if (commandName.Contains(' '))
             {
-                int closingQuoteIndex = -1;
+                commandName = commandName.Replace(
+                    " ",
+                    string.Empty,
+                    StringComparison.OrdinalIgnoreCase
+                );
+            }
 
-                // Find the matching closing quote.
-                for (int i = 1; i < stringValue.Length; ++i)
+            if (!_commands.TryGetValue(commandName, out CommandInfo command))
+            {
+                IssueErrorMessage($"Command {commandName} not found");
+                // Unknown command, unconditional push
+                _history.Push(
+                    historyLine ?? BuildHistoryLine(commandName, arguments),
+                    false,
+                    false
+                );
+                return false;
+            }
+
+            if (!context.IsEligibleFor(command.executionContexts))
+            {
+                _errorMessages.Enqueue(
+                    $"{commandName} is not available in the current execution context"
+                );
+                // Known but unavailable command, respect addToHistory flag
+                if (command.addToHistory)
                 {
-                    if (stringValue[i] == firstChar)
-                    {
-                        closingQuoteIndex = i;
-                        break;
-                    }
+                    _history.Push(
+                        historyLine ?? BuildHistoryLine(commandName, arguments),
+                        false,
+                        false
+                    );
                 }
 
-                if (closingQuoteIndex < 0)
+                return false;
+            }
+
+            int argCount = arguments.Count;
+            string errorMessage = null;
+            int requiredArg = 0;
+
+            if (argCount < command.minArgCount)
+            {
+                errorMessage = command.minArgCount == command.maxArgCount ? "exactly" : "at least";
+                requiredArg = command.minArgCount;
+            }
+            else if (command.maxArgCount is int maxArgCount && maxArgCount < argCount)
+            {
+                errorMessage = command.minArgCount == command.maxArgCount ? "exactly" : "at most";
+                requiredArg = maxArgCount;
+            }
+
+            if (!string.IsNullOrEmpty(errorMessage))
+            {
+                string pluralFix = requiredArg == 1 ? "" : "s";
+
+                string invalidMessage =
+                    $"{commandName} requires {errorMessage} {requiredArg} argument{pluralFix}";
+                if (!string.IsNullOrWhiteSpace(command.hint))
                 {
-                    // No closing quote was found; consume the rest of the string (excluding the opening quote).
-                    string input = stringValue.Substring(1);
-                    arg = new CommandArg(input, firstChar);
-                    stringValue = string.Empty;
+                    invalidMessage += $"\n    -> Usage: {command.hint}";
                 }
-                else
+
+                _errorMessages.Enqueue(invalidMessage);
+                // Known command with invalid arguments, respect addToHistory flag
+                if (command.addToHistory)
                 {
-                    // Extract the argument inside the quotes.
-                    string input = stringValue.Substring(1, closingQuoteIndex - 1);
-                    arg = new CommandArg(input, firstChar, firstChar);
-                    // Remove the parsed argument (including the quotes) from the input.
-                    stringValue = stringValue.Substring(closingQuoteIndex + 1);
+                    _history.Push(
+                        historyLine ?? BuildHistoryLine(commandName, arguments),
+                        false,
+                        false
+                    );
                 }
+
+                return false;
+            }
+
+            int errorCount = _errorMessages.Count;
+            if (command.handler != null)
+            {
+                command.handler(context, new BorrowedCommandArguments(arguments));
+            }
+            else if (arguments is CommandArg[] ownedArguments)
+            {
+                // Array callers dispatch their own array, as before.
+                command.proc?.Invoke(ownedArguments);
             }
             else
             {
-                // Unquoted argument: find the next space.
-                int spaceIndex = stringValue.IndexOf(' ');
-                if (spaceIndex < 0)
+                // Legacy handlers may retain their argument array, so each
+                // invocation materializes a fresh one. The array is never
+                // pooled or reused after the handler returns.
+                CommandArg[] materialized = new CommandArg[arguments.Count];
+                for (int i = 0; i < materialized.Length; ++i)
                 {
-                    arg = new CommandArg(stringValue);
-                    stringValue = string.Empty;
+                    materialized[i] = arguments[i];
                 }
-                else
-                {
-                    string input = stringValue.Substring(0, spaceIndex);
-                    arg = new CommandArg(input);
-                    stringValue = stringValue.Substring(spaceIndex + 1);
-                }
+
+                command.proc?.Invoke(materialized);
+            }
+
+            // Known command executed, respect addToHistory flag
+            if (command.addToHistory)
+            {
+                _history.Push(
+                    historyLine ?? BuildHistoryLine(commandName, arguments),
+                    true,
+                    errorCount == _errorMessages.Count
+                );
             }
 
             return true;
+        }
+
+        private string BuildHistoryLine(string commandName, IReadOnlyList<CommandArg> arguments)
+        {
+            _commandBuilder.Clear();
+            _commandBuilder.Append(commandName);
+            if (arguments.Count != 0)
+            {
+                _commandBuilder.Append(' ');
+            }
+
+            bool firstArgument = true;
+            foreach (CommandArg argument in arguments)
+            {
+                if (!firstArgument)
+                {
+                    _commandBuilder.Append(' ');
+                }
+
+                firstArgument = false;
+
+                if (argument.startQuote != null)
+                {
+                    _commandBuilder.Append(argument.startQuote.Value);
+                }
+
+                _commandBuilder.Append(argument.contents);
+                if (argument.endQuote != null)
+                {
+                    _commandBuilder.Append(argument.endQuote.Value);
+                }
+            }
+
+            return _commandBuilder.ToString();
+        }
+
+        /*
+            One generated command registration, shared by the generated-catalog
+            path and the reflection compatibility path so both apply identical
+            filtering, validation, and diagnostics.
+         */
+        private readonly struct AutoCommand
+        {
+            public readonly string Name;
+            public readonly string MethodName;
+            public readonly int MinArgCount;
+            public readonly int MaxArgCount;
+            public readonly string Help;
+            public readonly string Hint;
+            public readonly bool AddToHistory;
+            public readonly bool EditorOnly;
+            public readonly bool DevelopmentOnly;
+            public readonly bool IsDefault;
+            public readonly CommandExecutionContexts Contexts;
+
+            // Non-null for valid (CommandArg[]) signatures. Null marks a
+            // rejected command; diagnostics then come from MethodAccessor.
+            public readonly Func<Action<CommandArg[]>> Binder;
+
+            public readonly Func<MethodInfo> MethodAccessor;
+
+            private AutoCommand(
+                string name,
+                string methodName,
+                int minArgCount,
+                int maxArgCount,
+                string help,
+                string hint,
+                bool addToHistory,
+                bool editorOnly,
+                bool developmentOnly,
+                bool isDefault,
+                CommandExecutionContexts contexts,
+                Func<Action<CommandArg[]>> binder,
+                Func<MethodInfo> methodAccessor
+            )
+            {
+                Name = name;
+                MethodName = methodName;
+                MinArgCount = minArgCount;
+                MaxArgCount = maxArgCount;
+                Help = help;
+                Hint = hint;
+                AddToHistory = addToHistory;
+                EditorOnly = editorOnly;
+                DevelopmentOnly = developmentOnly;
+                IsDefault = isDefault;
+                Contexts = contexts;
+                Binder = binder;
+                MethodAccessor = methodAccessor;
+            }
+
+            public static AutoCommand FromCatalog(CommandCatalogEntry entry)
+            {
+                return new AutoCommand(
+                    entry.Name,
+                    entry.MethodName,
+                    entry.MinArgCount,
+                    entry.MaxArgCount,
+                    entry.Help,
+                    entry.Hint,
+                    entry.AddToHistory,
+                    entry.EditorOnly,
+                    entry.DevelopmentOnly,
+                    entry.IsDefault,
+                    entry.Contexts,
+                    entry.Binder,
+                    entry.MethodAccessor
+                );
+            }
+
+            public static AutoCommand FromReflected(
+                MethodInfo method,
+                RegisterCommandAttribute attribute
+            )
+            {
+                bool valid = IsValidSignature(method);
+                return new AutoCommand(
+                    attribute.Name,
+                    method.Name,
+                    attribute.MinArgCount,
+                    attribute.MaxArgCount,
+                    attribute.Help,
+                    attribute.Hint,
+                    attribute.AddToHistory,
+                    attribute.EditorOnly,
+                    attribute.DevelopmentOnly,
+                    attribute.Default,
+                    attribute.Contexts,
+                    valid
+                        ? () =>
+                            (Action<CommandArg[]>)
+                                Delegate.CreateDelegate(typeof(Action<CommandArg[]>), method)
+                        : null,
+                    () => method
+                );
+            }
+
+            private static bool IsValidSignature(MethodInfo method)
+            {
+                ParameterInfo[] methodParams = method.GetParameters();
+                return methodParams.Length == 1
+                    && methodParams[0].ParameterType == typeof(CommandArg[]);
+            }
+        }
+
+        /*
+            Probes the assembly for its generated `CommandCatalog` and binds its
+            Collect method, and caches the reflection-compatibility result for
+            assemblies without one. Both are computed once per assembly per
+            domain on whatever thread first triggers readiness; the weak table
+            keeps unloaded-collectible editor assemblies collectible.
+         */
+        private sealed class DiscoveryCache
+        {
+            /*
+                Written once per assembly on first initialization; concurrent
+                first uses share one cache through the weak table, so the
+                worst case is a harmless redundant re-probe.
+             */
+            public Action<List<CommandCatalogEntry>> Collector;
+            public bool CollectorProbed;
+            public List<AutoCommand> ReflectedCommands;
         }
     }
 }

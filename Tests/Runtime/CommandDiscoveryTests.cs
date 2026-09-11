@@ -51,6 +51,22 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 #endif
         }
 
+        private static string Describe(
+            Assembly assembly,
+            Type type,
+            MethodInfo method,
+            RegisterCommandAttribute attribute
+        )
+        {
+            return $"{assembly.GetName().Name}:{type.FullName}:{method.Name}:{attribute.Name}";
+        }
+
+        private static Assembly CreateDynamicAssembly()
+        {
+            AssemblyName name = new($"DiscoveryTestDynamic-{Guid.NewGuid():N}");
+            return AssemblyBuilder.DefineDynamicAssembly(name, AssemblyBuilderAccess.Run);
+        }
+
         [Test]
         [TestCaseSource(nameof(AssemblyFilterCases))]
         public void MayContainCommandsFiltersAssemblies(Assembly assembly, bool expected)
@@ -190,22 +206,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 string.Join("\n", actual.OrderBy(name => name, StringComparer.Ordinal)),
                 "Filtered discovery diverged from the legacy full-domain scan"
             );
-        }
-
-        private static string Describe(
-            Assembly assembly,
-            Type type,
-            MethodInfo method,
-            RegisterCommandAttribute attribute
-        )
-        {
-            return $"{assembly.GetName().Name}:{type.FullName}:{method.Name}:{attribute.Name}";
-        }
-
-        private static Assembly CreateDynamicAssembly()
-        {
-            AssemblyName name = new($"DiscoveryTestDynamic-{Guid.NewGuid():N}");
-            return AssemblyBuilder.DefineDynamicAssembly(name, AssemblyBuilderAccess.Run);
         }
     }
 }

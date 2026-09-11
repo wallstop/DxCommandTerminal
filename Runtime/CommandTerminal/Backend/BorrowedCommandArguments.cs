@@ -22,6 +22,71 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     {
         private static readonly CommandArg[] EmptyArguments = Array.Empty<CommandArg>();
 
+        /// <summary>Number of arguments in the current invocation.</summary>
+        public int Count
+        {
+            get
+            {
+                if (_array != null)
+                {
+                    return _array.Length;
+                }
+
+                if (_list != null)
+                {
+                    return _list.Count;
+                }
+
+                return _fallback?.Count ?? 0;
+            }
+        }
+
+        /// <summary>True when the invocation carries no arguments.</summary>
+        public bool IsEmpty => Count == 0;
+
+        /// <summary>
+        ///     The argument at <paramref name="index"/>, in input order.
+        ///     Throws <see cref="ArgumentOutOfRangeException"/> when the
+        ///     index is outside <c>[0, Count)</c>.
+        /// </summary>
+        public CommandArg this[int index]
+        {
+            get
+            {
+                if (_array != null)
+                {
+                    if ((uint)_array.Length <= (uint)index)
+                    {
+                        throw new ArgumentOutOfRangeException(nameof(index));
+                    }
+
+                    return _array[index];
+                }
+
+                if (_list != null)
+                {
+                    if ((uint)_list.Count <= (uint)index)
+                    {
+                        throw new ArgumentOutOfRangeException(nameof(index));
+                    }
+
+                    return _list[index];
+                }
+
+                if (_fallback != null)
+                {
+                    if ((uint)_fallback.Count <= (uint)index)
+                    {
+                        throw new ArgumentOutOfRangeException(nameof(index));
+                    }
+
+                    return _fallback[index];
+                }
+
+                throw new ArgumentOutOfRangeException(nameof(index));
+            }
+        }
+
         // Specialized storage: Unity does not de-virtualize IReadOnlyList
         // indexers, so array and list keep direct element access. The
         // fallback covers exotic callers only.
@@ -64,71 +129,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             _array = null;
             _list = null;
             _fallback = arguments;
-        }
-
-        /// <summary>Number of arguments in the current invocation.</summary>
-        public int Count
-        {
-            get
-            {
-                if (_array != null)
-                {
-                    return _array.Length;
-                }
-
-                if (_list != null)
-                {
-                    return _list.Count;
-                }
-
-                return _fallback?.Count ?? 0;
-            }
-        }
-
-        /// <summary>True when the invocation carries no arguments.</summary>
-        public bool IsEmpty => Count == 0;
-
-        /// <summary>
-        ///     The argument at <paramref name="index"/>, in input order.
-        ///     Throws <see cref="ArgumentOutOfRangeException"/> when the
-        ///     index is outside <c>[0, Count)</c>.
-        /// </summary>
-        public CommandArg this[int index]
-        {
-            get
-            {
-                if (_array != null)
-                {
-                    if ((uint)index >= (uint)_array.Length)
-                    {
-                        throw new ArgumentOutOfRangeException(nameof(index));
-                    }
-
-                    return _array[index];
-                }
-
-                if (_list != null)
-                {
-                    if ((uint)index >= (uint)_list.Count)
-                    {
-                        throw new ArgumentOutOfRangeException(nameof(index));
-                    }
-
-                    return _list[index];
-                }
-
-                if (_fallback != null)
-                {
-                    if ((uint)index >= (uint)_fallback.Count)
-                    {
-                        throw new ArgumentOutOfRangeException(nameof(index));
-                    }
-
-                    return _fallback[index];
-                }
-
-                throw new ArgumentOutOfRangeException(nameof(index));
-            }
         }
 
         public Enumerator GetEnumerator()
@@ -188,6 +188,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         /// </summary>
         public struct Enumerator : IEnumerator<CommandArg>
         {
+            public CommandArg Current => _current;
+
+            object IEnumerator.Current => _current;
+
             private readonly CommandArg[] _array;
             private readonly List<CommandArg> _list;
             private readonly IReadOnlyList<CommandArg> _fallback;
@@ -206,10 +210,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 _index = -1;
                 _current = default;
             }
-
-            public CommandArg Current => _current;
-
-            object IEnumerator.Current => _current;
 
             public bool MoveNext()
             {

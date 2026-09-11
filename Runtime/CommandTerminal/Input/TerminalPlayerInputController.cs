@@ -20,41 +20,6 @@ namespace WallstopStudios.DxCommandTerminal.Input
 
         protected PlayerInput _playerInput;
 
-        protected virtual void Awake()
-        {
-            _playerInput = _serializedPlayerInput;
-            if (_playerInput == null)
-            {
-                if (!TryGetComponent(out _playerInput) && enableWarnings)
-                {
-                    Debug.LogWarning(
-                        "No PlayerInput attached, events may not work (which is the point of this component).",
-                        this
-                    );
-                }
-            }
-
-            if (terminal != null)
-            {
-                return;
-            }
-
-            if (!TryGetComponent(out terminal))
-            {
-                Debug.LogError("Failed to find TerminalUI, Input will not work.", this);
-            }
-        }
-
-        protected virtual void OnEnable()
-        {
-            _enabled = true;
-        }
-
-        protected virtual void OnDisable()
-        {
-            _enabled = false;
-        }
-
         public virtual void OnHandlePrevious(InputValue inputValue)
         {
             if (!_enabled)
@@ -157,6 +122,41 @@ namespace WallstopStudios.DxCommandTerminal.Input
                 return;
             }
             terminal.EnterCommand();
+        }
+
+        protected virtual void Awake()
+        {
+            _playerInput = _serializedPlayerInput;
+            if (_playerInput == null)
+            {
+                if (!TryGetComponent(out _playerInput) && enableWarnings)
+                {
+                    Debug.LogWarning(
+                        "No PlayerInput attached, events may not work (which is the point of this component).",
+                        this
+                    );
+                }
+            }
+
+            if (terminal != null)
+            {
+                return;
+            }
+
+            if (!TryGetComponent(out terminal))
+            {
+                Debug.LogError("Failed to find TerminalUI, Input will not work.", this);
+            }
+        }
+
+        protected virtual void OnEnable()
+        {
+            _enabled = true;
+        }
+
+        protected virtual void OnDisable()
+        {
+            _enabled = false;
         }
     }
 #endif

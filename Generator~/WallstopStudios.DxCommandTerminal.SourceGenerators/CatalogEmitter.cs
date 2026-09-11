@@ -9,9 +9,6 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
 
     internal static class CatalogEmitter
     {
-        internal static SymbolDisplayFormat FullyQualified =>
-            SymbolDisplayFormat.FullyQualifiedFormat;
-
         /*
             Generated code references every type through fully qualified
             global:: names so a consumer type declared in an enclosing
@@ -57,6 +54,9 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
 
         private const string BinderFieldNameFormat = "_boundHandler{0}";
         private const string BinderMethodNameFormat = "BindHandler{0}";
+
+        internal static SymbolDisplayFormat FullyQualified =>
+            SymbolDisplayFormat.FullyQualifiedFormat;
 
         internal static string Emit(List<CommandModel> commands)
         {

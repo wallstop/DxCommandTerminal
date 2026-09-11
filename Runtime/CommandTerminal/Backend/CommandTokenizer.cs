@@ -125,7 +125,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             for (int i = 0; i < tokens.Count; ++i)
             {
                 CommandToken token = tokens[i];
-                if (token.Start > caret || caret > token.End)
+                if (caret < token.Start || token.End < caret)
                 {
                     continue;
                 }
