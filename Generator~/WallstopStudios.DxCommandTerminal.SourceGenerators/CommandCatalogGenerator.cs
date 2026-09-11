@@ -37,6 +37,23 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                 return false;
             }
 
+            /*
+                Cheap name check first: candidate methods carry several
+                unrelated attributes ([Test], [DllImport], ...), and the
+                display string that resolves the namespace qualification is
+                only built when the simple name already matches.
+             */
+            if (
+                !string.Equals(
+                    attributeClass.Name,
+                    "RegisterCommandAttribute",
+                    StringComparison.Ordinal
+                )
+            )
+            {
+                return false;
+            }
+
             return string.Equals(
                 attributeClass.ToDisplayString(),
                 AttributeMetadataName,

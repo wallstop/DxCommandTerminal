@@ -52,15 +52,36 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
         private const string Indent5 = Indent4 + Indent1;
         private const string Indent6 = Indent3 + Indent3;
 
-        private const string BinderFieldNameFormat = "_boundHandler{0}";
-        private const string BinderMethodNameFormat = "BindHandler{0}";
+        private const string BinderFieldPrefix = "_boundHandler";
+        private const string BinderMethodPrefix = "BindHandler";
+
+        /*
+            Rough per-command emission budget (entry arguments plus a cached
+            binder block when one is needed), used only to size the buffer in
+            one shot; EnsureCapacity covers any underestimate. A compilation
+            of N commands then costs one large allocation instead of the
+            doubling chain from a fixed seed.
+         */
+        private const int PerCommandCapacityEstimate = 512;
+        private const int BaseCapacityEstimate = 4096;
 
         internal static SymbolDisplayFormat FullyQualified =>
             SymbolDisplayFormat.FullyQualifiedFormat;
 
+        /*
+            One builder per thread, reused across compilations. Roslyn may run
+            this generator for several compilations concurrently, so a plain
+            static would race; ThreadStatic keeps each thread's buffer private.
+            Large catalogs (thousands of commands) allocate hundreds of
+            kilobytes per compilation otherwise.
+         */
+        [ThreadStatic]
+        private static StringBuilder CachedBuilder;
+
         internal static string Emit(List<CommandModel> commands)
         {
-            StringBuilder builder = new StringBuilder(4096);
+            int capacity = BaseCapacityEstimate + PerCommandCapacityEstimate * commands.Count;
+            StringBuilder builder = RentBuilder(capacity);
             bool needsUnboundFinder = false;
 
             foreach (CommandModel command in commands)
@@ -73,29 +94,40 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             }
 
             AppendHeader(builder);
-            builder.AppendLine(Indent2 + "internal static class CommandCatalog");
-            builder.AppendLine(Indent2 + "{");
-            builder.AppendLine(
-                Indent3 + "private static readonly " + EntryListType + " Entries = Build();"
-            );
+            builder.Append(Indent2).AppendLine("internal static class CommandCatalog");
+            builder.Append(Indent2).AppendLine("{");
+            builder
+                .Append(Indent3)
+                .Append("private static readonly ")
+                .Append(EntryListType)
+                .AppendLine(" Entries = Build();");
             builder.AppendLine();
-            builder.AppendLine(
-                Indent3 + "public static void Collect(" + EntryListType + " entries)"
-            );
-            builder.AppendLine(Indent3 + "{");
-            builder.AppendLine(Indent4 + "if (entries == null)");
-            builder.AppendLine(Indent4 + "{");
-            builder.AppendLine(
-                Indent5 + "throw new global::System.ArgumentNullException(\"entries\");"
-            );
-            builder.AppendLine(Indent4 + "}");
+            builder
+                .Append(Indent3)
+                .Append("public static void Collect(")
+                .Append(EntryListType)
+                .AppendLine(" entries)");
+            builder.Append(Indent3).AppendLine("{");
+            builder.Append(Indent4).AppendLine("if (entries == null)");
+            builder.Append(Indent4).AppendLine("{");
+            builder
+                .Append(Indent5)
+                .AppendLine("throw new global::System.ArgumentNullException(\"entries\");");
+            builder.Append(Indent4).AppendLine("}");
             builder.AppendLine();
-            builder.AppendLine(Indent4 + "entries.AddRange(Entries);");
-            builder.AppendLine(Indent3 + "}");
+            builder.Append(Indent4).AppendLine("entries.AddRange(Entries);");
+            builder.Append(Indent3).AppendLine("}");
             builder.AppendLine();
-            builder.AppendLine(Indent3 + "private static " + EntryListType + " Build()");
-            builder.AppendLine(Indent3 + "{");
-            builder.AppendLine(Indent4 + EntryListType + " entries = new " + EntryListType + "();");
+            builder
+                .Append(Indent3)
+                .Append("private static ")
+                .Append(EntryListType)
+                .AppendLine(" Build()");
+            builder.Append(Indent3).AppendLine("{");
+            builder
+                .Append(Indent4)
+                .Append(EntryListType)
+                .AppendLine(" entries = new " + EntryListType + "();");
 
             for (int i = 0; i < commands.Count; i++)
             {
@@ -103,8 +135,8 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             }
 
             builder.AppendLine();
-            builder.AppendLine(Indent4 + "return entries;");
-            builder.AppendLine(Indent3 + "}");
+            builder.Append(Indent4).AppendLine("return entries;");
+            builder.Append(Indent3).AppendLine("}");
 
             if (needsUnboundFinder)
             {
@@ -120,9 +152,30 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                 }
             }
 
-            builder.AppendLine(Indent2 + "}");
+            builder.Append(Indent2).AppendLine("}");
             builder.AppendLine("}");
-            return builder.ToString();
+            string source = builder.ToString();
+            ReturnBuilder(builder);
+            return source;
+        }
+
+        private static StringBuilder RentBuilder(int minimumCapacity)
+        {
+            StringBuilder builder = CachedBuilder;
+            CachedBuilder = null;
+            if (builder == null)
+            {
+                return new StringBuilder(minimumCapacity);
+            }
+
+            builder.EnsureCapacity(minimumCapacity);
+            return builder;
+        }
+
+        private static void ReturnBuilder(StringBuilder builder)
+        {
+            builder.Clear();
+            CachedBuilder = builder;
         }
 
         private static void AppendHeader(StringBuilder builder)
@@ -148,117 +201,129 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
         )
         {
             builder.AppendLine();
-            builder.AppendLine(
-                Indent4
-                    + "// "
-                    + commandIndex.ToString(CultureInfo.InvariantCulture)
-                    + ": command '"
-                    + command.CommandName.Replace("\r", string.Empty).Replace("\n", string.Empty)
-                    + "' from method "
-                    + command.MethodName
-            );
-            builder.AppendLine(Indent4 + "entries.Add(new " + EntryType + "(");
+            builder.Append(Indent4).Append("// ").Append(commandIndex);
+            builder.Append(": command '");
+            foreach (char c in command.CommandName)
+            {
+                if (c != '\r' && c != '\n')
+                {
+                    builder.Append(c);
+                }
+            }
+
+            builder.Append("' from method ").AppendLine(command.MethodName);
+            builder.Append(Indent4).Append("entries.Add(new ").Append(EntryType).AppendLine("(");
             AppendLiteral(builder, command.CommandName);
             builder.AppendLine(",");
             AppendLiteral(builder, command.MethodName);
             builder.AppendLine(",");
-            builder.AppendLine(
-                Indent4
-                    + "    "
-                    + command.MinArgCount.ToString(CultureInfo.InvariantCulture)
-                    + ", "
-                    + command.MaxArgCount.ToString(CultureInfo.InvariantCulture)
-                    + ","
-            );
+            builder.Append(Indent4).Append("    ").Append(command.MinArgCount);
+            builder.Append(", ").Append(command.MaxArgCount).AppendLine(",");
             AppendLiteral(builder, command.Help);
             builder.AppendLine(",");
             AppendLiteral(builder, command.Hint);
             builder.AppendLine(",");
-            builder.AppendLine(Indent4 + "    " + (command.AddToHistory ? "true" : "false") + ",");
-            builder.AppendLine(Indent4 + "    " + (command.EditorOnly ? "true" : "false") + ",");
-            builder.AppendLine(
-                Indent4 + "    " + (command.DevelopmentOnly ? "true" : "false") + ","
-            );
-            builder.AppendLine(Indent4 + "    " + (command.IsDefault ? "true" : "false") + ",");
+            builder
+                .Append(Indent4)
+                .Append("    ")
+                .AppendLine(command.AddToHistory ? "true," : "false,");
+            builder
+                .Append(Indent4)
+                .Append("    ")
+                .AppendLine(command.EditorOnly ? "true," : "false,");
+            builder
+                .Append(Indent4)
+                .Append("    ")
+                .AppendLine(command.DevelopmentOnly ? "true," : "false,");
+            builder
+                .Append(Indent4)
+                .Append("    ")
+                .AppendLine(command.IsDefault ? "true," : "false,");
 
             if (command.HasValidSignature)
             {
                 if (command.DirectlyBindable)
                 {
-                    builder.AppendLine(Indent4 + "    new " + BinderFactoryType + "(delegate");
-                    builder.AppendLine(Indent4 + "    {");
-                    builder.AppendLine(
-                        Indent5
-                            + "return new "
-                            + BinderType
-                            + "("
-                            + command.ContainingTypeDisplay
-                            + "."
-                            + command.MethodNameIdentifierDisplay
-                            + ");"
-                    );
-                    builder.AppendLine(Indent4 + "    }),");
-                    builder.AppendLine(Indent4 + "    null,");
+                    builder
+                        .Append(Indent4)
+                        .Append("    new ")
+                        .Append(BinderFactoryType)
+                        .AppendLine("(delegate");
+                    builder.Append(Indent4).AppendLine("    {");
+                    builder
+                        .Append(Indent5)
+                        .Append("return new ")
+                        .Append(BinderType)
+                        .Append("(")
+                        .Append(command.ContainingTypeDisplay)
+                        .Append(".")
+                        .Append(command.MethodNameIdentifierDisplay)
+                        .AppendLine(");");
+                    builder.Append(Indent4).AppendLine("    }),");
+                    builder.Append(Indent4).AppendLine("    null,");
                 }
                 else
                 {
-                    builder.AppendLine(
-                        Indent4
-                            + "    new "
-                            + BinderFactoryType
-                            + "("
-                            + Format(BinderMethodNameFormat, commandIndex)
-                            + "),"
-                    );
-                    builder.AppendLine(Indent4 + "    null,");
+                    builder
+                        .Append(Indent4)
+                        .Append("    new ")
+                        .Append(BinderFactoryType)
+                        .Append("(")
+                        .Append(BinderMethodPrefix)
+                        .Append(commandIndex)
+                        .AppendLine("),");
+                    builder.Append(Indent4).AppendLine("    null,");
                 }
             }
             else
             {
-                builder.AppendLine(Indent4 + "    null,");
-                builder.AppendLine(
-                    Indent4 + "    new global::System.Func<" + MethodInfoType + ">(delegate"
-                );
-                builder.AppendLine(Indent4 + "    {");
+                builder.Append(Indent4).AppendLine("    null,");
+                builder
+                    .Append(Indent4)
+                    .Append("    new global::System.Func<")
+                    .Append(MethodInfoType)
+                    .AppendLine(">(delegate");
+                builder.Append(Indent4).AppendLine("    {");
                 if (command.ExactSignatureAddressable)
                 {
-                    builder.AppendLine(
-                        Indent5 + "return typeof(" + command.ContainingTypeDisplay + ").GetMethod("
-                    );
+                    builder
+                        .Append(Indent5)
+                        .Append("return typeof(")
+                        .Append(command.ContainingTypeDisplay)
+                        .AppendLine(").GetMethod(");
                     AppendLiteral(builder, command.MethodName, Indent6);
                     builder.AppendLine(",");
-                    builder.AppendLine(Indent6 + BindingFlagsExpression + ",");
-                    builder.AppendLine(Indent6 + "null,");
-                    builder.AppendLine(Indent6 + "new global::System.Type[]");
-                    builder.AppendLine(Indent6 + "{");
+                    builder.Append(Indent6).Append(BindingFlagsExpression).AppendLine(",");
+                    builder.Append(Indent6).AppendLine("null,");
+                    builder.Append(Indent6).AppendLine("new global::System.Type[]");
+                    builder.Append(Indent6).AppendLine("{");
                     AppendParameterExpressions(
                         builder,
                         command.ParameterTypeExpressions,
                         Indent6 + "    "
                     );
 
-                    builder.AppendLine(Indent6 + "},");
-                    builder.AppendLine(Indent6 + "null");
-                    builder.AppendLine(Indent5 + ");");
+                    builder.Append(Indent6).AppendLine("},");
+                    builder.Append(Indent6).AppendLine("null");
+                    builder.Append(Indent5).AppendLine(");");
                 }
                 else
                 {
-                    builder.AppendLine(Indent5 + "return FindMethodByName(");
-                    builder.AppendLine(Indent6 + "typeof(" + command.ContainingTypeDisplay + "),");
+                    builder.Append(Indent5).AppendLine("return FindMethodByName(");
+                    builder
+                        .Append(Indent6)
+                        .Append("typeof(")
+                        .Append(command.ContainingTypeDisplay)
+                        .AppendLine("),");
                     AppendLiteral(builder, command.MethodName, Indent6);
                     builder.AppendLine(",");
-                    builder.AppendLine(
-                        Indent6
-                            + command.ParameterTypeExpressions.Length.ToString(
-                                CultureInfo.InvariantCulture
-                            )
-                            + ","
-                    );
-                    builder.AppendLine(Indent6 + (command.IsMethodGeneric ? "true" : "false"));
-                    builder.AppendLine(Indent5 + ");");
+                    builder.Append(Indent6).Append(command.ParameterTypeExpressions.Length);
+                    builder.AppendLine(",");
+                    builder.Append(Indent6).AppendLine(command.IsMethodGeneric ? "true" : "false");
+                    builder.Append(Indent5).AppendLine(");");
                 }
 
-                builder.AppendLine(Indent4 + "    }),");
+                builder.Append(Indent4).AppendLine("    }),");
             }
 
             /*
@@ -267,48 +332,50 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                 across runtime versions, and the cast round-trips any
                 combination the attribute carried.
              */
-            builder.AppendLine(
-                Indent4
-                    + "    ("
-                    + ContextsType
-                    + ")"
-                    + command.Contexts.ToString(CultureInfo.InvariantCulture)
-            );
-            builder.AppendLine(Indent4 + "));");
+            builder.Append(Indent4).Append("    (").Append(ContextsType).Append(")");
+            builder.Append(command.Contexts).AppendLine();
+            builder.Append(Indent4).AppendLine("));");
         }
 
         private static void EmitUnboundMethodFinder(StringBuilder builder)
         {
             builder.AppendLine();
-            builder.AppendLine(Indent3 + "private static " + MethodInfoType + " FindMethodByName(");
-            builder.AppendLine(Indent4 + "global::System.Type type,");
-            builder.AppendLine(Indent4 + "string name,");
-            builder.AppendLine(Indent4 + "int parameterCount,");
-            builder.AppendLine(Indent4 + "bool isGeneric");
-            builder.AppendLine(Indent3 + ")");
-            builder.AppendLine(Indent3 + "{");
-            builder.AppendLine(
-                Indent4 + "global::System.Reflection.MethodInfo[] methods = type.GetMethods("
-            );
-            builder.AppendLine(Indent5 + BindingFlagsExpression);
-            builder.AppendLine(Indent4 + ");");
-            builder.AppendLine(Indent4 + "for (int i = 0; i < methods.Length; i++)");
-            builder.AppendLine(Indent4 + "{");
-            builder.AppendLine(
-                Indent5 + "global::System.Reflection.MethodInfo method = methods[i];"
-            );
-            builder.AppendLine(Indent5 + "if (");
-            builder.AppendLine(Indent6 + "method.Name == name");
-            builder.AppendLine(Indent6 + "&& method.GetParameters().Length == parameterCount");
-            builder.AppendLine(Indent6 + "&& method.IsGenericMethodDefinition == isGeneric");
-            builder.AppendLine(Indent5 + ")");
-            builder.AppendLine(Indent5 + "{");
-            builder.AppendLine(Indent6 + "return method;");
-            builder.AppendLine(Indent5 + "}");
-            builder.AppendLine(Indent4 + "}");
+            builder
+                .Append(Indent3)
+                .Append("private static ")
+                .Append(MethodInfoType)
+                .AppendLine(" FindMethodByName(");
+            builder.Append(Indent4).AppendLine("global::System.Type type,");
+            builder.Append(Indent4).AppendLine("string name,");
+            builder.Append(Indent4).AppendLine("int parameterCount,");
+            builder.Append(Indent4).AppendLine("bool isGeneric");
+            builder.Append(Indent3).AppendLine(")");
+            builder.Append(Indent3).AppendLine("{");
+            builder
+                .Append(Indent4)
+                .Append("global::System.Reflection.MethodInfo[] methods = type.GetMethods(")
+                .AppendLine();
+            builder.Append(Indent5).AppendLine(BindingFlagsExpression);
+            builder.Append(Indent4).AppendLine(");");
+            builder.Append(Indent4).AppendLine("for (int i = 0; i < methods.Length; i++)");
+            builder.Append(Indent4).AppendLine("{");
+            builder
+                .Append(Indent5)
+                .AppendLine("global::System.Reflection.MethodInfo method = methods[i];");
+            builder.Append(Indent5).AppendLine("if (");
+            builder.Append(Indent6).AppendLine("method.Name == name");
+            builder
+                .Append(Indent6)
+                .AppendLine("&& method.GetParameters().Length == parameterCount");
+            builder.Append(Indent6).AppendLine("&& method.IsGenericMethodDefinition == isGeneric");
+            builder.Append(Indent5).AppendLine(")");
+            builder.Append(Indent5).AppendLine("{");
+            builder.Append(Indent6).AppendLine("return method;");
+            builder.Append(Indent5).AppendLine("}");
+            builder.Append(Indent4).AppendLine("}");
             builder.AppendLine();
-            builder.AppendLine(Indent4 + "return null;");
-            builder.AppendLine(Indent3 + "}");
+            builder.Append(Indent4).AppendLine("return null;");
+            builder.Append(Indent3).AppendLine("}");
         }
 
         private static void EmitCachedBinder(
@@ -317,42 +384,63 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             CommandModel command
         )
         {
-            string fieldName = Format(BinderFieldNameFormat, binderIndex);
-            string methodName = Format(BinderMethodNameFormat, binderIndex);
+            string fieldName =
+                BinderFieldPrefix + binderIndex.ToString(CultureInfo.InvariantCulture);
+            string methodName =
+                BinderMethodPrefix + binderIndex.ToString(CultureInfo.InvariantCulture);
 
             builder.AppendLine();
-            builder.AppendLine(Indent3 + "private static " + BinderType + " " + fieldName + ";");
+            builder
+                .Append(Indent3)
+                .Append("private static ")
+                .Append(BinderType)
+                .Append(" ")
+                .Append(fieldName)
+                .AppendLine(";");
             builder.AppendLine();
-            builder.AppendLine(Indent3 + "private static " + BinderType + " " + methodName + "()");
-            builder.AppendLine(Indent3 + "{");
-            builder.AppendLine(Indent4 + "if (" + fieldName + " == null)");
-            builder.AppendLine(Indent4 + "{");
-            builder.AppendLine(Indent5 + fieldName + " = (" + BinderType + ")");
-            builder.AppendLine(Indent5 + "global::System.Delegate.CreateDelegate(");
-            builder.AppendLine(Indent6 + "typeof(" + BinderType + "),");
-            builder.AppendLine(
-                Indent6 + "typeof(" + command.ContainingTypeDisplay + ").GetMethod("
-            );
+            builder
+                .Append(Indent3)
+                .Append("private static ")
+                .Append(BinderType)
+                .Append(" ")
+                .Append(methodName)
+                .AppendLine("()");
+            builder.Append(Indent3).AppendLine("{");
+            builder.Append(Indent4).Append("if (").Append(fieldName).AppendLine(" == null)");
+            builder.Append(Indent4).AppendLine("{");
+            builder
+                .Append(Indent5)
+                .Append(fieldName)
+                .Append(" = (")
+                .Append(BinderType)
+                .AppendLine(")");
+            builder.Append(Indent5).AppendLine("global::System.Delegate.CreateDelegate(");
+            builder.Append(Indent6).Append("typeof(").Append(BinderType).AppendLine("),");
+            builder
+                .Append(Indent6)
+                .Append("typeof(")
+                .Append(command.ContainingTypeDisplay)
+                .AppendLine(").GetMethod(");
             AppendLiteral(builder, command.MethodName, Indent6 + "    ");
             builder.AppendLine(",");
-            builder.AppendLine(Indent6 + "    " + BindingFlagsExpression + ",");
-            builder.AppendLine(Indent6 + "    null,");
-            builder.AppendLine(Indent6 + "    new global::System.Type[]");
-            builder.AppendLine(Indent6 + "    {");
+            builder.Append(Indent6).Append("    ").Append(BindingFlagsExpression).AppendLine(",");
+            builder.Append(Indent6).AppendLine("    null,");
+            builder.Append(Indent6).AppendLine("    new global::System.Type[]");
+            builder.Append(Indent6).AppendLine("    {");
             AppendParameterExpressions(
                 builder,
                 command.ParameterTypeExpressions,
                 Indent6 + "        "
             );
 
-            builder.AppendLine(Indent6 + "    },");
-            builder.AppendLine(Indent6 + "    null");
-            builder.AppendLine(Indent5 + ")");
-            builder.AppendLine(Indent5 + ");");
-            builder.AppendLine(Indent4 + "}");
+            builder.Append(Indent6).AppendLine("    },");
+            builder.Append(Indent6).AppendLine("    null");
+            builder.Append(Indent5).AppendLine(")");
+            builder.Append(Indent5).AppendLine(");");
+            builder.Append(Indent4).AppendLine("}");
             builder.AppendLine();
-            builder.AppendLine(Indent4 + "return " + fieldName + ";");
-            builder.AppendLine(Indent3 + "}");
+            builder.Append(Indent4).Append("return ").Append(fieldName).AppendLine(";");
+            builder.Append(Indent3).AppendLine("}");
         }
 
         /*
@@ -369,7 +457,13 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             bool first = true;
             foreach (string expression in parameterTypeExpressions)
             {
-                builder.AppendLine(indent + (first ? "" : ",") + expression);
+                builder.Append(indent);
+                if (!first)
+                {
+                    builder.Append(",");
+                }
+
+                builder.AppendLine(expression);
                 first = false;
             }
         }
@@ -385,11 +479,6 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             builder.Append(
                 value == null ? "null" : SymbolDisplay.FormatLiteral(value, quote: true)
             );
-        }
-
-        private static string Format(string format, int index)
-        {
-            return string.Format(CultureInfo.InvariantCulture, format, index);
         }
     }
 }
