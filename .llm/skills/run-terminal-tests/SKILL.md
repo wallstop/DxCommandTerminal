@@ -49,6 +49,32 @@ content before trusting a run: the host sync can lag, and stale assemblies
 produce misleading failures. Check a canary (a log line, an assert message, or
 a shifted line number in the failure stack) against the current file.
 
+## UI test timing (frame-coupled reads)
+
+`TerminalUI` applies programmatic value and caret writes through `RefreshUI` on
+`LateUpdate`, and UI Toolkit applies them on its own schedule after that. In a
+throttled or freshly initialized panel these passes can lag several frames, so
+any assertion read one `yield return null` after `CompleteCommand` or a direct
+field write is frame-coupled and flakes under session sequences
+(issue #56). Rules:
+
+- After `CompleteCommand` (or any code-driven field write), poll with the
+  bounded helpers in `TerminalUITokenCompletionTests` - `WaitForInput` /
+  `WaitForCaret` poll a few frames before asserting - instead of
+  `yield return null` + immediate read.
+- An exhausted poll that still finds the queued position pending is legitimate
+  for unfocused panels; see the helper comments for what each fallback pins.
+- Do not pin "consumed on frame N" behavior: the caret marker consumption
+  (`ApplyPendingCaret`) depends on real focus landing, which synthetic panels
+  may never do. Pin that logic synchronously by calling `ApplyPendingCaret`
+  directly (see `PendingCaretWritesAndKeepsMarkerWhileUnfocused`).
+- One failure mode survives everything: long agent sessions can leave the
+  editor in a state where panel events stop processing entirely (writes
+  re-clamp or never land, for 30+ frames). It clears with a domain reload
+  (Assets > Refresh). If a previously green UI suite fails with stale values
+  across several consecutive runs, refresh first, then re-run before hunting a
+  code bug.
+
 ## Debugging failures
 
 - Errors are queued on the terminal (not only the last one) - assert on the full error set where

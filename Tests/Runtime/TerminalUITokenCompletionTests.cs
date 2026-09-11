@@ -78,10 +78,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return SetInput("pickup ", 7);
 
             _terminal.CompleteCommand(true);
-            yield return null;
-            Assert.AreEqual(
+            yield return WaitForInput(
                 "pickup pickaxe",
-                _terminal._commandInput.value,
                 "The first Tab applies the first provider result to the active token"
             );
             Assert.IsEmpty(
@@ -91,18 +89,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return WaitForCaret(14, "The caret lands after the inserted token");
 
             _terminal.CompleteCommand(true);
-            yield return null;
-            Assert.AreEqual(
+            yield return WaitForInput(
                 "pickup torch",
-                _terminal._commandInput.value,
                 "Repeated Tab presses cycle provider results"
             );
 
             _terminal.CompleteCommand(true);
-            yield return null;
-            Assert.AreEqual(
+            yield return WaitForInput(
                 "pickup \"torch pick\"",
-                _terminal._commandInput.value,
                 "Insertions containing spaces are quoted when the token is unquoted"
             );
         }
@@ -117,16 +111,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return SetInput("pickup ", 7);
 
             _terminal.CompleteCommand(false);
-            yield return null;
-            Assert.AreEqual(
+            yield return WaitForInput(
                 "pickup \"torch pick\"",
-                _terminal._commandInput.value,
                 "Reverse completion starts from the last result"
             );
 
             _terminal.CompleteCommand(false);
-            yield return null;
-            Assert.AreEqual("pickup torch", _terminal._commandInput.value);
+            yield return WaitForInput("pickup torch", "Completion applies");
         }
 
         [UnityTest]
@@ -139,17 +130,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return SetInput("pickup ", 7);
 
             _terminal.CompleteCommand(true);
-            yield return null;
-            Assert.AreEqual("pickup pickaxe", _terminal._commandInput.value);
+            yield return WaitForInput("pickup pickaxe", "Completion applies");
 
             // Typing a new token resets the cycling snapshot.
             yield return SetInput("pickup to", 9);
 
             _terminal.CompleteCommand(true);
-            yield return null;
-            Assert.AreEqual(
+            yield return WaitForInput(
                 "pickup torch",
-                _terminal._commandInput.value,
                 "Typing restarts completion from the provider's first prefix match"
             );
         }
@@ -164,10 +152,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return SetInput("pickup \"to", 10);
 
             _terminal.CompleteCommand(true);
-            yield return null;
-            Assert.AreEqual(
+            yield return WaitForInput(
                 "pickup \"torch",
-                _terminal._commandInput.value,
                 "Inside an open quote the insertion goes in verbatim"
             );
             yield return WaitForCaret(13, "The caret lands after the quoted insertion");
@@ -183,10 +169,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return SetInput("pickup to after", 9);
 
             _terminal.CompleteCommand(true);
-            yield return null;
-            Assert.AreEqual(
+            yield return WaitForInput(
                 "pickup torch after",
-                _terminal._commandInput.value,
                 "Only the active token is replaced; trailing text is preserved"
             );
             yield return WaitForCaret(12, "The caret lands before the preserved trailing text");
@@ -203,15 +187,45 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             _terminal._textInput.Blur();
 
             _terminal.CompleteCommand(true);
-            yield return null;
-            Assert.AreEqual(
-                "pickup pickaxe",
-                _terminal._commandInput.value,
-                "Completion applies to an unfocused field"
-            );
+            yield return WaitForInput("pickup pickaxe", "Completion applies to an unfocused field");
             yield return WaitForCaret(
                 14,
                 "The queued caret survives the focus pass instead of jumping to line end"
+            );
+        }
+
+        [UnityTest]
+        public IEnumerator PendingCaretWritesAndKeepsMarkerWhileUnfocused()
+        {
+            yield return SpawnTerminalWithUi();
+
+            _terminal._commandInput.value = "abc";
+            yield return null;
+
+            _terminal._pendingCaretIndex = 3;
+            _terminal.ApplyPendingCaret();
+            Assert.AreEqual(
+                3,
+                _terminal._commandInput.cursorIndex,
+                "An unfocused pass still writes the queued caret position"
+            );
+            Assert.AreEqual(
+                3,
+                _terminal._pendingCaretIndex,
+                "An unfocused pass keeps the marker so a later focus cannot jump to line end"
+            );
+
+            _terminal._pendingCaretIndex = 1;
+            _terminal.ApplyPendingCaret();
+            Assert.AreEqual(
+                1,
+                _terminal._commandInput.cursorIndex,
+                "A new queued position is applied on the next pass"
+            );
+            Assert.AreEqual(
+                1,
+                _terminal._pendingCaretIndex,
+                "A pass where the caret has not stuck keeps the marker"
             );
         }
 
@@ -236,10 +250,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return SetInput("pickup pickaxe", 14);
 
             _terminal.CompleteCommand(true);
-            yield return null;
-            Assert.AreEqual(
+            yield return WaitForInput(
                 "pickaxe",
-                _terminal._commandInput.value,
                 "The override replaces the whole line while the context range would replace only the token"
             );
         }
@@ -256,12 +268,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return SetInput("zzz", 3);
 
             _terminal.CompleteCommand(true);
-            yield return null;
-            Assert.AreEqual(
-                "zzz",
-                _terminal._commandInput.value,
-                "With no suggestions anywhere the input is untouched"
-            );
+            yield return WaitForInput("zzz", "With no suggestions anywhere the input is untouched");
 
             /*
                 'help' has no provider, so the legacy history-based completion
@@ -270,10 +277,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return SetInput("h", 1);
 
             _terminal.CompleteCommand(true);
-            yield return null;
-            Assert.AreEqual(
+            yield return WaitForInput(
                 "help",
-                _terminal._commandInput.value,
                 "Without a provider the legacy history completion still suggests command names"
             );
         }
@@ -347,13 +352,35 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         /*
+            The completion writes land through RefreshUI on LateUpdate, which
+            editor throttling can defer for frames; the rig polls for the
+            value instead of assuming one specific frame.
+         */
+        private IEnumerator WaitForInput(string expected, string message)
+        {
+            int frameBudget = 30;
+            while (
+                0 < frameBudget--
+                && !string.Equals(_terminal._commandInput.value, expected, StringComparison.Ordinal)
+            )
+            {
+                yield return null;
+            }
+
+            Assert.AreEqual(expected, _terminal._commandInput.value, message);
+        }
+
+        /*
             Accepted completions queue the caret for a later RefreshUI pass;
-            panel initialization and editor throttling can shift that pass by
-            a frame, so the rig polls for the queued caret to land instead of
-            assuming it lands on one specific frame. A throttled panel can
-            also defer applying caret state outright, so an exhausted poll
-            falls back to the queued position: the caret must land after the
-            insertion, and a line-end jump still fails.
+            panel initialization, editor throttling, and unfocused panels can
+            defer applying caret state for many frames, so the rig polls for
+            the caret to land instead of assuming one specific frame. When a
+            throttled panel never applies caret state at all, the queued
+            position standing at the insertion point is the invariant the
+            rig accepts: it pins that the caret cannot land behind the
+            insertion. Whether a line-end jump is distinguishable depends on
+            the site: only mid-line insertions expect a caret short of line
+            end, so only they can catch a jump positionally.
          */
         private IEnumerator WaitForCaret(int expectedCaretIndex, string message)
         {

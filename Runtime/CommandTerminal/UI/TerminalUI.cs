@@ -1265,6 +1265,45 @@
             }
         }
 
+        internal void ApplyPendingCaret()
+        {
+            if (_pendingCaretIndex < 0 || _commandInput == null)
+            {
+                return;
+            }
+
+            if (_commandInput.value.Length < _pendingCaretIndex)
+            {
+                /*
+                   The queued position targets input the field does not hold
+                   yet; the value sync applies it once the field catches up.
+                */
+                return;
+            }
+
+            bool focused =
+                _textInput != null
+                && _textInput.focusController != null
+                && _textInput.focusController.focusedElement == _textInput;
+
+            /*
+                The field applies programmatic value writes on its own
+                schedule, and that apply can re-clamp the caret after this
+                pass's write. Consume the marker only while focused once the
+                caret stuck on a later pass; an unfocused field keeps the
+                marker (Bugbot: unfocused completion caret jump) so a later
+                fresh focus cannot send the caret to line end.
+             */
+            if (focused && _commandInput.cursorIndex == _pendingCaretIndex)
+            {
+                _pendingCaretIndex = -1;
+                return;
+            }
+
+            _commandInput.cursorIndex = _pendingCaretIndex;
+            _commandInput.selectIndex = _pendingCaretIndex;
+        }
+
         private void ResetAutoComplete()
         {
             _lastKnownCommandText = _input.CommandText ?? string.Empty;
@@ -1886,8 +1925,10 @@
             }
 
             /*
-               Pending carets are consumed on every pass: an accepted
-               completion can be a text no-op that must still move the caret.
+               Pending carets are applied on every pass: an accepted
+               completion can be a text no-op that must still move the
+               caret. The marker is consumed once the write sticks on a
+               focused pass.
             */
             ApplyPendingCaret();
             RefreshStateButtons();
@@ -1916,45 +1957,6 @@
             int textEndPosition = _commandInput.value.Length;
             _commandInput.cursorIndex = textEndPosition;
             _commandInput.selectIndex = textEndPosition;
-        }
-
-        private void ApplyPendingCaret()
-        {
-            if (_pendingCaretIndex < 0 || _commandInput == null)
-            {
-                return;
-            }
-
-            if (_commandInput.value.Length < _pendingCaretIndex)
-            {
-                /*
-                   The queued position targets input the field does not hold
-                   yet; the value sync applies it once the field catches up.
-                */
-                return;
-            }
-
-            bool focused =
-                _textInput != null
-                && _textInput.focusController != null
-                && _textInput.focusController.focusedElement == _textInput;
-
-            /*
-                The field applies programmatic value writes on its own
-                schedule, and that apply can re-clamp the caret after this
-                pass's write. Consume the marker only while focused once the
-                caret stuck on a later pass; an unfocused field keeps the
-                marker (Bugbot: unfocused completion caret jump) so a later
-                fresh focus cannot send the caret to line end.
-             */
-            if (focused && _commandInput.cursorIndex == _pendingCaretIndex)
-            {
-                _pendingCaretIndex = -1;
-                return;
-            }
-
-            _commandInput.cursorIndex = _pendingCaretIndex;
-            _commandInput.selectIndex = _pendingCaretIndex;
         }
 
         private void RefreshLogs()
