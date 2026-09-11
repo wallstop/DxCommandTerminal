@@ -1062,11 +1062,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 errorMessage = command.minArgCount == command.maxArgCount ? "exactly" : "at least";
                 requiredArg = command.minArgCount;
             }
-            else if (0 <= command.maxArgCount && command.maxArgCount < argCount)
+            else if (command.maxArgCount is int maxArgCount && maxArgCount < argCount)
             {
-                // Do not check max allowed number of arguments if it is -1
                 errorMessage = command.minArgCount == command.maxArgCount ? "exactly" : "at most";
-                requiredArg = command.maxArgCount;
+                requiredArg = maxArgCount;
             }
 
             if (!string.IsNullOrEmpty(errorMessage))
@@ -1355,7 +1354,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             string name,
             Action<CommandArg[]> proc,
             int minArgs = 0,
-            int maxArgs = -1,
+            int? maxArgs = null,
             string help = "",
             string hint = null,
             bool addToHistory = true
@@ -1405,7 +1404,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 definition.CompletionProvider,
                 definition.Contexts,
                 definition.MinArgCount,
-                definition.MaxArgCount ?? -1,
+                definition.MaxArgCount,
                 definition.Help,
                 definition.Hint,
                 definition.AddToHistory

@@ -94,13 +94,13 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         ///     completion.
         /// </summary>
         /// <remarks>
-        ///     The caret edits an existing token when the token's content span
-        ///     satisfies <c>Start &lt; caret &lt;= End</c>, or when a
-        ///     zero-length token (an empty quoted argument) sits exactly at
-        ///     the caret. Otherwise the caret opens a new argument at the
-        ///     caret position; its replacement range is empty and its token
-        ///     text is empty. Mid-token text after the caret is part of the
-        ///     replaced span, matching shell completion conventions.
+        ///     The caret edits the token whose content span contains it
+        ///     (<c>Start &lt;= caret &lt;= End</c>; a zero-length token is
+        ///     active when the caret sits on it). Otherwise the caret opens a
+        ///     new argument at the caret position; its replacement range is
+        ///     empty and its token text is empty. Mid-token text after the
+        ///     caret is part of the replaced span, matching shell completion
+        ///     conventions.
         /// </remarks>
         public static bool TryFindActiveToken(
             string line,
@@ -125,16 +125,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             for (int i = 0; i < tokens.Count; ++i)
             {
                 CommandToken token = tokens[i];
-                if (token.Start == token.End)
-                {
-                    // A zero-length token (an empty quoted argument) is
-                    // active exactly when the caret sits on it.
-                    if (token.Start != caret)
-                    {
-                        continue;
-                    }
-                }
-                else if (!(token.Start < caret && caret <= token.End))
+                if (token.Start > caret || caret > token.End)
                 {
                     continue;
                 }

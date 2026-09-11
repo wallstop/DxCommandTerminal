@@ -80,8 +80,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     info.minArgCount,
                     $"Command '{commandName}' has mismatched min bounds"
                 );
+                int? expectedMaxArgCount = attribute.MaxArgCount < 0 ? null : attribute.MaxArgCount;
                 Assert.AreEqual(
-                    attribute.MaxArgCount,
+                    expectedMaxArgCount,
                     info.maxArgCount,
                     $"Command '{commandName}' has mismatched max bounds"
                 );

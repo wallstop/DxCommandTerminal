@@ -95,7 +95,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         [TestCase("log", 0)]
         [TestCase("log foo", 0)]
-        public void CaretBeforeTheCommandNameOpensTheNameSlot(string line, int caret)
+        public void CaretOnTheCommandNameSelectsTheNameToken(string line, int caret)
         {
             List<CommandToken> tokens = Tokenize(line);
             bool found = CommandTokenizer.TryFindActiveToken(
@@ -109,17 +109,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
 
             Assert.IsTrue(found, $"Expected a result for caret {caret} in '{line}'");
-            Assert.AreEqual(
-                0,
-                activeTokenIndex,
-                $"Command name slot for caret {caret} in '{line}'"
-            );
-            Assert.IsTrue(
-                isNewArgument,
-                $"Command name slot is boundary-like for caret {caret} in '{line}'"
-            );
-            Assert.AreEqual(caret, replacementStart, $"Name slot starts at the caret in '{line}'");
-            Assert.AreEqual(0, replacementLength, $"Name slot replaces nothing in '{line}'");
+            Assert.IsFalse(isNewArgument, $"Caret {caret} in '{line}' selects the name token");
+            Assert.AreEqual(0, activeTokenIndex);
+            Assert.AreEqual(0, replacementStart);
+            Assert.AreEqual(3, replacementLength);
         }
 
         [Test]
@@ -167,6 +160,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [TestCase("log pickaxe", 10, 1, "pickax", 4, 7, false)]
         [TestCase("pickup \"pi", 10, 1, "pi", 8, 2, true)]
         [TestCase("pickup \"\"", 8, 1, "", 8, 0, true)]
+        [TestCase("log foo", 4, 1, "", 4, 3, false)]
+        [TestCase("log foo  bar", 9, 2, "", 9, 3, false)]
         public void CaretInsideTokenSelectsThatToken(
             string line,
             int caret,
@@ -216,7 +211,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         [TestCase("log foo ", 8)]
-        [TestCase("log foo  bar", 9)]
         [TestCase("log \"\" ", 7)]
         [TestCase("pickup ", 7)]
         [TestCase("pickup  ", 8)]
@@ -242,7 +236,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void BoundaryAfterFirstArgumentCompletesNextStage()
         {
-            const string line = "log foo  bar";
+            const string line = "log foo  ";
             List<CommandToken> tokens = Tokenize(line);
 
             bool found = CommandTokenizer.TryFindActiveToken(
@@ -260,7 +254,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreEqual(
                 2,
                 activeTokenIndex,
-                "A boundary between 'foo' and 'bar' completes the argument after 'foo'"
+                "A boundary after 'foo' completes the argument after 'foo'"
             );
         }
 
@@ -290,10 +284,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
 
             Assert.IsTrue(foundNegative);
-            Assert.AreEqual(0, negativeIndex, "A caret before the command name is the name slot");
+            Assert.AreEqual(0, negativeIndex, "A clamped caret on 'log' selects the name token");
+            Assert.IsFalse(negativeNew);
             Assert.AreEqual(0, negativeStart);
-            Assert.AreEqual(0, negativeLength);
-            Assert.IsTrue(negativeNew);
+            Assert.AreEqual(3, negativeLength);
 
             Assert.IsTrue(foundLarge);
             Assert.AreEqual(2, largeIndex, "A caret past the line end opens the next argument");

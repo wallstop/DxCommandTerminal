@@ -9,6 +9,12 @@ namespace WallstopStudios.DxCommandTerminal.Attributes
     {
         public string Name { get; set; }
         public int MinArgCount { get; set; } = 0;
+
+        /*
+            int, not int?: attribute properties must be constant-compatible,
+            so nullable types are not legal here. Negative means unbounded;
+            CommandInfo normalizes it to null at registration.
+         */
         public int MaxArgCount { get; set; } = -1;
         public string Help { get; set; }
         public string Hint { get; set; }

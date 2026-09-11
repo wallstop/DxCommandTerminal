@@ -33,8 +33,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         /// <summary>
         ///     Maximum number of arguments the command accepts, or a negative
-        ///     value for unbounded. Stored as declared; the shell applies the
-        ///     same argument-count rules as reflection discovery.
+        ///     value for unbounded. int, not int?, because generated catalogs
+        ///     transport the attribute's value as written;
+        ///     <see cref="CommandInfo"/> normalizes negatives to
+        ///     <c>null</c> at registration.
         /// </summary>
         public int MaxArgCount { get; }
 

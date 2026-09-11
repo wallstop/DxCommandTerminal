@@ -6,7 +6,14 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     {
         public readonly Action<CommandArg[]> proc;
         public readonly int minArgCount;
-        public readonly int maxArgCount;
+
+        /// <summary>
+        ///     Maximum number of arguments the command accepts, or
+        ///     <c>null</c> for unbounded. Legacy registrations that pass a
+        ///     negative value are normalized to <c>null</c>.
+        /// </summary>
+        public readonly int? maxArgCount;
+
         public readonly string help;
         public readonly string hint;
         public readonly bool addToHistory;
@@ -35,7 +42,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         public CommandInfo(
             Action<CommandArg[]> proc,
             int minArgCount,
-            int maxArgCount,
+            int? maxArgCount,
             string help,
             string hint,
             bool addToHistory = true
@@ -58,7 +65,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             CommandCompletionProvider completionProvider,
             CommandExecutionContexts executionContexts,
             int minArgCount,
-            int maxArgCount,
+            int? maxArgCount,
             string help,
             string hint,
             bool addToHistory = true
@@ -68,11 +75,20 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             this.handler = handler;
             this.completionProvider = completionProvider;
             this.executionContexts = executionContexts;
-            this.maxArgCount = maxArgCount;
+            this.maxArgCount = NormalizeMaxArgCount(maxArgCount);
             this.minArgCount = minArgCount;
             this.help = help;
             this.hint = hint;
             this.addToHistory = addToHistory;
+        }
+
+        /// <summary>
+        ///     Negative bounds were the legacy "unbounded" spelling; they
+        ///     normalize to <c>null</c> so the sentinel has no meaning here.
+        /// </summary>
+        private static int? NormalizeMaxArgCount(int? maxArgCount)
+        {
+            return maxArgCount is int bound && 0 <= bound ? bound : null;
         }
     }
 }

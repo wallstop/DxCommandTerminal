@@ -781,9 +781,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 _tokenCompletionCaret = NormalizeCaret(liveCaret);
             }
 
-            UnityEngine.Debug.Log(
-                $"[T08DIAG8] press: live={_commandInput.cursorIndex} input='{_input.CommandText}' snap='{_tokenCompletionInput ?? "null"}' snapCaret={_tokenCompletionCaret}"
-            );
             _tokenCompletionsTemp.Clear();
             bool hasProvider = shell.TryComplete(
                 CommandExecutionContext.Current,
@@ -794,7 +791,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
             );
             if (!hasProvider)
             {
-                UnityEngine.Debug.Log("[T08DIAG8] no provider answered");
                 ResetTokenCompletion();
                 return false;
             }

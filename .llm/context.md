@@ -130,9 +130,9 @@ frontmatter validity, index freshness, and pointer-file delegation; see
 15. No raw bitwise flag math at call sites; use the allocation-free
     `EnumExtensions.HasFlagNoAlloc` helper (adapted from unity-helpers, MIT).
 16. No sentinel/magic values where the type system can express optionality: use nullable
-    types (`int?`, nullable structs). The released `-1 = unbounded` `maxArgCount` convention
-    stays on existing APIs (`RegisterCommandAttribute`, `CommandInfo`, `AddCommand`); new
-    types use `int?`.
+    types (`int?`, nullable structs). `CommandInfo.maxArgCount` and `AddCommand` use `int?`
+    (legacy negative values normalize to `null`). `RegisterCommandAttribute.MaxArgCount`
+    keeps `int` because attribute properties cannot be nullable; `CommandInfo` normalizes.
 17. No `params` on frequently-called APIs; provide fixed-arity overloads (`params` allocates).
     One-time configuration APIs may use `params`.
 18. Hot-path collection access avoids interface dispatch: specialize arrays and `List<T>`
