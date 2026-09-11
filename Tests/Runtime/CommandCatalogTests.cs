@@ -39,9 +39,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void CatalogDiscoveryRegistersEveryLegacyCommandWithTheSameMetadata()
         {
-            // The compatibility surface is the discovery oracle: whatever it
-            // finds must be registered by the catalog-first path with the
-            // same normalized name and attribute metadata.
+            /*
+               The compatibility surface is the discovery oracle: whatever it
+               finds must be registered by the catalog-first path with the
+               same normalized name and attribute metadata.
+            */
             (MethodInfo method, RegisterCommandAttribute attribute)[] legacy = CommandShell
                 .RegisteredCommands
                 .Value;

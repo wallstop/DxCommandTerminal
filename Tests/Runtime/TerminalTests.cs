@@ -12,8 +12,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
     public sealed class TerminalTests
     {
-        // Dynamically derived from RegisteredCommands so the test stays in sync
-        // with any additions/removals of default commands in BuiltinCommands.cs.
+        /*
+           Dynamically derived from RegisteredCommands so the test stays in sync
+           with any additions/removals of default commands in BuiltinCommands.cs.
+        */
         private static readonly string[] KnownDefaultCommands = CommandShell
             .RegisteredCommands.Value.Where(tuple => tuple.attribute.Default)
             .Select(tuple => tuple.attribute.Name)
@@ -283,8 +285,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 "Auto commands must stay unregistered before the first use"
             );
 
-            // Pick a zero-argument auto command that is safe to run inside a
-            // test session (never quit/exit).
+            /*
+               Pick a zero-argument auto command that is safe to run inside a
+               test session (never quit/exit).
+            */
             string knownCommand = CommandShell
                 .RegisteredCommands.Value.Where(tuple =>
                     tuple.attribute.MinArgCount == 0

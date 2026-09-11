@@ -1,6 +1,8 @@
-// Minimal Unity scripting shim so Unity-free generator test compilations can include the
-// real Runtime sources that reference UnityEngine types (pattern adapted from unity-helpers,
-// MIT, Ambiguous-Interactive). Only the members CommandArg.cs actually touches are provided.
+/*
+   Minimal Unity scripting shim so Unity-free generator test compilations can include the
+   real Runtime sources that reference UnityEngine types (pattern adapted from unity-helpers,
+   MIT, Ambiguous-Interactive). Only the members CommandArg.cs actually touches are provided.
+*/
 namespace UnityEngine
 {
     public struct Vector2

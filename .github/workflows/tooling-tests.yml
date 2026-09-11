@@ -87,6 +87,9 @@ jobs:
       - name: Lint member ordering
         run: node tooling~/scripts/lint-member-ordering.mjs
 
+      - name: Lint multi-line comments
+        run: node tooling~/scripts/lint-multiline-comments.mjs
+
   package-content:
     # Clean-install guard for the UPM artifact (issue #22, PLAN.md T02
     # "package-content validators"): packs the package exactly like npm/UPM

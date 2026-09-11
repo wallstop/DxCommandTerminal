@@ -15,14 +15,18 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
 
 #if UNITY_EDITOR
-        // Defined once: dynamic assemblies are non-collectible, and IL2CPP
-        // players do not support Reflection.Emit, so this case is editor-only.
+        /*
+           Defined once: dynamic assemblies are non-collectible, and IL2CPP
+           players do not support Reflection.Emit, so this case is editor-only.
+        */
         private static readonly Assembly DynamicAssembly = CreateDynamicAssembly();
 #endif
 
-        // Declared in this test assembly (a consumer-style assembly that only
-        // references the runtime) so discovery from non-builtin assemblies is
-        // pinned. Names are normalized the same way production discovery does.
+        /*
+           Declared in this test assembly (a consumer-style assembly that only
+           references the runtime) so discovery from non-builtin assemblies is
+           pinned. Names are normalized the same way production discovery does.
+        */
         [RegisterCommand(Help = "Test command with an inferred name.")]
         private static void TestCommand(CommandArg[] args) { }
 
@@ -35,9 +39,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             // The core assembly never references the terminal package.
             Assembly coreAssembly = typeof(int).Assembly;
 
-            // Note: the runtime assembly itself is not classified by
-            // MayContainCommands (production scans it last via a name match);
-            // that ordering is pinned by the equivalence sweep below.
+            /*
+               Note: the runtime assembly itself is not classified by
+               MayContainCommands (production scans it last via a name match);
+               that ordering is pinned by the equivalence sweep below.
+            */
             yield return new TestCaseData(testAssembly, true).SetName(
                 "testAssemblyMayContainCommands"
             );
@@ -86,8 +92,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 .RegisteredCommands
                 .Value;
 
-            // Command names are matched OrdinalIgnoreCase by the shell, so the
-            // inferred name may preserve the declaring method's casing.
+            /*
+               Command names are matched OrdinalIgnoreCase by the shell, so the
+               inferred name may preserve the declaring method's casing.
+            */
             RegisterCommandAttribute inferred = discovered
                 .Select(tuple => tuple.attribute)
                 .FirstOrDefault(attribute =>
@@ -115,10 +123,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void FilteredDiscoveryMatchesUnfilteredDiscovery()
         {
-            // The legacy discovery algorithm: scan every assembly in the
-            // domain, materializing attributes per method. This equivalence
-            // sweep pins that the assembly-reference filter never drops a
-            // command the legacy path would have found.
+            /*
+               The legacy discovery algorithm: scan every assembly in the
+               domain, materializing attributes per method. This equivalence
+               sweep pins that the assembly-reference filter never drops a
+               command the legacy path would have found.
+            */
             List<string> legacy = new();
             Assembly ourAssembly = typeof(BuiltInCommands).Assembly;
             Assembly[] loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies();
@@ -139,8 +149,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 }
                 catch (Exception)
                 {
-                    // Mirrors production TryGetScanTypes: an assembly that
-                    // cannot be enumerated contributes no commands.
+                    /*
+                       Mirrors production TryGetScanTypes: an assembly that
+                       cannot be enumerated contributes no commands.
+                    */
                     continue;
                 }
 
@@ -169,8 +181,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                         }
                         catch (Exception)
                         {
-                            // Mirrors production: attribute resolution failures
-                            // are contained, not fatal.
+                            /*
+                               Mirrors production: attribute resolution failures
+                               are contained, not fatal.
+                            */
                             continue;
                         }
 

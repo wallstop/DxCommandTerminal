@@ -232,8 +232,10 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators.Tests
             secretEntry.Binder()(Array.Empty<CommandArg>());
             Assert.Equal(1, CatalogFixtureCommands.SecretInvocations);
 
-            // Binders are cached per command; repeated collection and binding
-            // reuse the same delegate without re-resolving reflection.
+            /*
+               Binders are cached per command; repeated collection and binding
+               reuse the same delegate without re-resolving reflection.
+            */
             Assert.Equal(1, Collect().Count(entry => entry.Name == "Secret"));
             secretEntry.Binder()(Array.Empty<CommandArg>());
             Assert.Equal(2, CatalogFixtureCommands.SecretInvocations);

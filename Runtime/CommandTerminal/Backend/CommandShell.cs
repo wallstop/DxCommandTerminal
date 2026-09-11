@@ -150,8 +150,10 @@
             _history = history ?? throw new ArgumentNullException(nameof(history));
         }
 
-        // Internal for test coverage of the discovery filter (see
-        // WallstopStudios.DxCommandTerminal.Tests.Runtime).
+        /*
+           Internal for test coverage of the discovery filter (see
+           WallstopStudios.DxCommandTerminal.Tests.Runtime).
+        */
         public static bool TryEatArgument(ref string stringValue, out CommandArg arg)
         {
             stringValue = stringValue.TrimStart();
@@ -232,8 +234,10 @@
             }
             catch (Exception)
             {
-                // Metadata reads can fail for exotic assemblies; scanning them
-                // is cheaper than silently dropping commands they might carry.
+                /*
+                   Metadata reads can fail for exotic assemblies; scanning them
+                   is cheaper than silently dropping commands they might carry.
+                */
                 return true;
             }
 
@@ -270,8 +274,10 @@
                 }
                 catch (Exception)
                 {
-                    // Classification must never be able to fail discovery; if
-                    // an assembly cannot be classified, scan it.
+                    /*
+                       Classification must never be able to fail discovery; if
+                       an assembly cannot be classified, scan it.
+                    */
                     scanCandidates.Add(assembly);
                 }
             }
@@ -353,8 +359,10 @@
             }
             catch (ArgumentException)
             {
-                // A concurrent initialization registered its cache first;
-                // sharing it is equivalent to having won the race.
+                /*
+                   A concurrent initialization registered its cache first;
+                   sharing it is equivalent to having won the race.
+                */
                 DiscoveryCaches.TryGetValue(assembly, out cache);
             }
 
@@ -491,9 +499,11 @@
                     return true;
                 }
 
-                // An empty or failed catalog is not proof that the assembly has
-                // no commands; the reflection walk below stays compatible with
-                // it.
+                /*
+                   An empty or failed catalog is not proof that the assembly has
+                   no commands; the reflection walk below stays compatible with
+                   it.
+                */
             }
 
             if (cache.ReflectedCommands == null)
@@ -522,8 +532,10 @@
             }
             catch (ReflectionTypeLoadException e)
             {
-                // Scan the subset that loaded; one unloadable type must not
-                // break discovery for the entire session.
+                /*
+                   Scan the subset that loaded; one unloadable type must not
+                   break discovery for the entire session.
+                */
                 types = e.Types;
                 Debug.LogWarning(
                     $"Some types of assembly {assembly.FullName} failed to load; "
@@ -568,8 +580,10 @@
         /// </summary>
         public int ClearAutoRegisteredCommands()
         {
-            // A pending registration would resurrect the commands this call
-            // removes, so cancellation is part of clearing.
+            /*
+               A pending registration would resurrect the commands this call
+               removes, so cancellation is part of clearing.
+            */
             Interlocked.Exchange(ref _autoCommandsPending, 0);
             AutoCommandsRegistered = false;
             int count = _autoRegisteredCommands.Count;
@@ -637,8 +651,10 @@
         /// </summary>
         public bool RunCommand(string line)
         {
-            // A first command request is an explicit readiness boundary: any
-            // deferred registration must be applied before this parse.
+            /*
+               A first command request is an explicit readiness boundary: any
+               deferred registration must be applied before this parse.
+            */
             EnsureAutoCommandsRegistered();
             _dispatchDepth++;
             try
@@ -701,8 +717,10 @@
 
         public bool RunCommand(string commandName, CommandArg[] arguments)
         {
-            // A first command request is an explicit readiness boundary: any
-            // deferred registration must be applied before this lookup.
+            /*
+               A first command request is an explicit readiness boundary: any
+               deferred registration must be applied before this lookup.
+            */
             EnsureAutoCommandsRegistered();
             string line = BuildHistoryLine(commandName, arguments);
             return RunCommandCore(CommandExecutionContext.Current, commandName, arguments, line);
@@ -726,8 +744,10 @@
             List<CommandArg> arguments
         )
         {
-            // A first command request is an explicit readiness boundary: any
-            // deferred registration must be applied before this lookup.
+            /*
+               A first command request is an explicit readiness boundary: any
+               deferred registration must be applied before this lookup.
+            */
             EnsureAutoCommandsRegistered();
             return RunCommandCore(context, commandName, arguments, historyLine: null);
         }
@@ -858,8 +878,10 @@
                     return true;
                 }
 
-                // Drop empty candidates and duplicate insertion texts; first
-                // occurrence wins and provider order is preserved.
+                /*
+                   Drop empty candidates and duplicate insertion texts; first
+                   occurrence wins and provider order is preserved.
+                */
                 int writeIndex = 0;
                 _completionDeduplication.Clear();
                 for (int readIndex = 0; readIndex < results.Count; ++readIndex)
@@ -1350,9 +1372,11 @@
             }
             else
             {
-                // Legacy handlers may retain their argument array, so each
-                // invocation materializes a fresh one. The array is never
-                // pooled or reused after the handler returns.
+                /*
+                   Legacy handlers may retain their argument array, so each
+                   invocation materializes a fresh one. The array is never
+                   pooled or reused after the handler returns.
+                */
                 CommandArg[] materialized = new CommandArg[arguments.Count];
                 for (int i = 0; i < materialized.Length; ++i)
                 {
@@ -1428,8 +1452,10 @@
             public readonly bool IsDefault;
             public readonly CommandExecutionContexts Contexts;
 
-            // Non-null for valid (CommandArg[]) signatures. Null marks a
-            // rejected command; diagnostics then come from MethodAccessor.
+            /*
+               Non-null for valid (CommandArg[]) signatures. Null marks a
+               rejected command; diagnostics then come from MethodAccessor.
+            */
             public readonly Func<Action<CommandArg[]>> Binder;
 
             public readonly Func<MethodInfo> MethodAccessor;

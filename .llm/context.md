@@ -151,6 +151,10 @@ frontmatter validity, index freshness, and pointer-file delegation; see
     Enforced by `npm --prefix tooling~ run lint:member-ordering` (pre-commit + CI; `:fix` is a
     permutation-only reorder that never crosses `#if` boundaries or type-load-initializer
     dependencies).
+21. Multi-line comments are block comments: two or more consecutive comment-only `//` lines
+    must be one `/*` ... `*/` block instead. Single `//` lines and `///` doc comments stay
+    legal. Enforced by `npm --prefix tooling~ run lint:multiline-comments` (pre-commit + CI;
+    `:fix` converts runs, refusing content that contains the block-comment close).
 
 ### Unity Package Rules
 
