@@ -14,6 +14,7 @@
     "lint:member-ordering:fix": "node scripts/lint-member-ordering.mjs --fix",
     "lint:multiline-comments": "node scripts/lint-multiline-comments.mjs",
     "lint:multiline-comments:fix": "node scripts/lint-multiline-comments.mjs --fix",
+    "lint:linq-production": "node scripts/lint-linq-production.mjs",
     "unity:mcp:probe": "node scripts/mcp/unity-mcp.mjs probe",
     "unity:mcp:configure": "node scripts/mcp/unity-mcp.mjs configure",
     "unity:mcp:bridge": "node scripts/mcp/unity-mcp.mjs bridge",

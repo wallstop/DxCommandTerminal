@@ -3,7 +3,6 @@ namespace WallstopStudios.DxCommandTerminal.DataStructures
     using System;
     using System.Collections;
     using System.Collections.Generic;
-    using System.Linq;
     using Extensions;
 
     [Serializable]
@@ -40,7 +39,7 @@ namespace WallstopStudios.DxCommandTerminal.DataStructures
             _position = 0;
             Count = 0;
             _buffer = new List<T>();
-            foreach (T item in initialContents ?? Enumerable.Empty<T>())
+            foreach (T item in initialContents ?? Array.Empty<T>())
             {
                 Add(item);
             }

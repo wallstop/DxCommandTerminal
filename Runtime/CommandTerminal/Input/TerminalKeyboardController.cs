@@ -2,21 +2,13 @@
 {
     using System;
     using System.Collections.Generic;
-    using System.Linq;
     using UI;
     using UnityEngine;
 
     [DisallowMultipleComponent]
     public class TerminalKeyboardController : MonoBehaviour, IInputHandler
     {
-        protected static readonly TerminalControlTypes[] ControlTypes = Enum.GetValues(
-                typeof(TerminalControlTypes)
-            )
-            .OfType<TerminalControlTypes>()
-#pragma warning disable CS0612 // Type or member is obsolete
-            .Except(new[] { TerminalControlTypes.None })
-#pragma warning restore CS0612 // Type or member is obsolete
-            .ToArray();
+        protected static readonly TerminalControlTypes[] ControlTypes = BuildControlTypes();
 
         public bool ShouldHandleInputThisFrame
         {
@@ -110,6 +102,22 @@
             _controlHandlerActions[TerminalControlTypes.ToggleSmall] = ToggleSmall;
             _controlHandlerActions[TerminalControlTypes.CompleteBackward] = CompleteBackward;
             _controlHandlerActions[TerminalControlTypes.CompleteForward] = Complete;
+        }
+
+        private static TerminalControlTypes[] BuildControlTypes()
+        {
+            Array values = Enum.GetValues(typeof(TerminalControlTypes));
+            List<TerminalControlTypes> controlTypes = new(values.Length);
+#pragma warning disable CS0612 // Type or member is obsolete
+            foreach (TerminalControlTypes value in values)
+            {
+                if (value != TerminalControlTypes.None)
+                {
+                    controlTypes.Add(value);
+                }
+            }
+#pragma warning restore CS0612 // Type or member is obsolete
+            return controlTypes.ToArray();
         }
 
         protected virtual void Awake()
@@ -307,8 +315,17 @@
 
         private void VerifyControlOrderIntegrity()
         {
-            TerminalControlTypes[] missingControls = ControlTypes.Except(_controlOrder).ToArray();
-            if (0 < missingControls.Length)
+            List<TerminalControlTypes> missingControls = null;
+            foreach (TerminalControlTypes controlType in ControlTypes)
+            {
+                if (!_controlOrder.Contains(controlType))
+                {
+                    missingControls ??= new List<TerminalControlTypes>();
+                    missingControls.Add(controlType);
+                }
+            }
+
+            if (missingControls != null)
             {
                 Debug.LogWarning(
                     $"Control Order is missing the following controls: [{string.Join(", ", missingControls)}]. "

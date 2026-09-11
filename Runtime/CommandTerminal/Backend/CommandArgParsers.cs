@@ -2,7 +2,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 {
     using System;
     using System.Globalization;
-    using System.Linq;
 
     /// <summary>
     ///     Culture-invariant parsers for the built-in types
@@ -622,13 +621,18 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return false;
             }
 
-            string strippedInput = CommandArg
-                .IgnoredValuesForComplexTypes.Where(ignored => !string.IsNullOrEmpty(ignored))
-                .Aggregate(
-                    input,
-                    (current, ignored) =>
-                        current.Replace(ignored, string.Empty, StringComparison.OrdinalIgnoreCase)
-                );
+            string strippedInput = input;
+            foreach (string ignored in CommandArg.IgnoredValuesForComplexTypes)
+            {
+                if (!string.IsNullOrEmpty(ignored))
+                {
+                    strippedInput = strippedInput.Replace(
+                        ignored,
+                        string.Empty,
+                        StringComparison.OrdinalIgnoreCase
+                    );
+                }
+            }
 
             foreach (char delimiter in CommandArg.Delimiters)
             {

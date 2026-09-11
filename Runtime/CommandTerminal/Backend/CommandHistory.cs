@@ -2,7 +2,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 {
     using System;
     using System.Collections.Generic;
-    using System.Linq;
     using DataStructures;
 
     public sealed class CommandHistory
@@ -33,10 +32,21 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         public IEnumerable<string> GetHistory(bool onlySuccess, bool onlyErrorFree)
         {
-            return _history
-                .Where(value => !onlySuccess || value.success == true)
-                .Where(value => !onlyErrorFree || value.errorFree == true)
-                .Select(value => value.text);
+            for (int index = 0; index < _history.Count; ++index)
+            {
+                (string text, bool? success, bool? errorFree) entry = _history[index];
+                if (onlySuccess && entry.success != true)
+                {
+                    continue;
+                }
+
+                if (onlyErrorFree && entry.errorFree != true)
+                {
+                    continue;
+                }
+
+                yield return entry.text;
+            }
         }
 
         public void Resize(int newCapacity)
@@ -128,6 +138,31 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             _seenInDirection.Clear();
             _direction = 0;
             return count;
+        }
+
+        /*
+            Fills a caller-owned buffer without allocating: the completion
+            hot path iterates history on every keystroke-driven query, so it
+            must not pay for enumerators or iterator state machines.
+         */
+        internal void CopyHistory(bool onlySuccess, bool onlyErrorFree, List<string> results)
+        {
+            results.Clear();
+            for (int index = 0; index < _history.Count; ++index)
+            {
+                (string text, bool? success, bool? errorFree) entry = _history[index];
+                if (onlySuccess && entry.success != true)
+                {
+                    continue;
+                }
+
+                if (onlyErrorFree && entry.errorFree != true)
+                {
+                    continue;
+                }
+
+                results.Add(entry.text);
+            }
         }
     }
 }

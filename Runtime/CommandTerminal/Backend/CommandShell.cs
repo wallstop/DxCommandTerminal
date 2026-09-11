@@ -3,7 +3,6 @@
     using System;
     using System.Collections.Generic;
     using System.Diagnostics;
-    using System.Linq;
     using System.Reflection;
     using System.Runtime.CompilerServices;
     using System.Text;
@@ -614,7 +613,7 @@
             IgnoringDefaultCommands = ignoreDefaultCommands;
             ClearAutoRegisteredCommands();
             _ignoredCommands.Clear();
-            _ignoredCommands.UnionWith(ignoredCommands ?? Enumerable.Empty<string>());
+            _ignoredCommands.UnionWith(ignoredCommands ?? Array.Empty<string>());
             foreach (string ignoredCommand in _ignoredCommands)
             {
                 _commands.Remove(ignoredCommand);
@@ -1190,10 +1189,23 @@
 
             foreach (KeyValuePair<string, MethodInfo> command in _rejectedCommands)
             {
+                ParameterInfo[] parameters = command.Value.GetParameters();
+                StringBuilder found = new StringBuilder(command.Value.Name).Append('(');
+                for (int index = 0; index < parameters.Length; ++index)
+                {
+                    if (0 < index)
+                    {
+                        found.Append(',');
+                    }
+
+                    found.Append(parameters[index].ParameterType.Name);
+                }
+
+                found.Append(')');
                 IssueErrorMessage(
                     $"{command.Key} has an invalid signature. "
                         + $"Expected: {command.Value.Name}(CommandArg[]). "
-                        + $"Found: {command.Value.Name}({string.Join(",", command.Value.GetParameters().Select(p => p.ParameterType.Name))})"
+                        + $"Found: {found}"
                 );
             }
 

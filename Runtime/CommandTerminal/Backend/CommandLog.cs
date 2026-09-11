@@ -2,7 +2,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 {
     using System;
     using System.Collections.Generic;
-    using System.Linq;
     using DataStructures;
     using UnityEngine;
 
@@ -25,7 +24,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         {
             _logs = new CyclicBuffer<LogItem>(maxItems);
             this.ignoredLogTypes = new HashSet<TerminalLogType>(
-                ignoredLogTypes ?? Enumerable.Empty<TerminalLogType>()
+                ignoredLogTypes ?? Array.Empty<TerminalLogType>()
             );
         }
 

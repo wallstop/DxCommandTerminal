@@ -4,7 +4,6 @@ namespace WallstopStudios.DxCommandTerminal.Editor.Helper
     using System;
     using System.Collections.Generic;
     using System.IO;
-    using System.Linq;
     using System.Text.RegularExpressions;
     using Themes;
     using UnityEditor;
@@ -143,7 +142,9 @@ namespace WallstopStudios.DxCommandTerminal.Editor.Helper
                     lastIndex = nextBraceIndex < 0 ? ussContent.Length : nextBraceIndex + 1;
                 }
 
-                return selectors.ToArray();
+                string[] result = new string[selectors.Count];
+                selectors.CopyTo(result, 0);
+                return result;
             }
             catch (Exception e)
             {

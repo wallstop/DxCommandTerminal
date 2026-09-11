@@ -2,7 +2,6 @@
 {
     using System;
     using System.Collections.Generic;
-    using System.Linq;
     using System.Net;
     using System.Numerics;
     using System.Reflection;
@@ -41,11 +40,21 @@
             ">",
         };
         private static readonly Lazy<MethodInfo> TryGetMethod = new(() =>
-            typeof(CommandArg)
-                .GetMethods(BindingFlags.Instance | BindingFlags.Public)
-                .Where(method => method.Name == nameof(TryGet))
-                .FirstOrDefault(method => method.GetParameters().Length == 1)
-        );
+        {
+            foreach (
+                MethodInfo method in typeof(CommandArg).GetMethods(
+                    BindingFlags.Instance | BindingFlags.Public
+                )
+            )
+            {
+                if (method.Name == nameof(TryGet) && method.GetParameters().Length == 1)
+                {
+                    return method;
+                }
+            }
+
+            return null;
+        });
 
         private static readonly Dictionary<Type, object> RegisteredParsers = new();
         private static readonly Dictionary<
@@ -100,15 +109,15 @@
             get
             {
                 string cleanedString = contents;
-                cleanedString = IgnoredValuesForCleanedTypes.Aggregate(
-                    cleanedString,
-                    (current, ignoredValue) =>
-                        current.Replace(
-                            ignoredValue,
-                            string.Empty,
-                            StringComparison.OrdinalIgnoreCase
-                        )
-                );
+                foreach (string ignoredValue in IgnoredValuesForCleanedTypes)
+                {
+                    cleanedString = cleanedString.Replace(
+                        ignoredValue,
+                        string.Empty,
+                        StringComparison.OrdinalIgnoreCase
+                    );
+                }
+
                 return cleanedString;
             }
         }
@@ -173,25 +182,35 @@
         private static Dictionary<string, PropertyInfo> LoadStaticPropertiesForType<T>()
         {
             Type type = typeof(T);
-            return type.GetProperties(BindingFlags.Static | BindingFlags.Public)
-                .Where(property => property.PropertyType == type)
-                .ToDictionary(
-                    property => property.Name,
-                    property => property,
-                    StringComparer.OrdinalIgnoreCase
-                );
+            Dictionary<string, PropertyInfo> properties = new(StringComparer.OrdinalIgnoreCase);
+            foreach (
+                PropertyInfo property in type.GetProperties(
+                    BindingFlags.Static | BindingFlags.Public
+                )
+            )
+            {
+                if (property.PropertyType == type)
+                {
+                    properties.Add(property.Name, property);
+                }
+            }
+
+            return properties;
         }
 
         private static Dictionary<string, FieldInfo> LoadStaticFieldsForType<T>()
         {
             Type type = typeof(T);
-            return type.GetFields(BindingFlags.Static | BindingFlags.Public)
-                .Where(field => field.FieldType == type)
-                .ToDictionary(
-                    field => field.Name,
-                    field => field,
-                    StringComparer.OrdinalIgnoreCase
-                );
+            Dictionary<string, FieldInfo> fields = new(StringComparer.OrdinalIgnoreCase);
+            foreach (FieldInfo field in type.GetFields(BindingFlags.Static | BindingFlags.Public))
+            {
+                if (field.FieldType == type)
+                {
+                    fields.Add(field.Name, field);
+                }
+            }
+
+            return fields;
         }
 
         private static bool TryGetNamedConstant<T>(string input, out T value)
@@ -295,7 +314,12 @@
                 {
                     if (!EnumValues.TryGetValue(type, out object enumValues))
                     {
-                        enumValues = Enum.GetValues(type).OfType<T>().ToArray();
+                        /*
+                            Enum.GetValues returns an array whose runtime type is
+                            exactly T[], so the cast is free; OfType/ToArray would
+                            copy it for nothing.
+                         */
+                        enumValues = (T[])Enum.GetValues(type);
                         EnumValues[type] = enumValues;
                     }
 

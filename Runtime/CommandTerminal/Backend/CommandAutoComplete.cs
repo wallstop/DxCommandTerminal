@@ -2,7 +2,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 {
     using System;
     using System.Collections.Generic;
-    using System.Linq;
     using Extensions;
 
     public sealed class CommandAutoComplete
@@ -10,6 +9,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         private readonly SortedSet<string> _knownWords = new(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _duplicateBuffer = new(StringComparer.OrdinalIgnoreCase);
         private readonly List<string> _buffer = new();
+        private readonly List<string> _historyBuffer = new();
 
         private readonly CommandHistory _history;
         private readonly CommandShell _shell;
@@ -22,12 +22,15 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         {
             _history = history ?? throw new ArgumentNullException(nameof(history));
             _shell = shell ?? throw new ArgumentNullException(nameof(shell));
-            _knownWords.UnionWith(commands ?? Enumerable.Empty<string>());
+            _knownWords.UnionWith(commands ?? Array.Empty<string>());
         }
 
         public string[] Complete(string text)
         {
-            return Complete(text: text, buffer: _buffer).ToArray();
+            Complete(text: text, buffer: _buffer);
+            string[] results = new string[_buffer.Count];
+            _buffer.CopyTo(results);
+            return results;
         }
 
         public List<string> Complete(string text, List<string> buffer)
@@ -49,28 +52,38 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
             _duplicateBuffer.Clear();
             buffer.Clear();
-            foreach (
-                string known in _shell
-                    .Commands.Keys.Select(command =>
-                        command.NeedsLowerInvariantConversion()
-                            ? command.ToLowerInvariant()
-                            : command
-                    )
-                    .Concat(_knownWords)
-                    .Concat(
-                        _history.GetHistory(onlySuccess: onlySuccess, onlyErrorFree: onlyErrorFree)
-                    )
-            )
-            {
-                if (!known.StartsWith(input, StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
 
-                if (_duplicateBuffer.Add(known))
-                {
-                    buffer.Add(known);
-                }
+            foreach (string command in _shell.Commands.Keys)
+            {
+                TryAddCompletion(
+                    command.NeedsLowerInvariantConversion() ? command.ToLowerInvariant() : command,
+                    input,
+                    buffer
+                );
+            }
+
+            foreach (string known in _knownWords)
+            {
+                TryAddCompletion(known, input, buffer);
+            }
+
+            _history.CopyHistory(onlySuccess, onlyErrorFree, _historyBuffer);
+            foreach (string entry in _historyBuffer)
+            {
+                TryAddCompletion(entry, input, buffer);
+            }
+        }
+
+        private void TryAddCompletion(string candidate, string input, List<string> buffer)
+        {
+            if (!candidate.StartsWith(input, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            if (_duplicateBuffer.Add(candidate))
+            {
+                buffer.Add(candidate);
             }
         }
     }

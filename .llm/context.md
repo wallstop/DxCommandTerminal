@@ -155,6 +155,14 @@ frontmatter validity, index freshness, and pointer-file delegation; see
     must be one `/*` ... `*/` block instead. Single `//` lines and `///` doc comments stay
     legal. Enforced by `npm --prefix tooling~ run lint:multiline-comments` (pre-commit + CI;
     `:fix` converts runs, refusing content that contains the block-comment close).
+22. No LINQ in production code (`Runtime/`, `Editor/`): every operator allocates
+    enumerators and closures, and several copy the whole sequence, so shipped code bans it
+    outright - no `using System.Linq`, no qualified `System.Linq.` calls, no static
+    `Enumerable.` calls. Write plain loops over the concrete collection type; reuse
+    caller-owned buffers (`List<T>` fill/`Clear` methods, `CopyTo`) instead of building
+    intermediate sequences. `List<T>.ToArray()`/`CopyTo` instance methods stay legal.
+    Tests and `Generator~` tooling are exempt. Enforced by
+    `npm --prefix tooling~ run lint:linq-production` (pre-commit + CI; no `:fix` by design).
 
 ### Unity Package Rules
 

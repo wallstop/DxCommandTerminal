@@ -4,7 +4,6 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
     using System;
     using System.Collections.Generic;
     using System.IO;
-    using System.Linq;
     using DxCommandTerminal.Helper;
     using Extensions;
     using Helper;
@@ -61,7 +60,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                     continue;
                 }
                 _styleCache.Add(theme);
-                if (!TerminalThemeStyleSheetHelper.GetAvailableThemes(theme).Any())
+                if (TerminalThemeStyleSheetHelper.GetAvailableThemes(theme).Length == 0)
                 {
                     _invalidStyles.Add(theme);
                 }
@@ -73,7 +72,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
             if (
                 anyInvalidTheme
                 || _styleCache.Count != themePack._themes.Count
-                || _invalidStyles.Any()
+                || 0 < _invalidStyles.Count
             )
             {
                 if (GUILayout.Button("Fix Invalid Themes", _impactButtonStyle))
@@ -153,9 +152,12 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                 themePack._themes.SortByName();
                 themePack._themeNames ??= new List<string>();
                 themePack._themeNames.Clear();
-                themePack._themeNames.AddRange(
-                    themePack._themes.SelectMany(TerminalThemeStyleSheetHelper.GetAvailableThemes)
-                );
+                foreach (StyleSheet theme in themePack._themes)
+                {
+                    themePack._themeNames.AddRange(
+                        TerminalThemeStyleSheetHelper.GetAvailableThemes(theme)
+                    );
+                }
             }
 
             void UpdateFromDirectory(string directory)
@@ -188,7 +190,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                     );
                     if (
                         styleSheet != null
-                        && TerminalThemeStyleSheetHelper.GetAvailableThemes(styleSheet).Any()
+                        && 0 < TerminalThemeStyleSheetHelper.GetAvailableThemes(styleSheet).Length
                         && _styleCache.Add(styleSheet)
                     )
                     {

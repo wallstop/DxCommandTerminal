@@ -3,7 +3,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     using System;
     using System.Collections.Generic;
     using System.Diagnostics;
-    using System.Linq;
     using System.Text;
     using Attributes;
     using Themes;
@@ -38,11 +37,19 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return;
             }
 
-            string themes = string.Join(
-                BulkSeparator,
-                terminal._themePack._themeNames.Select(ThemeNameHelper.GetFriendlyThemeName)
-            );
-            Terminal.Log(TerminalLogType.Message, themes);
+            List<string> themeNames = terminal._themePack._themeNames;
+            StringBuilder themes = new StringBuilder();
+            for (int index = 0; index < themeNames.Count; ++index)
+            {
+                if (0 < index)
+                {
+                    themes.Append(BulkSeparator);
+                }
+
+                themes.Append(ThemeNameHelper.GetFriendlyThemeName(themeNames[index]));
+            }
+
+            Terminal.Log(TerminalLogType.Message, themes.ToString());
         }
 
         [RegisterCommand(
@@ -66,11 +73,19 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return;
             }
 
-            string themes = string.Join(
-                BulkSeparator,
-                terminal._fontPack._fonts.Select(font => font.name)
-            );
-            Terminal.Log(TerminalLogType.Message, themes);
+            List<Font> fonts = terminal._fontPack._fonts;
+            StringBuilder fontNames = new StringBuilder();
+            for (int index = 0; index < fonts.Count; ++index)
+            {
+                if (0 < index)
+                {
+                    fontNames.Append(BulkSeparator);
+                }
+
+                fontNames.Append(fonts[index].name);
+            }
+
+            Terminal.Log(TerminalLogType.Message, fontNames.ToString());
         }
 
         [RegisterCommand(
@@ -465,7 +480,13 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
 
             int variableCount = shell.Variables.Count;
-            foreach (string variable in shell.Variables.Keys.ToArray())
+            List<string> variableNames = new List<string>(variableCount);
+            foreach (string variable in shell.Variables.Keys)
+            {
+                variableNames.Add(variable);
+            }
+
+            foreach (string variable in variableNames)
             {
                 shell.ClearVariable(variable);
             }
@@ -566,7 +587,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return;
             }
 
-            if (!shell.Variables.Any())
+            if (shell.Variables.Count == 0)
             {
                 Terminal.Log(TerminalLogType.Warning, "No variables found.");
                 return;
