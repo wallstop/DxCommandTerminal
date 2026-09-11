@@ -1,4 +1,4 @@
-namespace WallstopStudios.DxCommandTerminal.Backend
+﻿namespace WallstopStudios.DxCommandTerminal.Backend
 {
     using System;
     using System.Collections.Generic;
@@ -14,20 +14,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
     public readonly struct CommandArg
     {
-        private static readonly Lazy<MethodInfo> TryGetMethod = new(() =>
-            typeof(CommandArg)
-                .GetMethods(BindingFlags.Instance | BindingFlags.Public)
-                .Where(method => method.Name == nameof(TryGet))
-                .FirstOrDefault(method => method.GetParameters().Length == 1)
-        );
-        private static readonly Dictionary<Type, object> RegisteredParsers = new();
-        private static readonly Dictionary<
-            Type,
-            Dictionary<string, PropertyInfo>
-        > StaticProperties = new();
-        private static readonly Dictionary<Type, Dictionary<string, FieldInfo>> ConstFields = new();
-        private static readonly Dictionary<Type, object> EnumValues = new();
-
         // Public to allow custom-mutation, if desired
         public static readonly HashSet<char> Delimiters = new() { ',', ';', ':', '_', '/', '\\' };
         public static readonly List<char> Quotes = new() { '"', '\'' };
@@ -53,10 +39,20 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             "<",
             ">",
         };
+        private static readonly Lazy<MethodInfo> TryGetMethod = new(() =>
+            typeof(CommandArg)
+                .GetMethods(BindingFlags.Instance | BindingFlags.Public)
+                .Where(method => method.Name == nameof(TryGet))
+                .FirstOrDefault(method => method.GetParameters().Length == 1)
+        );
 
-        public readonly string contents;
-        public readonly char? startQuote;
-        public readonly char? endQuote;
+        private static readonly Dictionary<Type, object> RegisteredParsers = new();
+        private static readonly Dictionary<
+            Type,
+            Dictionary<string, PropertyInfo>
+        > StaticProperties = new();
+        private static readonly Dictionary<Type, Dictionary<string, FieldInfo>> ConstFields = new();
+        private static readonly Dictionary<Type, object> EnumValues = new();
 
         public string CleanedContents
         {
@@ -74,6 +70,87 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 );
                 return cleanedString;
             }
+        }
+
+        public readonly string contents;
+        public readonly char? startQuote;
+        public readonly char? endQuote;
+
+        public CommandArg(string contents, char? startQuote = null, char? endQuote = null)
+        {
+            this.contents = contents ?? string.Empty;
+            this.startQuote = startQuote;
+            this.endQuote = endQuote;
+        }
+
+        public static bool RegisterParser<T>(CommandArgParser<T> parser, bool force = false)
+        {
+            if (parser == null)
+            {
+                return false;
+            }
+
+            Type type = typeof(T);
+            if (force)
+            {
+                RegisteredParsers[type] = parser;
+                return true;
+            }
+
+            return RegisteredParsers.TryAdd(type, parser);
+        }
+
+        public static bool TryGetParser<T>(out CommandArgParser<T> parser)
+        {
+            if (RegisteredParsers.TryGetValue(typeof(T), out object untypedParser))
+            {
+                parser = (CommandArgParser<T>)untypedParser;
+                return true;
+            }
+
+            parser = null;
+            return false;
+        }
+
+        public static bool UnregisterParser<T>()
+        {
+            return UnregisterParser(typeof(T));
+        }
+
+        public static bool UnregisterParser(Type type)
+        {
+            return RegisteredParsers.Remove(type);
+        }
+
+        public static int UnregisterAllParsers()
+        {
+            int parserCount = RegisteredParsers.Count;
+            RegisteredParsers.Clear();
+            return parserCount;
+        }
+
+        private static Dictionary<string, PropertyInfo> LoadStaticPropertiesForType<T>()
+        {
+            Type type = typeof(T);
+            return type.GetProperties(BindingFlags.Static | BindingFlags.Public)
+                .Where(property => property.PropertyType == type)
+                .ToDictionary(
+                    property => property.Name,
+                    property => property,
+                    StringComparer.OrdinalIgnoreCase
+                );
+        }
+
+        private static Dictionary<string, FieldInfo> LoadStaticFieldsForType<T>()
+        {
+            Type type = typeof(T);
+            return type.GetFields(BindingFlags.Static | BindingFlags.Public)
+                .Where(field => field.FieldType == type)
+                .ToDictionary(
+                    field => field.Name,
+                    field => field,
+                    StringComparer.OrdinalIgnoreCase
+                );
         }
 
         public bool TryGet(Type type, out object parsed)
@@ -540,83 +617,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 value = default;
                 return false;
             }
-        }
-
-        public CommandArg(string contents, char? startQuote = null, char? endQuote = null)
-        {
-            this.contents = contents ?? string.Empty;
-            this.startQuote = startQuote;
-            this.endQuote = endQuote;
-        }
-
-        public static bool RegisterParser<T>(CommandArgParser<T> parser, bool force = false)
-        {
-            if (parser == null)
-            {
-                return false;
-            }
-
-            Type type = typeof(T);
-            if (force)
-            {
-                RegisteredParsers[type] = parser;
-                return true;
-            }
-
-            return RegisteredParsers.TryAdd(type, parser);
-        }
-
-        public static bool TryGetParser<T>(out CommandArgParser<T> parser)
-        {
-            if (RegisteredParsers.TryGetValue(typeof(T), out object untypedParser))
-            {
-                parser = (CommandArgParser<T>)untypedParser;
-                return true;
-            }
-
-            parser = null;
-            return false;
-        }
-
-        public static bool UnregisterParser<T>()
-        {
-            return UnregisterParser(typeof(T));
-        }
-
-        public static bool UnregisterParser(Type type)
-        {
-            return RegisteredParsers.Remove(type);
-        }
-
-        public static int UnregisterAllParsers()
-        {
-            int parserCount = RegisteredParsers.Count;
-            RegisteredParsers.Clear();
-            return parserCount;
-        }
-
-        private static Dictionary<string, PropertyInfo> LoadStaticPropertiesForType<T>()
-        {
-            Type type = typeof(T);
-            return type.GetProperties(BindingFlags.Static | BindingFlags.Public)
-                .Where(property => property.PropertyType == type)
-                .ToDictionary(
-                    property => property.Name,
-                    property => property,
-                    StringComparer.OrdinalIgnoreCase
-                );
-        }
-
-        private static Dictionary<string, FieldInfo> LoadStaticFieldsForType<T>()
-        {
-            Type type = typeof(T);
-            return type.GetFields(BindingFlags.Static | BindingFlags.Public)
-                .Where(field => field.FieldType == type)
-                .ToDictionary(
-                    field => field.Name,
-                    field => field,
-                    StringComparer.OrdinalIgnoreCase
-                );
         }
 
         public override string ToString()

@@ -13,6 +13,23 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     {
         private Func<CommandExecutionContext> _previousAmbientProvider;
 
+        private static IEnumerator SpawnTerminal()
+        {
+            return TerminalTests.SpawnTerminal(resetStateOnInit: true);
+        }
+
+        private static string ConsumeError()
+        {
+            return Terminal.Shell.TryConsumeErrorMessage(out string error) ? error : null;
+        }
+
+        private static string ConsumeErrorOrEmpty()
+        {
+            return Terminal.Shell != null && Terminal.Shell.TryConsumeErrorMessage(out string error)
+                ? error
+                : null;
+        }
+
         [SetUp]
         public void SetUp()
         {
@@ -28,16 +45,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             {
                 UnityEngine.Object.Destroy(TerminalUI.Instance.gameObject);
             }
-        }
-
-        private static IEnumerator SpawnTerminal()
-        {
-            return TerminalTests.SpawnTerminal(resetStateOnInit: true);
-        }
-
-        private static string ConsumeError()
-        {
-            return Terminal.Shell.TryConsumeErrorMessage(out string error) ? error : null;
         }
 
         [UnityTest]
@@ -521,13 +528,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 "A duplicate name must be rejected like every other registration path"
             );
             Assert.AreEqual("Command ctx-duplicate is already defined.", ConsumeErrorOrEmpty());
-        }
-
-        private static string ConsumeErrorOrEmpty()
-        {
-            return Terminal.Shell != null && Terminal.Shell.TryConsumeErrorMessage(out string error)
-                ? error
-                : null;
         }
     }
 }

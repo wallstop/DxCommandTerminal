@@ -1,4 +1,4 @@
-namespace WallstopStudios.DxCommandTerminal.UI
+﻿namespace WallstopStudios.DxCommandTerminal.UI
 {
     using System;
     using System.Collections.Generic;
@@ -21,17 +21,10 @@ namespace WallstopStudios.DxCommandTerminal.UI
     {
         private const string TerminalRootName = "TerminalRoot";
 
-        private enum ScrollBarCaptureState
-        {
-            None = 0,
-            DraggerActive = 1,
-            TrackerActive = 2,
-        }
+        public static TerminalUI Instance { get; private set; }
 
         // Cache log callback to reduce allocations
         private static readonly Application.LogCallback UnityLogCallback = HandleUnityLog;
-
-        public static TerminalUI Instance { get; private set; }
 
         // ReSharper disable once MemberCanBePrivate.Global
         public bool IsClosed =>
@@ -45,16 +38,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
         public string CurrentFriendlyTheme => ThemeNameHelper.GetFriendlyThemeName(CurrentTheme);
 
         public Font CurrentFont => _runtimeFont != null ? _runtimeFont : _persistedFont;
-
-        [SerializeField]
-        [Tooltip("Unique Id for this terminal, mainly for use with persisted configuration")]
-        internal string id = Guid.NewGuid().ToString();
-
-        [SerializeField]
-        internal UIDocument _uiDocument;
-
-        [SerializeField]
-        internal string _persistedTheme = "dark-theme";
 
         [Header("Window")]
         [Range(0, 1)]
@@ -82,20 +65,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
         [Tooltip("Duration for the ease-in animation in seconds")]
         public float easeInTime = 0.5f;
 
-        [Header("System")]
-        [SerializeField]
-        private int _logBufferSize = 256;
-
-        [SerializeField]
-        private int _historyBufferSize = 512;
-
-        [Header("Input")]
-        [SerializeField]
-        internal Font _persistedFont;
-
-        [SerializeField]
-        private string _inputCaret = ">";
-
         [Header("Buttons")]
         public bool showGUIButtons;
 
@@ -117,6 +86,30 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         public bool makeHintsClickable = true;
 
+        [SerializeField]
+        [Tooltip("Unique Id for this terminal, mainly for use with persisted configuration")]
+        internal string id = Guid.NewGuid().ToString();
+
+        [SerializeField]
+        internal UIDocument _uiDocument;
+
+        [SerializeField]
+        internal string _persistedTheme = "dark-theme";
+
+        [Header("Input")]
+        [SerializeField]
+        internal Font _persistedFont;
+
+        [Header("System")]
+        [SerializeField]
+        private int _logBufferSize = 256;
+
+        [SerializeField]
+        private int _historyBufferSize = 512;
+
+        [SerializeField]
+        private string _inputCaret = ">";
+
         [Header("System")]
         [SerializeField]
         private int _cursorBlinkRateMilliseconds = 666;
@@ -135,9 +128,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
         public bool ignoreDefaultCommands;
 
         [SerializeField]
-        private bool _logUnityMessages;
-
-        [SerializeField]
         internal List<TerminalLogType> _ignoredLogTypes = new();
 
         [SerializeField]
@@ -148,6 +138,9 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         [SerializeField]
         internal TerminalThemePack _themePack;
+
+        [SerializeField]
+        private bool _logUnityMessages;
 
         private IInputHandler[] _inputHandlers;
 
@@ -163,6 +156,20 @@ namespace WallstopStudios.DxCommandTerminal.UI
         private readonly List<SerializedProperty> _autoCompleteProperties = new();
         private SerializedObject _serializedObject;
 #endif
+
+        // Internal for test coverage of token completion (see
+        // WallstopStudios.DxCommandTerminal.Tests.Runtime).
+        internal TextField _commandInput;
+
+        // Internal for test coverage of caret behavior (see
+        // WallstopStudios.DxCommandTerminal.Tests.Runtime).
+        internal VisualElement _textInput;
+
+        /*
+            Internal for test coverage of hint suppression (see
+            WallstopStudios.DxCommandTerminal.Tests.Runtime).
+         */
+        internal readonly List<string> _lastCompletionBuffer = new();
 
         private TerminalState _state = TerminalState.Closed;
         private float _currentWindowHeight;
@@ -191,25 +198,11 @@ namespace WallstopStudios.DxCommandTerminal.UI
         private ScrollView _logScrollView;
         private ScrollView _autoCompleteContainer;
         private VisualElement _inputContainer;
-
-        // Internal for test coverage of token completion (see
-        // WallstopStudios.DxCommandTerminal.Tests.Runtime).
-        internal TextField _commandInput;
         private Button _runButton;
         private VisualElement _stateButtonContainer;
-
-        // Internal for test coverage of caret behavior (see
-        // WallstopStudios.DxCommandTerminal.Tests.Runtime).
-        internal VisualElement _textInput;
         private Label _inputCaretLabel;
         private bool _lastKnownHintsClickable;
         private IVisualElementScheduledItem _cursorBlinkSchedule;
-
-        /*
-            Internal for test coverage of hint suppression (see
-            WallstopStudios.DxCommandTerminal.Tests.Runtime).
-         */
-        internal readonly List<string> _lastCompletionBuffer = new();
         private readonly List<string> _lastCompletionBufferTempCache = new();
         private readonly HashSet<string> _lastCompletionBufferTempSet = new(
             StringComparer.OrdinalIgnoreCase
@@ -636,6 +629,207 @@ namespace WallstopStudios.DxCommandTerminal.UI
         }
 #endif
 
+        private static void ConsumeAndLogErrors()
+        {
+            while (Terminal.Shell?.TryConsumeErrorMessage(out string error) == true)
+            {
+                Terminal.Log(TerminalLogType.Error, $"Error: {error}");
+            }
+        }
+
+        private static bool TokenCompletionsEquivalent(
+            List<CommandCompletion> candidates,
+            List<CommandCompletion> current
+        )
+        {
+            if (candidates.Count != current.Count)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < candidates.Count; ++i)
+            {
+                CommandCompletion candidate = candidates[i];
+                CommandCompletion active = current[i];
+                if (
+                    candidate.InsertionText != active.InsertionText
+                    || candidate.HasReplacementOverride != active.HasReplacementOverride
+                )
+                {
+                    return false;
+                }
+
+                if (
+                    candidate.Replacement is CommandCompletionReplacement candidateReplacement
+                    && active.Replacement is CommandCompletionReplacement activeReplacement
+                    && (
+                        candidateReplacement.Start != activeReplacement.Start
+                        || candidateReplacement.Length != activeReplacement.Length
+                    )
+                )
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static string QuoteInsertionIfNeeded(string insertion, bool tokenQuoted)
+        {
+            if (tokenQuoted)
+            {
+                return insertion;
+            }
+
+            bool containsSpace = false;
+            bool containsDoubleQuote = false;
+            bool containsSingleQuote = false;
+            foreach (char character in insertion)
+            {
+                switch (character)
+                {
+                    case ' ':
+                        containsSpace = true;
+                        break;
+                    case '"':
+                        containsDoubleQuote = true;
+                        break;
+                    case '\'':
+                        containsSingleQuote = true;
+                        break;
+                }
+            }
+
+            if (!containsSpace && !containsDoubleQuote && !containsSingleQuote)
+            {
+                return insertion;
+            }
+
+            if (!containsDoubleQuote)
+            {
+                return "\"" + insertion + "\"";
+            }
+
+            if (!containsSingleQuote)
+            {
+                return "'" + insertion + "'";
+            }
+
+            // The insertion mixes both quote characters; insert it verbatim
+            // rather than producing an untokenizable quoting.
+            return insertion;
+        }
+
+        private static void InitializeScrollView(ScrollView scrollView)
+        {
+            VisualElement parent = scrollView.Q<VisualElement>(
+                className: "unity-scroller--vertical"
+            );
+            if (parent == null)
+            {
+                scrollView.RegisterCallback<GeometryChangedEvent>(ReInitialize);
+                return;
+
+                void ReInitialize(GeometryChangedEvent evt)
+                {
+                    InitializeScrollView(scrollView);
+                    scrollView.UnregisterCallback<GeometryChangedEvent>(ReInitialize);
+                }
+            }
+            VisualElement trackerElement = parent.Q<VisualElement>(
+                className: "unity-base-slider__tracker"
+            );
+            VisualElement draggerElement = parent.Q<VisualElement>(
+                className: "unity-base-slider__dragger"
+            );
+
+            ScrollBarCaptureState scrollBarCaptureState = ScrollBarCaptureState.None;
+
+            RegisterCallbacks();
+            return;
+
+            void RegisterCallbacks()
+            {
+                // Hover Events
+                trackerElement.RegisterCallback<MouseEnterEvent>(OnTrackerMouseEnter);
+                trackerElement.RegisterCallback<MouseLeaveEvent>(OnTrackerMouseLeave);
+                draggerElement.RegisterCallback<MouseEnterEvent>(OnDraggerMouseEnter);
+                draggerElement.RegisterCallback<MouseLeaveEvent>(OnDraggerMouseLeave);
+
+                trackerElement.RegisterCallback<PointerDownEvent>(OnTrackerPointerDown);
+                trackerElement.RegisterCallback<PointerUpEvent>(OnTrackerPointerUp);
+                draggerElement.RegisterCallback<PointerDownEvent>(OnDraggerPointerDown);
+                parent.RegisterCallback<PointerCaptureOutEvent>(OnDraggerPointerCaptureOut);
+            }
+
+            void OnTrackerPointerDown(PointerDownEvent evt)
+            {
+                scrollBarCaptureState = ScrollBarCaptureState.TrackerActive;
+                draggerElement.AddToClassList("tracker-active");
+                draggerElement.RemoveFromClassList("tracker-hovered");
+            }
+
+            void OnTrackerPointerUp(PointerUpEvent evt)
+            {
+                scrollBarCaptureState = ScrollBarCaptureState.None;
+                draggerElement.RemoveFromClassList("tracker-active");
+            }
+
+            void OnDraggerPointerDown(PointerDownEvent evt)
+            {
+                scrollBarCaptureState = ScrollBarCaptureState.DraggerActive;
+                trackerElement.AddToClassList("dragger-active");
+                draggerElement.AddToClassList("dragger-active");
+                trackerElement.RemoveFromClassList("dragger-hovered");
+            }
+
+            void OnDraggerPointerCaptureOut(PointerCaptureOutEvent evt)
+            {
+                scrollBarCaptureState = ScrollBarCaptureState.None;
+                trackerElement.RemoveFromClassList("dragger-active");
+                draggerElement.RemoveFromClassList("tracker-active");
+                draggerElement.RemoveFromClassList("dragger-active");
+            }
+
+            void OnTrackerMouseEnter(MouseEnterEvent evt)
+            {
+                if (scrollBarCaptureState == ScrollBarCaptureState.None)
+                {
+                    draggerElement.AddToClassList("tracker-hovered");
+                }
+            }
+
+            void OnTrackerMouseLeave(MouseLeaveEvent evt)
+            {
+                if (scrollBarCaptureState == ScrollBarCaptureState.None)
+                {
+                    draggerElement.RemoveFromClassList("tracker-hovered");
+                }
+            }
+
+            void OnDraggerMouseEnter(MouseEnterEvent evt)
+            {
+                if (scrollBarCaptureState == ScrollBarCaptureState.None)
+                {
+                    trackerElement.AddToClassList("dragger-hovered");
+                }
+            }
+
+            void OnDraggerMouseLeave(MouseLeaveEvent evt)
+            {
+                if (scrollBarCaptureState == ScrollBarCaptureState.None)
+                {
+                    trackerElement.RemoveFromClassList("dragger-hovered");
+                }
+            }
+        }
+
+        private static void HandleUnityLog(string message, string stackTrace, LogType type)
+        {
+            Terminal.Buffer?.HandleLog(message, stackTrace, (TerminalLogType)type);
+        }
+
         public void ToggleState(TerminalState newState)
         {
             SetState(_state == newState ? TerminalState.Closed : newState);
@@ -657,11 +851,411 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
         }
 
-        private static void ConsumeAndLogErrors()
+        public Font SetRandomFont(bool persist = false)
         {
-            while (Terminal.Shell?.TryConsumeErrorMessage(out string error) == true)
+            if (_fontPack == null)
             {
-                Terminal.Log(TerminalLogType.Error, $"Error: {error}");
+                return _runtimeFont;
+            }
+
+            List<Font> loadedFonts = _fontPack._fonts;
+            if (loadedFonts is not { Count: > 0 })
+            {
+                return _runtimeFont;
+            }
+
+            int currentFontIndex = loadedFonts.IndexOf(_runtimeFont);
+
+            int newFontIndex;
+            do
+            {
+                newFontIndex = ThreadLocalRandom.Instance.Next(loadedFonts.Count);
+            } while (newFontIndex == currentFontIndex && loadedFonts.Count != 1);
+
+            Font newFont = loadedFonts[newFontIndex];
+            SetFont(newFont, persist);
+            return newFont;
+        }
+
+        public void SetFont(Font font, bool persist = false)
+        {
+            SetRuntimeFont(font);
+            if (!persist && CurrentFont == font)
+            {
+                return;
+            }
+
+            if (font == null)
+            {
+                Debug.LogError("Cannot set null font.", this);
+                return;
+            }
+
+            if (_uiDocument == null)
+            {
+                Debug.LogError("Cannot set font, no UIDocument assigned.");
+                return;
+            }
+
+            Font currentFont = _persistedFont;
+            _runtimeFont = font;
+            if (currentFont != font)
+            {
+                Debug.Log(
+                    currentFont == null
+                        ? $"Setting font to {font.name}."
+                        : $"Changing font from {currentFont.name} to {font.name}.",
+                    this
+                );
+            }
+
+            if (persist)
+            {
+                _persistedFont = font;
+            }
+
+            return;
+
+            void SetRuntimeFont(Font toSet)
+            {
+                if (toSet == null)
+                {
+                    return;
+                }
+
+                if (!Application.isPlaying)
+                {
+                    return;
+                }
+
+                if (_uiDocument == null)
+                {
+                    return;
+                }
+
+                VisualElement root = _uiDocument.rootVisualElement;
+                if (root == null)
+                {
+                    return;
+                }
+
+                root.style.unityFontDefinition = new StyleFontDefinition(toSet);
+            }
+        }
+
+        public string SetRandomTheme(bool persist = false)
+        {
+            if (_themePack == null)
+            {
+                return _runtimeTheme;
+            }
+
+            List<string> loadedThemes = _themePack._themeNames;
+            if (loadedThemes is not { Count: > 0 })
+            {
+                return _runtimeTheme;
+            }
+
+            int currentThemeIndex = loadedThemes.IndexOf(_runtimeTheme);
+
+            int newThemeIndex;
+            do
+            {
+                newThemeIndex = ThreadLocalRandom.Instance.Next(loadedThemes.Count);
+            } while (newThemeIndex == currentThemeIndex && loadedThemes.Count != 1);
+
+            string newTheme = loadedThemes[newThemeIndex];
+            SetTheme(newTheme, persist);
+            return newTheme;
+        }
+
+        public void SetTheme(string theme, bool persist = false)
+        {
+            string friendlyThemeName = ThemeNameHelper.GetFriendlyThemeName(theme);
+            SetRuntimeTheme();
+            if (
+                !persist
+                && string.Equals(
+                    friendlyThemeName,
+                    CurrentFriendlyTheme,
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
+            {
+                return;
+            }
+
+            if (!IsValidTheme(out string validatedTheme))
+            {
+                return;
+            }
+
+            string currentTheme = ThemeNameHelper.GetFriendlyThemeName(CurrentTheme);
+            _runtimeTheme = validatedTheme;
+            if (!string.Equals(currentTheme, friendlyThemeName, StringComparison.OrdinalIgnoreCase))
+            {
+                Debug.Log($"Changing theme from {currentTheme} to {friendlyThemeName}.", this);
+            }
+
+            if (persist)
+            {
+                _persistedTheme = validatedTheme;
+            }
+
+            return;
+
+            bool IsValidTheme(out string validTheme)
+            {
+                if (string.IsNullOrWhiteSpace(theme) || _themePack == null)
+                {
+                    validTheme = default;
+                    return false;
+                }
+
+                List<string> themeNames = _themePack._themeNames;
+                if (themeNames.Contains(theme, StringComparer.OrdinalIgnoreCase))
+                {
+                    validTheme = theme;
+                    return true;
+                }
+
+                foreach (string themeName in ThemeNameHelper.GetPossibleThemeNames(theme))
+                {
+                    if (themeNames.Contains(themeName, StringComparer.OrdinalIgnoreCase))
+                    {
+                        validTheme = themeName;
+                        return true;
+                    }
+                }
+
+                validTheme = default;
+                return false;
+            }
+
+            void SetRuntimeTheme()
+            {
+                if (!Application.isPlaying)
+                {
+                    return;
+                }
+
+                if (!IsValidTheme(out validatedTheme))
+                {
+                    return;
+                }
+
+                if (_uiDocument == null)
+                {
+                    return;
+                }
+
+                VisualElement terminalRoot = _uiDocument.rootVisualElement?.Q<VisualElement>(
+                    TerminalRootName
+                );
+                if (terminalRoot == null)
+                {
+                    return;
+                }
+
+                string[] loadedThemes = terminalRoot
+                    .GetClasses()
+                    .Where(ThemeNameHelper.IsThemeName)
+                    .ToArray();
+
+                foreach (string loadedTheme in loadedThemes)
+                {
+                    terminalRoot.RemoveFromClassList(loadedTheme);
+                }
+
+                terminalRoot.AddToClassList(validatedTheme);
+            }
+        }
+
+        public void HandlePrevious()
+        {
+            if (_state == TerminalState.Closed)
+            {
+                return;
+            }
+
+            _input.CommandText =
+                Terminal.History?.Previous(skipSameCommandsInHistory) ?? string.Empty;
+            ResetAutoComplete();
+            _needsFocus = true;
+        }
+
+        public void HandleNext()
+        {
+            if (_state == TerminalState.Closed)
+            {
+                return;
+            }
+
+            _input.CommandText = Terminal.History?.Next(skipSameCommandsInHistory) ?? string.Empty;
+            ResetAutoComplete();
+            _needsFocus = true;
+        }
+
+        public void Close()
+        {
+            SetState(TerminalState.Closed);
+        }
+
+        public void ToggleSmall()
+        {
+            ToggleState(TerminalState.OpenSmall);
+        }
+
+        public void ToggleFull()
+        {
+            ToggleState(TerminalState.OpenFull);
+        }
+
+        public void EnterCommand()
+        {
+            if (_state == TerminalState.Closed)
+            {
+                return;
+            }
+
+            string commandText = _input.CommandText ?? string.Empty;
+            if (commandText.NeedsTrim())
+            {
+                commandText = commandText.Trim();
+            }
+
+            _input.CommandText = commandText;
+            try
+            {
+                if (string.IsNullOrWhiteSpace(commandText))
+                {
+                    return;
+                }
+
+                Terminal.Log(TerminalLogType.Input, commandText);
+                Terminal.Shell?.RunCommand(commandText);
+                while (Terminal.Shell?.TryConsumeErrorMessage(out string error) == true)
+                {
+                    Terminal.Log(TerminalLogType.Error, $"Error: {error}");
+                }
+
+                _input.CommandText = string.Empty;
+                _needsFocus = true;
+                _needsScrollToEnd = true;
+            }
+            finally
+            {
+                ResetAutoComplete();
+            }
+        }
+
+        public void CompleteCommand(bool searchForward = true)
+        {
+            if (_state == TerminalState.Closed)
+            {
+                return;
+            }
+
+            try
+            {
+                /*
+                    Commands with a completion provider own completion for
+                    their input shape: cycling replaces only the active token.
+                    Without a provider the legacy history-based completion
+                    below runs unchanged.
+                 */
+                if (TryTokenComplete(searchForward))
+                {
+                    return;
+                }
+
+                _lastKnownCommandText ??= _input.CommandText ?? string.Empty;
+                _lastCompletionBufferTempCache.Clear();
+                Terminal.AutoComplete?.Complete(
+                    _lastKnownCommandText,
+                    _lastCompletionBufferTempCache
+                );
+                bool equivalentBuffers = true;
+                try
+                {
+                    int completionLength = _lastCompletionBufferTempCache.Count;
+                    equivalentBuffers =
+                        _lastCompletionBuffer.Count == _lastCompletionBufferTempCache.Count;
+                    if (equivalentBuffers)
+                    {
+                        _lastCompletionBufferTempSet.Clear();
+                        foreach (string item in _lastCompletionBuffer)
+                        {
+                            _lastCompletionBufferTempSet.Add(item);
+                        }
+
+                        foreach (string newCompletionItem in _lastCompletionBufferTempCache)
+                        {
+                            if (!_lastCompletionBufferTempSet.Contains(newCompletionItem))
+                            {
+                                equivalentBuffers = false;
+                                break;
+                            }
+                        }
+                    }
+                    if (equivalentBuffers)
+                    {
+                        if (0 < completionLength)
+                        {
+                            if (_lastCompletionIndex == null)
+                            {
+                                _lastCompletionIndex = 0;
+                            }
+                            else if (searchForward)
+                            {
+                                _lastCompletionIndex =
+                                    (_lastCompletionIndex + 1) % completionLength;
+                            }
+                            else
+                            {
+                                _lastCompletionIndex =
+                                    (_lastCompletionIndex - 1 + completionLength)
+                                    % completionLength;
+                            }
+
+                            _input.CommandText = _lastCompletionBuffer[_lastCompletionIndex.Value];
+                        }
+                        else
+                        {
+                            _lastCompletionIndex = null;
+                        }
+                    }
+                    else
+                    {
+                        if (0 < completionLength)
+                        {
+                            _lastCompletionIndex = 0;
+                            _input.CommandText = _lastCompletionBufferTempCache[0];
+                        }
+                        else
+                        {
+                            _lastCompletionIndex = null;
+                        }
+                    }
+                }
+                finally
+                {
+                    if (!equivalentBuffers)
+                    {
+                        _lastCompletionBuffer.Clear();
+                        foreach (string item in _lastCompletionBufferTempCache)
+                        {
+                            _lastCompletionBuffer.Add(item);
+                        }
+                        _previousLastCompletionIndex = null;
+                    }
+
+                    _previousLastCompletionIndex ??= _lastCompletionIndex;
+                }
+            }
+            finally
+            {
+                _needsFocus = true;
             }
         }
 
@@ -838,44 +1432,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
             return true;
         }
 
-        private static bool TokenCompletionsEquivalent(
-            List<CommandCompletion> candidates,
-            List<CommandCompletion> current
-        )
-        {
-            if (candidates.Count != current.Count)
-            {
-                return false;
-            }
-
-            for (int i = 0; i < candidates.Count; ++i)
-            {
-                CommandCompletion candidate = candidates[i];
-                CommandCompletion active = current[i];
-                if (
-                    candidate.InsertionText != active.InsertionText
-                    || candidate.HasReplacementOverride != active.HasReplacementOverride
-                )
-                {
-                    return false;
-                }
-
-                if (
-                    candidate.Replacement is CommandCompletionReplacement candidateReplacement
-                    && active.Replacement is CommandCompletionReplacement activeReplacement
-                    && (
-                        candidateReplacement.Start != activeReplacement.Start
-                        || candidateReplacement.Length != activeReplacement.Length
-                    )
-                )
-                {
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
         private void ApplyTokenCompletion(CommandCompletion completion)
         {
             string input = _tokenCompletionInput ?? string.Empty;
@@ -913,52 +1469,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             _input.CommandText = newInput;
             _needsFocus = true;
-        }
-
-        private static string QuoteInsertionIfNeeded(string insertion, bool tokenQuoted)
-        {
-            if (tokenQuoted)
-            {
-                return insertion;
-            }
-
-            bool containsSpace = false;
-            bool containsDoubleQuote = false;
-            bool containsSingleQuote = false;
-            foreach (char character in insertion)
-            {
-                switch (character)
-                {
-                    case ' ':
-                        containsSpace = true;
-                        break;
-                    case '"':
-                        containsDoubleQuote = true;
-                        break;
-                    case '\'':
-                        containsSingleQuote = true;
-                        break;
-                }
-            }
-
-            if (!containsSpace && !containsDoubleQuote && !containsSingleQuote)
-            {
-                return insertion;
-            }
-
-            if (!containsDoubleQuote)
-            {
-                return "\"" + insertion + "\"";
-            }
-
-            if (!containsSingleQuote)
-            {
-                return "'" + insertion + "'";
-            }
-
-            // The insertion mixes both quote characters; insert it verbatim
-            // rather than producing an untokenizable quoting.
-            return insertion;
         }
 
         private void ResetWindowIdempotent()
@@ -1285,110 +1795,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
                     shouldRenderCursor = !shouldRenderCursor;
                 })
                 .Every(_cursorBlinkRateMilliseconds);
-        }
-
-        private static void InitializeScrollView(ScrollView scrollView)
-        {
-            VisualElement parent = scrollView.Q<VisualElement>(
-                className: "unity-scroller--vertical"
-            );
-            if (parent == null)
-            {
-                scrollView.RegisterCallback<GeometryChangedEvent>(ReInitialize);
-                return;
-
-                void ReInitialize(GeometryChangedEvent evt)
-                {
-                    InitializeScrollView(scrollView);
-                    scrollView.UnregisterCallback<GeometryChangedEvent>(ReInitialize);
-                }
-            }
-            VisualElement trackerElement = parent.Q<VisualElement>(
-                className: "unity-base-slider__tracker"
-            );
-            VisualElement draggerElement = parent.Q<VisualElement>(
-                className: "unity-base-slider__dragger"
-            );
-
-            ScrollBarCaptureState scrollBarCaptureState = ScrollBarCaptureState.None;
-
-            RegisterCallbacks();
-            return;
-
-            void RegisterCallbacks()
-            {
-                // Hover Events
-                trackerElement.RegisterCallback<MouseEnterEvent>(OnTrackerMouseEnter);
-                trackerElement.RegisterCallback<MouseLeaveEvent>(OnTrackerMouseLeave);
-                draggerElement.RegisterCallback<MouseEnterEvent>(OnDraggerMouseEnter);
-                draggerElement.RegisterCallback<MouseLeaveEvent>(OnDraggerMouseLeave);
-
-                trackerElement.RegisterCallback<PointerDownEvent>(OnTrackerPointerDown);
-                trackerElement.RegisterCallback<PointerUpEvent>(OnTrackerPointerUp);
-                draggerElement.RegisterCallback<PointerDownEvent>(OnDraggerPointerDown);
-                parent.RegisterCallback<PointerCaptureOutEvent>(OnDraggerPointerCaptureOut);
-            }
-
-            void OnTrackerPointerDown(PointerDownEvent evt)
-            {
-                scrollBarCaptureState = ScrollBarCaptureState.TrackerActive;
-                draggerElement.AddToClassList("tracker-active");
-                draggerElement.RemoveFromClassList("tracker-hovered");
-            }
-
-            void OnTrackerPointerUp(PointerUpEvent evt)
-            {
-                scrollBarCaptureState = ScrollBarCaptureState.None;
-                draggerElement.RemoveFromClassList("tracker-active");
-            }
-
-            void OnDraggerPointerDown(PointerDownEvent evt)
-            {
-                scrollBarCaptureState = ScrollBarCaptureState.DraggerActive;
-                trackerElement.AddToClassList("dragger-active");
-                draggerElement.AddToClassList("dragger-active");
-                trackerElement.RemoveFromClassList("dragger-hovered");
-            }
-
-            void OnDraggerPointerCaptureOut(PointerCaptureOutEvent evt)
-            {
-                scrollBarCaptureState = ScrollBarCaptureState.None;
-                trackerElement.RemoveFromClassList("dragger-active");
-                draggerElement.RemoveFromClassList("tracker-active");
-                draggerElement.RemoveFromClassList("dragger-active");
-            }
-
-            void OnTrackerMouseEnter(MouseEnterEvent evt)
-            {
-                if (scrollBarCaptureState == ScrollBarCaptureState.None)
-                {
-                    draggerElement.AddToClassList("tracker-hovered");
-                }
-            }
-
-            void OnTrackerMouseLeave(MouseLeaveEvent evt)
-            {
-                if (scrollBarCaptureState == ScrollBarCaptureState.None)
-                {
-                    draggerElement.RemoveFromClassList("tracker-hovered");
-                }
-            }
-
-            void OnDraggerMouseEnter(MouseEnterEvent evt)
-            {
-                if (scrollBarCaptureState == ScrollBarCaptureState.None)
-                {
-                    trackerElement.AddToClassList("dragger-hovered");
-                }
-            }
-
-            void OnDraggerMouseLeave(MouseLeaveEvent evt)
-            {
-                if (scrollBarCaptureState == ScrollBarCaptureState.None)
-                {
-                    trackerElement.RemoveFromClassList("dragger-hovered");
-                }
-            }
         }
 
         private void RefreshUI()
@@ -2015,414 +2421,6 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
         }
 
-        public Font SetRandomFont(bool persist = false)
-        {
-            if (_fontPack == null)
-            {
-                return _runtimeFont;
-            }
-
-            List<Font> loadedFonts = _fontPack._fonts;
-            if (loadedFonts is not { Count: > 0 })
-            {
-                return _runtimeFont;
-            }
-
-            int currentFontIndex = loadedFonts.IndexOf(_runtimeFont);
-
-            int newFontIndex;
-            do
-            {
-                newFontIndex = ThreadLocalRandom.Instance.Next(loadedFonts.Count);
-            } while (newFontIndex == currentFontIndex && loadedFonts.Count != 1);
-
-            Font newFont = loadedFonts[newFontIndex];
-            SetFont(newFont, persist);
-            return newFont;
-        }
-
-        public void SetFont(Font font, bool persist = false)
-        {
-            SetRuntimeFont(font);
-            if (!persist && CurrentFont == font)
-            {
-                return;
-            }
-
-            if (font == null)
-            {
-                Debug.LogError("Cannot set null font.", this);
-                return;
-            }
-
-            if (_uiDocument == null)
-            {
-                Debug.LogError("Cannot set font, no UIDocument assigned.");
-                return;
-            }
-
-            Font currentFont = _persistedFont;
-            _runtimeFont = font;
-            if (currentFont != font)
-            {
-                Debug.Log(
-                    currentFont == null
-                        ? $"Setting font to {font.name}."
-                        : $"Changing font from {currentFont.name} to {font.name}.",
-                    this
-                );
-            }
-
-            if (persist)
-            {
-                _persistedFont = font;
-            }
-
-            return;
-
-            void SetRuntimeFont(Font toSet)
-            {
-                if (toSet == null)
-                {
-                    return;
-                }
-
-                if (!Application.isPlaying)
-                {
-                    return;
-                }
-
-                if (_uiDocument == null)
-                {
-                    return;
-                }
-
-                VisualElement root = _uiDocument.rootVisualElement;
-                if (root == null)
-                {
-                    return;
-                }
-
-                root.style.unityFontDefinition = new StyleFontDefinition(toSet);
-            }
-        }
-
-        public string SetRandomTheme(bool persist = false)
-        {
-            if (_themePack == null)
-            {
-                return _runtimeTheme;
-            }
-
-            List<string> loadedThemes = _themePack._themeNames;
-            if (loadedThemes is not { Count: > 0 })
-            {
-                return _runtimeTheme;
-            }
-
-            int currentThemeIndex = loadedThemes.IndexOf(_runtimeTheme);
-
-            int newThemeIndex;
-            do
-            {
-                newThemeIndex = ThreadLocalRandom.Instance.Next(loadedThemes.Count);
-            } while (newThemeIndex == currentThemeIndex && loadedThemes.Count != 1);
-
-            string newTheme = loadedThemes[newThemeIndex];
-            SetTheme(newTheme, persist);
-            return newTheme;
-        }
-
-        public void SetTheme(string theme, bool persist = false)
-        {
-            string friendlyThemeName = ThemeNameHelper.GetFriendlyThemeName(theme);
-            SetRuntimeTheme();
-            if (
-                !persist
-                && string.Equals(
-                    friendlyThemeName,
-                    CurrentFriendlyTheme,
-                    StringComparison.OrdinalIgnoreCase
-                )
-            )
-            {
-                return;
-            }
-
-            if (!IsValidTheme(out string validatedTheme))
-            {
-                return;
-            }
-
-            string currentTheme = ThemeNameHelper.GetFriendlyThemeName(CurrentTheme);
-            _runtimeTheme = validatedTheme;
-            if (!string.Equals(currentTheme, friendlyThemeName, StringComparison.OrdinalIgnoreCase))
-            {
-                Debug.Log($"Changing theme from {currentTheme} to {friendlyThemeName}.", this);
-            }
-
-            if (persist)
-            {
-                _persistedTheme = validatedTheme;
-            }
-
-            return;
-
-            bool IsValidTheme(out string validTheme)
-            {
-                if (string.IsNullOrWhiteSpace(theme) || _themePack == null)
-                {
-                    validTheme = default;
-                    return false;
-                }
-
-                List<string> themeNames = _themePack._themeNames;
-                if (themeNames.Contains(theme, StringComparer.OrdinalIgnoreCase))
-                {
-                    validTheme = theme;
-                    return true;
-                }
-
-                foreach (string themeName in ThemeNameHelper.GetPossibleThemeNames(theme))
-                {
-                    if (themeNames.Contains(themeName, StringComparer.OrdinalIgnoreCase))
-                    {
-                        validTheme = themeName;
-                        return true;
-                    }
-                }
-
-                validTheme = default;
-                return false;
-            }
-
-            void SetRuntimeTheme()
-            {
-                if (!Application.isPlaying)
-                {
-                    return;
-                }
-
-                if (!IsValidTheme(out validatedTheme))
-                {
-                    return;
-                }
-
-                if (_uiDocument == null)
-                {
-                    return;
-                }
-
-                VisualElement terminalRoot = _uiDocument.rootVisualElement?.Q<VisualElement>(
-                    TerminalRootName
-                );
-                if (terminalRoot == null)
-                {
-                    return;
-                }
-
-                string[] loadedThemes = terminalRoot
-                    .GetClasses()
-                    .Where(ThemeNameHelper.IsThemeName)
-                    .ToArray();
-
-                foreach (string loadedTheme in loadedThemes)
-                {
-                    terminalRoot.RemoveFromClassList(loadedTheme);
-                }
-
-                terminalRoot.AddToClassList(validatedTheme);
-            }
-        }
-
-        public void HandlePrevious()
-        {
-            if (_state == TerminalState.Closed)
-            {
-                return;
-            }
-
-            _input.CommandText =
-                Terminal.History?.Previous(skipSameCommandsInHistory) ?? string.Empty;
-            ResetAutoComplete();
-            _needsFocus = true;
-        }
-
-        public void HandleNext()
-        {
-            if (_state == TerminalState.Closed)
-            {
-                return;
-            }
-
-            _input.CommandText = Terminal.History?.Next(skipSameCommandsInHistory) ?? string.Empty;
-            ResetAutoComplete();
-            _needsFocus = true;
-        }
-
-        public void Close()
-        {
-            SetState(TerminalState.Closed);
-        }
-
-        public void ToggleSmall()
-        {
-            ToggleState(TerminalState.OpenSmall);
-        }
-
-        public void ToggleFull()
-        {
-            ToggleState(TerminalState.OpenFull);
-        }
-
-        public void EnterCommand()
-        {
-            if (_state == TerminalState.Closed)
-            {
-                return;
-            }
-
-            string commandText = _input.CommandText ?? string.Empty;
-            if (commandText.NeedsTrim())
-            {
-                commandText = commandText.Trim();
-            }
-
-            _input.CommandText = commandText;
-            try
-            {
-                if (string.IsNullOrWhiteSpace(commandText))
-                {
-                    return;
-                }
-
-                Terminal.Log(TerminalLogType.Input, commandText);
-                Terminal.Shell?.RunCommand(commandText);
-                while (Terminal.Shell?.TryConsumeErrorMessage(out string error) == true)
-                {
-                    Terminal.Log(TerminalLogType.Error, $"Error: {error}");
-                }
-
-                _input.CommandText = string.Empty;
-                _needsFocus = true;
-                _needsScrollToEnd = true;
-            }
-            finally
-            {
-                ResetAutoComplete();
-            }
-        }
-
-        public void CompleteCommand(bool searchForward = true)
-        {
-            if (_state == TerminalState.Closed)
-            {
-                return;
-            }
-
-            try
-            {
-                /*
-                    Commands with a completion provider own completion for
-                    their input shape: cycling replaces only the active token.
-                    Without a provider the legacy history-based completion
-                    below runs unchanged.
-                 */
-                if (TryTokenComplete(searchForward))
-                {
-                    return;
-                }
-
-                _lastKnownCommandText ??= _input.CommandText ?? string.Empty;
-                _lastCompletionBufferTempCache.Clear();
-                Terminal.AutoComplete?.Complete(
-                    _lastKnownCommandText,
-                    _lastCompletionBufferTempCache
-                );
-                bool equivalentBuffers = true;
-                try
-                {
-                    int completionLength = _lastCompletionBufferTempCache.Count;
-                    equivalentBuffers =
-                        _lastCompletionBuffer.Count == _lastCompletionBufferTempCache.Count;
-                    if (equivalentBuffers)
-                    {
-                        _lastCompletionBufferTempSet.Clear();
-                        foreach (string item in _lastCompletionBuffer)
-                        {
-                            _lastCompletionBufferTempSet.Add(item);
-                        }
-
-                        foreach (string newCompletionItem in _lastCompletionBufferTempCache)
-                        {
-                            if (!_lastCompletionBufferTempSet.Contains(newCompletionItem))
-                            {
-                                equivalentBuffers = false;
-                                break;
-                            }
-                        }
-                    }
-                    if (equivalentBuffers)
-                    {
-                        if (0 < completionLength)
-                        {
-                            if (_lastCompletionIndex == null)
-                            {
-                                _lastCompletionIndex = 0;
-                            }
-                            else if (searchForward)
-                            {
-                                _lastCompletionIndex =
-                                    (_lastCompletionIndex + 1) % completionLength;
-                            }
-                            else
-                            {
-                                _lastCompletionIndex =
-                                    (_lastCompletionIndex - 1 + completionLength)
-                                    % completionLength;
-                            }
-
-                            _input.CommandText = _lastCompletionBuffer[_lastCompletionIndex.Value];
-                        }
-                        else
-                        {
-                            _lastCompletionIndex = null;
-                        }
-                    }
-                    else
-                    {
-                        if (0 < completionLength)
-                        {
-                            _lastCompletionIndex = 0;
-                            _input.CommandText = _lastCompletionBufferTempCache[0];
-                        }
-                        else
-                        {
-                            _lastCompletionIndex = null;
-                        }
-                    }
-                }
-                finally
-                {
-                    if (!equivalentBuffers)
-                    {
-                        _lastCompletionBuffer.Clear();
-                        foreach (string item in _lastCompletionBufferTempCache)
-                        {
-                            _lastCompletionBuffer.Add(item);
-                        }
-                        _previousLastCompletionIndex = null;
-                    }
-
-                    _previousLastCompletionIndex ??= _lastCompletionIndex;
-                }
-            }
-            finally
-            {
-                _needsFocus = true;
-            }
-        }
-
         private void StartHeightAnimation()
         {
             if (Mathf.Approximately(_currentWindowHeight, _targetWindowHeight))
@@ -2447,7 +2445,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             AnimationCurve selectedCurve;
             float animationDuration;
-            bool isExpanding = _targetWindowHeight > _initialWindowHeight;
+            bool isExpanding = _initialWindowHeight < _targetWindowHeight;
 
             if (isExpanding)
             {
@@ -2504,9 +2502,11 @@ namespace WallstopStudios.DxCommandTerminal.UI
             }
         }
 
-        private static void HandleUnityLog(string message, string stackTrace, LogType type)
+        private enum ScrollBarCaptureState
         {
-            Terminal.Buffer?.HandleLog(message, stackTrace, (TerminalLogType)type);
+            None = 0,
+            DraggerActive = 1,
+            TrackerActive = 2,
         }
     }
 }

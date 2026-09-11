@@ -12,6 +12,13 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
     [Generator]
     public sealed class CommandCatalogGenerator : ISourceGenerator
     {
+        internal const string ArgumentMetadataName =
+            "WallstopStudios.DxCommandTerminal.Backend.CommandArg";
+
+        // Matches RegisterCommandAttribute's Contexts default so attributed
+        // commands that omit Contexts keep unrestricted eligibility.
+        internal const int AllExecutionContexts = 7;
+
         private const string AttributeMetadataName =
             "WallstopStudios.DxCommandTerminal.Attributes.RegisterCommandAttribute";
 
@@ -21,123 +28,28 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
         private const string ContextsMetadataName =
             "WallstopStudios.DxCommandTerminal.Backend.CommandExecutionContexts";
 
-        internal const string ArgumentMetadataName =
-            "WallstopStudios.DxCommandTerminal.Backend.CommandArg";
-
-        // Matches RegisterCommandAttribute's Contexts default so attributed
-        // commands that omit Contexts keep unrestricted eligibility.
-        internal const int AllExecutionContexts = 7;
-
         private const string GeneratedHintName = "DxCommandTerminalCommandCatalog.g.cs";
-
-        public void Initialize(GeneratorInitializationContext context)
-        {
-            context.RegisterForSyntaxNotifications(() => new CommandSyntaxReceiver());
-        }
-
-        public void Execute(GeneratorExecutionContext context)
-        {
-            if (context.SyntaxReceiver is not CommandSyntaxReceiver receiver)
-            {
-                return;
-            }
-
-            Compilation compilation = context.Compilation;
-
-            /*
-                Version-skew guard: the generated code compiles against the
-                runtime contract types. When the consuming compilation carries
-                an older runtime assembly that predates the catalog contract,
-                emit nothing so discovery falls back to reflection instead of
-                breaking the consumer build.
-             */
-            ITypeSymbol entryType = compilation.GetTypeByMetadataName(EntryMetadataName);
-            ITypeSymbol commandArgumentType = compilation.GetTypeByMetadataName(
-                ArgumentMetadataName
-            );
-            ITypeSymbol contextsType = compilation.GetTypeByMetadataName(ContextsMetadataName);
-            if (entryType == null || commandArgumentType == null || contextsType == null)
-            {
-                return;
-            }
-
-            List<CommandModel> commands = new List<CommandModel>();
-            HashSet<IMethodSymbol> seenMethods = new HashSet<IMethodSymbol>(
-                SymbolEqualityComparer.Default
-            );
-            foreach (MethodDeclarationSyntax candidate in receiver.Candidates)
-            {
-                context.CancellationToken.ThrowIfCancellationRequested();
-                SemanticModel semanticModel = compilation.GetSemanticModel(candidate.SyntaxTree);
-                IMethodSymbol method = semanticModel.GetDeclaredSymbol(
-                    candidate,
-                    context.CancellationToken
-                );
-                if (method == null)
-                {
-                    // Declarations inside inactive preprocessor branches and
-                    // other exotic syntax contribute no symbol; legacy
-                    // reflection discovery would not see them either.
-                    continue;
-                }
-
-                /*
-                    Partial methods surface as two distinct symbols (the
-                    definition part and the implementation part); canonicalize
-                    on the definition so the merged symbol is emitted once,
-                    exactly as reflection's type.GetMethods sees it.
-                 */
-                IMethodSymbol canonicalMethod = method.PartialDefinitionPart ?? method;
-                if (!seenMethods.Add(canonicalMethod))
-                {
-                    continue;
-                }
-                if (!TryParseAttribute(method, out CommandAttributeData attribute))
-                {
-                    continue;
-                }
-
-                CommandModel model = CommandModelBuilder.Build(
-                    method,
-                    attribute,
-                    commandArgumentType
-                );
-                if (model != null)
-                {
-                    commands.Add(model);
-                }
-            }
-
-            if (commands.Count == 0)
-            {
-                return;
-            }
-
-            /*
-                The generated catalog can only name types whose declaration
-                chain is accessible from same-assembly code. For a handler in
-                a private nested or file-local class, every emission path
-                (method-group bind, cached binder, rejected-command accessor)
-                would emit an illegal typeof(...). Dropping just that command
-                would silently lose it, so the assembly gets no catalog at all
-                and the shell falls back to reflection, which finds everything
-                the compatibility path has always found.
-             */
-            foreach (CommandModel command in commands)
-            {
-                if (!command.TypeChainNameable)
-                {
-                    return;
-                }
-            }
-
-            string source = CatalogEmitter.Emit(commands);
-            context.AddSource(GeneratedHintName, source);
-        }
 
         private static bool IsRegisterCommand(INamedTypeSymbol attributeClass)
         {
             if (attributeClass == null)
+            {
+                return false;
+            }
+
+            /*
+                Cheap name check first: candidate methods carry several
+                unrelated attributes ([Test], [DllImport], ...), and the
+                display string that resolves the namespace qualification is
+                only built when the simple name already matches.
+             */
+            if (
+                !string.Equals(
+                    attributeClass.Name,
+                    "RegisterCommandAttribute",
+                    StringComparison.Ordinal
+                )
+            )
             {
                 return false;
             }
@@ -247,6 +159,111 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                         : AllExecutionContexts;
                     break;
             }
+        }
+
+        public void Initialize(GeneratorInitializationContext context)
+        {
+            context.RegisterForSyntaxNotifications(() => new CommandSyntaxReceiver());
+        }
+
+        public void Execute(GeneratorExecutionContext context)
+        {
+            if (context.SyntaxReceiver is not CommandSyntaxReceiver receiver)
+            {
+                return;
+            }
+
+            Compilation compilation = context.Compilation;
+
+            /*
+                Version-skew guard: the generated code compiles against the
+                runtime contract types. When the consuming compilation carries
+                an older runtime assembly that predates the catalog contract,
+                emit nothing so discovery falls back to reflection instead of
+                breaking the consumer build.
+             */
+            ITypeSymbol entryType = compilation.GetTypeByMetadataName(EntryMetadataName);
+            ITypeSymbol commandArgumentType = compilation.GetTypeByMetadataName(
+                ArgumentMetadataName
+            );
+            ITypeSymbol contextsType = compilation.GetTypeByMetadataName(ContextsMetadataName);
+            if (entryType == null || commandArgumentType == null || contextsType == null)
+            {
+                return;
+            }
+
+            List<CommandModel> commands = new List<CommandModel>();
+            HashSet<IMethodSymbol> seenMethods = new HashSet<IMethodSymbol>(
+                SymbolEqualityComparer.Default
+            );
+            foreach (MethodDeclarationSyntax candidate in receiver.Candidates)
+            {
+                context.CancellationToken.ThrowIfCancellationRequested();
+                SemanticModel semanticModel = compilation.GetSemanticModel(candidate.SyntaxTree);
+                IMethodSymbol method = semanticModel.GetDeclaredSymbol(
+                    candidate,
+                    context.CancellationToken
+                );
+                if (method == null)
+                {
+                    // Declarations inside inactive preprocessor branches and
+                    // other exotic syntax contribute no symbol; legacy
+                    // reflection discovery would not see them either.
+                    continue;
+                }
+
+                /*
+                    Partial methods surface as two distinct symbols (the
+                    definition part and the implementation part); canonicalize
+                    on the definition so the merged symbol is emitted once,
+                    exactly as reflection's type.GetMethods sees it.
+                 */
+                IMethodSymbol canonicalMethod = method.PartialDefinitionPart ?? method;
+                if (!seenMethods.Add(canonicalMethod))
+                {
+                    continue;
+                }
+                if (!TryParseAttribute(method, out CommandAttributeData attribute))
+                {
+                    continue;
+                }
+
+                CommandModel model = CommandModelBuilder.Build(
+                    method,
+                    attribute,
+                    commandArgumentType
+                );
+                if (model != null)
+                {
+                    commands.Add(model);
+                }
+            }
+
+            if (commands.Count == 0)
+            {
+                return;
+            }
+
+            /*
+                The generated catalog can only name types whose declaration
+                chain is accessible from same-assembly code. For a handler in
+                a private nested or file-local class, every emission path
+                (method-group bind, cached binder, rejected-command accessor)
+                would emit an illegal typeof(...). Dropping just that command
+                would silently lose it, so the assembly gets no catalog at all
+                and the shell falls back to reflection, which finds everything
+                the compatibility path has always found.
+             */
+            foreach (CommandModel command in commands)
+            {
+                if (!command.TypeChainNameable)
+                {
+                    return;
+                }
+            }
+
+            string source = CatalogEmitter.Emit(commands);
+            context.AddSource(GeneratedHintName, source);
         }
     }
 
@@ -375,6 +392,39 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             return model;
         }
 
+        /*
+            Mirrors RegisterCommandAttribute.NormalizeName exactly: explicit
+            names are stripped of spaces at construction, blank names fall
+            back to inference, and the final result is space-stripped again.
+            The guards make the mirror allocation-free when there is nothing
+            to strip (string.Replace and string.Trim return the original
+            instance unchanged, but only after a search).
+         */
+        public static string NormalizeName(string explicitName, string methodName)
+        {
+            string name = explicitName;
+            if (name != null && name.Contains(" "))
+            {
+                name = name.Replace(" ", string.Empty);
+            }
+
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                name = InferCommandName(methodName);
+            }
+
+            // Method names are identifiers, so inference cannot produce
+            // spaces or surrounding whitespace; the guard keeps this a
+            // no-op pass for the common case while preserving the runtime
+            // attribute's exact semantics.
+            if (name.Contains(" "))
+            {
+                name = name.Replace(" ", string.Empty);
+            }
+
+            return name.Trim();
+        }
+
         private static void BuildSignature(
             IMethodSymbol method,
             ITypeSymbol commandArgumentType,
@@ -494,7 +544,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
 
             if (type is INamedTypeSymbol namedType)
             {
-                if (namedType.TypeParameters.Length > 0 && namedType.TypeArguments.Length == 0)
+                if (0 < namedType.TypeParameters.Length && namedType.TypeArguments.Length == 0)
                 {
                     // Generic definition; addressable only in unbound form,
                     // which the caller handles via ContainingTypeIsUnbound.
@@ -566,39 +616,6 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             }
         }
 
-        /*
-            Mirrors RegisterCommandAttribute.NormalizeName exactly: explicit
-            names are stripped of spaces at construction, blank names fall
-            back to inference, and the final result is space-stripped again.
-            The guards make the mirror allocation-free when there is nothing
-            to strip (string.Replace and string.Trim return the original
-            instance unchanged, but only after a search).
-         */
-        public static string NormalizeName(string explicitName, string methodName)
-        {
-            string name = explicitName;
-            if (name != null && name.Contains(" "))
-            {
-                name = name.Replace(" ", string.Empty);
-            }
-
-            if (string.IsNullOrWhiteSpace(name))
-            {
-                name = InferCommandName(methodName);
-            }
-
-            // Method names are identifiers, so inference cannot produce
-            // spaces or surrounding whitespace; the guard keeps this a
-            // no-op pass for the common case while preserving the runtime
-            // attribute's exact semantics.
-            if (name.Contains(" "))
-            {
-                name = name.Replace(" ", string.Empty);
-            }
-
-            return name.Trim();
-        }
-
         private static string InferCommandName(string methodName)
         {
             const string commandId = "COMMAND";
@@ -654,7 +671,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
 
             if (namedType.TypeArguments.Length == 0)
             {
-                return namedType.TypeParameters.Length > 0;
+                return 0 < namedType.TypeParameters.Length;
             }
 
             foreach (ITypeSymbol typeArgument in namedType.TypeArguments)
@@ -715,7 +732,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                 name = "@" + name;
             }
 
-            if (arity > 0)
+            if (0 < arity)
             {
                 // Generator-time formatting only; string.Concat keeps the
                 // arity suffix a single allocation.
@@ -746,7 +763,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
 
             foreach (AttributeListSyntax attributeList in method.AttributeLists)
             {
-                if (attributeList.Attributes.Count > 0)
+                if (0 < attributeList.Attributes.Count)
                 {
                     Candidates.Add(method);
                     return;

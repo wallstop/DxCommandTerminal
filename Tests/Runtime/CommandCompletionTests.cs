@@ -8,6 +8,33 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
     public sealed class CommandCompletionTests
     {
+        private static CommandCompletionProvider Record(List<int> stages)
+        {
+            return (in CommandCompletionContext context, List<CommandCompletion> results) =>
+                stages.Add(context.ActiveArgumentIndex);
+        }
+
+        private static void Invoke(CommandCompletionProvider provider, int activeArgumentIndex)
+        {
+            provider(CreateContext(activeArgumentIndex), new List<CommandCompletion>());
+        }
+
+        private static CommandCompletionContext CreateContext(int activeArgumentIndex)
+        {
+            return new CommandCompletionContext(
+                CommandExecutionContext.Current,
+                string.Empty,
+                0,
+                activeArgumentIndex,
+                new List<CommandArg>(),
+                string.Empty,
+                0,
+                0,
+                false,
+                null
+            );
+        }
+
         [Test]
         public void ReplacementOverrideValidatesBothValues()
         {
@@ -112,33 +139,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.Throws<ArgumentNullException>(
                 () => CommandCompletionProviders.Staged((CommandCompletionProvider[])null),
                 "A null stage array is rejected"
-            );
-        }
-
-        private static CommandCompletionProvider Record(List<int> stages)
-        {
-            return (in CommandCompletionContext context, List<CommandCompletion> results) =>
-                stages.Add(context.ActiveArgumentIndex);
-        }
-
-        private static void Invoke(CommandCompletionProvider provider, int activeArgumentIndex)
-        {
-            provider(CreateContext(activeArgumentIndex), new List<CommandCompletion>());
-        }
-
-        private static CommandCompletionContext CreateContext(int activeArgumentIndex)
-        {
-            return new CommandCompletionContext(
-                CommandExecutionContext.Current,
-                string.Empty,
-                0,
-                activeArgumentIndex,
-                new List<CommandArg>(),
-                string.Empty,
-                0,
-                0,
-                false,
-                null
             );
         }
     }

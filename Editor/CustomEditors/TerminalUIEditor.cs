@@ -202,39 +202,6 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
             }
         }
 
-        private void OnEnable()
-        {
-            _allCommands.Clear();
-            _allCommands.UnionWith(
-                CommandShell
-                    .RegisteredCommands.Value.Select(tuple => tuple.attribute)
-                    .Select(attribute => attribute.Name)
-            );
-            _defaultCommands.Clear();
-            _defaultCommands.UnionWith(
-                CommandShell
-                    .RegisteredCommands.Value.Select(tuple => tuple.attribute)
-                    .Where(tuple => tuple.Default)
-                    .Select(attribute => attribute.Name)
-            );
-            _nonDefaultCommands.Clear();
-            _nonDefaultCommands.UnionWith(
-                CommandShell
-                    .RegisteredCommands.Value.Select(tuple => tuple.attribute)
-                    .Where(tuple => !tuple.Default)
-                    .Select(attribute => attribute.Name)
-            );
-            _fontsByPrefix.Clear();
-
-            ResetStateIdempotent(force: true);
-
-            if (!_editorUpdateAttached)
-            {
-                EditorApplication.update += EditorUpdate;
-                _editorUpdateAttached = true;
-            }
-        }
-
         private static T[] LoadAll<T>()
             where T : Object
         {
@@ -286,6 +253,327 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                 }
             }
             return ordered.ToArray();
+        }
+
+        private static bool CheckForUIDocumentProblems(TerminalUI terminal)
+        {
+            bool anyChanged = false;
+            if (terminal._uiDocument == null)
+            {
+                terminal._uiDocument = terminal.TryGetComponent(out UIDocument uiDocument)
+                    ? uiDocument
+                    : terminal.gameObject.AddComponent<UIDocument>();
+                anyChanged = true;
+            }
+
+            if (terminal._uiDocument.panelSettings != null)
+            {
+                return anyChanged;
+            }
+
+            string[] panelSettingGuids;
+            string absoluteStylesPath = DirectoryHelper.FindAbsolutePathToDirectory("Styles");
+            if (!string.IsNullOrWhiteSpace(absoluteStylesPath))
+            {
+                panelSettingGuids = AssetDatabase.FindAssets(
+                    "t:PanelSettings",
+                    new[] { absoluteStylesPath }
+                );
+                TryFindTerminalSettings();
+                if (terminal._uiDocument.panelSettings != null)
+                {
+                    return true;
+                }
+            }
+
+            List<string> directories = new();
+            if (Directory.Exists(Path.Combine(Application.dataPath, "Library")))
+            {
+                directories.Add("Library");
+            }
+
+            if (Directory.Exists(Path.Combine(Application.dataPath, "Packages")))
+            {
+                directories.Add("Packages");
+            }
+
+            directories.Add("Assets");
+            panelSettingGuids = AssetDatabase.FindAssets("t:PanelSettings", directories.ToArray());
+            TryFindTerminalSettings();
+            return anyChanged;
+
+            void TryFindTerminalSettings()
+            {
+                foreach (string guid in panelSettingGuids)
+                {
+                    string assetPath = AssetDatabase.GUIDToAssetPath(guid);
+                    if (string.IsNullOrWhiteSpace(assetPath))
+                    {
+                        continue;
+                    }
+
+                    if (!assetPath.Contains("TerminalSettings", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    PanelSettings panelSettings = AssetDatabase.LoadAssetAtPath<PanelSettings>(
+                        assetPath
+                    );
+
+                    if (panelSettings == null)
+                    {
+                        continue;
+                    }
+
+                    terminal._uiDocument.panelSettings = panelSettings;
+                    anyChanged = true;
+                    return;
+                }
+            }
+        }
+
+        private static void RenderCommandManipulationHeader()
+        {
+            EditorGUILayout.Space();
+            EditorGUILayout.Space(10);
+            EditorGUILayout.LabelField("Command Manipulation", EditorStyles.boldLabel);
+        }
+
+        private static void CollectFonts(
+            TerminalUI terminal,
+            SortedDictionary<string, SortedDictionary<string, Font>> fontsByPrefix
+        )
+        {
+            if (
+                terminal == null
+                || terminal._fontPack == null
+                || terminal._fontPack._fonts is not { Count: > 0 }
+            )
+            {
+                return;
+            }
+
+            if (fontsByPrefix.Count != 0)
+            {
+                return;
+            }
+
+            foreach (Font font in terminal._fontPack._fonts)
+            {
+                string fontName = font.name;
+                int indexOfSplit = fontName.IndexOf('-', StringComparison.OrdinalIgnoreCase);
+                if (indexOfSplit < 0)
+                {
+                    indexOfSplit = fontName.IndexOf('_', StringComparison.OrdinalIgnoreCase);
+                }
+
+                string key;
+                string secondKey;
+                if (0 <= indexOfSplit)
+                {
+                    key = fontName[..indexOfSplit];
+                    secondKey = fontName[Mathf.Min(indexOfSplit + 1, fontName.Length)..];
+                }
+                else
+                {
+                    key = fontName;
+                    secondKey = string.Empty;
+                }
+
+                if (!fontsByPrefix.TryGetValue(key, out SortedDictionary<string, Font> fontMapping))
+                {
+                    fontMapping = new SortedDictionary<string, Font>(
+                        StringComparer.OrdinalIgnoreCase
+                    );
+                    fontsByPrefix[key] = fontMapping;
+                }
+
+                fontMapping[secondKey] = font;
+            }
+        }
+
+        private static bool TrySetupDefaultTheme(TerminalUI terminal)
+        {
+            if (
+                !string.IsNullOrWhiteSpace(terminal.CurrentTheme)
+                && terminal._themePack != null
+                && terminal._themePack._themeNames.Contains(
+                    terminal.CurrentTheme,
+                    StringComparer.OrdinalIgnoreCase
+                )
+            )
+            {
+                return false;
+            }
+
+            if (terminal._themePack == null || terminal._themePack._themeNames.Count == 0)
+            {
+                return false;
+            }
+
+            string defaultTheme = terminal._themePack._themeNames.FirstOrDefault(theme =>
+                theme.Contains("Dark", StringComparison.OrdinalIgnoreCase)
+            );
+            if (string.IsNullOrWhiteSpace(defaultTheme))
+            {
+                defaultTheme = terminal._themePack._themeNames.FirstOrDefault(theme =>
+                    theme.Contains("Light", StringComparison.OrdinalIgnoreCase)
+                );
+            }
+
+            if (string.IsNullOrWhiteSpace(defaultTheme))
+            {
+                defaultTheme = terminal._themePack._themeNames.FirstOrDefault();
+            }
+
+            terminal.SetTheme(defaultTheme, persist: true);
+            return true;
+        }
+
+        private static bool TrySetupDefaultFont(TerminalUI terminal)
+        {
+            if (
+                terminal.CurrentFont != null
+                && terminal._fontPack != null
+                && terminal._fontPack._fonts.Contains(terminal.CurrentFont)
+            )
+            {
+                return false;
+            }
+
+            if (terminal._fontPack == null || terminal._fontPack._fonts is not { Count: > 0 })
+            {
+                return false;
+            }
+
+            Font defaultFont = terminal._fontPack._fonts.FirstOrDefault(font =>
+                font.name.Contains("SourceCodePro", StringComparison.OrdinalIgnoreCase)
+                && font.name.Contains("Regular", StringComparison.OrdinalIgnoreCase)
+            );
+            if (defaultFont == null)
+            {
+                defaultFont = terminal._fontPack._fonts.FirstOrDefault(font =>
+                    font.name.Contains("Mono", StringComparison.OrdinalIgnoreCase)
+                    && font.name.Contains("Regular", StringComparison.OrdinalIgnoreCase)
+                );
+            }
+            if (defaultFont == null)
+            {
+                defaultFont = terminal._fontPack._fonts.FirstOrDefault(font =>
+                    font.name.Contains("Mono", StringComparison.OrdinalIgnoreCase)
+                );
+            }
+            if (defaultFont == null)
+            {
+                defaultFont = terminal._fontPack._fonts.FirstOrDefault(font =>
+                    font.name.Contains("Regular", StringComparison.OrdinalIgnoreCase)
+                );
+            }
+            if (defaultFont == null)
+            {
+                defaultFont = terminal._fontPack._fonts.FirstOrDefault();
+            }
+
+            terminal.SetFont(defaultFont, persist: true);
+            return true;
+        }
+
+        public override void OnInspectorGUI()
+        {
+            _impactButtonStyle ??= new GUIStyle(GUI.skin.button)
+            {
+                normal = { textColor = Color.yellow },
+                fontStyle = FontStyle.Bold,
+            };
+            _impactLabelStyle ??= new GUIStyle(GUI.skin.label)
+            {
+                normal = { textColor = new Color(1f, 0.3f, 0.3f, 1f) },
+                fontStyle = FontStyle.Bold,
+            };
+
+            if (_allCommands.Count == 0 || _defaultCommands.Count == 0)
+            {
+                HydrateCommandCaches();
+            }
+
+            TerminalUI terminal = target as TerminalUI;
+            if (terminal == null)
+            {
+                return;
+            }
+
+            serializedObject.Update();
+            ResetStateIdempotent(force: false);
+
+            bool anyChanged = false;
+
+            bool uiDocumentChanged = CheckForUIDocumentProblems(terminal);
+            anyChanged |= uiDocumentChanged;
+
+            bool themesChanged = CheckForThemingAndFontChanges(terminal);
+            anyChanged |= themesChanged;
+
+            RenderCyclingPreviews();
+
+            DrawPropertiesExcluding(
+                serializedObject,
+                "m_Script",
+                nameof(TerminalUI._themePack),
+                nameof(TerminalUI._fontPack),
+                nameof(TerminalUI._persistedTheme),
+                nameof(TerminalUI._uiDocument)
+            );
+
+            bool propertiesDirty = CheckForSimpleProperties(terminal);
+            anyChanged |= propertiesDirty;
+
+            RenderCommandManipulationHeader();
+
+            bool ignoredCommandsUpdated = CheckForIgnoredCommandUpdates(terminal);
+            anyChanged |= ignoredCommandsUpdated;
+
+            bool commandsUpdated = CheckForDisabledCommandProblems(terminal);
+            anyChanged |= commandsUpdated;
+
+            serializedObject.ApplyModifiedProperties();
+            if (anyChanged)
+            {
+                EditorUtility.SetDirty(terminal);
+            }
+        }
+
+        private void OnEnable()
+        {
+            _allCommands.Clear();
+            _allCommands.UnionWith(
+                CommandShell
+                    .RegisteredCommands.Value.Select(tuple => tuple.attribute)
+                    .Select(attribute => attribute.Name)
+            );
+            _defaultCommands.Clear();
+            _defaultCommands.UnionWith(
+                CommandShell
+                    .RegisteredCommands.Value.Select(tuple => tuple.attribute)
+                    .Where(tuple => tuple.Default)
+                    .Select(attribute => attribute.Name)
+            );
+            _nonDefaultCommands.Clear();
+            _nonDefaultCommands.UnionWith(
+                CommandShell
+                    .RegisteredCommands.Value.Select(tuple => tuple.attribute)
+                    .Where(tuple => !tuple.Default)
+                    .Select(attribute => attribute.Name)
+            );
+            _fontsByPrefix.Clear();
+
+            ResetStateIdempotent(force: true);
+
+            if (!_editorUpdateAttached)
+            {
+                EditorApplication.update += EditorUpdate;
+                _editorUpdateAttached = true;
+            }
         }
 
         private void OnDisable()
@@ -402,70 +690,6 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
             catch
             {
                 return terminal.CurrentFont;
-            }
-        }
-
-        public override void OnInspectorGUI()
-        {
-            _impactButtonStyle ??= new GUIStyle(GUI.skin.button)
-            {
-                normal = { textColor = Color.yellow },
-                fontStyle = FontStyle.Bold,
-            };
-            _impactLabelStyle ??= new GUIStyle(GUI.skin.label)
-            {
-                normal = { textColor = new Color(1f, 0.3f, 0.3f, 1f) },
-                fontStyle = FontStyle.Bold,
-            };
-
-            if (_allCommands.Count == 0 || _defaultCommands.Count == 0)
-            {
-                HydrateCommandCaches();
-            }
-
-            TerminalUI terminal = target as TerminalUI;
-            if (terminal == null)
-            {
-                return;
-            }
-
-            serializedObject.Update();
-            ResetStateIdempotent(force: false);
-
-            bool anyChanged = false;
-
-            bool uiDocumentChanged = CheckForUIDocumentProblems(terminal);
-            anyChanged |= uiDocumentChanged;
-
-            bool themesChanged = CheckForThemingAndFontChanges(terminal);
-            anyChanged |= themesChanged;
-
-            RenderCyclingPreviews();
-
-            DrawPropertiesExcluding(
-                serializedObject,
-                "m_Script",
-                nameof(TerminalUI._themePack),
-                nameof(TerminalUI._fontPack),
-                nameof(TerminalUI._persistedTheme),
-                nameof(TerminalUI._uiDocument)
-            );
-
-            bool propertiesDirty = CheckForSimpleProperties(terminal);
-            anyChanged |= propertiesDirty;
-
-            RenderCommandManipulationHeader();
-
-            bool ignoredCommandsUpdated = CheckForIgnoredCommandUpdates(terminal);
-            anyChanged |= ignoredCommandsUpdated;
-
-            bool commandsUpdated = CheckForDisabledCommandProblems(terminal);
-            anyChanged |= commandsUpdated;
-
-            serializedObject.ApplyModifiedProperties();
-            if (anyChanged)
-            {
-                EditorUtility.SetDirty(terminal);
             }
         }
 
@@ -945,91 +1169,6 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
             return anyChanged;
         }
 
-        private static bool CheckForUIDocumentProblems(TerminalUI terminal)
-        {
-            bool anyChanged = false;
-            if (terminal._uiDocument == null)
-            {
-                terminal._uiDocument = terminal.TryGetComponent(out UIDocument uiDocument)
-                    ? uiDocument
-                    : terminal.gameObject.AddComponent<UIDocument>();
-                anyChanged = true;
-            }
-
-            if (terminal._uiDocument.panelSettings != null)
-            {
-                return anyChanged;
-            }
-
-            string[] panelSettingGuids;
-            string absoluteStylesPath = DirectoryHelper.FindAbsolutePathToDirectory("Styles");
-            if (!string.IsNullOrWhiteSpace(absoluteStylesPath))
-            {
-                panelSettingGuids = AssetDatabase.FindAssets(
-                    "t:PanelSettings",
-                    new[] { absoluteStylesPath }
-                );
-                TryFindTerminalSettings();
-                if (terminal._uiDocument.panelSettings != null)
-                {
-                    return true;
-                }
-            }
-
-            List<string> directories = new();
-            if (Directory.Exists(Path.Combine(Application.dataPath, "Library")))
-            {
-                directories.Add("Library");
-            }
-
-            if (Directory.Exists(Path.Combine(Application.dataPath, "Packages")))
-            {
-                directories.Add("Packages");
-            }
-
-            directories.Add("Assets");
-            panelSettingGuids = AssetDatabase.FindAssets("t:PanelSettings", directories.ToArray());
-            TryFindTerminalSettings();
-            return anyChanged;
-
-            void TryFindTerminalSettings()
-            {
-                foreach (string guid in panelSettingGuids)
-                {
-                    string assetPath = AssetDatabase.GUIDToAssetPath(guid);
-                    if (string.IsNullOrWhiteSpace(assetPath))
-                    {
-                        continue;
-                    }
-
-                    if (!assetPath.Contains("TerminalSettings", StringComparison.OrdinalIgnoreCase))
-                    {
-                        continue;
-                    }
-
-                    PanelSettings panelSettings = AssetDatabase.LoadAssetAtPath<PanelSettings>(
-                        assetPath
-                    );
-
-                    if (panelSettings == null)
-                    {
-                        continue;
-                    }
-
-                    terminal._uiDocument.panelSettings = panelSettings;
-                    anyChanged = true;
-                    return;
-                }
-            }
-        }
-
-        private static void RenderCommandManipulationHeader()
-        {
-            EditorGUILayout.Space();
-            EditorGUILayout.Space(10);
-            EditorGUILayout.LabelField("Command Manipulation", EditorStyles.boldLabel);
-        }
-
         private bool CheckForIgnoredCommandUpdates(TerminalUI terminal)
         {
             bool anyChanged = false;
@@ -1119,59 +1258,6 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
             return anyChanged;
         }
 
-        private static void CollectFonts(
-            TerminalUI terminal,
-            SortedDictionary<string, SortedDictionary<string, Font>> fontsByPrefix
-        )
-        {
-            if (
-                terminal == null
-                || terminal._fontPack == null
-                || terminal._fontPack._fonts is not { Count: > 0 }
-            )
-            {
-                return;
-            }
-
-            if (fontsByPrefix.Count != 0)
-            {
-                return;
-            }
-
-            foreach (Font font in terminal._fontPack._fonts)
-            {
-                string fontName = font.name;
-                int indexOfSplit = fontName.IndexOf('-', StringComparison.OrdinalIgnoreCase);
-                if (indexOfSplit < 0)
-                {
-                    indexOfSplit = fontName.IndexOf('_', StringComparison.OrdinalIgnoreCase);
-                }
-
-                string key;
-                string secondKey;
-                if (0 <= indexOfSplit)
-                {
-                    key = fontName[..indexOfSplit];
-                    secondKey = fontName[Mathf.Min(indexOfSplit + 1, fontName.Length)..];
-                }
-                else
-                {
-                    key = fontName;
-                    secondKey = string.Empty;
-                }
-
-                if (!fontsByPrefix.TryGetValue(key, out SortedDictionary<string, Font> fontMapping))
-                {
-                    fontMapping = new SortedDictionary<string, Font>(
-                        StringComparer.OrdinalIgnoreCase
-                    );
-                    fontsByPrefix[key] = fontMapping;
-                }
-
-                fontMapping[secondKey] = font;
-            }
-        }
-
         private void TryMatchExistingFont(TerminalUI terminal)
         {
             if (0 <= _fontKey || 0 <= _secondFontKey || terminal.CurrentFont == null)
@@ -1180,92 +1266,6 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
             }
 
             TrySetFontKeysFromFont(terminal.CurrentFont);
-        }
-
-        private static bool TrySetupDefaultTheme(TerminalUI terminal)
-        {
-            if (
-                !string.IsNullOrWhiteSpace(terminal.CurrentTheme)
-                && terminal._themePack != null
-                && terminal._themePack._themeNames.Contains(
-                    terminal.CurrentTheme,
-                    StringComparer.OrdinalIgnoreCase
-                )
-            )
-            {
-                return false;
-            }
-
-            if (terminal._themePack == null || terminal._themePack._themeNames.Count == 0)
-            {
-                return false;
-            }
-
-            string defaultTheme = terminal._themePack._themeNames.FirstOrDefault(theme =>
-                theme.Contains("Dark", StringComparison.OrdinalIgnoreCase)
-            );
-            if (string.IsNullOrWhiteSpace(defaultTheme))
-            {
-                defaultTheme = terminal._themePack._themeNames.FirstOrDefault(theme =>
-                    theme.Contains("Light", StringComparison.OrdinalIgnoreCase)
-                );
-            }
-
-            if (string.IsNullOrWhiteSpace(defaultTheme))
-            {
-                defaultTheme = terminal._themePack._themeNames.FirstOrDefault();
-            }
-
-            terminal.SetTheme(defaultTheme, persist: true);
-            return true;
-        }
-
-        private static bool TrySetupDefaultFont(TerminalUI terminal)
-        {
-            if (
-                terminal.CurrentFont != null
-                && terminal._fontPack != null
-                && terminal._fontPack._fonts.Contains(terminal.CurrentFont)
-            )
-            {
-                return false;
-            }
-
-            if (terminal._fontPack == null || terminal._fontPack._fonts is not { Count: > 0 })
-            {
-                return false;
-            }
-
-            Font defaultFont = terminal._fontPack._fonts.FirstOrDefault(font =>
-                font.name.Contains("SourceCodePro", StringComparison.OrdinalIgnoreCase)
-                && font.name.Contains("Regular", StringComparison.OrdinalIgnoreCase)
-            );
-            if (defaultFont == null)
-            {
-                defaultFont = terminal._fontPack._fonts.FirstOrDefault(font =>
-                    font.name.Contains("Mono", StringComparison.OrdinalIgnoreCase)
-                    && font.name.Contains("Regular", StringComparison.OrdinalIgnoreCase)
-                );
-            }
-            if (defaultFont == null)
-            {
-                defaultFont = terminal._fontPack._fonts.FirstOrDefault(font =>
-                    font.name.Contains("Mono", StringComparison.OrdinalIgnoreCase)
-                );
-            }
-            if (defaultFont == null)
-            {
-                defaultFont = terminal._fontPack._fonts.FirstOrDefault(font =>
-                    font.name.Contains("Regular", StringComparison.OrdinalIgnoreCase)
-                );
-            }
-            if (defaultFont == null)
-            {
-                defaultFont = terminal._fontPack._fonts.FirstOrDefault();
-            }
-
-            terminal.SetFont(defaultFont, persist: true);
-            return true;
         }
 
         private bool RenderSelectableFonts(TerminalUI terminal)
