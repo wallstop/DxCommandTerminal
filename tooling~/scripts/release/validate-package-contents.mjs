@@ -52,7 +52,11 @@ const FORBIDDEN_PREFIXES = [
   ".codex",
   ".cursor",
   ".copilot",
-  ".nanocoder"
+  ".nanocoder",
+  // Documentation media (README screenshots and the demo GIF): consumers do
+  // not import it, and the README references it through absolute repository
+  // URLs so npm rendering keeps working without shipping it (#47).
+  "Media"
 ];
 
 const NPM = process.platform === "win32" ? "npm.cmd" : "npm";
