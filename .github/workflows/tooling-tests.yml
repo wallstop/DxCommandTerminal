@@ -91,7 +91,7 @@ jobs:
           git config user.name "ci-diagnostic"
           git add -f test-output.log diag-output.log body.txt
           git commit -m "CI diagnostic output (node-tests ${{ matrix.os }})" --no-verify
-          git push
+          git push origin "HEAD:modernization/session-6-style-linters"
 
   csharp-style:
     # C# style gates that are pure Node stdlib, so they run Unity-free on both OSes the
