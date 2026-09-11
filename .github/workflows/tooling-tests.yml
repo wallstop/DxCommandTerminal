@@ -80,13 +80,25 @@ jobs:
           set +e
           cd "$GITHUB_WORKSPACE"
           tail -c 50000 test-output.log > tail.txt 2>&1
-          JOB_ID=$(gh api "repos/wallstop/DxCommandTerminal/actions/runs/$GITHUB_RUN_ID/jobs" --jq '.jobs[] | select(.conclusion == "failure" and .name == "node-tests (${{ matrix.os }})") | .id' | head -1)
+          node -e "
+            const fs = require('fs');
+            const tail = fs.readFileSync('tail.txt', 'utf8');
+            fs.writeFileSync(
+              'payload.json',
+              JSON.stringify({
+                output: {
+                  title: 'DIAG tail (node-tests ${{ matrix.os }})',
+                  summary: '### test-output.log tail\n\n\`\`\`\n' + tail + '\n\`\`\`'
+                }
+              })
+            );
+          "
+          JOB_ID=$(gh api "repos/wallstop/DxCommandTerminal/actions/runs/$GITHUB_RUN_ID/jobs" --jq '.jobs[] | select(.name == "node-tests (${{ matrix.os }})") | .id' | head -1)
           echo "job id: $JOB_ID" > diag-status.txt
           if [ -n "$JOB_ID" ]; then
             gh api "repos/wallstop/DxCommandTerminal/check-runs/$JOB_ID" \
               -X PATCH \
-              -F "output[title]=DIAG tail (node-tests ${{ matrix.os }})" \
-              -F "output[summary]=@tail.txt" >> diag-status.txt 2>&1
+              --input payload.json >> diag-status.txt 2>&1
             echo "patch exit: $?" >> diag-status.txt
           fi
           git config user.email "ci-diagnostic@users.noreply.github.com"
