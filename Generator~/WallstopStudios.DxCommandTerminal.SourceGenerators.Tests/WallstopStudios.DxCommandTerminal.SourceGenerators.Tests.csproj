@@ -27,8 +27,10 @@
         it), which is exactly what CA1019 asks attribute ctor-backed properties not to do.
       - CA1510: ArgumentNullException.ThrowIfNull is .NET 6+, above the Unity BCL floor.
       - CA2211: fixture invocation counters are mutable statics by necessity (the generated
-        binders are static). -->
-        <NoWarn>$(NoWarn);CA1002;CA1051;CA1515;CA1815;CA2225;CA1019;CA1510;CA2211</NoWarn>
+        binders are static).
+      - CA1720: CommandArgParsers deliberately names each parser after the type it parses
+        (CommandArgParsers.Int, .Float, ...); that naming IS the API. -->
+        <NoWarn>$(NoWarn);CA1002;CA1051;CA1515;CA1815;CA2225;CA1019;CA1510;CA2211;CA1720</NoWarn>
     </PropertyGroup>
     <ItemGroup>
         <!-- The real runtime sources, compiled Unity-free. CommandArg.cs is the one file that
@@ -37,6 +39,7 @@
          and nowhere else. -->
         <Compile Include="$(RepoRoot)/Runtime/Attributes/RegisterCommandAttribute.cs" />
         <Compile Include="$(RepoRoot)/Runtime/CommandTerminal/Backend/CommandArg.cs" />
+        <Compile Include="$(RepoRoot)/Runtime/CommandTerminal/Backend/CommandArgParsers.cs" />
         <Compile Include="$(RepoRoot)/Runtime/CommandTerminal/Backend/CommandCatalogEntry.cs" />
         <Compile Include="$(RepoRoot)/Runtime/CommandTerminal/Backend/CommandExecutionContexts.cs" />
         <Compile Include="$(RepoRoot)/Runtime/CommandTerminal/Backend/CommandExecutionContextSets.cs" />

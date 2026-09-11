@@ -204,87 +204,107 @@
             // TODO: Slap into a dictionary of built-in type -> parser mapping
             if (type == typeof(bool))
             {
-                return InnerParse<bool>(stringValue, bool.TryParse, out parsed);
+                return InnerParse<bool>(stringValue, CommandArgParsers.Bool, out parsed);
             }
             if (type == typeof(float))
             {
-                return InnerParse<float>(stringValue, ParseFloatInvariant, out parsed);
+                return InnerParse<float>(stringValue, CommandArgParsers.Float, out parsed);
             }
             if (type == typeof(int))
             {
-                return InnerParse<int>(stringValue, ParseIntInvariant, out parsed);
+                return InnerParse<int>(stringValue, CommandArgParsers.Int, out parsed);
             }
             if (type == typeof(uint))
             {
-                return InnerParse<uint>(stringValue, ParseUintInvariant, out parsed);
+                return InnerParse<uint>(stringValue, CommandArgParsers.Uint, out parsed);
             }
             if (type == typeof(long))
             {
-                return InnerParse<long>(stringValue, ParseLongInvariant, out parsed);
+                return InnerParse<long>(stringValue, CommandArgParsers.Long, out parsed);
             }
             if (type == typeof(ulong))
             {
-                return InnerParse<ulong>(stringValue, ParseUlongInvariant, out parsed);
+                return InnerParse<ulong>(stringValue, CommandArgParsers.Ulong, out parsed);
             }
             if (type == typeof(double))
             {
-                return InnerParse<double>(stringValue, ParseDoubleInvariant, out parsed);
+                return InnerParse<double>(stringValue, CommandArgParsers.Double, out parsed);
             }
             if (type == typeof(short))
             {
-                return InnerParse<short>(stringValue, ParseShortInvariant, out parsed);
+                return InnerParse<short>(stringValue, CommandArgParsers.Short, out parsed);
             }
             if (type == typeof(ushort))
             {
-                return InnerParse<ushort>(stringValue, ParseUshortInvariant, out parsed);
+                return InnerParse<ushort>(stringValue, CommandArgParsers.Ushort, out parsed);
             }
             if (type == typeof(byte))
             {
-                return InnerParse<byte>(stringValue, ParseByteInvariant, out parsed);
+                return InnerParse<byte>(stringValue, CommandArgParsers.Byte, out parsed);
             }
             if (type == typeof(sbyte))
             {
-                return InnerParse<sbyte>(stringValue, ParseSbyteInvariant, out parsed);
+                return InnerParse<sbyte>(stringValue, CommandArgParsers.Sbyte, out parsed);
             }
             if (type == typeof(Guid))
             {
-                return InnerParse<Guid>(stringValue, Guid.TryParse, out parsed);
+                return InnerParse<System.Guid>(stringValue, CommandArgParsers.Guid, out parsed);
             }
             if (type == typeof(DateTime))
             {
-                return InnerParse<DateTime>(stringValue, ParseDateTimeInvariant, out parsed);
+                return InnerParse<System.DateTime>(
+                    stringValue,
+                    CommandArgParsers.DateTime,
+                    out parsed
+                );
             }
             if (type == typeof(DateTimeOffset))
             {
-                return InnerParse<DateTimeOffset>(
+                return InnerParse<System.DateTimeOffset>(
                     stringValue,
-                    ParseDateTimeOffsetInvariant,
+                    CommandArgParsers.DateTimeOffset,
                     out parsed
                 );
             }
             if (type == typeof(char))
             {
-                return InnerParse<char>(stringValue, char.TryParse, out parsed);
+                return InnerParse<char>(stringValue, CommandArgParsers.Char, out parsed);
             }
             if (type == typeof(decimal))
             {
-                return InnerParse<decimal>(stringValue, ParseDecimalInvariant, out parsed);
+                return InnerParse<decimal>(stringValue, CommandArgParsers.Decimal, out parsed);
             }
             if (type == typeof(BigInteger))
             {
-                return InnerParse<BigInteger>(stringValue, ParseBigIntegerInvariant, out parsed);
+                return InnerParse<System.Numerics.BigInteger>(
+                    stringValue,
+                    CommandArgParsers.BigInteger,
+                    out parsed
+                );
             }
             if (type == typeof(TimeSpan))
             {
-                return InnerParse<TimeSpan>(stringValue, ParseTimeSpanInvariant, out parsed);
+                return InnerParse<System.TimeSpan>(
+                    stringValue,
+                    CommandArgParsers.TimeSpan,
+                    out parsed
+                );
             }
             if (type == typeof(Version))
             {
-                return InnerParse<Version>(stringValue, Version.TryParse, out parsed);
+                return InnerParse<System.Version>(
+                    stringValue,
+                    CommandArgParsers.Version,
+                    out parsed
+                );
             }
             if (type == typeof(IPAddress))
             {
-                return InnerParse<IPAddress>(stringValue, IPAddress.TryParse, out parsed);
+                return InnerParse<System.Net.IPAddress>(
+                    stringValue,
+                    CommandArgParsers.IPAddress,
+                    out parsed
+                );
             }
             if (type.IsEnum)
             {
@@ -298,14 +318,7 @@
                     }
                 }
 
-                if (
-                    int.TryParse(
-                        stringValue,
-                        NumberStyles.Integer,
-                        CultureInfo.InvariantCulture,
-                        out int enumIntValue
-                    )
-                )
+                if (CommandArgParsers.Int(stringValue, out int enumIntValue))
                 {
                     if (!EnumValues.TryGetValue(type, out object enumValues))
                     {
@@ -327,14 +340,14 @@
                 switch (split.Length)
                 {
                     case 2
-                        when ParseFloatInvariant(split[0], out float x)
-                            && ParseFloatInvariant(split[1], out float y):
+                        when CommandArgParsers.Float(split[0], out float x)
+                            && CommandArgParsers.Float(split[1], out float y):
                         parsed = (T)(object)new Vector2(x, y);
                         return true;
                     case 3
-                        when ParseFloatInvariant(split[0], out float x)
-                            && ParseFloatInvariant(split[1], out float y)
-                            && ParseFloatInvariant(split[2], out float z):
+                        when CommandArgParsers.Float(split[0], out float x)
+                            && CommandArgParsers.Float(split[1], out float y)
+                            && CommandArgParsers.Float(split[2], out float z):
                         parsed = (T)(object)(Vector2)new Vector3(x, y, z);
                         return true;
                 }
@@ -345,14 +358,14 @@
                 switch (split.Length)
                 {
                     case 2
-                        when ParseFloatInvariant(split[0], out float x)
-                            && ParseFloatInvariant(split[1], out float y):
+                        when CommandArgParsers.Float(split[0], out float x)
+                            && CommandArgParsers.Float(split[1], out float y):
                         parsed = (T)(object)new Vector3(x, y);
                         return true;
                     case 3
-                        when ParseFloatInvariant(split[0], out float x)
-                            && ParseFloatInvariant(split[1], out float y)
-                            && ParseFloatInvariant(split[2], out float z):
+                        when CommandArgParsers.Float(split[0], out float x)
+                            && CommandArgParsers.Float(split[1], out float y)
+                            && CommandArgParsers.Float(split[2], out float z):
                         parsed = (T)(object)new Vector3(x, y, z);
                         return true;
                 }
@@ -363,21 +376,21 @@
                 switch (split.Length)
                 {
                     case 2
-                        when ParseFloatInvariant(split[0], out float x)
-                            && ParseFloatInvariant(split[1], out float y):
+                        when CommandArgParsers.Float(split[0], out float x)
+                            && CommandArgParsers.Float(split[1], out float y):
                         parsed = (T)(object)new Vector4(x, y);
                         return true;
                     case 3
-                        when ParseFloatInvariant(split[0], out float x)
-                            && ParseFloatInvariant(split[1], out float y)
-                            && ParseFloatInvariant(split[2], out float z):
+                        when CommandArgParsers.Float(split[0], out float x)
+                            && CommandArgParsers.Float(split[1], out float y)
+                            && CommandArgParsers.Float(split[2], out float z):
                         parsed = (T)(object)new Vector4(x, y, z);
                         return true;
                     case 4
-                        when ParseFloatInvariant(split[0], out float x)
-                            && ParseFloatInvariant(split[1], out float y)
-                            && ParseFloatInvariant(split[2], out float z)
-                            && ParseFloatInvariant(split[3], out float w):
+                        when CommandArgParsers.Float(split[0], out float x)
+                            && CommandArgParsers.Float(split[1], out float y)
+                            && CommandArgParsers.Float(split[2], out float z)
+                            && CommandArgParsers.Float(split[3], out float w):
                         parsed = (T)(object)new Vector4(x, y, z, w);
                         return true;
                 }
@@ -388,14 +401,14 @@
                 switch (split.Length)
                 {
                     case 2
-                        when ParseIntInvariant(split[0], out int x)
-                            && ParseIntInvariant(split[1], out int y):
+                        when CommandArgParsers.Int(split[0], out int x)
+                            && CommandArgParsers.Int(split[1], out int y):
                         parsed = (T)(object)new Vector2Int(x, y);
                         return true;
                     case 3
-                        when ParseIntInvariant(split[0], out int x)
-                            && ParseIntInvariant(split[1], out int y)
-                            && ParseIntInvariant(split[2], out int z):
+                        when CommandArgParsers.Int(split[0], out int x)
+                            && CommandArgParsers.Int(split[1], out int y)
+                            && CommandArgParsers.Int(split[2], out int z):
                         parsed = (T)(object)(Vector2Int)new Vector3Int(x, y, z);
                         return true;
                 }
@@ -406,14 +419,14 @@
                 switch (split.Length)
                 {
                     case 2
-                        when ParseIntInvariant(split[0], out int x)
-                            && ParseIntInvariant(split[1], out int y):
+                        when CommandArgParsers.Int(split[0], out int x)
+                            && CommandArgParsers.Int(split[1], out int y):
                         parsed = (T)(object)new Vector3Int(x, y);
                         return true;
                     case 3
-                        when ParseIntInvariant(split[0], out int x)
-                            && ParseIntInvariant(split[1], out int y)
-                            && ParseIntInvariant(split[2], out int z):
+                        when CommandArgParsers.Int(split[0], out int x)
+                            && CommandArgParsers.Int(split[1], out int y)
+                            && CommandArgParsers.Int(split[2], out int z):
                         parsed = (T)(object)new Vector3Int(x, y, z);
                         return true;
                 }
@@ -434,16 +447,16 @@
                 switch (split.Length)
                 {
                     case 3
-                        when ParseFloatInvariant(split[0], out float r)
-                            && ParseFloatInvariant(split[1], out float g)
-                            && ParseFloatInvariant(split[2], out float b):
+                        when CommandArgParsers.Float(split[0], out float r)
+                            && CommandArgParsers.Float(split[1], out float g)
+                            && CommandArgParsers.Float(split[2], out float b):
                         parsed = (T)(object)new Color(r, g, b);
                         return true;
                     case 4
-                        when ParseFloatInvariant(split[0], out float r)
-                            && ParseFloatInvariant(split[1], out float g)
-                            && ParseFloatInvariant(split[2], out float b)
-                            && ParseFloatInvariant(split[3], out float a):
+                        when CommandArgParsers.Float(split[0], out float r)
+                            && CommandArgParsers.Float(split[1], out float g)
+                            && CommandArgParsers.Float(split[2], out float b)
+                            && CommandArgParsers.Float(split[3], out float a):
                         parsed = (T)(object)new Color(r, g, b, a);
                         return true;
                 }
@@ -454,10 +467,10 @@
                 switch (split.Length)
                 {
                     case 4
-                        when ParseFloatInvariant(split[0], out float x)
-                            && ParseFloatInvariant(split[1], out float y)
-                            && ParseFloatInvariant(split[2], out float z)
-                            && ParseFloatInvariant(split[3], out float w):
+                        when CommandArgParsers.Float(split[0], out float x)
+                            && CommandArgParsers.Float(split[1], out float y)
+                            && CommandArgParsers.Float(split[2], out float z)
+                            && CommandArgParsers.Float(split[3], out float w):
                         parsed = (T)(object)new Quaternion(x, y, z, w);
                         return true;
                 }
@@ -468,12 +481,12 @@
                 switch (split.Length)
                 {
                     case 4
-                        when ParseFloatInvariant(
+                        when CommandArgParsers.Float(
                             split[0]
                                 .Replace("x:", string.Empty, StringComparison.OrdinalIgnoreCase),
                             out float x
                         )
-                            && ParseFloatInvariant(
+                            && CommandArgParsers.Float(
                                 split[1]
                                     .Replace(
                                         "y:",
@@ -482,7 +495,7 @@
                                     ),
                                 out float y
                             )
-                            && ParseFloatInvariant(
+                            && CommandArgParsers.Float(
                                 split[2]
                                     .Replace(
                                         "width:",
@@ -491,7 +504,7 @@
                                     ),
                                 out float width
                             )
-                            && ParseFloatInvariant(
+                            && CommandArgParsers.Float(
                                 split[3]
                                     .Replace(
                                         "height:",
@@ -510,12 +523,12 @@
                 switch (split.Length)
                 {
                     case 4
-                        when ParseIntInvariant(
+                        when CommandArgParsers.Int(
                             split[0]
                                 .Replace("x:", string.Empty, StringComparison.OrdinalIgnoreCase),
                             out int x
                         )
-                            && ParseIntInvariant(
+                            && CommandArgParsers.Int(
                                 split[1]
                                     .Replace(
                                         "y:",
@@ -524,7 +537,7 @@
                                     ),
                                 out int y
                             )
-                            && ParseIntInvariant(
+                            && CommandArgParsers.Int(
                                 split[2]
                                     .Replace(
                                         "width:",
@@ -533,7 +546,7 @@
                                     ),
                                 out int width
                             )
-                            && ParseIntInvariant(
+                            && CommandArgParsers.Int(
                                 split[3]
                                     .Replace(
                                         "height:",
@@ -549,122 +562,6 @@
 
             parsed = default;
             return false;
-
-            /*
-                Console input must parse identically on every machine, so every
-                culture-sensitive TryParse pins NumberStyles and InvariantCulture
-                explicitly. The style flags mirror each overload's default so only
-                the culture is pinned, never the accepted syntax.
-             */
-            static bool ParseFloatInvariant(string input, out float parsed) =>
-                float.TryParse(
-                    input,
-                    NumberStyles.Float | NumberStyles.AllowThousands,
-                    CultureInfo.InvariantCulture,
-                    out parsed
-                );
-
-            static bool ParseDoubleInvariant(string input, out double parsed) =>
-                double.TryParse(
-                    input,
-                    NumberStyles.Float | NumberStyles.AllowThousands,
-                    CultureInfo.InvariantCulture,
-                    out parsed
-                );
-
-            static bool ParseDecimalInvariant(string input, out decimal parsed) =>
-                decimal.TryParse(
-                    input,
-                    NumberStyles.Number,
-                    CultureInfo.InvariantCulture,
-                    out parsed
-                );
-
-            static bool ParseIntInvariant(string input, out int parsed) =>
-                int.TryParse(input, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed);
-
-            static bool ParseUintInvariant(string input, out uint parsed) =>
-                uint.TryParse(
-                    input,
-                    NumberStyles.Integer,
-                    CultureInfo.InvariantCulture,
-                    out parsed
-                );
-
-            static bool ParseLongInvariant(string input, out long parsed) =>
-                long.TryParse(
-                    input,
-                    NumberStyles.Integer,
-                    CultureInfo.InvariantCulture,
-                    out parsed
-                );
-
-            static bool ParseUlongInvariant(string input, out ulong parsed) =>
-                ulong.TryParse(
-                    input,
-                    NumberStyles.Integer,
-                    CultureInfo.InvariantCulture,
-                    out parsed
-                );
-
-            static bool ParseShortInvariant(string input, out short parsed) =>
-                short.TryParse(
-                    input,
-                    NumberStyles.Integer,
-                    CultureInfo.InvariantCulture,
-                    out parsed
-                );
-
-            static bool ParseUshortInvariant(string input, out ushort parsed) =>
-                ushort.TryParse(
-                    input,
-                    NumberStyles.Integer,
-                    CultureInfo.InvariantCulture,
-                    out parsed
-                );
-
-            static bool ParseByteInvariant(string input, out byte parsed) =>
-                byte.TryParse(
-                    input,
-                    NumberStyles.Integer,
-                    CultureInfo.InvariantCulture,
-                    out parsed
-                );
-
-            static bool ParseSbyteInvariant(string input, out sbyte parsed) =>
-                sbyte.TryParse(
-                    input,
-                    NumberStyles.Integer,
-                    CultureInfo.InvariantCulture,
-                    out parsed
-                );
-
-            static bool ParseBigIntegerInvariant(string input, out BigInteger parsed) =>
-                BigInteger.TryParse(
-                    input,
-                    NumberStyles.Integer,
-                    CultureInfo.InvariantCulture,
-                    out parsed
-                );
-
-            static bool ParseDateTimeInvariant(string input, out DateTime parsed) =>
-                DateTime.TryParse(
-                    input,
-                    CultureInfo.InvariantCulture,
-                    DateTimeStyles.None,
-                    out parsed
-                );
-
-            static bool ParseDateTimeOffsetInvariant(string input, out DateTimeOffset parsed) =>
-                DateTimeOffset.TryParse(
-                    input,
-                    CultureInfo.InvariantCulture,
-                    DateTimeStyles.None,
-                    out parsed
-                );
-
-            static bool ParseTimeSpanInvariant(string input, out TimeSpan parsed) =>
-                TimeSpan.TryParse(input, CultureInfo.InvariantCulture, out parsed);
 
             static bool InnerParse<TParsed>(
                 string input,

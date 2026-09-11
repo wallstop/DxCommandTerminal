@@ -17,6 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `TerminalUI` Tab now cycles provider token completions: only the active token is replaced, trailing text is preserved, space- or quote-containing insertions are quoted, and the caret lands after the insertion.
 - New shared `CommandTokenizer` for execution and completion, parity-pinned against `TryEatArgument` by a data-driven corpus.
 - `CommandDefinition` commands with `AddToHistory = false` dispatch without rebuilding the history line.
+- `CommandArgParsers`, a public static class exposing the culture-invariant parsers behind `CommandArg.TryGet`, one method per built-in type (`CommandArgParsers.Float`, `.Int`, `.DateTime`, ...), callable directly from command handlers and test code.
 
 ### Changed
 

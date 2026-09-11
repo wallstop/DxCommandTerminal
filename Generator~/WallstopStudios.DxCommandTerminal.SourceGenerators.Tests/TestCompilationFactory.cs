@@ -33,6 +33,7 @@
             {
                 "Runtime/Attributes/RegisterCommandAttribute.cs",
                 "Runtime/CommandTerminal/Backend/CommandArg.cs",
+                "Runtime/CommandTerminal/Backend/CommandArgParsers.cs",
                 "Runtime/CommandTerminal/Backend/CommandExecutionContexts.cs",
                 "Runtime/CommandTerminal/Backend/CommandExecutionContextSets.cs",
                 "Runtime/CommandTerminal/Backend/CommandExecutionContextsExtensions.cs",
