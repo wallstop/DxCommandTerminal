@@ -1307,5 +1307,11 @@ function main(argv) {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  process.exit(main(process.argv.slice(2)));
+  /*
+      exitCode, not exit: on Windows, writes to a piped stderr are
+      asynchronous, and process.exit() would truncate the violation
+      report this process is still flushing. Letting the loop drain
+      keeps the report whole and the exit code identical.
+   */
+  process.exitCode = main(process.argv.slice(2));
 }
