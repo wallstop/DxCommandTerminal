@@ -14,53 +14,38 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
     [CustomEditor(typeof(TerminalFontPack))]
     public sealed class TerminalFontPackEditor : Editor
     {
-        [Flags]
-        private enum FontType
-        {
-            None = 0,
-            Normal = 1 << 0,
-            Bold = 1 << 1,
-            Italic = 1 << 2,
-            BoldItalic = 1 << 3,
-            ExtraBold = 1 << 4,
-            ExtraBoldItalic = 1 << 5,
-            ExtraLight = 1 << 6,
-            ExtraLightItalic = 1 << 7,
-            Light = 1 << 8,
-            LightItalic = 1 << 9,
-            Medium = 1 << 10,
-            MediumItalic = 1 << 11,
-            SemiBold = 1 << 12,
-            SemiBoldItalic = 1 << 13,
-            Thin = 1 << 14,
-            ThinItalic = 1 << 15,
-            Black = 1 << 16,
-            BlackItalic = 1 << 17,
-            Regular = 1 << 18,
-            Variable = 1 << 19,
-            Monospace = 1 << 20,
-            Condensed = 1 << 21,
-            CondensedBold = 1 << 22,
-            CondensedExtraBold = 1 << 23,
-            CondensedExtraLight = 1 << 24,
-            CondensedLight = 1 << 25,
-            CondensedMedium = 1 << 26,
-            CondensedSemiBold = 1 << 27,
-            CondensedThin = 1 << 28,
-            VariableFont_wght = 1 << 29,
-            VariableFont_width = 1 << 30,
-        }
-
         private readonly HashSet<Font> _fontCache = new();
         private FontType _fontRemovalType = FontType.None;
         private FontType _fontAdditionType = FontType.None;
         private string _lastSelectedDirectory;
         private GUIStyle _impactButtonStyle;
 
-        private void OnEnable()
+        private static bool Matches(Font font, FontType toCheck)
         {
-            _fontCache.Clear();
-            _fontRemovalType = FontType.None;
+            if (font == null)
+            {
+                return false;
+            }
+
+            if (toCheck == FontType.None)
+            {
+                return false;
+            }
+
+            foreach (FontType fontType in Enum.GetValues(typeof(FontType)))
+            {
+                if ((fontType & toCheck) == 0)
+                {
+                    continue;
+                }
+
+                if (font.name.EndsWith(fontType.ToString(), StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         public override void OnInspectorGUI()
@@ -250,32 +235,47 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
             }
         }
 
-        private static bool Matches(Font font, FontType toCheck)
+        private void OnEnable()
         {
-            if (font == null)
-            {
-                return false;
-            }
+            _fontCache.Clear();
+            _fontRemovalType = FontType.None;
+        }
 
-            if (toCheck == FontType.None)
-            {
-                return false;
-            }
-
-            foreach (FontType fontType in Enum.GetValues(typeof(FontType)))
-            {
-                if ((fontType & toCheck) == 0)
-                {
-                    continue;
-                }
-
-                if (font.name.EndsWith(fontType.ToString(), StringComparison.OrdinalIgnoreCase))
-                {
-                    return true;
-                }
-            }
-
-            return false;
+        [Flags]
+        private enum FontType
+        {
+            None = 0,
+            Normal = 1 << 0,
+            Bold = 1 << 1,
+            Italic = 1 << 2,
+            BoldItalic = 1 << 3,
+            ExtraBold = 1 << 4,
+            ExtraBoldItalic = 1 << 5,
+            ExtraLight = 1 << 6,
+            ExtraLightItalic = 1 << 7,
+            Light = 1 << 8,
+            LightItalic = 1 << 9,
+            Medium = 1 << 10,
+            MediumItalic = 1 << 11,
+            SemiBold = 1 << 12,
+            SemiBoldItalic = 1 << 13,
+            Thin = 1 << 14,
+            ThinItalic = 1 << 15,
+            Black = 1 << 16,
+            BlackItalic = 1 << 17,
+            Regular = 1 << 18,
+            Variable = 1 << 19,
+            Monospace = 1 << 20,
+            Condensed = 1 << 21,
+            CondensedBold = 1 << 22,
+            CondensedExtraBold = 1 << 23,
+            CondensedExtraLight = 1 << 24,
+            CondensedLight = 1 << 25,
+            CondensedMedium = 1 << 26,
+            CondensedSemiBold = 1 << 27,
+            CondensedThin = 1 << 28,
+            VariableFont_wght = 1 << 29,
+            VariableFont_width = 1 << 30,
         }
     }
 #endif

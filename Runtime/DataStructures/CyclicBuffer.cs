@@ -9,50 +9,8 @@ namespace WallstopStudios.DxCommandTerminal.DataStructures
     [Serializable]
     internal sealed class CyclicBuffer<T> : IReadOnlyList<T>
     {
-        public struct CyclicBufferEnumerator : IEnumerator<T>
-        {
-            private readonly CyclicBuffer<T> _buffer;
-
-            private int _index;
-            private T _current;
-
-            internal CyclicBufferEnumerator(CyclicBuffer<T> buffer)
-            {
-                _buffer = buffer;
-                _index = -1;
-                _current = default;
-            }
-
-            public bool MoveNext()
-            {
-                if (++_index < _buffer.Count)
-                {
-                    _current = _buffer._buffer[_buffer.AdjustedIndexFor(_index)];
-                    return true;
-                }
-
-                _current = default;
-                return false;
-            }
-
-            public T Current => _current;
-
-            object IEnumerator.Current => Current;
-
-            public void Reset()
-            {
-                _index = -1;
-                _current = default;
-            }
-
-            public void Dispose() { }
-        }
-
         public int Capacity { get; private set; }
         public int Count { get; private set; }
-
-        private readonly List<T> _buffer;
-        private int _position;
 
         public T this[int index]
         {
@@ -67,6 +25,9 @@ namespace WallstopStudios.DxCommandTerminal.DataStructures
                 _buffer[AdjustedIndexFor(index)] = value;
             }
         }
+
+        private readonly List<T> _buffer;
+        private int _position;
 
         public CyclicBuffer(int capacity, IEnumerable<T> initialContents = null)
         {
@@ -88,16 +49,6 @@ namespace WallstopStudios.DxCommandTerminal.DataStructures
         public CyclicBufferEnumerator GetEnumerator()
         {
             return new CyclicBufferEnumerator(this);
-        }
-
-        IEnumerator<T> IEnumerable<T>.GetEnumerator()
-        {
-            return GetEnumerator();
-        }
-
-        IEnumerator IEnumerable.GetEnumerator()
-        {
-            return GetEnumerator();
         }
 
         public void Add(T item)
@@ -183,6 +134,55 @@ namespace WallstopStudios.DxCommandTerminal.DataStructures
         private bool InBounds(int index)
         {
             return 0 <= index && index < Count;
+        }
+
+        IEnumerator<T> IEnumerable<T>.GetEnumerator()
+        {
+            return GetEnumerator();
+        }
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return GetEnumerator();
+        }
+
+        public struct CyclicBufferEnumerator : IEnumerator<T>
+        {
+            public T Current => _current;
+
+            object IEnumerator.Current => Current;
+
+            private readonly CyclicBuffer<T> _buffer;
+
+            private int _index;
+            private T _current;
+
+            internal CyclicBufferEnumerator(CyclicBuffer<T> buffer)
+            {
+                _buffer = buffer;
+                _index = -1;
+                _current = default;
+            }
+
+            public bool MoveNext()
+            {
+                if (++_index < _buffer.Count)
+                {
+                    _current = _buffer._buffer[_buffer.AdjustedIndexFor(_index)];
+                    return true;
+                }
+
+                _current = default;
+                return false;
+            }
+
+            public void Reset()
+            {
+                _index = -1;
+                _current = default;
+            }
+
+            public void Dispose() { }
         }
     }
 }

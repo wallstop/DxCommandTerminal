@@ -12,7 +12,28 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
     public sealed class CommandCompletionProviderTests
     {
+        private static readonly string[] Inventory = { "pickaxe", "torch", "torch pick" };
+
         private Func<CommandExecutionContext> _previousAmbientProvider;
+
+        private static IEnumerator SpawnTerminal()
+        {
+            return TerminalTests.SpawnTerminal(resetStateOnInit: true);
+        }
+
+        private static CommandCompletionProvider InventoryProvider()
+        {
+            return (in CommandCompletionContext context, List<CommandCompletion> results) =>
+            {
+                foreach (string item in Inventory)
+                {
+                    if (item.StartsWith(context.Token, StringComparison.Ordinal))
+                    {
+                        results.Add(new CommandCompletion(item));
+                    }
+                }
+            };
+        }
 
         [SetUp]
         public void SetUp()
@@ -29,27 +50,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             {
                 UnityEngine.Object.Destroy(TerminalUI.Instance.gameObject);
             }
-        }
-
-        private static IEnumerator SpawnTerminal()
-        {
-            return TerminalTests.SpawnTerminal(resetStateOnInit: true);
-        }
-
-        private static readonly string[] Inventory = { "pickaxe", "torch", "torch pick" };
-
-        private static CommandCompletionProvider InventoryProvider()
-        {
-            return (in CommandCompletionContext context, List<CommandCompletion> results) =>
-            {
-                foreach (string item in Inventory)
-                {
-                    if (item.StartsWith(context.Token, StringComparison.Ordinal))
-                    {
-                        results.Add(new CommandCompletion(item));
-                    }
-                }
-            };
         }
 
         [UnityTest]

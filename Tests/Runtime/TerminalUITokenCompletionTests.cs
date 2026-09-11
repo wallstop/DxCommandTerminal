@@ -25,6 +25,27 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         private Func<CommandExecutionContext> _previousAmbientProvider;
 
+        private static CommandDefinition DefinePickupWithStagedInventory()
+        {
+            return new CommandDefinition
+            {
+                Name = "pickup",
+                Handler = (context, arguments) => { },
+                CompletionProvider = CommandCompletionProviders.Staged(
+                    (in CommandCompletionContext context, List<CommandCompletion> results) =>
+                    {
+                        foreach (string item in new[] { "pickaxe", "torch", "torch pick" })
+                        {
+                            if (item.StartsWith(context.Token, StringComparison.Ordinal))
+                            {
+                                results.Add(new CommandCompletion(item));
+                            }
+                        }
+                    }
+                ),
+            };
+        }
+
         [SetUp]
         public void SetUp()
         {
@@ -45,95 +66,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             {
                 UnityEngine.Object.Destroy(_panelSettings);
             }
-        }
-
-        private IEnumerator SpawnTerminalWithUi()
-        {
-#if UNITY_EDITOR
-            _panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
-            _terminalObject = new GameObject("TerminalUITokenCompletion");
-            _terminalObject.SetActive(false);
-            UIDocument document = _terminalObject.AddComponent<UIDocument>();
-            document.panelSettings = _panelSettings;
-            _terminal = _terminalObject.AddComponent<TerminalUI>();
-            _terminal._uiDocument = document;
-            _terminal.resetStateOnInit = true;
-            _terminal._themePack = LoadAsset<TerminalThemePack>("Packs/Themes/Medium.asset");
-            _terminal._fontPack = LoadAsset<TerminalFontPack>("Packs/Fonts/Medium.asset");
-            StartTracker tracker = _terminalObject.AddComponent<StartTracker>();
-            _terminalObject.SetActive(true);
-            yield return new WaitUntil(() => tracker.Started);
-#else
-            Assert.Ignore("Token completion UI coverage runs in the editor Play Mode suite.");
-            yield break;
-#endif
-
-            _terminal.SetState(TerminalState.OpenFull);
-
-            /*
-                SetState flags a command as issued for the current frame; the
-                input change handler reverts field writes until that flag
-                clears, so the rig settles for one frame before driving the
-                input.
-             */
-            yield return null;
-
-            int frameBudget = 600;
-            while (
-                frameBudget-- > 0
-                && (
-                    _terminal._commandInput == null
-                    || _terminal._commandInput.resolvedStyle.display != DisplayStyle.Flex
-                )
-            )
-            {
-                yield return null;
-            }
-
-            Assert.IsNotNull(
-                _terminal._commandInput,
-                "The terminal input field should exist after the terminal opens"
-            );
-            Assert.AreEqual(
-                DisplayStyle.Flex,
-                _terminal._commandInput.resolvedStyle.display,
-                "The input field should be visible on an open terminal"
-            );
-        }
-
-        /*
-            A programmatic value write does not preserve a mid-line caret
-            across the panel's next update tick, so the rig settles the value
-            first and places the caret in a second step, with no panel tick
-            between the caret placement and the completion request.
-         */
-        private IEnumerator SetInput(string text, int caretIndex)
-        {
-            _terminal._commandInput.value = text;
-            yield return null;
-            _terminal._commandInput.cursorIndex = caretIndex;
-            _terminal._commandInput.selectIndex = caretIndex;
-        }
-
-        private static CommandDefinition DefinePickupWithStagedInventory()
-        {
-            return new CommandDefinition
-            {
-                Name = "pickup",
-                Handler = (context, arguments) => { },
-                CompletionProvider = CommandCompletionProviders.Staged(
-                    (in CommandCompletionContext context, List<CommandCompletion> results) =>
-                    {
-                        foreach (string item in new[] { "pickaxe", "torch", "torch pick" })
-                        {
-                            if (item.StartsWith(context.Token, StringComparison.Ordinal))
-                            {
-                                results.Add(new CommandCompletion(item));
-                            }
-                        }
-                    }
-                ),
-            };
         }
 
         [UnityTest]
@@ -347,6 +279,74 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 _terminal._commandInput.value,
                 "Without a provider the legacy history completion still suggests command names"
             );
+        }
+
+        private IEnumerator SpawnTerminalWithUi()
+        {
+#if UNITY_EDITOR
+            _panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
+            _terminalObject = new GameObject("TerminalUITokenCompletion");
+            _terminalObject.SetActive(false);
+            UIDocument document = _terminalObject.AddComponent<UIDocument>();
+            document.panelSettings = _panelSettings;
+            _terminal = _terminalObject.AddComponent<TerminalUI>();
+            _terminal._uiDocument = document;
+            _terminal.resetStateOnInit = true;
+            _terminal._themePack = LoadAsset<TerminalThemePack>("Packs/Themes/Medium.asset");
+            _terminal._fontPack = LoadAsset<TerminalFontPack>("Packs/Fonts/Medium.asset");
+            StartTracker tracker = _terminalObject.AddComponent<StartTracker>();
+            _terminalObject.SetActive(true);
+            yield return new WaitUntil(() => tracker.Started);
+#else
+            Assert.Ignore("Token completion UI coverage runs in the editor Play Mode suite.");
+            yield break;
+#endif
+
+            _terminal.SetState(TerminalState.OpenFull);
+
+            /*
+                SetState flags a command as issued for the current frame; the
+                input change handler reverts field writes until that flag
+                clears, so the rig settles for one frame before driving the
+                input.
+             */
+            yield return null;
+
+            int frameBudget = 600;
+            while (
+                0 < frameBudget--
+                && (
+                    _terminal._commandInput == null
+                    || _terminal._commandInput.resolvedStyle.display != DisplayStyle.Flex
+                )
+            )
+            {
+                yield return null;
+            }
+
+            Assert.IsNotNull(
+                _terminal._commandInput,
+                "The terminal input field should exist after the terminal opens"
+            );
+            Assert.AreEqual(
+                DisplayStyle.Flex,
+                _terminal._commandInput.resolvedStyle.display,
+                "The input field should be visible on an open terminal"
+            );
+        }
+
+        /*
+            A programmatic value write does not preserve a mid-line caret
+            across the panel's next update tick, so the rig settles the value
+            first and places the caret in a second step, with no panel tick
+            between the caret placement and the completion request.
+         */
+        private IEnumerator SetInput(string text, int caretIndex)
+        {
+            _terminal._commandInput.value = text;
+            yield return null;
+            _terminal._commandInput.cursorIndex = caretIndex;
+            _terminal._commandInput.selectIndex = caretIndex;
         }
 
 #if UNITY_EDITOR
