@@ -24,14 +24,14 @@ namespace WallstopStudios.DxCommandTerminal.Attributes
 
         /// <summary>
         ///     Environments the command may run in. Defaults to
-        ///     <see cref="CommandExecutionContexts.All"/> so attributed commands
+        ///     <see cref="CommandExecutionContextSets.All"/> so attributed commands
         ///     keep their previous availability everywhere, Edit Mode
         ///     included. Set a narrower set to opt out of environments; the
         ///     Edit-Mode opt-in rule applies to new
         ///     <see cref="Backend.CommandDefinition"/> metadata, whose
-        ///     default is <see cref="CommandExecutionContexts.Gameplay"/>.
+        ///     default is <see cref="CommandExecutionContextSets.Gameplay"/>.
         /// </summary>
-        public CommandExecutionContexts Contexts { get; set; } = CommandExecutionContexts.All;
+        public CommandExecutionContexts Contexts { get; set; } = CommandExecutionContextSets.All;
 
         public RegisterCommandAttribute(string commandName = null)
         {

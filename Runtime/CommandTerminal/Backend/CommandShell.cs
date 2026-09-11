@@ -1226,7 +1226,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 )
                 {
                     // Command-name completion is the caller's territory.
-
+                    completionContext = default;
                     return false;
                 }
 
@@ -1237,6 +1237,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                     || command.completionProvider == null
                 )
                 {
+                    completionContext = default;
                     return false;
                 }
 
@@ -1267,10 +1268,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                     context,
                     input,
                     caretIndex,
-                    /*
-                        Argument stages count arguments after the command name:
-                        the active token is stage ActiveArgumentIndex - 1.
-                     */
+                    // Stages count arguments after the command name.
                     activeTokenIndex - 1,
                     precedingArguments,
                     token,
@@ -1407,7 +1405,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 definition.CompletionProvider,
                 definition.Contexts,
                 definition.MinArgCount,
-                definition.MaxArgCount,
+                definition.MaxArgCount ?? -1,
                 definition.Help,
                 definition.Hint,
                 definition.AddToHistory

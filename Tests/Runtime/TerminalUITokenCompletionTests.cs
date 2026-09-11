@@ -265,6 +265,59 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         [UnityTest]
+        public IEnumerator UnfocusedFieldKeepsQueuedCompletionCaret()
+        {
+            yield return SpawnTerminalWithUi();
+
+            Assert.IsTrue(Terminal.Shell.AddCommand(DefinePickupWithStagedInventory()));
+
+            yield return SetInput("pickup ", 7);
+            _terminal._textInput.Blur();
+
+            _terminal.CompleteCommand(true);
+            yield return null;
+            Assert.AreEqual(
+                "pickup pickaxe",
+                _terminal._commandInput.value,
+                "Completion applies to an unfocused field"
+            );
+            Assert.AreEqual(
+                14,
+                _terminal._commandInput.cursorIndex,
+                "The queued caret survives the focus pass instead of jumping to line end"
+            );
+        }
+
+        [UnityTest]
+        public IEnumerator ProviderReplacementOverrideWinsOverTokenRange()
+        {
+            yield return SpawnTerminalWithUi();
+
+            CommandDefinition definition = DefinePickupWithStagedInventory();
+            definition.CompletionProvider = (
+                in CommandCompletionContext context,
+                List<CommandCompletion> results
+            ) =>
+                results.Add(
+                    new CommandCompletion(
+                        "pickaxe",
+                        replacement: new CommandCompletionReplacement(0, 14)
+                    )
+                );
+            Assert.IsTrue(Terminal.Shell.AddCommand(definition));
+
+            yield return SetInput("pickup pickaxe", 14);
+
+            _terminal.CompleteCommand(true);
+            yield return null;
+            Assert.AreEqual(
+                "pickaxe",
+                _terminal._commandInput.value,
+                "The override replaces the whole line while the context range would replace only the token"
+            );
+        }
+
+        [UnityTest]
         public IEnumerator CommandsWithoutProvidersKeepHistoryCompletion()
         {
             yield return SpawnTerminalWithUi();

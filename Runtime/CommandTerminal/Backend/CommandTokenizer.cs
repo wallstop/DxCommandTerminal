@@ -4,41 +4,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     using System.Collections.Generic;
 
     /// <summary>
-    ///     One parsed token of an input line, with the span it came from.
-    ///     Contents and quote flags match
-    ///     <see cref="CommandShell.TryEatArgument"/> exactly; the span lets
-    ///     completion address the raw text around the caret.
-    /// </summary>
-    internal readonly struct CommandToken
-    {
-        public string Contents { get; }
-        public char? StartQuote { get; }
-        public char? EndQuote { get; }
-
-        /// <summary>Start index of the token's contents in the line, quotes
-        /// excluded.</summary>
-        public int Start { get; }
-
-        /// <summary>End index (exclusive) of the token's contents in the line,
-        /// closing quote excluded.</summary>
-        public int End { get; }
-
-        public CommandToken(string contents, char? startQuote, char? endQuote, int start, int end)
-        {
-            Contents = contents;
-            StartQuote = startQuote;
-            EndQuote = endQuote;
-            Start = start;
-            End = end;
-        }
-
-        public CommandArg ToArgument()
-        {
-            return new CommandArg(Contents, StartQuote, EndQuote);
-        }
-    }
-
-    /// <summary>
     ///     Single tokenization model shared by execution and completion.
     ///     Production (<see cref="CommandShell.TryEatArgument"/>) semantics
     ///     are preserved exactly: leading whitespace is skipped with
@@ -147,13 +112,12 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             out bool isNewArgument
         )
         {
-            activeTokenIndex = -1;
-            replacementStart = -1;
-            replacementLength = -1;
-            isNewArgument = false;
-
             if (line == null || tokens == null || tokens.Count == 0)
             {
+                activeTokenIndex = -1;
+                replacementStart = -1;
+                replacementLength = -1;
+                isNewArgument = false;
                 return false;
             }
 
@@ -178,6 +142,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 activeTokenIndex = i;
                 replacementStart = token.Start;
                 replacementLength = token.End - token.Start;
+                isNewArgument = false;
                 return true;
             }
 

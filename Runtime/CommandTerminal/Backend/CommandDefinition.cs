@@ -29,10 +29,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         public int MinArgCount { get; set; }
 
         /// <summary>
-        ///     Maximum number of arguments the command accepts, or a negative
-        ///     value for unbounded.
+        ///     Maximum number of arguments the command accepts, or
+        ///     <c>null</c> for unbounded.
         /// </summary>
-        public int MaxArgCount { get; set; } = -1;
+        public int? MaxArgCount { get; set; }
 
         /// <summary>Whether invocations are recorded in the command history.</summary>
         public bool AddToHistory { get; set; } = true;
@@ -43,7 +43,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         ///     execution requires explicit opt-in by including
         ///     <see cref="CommandExecutionContexts.EditorEditMode"/>.
         /// </summary>
-        public CommandExecutionContexts Contexts { get; set; } = CommandExecutionContexts.Gameplay;
+        public CommandExecutionContexts Contexts { get; set; } =
+            CommandExecutionContextSets.Gameplay;
 
         /// <summary>
         ///     Context-aware handler receiving the execution context and a

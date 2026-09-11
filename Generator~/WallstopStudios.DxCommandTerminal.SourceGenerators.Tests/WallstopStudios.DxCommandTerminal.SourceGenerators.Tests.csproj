@@ -1,53 +1,52 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
-    <LangVersion>latest</LangVersion>
-    <Nullable>disable</Nullable>
-    <IsPackable>false</IsPackable>
-    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
-    <RepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/../..'))</RepoRoot>
-    <!--
+    <PropertyGroup>
+        <TargetFramework>net9.0</TargetFramework>
+        <LangVersion>latest</LangVersion>
+        <Nullable>disable</Nullable>
+        <IsPackable>false</IsPackable>
+        <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+        <RepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/../..'))</RepoRoot>
+        <!--
       Warnings are NOT errors here, unlike elsewhere under Generator~. The fixtures
       deliberately exercise attributed members the runtime treats as rejected or ignored
       (invalid signatures, generic shapes), and the Unity-free compilation of Runtime/
       sources pulls in the .NET CA analyzers by default.
     -->
-    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
-  </PropertyGroup>
-
-  <ItemGroup>
-    <!-- The real runtime sources, compiled Unity-free. CommandArg.cs is the one file that
+        <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    </PropertyGroup>
+    <ItemGroup>
+        <!-- The real runtime sources, compiled Unity-free. CommandArg.cs is the one file that
          references UnityEngine types; UnityScriptingShim.cs supplies exactly the members it
          touches. Sources are named one by one so a new dependency of one of them fails HERE
          and nowhere else. -->
-    <Compile Include="$(RepoRoot)/Runtime/Attributes/RegisterCommandAttribute.cs" />
-    <Compile Include="$(RepoRoot)/Runtime/CommandTerminal/Backend/CommandArg.cs" />
-    <Compile Include="$(RepoRoot)/Runtime/CommandTerminal/Backend/CommandCatalogEntry.cs" />
-    <Compile Include="$(RepoRoot)/Runtime/CommandTerminal/Backend/CommandExecutionContexts.cs" />
-    <Compile Include="*.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <!-- The analyzer under test is the DLL this package SHIPS, not a fresh build of the
+        <Compile Include="$(RepoRoot)/Runtime/Attributes/RegisterCommandAttribute.cs" />
+        <Compile Include="$(RepoRoot)/Runtime/CommandTerminal/Backend/CommandArg.cs" />
+        <Compile Include="$(RepoRoot)/Runtime/CommandTerminal/Backend/CommandCatalogEntry.cs" />
+        <Compile Include="$(RepoRoot)/Runtime/CommandTerminal/Backend/CommandExecutionContexts.cs" />
+        <Compile Include="$(RepoRoot)/Runtime/CommandTerminal/Backend/CommandExecutionContextSets.cs" />
+        <Compile Include="$(RepoRoot)/Runtime/CommandTerminal/Backend/CommandExecutionContextsExtensions.cs" />
+        <Compile Include="$(RepoRoot)/Runtime/CommandTerminal/Backend/CommandArgParser.cs" />
+        <Compile Include="*.cs" />
+    </ItemGroup>
+    <ItemGroup>
+        <!-- The analyzer under test is the DLL this package SHIPS, not a fresh build of the
          sources beside it. That is the only binary Unity ever loads, and pointing the suite
          at a rebuild would leave a stale committed DLL undetectable. -->
-    <Analyzer Include="$(RepoRoot)/Runtime/Analyzers/WallstopStudios.DxCommandTerminal.SourceGenerators.dll" />
-
-    <!-- Referenced normally as well, so the unit tests can drive the generator through a
+        <Analyzer Include="$(RepoRoot)/Runtime/Analyzers/WallstopStudios.DxCommandTerminal.SourceGenerators.dll" />
+        <!-- Referenced normally as well, so the unit tests can drive the generator through a
          Roslyn GeneratorDriver over a synthetic consumer compilation. -->
-    <ProjectReference Include="../WallstopStudios.DxCommandTerminal.SourceGenerators/WallstopStudios.DxCommandTerminal.SourceGenerators.csproj">
-      <!-- Building the generator normally refreshes the shipped DLL. Not from here: these
+        <ProjectReference Include="../WallstopStudios.DxCommandTerminal.SourceGenerators/WallstopStudios.DxCommandTerminal.SourceGenerators.csproj">
+            <!-- Building the generator normally refreshes the shipped DLL. Not from here: these
            tests validate the shipped artifact, and a run that rewrote it first could never
            fail. -->
-      <Properties>CopyAnalyzerPayload=false</Properties>
-    </ProjectReference>
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="Basic.Reference.Assemblies.NetStandard21" Version="1.8.11" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.11.0" />
-    <PackageReference Include="xunit" Version="2.9.0" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
-  </ItemGroup>
+            <Properties>CopyAnalyzerPayload=false</Properties>
+        </ProjectReference>
+    </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="Basic.Reference.Assemblies.NetStandard21" Version="1.8.11" />
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+        <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.11.0" />
+        <PackageReference Include="xunit" Version="2.9.0" />
+        <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+    </ItemGroup>
 </Project>

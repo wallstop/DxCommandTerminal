@@ -122,6 +122,23 @@ frontmatter validity, index freshness, and pointer-file delegation; see
 11. `foreach` over collections with value-typed enumerables (`List<T>`, arrays, structs).
     Counting `for` only when the index is used, the collection is `IReadonlyList`, or the
     count direction/skip matters. Convert last-element separator logic to a first/last flag.
+12. One top-level type (class/struct/enum/delegate) per file. Nested helper types are fine.
+13. Assign `out` parameters immediately before each `return`, per path. Never blanket-assign
+    them at method entry; that defeats the compiler's definite-assignment bugcheck.
+14. Flags enums hold single-bit members only. Named composites (`Gameplay`, `All`) live in a
+    static presets class; never compose members inside the enum.
+15. No raw bitwise flag math at call sites; use the allocation-free
+    `EnumExtensions.HasFlagNoAlloc` helper (adapted from unity-helpers, MIT).
+16. No sentinel/magic values where the type system can express optionality: use nullable
+    types (`int?`, nullable structs). The released `-1 = unbounded` `maxArgCount` convention
+    stays on existing APIs (`RegisterCommandAttribute`, `CommandInfo`, `AddCommand`); new
+    types use `int?`.
+17. No `params` on frequently-called APIs; provide fixed-arity overloads (`params` allocates).
+    One-time configuration APIs may use `params`.
+18. Hot-path collection access avoids interface dispatch: specialize arrays and `List<T>`
+    (Unity does not de-virtualize `IReadOnlyList` indexers); arrays are preferred (bound-check
+    elision). Copy with `Array.Copy` / `CopyTo`, not element loops; reserve `Clone()` for
+    cases where its `object` return is acceptable.
 
 ### Unity Package Rules
 

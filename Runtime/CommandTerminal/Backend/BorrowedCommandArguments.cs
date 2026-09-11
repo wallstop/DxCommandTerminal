@@ -22,15 +22,68 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     {
         private static readonly CommandArg[] EmptyArguments = Array.Empty<CommandArg>();
 
-        private readonly IReadOnlyList<CommandArg> _arguments;
+        // Specialized storage: Unity does not de-virtualize IReadOnlyList
+        // indexers, so array and list keep direct element access. The
+        // fallback covers exotic callers only.
+        private readonly CommandArg[] _array;
+        private readonly List<CommandArg> _list;
+        private readonly IReadOnlyList<CommandArg> _fallback;
+
+        internal BorrowedCommandArguments(CommandArg[] array)
+        {
+            _array = array;
+            _list = null;
+            _fallback = null;
+        }
+
+        internal BorrowedCommandArguments(List<CommandArg> list)
+        {
+            _array = null;
+            _list = list;
+            _fallback = null;
+        }
 
         internal BorrowedCommandArguments(IReadOnlyList<CommandArg> arguments)
         {
-            _arguments = arguments;
+            if (arguments is CommandArg[] array)
+            {
+                _array = array;
+                _list = null;
+                _fallback = null;
+                return;
+            }
+
+            if (arguments is List<CommandArg> list)
+            {
+                _array = null;
+                _list = list;
+                _fallback = null;
+                return;
+            }
+
+            _array = null;
+            _list = null;
+            _fallback = arguments;
         }
 
         /// <summary>Number of arguments in the current invocation.</summary>
-        public int Count => _arguments?.Count ?? 0;
+        public int Count
+        {
+            get
+            {
+                if (_array != null)
+                {
+                    return _array.Length;
+                }
+
+                if (_list != null)
+                {
+                    return _list.Count;
+                }
+
+                return _fallback?.Count ?? 0;
+            }
+        }
 
         /// <summary>True when the invocation carries no arguments.</summary>
         public bool IsEmpty => Count == 0;
@@ -44,41 +97,75 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         {
             get
             {
-                if (_arguments == null || (uint)index >= (uint)_arguments.Count)
+                if (_array != null)
                 {
-                    throw new ArgumentOutOfRangeException(nameof(index));
+                    if ((uint)index >= (uint)_array.Length)
+                    {
+                        throw new ArgumentOutOfRangeException(nameof(index));
+                    }
+
+                    return _array[index];
                 }
 
-                return _arguments[index];
+                if (_list != null)
+                {
+                    if ((uint)index >= (uint)_list.Count)
+                    {
+                        throw new ArgumentOutOfRangeException(nameof(index));
+                    }
+
+                    return _list[index];
+                }
+
+                if (_fallback != null)
+                {
+                    if ((uint)index >= (uint)_fallback.Count)
+                    {
+                        throw new ArgumentOutOfRangeException(nameof(index));
+                    }
+
+                    return _fallback[index];
+                }
+
+                throw new ArgumentOutOfRangeException(nameof(index));
             }
         }
 
         public Enumerator GetEnumerator()
         {
-            return new Enumerator(_arguments);
+            return new Enumerator(_array, _list, _fallback);
         }
 
         /// <summary>
-        ///     Copies the arguments into an owned array. New-style handlers
-        ///     that must retain arguments beyond the invocation use this; the
-        ///     copy is theirs to keep.
+        ///     Copies the arguments into an owned array with bulk copies. A
+        ///     new-style handler that must retain arguments beyond the
+        ///     invocation uses this; the copy is theirs to keep.
         /// </summary>
         public CommandArg[] ToArray()
         {
-            if (_arguments == null)
+            if (_array != null)
+            {
+                CommandArg[] arrayCopy = new CommandArg[_array.Length];
+                Array.Copy(_array, arrayCopy, arrayCopy.Length);
+                return arrayCopy;
+            }
+
+            if (_list != null)
+            {
+                CommandArg[] listCopy = new CommandArg[_list.Count];
+                _list.CopyTo(listCopy, 0);
+                return listCopy;
+            }
+
+            if (_fallback == null)
             {
                 return EmptyArguments;
             }
 
-            if (_arguments is CommandArg[] array)
-            {
-                return (CommandArg[])array.Clone();
-            }
-
-            CommandArg[] copy = new CommandArg[_arguments.Count];
+            CommandArg[] copy = new CommandArg[_fallback.Count];
             for (int i = 0; i < copy.Length; ++i)
             {
-                copy[i] = _arguments[i];
+                copy[i] = _fallback[i];
             }
 
             return copy;
@@ -101,12 +188,21 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         /// </summary>
         public struct Enumerator : IEnumerator<CommandArg>
         {
-            private readonly IReadOnlyList<CommandArg> _arguments;
+            private readonly CommandArg[] _array;
+            private readonly List<CommandArg> _list;
+            private readonly IReadOnlyList<CommandArg> _fallback;
+            private int _index;
             private CommandArg _current;
 
-            internal Enumerator(IReadOnlyList<CommandArg> arguments)
+            internal Enumerator(
+                CommandArg[] array,
+                List<CommandArg> list,
+                IReadOnlyList<CommandArg> fallback
+            )
             {
-                _arguments = arguments;
+                _array = array;
+                _list = list;
+                _fallback = fallback;
                 _index = -1;
                 _current = default;
             }
@@ -118,14 +214,50 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             public bool MoveNext()
             {
                 int nextIndex = _index + 1;
-                if (_arguments == null || _arguments.Count <= nextIndex)
+                if (_array != null)
+                {
+                    if (_array.Length <= nextIndex)
+                    {
+                        _current = default;
+                        return false;
+                    }
+                }
+                else if (_list != null)
+                {
+                    if (_list.Count <= nextIndex)
+                    {
+                        _current = default;
+                        return false;
+                    }
+                }
+                else if (_fallback != null)
+                {
+                    if (_fallback.Count <= nextIndex)
+                    {
+                        _current = default;
+                        return false;
+                    }
+                }
+                else
                 {
                     _current = default;
                     return false;
                 }
 
                 _index = nextIndex;
-                _current = _arguments[_index];
+                if (_array != null)
+                {
+                    _current = _array[_index];
+                }
+                else if (_list != null)
+                {
+                    _current = _list[_index];
+                }
+                else
+                {
+                    _current = _fallback[_index];
+                }
+
                 return true;
             }
 
@@ -136,8 +268,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
 
             public void Dispose() { }
-
-            private int _index;
         }
     }
 }

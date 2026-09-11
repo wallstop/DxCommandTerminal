@@ -197,7 +197,10 @@ namespace WallstopStudios.DxCommandTerminal.UI
         internal TextField _commandInput;
         private Button _runButton;
         private VisualElement _stateButtonContainer;
-        private VisualElement _textInput;
+
+        // Internal for test coverage of caret behavior (see
+        // WallstopStudios.DxCommandTerminal.Tests.Runtime).
+        internal VisualElement _textInput;
         private Label _inputCaretLabel;
         private bool _lastKnownHintsClickable;
         private IVisualElementScheduledItem _cursorBlinkSchedule;
@@ -778,6 +781,9 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 _tokenCompletionCaret = NormalizeCaret(liveCaret);
             }
 
+            UnityEngine.Debug.Log(
+                $"[T08DIAG8] press: live={_commandInput.cursorIndex} input='{_input.CommandText}' snap='{_tokenCompletionInput ?? "null"}' snapCaret={_tokenCompletionCaret}"
+            );
             _tokenCompletionsTemp.Clear();
             bool hasProvider = shell.TryComplete(
                 CommandExecutionContext.Current,
@@ -788,6 +794,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             );
             if (!hasProvider)
             {
+                UnityEngine.Debug.Log("[T08DIAG8] no provider answered");
                 ResetTokenCompletion();
                 return false;
             }
@@ -851,8 +858,19 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 CommandCompletion active = current[i];
                 if (
                     candidate.InsertionText != active.InsertionText
-                    || candidate.ReplacementStart != active.ReplacementStart
-                    || candidate.ReplacementLength != active.ReplacementLength
+                    || candidate.HasReplacementOverride != active.HasReplacementOverride
+                )
+                {
+                    return false;
+                }
+
+                if (
+                    candidate.Replacement is CommandCompletionReplacement candidateReplacement
+                    && active.Replacement is CommandCompletionReplacement activeReplacement
+                    && (
+                        candidateReplacement.Start != activeReplacement.Start
+                        || candidateReplacement.Length != activeReplacement.Length
+                    )
                 )
                 {
                     return false;
@@ -865,12 +883,18 @@ namespace WallstopStudios.DxCommandTerminal.UI
         private void ApplyTokenCompletion(CommandCompletion completion)
         {
             string input = _tokenCompletionInput ?? string.Empty;
-            int replacementStart = completion.HasReplacementOverride
-                ? completion.ReplacementStart
-                : _tokenCompletionReplacementStart;
-            int replacementLength = completion.HasReplacementOverride
-                ? completion.ReplacementLength
-                : _tokenCompletionReplacementLength;
+            int replacementStart;
+            int replacementLength;
+            if (completion.Replacement is CommandCompletionReplacement override2)
+            {
+                replacementStart = override2.Start;
+                replacementLength = override2.Length;
+            }
+            else
+            {
+                replacementStart = _tokenCompletionReplacementStart;
+                replacementLength = _tokenCompletionReplacementLength;
+            }
             if (
                 replacementStart < 0
                 || replacementLength < 0
@@ -1454,9 +1478,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             {
                 /*
                     The field already holds focus, or a completion queued a
-                    caret position for input the field has not received yet:
-                    keep the caret. RefreshUI applies the queued position once
-                    the field value is synced.
+                    caret: keep the caret and let ApplyPendingCaret place it.
                  */
                 _textInput.Focus();
                 return;
@@ -1478,16 +1500,27 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
             if (_commandInput.value.Length < _pendingCaretIndex)
             {
-                /*
-                    The queued position targets input the field does not hold
-                    yet; the value sync in RefreshUI applies it right after
-                    the field catches up.
-                 */
+                // The queued position targets input the field does not hold
+                // yet; the value sync applies it once the field catches up.
                 return;
             }
 
+            bool focused =
+                _textInput != null
+                && _textInput.focusController != null
+                && _textInput.focusController.focusedElement == _textInput;
+
+            /*
+                Consume the marker only while focused: the queued position is
+                what keeps a later fresh-focus pass from sending the caret to
+                line end (Bugbot: unfocused completion caret jump).
+             */
             int caretPosition = _pendingCaretIndex;
-            _pendingCaretIndex = -1;
+            if (focused)
+            {
+                _pendingCaretIndex = -1;
+            }
+
             _commandInput.cursorIndex = caretPosition;
             _commandInput.selectIndex = caretPosition;
         }

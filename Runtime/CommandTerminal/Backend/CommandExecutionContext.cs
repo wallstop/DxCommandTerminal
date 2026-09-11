@@ -53,7 +53,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         public bool IsEligibleFor(CommandExecutionContexts allowedContexts)
         {
-            return (Environment & allowedContexts) != 0;
+            return allowedContexts.HasFlagNoAlloc(Environment);
         }
 
         private static CommandExecutionContexts ResolveEnvironment()

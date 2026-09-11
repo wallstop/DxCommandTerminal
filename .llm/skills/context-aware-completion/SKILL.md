@@ -16,7 +16,7 @@ Terminal.Shell.AddCommand(new CommandDefinition
     Help = "Picks up an item",
     MinArgCount = 1,
     MaxArgCount = 2,
-    Contexts = CommandExecutionContexts.Gameplay,
+    Contexts = CommandExecutionContextSets.Gameplay,
     Handler = (CommandExecutionContext context, BorrowedCommandArguments args) =>
     {
         string item = args[0].contents;
@@ -36,10 +36,12 @@ Terminal.Shell.AddCommand(new CommandDefinition
 ## Execution contexts
 
 - `CommandExecutionContexts` flags: `EditorEditMode`, `EditorPlayMode`,
-  `Player`; composites `Gameplay` and `All`.
-- Definitions default to `Gameplay`; `EditorEditMode` execution is
-  opt-in. `[RegisterCommand]` defaults to `Contexts = All`, so existing
-  attributed commands keep their previous availability.
+  `Player`. Flag members stay single bits; named sets live in
+  `CommandExecutionContextSets` (`Gameplay`, `All`).
+- Definitions default to `CommandExecutionContextSets.Gameplay`;
+  `EditorEditMode` execution is opt-in. `[RegisterCommand]` defaults to
+  `CommandExecutionContextSets.All`, so existing attributed commands keep
+  their previous availability.
 - Legacy `AddCommand` overloads stay unrestricted.
 - Eligibility is checked at dispatch: an ineligible command queues
   `"<name> is not available in the current execution context"` and
@@ -62,9 +64,10 @@ Terminal.Shell.AddCommand(new CommandDefinition
 - The shell deduplicates by insertion text (ordinal, first wins) and
   preserves provider order. Empty insertions are dropped. Zero results
   still count as provider-answered.
-- `CommandCompletionProviders.Staged(...)` maps argument stage k to
-  stages[k]; stages beyond the list produce nothing, and null stages
-  produce nothing.
+- `CommandCompletionProviders.Staged(...)` has one/two/three-stage
+  overloads plus a `params` overload for more; stage k is completed by
+  stages[k], and requests beyond the list produce nothing. In the
+  `params` overload, null stages produce nothing.
 - Insertions with spaces or quotes are quoted on insertion by the UI when
   the active token is unquoted. Providers return raw values.
 

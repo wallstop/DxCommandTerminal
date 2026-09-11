@@ -109,7 +109,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             bool isDefault,
             Func<Action<CommandArg[]>> binder,
             Func<MethodInfo> methodAccessor,
-            CommandExecutionContexts contexts = CommandExecutionContexts.All
+            CommandExecutionContexts contexts = CommandExecutionContextSets.All
         )
         {
             /*

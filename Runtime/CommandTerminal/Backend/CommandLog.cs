@@ -6,31 +6,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     using DataStructures;
     using UnityEngine;
 
-    public enum TerminalLogType
-    {
-        Error = LogType.Error,
-        Assert = LogType.Assert,
-        Warning = LogType.Warning,
-        Message = LogType.Log,
-        Exception = LogType.Exception,
-        Input,
-        ShellMessage,
-    }
-
-    public readonly struct LogItem
-    {
-        public readonly TerminalLogType type;
-        public readonly string message;
-        public readonly string stackTrace;
-
-        public LogItem(TerminalLogType type, string message, string stackTrace)
-        {
-            this.type = type;
-            this.message = message ?? string.Empty;
-            this.stackTrace = stackTrace ?? string.Empty;
-        }
-    }
-
     public sealed class CommandLog
     {
         private static readonly string[] NewlineSeparators = { "\r\n", "\n", "\r" };

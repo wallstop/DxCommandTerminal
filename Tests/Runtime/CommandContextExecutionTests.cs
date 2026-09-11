@@ -61,7 +61,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 "The definition should register cleanly"
             );
             Assert.AreEqual(
-                CommandExecutionContexts.Gameplay,
+                CommandExecutionContextSets.Gameplay,
                 definition.Contexts,
                 "Definitions default to the gameplay contexts"
             );
@@ -132,7 +132,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     new CommandDefinition
                     {
                         Name = "ctx-all",
-                        Contexts = CommandExecutionContexts.All,
+                        Contexts = CommandExecutionContextSets.All,
                         Handler = (context, arguments) => ++allContextsRuns,
                     }
                 )

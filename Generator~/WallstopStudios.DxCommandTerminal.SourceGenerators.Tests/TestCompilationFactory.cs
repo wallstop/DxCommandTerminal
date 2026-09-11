@@ -34,6 +34,9 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators.Tests
                 "Runtime/Attributes/RegisterCommandAttribute.cs",
                 "Runtime/CommandTerminal/Backend/CommandArg.cs",
                 "Runtime/CommandTerminal/Backend/CommandExecutionContexts.cs",
+                "Runtime/CommandTerminal/Backend/CommandExecutionContextSets.cs",
+                "Runtime/CommandTerminal/Backend/CommandExecutionContextsExtensions.cs",
+                "Runtime/CommandTerminal/Backend/CommandArgParser.cs",
             }
         );
 

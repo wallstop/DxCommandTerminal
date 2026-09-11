@@ -27,7 +27,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         /// <summary>
         ///     Environments the command may run in. Commands registered without
-        ///     explicit context metadata keep <see cref="CommandExecutionContexts.All"/>,
+        ///     explicit context metadata keep <see cref="CommandExecutionContextSets.All"/>,
         ///     their previous availability everywhere.
         /// </summary>
         public readonly CommandExecutionContexts executionContexts;
@@ -44,7 +44,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 proc,
                 null,
                 null,
-                CommandExecutionContexts.All,
+                CommandExecutionContextSets.All,
                 minArgCount,
                 maxArgCount,
                 help,
