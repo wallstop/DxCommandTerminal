@@ -2577,6 +2577,49 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 );
             }
 
+            // The Unity ToString form prints center plus extents (half the size).
+            for (int i = 0; i < NumTries; ++i)
+            {
+                float centerX = (float)(
+                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
+                );
+                float centerY = (float)(
+                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
+                );
+                float centerZ = (float)(
+                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
+                );
+                float sizeX = (float)(
+                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
+                );
+                float sizeY = (float)(
+                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
+                );
+                float sizeZ = (float)(
+                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
+                );
+                expected = new Bounds(
+                    new Vector3(centerX, centerY, centerZ),
+                    new Vector3(sizeX, sizeY, sizeZ)
+                );
+                arg = new CommandArg(expected.ToString());
+                Assert.IsTrue(arg.TryGet(out value), $"Failed to parse {arg.contents} as Bounds");
+                /*
+                   The ToString round-trip reads F2 text back, so tolerance is
+                   a decimal digit of the printed values, doubled by the
+                   extents-to-size conversion.
+                 */
+                Assert.IsTrue(
+                    Approximately(expected.center.x, value.center.x, 0.02f)
+                        && Approximately(expected.center.y, value.center.y, 0.02f)
+                        && Approximately(expected.center.z, value.center.z, 0.02f)
+                        && Approximately(expected.size.x, value.size.x, 0.04f)
+                        && Approximately(expected.size.y, value.size.y, 0.04f)
+                        && Approximately(expected.size.z, value.size.z, 0.04f),
+                    $"Expected {expected} to be approximately {value}"
+                );
+            }
+
             arg = new CommandArg("1,2,3,4,5");
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
             arg = new CommandArg("1,2,3,4,5,6,7");
@@ -2654,6 +2697,27 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 Assert.AreEqual(new Vector3Int(4, 5, 6), value.size);
             }
 
+            for (int i = 0; i < NumTries; ++i)
+            {
+                int positionX = _random.Next(short.MinValue, short.MaxValue);
+                int positionY = _random.Next(short.MinValue, short.MaxValue);
+                int positionZ = _random.Next(short.MinValue, short.MaxValue);
+                int sizeX = _random.Next(short.MinValue, short.MaxValue);
+                int sizeY = _random.Next(short.MinValue, short.MaxValue);
+                int sizeZ = _random.Next(short.MinValue, short.MaxValue);
+                expected = new BoundsInt(
+                    new Vector3Int(positionX, positionY, positionZ),
+                    new Vector3Int(sizeX, sizeY, sizeZ)
+                );
+                arg = new CommandArg(expected.ToString());
+                Assert.IsTrue(
+                    arg.TryGet(out value),
+                    $"Failed to parse {arg.contents} as BoundsInt"
+                );
+                Assert.AreEqual(expected.position, value.position);
+                Assert.AreEqual(expected.size, value.size);
+            }
+
             arg = new CommandArg("1,2,3,4,5");
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
             arg = new CommandArg("1,2,3,4,5,6,7");
@@ -2725,6 +2789,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             }
 
             arg = new CommandArg("4,8,2");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+            /*
+                RectOffset is a plain class: its default ToString is the type
+                name, so there is no structured ToString form to round-trip.
+             */
+            arg = new CommandArg("UnityEngine.RectOffset");
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
             arg = new CommandArg(System.Guid.NewGuid().ToString());
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
@@ -2813,6 +2883,33 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                         && Approximately(0f, value.normal.z)
                         && Approximately(5f, value.distance),
                     $"Expected normal (0, 1, 0) and distance 5, got {value}"
+                );
+            }
+
+            for (int i = 0; i < NumTries; ++i)
+            {
+                float normalX = (float)(_random.NextDouble() * 2 - 1);
+                float normalY = (float)(_random.NextDouble() * 2 - 1);
+                float normalZ = (float)(_random.NextDouble() * 2 - 1);
+                float distance = (float)(
+                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
+                );
+                Vector3 normal = new(normalX, normalY, normalZ);
+                if (normal == UnityEngine.Vector3.zero)
+                {
+                    continue;
+                }
+
+                normal.Normalize();
+                expected = new Plane(normal, distance);
+                arg = new CommandArg(expected.ToString());
+                Assert.IsTrue(arg.TryGet(out value), $"Failed to parse {arg.contents} as Plane");
+                Assert.IsTrue(
+                    Approximately(expected.normal.x, value.normal.x, 0.01f)
+                        && Approximately(expected.normal.y, value.normal.y, 0.01f)
+                        && Approximately(expected.normal.z, value.normal.z, 0.01f)
+                        && Approximately(expected.distance, value.distance, 0.01f),
+                    $"Expected {expected} to be approximately {value}"
                 );
             }
 
@@ -2916,6 +3013,37 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                         && Approximately(1f, value.direction.y)
                         && Approximately(0f, value.direction.z),
                     $"Expected origin (0, 0, 0) and direction (0, 1, 0), got {value}"
+                );
+            }
+
+            for (int i = 0; i < NumTries; ++i)
+            {
+                float originX = (float)(
+                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
+                );
+                float originY = (float)(
+                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
+                );
+                float originZ = (float)(
+                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
+                );
+                float directionX = (float)(_random.NextDouble() * 2 - 1);
+                float directionY = (float)(_random.NextDouble() * 2 - 1);
+                float directionZ = (float)(_random.NextDouble() * 2 - 1);
+                expected = new Ray(
+                    new Vector3(originX, originY, originZ),
+                    new Vector3(directionX, directionY, directionZ)
+                );
+                arg = new CommandArg(expected.ToString());
+                Assert.IsTrue(arg.TryGet(out value), $"Failed to parse {arg.contents} as Ray");
+                Assert.IsTrue(
+                    Approximately(expected.origin.x, value.origin.x, 0.01f)
+                        && Approximately(expected.origin.y, value.origin.y, 0.01f)
+                        && Approximately(expected.origin.z, value.origin.z, 0.01f)
+                        && Approximately(expected.direction.x, value.direction.x, 0.01f)
+                        && Approximately(expected.direction.y, value.direction.y, 0.01f)
+                        && Approximately(expected.direction.z, value.direction.z, 0.01f),
+                    $"Expected {expected} to be approximately {value}"
                 );
             }
 

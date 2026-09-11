@@ -412,25 +412,37 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         /// <summary>
         ///     Parses six components into a center and a size: "0, 0, 0, 1, 1, 1"
         ///     is a bounds centered at the origin with size one on every axis.
+        ///     The Unity ToString form, "Center: (0, 0, 0), Extents: (1, 1, 1)",
+        ///     is also accepted; its trailing triple is extents (half the size)
+        ///     and is doubled, so pasted log output round-trips.
         /// </summary>
         public static bool Bounds(string input, out UnityEngine.Bounds parsed)
         {
-            if (
-                TrySplitComponents(input, out string[] split)
-                && split.Length == 6
-                && Float(split[0], out float centerX)
-                && Float(split[1], out float centerY)
-                && Float(split[2], out float centerZ)
-                && Float(split[3], out float sizeX)
-                && Float(split[4], out float sizeY)
-                && Float(split[5], out float sizeZ)
-            )
+            if (TrySplitComponents(input, out string[] split) && split.Length == 6)
             {
-                parsed = new UnityEngine.Bounds(
-                    new UnityEngine.Vector3(centerX, centerY, centerZ),
-                    new UnityEngine.Vector3(sizeX, sizeY, sizeZ)
-                );
-                return true;
+                string first = StripLabel(split[0], "Center:", out bool centerLabeled);
+                string fourth = StripLabel(split[3], "Extents:", out _);
+                if (
+                    Float(first, out float centerX)
+                    && Float(split[1], out float centerY)
+                    && Float(split[2], out float centerZ)
+                    && Float(fourth, out float sizeX)
+                    && Float(split[4], out float sizeY)
+                    && Float(split[5], out float sizeZ)
+                )
+                {
+                    /*
+                       The Unity ToString form prints extents, half the size.
+                       Detecting the label (not the fourth part's value) keeps
+                       the bare form's center-plus-size reading intact.
+                     */
+                    float scale = centerLabeled ? 2f : 1f;
+                    parsed = new UnityEngine.Bounds(
+                        new UnityEngine.Vector3(centerX, centerY, centerZ),
+                        new UnityEngine.Vector3(sizeX * scale, sizeY * scale, sizeZ * scale)
+                    );
+                    return true;
+                }
             }
 
             parsed = default;
@@ -440,25 +452,30 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         /// <summary>
         ///     Parses six integer components into a position and a size:
         ///     "0, 0, 0, 1, 1, 1" is a one-cell bounds at the grid origin.
+        ///     The Unity ToString form, "Position: (0, 0, 0), Size: (1, 1, 1)",
+        ///     is also accepted, so pasted log output round-trips.
         /// </summary>
         public static bool BoundsInt(string input, out UnityEngine.BoundsInt parsed)
         {
-            if (
-                TrySplitComponents(input, out string[] split)
-                && split.Length == 6
-                && Int(split[0], out int positionX)
-                && Int(split[1], out int positionY)
-                && Int(split[2], out int positionZ)
-                && Int(split[3], out int sizeX)
-                && Int(split[4], out int sizeY)
-                && Int(split[5], out int sizeZ)
-            )
+            if (TrySplitComponents(input, out string[] split) && split.Length == 6)
             {
-                parsed = new UnityEngine.BoundsInt(
-                    new UnityEngine.Vector3Int(positionX, positionY, positionZ),
-                    new UnityEngine.Vector3Int(sizeX, sizeY, sizeZ)
-                );
-                return true;
+                string first = StripLabel(split[0], "Position:", out _);
+                string fourth = StripLabel(split[3], "Size:", out _);
+                if (
+                    Int(first, out int positionX)
+                    && Int(split[1], out int positionY)
+                    && Int(split[2], out int positionZ)
+                    && Int(fourth, out int sizeX)
+                    && Int(split[4], out int sizeY)
+                    && Int(split[5], out int sizeZ)
+                )
+                {
+                    parsed = new UnityEngine.BoundsInt(
+                        new UnityEngine.Vector3Int(positionX, positionY, positionZ),
+                        new UnityEngine.Vector3Int(sizeX, sizeY, sizeZ)
+                    );
+                    return true;
+                }
             }
 
             parsed = default;
@@ -469,7 +486,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         ///     Parses four integer components in the
         ///     RectOffset(int, int, int, int) order: left, right, top, and
         ///     bottom. "4, 8, 2, 6" offsets four on the left, eight on the
-        ///     right, two on the top, and six on the bottom.
+        ///     right, two on the top, and six on the bottom. Note that
+        ///     RectOffset is a plain class whose ToString is the default type
+        ///     name, so there is no structured ToString form to accept.
         /// </summary>
         public static bool RectOffset(string input, out UnityEngine.RectOffset parsed)
         {
@@ -493,23 +512,28 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         /// <summary>
         ///     Parses four components into a normal and a distance along that
         ///     normal: "0, 1, 0, 5" is the plane with up normal at height five.
+        ///     The Unity ToString form, "(normal:(0, 1, 0), distance: 5)", is
+        ///     also accepted, so pasted log output round-trips.
         /// </summary>
         public static bool Plane(string input, out UnityEngine.Plane parsed)
         {
-            if (
-                TrySplitComponents(input, out string[] split)
-                && split.Length == 4
-                && Float(split[0], out float normalX)
-                && Float(split[1], out float normalY)
-                && Float(split[2], out float normalZ)
-                && Float(split[3], out float distance)
-            )
+            if (TrySplitComponents(input, out string[] split) && split.Length == 4)
             {
-                parsed = new UnityEngine.Plane(
-                    new UnityEngine.Vector3(normalX, normalY, normalZ),
-                    distance
-                );
-                return true;
+                string first = StripLabel(split[0], "normal:", out _);
+                string fourth = StripLabel(split[3], "distance:", out _);
+                if (
+                    Float(first, out float normalX)
+                    && Float(split[1], out float normalY)
+                    && Float(split[2], out float normalZ)
+                    && Float(fourth, out float distance)
+                )
+                {
+                    parsed = new UnityEngine.Plane(
+                        new UnityEngine.Vector3(normalX, normalY, normalZ),
+                        distance
+                    );
+                    return true;
+                }
             }
 
             parsed = default;
@@ -519,25 +543,30 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         /// <summary>
         ///     Parses six components into an origin and a direction:
         ///     "0, 0, 0, 0, 1, 0" is a ray from the origin pointing up.
+        ///     The Unity ToString form, "Origin: (0, 0, 0), Dir: (0, 1, 0)",
+        ///     is also accepted, so pasted log output round-trips.
         /// </summary>
         public static bool Ray(string input, out UnityEngine.Ray parsed)
         {
-            if (
-                TrySplitComponents(input, out string[] split)
-                && split.Length == 6
-                && Float(split[0], out float originX)
-                && Float(split[1], out float originY)
-                && Float(split[2], out float originZ)
-                && Float(split[3], out float directionX)
-                && Float(split[4], out float directionY)
-                && Float(split[5], out float directionZ)
-            )
+            if (TrySplitComponents(input, out string[] split) && split.Length == 6)
             {
-                parsed = new UnityEngine.Ray(
-                    new UnityEngine.Vector3(originX, originY, originZ),
-                    new UnityEngine.Vector3(directionX, directionY, directionZ)
-                );
-                return true;
+                string first = StripLabel(split[0], "Origin:", out _);
+                string fourth = StripLabel(split[3], "Dir:", out _);
+                if (
+                    Float(first, out float originX)
+                    && Float(split[1], out float originY)
+                    && Float(split[2], out float originZ)
+                    && Float(fourth, out float directionX)
+                    && Float(split[4], out float directionY)
+                    && Float(split[5], out float directionZ)
+                )
+                {
+                    parsed = new UnityEngine.Ray(
+                        new UnityEngine.Vector3(originX, originY, originZ),
+                        new UnityEngine.Vector3(directionX, directionY, directionZ)
+                    );
+                    return true;
+                }
             }
 
             parsed = default;
@@ -563,6 +592,26 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
             parsed = default;
             return false;
+        }
+
+        /*
+            Unity ToString forms carry per-group labels ("Center:", "Dir:",
+            ...). A label is stripped only from the component it is attached
+            to, so bare positional input keeps its reading; `stripped` tells
+            the caller the labeled form was seen (Bounds uses that to read
+            its trailing triple as extents instead of size).
+         */
+        private static string StripLabel(string component, string label, out bool stripped)
+        {
+            string trimmed = component.Trim();
+            if (trimmed.StartsWith(label, StringComparison.OrdinalIgnoreCase))
+            {
+                stripped = true;
+                return trimmed.Substring(label.Length).Trim();
+            }
+
+            stripped = false;
+            return trimmed;
         }
 
         private static bool TrySplitComponents(string input, out string[] split)
