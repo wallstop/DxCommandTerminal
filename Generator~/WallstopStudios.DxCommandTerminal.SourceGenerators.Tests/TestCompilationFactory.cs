@@ -1,4 +1,4 @@
-namespace WallstopStudios.DxCommandTerminal.SourceGenerators.Tests
+﻿namespace WallstopStudios.DxCommandTerminal.SourceGenerators.Tests
 {
     using System;
     using System.Collections;
@@ -51,6 +51,39 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators.Tests
             }
         );
 
+        public static (SyntaxTree generated, CSharpCompilation output) RunGenerator(
+            CSharpCompilation compilation
+        )
+        {
+            CommandCatalogGenerator generator = new CommandCatalogGenerator();
+            CSharpGeneratorDriver driver = CSharpGeneratorDriver.Create(generator);
+            driver.RunGeneratorsAndUpdateCompilation(
+                compilation,
+                out Compilation outputCompilation,
+                out ImmutableArray<Diagnostic> generatorDiagnostics
+            );
+
+            List<Diagnostic> errors = generatorDiagnostics
+                .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+                .ToList();
+            if (0 < errors.Count)
+            {
+                throw new InvalidOperationException(
+                    "The generator produced error diagnostics: "
+                        + string.Join(
+                            Environment.NewLine,
+                            errors.Select(diagnostic => diagnostic.ToString())
+                        )
+                );
+            }
+
+            CSharpCompilation output = (CSharpCompilation)outputCompilation;
+            SyntaxTree generated = output.SyntaxTrees.FirstOrDefault(tree =>
+                tree.FilePath == GeneratedHintName || tree.FilePath.EndsWith(GeneratedHintName)
+            );
+            return (generated, output);
+        }
+
         public static CSharpCompilation CreateCompilation(
             string assemblyName,
             string fixtureSource,
@@ -84,46 +117,13 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators.Tests
             );
         }
 
-        public static (SyntaxTree generated, CSharpCompilation output) RunGenerator(
-            CSharpCompilation compilation
-        )
-        {
-            CommandCatalogGenerator generator = new CommandCatalogGenerator();
-            CSharpGeneratorDriver driver = CSharpGeneratorDriver.Create(generator);
-            driver.RunGeneratorsAndUpdateCompilation(
-                compilation,
-                out Compilation outputCompilation,
-                out ImmutableArray<Diagnostic> generatorDiagnostics
-            );
-
-            List<Diagnostic> errors = generatorDiagnostics
-                .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
-                .ToList();
-            if (errors.Count > 0)
-            {
-                throw new InvalidOperationException(
-                    "The generator produced error diagnostics: "
-                        + string.Join(
-                            Environment.NewLine,
-                            errors.Select(diagnostic => diagnostic.ToString())
-                        )
-                );
-            }
-
-            CSharpCompilation output = (CSharpCompilation)outputCompilation;
-            SyntaxTree generated = output.SyntaxTrees.FirstOrDefault(tree =>
-                tree.FilePath == GeneratedHintName || tree.FilePath.EndsWith(GeneratedHintName)
-            );
-            return (generated, output);
-        }
-
         public static Assembly CompileAndLoad(CSharpCompilation compilation)
         {
             List<Diagnostic> errors = compilation
                 .GetDiagnostics()
                 .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
                 .ToList();
-            if (errors.Count > 0)
+            if (0 < errors.Count)
             {
                 StringBuilder message = new StringBuilder("Fixture compilation has errors:");
                 foreach (Diagnostic error in errors)
@@ -249,10 +249,10 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators.Tests
      */
     internal sealed class CatalogView
     {
-        private readonly Type _entryType;
-
         public Assembly Assembly { get; }
         public IReadOnlyList<object> Entries { get; }
+
+        private readonly Type _entryType;
 
         private CatalogView(Assembly assembly, IReadOnlyList<object> entries, Type entryType)
         {
@@ -293,13 +293,6 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators.Tests
             }
 
             return new CatalogView(assembly, snapshot, entryType);
-        }
-
-        private object GetValue(object entry, string propertyName)
-        {
-            return _entryType
-                .GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance)
-                .GetValue(entry);
         }
 
         public string NameOf(object entry) => (string)GetValue(entry, "Name");
@@ -351,5 +344,12 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators.Tests
         }
 
         public bool HasValidSignature(object entry) => (bool)GetValue(entry, "IsValid");
+
+        private object GetValue(object entry, string propertyName)
+        {
+            return _entryType
+                .GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance)
+                .GetValue(entry);
+        }
     }
 }
