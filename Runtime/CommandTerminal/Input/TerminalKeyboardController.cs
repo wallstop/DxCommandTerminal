@@ -106,18 +106,25 @@
 
         private static TerminalControlTypes[] BuildControlTypes()
         {
-            Array values = Enum.GetValues(typeof(TerminalControlTypes));
-            List<TerminalControlTypes> controlTypes = new(values.Length);
+            /*
+                Written out explicitly rather than via Enum.GetValues: no
+                runtime reflection, IL2CPP/WebGL safe. The
+                ControlTypesContainsAllNonNoneEnumValues test fails when a new
+                enum member is not added here.
+             */
 #pragma warning disable CS0612 // Type or member is obsolete
-            foreach (TerminalControlTypes value in values)
+            return new[]
             {
-                if (value != TerminalControlTypes.None)
-                {
-                    controlTypes.Add(value);
-                }
-            }
+                TerminalControlTypes.Close,
+                TerminalControlTypes.EnterCommand,
+                TerminalControlTypes.Previous,
+                TerminalControlTypes.Next,
+                TerminalControlTypes.ToggleFull,
+                TerminalControlTypes.ToggleSmall,
+                TerminalControlTypes.CompleteForward,
+                TerminalControlTypes.CompleteBackward,
+            };
 #pragma warning restore CS0612 // Type or member is obsolete
-            return controlTypes.ToArray();
         }
 
         protected virtual void Awake()

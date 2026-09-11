@@ -15,6 +15,12 @@
     public readonly struct CommandArg
     {
         // Public to allow custom-mutation, if desired
+        /// <summary>
+        ///     Untyped parser adapter: parses into a boxed value for the
+        ///     non-generic <see cref="TryGet(Type, out object)" /> path.
+        /// </summary>
+        internal delegate bool UntypedParser(string input, out object parsed);
+
         public static readonly HashSet<char> Delimiters = new() { ',', ';', ':', '_', '/', '\\' };
         public static readonly List<char> Quotes = new() { '"', '\'' };
         public static readonly HashSet<string> IgnoredValuesForCleanedTypes = new() { "\r", "\n" };
@@ -39,24 +45,229 @@
             "<",
             ">",
         };
-        private static readonly Lazy<MethodInfo> TryGetMethod = new(() =>
-        {
-            foreach (
-                MethodInfo method in typeof(CommandArg).GetMethods(
-                    BindingFlags.Instance | BindingFlags.Public
-                )
-            )
-            {
-                if (method.Name == nameof(TryGet) && method.GetParameters().Length == 1)
-                {
-                    return method;
-                }
-            }
-
-            return null;
-        });
-
         private static readonly Dictionary<Type, object> RegisteredParsers = new();
+
+        /*
+            Untyped adapters for the built-in parser table, so the non-generic
+            TryGet(Type, out object) path needs no reflection at runtime
+            (IL2CPP/WebGL safe). Registered parsers mirror into the same
+            delegate shape at registration time.
+         */
+        private static readonly Dictionary<Type, UntypedParser> BuiltInUntypedParsers = new()
+        {
+            [typeof(bool)] = (string input, out object parsed) =>
+            {
+                bool ok = CommandArgParsers.Bool(input, out bool value);
+                parsed = value;
+                return ok;
+            },
+            [typeof(float)] = (string input, out object parsed) =>
+            {
+                bool ok = CommandArgParsers.Float(input, out float value);
+                parsed = value;
+                return ok;
+            },
+            [typeof(int)] = (string input, out object parsed) =>
+            {
+                bool ok = CommandArgParsers.Int(input, out int value);
+                parsed = value;
+                return ok;
+            },
+            [typeof(uint)] = (string input, out object parsed) =>
+            {
+                bool ok = CommandArgParsers.Uint(input, out uint value);
+                parsed = value;
+                return ok;
+            },
+            [typeof(long)] = (string input, out object parsed) =>
+            {
+                bool ok = CommandArgParsers.Long(input, out long value);
+                parsed = value;
+                return ok;
+            },
+            [typeof(ulong)] = (string input, out object parsed) =>
+            {
+                bool ok = CommandArgParsers.Ulong(input, out ulong value);
+                parsed = value;
+                return ok;
+            },
+            [typeof(double)] = (string input, out object parsed) =>
+            {
+                bool ok = CommandArgParsers.Double(input, out double value);
+                parsed = value;
+                return ok;
+            },
+            [typeof(short)] = (string input, out object parsed) =>
+            {
+                bool ok = CommandArgParsers.Short(input, out short value);
+                parsed = value;
+                return ok;
+            },
+            [typeof(ushort)] = (string input, out object parsed) =>
+            {
+                bool ok = CommandArgParsers.Ushort(input, out ushort value);
+                parsed = value;
+                return ok;
+            },
+            [typeof(byte)] = (string input, out object parsed) =>
+            {
+                bool ok = CommandArgParsers.Byte(input, out byte value);
+                parsed = value;
+                return ok;
+            },
+            [typeof(sbyte)] = (string input, out object parsed) =>
+            {
+                bool ok = CommandArgParsers.Sbyte(input, out sbyte value);
+                parsed = value;
+                return ok;
+            },
+            [typeof(Guid)] = (string input, out object parsed) =>
+            {
+                bool ok = CommandArgParsers.Guid(input, out Guid value);
+                parsed = value;
+                return ok;
+            },
+            [typeof(DateTime)] = (string input, out object parsed) =>
+            {
+                bool ok = CommandArgParsers.DateTime(input, out DateTime value);
+                parsed = value;
+                return ok;
+            },
+            [typeof(DateTimeOffset)] = (string input, out object parsed) =>
+            {
+                bool ok = CommandArgParsers.DateTimeOffset(input, out DateTimeOffset value);
+                parsed = value;
+                return ok;
+            },
+            [typeof(char)] = (string input, out object parsed) =>
+            {
+                bool ok = CommandArgParsers.Char(input, out char value);
+                parsed = value;
+                return ok;
+            },
+            [typeof(decimal)] = (string input, out object parsed) =>
+            {
+                bool ok = CommandArgParsers.Decimal(input, out decimal value);
+                parsed = value;
+                return ok;
+            },
+            [typeof(BigInteger)] = (string input, out object parsed) =>
+            {
+                bool ok = CommandArgParsers.BigInteger(input, out BigInteger value);
+                parsed = value;
+                return ok;
+            },
+            [typeof(TimeSpan)] = (string input, out object parsed) =>
+            {
+                bool ok = CommandArgParsers.TimeSpan(input, out TimeSpan value);
+                parsed = value;
+                return ok;
+            },
+            [typeof(Version)] = (string input, out object parsed) =>
+            {
+                bool ok = CommandArgParsers.Version(input, out Version value);
+                parsed = value;
+                return ok;
+            },
+            [typeof(IPAddress)] = (string input, out object parsed) =>
+            {
+                bool ok = CommandArgParsers.IPAddress(input, out IPAddress value);
+                parsed = value;
+                return ok;
+            },
+            [typeof(Vector2)] = (string input, out object parsed) =>
+            {
+                bool ok = CommandArgParsers.Vector2(input, out Vector2 value);
+                parsed = value;
+                return ok;
+            },
+            [typeof(Vector3)] = (string input, out object parsed) =>
+            {
+                bool ok = CommandArgParsers.Vector3(input, out Vector3 value);
+                parsed = value;
+                return ok;
+            },
+            [typeof(Vector4)] = (string input, out object parsed) =>
+            {
+                bool ok = CommandArgParsers.Vector4(input, out Vector4 value);
+                parsed = value;
+                return ok;
+            },
+            [typeof(Vector2Int)] = (string input, out object parsed) =>
+            {
+                bool ok = CommandArgParsers.Vector2Int(input, out Vector2Int value);
+                parsed = value;
+                return ok;
+            },
+            [typeof(Vector3Int)] = (string input, out object parsed) =>
+            {
+                bool ok = CommandArgParsers.Vector3Int(input, out Vector3Int value);
+                parsed = value;
+                return ok;
+            },
+            [typeof(Color)] = (string input, out object parsed) =>
+            {
+                bool ok = CommandArgParsers.Color(input, out Color value);
+                parsed = value;
+                return ok;
+            },
+            [typeof(Quaternion)] = (string input, out object parsed) =>
+            {
+                bool ok = CommandArgParsers.Quaternion(input, out Quaternion value);
+                parsed = value;
+                return ok;
+            },
+            [typeof(Rect)] = (string input, out object parsed) =>
+            {
+                bool ok = CommandArgParsers.Rect(input, out Rect value);
+                parsed = value;
+                return ok;
+            },
+            [typeof(RectInt)] = (string input, out object parsed) =>
+            {
+                bool ok = CommandArgParsers.RectInt(input, out RectInt value);
+                parsed = value;
+                return ok;
+            },
+            [typeof(Bounds)] = (string input, out object parsed) =>
+            {
+                bool ok = CommandArgParsers.Bounds(input, out Bounds value);
+                parsed = value;
+                return ok;
+            },
+            [typeof(BoundsInt)] = (string input, out object parsed) =>
+            {
+                bool ok = CommandArgParsers.BoundsInt(input, out BoundsInt value);
+                parsed = value;
+                return ok;
+            },
+            [typeof(RectOffset)] = (string input, out object parsed) =>
+            {
+                bool ok = CommandArgParsers.RectOffset(input, out RectOffset value);
+                parsed = value;
+                return ok;
+            },
+            [typeof(Plane)] = (string input, out object parsed) =>
+            {
+                bool ok = CommandArgParsers.Plane(input, out Plane value);
+                parsed = value;
+                return ok;
+            },
+            [typeof(Ray)] = (string input, out object parsed) =>
+            {
+                bool ok = CommandArgParsers.Ray(input, out Ray value);
+                parsed = value;
+                return ok;
+            },
+            [typeof(Complex)] = (string input, out object parsed) =>
+            {
+                bool ok = CommandArgParsers.Complex(input, out Complex value);
+                parsed = value;
+                return ok;
+            },
+        };
+
+        private static readonly Dictionary<Type, UntypedParser> RegisteredUntypedParsers = new();
         private static readonly Dictionary<
             Type,
             Dictionary<string, PropertyInfo>
@@ -141,13 +352,26 @@
             }
 
             Type type = typeof(T);
+            UntypedParser untypedParser = (string input, out object parsed) =>
+            {
+                bool ok = parser(input, out T value);
+                parsed = value;
+                return ok;
+            };
             if (force)
             {
                 RegisteredParsers[type] = parser;
+                RegisteredUntypedParsers[type] = untypedParser;
                 return true;
             }
 
-            return RegisteredParsers.TryAdd(type, parser);
+            if (!RegisteredParsers.TryAdd(type, parser))
+            {
+                return false;
+            }
+
+            RegisteredUntypedParsers[type] = untypedParser;
+            return true;
         }
 
         public static bool TryGetParser<T>(out CommandArgParser<T> parser)
@@ -169,6 +393,7 @@
 
         public static bool UnregisterParser(Type type)
         {
+            RegisteredUntypedParsers.Remove(type);
             return RegisteredParsers.Remove(type);
         }
 
@@ -176,12 +401,12 @@
         {
             int parserCount = RegisteredParsers.Count;
             RegisteredParsers.Clear();
+            RegisteredUntypedParsers.Clear();
             return parserCount;
         }
 
-        private static Dictionary<string, PropertyInfo> LoadStaticPropertiesForType<T>()
+        private static Dictionary<string, PropertyInfo> LoadStaticPropertiesForType(Type type)
         {
-            Type type = typeof(T);
             Dictionary<string, PropertyInfo> properties = new(StringComparer.OrdinalIgnoreCase);
             foreach (
                 PropertyInfo property in type.GetProperties(
@@ -198,9 +423,8 @@
             return properties;
         }
 
-        private static Dictionary<string, FieldInfo> LoadStaticFieldsForType<T>()
+        private static Dictionary<string, FieldInfo> LoadStaticFieldsForType(Type type)
         {
-            Type type = typeof(T);
             Dictionary<string, FieldInfo> fields = new(StringComparer.OrdinalIgnoreCase);
             foreach (FieldInfo field in type.GetFields(BindingFlags.Static | BindingFlags.Public))
             {
@@ -213,33 +437,42 @@
             return fields;
         }
 
-        private static bool TryGetNamedConstant<T>(string input, out T value)
+        private static bool TryGetNamedConstantUntyped(Type type, string input, out object value)
         {
-            Type type = typeof(T);
             if (
                 !StaticProperties.TryGetValue(type, out Dictionary<string, PropertyInfo> properties)
             )
             {
-                properties = LoadStaticPropertiesForType<T>();
+                properties = LoadStaticPropertiesForType(type);
                 StaticProperties[type] = properties;
             }
 
             if (properties.TryGetValue(input, out PropertyInfo property))
             {
-                object resolved = property.GetValue(null);
-                value = (T)resolved;
+                value = property.GetValue(null);
                 return true;
             }
 
             if (!ConstFields.TryGetValue(type, out Dictionary<string, FieldInfo> fields))
             {
-                fields = LoadStaticFieldsForType<T>();
+                fields = LoadStaticFieldsForType(type);
                 ConstFields[type] = fields;
             }
 
             if (fields.TryGetValue(input, out FieldInfo field))
             {
-                object resolved = field.GetValue(null);
+                value = field.GetValue(null);
+                return true;
+            }
+
+            value = default;
+            return false;
+        }
+
+        private static bool TryGetNamedConstant<T>(string input, out T value)
+        {
+            if (TryGetNamedConstantUntyped(typeof(T), input, out object resolved))
+            {
                 value = (T)resolved;
                 return true;
             }
@@ -250,19 +483,65 @@
 
         public bool TryGet(Type type, out object parsed)
         {
-            // TODO: Convert into delegates and cache for performance
-            MethodInfo genericMethod = TryGetMethod.Value;
-            if (genericMethod == null)
+            if (type == null)
             {
                 parsed = default;
                 return false;
             }
 
-            MethodInfo constructed = genericMethod.MakeGenericMethod(type);
-            object[] parameters = { null };
-            bool success = (bool)constructed.Invoke(this, parameters);
-            parsed = parameters[0];
-            return success;
+            string stringValue = DoNotCleanTypes.Contains(type) ? contents : CleanedContents;
+
+            if (RegisteredUntypedParsers.TryGetValue(type, out UntypedParser registered))
+            {
+                return registered(stringValue, out parsed);
+            }
+
+            if (type == typeof(string))
+            {
+                parsed = stringValue;
+                return true;
+            }
+
+            if (TryGetNamedConstantUntyped(type, stringValue, out parsed))
+            {
+                return true;
+            }
+
+            if (BuiltInUntypedParsers.TryGetValue(type, out UntypedParser builtIn))
+            {
+                return builtIn(stringValue, out parsed);
+            }
+
+            if (type.IsEnum)
+            {
+                if (Enum.IsDefined(type, stringValue))
+                {
+                    if (Enum.TryParse(type, stringValue, out object parsedObject))
+                    {
+                        parsed = parsedObject;
+                        return true;
+                    }
+                }
+
+                if (CommandArgParsers.Int(stringValue, out int enumIntValue))
+                {
+                    if (!EnumValues.TryGetValue(type, out object enumValues))
+                    {
+                        enumValues = Enum.GetValues(type);
+                        EnumValues[type] = enumValues;
+                    }
+
+                    Array values = (Array)enumValues;
+                    if (0 <= enumIntValue && enumIntValue < values.Length)
+                    {
+                        parsed = values.GetValue(enumIntValue);
+                        return true;
+                    }
+                }
+            }
+
+            parsed = default;
+            return false;
         }
 
         public bool TryGet<T>(out T parsed)
@@ -319,7 +598,7 @@
                             exactly T[], so the cast is free; OfType/ToArray would
                             copy it for nothing.
                          */
-                        enumValues = (T[])Enum.GetValues(type);
+                        enumValues = Enum.GetValues(type);
                         EnumValues[type] = enumValues;
                     }
 

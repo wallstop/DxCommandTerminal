@@ -43,29 +43,22 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
 
             List<string> themeNames = terminal._themePack._themeNames;
-            StringBuilder themes = CachedStringBuilder.Rent(
+            using CachedStringBuilder.Scope themes = new(
                 themeNames.Count * AverageThemeNameCapacity
             );
-            try
+            bool firstTheme = true;
+            foreach (string themeName in themeNames)
             {
-                bool first = true;
-                foreach (string themeName in themeNames)
+                if (!firstTheme)
                 {
-                    if (!first)
-                    {
-                        themes.Append(BulkSeparator);
-                    }
-
-                    themes.Append(ThemeNameHelper.GetFriendlyThemeName(themeName));
-                    first = false;
+                    themes.Builder.Append(BulkSeparator);
                 }
 
-                Terminal.Log(TerminalLogType.Message, themes.ToString());
+                themes.Builder.Append(ThemeNameHelper.GetFriendlyThemeName(themeName));
+                firstTheme = false;
             }
-            finally
-            {
-                CachedStringBuilder.Return(themes);
-            }
+
+            Terminal.Log(TerminalLogType.Message, themes.Builder.ToString());
         }
 
         [RegisterCommand(
@@ -90,29 +83,20 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
 
             List<Font> fonts = terminal._fontPack._fonts;
-            StringBuilder fontNames = CachedStringBuilder.Rent(
-                fonts.Count * AverageFontNameCapacity
-            );
-            try
+            using CachedStringBuilder.Scope fontNames = new(fonts.Count * AverageFontNameCapacity);
+            bool firstFont = true;
+            foreach (Font font in fonts)
             {
-                bool first = true;
-                foreach (Font font in fonts)
+                if (!firstFont)
                 {
-                    if (!first)
-                    {
-                        fontNames.Append(BulkSeparator);
-                    }
-
-                    fontNames.Append(font.name);
-                    first = false;
+                    fontNames.Builder.Append(BulkSeparator);
                 }
 
-                Terminal.Log(TerminalLogType.Message, fontNames.ToString());
+                fontNames.Builder.Append(font.name);
+                firstFont = false;
             }
-            finally
-            {
-                CachedStringBuilder.Return(fontNames);
-            }
+
+            Terminal.Log(TerminalLogType.Message, fontNames.Builder.ToString());
         }
 
         [RegisterCommand(

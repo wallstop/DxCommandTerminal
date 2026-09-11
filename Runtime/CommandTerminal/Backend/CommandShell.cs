@@ -123,7 +123,13 @@
         private readonly CommandHistory _history;
         private readonly HashSet<string> _ignoredCommands = new(StringComparer.OrdinalIgnoreCase);
 
-        private readonly SortedDictionary<string, MethodInfo> _rejectedCommands = new(
+        /*
+            Rejected signatures store their formatted "Found: ..." text at
+            rejection time, so the error pass never reflects over MethodInfo.
+            Rejections only arise on the reflection compatibility path; the
+            generator catalog never produces them.
+         */
+        private readonly SortedDictionary<string, string> _rejectedCommands = new(
             StringComparer.OrdinalIgnoreCase
         );
 
@@ -1212,36 +1218,13 @@
                 StringComparer.OrdinalIgnoreCase
             );
 
-            foreach (KeyValuePair<string, MethodInfo> command in _rejectedCommands)
+            foreach (KeyValuePair<string, string> command in _rejectedCommands)
             {
-                ParameterInfo[] parameters = command.Value.GetParameters();
-                StringBuilder found = CachedStringBuilder.Rent(64);
-                try
-                {
-                    found.Append(command.Value.Name).Append('(');
-                    bool first = true;
-                    foreach (ParameterInfo parameter in parameters)
-                    {
-                        if (!first)
-                        {
-                            found.Append(',');
-                        }
-
-                        found.Append(parameter.ParameterType.Name);
-                        first = false;
-                    }
-
-                    found.Append(')');
-                    IssueErrorMessage(
-                        $"{command.Key} has an invalid signature. "
-                            + $"Expected: {command.Value.Name}(CommandArg[]). "
-                            + $"Found: {found}"
-                    );
-                }
-                finally
-                {
-                    CachedStringBuilder.Return(found);
-                }
+                IssueErrorMessage(
+                    $"{command.Key} has an invalid signature. "
+                        + $"Expected: {command.Key}(CommandArg[]). "
+                        + $"Found: {command.Value}"
+                );
             }
 
             AutoCommandsRegistered = true;
@@ -1282,7 +1265,22 @@
                 return;
             }
 
-            _rejectedCommands.TryAdd(commandName, method);
+            using CachedStringBuilder.Scope found = new(64);
+            found.Builder.Append(method.Name).Append('(');
+            bool first = true;
+            foreach (ParameterInfo parameter in method.GetParameters())
+            {
+                if (!first)
+                {
+                    found.Builder.Append(',');
+                }
+
+                found.Builder.Append(parameter.ParameterType.Name);
+                first = false;
+            }
+
+            found.Builder.Append(')');
+            _rejectedCommands.TryAdd(commandName, found.Builder.ToString());
         }
 
         private List<CommandArg> GetDispatchScope(int depth)

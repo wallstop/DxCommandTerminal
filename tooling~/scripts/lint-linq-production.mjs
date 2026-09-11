@@ -28,7 +28,7 @@
 */
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const REPO_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -39,29 +39,72 @@ const SCAN_ROOTS = process.env.LINQ_PRODUCTION_ROOTS
   ? process.env.LINQ_PRODUCTION_ROOTS.split(path.delimiter).filter(Boolean)
   : ["Runtime", "Editor"];
 
+const { consumeLiteral } = await import(
+  pathToFileURL(
+    path.join(REPO_ROOT, "tooling~", "scripts", "lint-comparison-direction.mjs")
+  ).href
+);
+
+/**
+ * Replaces comment contents with spaces, keeping newlines, so banned
+ * vocabulary inside comments can never trip the scan. String/char literals
+ * are consumed with the comparison-direction scanner so `//` or `/*` inside a
+ * literal stays data.
+ */
+export function stripComments(text) {
+  let out = "";
+  let i = 0;
+  while (i < text.length) {
+    const ch = text[i];
+    if (ch === '"' || ch === "'" || ch === "@" || ch === "$") {
+      const literal = consumeLiteral(text, i);
+      /*
+          Mask literal contents too: banned vocabulary inside a string is
+          data, not code, and must not read as a violation.
+       */
+      for (let j = i; j < literal.end; j++) {
+        out += text[j] === "\n" ? "\n" : " ";
+      }
+      i = literal.end;
+      continue;
+    }
+
+    if (ch === "/" && text[i + 1] === "/") {
+      while (i < text.length && text[i] !== "\n") {
+        out += " ";
+        i++;
+      }
+      continue;
+    }
+
+    if (ch === "/" && text[i + 1] === "*") {
+      while (i < text.length && !(text[i] === "*" && text[i + 1] === "/")) {
+        out += text[i] === "\n" ? "\n" : " ";
+        i++;
+      }
+      out += "  ";
+      i += 2;
+      continue;
+    }
+
+    out += ch;
+    i++;
+  }
+
+  return out;
+}
+
 const USING_PATTERN = /\busing\s+System\s*\.\s*Linq\b/;
 const QUALIFIED_PATTERN = /\bSystem\s*\.\s*Linq\s*\./;
 const ENUMERABLE_PATTERN = /\bEnumerable\s*\.\s*\w+/;
 
-function isCommentOnly(line) {
-  const trimmed = line.trimStart();
-  return (
-    trimmed.startsWith("//") ||
-    trimmed.startsWith("/*") ||
-    trimmed.startsWith("*")
-  );
-}
-
 /** Returns one-based line numbers whose code (not comment) text violates the ban. */
-export function linqViolations(text) {
+export function linqViolations(rawText) {
+  const text = stripComments(rawText);
   const lines = text.split("\n");
   const violations = [];
   for (let index = 0; index < lines.length; index++) {
     const line = lines[index];
-    if (isCommentOnly(line)) {
-      continue;
-    }
-
     if (
       USING_PATTERN.test(line) ||
       QUALIFIED_PATTERN.test(line) ||

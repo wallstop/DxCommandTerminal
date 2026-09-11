@@ -69,6 +69,26 @@ const EXEMPT = [
   ],
 
   [
+    "a block comment mentioning the banned vocabulary",
+    "/*\n    using System.Linq is banned; Enumerable.Range allocates.\n*/\nint x = 0;",
+  ],
+
+  [
+    "a one-line block comment with code around it",
+    "int y = 1; /* Enumerable.Range here is data */ int z = 2;",
+  ],
+
+  [
+    "banned vocabulary inside a string literal",
+    'string note = "using System.Linq is banned";',
+  ],
+
+  [
+    "banned vocabulary inside a string after a block comment opens mid-line",
+    "int a = 0; /* note: Enumerable.Empty */",
+  ],
+
+  [
     "a type whose name merely contains Enumerable",
     "sealed class EnumerableFactory\n{\n    void Make() { }\n}",
   ],
