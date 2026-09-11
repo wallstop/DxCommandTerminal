@@ -73,8 +73,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 "Definitions default to the gameplay contexts"
             );
 
-            // Play Mode is the ambient environment for editor test runs; no
-            // provider is installed, so Unity decides.
+            /*
+               Play Mode is the ambient environment for editor test runs; no
+               provider is installed, so Unity decides.
+            */
             Assert.IsTrue(
                 Terminal.Shell.RunCommand("ctx-test alpha"),
                 "A gameplay command should run in Editor Play Mode"
@@ -409,8 +411,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 )
             );
 
-            // The command declares Player-only eligibility, so the eligible
-            // ambient here is a player.
+            /*
+               The command declares Player-only eligibility, so the eligible
+               ambient here is a player.
+            */
             CommandExecutionContext.AmbientContextProvider = () =>
                 new CommandExecutionContext(CommandExecutionContexts.Player);
             Assert.IsTrue(
@@ -443,8 +447,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             };
             Assert.IsTrue(Terminal.Shell.AddCommand(definition));
 
-            // Mutating the definition after registration must not affect the
-            // registration or register anything under the new name.
+            /*
+               Mutating the definition after registration must not affect the
+               registration or register anything under the new name.
+            */
             definition.Name = "ctx-renamed";
             definition.Handler = null;
             definition.Contexts = CommandExecutionContexts.None;

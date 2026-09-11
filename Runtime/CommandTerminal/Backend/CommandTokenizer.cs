@@ -49,9 +49,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
                     if (closingQuoteIndex < 0)
                     {
-                        // Unclosed quote consumes the rest of the line
-                        // (excluding the opening quote), matching
-                        // TryEatArgument.
+                        /*
+                           Unclosed quote consumes the rest of the line
+                           (excluding the opening quote), matching
+                           TryEatArgument.
+                        */
                         tokens.Add(
                             new CommandToken(
                                 line.Substring(index + 1),

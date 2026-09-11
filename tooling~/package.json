@@ -12,6 +12,8 @@
     "lint:comparison-direction:fix": "node scripts/lint-comparison-direction.mjs --fix",
     "lint:member-ordering": "node scripts/lint-member-ordering.mjs --verbose",
     "lint:member-ordering:fix": "node scripts/lint-member-ordering.mjs --fix",
+    "lint:multiline-comments": "node scripts/lint-multiline-comments.mjs",
+    "lint:multiline-comments:fix": "node scripts/lint-multiline-comments.mjs --fix",
     "unity:mcp:probe": "node scripts/mcp/unity-mcp.mjs probe",
     "unity:mcp:configure": "node scripts/mcp/unity-mcp.mjs configure",
     "unity:mcp:bridge": "node scripts/mcp/unity-mcp.mjs bridge",

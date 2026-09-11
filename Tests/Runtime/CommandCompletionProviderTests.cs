@@ -106,8 +106,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 "Stage 1 completes the second argument"
             );
 
-            // Requests past the last stage produce no candidates but still
-            // count as provider-answered.
+            /*
+               Requests past the last stage produce no candidates but still
+               count as provider-answered.
+            */
             Assert.IsTrue(
                 Terminal.Shell.TryComplete(context, "pickup pickaxe sharpened ", 25, results, out _)
             );
@@ -137,8 +139,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             CommandExecutionContext context = CommandExecutionContext.Current;
             List<CommandCompletion> results = new();
 
-            // Mid-token inside a quoted argument: the caret completes an
-            // unclosed quoted token, so the request is quoted.
+            /*
+               Mid-token inside a quoted argument: the caret completes an
+               unclosed quoted token, so the request is quoted.
+            */
             Assert.IsTrue(
                 Terminal.Shell.TryComplete(
                     context,

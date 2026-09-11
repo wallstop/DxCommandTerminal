@@ -70,8 +70,6 @@ namespace WallstopStudios.DxCommandTerminal.Persistence
                 yield break;
             }
 
-            string themeFile = ThemeFile;
-            Debug.Log($"Attempting to initialize from {themeFile}...", this);
             yield return CheckAndPersistAnyChanges(hydrate: true);
         }
 
@@ -175,10 +173,12 @@ namespace WallstopStudios.DxCommandTerminal.Persistence
                 }
                 else
                 {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
                     Debug.Log(
                         $"Creating new theme file {themeFile} for terminal {terminal.id} ...",
                         this
                     );
+#endif
                     configurations = new TerminalThemeConfigurations();
                 }
 
@@ -253,10 +253,12 @@ namespace WallstopStudios.DxCommandTerminal.Persistence
                     }
                     else
                     {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
                         Debug.Log(
                             $"Failed to find persisted configuration for terminal {terminal.id} while hydrating, defaulting to Prefab configuration.",
                             this
                         );
+#endif
                     }
                 }
 
@@ -273,10 +275,6 @@ namespace WallstopStudios.DxCommandTerminal.Persistence
                 }
 
                 string outputJson = JsonUtility.ToJson(configurations, prettyPrint: true);
-                Debug.Log(
-                    $"Writing theme file {themeFile} with contents:{Environment.NewLine}{outputJson}",
-                    this
-                );
                 Task writerTask = File.WriteAllTextAsync(themeFile, outputJson);
                 while (!writerTask.IsCompleted)
                 {
@@ -292,10 +290,12 @@ namespace WallstopStudios.DxCommandTerminal.Persistence
                         this
                     );
                 }
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
                 else
                 {
                     Debug.Log($"Theme file {themeFile} successfully updated.", this);
                 }
+#endif
             }
             finally
             {

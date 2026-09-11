@@ -303,8 +303,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [UnityTest]
         public IEnumerator ClearHistoryCommandResultsInEmptyHistory()
         {
-            // clear-history uses AddToHistory = false on its RegisterCommand attribute,
-            // ensuring the command itself is not recorded in the history it just cleared.
+            /*
+               clear-history uses AddToHistory = false on its RegisterCommand attribute,
+               ensuring the command itself is not recorded in the history it just cleared.
+            */
             yield return TerminalTests.SpawnTerminal(resetStateOnInit: true);
 
             CommandShell shell = Terminal.Shell;
@@ -369,8 +371,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [UnityTest]
         public IEnumerator CommandWithAddToHistoryFalseAndInvalidArgsDoesNotPushToHistory()
         {
-            // clear-history has AddToHistory = false. When called with wrong args,
-            // it should still NOT be recorded in history.
+            /*
+               clear-history has AddToHistory = false. When called with wrong args,
+               it should still NOT be recorded in history.
+            */
             yield return TerminalTests.SpawnTerminal(resetStateOnInit: true);
 
             CommandShell shell = Terminal.Shell;
@@ -409,8 +413,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [UnityTest]
         public IEnumerator CommandWithAddToHistoryTrueAndInvalidArgsPushesToHistory()
         {
-            // set-theme has AddToHistory = true (default). When called with wrong args,
-            // it should still be recorded in history.
+            /*
+               set-theme has AddToHistory = true (default). When called with wrong args,
+               it should still be recorded in history.
+            */
             yield return TerminalTests.SpawnTerminal(resetStateOnInit: true);
 
             CommandShell shell = Terminal.Shell;

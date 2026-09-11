@@ -425,7 +425,7 @@ namespace Fixtures
         private static void AssertConditional(int defineCount, int expectedEntryCount)
         {
             string[] defines =
-                defineCount == 0 ? new string[0]
+                defineCount == 0 ? Array.Empty<string>()
                 : defineCount == 1 ? new[] { "UNITY_EDITOR" }
                 : new[] { "UNITY_EDITOR", "DEVELOPMENT_BUILD" };
 
@@ -500,8 +500,10 @@ namespace Fixtures
 
             Type argType = assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg");
 
-            // CommandArg is a value type, so its arrays cannot be cast to
-            // object[]; the arguments are boxed inside a one-element object[].
+            /*
+               CommandArg is a value type, so its arrays cannot be cast to
+               object[]; the arguments are boxed inside a one-element object[].
+            */
             Array publicArgs = Array.CreateInstance(argType, 1);
             catalog.BinderOf(catalog.Entries[0])(new object[] { publicArgs });
             Assert.Equal(1, publicInvocations.GetValue(null));
@@ -806,8 +808,10 @@ namespace Fixtures
                     .output
             );
 
-            // The catalog is loadable: a blank inferred name must not poison
-            // the assembly's static initializer.
+            /*
+               The catalog is loadable: a blank inferred name must not poison
+               the assembly's static initializer.
+            */
             CatalogView catalog = CatalogView.Load(assembly);
             object entry = Assert.Single(catalog.Entries);
             Assert.Equal(string.Empty, catalog.NameOf(entry));

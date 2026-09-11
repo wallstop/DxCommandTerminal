@@ -254,8 +254,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             yield return SpawnTerminalWithUi();
 
-            // No command starts with 'zzz', so neither completion path has a
-            // suggestion and the input stays untouched.
+            /*
+               No command starts with 'zzz', so neither completion path has a
+               suggestion and the input stays untouched.
+            */
             yield return SetInput("zzz", 3);
 
             _terminal.CompleteCommand(true);

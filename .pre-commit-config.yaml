@@ -47,6 +47,19 @@ repos:
           properties, fields, constructors, static methods, methods; each tier public >
           protected > internal > private) and nested types at the end of their containing type.
           Use `--fix` for a permutation-only reorder.
+      - id: multiline-comments-lint
+        name: Lint C# multi-line comments (block comments, not stacked '//'; PR #57 review)
+        entry: node tooling~/scripts/lint-multiline-comments.mjs
+        language: system
+        always_run: true
+        pass_filenames: false
+        stages:
+          - pre-commit
+          - pre-push
+        description: >
+          Two or more consecutive comment-only '//' lines must be one '/*'...'*/' block
+          comment instead. Single '//' lines and '///' doc comments stay legal. Use
+          `--fix` to convert runs to block comments.
       - id: llm-instructions-lint
         name: Lint .llm instructions (SKILL.md spec, index freshness, pointer delegation)
         entry: pwsh -NoProfile -File tooling~/scripts/lint-llm-instructions.ps1

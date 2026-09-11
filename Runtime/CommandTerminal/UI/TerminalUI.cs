@@ -157,12 +157,16 @@
         private SerializedObject _serializedObject;
 #endif
 
-        // Internal for test coverage of token completion (see
-        // WallstopStudios.DxCommandTerminal.Tests.Runtime).
+        /*
+           Internal for test coverage of token completion (see
+           WallstopStudios.DxCommandTerminal.Tests.Runtime).
+        */
         internal TextField _commandInput;
 
-        // Internal for test coverage of caret behavior (see
-        // WallstopStudios.DxCommandTerminal.Tests.Runtime).
+        /*
+           Internal for test coverage of caret behavior (see
+           WallstopStudios.DxCommandTerminal.Tests.Runtime).
+        */
         internal VisualElement _textInput;
 
         /*
@@ -716,8 +720,10 @@
                 return "'" + insertion + "'";
             }
 
-            // The insertion mixes both quote characters; insert it verbatim
-            // rather than producing an untokenizable quoting.
+            /*
+               The insertion mixes both quote characters; insert it verbatim
+               rather than producing an untokenizable quoting.
+            */
             return insertion;
         }
 
@@ -1403,8 +1409,10 @@
 
             if (_tokenCompletionsTemp.Count == 0)
             {
-                // A provider is attached but has nothing to offer; do not
-                // substitute full-line history suggestions for the token.
+                /*
+                   A provider is attached but has nothing to offer; do not
+                   substitute full-line history suggestions for the token.
+                */
                 return true;
             }
 
@@ -1623,8 +1631,10 @@
                         )
                     )
                     {
-                        // One echo follows each programmatic write; a later
-                        // same-value edit is a genuine edit, not an echo.
+                        /*
+                           One echo follows each programmatic write; a later
+                           same-value edit is a genuine edit, not an echo.
+                        */
                         context._lastCodeSyncedValue = null;
                         echoFromCode = true;
                     }
@@ -1718,7 +1728,18 @@
                 {
                     _runtimeTheme = themeNames.FirstOrDefault();
                 }
-                Debug.LogWarning($"Persisted theme not found, defaulting to '{_runtimeTheme}'.");
+
+                /*
+                   Defaulting from an empty or unknown persisted name is normal
+                   operation; only a stale persisted name deserves a warning.
+                */
+                if (_persistedTheme != null)
+                {
+                    Debug.LogWarning(
+                        $"Persisted theme '{_persistedTheme}' not found in the pack, defaulting to '{_runtimeTheme}'.",
+                        this
+                    );
+                }
             }
             else
             {
@@ -1765,15 +1786,17 @@
                 }
             }
 
-            if (_runtimeFont == null)
+            if (_runtimeFont != null)
             {
-                Debug.LogError("No font assigned, defaulting to Courier New 16pt", this);
-                _runtimeFont = Font.CreateDynamicFontFromOSFont("Courier New", 16);
+                // The pack defaulting itself is normal operation: stay silent.
+                return;
             }
-            else
-            {
-                Debug.LogWarning($"No font assigned, defaulting to {_runtimeFont.name}.", this);
-            }
+
+            Debug.LogWarning(
+                "Font pack contains no fonts; defaulting to OS font 'Courier New' 16pt.",
+                this
+            );
+            _runtimeFont = Font.CreateDynamicFontFromOSFont("Courier New", 16);
         }
 
         private void ScheduleBlinkingCursor()
@@ -1862,8 +1885,10 @@
                 _needsScrollToEnd = false;
             }
 
-            // Pending carets are consumed on every pass: an accepted
-            // completion can be a text no-op that must still move the caret.
+            /*
+               Pending carets are consumed on every pass: an accepted
+               completion can be a text no-op that must still move the caret.
+            */
             ApplyPendingCaret();
             RefreshStateButtons();
         }
@@ -1902,8 +1927,10 @@
 
             if (_commandInput.value.Length < _pendingCaretIndex)
             {
-                // The queued position targets input the field does not hold
-                // yet; the value sync applies it once the field catches up.
+                /*
+                   The queued position targets input the field does not hold
+                   yet; the value sync applies it once the field catches up.
+                */
                 return;
             }
 

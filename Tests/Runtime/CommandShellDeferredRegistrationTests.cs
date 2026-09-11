@@ -191,8 +191,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             CommandShell shell = new CommandShell(history);
             shell.InitializeAutoRegisteredCommands(deferRegistration: true);
 
-            // A manual registration between enable and first use keeps the
-            // name; readiness must not queue a duplicate error for it.
+            /*
+               A manual registration between enable and first use keeps the
+               name; readiness must not queue a duplicate error for it.
+            */
             Assert.IsTrue(
                 shell.AddCommand(knownCommand, _ => { }, 0, -1, "manual override"),
                 $"Sanity: registering '{knownCommand}' manually on an empty shell must succeed"

@@ -82,8 +82,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [UnityTest]
         public IEnumerator DefaultControlOrderProducesNoWarning()
         {
-            // Default _controlOrder contains all TerminalControlTypes, so no warning should fire.
-            // Awake will log an error about missing TerminalUI -- expect that.
+            /*
+               Default _controlOrder contains all TerminalControlTypes, so no warning should fire.
+               Awake will log an error about missing TerminalUI -- expect that.
+            */
             LogAssert.Expect(LogType.Error, "Failed to find TerminalUI, Input will not work.");
             GameObject go = new("TerminalKeyboardControllerTest");
             _gameObjects.Add(go);
@@ -97,8 +99,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [UnityTest]
         public IEnumerator ControlOrderWithDuplicatesButAllTypesPresent_ProducesNoWarning()
         {
-            // Regression test: if _controlOrder has duplicates but still covers all control types,
-            // VerifyControlOrderIntegrity should NOT produce a warning.
+            /*
+               Regression test: if _controlOrder has duplicates but still covers all control types,
+               VerifyControlOrderIntegrity should NOT produce a warning.
+            */
             LogAssert.Expect(LogType.Error, "Failed to find TerminalUI, Input will not work.");
             GameObject go = new("TerminalKeyboardControllerTest");
             _gameObjects.Add(go);
@@ -173,9 +177,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [UnityTest]
         public IEnumerator EmptyControlOrder_ProducesWarningForAllTypes()
         {
-            // When _controlOrder is empty, VerifyControlOrderIntegrity should warn about all missing types.
-            // Note: Awake fires during AddComponent with the default (full) control order, so
-            // we only modify _controlOrder afterward and invoke VerifyControlOrderIntegrity directly.
+            /*
+               When _controlOrder is empty, VerifyControlOrderIntegrity should warn about all missing types.
+               Note: Awake fires during AddComponent with the default (full) control order, so
+               we only modify _controlOrder afterward and invoke VerifyControlOrderIntegrity directly.
+            */
             LogAssert.Expect(LogType.Error, "Failed to find TerminalUI, Input will not work.");
             GameObject go = new("TerminalKeyboardControllerTest");
             _gameObjects.Add(go);

@@ -8,7 +8,7 @@ namespace WallstopStudios.DxCommandTerminal.Attributes
     public sealed class RegisterCommandAttribute : Attribute
     {
         public string Name { get; set; }
-        public int MinArgCount { get; set; } = 0;
+        public int MinArgCount { get; set; }
 
         /*
             int, not int?: attribute properties must be constant-compatible,
@@ -41,7 +41,7 @@ namespace WallstopStudios.DxCommandTerminal.Attributes
 
         public RegisterCommandAttribute(string commandName = null)
         {
-            commandName = commandName?.Replace(" ", string.Empty).Trim();
+            commandName = commandName?.Replace(" ", string.Empty, StringComparison.Ordinal).Trim();
             Name = commandName;
         }
 
@@ -65,12 +65,17 @@ namespace WallstopStudios.DxCommandTerminal.Attributes
 
         public void NormalizeName(MethodInfo method)
         {
+            if (method == null)
+            {
+                throw new ArgumentNullException(nameof(method));
+            }
+
             if (string.IsNullOrWhiteSpace(Name))
             {
                 Name = InferCommandName(method.Name);
             }
 
-            Name = Name.Replace(" ", string.Empty).Trim();
+            Name = Name.Replace(" ", string.Empty, StringComparison.Ordinal).Trim();
         }
     }
 }

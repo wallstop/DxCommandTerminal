@@ -151,6 +151,10 @@ frontmatter validity, index freshness, and pointer-file delegation; see
     Enforced by `npm --prefix tooling~ run lint:member-ordering` (pre-commit + CI; `:fix` is a
     permutation-only reorder that never crosses `#if` boundaries or type-load-initializer
     dependencies).
+21. Multi-line comments are block comments: two or more consecutive comment-only `//` lines
+    must be one `/*` ... `*/` block instead. Single `//` lines and `///` doc comments stay
+    legal. Enforced by `npm --prefix tooling~ run lint:multiline-comments` (pre-commit + CI;
+    `:fix` converts runs, refusing content that contains the block-comment close).
 
 ### Unity Package Rules
 
@@ -182,6 +186,17 @@ present tense, common words, ASCII only. PRs and commits follow a "Why" / "What 
 PR descriptions stay at or under ~20 lines, commit bodies at or under ~12, one line per
 bullet, no nested bullets. Code comments stay minimal - only what the code cannot say.
 Details: [simple-writing](./skills/simple-writing/SKILL.md).
+
+### CHANGELOG (user-facing only)
+
+`CHANGELOG.md` records only changes a package consumer can observe: public API and
+serialized-data changes, behavior changes, fixes, install-size or console-output changes.
+Internal work (refactors, tooling, style enforcement, linters, measurement, CI lanes)
+stays out, and so do internal numbers (timings, allocation counts, test tallies) - those
+live in PR descriptions, issues, and `progress/` logs. If a user cannot observe the
+difference, it does not belong in the changelog. New `Unreleased` entries follow the
+policy stated in the file header; a PR that touches `CHANGELOG.md` keeps entries in the
+existing `Added/Changed/Fixed/Removed` buckets.
 
 ### LLM Attribution (GitHub)
 

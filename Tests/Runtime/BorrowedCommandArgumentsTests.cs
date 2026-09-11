@@ -10,8 +10,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     {
         private static BorrowedCommandArguments CreateView(object source)
         {
-            // The shell constructs views from arrays, lists, and arbitrary
-            // read-only lists; cover all three construction paths.
+            /*
+               The shell constructs views from arrays, lists, and arbitrary
+               read-only lists; cover all three construction paths.
+            */
             return source switch
             {
                 CommandArg[] array => new BorrowedCommandArguments(array),

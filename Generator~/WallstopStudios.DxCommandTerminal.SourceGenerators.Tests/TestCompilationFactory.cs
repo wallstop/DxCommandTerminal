@@ -33,6 +33,7 @@
             {
                 "Runtime/Attributes/RegisterCommandAttribute.cs",
                 "Runtime/CommandTerminal/Backend/CommandArg.cs",
+                "Runtime/CommandTerminal/Backend/CommandArgParsers.cs",
                 "Runtime/CommandTerminal/Backend/CommandExecutionContexts.cs",
                 "Runtime/CommandTerminal/Backend/CommandExecutionContextSets.cs",
                 "Runtime/CommandTerminal/Backend/CommandExecutionContextsExtensions.cs",
@@ -79,7 +80,8 @@
 
             CSharpCompilation output = (CSharpCompilation)outputCompilation;
             SyntaxTree generated = output.SyntaxTrees.FirstOrDefault(tree =>
-                tree.FilePath == GeneratedHintName || tree.FilePath.EndsWith(GeneratedHintName)
+                tree.FilePath == GeneratedHintName
+                || tree.FilePath.EndsWith(GeneratedHintName, StringComparison.Ordinal)
             );
             return (generated, output);
         }
@@ -99,9 +101,11 @@
                 syntaxTrees.AddRange(ContractSources);
             }
 
-            // The fixture is parsed with the caller's preprocessor symbols so
-            // conditional compilation is exercised at parse time, exactly as
-            // it is in real compilations.
+            /*
+               The fixture is parsed with the caller's preprocessor symbols so
+               conditional compilation is exercised at parse time, exactly as
+               it is in real compilations.
+            */
             syntaxTrees.Add(
                 CSharpSyntaxTree.ParseText(
                     fixtureSource,
@@ -132,7 +136,8 @@
                 }
 
                 SyntaxTree generatedTree = compilation.SyntaxTrees.FirstOrDefault(tree =>
-                    tree.FilePath == GeneratedHintName || tree.ToString().Contains("auto-generated")
+                    tree.FilePath == GeneratedHintName
+                    || tree.ToString().Contains("auto-generated", StringComparison.Ordinal)
                 );
                 if (generatedTree != null)
                 {
@@ -224,10 +229,12 @@
 
             protected override Assembly Load(AssemblyName assemblyName)
             {
-                // netstandard and the System.* facades forward to the shared
-                // framework; anything else is a genuine harness failure. The
-                // ALC requires the resolved simple name to match, so the
-                // netstandard facade is loaded from the runtime directory.
+                /*
+                   netstandard and the System.* facades forward to the shared
+                   framework; anything else is a genuine harness failure. The
+                   ALC requires the resolved simple name to match, so the
+                   netstandard facade is loaded from the runtime directory.
+                */
                 if (assemblyName.Name == "netstandard")
                 {
                     string runtimeDirectory = Path.GetDirectoryName(
@@ -319,9 +326,11 @@
 
         public Func<object[], object> BinderOf(object entry)
         {
-            // Binder is Func<Action<CommandArg[]>> against the loaded
-            // assembly's own CommandArg type; both legs go through
-            // DynamicInvoke so no compile-time reference is needed.
+            /*
+               Binder is Func<Action<CommandArg[]>> against the loaded
+               assembly's own CommandArg type; both legs go through
+               DynamicInvoke so no compile-time reference is needed.
+            */
             Delegate binderFactory = (Delegate)GetValue(entry, "Binder");
             if (binderFactory == null)
             {

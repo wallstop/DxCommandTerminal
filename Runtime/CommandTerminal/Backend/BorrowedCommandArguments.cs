@@ -87,9 +87,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
         }
 
-        // Specialized storage: Unity does not de-virtualize IReadOnlyList
-        // indexers, so array and list keep direct element access. The
-        // fallback covers exotic callers only.
+        /*
+           Specialized storage: Unity does not de-virtualize IReadOnlyList
+           indexers, so array and list keep direct element access. The
+           fallback covers exotic callers only.
+        */
         private readonly CommandArg[] _array;
         private readonly List<CommandArg> _list;
         private readonly IReadOnlyList<CommandArg> _fallback;

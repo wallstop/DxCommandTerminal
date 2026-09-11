@@ -31,8 +31,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Exception exception = null;
             Action<string> assertion = null;
 
-            // These tests assert per-command logging only; applying deferred
-            // registration up front keeps its readiness log out of the window.
+            /*
+               These tests assert per-command logging only; applying deferred
+               registration up front keeps its readiness log out of the window.
+            */
             Terminal.Shell.EnsureAutoCommandsRegistered();
 
             Application.logMessageReceived += HandleMessageReceived;
@@ -129,8 +131,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Exception exception = null;
             Action<string> assertion = null;
 
-            // These tests assert per-command logging only; applying deferred
-            // registration up front keeps its readiness log out of the window.
+            /*
+               These tests assert per-command logging only; applying deferred
+               registration up front keeps its readiness log out of the window.
+            */
             Terminal.Shell.EnsureAutoCommandsRegistered();
 
             Application.logMessageReceived += HandleMessageReceived;

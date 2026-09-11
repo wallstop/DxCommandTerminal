@@ -15,8 +15,10 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
         internal const string ArgumentMetadataName =
             "WallstopStudios.DxCommandTerminal.Backend.CommandArg";
 
-        // Matches RegisterCommandAttribute's Contexts default so attributed
-        // commands that omit Contexts keep unrestricted eligibility.
+        /*
+           Matches RegisterCommandAttribute's Contexts default so attributed
+           commands that omit Contexts keep unrestricted eligibility.
+        */
         internal const int AllExecutionContexts = 7;
 
         private const string AttributeMetadataName =
@@ -89,9 +91,11 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                     attributeData.ConstructorArguments;
                 for (int i = 0; i < constructorArguments.Length; i++)
                 {
-                    // Resolve constructor arguments by parameter name instead
-                    // of type, so overload or order changes in the attribute
-                    // cannot silently bind to the wrong field.
+                    /*
+                       Resolve constructor arguments by parameter name instead
+                       of type, so overload or order changes in the attribute
+                       cannot silently bind to the wrong field.
+                    */
                     ApplyArgument(
                         attribute,
                         constructorParameters[i].Name,
@@ -206,9 +210,11 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                 );
                 if (method == null)
                 {
-                    // Declarations inside inactive preprocessor branches and
-                    // other exotic syntax contribute no symbol; legacy
-                    // reflection discovery would not see them either.
+                    /*
+                       Declarations inside inactive preprocessor branches and
+                       other exotic syntax contribute no symbol; legacy
+                       reflection discovery would not see them either.
+                    */
                     continue;
                 }
 
@@ -320,15 +326,19 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
 
         public bool ContainingTypeIsUnbound;
 
-        // The handler method name escaped for use as a C# identifier
-        // (keyword names such as `@params`).
+        /*
+           The handler method name escaped for use as a C# identifier
+           (keyword names such as `@params`).
+        */
         public string MethodNameIdentifierDisplay;
 
         // Whether the handler method itself is a generic method definition.
         public bool IsMethodGeneric;
 
-        // False when a parameter type or the method itself is open, dynamic,
-        // or otherwise not addressable by an exact typeof signature.
+        /*
+           False when a parameter type or the method itself is open, dynamic,
+           or otherwise not addressable by an exact typeof signature.
+        */
         public bool ExactSignatureAddressable;
 
         /*
@@ -349,9 +359,11 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             ITypeSymbol commandArgumentType
         )
         {
-            // Legacy discovery walks static methods only (BindingFlags.Static);
-            // instance methods attributed with RegisterCommandAttribute were
-            // never registered and must stay unregistered.
+            /*
+               Legacy discovery walks static methods only (BindingFlags.Static);
+               instance methods attributed with RegisterCommandAttribute were
+               never registered and must stay unregistered.
+            */
             if (!method.IsStatic)
             {
                 return null;
@@ -383,8 +395,10 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
 
             if (model.HasValidSignature && model.DirectlyBindable)
             {
-                // Nothing else is needed; the emitter binds the method group
-                // without parameter expressions.
+                /*
+                   Nothing else is needed; the emitter binds the method group
+                   without parameter expressions.
+                */
                 return model;
             }
 
@@ -413,10 +427,12 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                 name = InferCommandName(methodName);
             }
 
-            // Method names are identifiers, so inference cannot produce
-            // spaces or surrounding whitespace; the guard keeps this a
-            // no-op pass for the common case while preserving the runtime
-            // attribute's exact semantics.
+            /*
+               Method names are identifiers, so inference cannot produce
+               spaces or surrounding whitespace; the guard keeps this a
+               no-op pass for the common case while preserving the runtime
+               attribute's exact semantics.
+            */
             if (name.Contains(" "))
             {
                 name = name.Replace(" ", string.Empty);
@@ -432,9 +448,11 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             CommandModel model
         )
         {
-            // Methods inside open generic types (or open generic methods
-            // themselves) can never be bound to a closed delegate; legacy
-            // discovery would fail inside Delegate.CreateDelegate for them.
+            /*
+               Methods inside open generic types (or open generic methods
+               themselves) can never be bound to a closed delegate; legacy
+               discovery would fail inside Delegate.CreateDelegate for them.
+            */
             bool methodIsOpen = method.IsGenericMethod;
             bool signatureAddressable = !methodIsOpen && !containingTypeIsUnbound;
 
@@ -537,8 +555,10 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
 
             if (type is IPointerTypeSymbol pointerType)
             {
-                // Unmanaged pointers only; managed references (ref/out/in) are
-                // modeled on IParameterSymbol.RefKind, not on the type symbol.
+                /*
+                   Unmanaged pointers only; managed references (ref/out/in) are
+                   modeled on IParameterSymbol.RefKind, not on the type symbol.
+                */
                 return IsAddressableType(pointerType.PointedAtType);
             }
 
@@ -546,8 +566,10 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             {
                 if (0 < namedType.TypeParameters.Length && namedType.TypeArguments.Length == 0)
                 {
-                    // Generic definition; addressable only in unbound form,
-                    // which the caller handles via ContainingTypeIsUnbound.
+                    /*
+                       Generic definition; addressable only in unbound form,
+                       which the caller handles via ContainingTypeIsUnbound.
+                    */
                     return false;
                 }
 
@@ -734,8 +756,10 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
 
             if (0 < arity)
             {
-                // Generator-time formatting only; string.Concat keeps the
-                // arity suffix a single allocation.
+                /*
+                   Generator-time formatting only; string.Concat keeps the
+                   arity suffix a single allocation.
+                */
                 return string.Concat(name, "<", new string(',', arity - 1), ">");
             }
 
