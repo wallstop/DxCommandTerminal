@@ -47,6 +47,9 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      issues: write
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -60,7 +63,27 @@ jobs:
         run: npm --prefix tooling~ install --no-audit --no-fund
 
       - name: Test tooling
-        run: npm --prefix tooling~ test
+        # DIAGNOSTIC: capture output for the report step.
+        shell: bash
+        run: |
+          cd tooling~
+          set -o pipefail
+          npm test 2>&1 | tee ../test-output.log
+          exit $?
+
+      - name: Report failures to PR (diagnostic)
+        if: failure()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo "### node-tests ${{ matrix.os }} tail"
+            echo '```'
+            tail -c 6000 test-output.log
+            echo '```'
+          } > body.txt
+          gh api repos/wallstop/DxCommandTerminal/issues/53/comments -F body=@body.txt > /dev/null
 
   csharp-style:
     # C# style gates that are pure Node stdlib, so they run Unity-free on both OSes the
