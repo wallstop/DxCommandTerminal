@@ -1,0 +1,158 @@
+
+> test
+> node --test "scripts/mcp/__tests__/*.test.mjs" "scripts/tests/*.test.mjs"
+
+✔ configure writes every client schema with the unity endpoint (146.2988ms)
+✔ configure adds Z.AI servers when a key exists and removes them when it does not (51.683ms)
+✔ configure preserves unrelated keys and servers in JSON clients (32.7221ms)
+✔ configure defaults opencode share to disabled and preserves an explicit value (77.6101ms)
+✔ configure refuses to replace malformed client configs (3.8588ms)
+✔ mergeCodexToml refuses invalid TOML and deletes null entries (0.6507ms)
+✔ transactionalWrite rolls back committed files when a later write fails (45.883ms)
+✔ prepareJsonServers keeps unrelated collections and merges over existing servers (2.2946ms)
+✔ stripJsonComments rejects parse errors instead of recovering (0.6057ms)
+✔ parseDotEnv reads unquoted values with inline comments (2.8316ms)
+✔ parseDotEnv keeps hash characters inside quoted values (0.3834ms)
+✔ parseDotEnv unescapes double quotes only (0.4206ms)
+✔ parseDotEnv keeps trailing backslashes in double-quoted Windows paths (0.2844ms)
+✔ parseDotEnv supports export prefix and whitespace around equals (0.2612ms)
+✔ parseDotEnv allows comments after the closing quote (0.3018ms)
+✔ parseDotEnv rejects malformed lines (0.7367ms)
+✔ readLocalEnv skips malformed lines without aborting (71.5866ms)
+✔ readLocalEnv returns empty for a missing file (1.0042ms)
+✔ github token aliases resolve in documented order with env beating file (12.1644ms)
+✔ z.ai key aliases resolve with env beating file (0.4132ms)
+✔ capture script source lives outside Unity compilation (0.5467ms)
+✔ capture install target follows the DxMessaging Assets/Editor convention (0.3372ms)
+✔ capture artifacts prefer the package tree and fall back to Library (77.1524ms)
+✔ projectPort is deterministic across calls and path spellings (1.8596ms)
+✔ projectPort lands inside the dedicated project range (0.3616ms)
+✔ distinct projects map to distinct ports for realistic inputs (0.2841ms)
+✔ projectPort returns null without a path (0.189ms)
+✔ resolveProjectPorts puts the project port first and dedupes fallbacks (0.3468ms)
+✔ resolveProjectPorts without a project uses the stock fallbacks (3.8545ms)
+✔ bridge port precedence: flag beats env beats .env.local beats project port (17.155ms)
+✔ resolveOptions keeps project path from .env.local when no flag is given (0.5467ms)
+✔ parseArgs rejects unknown options and empty values (0.8573ms)
+✔ analyzer placement: payload + meta + label (1.8135ms)
+✔ analyzer placement: governed by the runtime asmdef, not an editor-only one (1.0673ms)
+✔ analyzer placement: no second copy anywhere Unity imports (44.8282ms)
+✔ exempt shapes stay silent (4.4432ms)
+✔ comparison shapes are flagged (0.7514ms)
+✔ fix swaps operands and flips the operator (0.8036ms)
+✔ fix keeps operand precedence (0.5672ms)
+✔ fix refuses when both operands can have a side effect (0.3749ms)
+✔ fix keeps a rewrite inside its interpolation hole (1.3344ms)
+✔ fix refuses a comparison that spans more than one line (0.289ms)
+✔ a corpus with no C# files is rejected rather than reported clean (101.891ms)
+✔ linter exits non-zero on a violation and zero once fixed (245.1942ms)
+✔ silent: a nested type already at the end (6.5137ms)
+✔ silent: the only member (0.2916ms)
+✔ silent: two nested types at the end (0.6244ms)
+✔ silent: a class constraint, which is not a declaration (0.54ms)
+✔ silent: a struct constraint (1.2621ms)
+✔ silent: `record` used as a field name (0.9564ms)
+✔ silent: a brace inside an attribute argument (0.2177ms)
+✔ silent: a brace in a field initializer (0.2426ms)
+✔ silent: a property with an accessor block and an initializer (0.6183ms)
+✔ silent: the word class inside a comment (0.525ms)
+✔ silent: the word class inside a string (0.252ms)
+✔ silent: an enum body, whose members are not types (0.1525ms)
+✔ silent: a top-level type after another top-level type (0.1331ms)
+✔ silent: the canonical tier order (0.9889ms)
+✔ silent: an expression-bodied property before a field (0.1869ms)
+✔ silent: a tuple-typed field and a tuple-typed property (0.4081ms)
+✔ silent: an indexer is a property (0.2129ms)
+✔ silent: an operator overload is a static method (0.1645ms)
+✔ silent: a static constructor sorts with the constructors (0.2144ms)
+✔ silent: a destructor sorts with the constructors (0.1458ms)
+✔ silent: an event and a delegate sort after const, before static properties (0.5384ms)
+✔ silent: an accessor-less auto-property before its field (0.1746ms)
+✔ silent: an object-initializer chain that continues past its closing brace (0.2899ms)
+✔ silent: an initializer inside a call argument that ends past its brace (0.2308ms)
+✔ silent: a nested interpolated string inside an interpolation hole (0.2873ms)
+✔ silent: a tuple-returning method is a method, not a tuple-typed property (0.2128ms)
+✔ silent: a generic tuple-returning method (0.7325ms)
+✔ reported: a nested class before a field (0.8046ms)
+✔ reported: a nested enum before a constant (0.3141ms)
+✔ reported: a nested struct before a method (0.1496ms)
+✔ reported: a nested interface before a field (0.1863ms)
+✔ reported: a nested record before a field (0.2128ms)
+✔ reported: a nested type inside a nested type (0.1959ms)
+✔ reported: a nested class between two fields inside a namespace (0.1422ms)
+✔ ordering reported: a static property after a static field (1.9758ms)
+✔ ordering reported: a property after a field (0.8351ms)
+✔ ordering reported: a field after a method (0.2372ms)
+✔ ordering reported: an internal field after a private field of the same tier (0.2829ms)
+✔ ordering reported: a static method after a method (0.3524ms)
+✔ ordering reported: a constructor after a method (0.4023ms)
+✔ ordering reported: a const after a static property (0.2089ms)
+✔ ordering reported: a public method after a private method of the same tier (0.31ms)
+✔ ordering reported: a tuple-returning static method after a method (0.4983ms)
+✔ ordering: the canonical tier order passes and the same body scrambled fails (0.6932ms)
+✔ ordering: members on opposite sides of a conditional are never compared (0.267ms)
+✔ ordering: a conditional inside a method does not reset the comparison (0.3867ms)
+✔ ordering: --fix reorders a scrambled body and changes nothing else (2.2118ms)
+✔ ordering: --fix orders access within a tier and keeps nested types last (0.3016ms)
+✔ ordering: --fix slots an event between const and static properties (0.5032ms)
+✔ --fix moves the type to the end and changes nothing else (0.5596ms)
+✔ --fix carries the doc comment and attributes with the type (0.4089ms)
+✔ --fix leaves a trailing same-line comment on the member it annotates (0.3709ms)
+✔ --fix keeps nested ordering stable (0.243ms)
+✔ masking blanks comments and literals without moving anything (0.1774ms)
+✖ the linter reports, fixes and then passes over a real tree (118.5142ms)
+✔ an empty corpus fails rather than reporting a clean scan (79.2184ms)
+✔ --fix refuses a type that only compiles inside a conditional (0.8353ms)
+✔ --fix moves an unconditional type past a trailing #endif (0.2991ms)
+✔ --fix still moves a type whose siblings carry a whole conditional inside them (0.2964ms)
+✔ ordering: --fix never moves a self-typed singleton past its dependencies (2.6302ms)
+✔ ordering: --fix treats target-typed new(args) as a self-typed construction (3.0168ms)
+✔ ordering: a generic-typed member built with new() is not self-typed (0.1918ms)
+✔ ordering: --fix never moves a static field whose initializer names a sibling (0.1745ms)
+✔ region keys separate the two branches of one conditional (0.3597ms)
+ℹ tests 108
+ℹ suites 0
+ℹ pass 107
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1317.6296
+
+✖ failing tests:
+
+test at scripts\tests\lint-member-ordering.test.mjs:419:1
+✖ the linter reports, fixes and then passes over a real tree (118.5142ms)
+  AssertionError [ERR_ASSERTION]: expected the file and line in the report, got: node:fs:484
+      return binding.readFileUtf8(path, stringToFlags(options.flag));
+                     ^
+  
+  Error: ENOENT: no such file or directory, open 'D:\a\DxCommandTerminal\DxCommandTerminal\C:\Users\RUNNER~1\AppData\Local\Temp\member-ordering-AZpGPh\Sample.cs'
+      at Object.readFileSync (node:fs:484:20)
+      at main (file:///D:/a/DxCommandTerminal/DxCommandTerminal/tooling%7E/scripts/lint-member-ordering.mjs:1225:19)
+      at file:///D:/a/DxCommandTerminal/DxCommandTerminal/tooling%7E/scripts/lint-member-ordering.mjs:1316:22
+      at ModuleJob.run (node:internal/modules/esm/module_job:561:25)
+      at async node:internal/modules/esm/loader:647:26
+      at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'D:\\a\\DxCommandTerminal\\DxCommandTerminal\\C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\member-ordering-AZpGPh\\Sample.cs'
+  }
+  
+  Node.js v24.20.0
+  
+      at TestContext.<anonymous> (file:///D:/a/DxCommandTerminal/DxCommandTerminal/tooling%7E/scripts/tests/lint-member-ordering.test.mjs:431:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1397:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:969:18)
+      at Test.postRun (node:internal/test_runner/test:1537:19)
+      at Test.run (node:internal/test_runner/test:1462:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:969:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
