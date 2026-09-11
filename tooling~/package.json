@@ -8,6 +8,10 @@
   "scripts": {
     "test": "node --test \"scripts/mcp/__tests__/*.test.mjs\" \"scripts/tests/*.test.mjs\"",
     "package:validate": "node scripts/release/validate-package-contents.mjs",
+    "lint:comparison-direction": "node scripts/lint-comparison-direction.mjs",
+    "lint:comparison-direction:fix": "node scripts/lint-comparison-direction.mjs --fix",
+    "lint:member-ordering": "node scripts/lint-member-ordering.mjs --verbose",
+    "lint:member-ordering:fix": "node scripts/lint-member-ordering.mjs --fix",
     "unity:mcp:probe": "node scripts/mcp/unity-mcp.mjs probe",
     "unity:mcp:configure": "node scripts/mcp/unity-mcp.mjs configure",
     "unity:mcp:bridge": "node scripts/mcp/unity-mcp.mjs bridge",
