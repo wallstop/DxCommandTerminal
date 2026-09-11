@@ -18,6 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - New shared `CommandTokenizer` for execution and completion, parity-pinned against `TryEatArgument` by a data-driven corpus.
 - `CommandDefinition` commands with `AddToHistory = false` dispatch without rebuilding the history line.
 - `CommandArgParsers`, a public static class exposing the culture-invariant parsers behind `CommandArg.TryGet`, one method per built-in type (`CommandArgParsers.Float`, `.Int`, `.DateTime`, ...), callable directly from command handlers and test code.
+- Built-in argument parsing for `Bounds`, `BoundsInt`, `RectOffset`, `Plane`, and `Ray` (Unity) plus `System.Numerics.Complex`. Each type parses positional components separated by any console delimiter: bounds `center x,y,z size x,y,z` (so `0,0,0,1,1,1` is a unit bounds at the origin), boundsInt `position x,y,z size x,y,z`, rectOffset in `RectOffset(left, right, top, bottom)` order, plane `normal x,y,z distance`, ray `origin x,y,z direction x,y,z`, and complex `real, imaginary`. The composite parsers (`Vector2` through `RectInt`, `Color`, `Quaternion`) are now public methods on `CommandArgParsers`, so handlers and tests can call them directly.
 
 ### Changed
 

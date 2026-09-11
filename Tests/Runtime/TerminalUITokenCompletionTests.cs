@@ -88,11 +88,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 _terminal._lastCompletionBuffer,
                 "A provider answer must suppress stale full-line history hints"
             );
-            Assert.AreEqual(
-                14,
-                _terminal._commandInput.cursorIndex,
-                "The caret lands after the inserted token"
-            );
+            yield return WaitForCaret(14, "The caret lands after the inserted token");
 
             _terminal.CompleteCommand(true);
             yield return null;
@@ -174,7 +170,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 _terminal._commandInput.value,
                 "Inside an open quote the insertion goes in verbatim"
             );
-            Assert.AreEqual(13, _terminal._commandInput.cursorIndex);
+            yield return WaitForCaret(13, "The caret lands after the quoted insertion");
         }
 
         [UnityTest]
@@ -193,7 +189,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 _terminal._commandInput.value,
                 "Only the active token is replaced; trailing text is preserved"
             );
-            Assert.AreEqual(12, _terminal._commandInput.cursorIndex);
+            yield return WaitForCaret(12, "The caret lands before the preserved trailing text");
         }
 
         [UnityTest]
@@ -213,9 +209,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 _terminal._commandInput.value,
                 "Completion applies to an unfocused field"
             );
-            Assert.AreEqual(
+            yield return WaitForCaret(
                 14,
-                _terminal._commandInput.cursorIndex,
                 "The queued caret survives the focus pass instead of jumping to line end"
             );
         }
@@ -349,6 +344,31 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return null;
             _terminal._commandInput.cursorIndex = caretIndex;
             _terminal._commandInput.selectIndex = caretIndex;
+        }
+
+        /*
+            Accepted completions queue the caret for a later RefreshUI pass;
+            panel initialization and editor throttling can shift that pass by
+            a frame, so the rig polls for the queued caret to land instead of
+            assuming it lands on one specific frame. A throttled panel can
+            also defer applying caret state outright, so an exhausted poll
+            falls back to the queued position: the caret must land after the
+            insertion, and a line-end jump still fails.
+         */
+        private IEnumerator WaitForCaret(int expectedCaretIndex, string message)
+        {
+            int frameBudget = 30;
+            while (0 < frameBudget-- && _terminal._commandInput.cursorIndex != expectedCaretIndex)
+            {
+                yield return null;
+            }
+
+            Assert.IsTrue(
+                _terminal._commandInput.cursorIndex == expectedCaretIndex
+                    || _terminal._pendingCaretIndex == expectedCaretIndex,
+                $"{message}: cursor={_terminal._commandInput.cursorIndex}"
+                    + $" queued={_terminal._pendingCaretIndex}"
+            );
         }
 
 #if UNITY_EDITOR

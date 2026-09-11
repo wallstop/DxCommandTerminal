@@ -229,12 +229,6 @@
         private bool _tokenCompletionQuoted;
 
         /*
-            Caret to restore on the next focus pass; negative keeps the
-            focus-at-end behavior. Token completions set it.
-         */
-        private int _pendingCaretIndex = -1;
-
-        /*
             The last value RefreshUI wrote to the field. The panel re-emits it
             as a synthetic change event; matching it keeps that echo from
             resetting completion state like user input.
@@ -244,6 +238,12 @@
 #if UNITY_EDITOR
         private readonly EditorApplication.CallbackFunction _checkForChanges;
 #endif
+        /*
+            Caret to restore on the next focus pass; negative keeps the
+            focus-at-end behavior. Token completions set it. Internal for
+            completion-caret test coverage.
+         */
+        internal int _pendingCaretIndex = -1;
         private ITerminalInput _input;
 
         public TerminalUI()
@@ -1940,18 +1940,21 @@
                 && _textInput.focusController.focusedElement == _textInput;
 
             /*
-                Consume the marker only while focused: the queued position is
-                what keeps a later fresh-focus pass from sending the caret to
-                line end (Bugbot: unfocused completion caret jump).
+                The field applies programmatic value writes on its own
+                schedule, and that apply can re-clamp the caret after this
+                pass's write. Consume the marker only while focused once the
+                caret stuck on a later pass; an unfocused field keeps the
+                marker (Bugbot: unfocused completion caret jump) so a later
+                fresh focus cannot send the caret to line end.
              */
-            int caretPosition = _pendingCaretIndex;
-            if (focused)
+            if (focused && _commandInput.cursorIndex == _pendingCaretIndex)
             {
                 _pendingCaretIndex = -1;
+                return;
             }
 
-            _commandInput.cursorIndex = caretPosition;
-            _commandInput.selectIndex = caretPosition;
+            _commandInput.cursorIndex = _pendingCaretIndex;
+            _commandInput.selectIndex = _pendingCaretIndex;
         }
 
         private void RefreshLogs()
