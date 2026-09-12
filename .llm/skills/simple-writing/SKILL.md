@@ -1,14 +1,15 @@
 ---
 name: simple-writing
-description: Write user-facing copy in Simplified Technical English (STE) with the Why/What changed/How we know structure and hard length budgets for PRs, commits, issues, and comments. Use when writing or editing any text a human will read in this repo.
+description: Write user-facing copy in Simplified Technical English (STE), extremely short and to the point - a few sentences max for PRs, commits, issues, and comments, covering how (plus why/what for PRs). Use when writing or editing any text a human will read in this repo.
 metadata:
   category: Core
 ---
 
 # Simple Writing (STE)
 
-All human-readable text uses Simplified Technical English. Short. Direct. No fluff.
-Reviewers are volume-limited; every line must earn its place.
+All human-readable text uses Simplified Technical English. Extremely short. Direct.
+No fluff, no verbosity. Default to fewer sentences than feel comfortable; cut
+before adding. A reader should get the point in seconds.
 
 ## Rules
 
@@ -18,25 +19,26 @@ Reviewers are volume-limited; every line must earn its place.
 3. Lists over prose. Links over restatement. Never restate a diff in prose.
 4. Write for a reader who knows Unity/C# but not this repo's history.
 5. ASCII only. No em-dashes, smart quotes, or emoji.
-6. Length budgets are hard limits. Cut before adding.
+6. Length budgets are hard limits. Cut before adding. When in doubt, delete the line.
 
 ## Structure by artifact
 
 | Artifact | Structure | Budget |
 | --- | --- | --- |
 | PR title | Imperative, <= 72 chars. "Add X", "Fix Y". | 1 line |
-| PR description | `**Why:**` (1-2 sentences), `**What:**` (one-line bullets), optional `**How we know:**` (counts, one line each). Omit a section that adds nothing. | <= ~20 lines |
+| PR description | `**Why:**` 1-2 sentences. `**What:**` one-line bullets (3-6). Optional `**How we know:**` 1-3 plain evidence lines. Omit a section that adds nothing. | <= ~12 lines |
 | Commit subject | Imperative, <= 72 chars, no trailing period. | 1 line |
-| Commit body | `Why` then `What changed`; one-line bullets; optional `How we know`. Wrap at ~72 chars. | <= ~12 lines |
+| Commit body | `Why` 1-2 sentences, then `What changed` one-line bullets (2-5). Optional one-line `How we know`. Wrap at ~72 chars. | <= ~8 lines |
 | Review comments | 1-3 sentences. Say what to change and why. | 3 lines |
 | Code comments | Minimal. State only what the code cannot say (constraints, invariants, non-obvious why). No narration of the next line. Max ~4 lines per comment block. | 4 lines |
-| Issues | `Problem` then `Evidence` then `Fix`. | short |
+| Issues | `Problem`, `Evidence`, `Fix` - one short paragraph each. | short |
 
-The structure matches the reference repos (Ambiguous-Interactive/unity-helpers,
-Ambiguous-Interactive/DxMessaging): a 1-2 sentence `Why`, a terse `What` bullet
-list, and a `How we know` section of plain evidence lines ("All 1,300 script
-tests pass."). No nested sub-bullets, no per-file tours, no restated context
-already in the linked issues or PLAN.
+A few sentences is the ceiling, not the target. Two sentences that cover the
+point beat six that cover it plus context. No nested sub-bullets, no per-file
+tours, no process narration (review rounds, sub-agents, commits list), no
+restated context already in linked issues or PLAN. Numbers only as evidence
+lines. LLM-posted GitHub text keeps the `DISCLOSURE: LLM-GENERATED TEXT` first
+line (see llm-attribution); it does not count against the budget.
 
 ## Example
 
