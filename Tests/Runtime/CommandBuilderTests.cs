@@ -158,6 +158,96 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.IsNull(ConsumeError(shell));
         }
 
+        [Test]
+        public void OmittedOptionalArgumentsReadAsTheirDefaults()
+        {
+            CommandShell shell = new(History());
+            string note = "sentinel";
+            bool notePresent = false;
+            int count = -1;
+            Assert.IsTrue(
+                shell.AddCommand(
+                    CommandBuilder
+                        .Create("annotate")
+                        .Arg<string>("note")
+                        .Arg<int>("count")
+                        .Handler(
+                            (context, arguments) =>
+                            {
+                                note = arguments.Get<string>(0);
+                                notePresent = arguments.TryGet(0, out string _);
+                                count = arguments.Get<int>(1);
+                            }
+                        ),
+                    out _
+                )
+            );
+
+            Assert.IsTrue(shell.RunCommand("annotate"));
+            Assert.IsNull(note, "An optional string without an explicit default reads as null");
+            Assert.IsTrue(
+                notePresent,
+                "A correctly-typed null default is a successful read, not a mismatch"
+            );
+            Assert.AreEqual(
+                0,
+                count,
+                "An optional value type without a default reads as default(T)"
+            );
+        }
+
+        [Test]
+        public void TypedAccessorValidatesIndices()
+        {
+            CommandShell shell = new(History());
+            Exception negativeGet = null;
+            Exception overflowGet = null;
+            bool negativeTryGet = true;
+            bool overflowTryGet = true;
+            Assert.IsTrue(
+                shell.AddCommand(
+                    CommandBuilder
+                        .Create("probe")
+                        .Arg<int>("value", spec => spec.Required())
+                        .Handler(
+                            (context, arguments) =>
+                            {
+                                try
+                                {
+                                    arguments.Get<int>(-1);
+                                }
+                                catch (ArgumentOutOfRangeException e)
+                                {
+                                    negativeGet = e;
+                                }
+
+                                try
+                                {
+                                    arguments.Get<int>(1);
+                                }
+                                catch (ArgumentOutOfRangeException e)
+                                {
+                                    overflowGet = e;
+                                }
+
+                                negativeTryGet = arguments.TryGet<int>(-1, out _);
+                                overflowTryGet = arguments.TryGet<int>(5, out _);
+                            }
+                        ),
+                    out _
+                )
+            );
+
+            Assert.IsTrue(shell.RunCommand("probe 1"));
+            Assert.IsNotNull(negativeGet, "A negative index throws ArgumentOutOfRangeException");
+            Assert.IsNotNull(
+                overflowGet,
+                "An out-of-range index throws ArgumentOutOfRangeException"
+            );
+            Assert.IsFalse(negativeTryGet, "TryGet reports false for a negative index");
+            Assert.IsFalse(overflowTryGet, "TryGet reports false for an out-of-range index");
+        }
+
         [TestCase("abc", ExpectedResult = true)]
         [TestCase("1.5", ExpectedResult = true)]
         [TestCase("", ExpectedResult = false)]
@@ -416,6 +506,22 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 results.ConvertAll(completion => completion.InsertionText),
                 "Dynamic providers re-query on every request"
             );
+
+            Assert.IsTrue(
+                shell.TryComplete(
+                    CommandExecutionContext.Current,
+                    "summon torch ",
+                    13,
+                    results,
+                    out _
+                )
+            );
+            Assert.AreEqual(2, requests.Count, "A second request queries the provider again");
+            CollectionAssert.AreEqual(
+                new[] { "ally-1" },
+                results.ConvertAll(completion => completion.InsertionText),
+                "Dynamic choices recompute instead of caching"
+            );
         }
 
         [Test]
@@ -655,6 +761,145 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         [Test]
+        public void DefaultMarksOptionalRegardlessOfOrder()
+        {
+            CommandShell shell = new(History());
+            int runs = 0;
+            Assert.IsTrue(
+                shell.AddCommand(
+                    CommandBuilder
+                        .Create("order-omitted")
+                        .Arg<int>("value", spec => spec.Required().Default(9))
+                        .Handler((context, arguments) => ++runs),
+                    out _
+                ),
+                "Required().Default() ends optional: the last fluent call wins"
+            );
+
+            Assert.IsTrue(shell.RunCommand("order-omitted"));
+            Assert.AreEqual(1, runs, "An explicit Default makes the argument optional");
+            Assert.IsNull(ConsumeError(shell));
+        }
+
+        [Test]
+        public void DefaultsMustSatisfyTheirOwnValidation()
+        {
+            CommandShell shell = new(History());
+            InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() =>
+                shell.AddCommand(
+                    CommandBuilder
+                        .Create("bounded-default")
+                        .Arg<int>("count", spec => spec.Default(0).Range(1, 100))
+                        .Handler((context, arguments) => { }),
+                    out _
+                )
+            );
+            Assert.That(
+                exception.Message,
+                Does.Contain("count"),
+                "The diagnostic names the argument whose default violates validation"
+            );
+
+            Assert.IsTrue(
+                shell.AddCommand(
+                    CommandBuilder
+                        .Create("bounded-default")
+                        .Arg<int>("count", spec => spec.Default(1).Range(1, 100))
+                        .Handler((context, arguments) => { }),
+                    out _
+                ),
+                "A default inside the range registers"
+            );
+        }
+
+        [Test]
+        public void DisposedHandleDoesNotRemoveALegacyReplacement()
+        {
+            CommandShell shell = new(History());
+            Assert.IsTrue(
+                shell.AddCommand(
+                    CommandBuilder.Create("replaced").Handler((context, arguments) => { }),
+                    out CommandRegistrationHandle handle
+                )
+            );
+
+            shell.ClearCustomCommands();
+            Assert.IsTrue(
+                shell.AddCommand("replaced", arguments => { }),
+                "Sanity: a legacy command registers under the same name"
+            );
+
+            handle.Dispose();
+            Assert.IsTrue(
+                shell.Commands.ContainsKey("replaced"),
+                "A stale handle must not remove the legacy replacement"
+            );
+        }
+
+        [Test]
+        public void AddToHistoryFalseSkipsHistoryForBuilderCommands()
+        {
+            CommandHistory history = History();
+            CommandShell shell = new(history);
+            Assert.IsTrue(
+                shell.AddCommand(
+                    CommandBuilder
+                        .Create("quiet")
+                        .AddToHistory(false)
+                        .Arg<int>("value", spec => spec.Required())
+                        .Handler((context, arguments) => { }),
+                    out _
+                )
+            );
+
+            Assert.IsTrue(shell.RunCommand("quiet 5"));
+            Assert.IsEmpty(
+                history.GetHistory(true, true),
+                "AddToHistory(false) must keep builder invocations out of the history"
+            );
+        }
+
+        [Test]
+        public void NestedBuilderCommandsDoNotCorruptParsedArguments()
+        {
+            CommandShell shell = new(History());
+            string innerValue = null;
+            string outerValue = null;
+            Assert.IsTrue(
+                shell.AddCommand(
+                    CommandBuilder
+                        .Create("inner")
+                        .Arg<string>("value", spec => spec.Required())
+                        .Handler((context, arguments) => innerValue = arguments.Get<string>(0)),
+                    out _
+                )
+            );
+            Assert.IsTrue(
+                shell.AddCommand(
+                    CommandBuilder
+                        .Create("outer")
+                        .Arg<string>("value", spec => spec.Required())
+                        .Handler(
+                            (context, arguments) =>
+                            {
+                                outerValue = arguments.Get<string>(0);
+                                Assert.IsTrue(
+                                    shell.RunCommand("inner nested"),
+                                    "Nested dispatch succeeds from inside a builder handler"
+                                );
+                                outerValue = arguments.Get<string>(0);
+                            }
+                        ),
+                    out _
+                )
+            );
+
+            Assert.IsTrue(shell.RunCommand("outer alpha"));
+            Assert.AreEqual("alpha", outerValue, "The outer arguments survive the nested dispatch");
+            Assert.AreEqual("nested", innerValue, "The nested command ran with its own argument");
+        }
+
+        [Test]
         public void DisposedHandleRemovesExactlyItsOwnRegistration()
         {
             CommandShell shell = new(History());
@@ -797,35 +1042,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Sword,
             Bow,
             Staff,
-        }
-    }
-
-    internal sealed class BuilderLifecycleComponent : MonoBehaviour
-    {
-        public int Invocations { get; private set; }
-
-        private CommandRegistrationHandle Handle { get; set; }
-
-        private void OnEnable()
-        {
-            /*
-               The documented lifecycle pattern: register on enable, dispose on
-               disable, so scene transitions never leak commands.
-             */
-            Terminal.Shell.AddCommand(
-                CommandBuilder
-                    .Create("lifecycle-hit")
-                    .Arg<int>("value", spec => spec.Required())
-                    .Handler((context, arguments) => ++Invocations),
-                out CommandRegistrationHandle handle
-            );
-            Handle = handle;
-        }
-
-        private void OnDisable()
-        {
-            Handle?.Dispose();
-            Handle = null;
         }
     }
 

@@ -11,7 +11,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     /// </summary>
     /// <remarks>
     ///     Disposal is idempotent. Once disposed (or after the shell itself
-    ///     cleared or replaced the command), later disposal is a no-op.
+    ///     cleared or replaced the command), later disposal is a no-op. A
+    ///     handle that is never disposed keeps its shell reachable; follow
+    ///     the OnEnable/OnDisable pattern so handles live as long as their
+    ///     owner.
     /// </remarks>
     public sealed class CommandRegistrationHandle : IDisposable
     {

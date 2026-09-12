@@ -3,16 +3,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     using System;
 
     /// <summary>
-    ///     Handler for a typed builder command. Runs only after every argument
-    ///     parsed and validated against its definition; <paramref name="arguments"/>
-    ///     exposes the parsed values.
-    /// </summary>
-    public delegate void TypedCommandHandler(
-        CommandExecutionContext context,
-        CommandArguments arguments
-    );
-
-    /// <summary>
     ///     Invocation-scoped typed view over the parsed arguments of one
     ///     builder command. Values are parsed and validated by the command's
     ///     definition before the handler runs; a value read with the wrong
@@ -29,7 +19,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         public CommandExecutionContext Context { get; }
 
         /// <summary>Number of parsed arguments, always matching the definition.</summary>
-        public int Count => _values.Length;
+        public int Count => _values?.Length ?? 0;
 
         /// <summary>
         ///     The raw, invocation-scoped borrowed view over the input
@@ -62,6 +52,16 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return typed;
             }
 
+            /*
+                An omitted optional argument without an explicit default reads
+                as default(T): null for reference types is a valid, correctly
+                typed read, not a mismatch.
+             */
+            if (value == null && !typeof(T).IsValueType)
+            {
+                return default;
+            }
+
             throw new InvalidOperationException(
                 $"Argument '{spec.Name}' is declared as {spec.TypeName}; "
                     + $"requested {typeof(T).Name}."
@@ -75,7 +75,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         /// </summary>
         public T Get<T>(int index)
         {
-            if (_values == null || _values.Length <= index)
+            if (_values == null || _values.Length <= (uint)index)
             {
                 throw new ArgumentOutOfRangeException(nameof(index));
             }
@@ -86,18 +86,32 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         /// <summary>
         ///     Attempts to read the parsed value at <paramref name="index"/> as
         ///     <typeparamref name="T"/>; false on a type mismatch or an
-        ///     out-of-range index.
+        ///     out-of-range index. A null default reads as
+        ///     <c>default(T)</c> for reference types.
         /// </summary>
         public bool TryGet<T>(int index, out T value)
         {
-            if (_values == null || _values.Length <= index || _values[index] is not T typed)
+            if (_values == null || _values.Length <= (uint)index)
             {
                 value = default;
                 return false;
             }
 
-            value = typed;
-            return true;
+            object raw = _values[index];
+            if (raw is T typed)
+            {
+                value = typed;
+                return true;
+            }
+
+            if (raw == null && !typeof(T).IsValueType)
+            {
+                value = default;
+                return true;
+            }
+
+            value = default;
+            return false;
         }
 
         /// <summary>

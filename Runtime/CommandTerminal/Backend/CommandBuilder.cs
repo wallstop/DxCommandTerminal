@@ -291,6 +291,29 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 }
             }
 
+            /*
+                Defaults are configuration, but the handler contract promises
+                validated values, so a default must satisfy its argument's own
+                validation. Surfacing the contradiction here beats failing the
+                first omitted invocation.
+             */
+            for (int i = 0; i < specs.Length; ++i)
+            {
+                if (specs[i].IsRequired)
+                {
+                    continue;
+                }
+
+                string defaultError = specs[i].ValidateParsed(specs[i].GetDefault());
+                if (defaultError != null)
+                {
+                    throw new InvalidOperationException(
+                        $"Command '{name}': the default for argument '{specs[i].Name}' fails "
+                            + $"its own validation: {defaultError}"
+                    );
+                }
+            }
+
             string hint = _hint ?? BuildUsageHint(name, specs);
             CommandCompletionProvider provider = BuildCompletionProvider(specs);
             TypedCommandHandler handler = _handler;

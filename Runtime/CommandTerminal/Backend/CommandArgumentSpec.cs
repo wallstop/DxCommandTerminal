@@ -131,8 +131,24 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             _required = required;
             _defaultValue = defaultValue;
             _parserOverride = parserOverride;
-            _staticChoices = staticChoices;
-            _staticChoiceTexts = staticChoices == null ? null : FormatChoices(staticChoices);
+
+            /*
+                Copy the caller's choices: the spec is immutable, so a later
+                mutation of the caller's array must not change validation or
+                completion of a registered command.
+             */
+            if (staticChoices is T[] choicesArray)
+            {
+                T[] choicesCopy = new T[choicesArray.Length];
+                choicesArray.CopyTo(choicesCopy, 0);
+                _staticChoices = choicesCopy;
+            }
+            else
+            {
+                _staticChoices = staticChoices;
+            }
+
+            _staticChoiceTexts = _staticChoices == null ? null : FormatChoices(_staticChoices);
             _dynamicChoices = dynamicChoices;
             _rangeValidator = rangeValidator;
             _validator = validator;
@@ -205,15 +221,16 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         }
 
         /// <summary>
-        ///     Marks the argument optional with the value used when it is
+        ///     Marks the argument optional and sets the value used when it is
         ///     omitted. Optional arguments without an explicit default use
-        ///     <c>default(T)</c>.
+        ///     <c>default(T)</c>; a later <see cref="Required"/> makes the
+        ///     argument mandatory again and leaves the default unused.
         /// </summary>
         public CommandArgumentSpec<T> Default(T value)
         {
             return new CommandArgumentSpec<T>(
                 Name,
-                _required,
+                required: false,
                 value,
                 _parserOverride,
                 _staticChoices,
@@ -313,7 +330,12 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             return Choices((T)(object)true, (T)(object)false);
         }
 
-        /// <summary>Completes every enum value of the argument's type.</summary>
+        /// <summary>
+        ///     Completes every enum value of the argument's type. Completion
+        ///     offers the enum names; input may also use any spelling the
+        ///     shared <see cref="CommandArg.TryGet{T}"/> enum path accepts,
+        ///     including bare numeric values.
+        /// </summary>
         public CommandArgumentSpec<T> EnumChoices()
         {
             if (!typeof(T).IsEnum)
@@ -364,6 +386,14 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 non-generic-IComparable types through the BCL fallback.
              */
             IComparer<T> comparer = Comparer<T>.Default;
+            if (0 < comparer.Compare(min, max))
+            {
+                throw new ArgumentException(
+                    $"Argument '{Name}' range {FormatValue(min)}..{FormatValue(max)} is inverted.",
+                    nameof(min)
+                );
+            }
+
             return new CommandArgumentSpec<T>(
                 Name,
                 _required,
