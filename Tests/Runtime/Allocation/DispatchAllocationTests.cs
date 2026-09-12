@@ -108,6 +108,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
 
             Action push = () => _history.Push(wrappedEntry, true, true);
             AllocationAssertions.AssertZeroAllocations("fixed-capacity wrap push", push);
+            Assert.AreEqual(
+                HistoryCapacity,
+                _history.Count,
+                "Sanity: wrap pushes must land in the wrapped buffer, not grow it"
+            );
         }
 
         private void FillHistory(List<string> entries)

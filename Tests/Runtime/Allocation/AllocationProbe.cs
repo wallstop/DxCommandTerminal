@@ -57,18 +57,21 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
 
             /*
                 Warm the control loop first so JIT and first-touch costs stay
-                outside the measured window.
+                outside the measured window. One window then validates both
+                capabilities independently: the detection verdict gates the
+                instrument, and the raw (ungated) byte delta gates the byte
+                reader - gating the control's bytes on the capability being
+                validated would make that capability impossible to approve.
             */
             AllocationAssertions.ForceControlAllocation();
-            AllocationMeasurement control = MeasureWindow(
-                AllocationAssertions.ForceControlAllocation
-            );
-            _instrumentValid =
-                control.Status == AllocationMeasurementStatus.Measured
-                && control.DetectedAllocations;
+            TryReadThreadAllocatedBytes(out long controlStart);
+            bool detected = DetectsAllocations(AllocationAssertions.ForceControlAllocation);
+            TryReadThreadAllocatedBytes(out long controlEnd);
+            _instrumentValid = detected;
             _byteCapabilityValid =
-                control.AllocatedBytes != AllocationMeasurement.Unavailable
-                && 0 < control.AllocatedBytes;
+                controlStart != AllocationMeasurement.Unavailable
+                && controlEnd != AllocationMeasurement.Unavailable
+                && 0 < controlEnd - controlStart;
             _validated = true;
         }
 
@@ -105,7 +108,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
         ///     control decides whether readings can be trusted
         ///     (<see cref="ByteCapabilityValid"/>).
         /// </summary>
-        public static bool TryReadThreadAllocatedBytes(out long bytes)
+        private static bool TryReadThreadAllocatedBytes(out long bytes)
         {
             try
             {
