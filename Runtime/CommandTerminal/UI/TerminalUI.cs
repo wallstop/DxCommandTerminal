@@ -912,6 +912,11 @@
         public void SetState(TerminalState newState)
         {
             _commandIssuedThisFrame = true;
+            if (newState != TerminalState.Closed)
+            {
+                CommandPaletteUI.CloseActive();
+            }
+
             _state = newState;
             ResetWindowIdempotent();
             if (_state != TerminalState.Closed)

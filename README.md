@@ -100,7 +100,6 @@ More improvements coming soon, stick around :)
 Planned improvements:
 - More and better documentation
 - Wikification
-- A `command bar` for quick commands, instead of waiting for a terminal to fold into the screen
 - Command Groups
 - Ensure working in Mobile builds
 - Smarter auto complete
@@ -121,6 +120,10 @@ Command Terminal is based on [an implementation by Jonathan Blow](https://youtu.
 Copy the contents from [CommandTerminal](./CommandTerminal) to your Assets folder. Attach a `Terminal` Component to a game object. The console window can be toggled with a hotkey (default is backtick), and another hotkey can be used to toggle the full size window (default is shift+backtick).
 
 Enter `help` in the console to view all available commands, use the up and down arrow keys to traverse the command history, and the tab key to autocomplete commands.
+
+## Quick-Launch Bar
+
+Add a `CommandPaletteUI` component next to a `UIDocument` to get a Flow-Launcher-style command bar with no terminal animation. Press Ctrl+Space (configurable via `toggleHotkey`) to open it anywhere: it lists every registered command, ranks matches exact-first, then prefix, then fuzzy subsequence, and runs the selected command through the same shell as the terminal. Up/Down select, Tab applies the selected name, Enter runs it (a failed command keeps the bar open with visible feedback), and Escape closes while restoring the previous focus. Opening the terminal closes the bar and vice versa, so a hotkey press can never execute twice, and the `Opened`/`Closed` events let gameplay code release its own input maps. Assign a `TerminalThemePack` to follow the terminal's theme.
 
 ## Registering Commands
 
