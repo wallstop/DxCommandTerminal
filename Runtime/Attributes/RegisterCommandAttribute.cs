@@ -41,8 +41,12 @@ namespace WallstopStudios.DxCommandTerminal.Attributes
 
         public RegisterCommandAttribute(string commandName = null)
         {
-            commandName = commandName?.Replace(" ", string.Empty, StringComparison.Ordinal).Trim();
-            Name = commandName;
+            if (commandName != null && commandName.Contains(' '))
+            {
+                commandName = commandName.Replace(" ", string.Empty, StringComparison.Ordinal);
+            }
+
+            Name = commandName?.Trim();
         }
 
         internal RegisterCommandAttribute(bool isDefault)
@@ -75,7 +79,12 @@ namespace WallstopStudios.DxCommandTerminal.Attributes
                 Name = InferCommandName(method.Name);
             }
 
-            Name = Name.Replace(" ", string.Empty, StringComparison.Ordinal).Trim();
+            if (Name.Contains(' '))
+            {
+                Name = Name.Replace(" ", string.Empty, StringComparison.Ordinal);
+            }
+
+            Name = Name.Trim();
         }
     }
 }

@@ -220,9 +220,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         {
             if (values == null || values.Length == 0)
             {
-                throw new ArgumentException(
-                    $"Argument '{Name}' needs at least one choice.",
-                    nameof(values)
+                throw new CommandConfigurationException(
+                    $"Argument '{Name}' needs at least one choice."
                 );
             }
 
@@ -230,9 +229,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             {
                 if (values[i] == null)
                 {
-                    throw new ArgumentException(
-                        $"Argument '{Name}' choices must not contain null.",
-                        nameof(values)
+                    throw new CommandConfigurationException(
+                        $"Argument '{Name}' choices must not contain null."
                     );
                 }
             }
@@ -288,7 +286,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         {
             if (typeof(T) != typeof(bool))
             {
-                throw new InvalidOperationException(
+                throw new CommandConfigurationException(
                     $"Argument '{Name}' of type {TypeName} cannot use {nameof(BoolChoices)}; only bool arguments can."
                 );
             }
@@ -306,7 +304,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         {
             if (!typeof(T).IsEnum)
             {
-                throw new InvalidOperationException(
+                throw new CommandConfigurationException(
                     $"Argument '{Name}' of type {TypeName} cannot use {nameof(EnumChoices)}; only enum arguments can."
                 );
             }
@@ -333,7 +331,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 && !typeof(IComparable).IsAssignableFrom(type)
             )
             {
-                throw new InvalidOperationException(
+                throw new CommandConfigurationException(
                     $"Argument '{Name}' of type {TypeName} cannot use {nameof(Range)}; {type} is not comparable."
                 );
             }
@@ -354,9 +352,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             IComparer<T> comparer = Comparer<T>.Default;
             if (0 < comparer.Compare(min, max))
             {
-                throw new ArgumentException(
-                    $"Argument '{Name}' range {FormatValue(min)}..{FormatValue(max)} is inverted.",
-                    nameof(min)
+                throw new CommandConfigurationException(
+                    $"Argument '{Name}' range {FormatValue(min)}..{FormatValue(max)} is inverted."
                 );
             }
 
@@ -440,7 +437,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return;
             }
 
-            throw new InvalidOperationException(
+            throw new CommandConfigurationException(
                 $"Argument '{Name}' of type {typeof(T)} has no registered parser. "
                     + $"Register one through {nameof(CommandArg)}.{nameof(CommandArg.RegisterParser)} "
                     + "or provide one with CommandArgumentSpec.Parser."

@@ -663,6 +663,72 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         [Test]
+        public void DynamicChoicesReceiveSubcommandScopedContext()
+        {
+            CommandShell shell = new(new CommandHistory(16));
+            int observedStage = -1;
+            string observedFirst = null;
+
+            Assert.IsTrue(
+                shell.AddCommand(
+                    CommandBuilder
+                        .Create("summon")
+                        .Subcommand(
+                            "pair",
+                            pair =>
+                                pair.Arg<string>(
+                                        "creature",
+                                        spec => spec.Required().Choices("wolf", "dragon")
+                                    )
+                                    .Arg<string>(
+                                        "title",
+                                        spec =>
+                                            spec.Required()
+                                                .Choices(context =>
+                                                {
+                                                    observedStage = context.ActiveArgumentIndex;
+                                                    observedFirst = context
+                                                        .PrecedingArguments
+                                                        .IsEmpty
+                                                        ? null
+                                                        : context.PrecedingArguments[0].contents;
+                                                    return new[] { $"{observedFirst}-lord" };
+                                                })
+                                    )
+                                    .Handler((_, _) => { })
+                        ),
+                    out _
+                )
+            );
+
+            List<CommandCompletion> results = new();
+            Assert.IsTrue(
+                shell.TryComplete(
+                    CommandExecutionContext.Current,
+                    "summon pair wolf ",
+                    "summon pair wolf ".Length,
+                    results,
+                    out _
+                )
+            );
+            CollectionAssert.AreEqual(
+                new[] { "wolf-lord" },
+                ResultsToTexts(results),
+                "The dynamic provider builds candidates from the subcommand's own preceding argument"
+            );
+            Assert.AreEqual(
+                1,
+                observedStage,
+                "The dynamic provider sees the subcommand-relative stage"
+            );
+            Assert.AreEqual(
+                "wolf",
+                observedFirst,
+                "The dynamic provider sees the subcommand's preceding arguments, not router tokens"
+            );
+        }
+
+        [Test]
         public void CompletionOfUnknownSubcommandProducesNoResults()
         {
             CommandShell shell = new(new CommandHistory(16));
@@ -702,11 +768,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void DefinitionTimeValidation()
         {
-            InvalidOperationException duplicate = Assert.Throws<InvalidOperationException>(() =>
-                CommandBuilder
-                    .Create("inventory")
-                    .Subcommand("add", _ => { })
-                    .Subcommand("ADD", _ => { })
+            CommandConfigurationException duplicate = Assert.Throws<CommandConfigurationException>(
+                () =>
+                    CommandBuilder
+                        .Create("inventory")
+                        .Subcommand("add", _ => { })
+                        .Subcommand("ADD", _ => { })
             );
             Assert.That(
                 duplicate.Message,
@@ -714,8 +781,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 "Duplicate detection follows command-name case rules"
             );
 
-            InvalidOperationException parentArguments = Assert.Throws<InvalidOperationException>(
-                () =>
+            CommandConfigurationException parentArguments =
+                Assert.Throws<CommandConfigurationException>(() =>
                     new CommandShell(new CommandHistory(16)).AddCommand(
                         CommandBuilder
                             .Create("inventory")
@@ -723,46 +790,48 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                             .Subcommand("add", add => add.Handler((_, _) => { })),
                         out _
                     )
-            );
+                );
             Assert.That(
                 parentArguments.Message,
                 Does.Contain("cannot declare its own arguments"),
                 "Router commands route; they take no own arguments"
             );
 
-            InvalidOperationException childContexts = Assert.Throws<InvalidOperationException>(() =>
-                CommandBuilder
-                    .Create("inventory")
-                    .Subcommand(
-                        "add",
-                        add =>
-                            add.Contexts(CommandExecutionContexts.EditorEditMode)
-                                .Handler((_, _) => { })
-                    )
-            );
+            CommandConfigurationException childContexts =
+                Assert.Throws<CommandConfigurationException>(() =>
+                    CommandBuilder
+                        .Create("inventory")
+                        .Subcommand(
+                            "add",
+                            add =>
+                                add.Contexts(CommandExecutionContexts.EditorEditMode)
+                                    .Handler((_, _) => { })
+                        )
+                );
             Assert.That(
                 childContexts.Message,
                 Does.Contain("do not set Contexts on a subcommand"),
                 "The parent's contexts govern every subcommand"
             );
 
-            InvalidOperationException childHistory = Assert.Throws<InvalidOperationException>(() =>
-                CommandBuilder
-                    .Create("inventory")
-                    .Subcommand("add", add => add.AddToHistory(false).Handler((_, _) => { }))
-            );
+            CommandConfigurationException childHistory =
+                Assert.Throws<CommandConfigurationException>(() =>
+                    CommandBuilder
+                        .Create("inventory")
+                        .Subcommand("add", add => add.AddToHistory(false).Handler((_, _) => { }))
+                );
             Assert.That(
                 childHistory.Message,
                 Does.Contain("do not set AddToHistory on a subcommand")
             );
 
-            InvalidOperationException missingHandler = Assert.Throws<InvalidOperationException>(
-                () =>
+            CommandConfigurationException missingHandler =
+                Assert.Throws<CommandConfigurationException>(() =>
                     new CommandShell(new CommandHistory(16)).AddCommand(
                         CommandBuilder.Create("inventory").Subcommand("add", _ => { }),
                         out _
                     )
-            );
+                );
             Assert.That(
                 missingHandler.Message,
                 Does.Contain("Command 'inventory add':"),
@@ -770,11 +839,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
             Assert.That(missingHandler.Message, Does.Contain("set a handler"));
 
-            InvalidOperationException colliding = Assert.Throws<InvalidOperationException>(() =>
-                CommandBuilder
-                    .Create("inventory")
-                    .Subcommand("ad d", _ => { })
-                    .Subcommand("ADD", _ => { })
+            CommandConfigurationException colliding = Assert.Throws<CommandConfigurationException>(
+                () =>
+                    CommandBuilder
+                        .Create("inventory")
+                        .Subcommand("ad d", _ => { })
+                        .Subcommand("ADD", _ => { })
             );
             Assert.That(
                 colliding.Message,
@@ -782,8 +852,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 "Normalization happens before duplicate detection"
             );
 
-            InvalidOperationException emptyName = Assert.Throws<InvalidOperationException>(() =>
-                CommandBuilder.Create("inventory").Subcommand("   ", _ => { })
+            CommandConfigurationException emptyName = Assert.Throws<CommandConfigurationException>(
+                () =>
+                    CommandBuilder.Create("inventory").Subcommand("   ", _ => { })
             );
             Assert.That(
                 emptyName.Message,

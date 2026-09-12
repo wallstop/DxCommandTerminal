@@ -51,7 +51,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         {
             if (string.IsNullOrWhiteSpace(name))
             {
-                throw new InvalidOperationException(
+                throw new CommandConfigurationException(
                     "A command name is required; pass a non-empty name to CommandBuilder.Create."
                 );
             }
@@ -67,11 +67,17 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         private static string NormalizeName(string owner, string name)
         {
-            string normalized = name?.Replace(" ", string.Empty, StringComparison.Ordinal);
+            string normalized = name;
+            if (normalized != null && normalized.Contains(' '))
+            {
+                normalized = normalized.Replace(" ", string.Empty, StringComparison.Ordinal);
+            }
+
             if (string.IsNullOrWhiteSpace(normalized))
             {
-                throw new InvalidOperationException(
-                    $"Command '{owner ?? string.Empty}': subcommand names must not be empty."
+                throw new CommandConfigurationException(
+                    $"Command '{owner ?? string.Empty}': subcommand names must not be empty.",
+                    owner
                 );
             }
 
@@ -143,24 +149,31 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         private static CommandCompletionProvider BuildCompletionProvider(CommandArgument[] specs)
         {
             CommandCompletionProvider[] stages = BuildSpecCompletionStages(specs);
-            if (stages == null)
+            foreach (CommandCompletionProvider stage in stages)
             {
-                /*
-                    No choices anywhere: leave the provider unset so the
-                    command keeps the shared history-based completion path.
-                 */
-                return null;
+                if (stage != null)
+                {
+                    return CommandCompletionProviders.Staged(stages);
+                }
             }
 
-            return CommandCompletionProviders.Staged(stages);
+            /*
+                No choices anywhere: leave the provider unset so the command
+                keeps the shared history-based completion path.
+             */
+            return null;
         }
 
+        /*
+            One stage per declared argument, in declaration order; stages for
+            arguments without choices stay null. The array is always sized to
+            specs.Length so route completion can index it directly.
+        */
         private static CommandCompletionProvider[] BuildSpecCompletionStages(
             CommandArgument[] specs
         )
         {
             CommandCompletionProvider[] stages = new CommandCompletionProvider[specs.Length];
-            bool any = false;
             for (int i = 0; i < specs.Length; ++i)
             {
                 CommandArgument spec = specs[i];
@@ -169,14 +182,13 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                     continue;
                 }
 
-                any = true;
                 stages[i] = (
                     in CommandCompletionContext context,
                     List<CommandCompletion> results
                 ) => spec.AppendCompletions(context, results);
             }
 
-            return any ? stages : null;
+            return stages;
         }
 
         /*
@@ -313,7 +325,14 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return;
             }
 
-            route.CompletionStages?[childStage]?.Invoke(context, results);
+            /*
+                The routed subcommand owns its argument window: hand the stage
+                a subcommand-relative context so dynamic choice providers read
+                the same shape as on a top-level command.
+            */
+            route
+                .CompletionStages[childStage]
+                ?.Invoke(context.ForSubcommand(baseStage + 1), results);
         }
 
         private static string FormatRouteList(Dictionary<string, SubcommandRoute> lookup)
@@ -338,9 +357,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         private static int RequiredCount(CommandArgument[] specs)
         {
             int count = 0;
-            for (int i = 0; i < specs.Length; ++i)
+            foreach (CommandArgument spec in specs)
             {
-                if (specs[i].IsRequired)
+                if (spec.IsRequired)
                 {
                     ++count;
                 }
@@ -395,17 +414,19 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         {
             if (string.IsNullOrWhiteSpace(name))
             {
-                throw new InvalidOperationException(
-                    $"Command '{Name}': argument names must not be empty."
+                throw new CommandConfigurationException(
+                    $"Command '{Name}': argument names must not be empty.",
+                    Name
                 );
             }
 
-            for (int i = 0; i < _arguments.Count; ++i)
+            foreach (CommandArgument argument in _arguments)
             {
-                if (string.Equals(_arguments[i].Name, name, StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(argument.Name, name, StringComparison.OrdinalIgnoreCase))
                 {
-                    throw new InvalidOperationException(
-                        $"Command '{Name}': duplicate argument name '{name}'."
+                    throw new CommandConfigurationException(
+                        $"Command '{Name}': duplicate argument name '{name}'.",
+                        Name
                     );
                 }
             }
@@ -416,8 +437,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 spec = configure(spec);
                 if (spec == null)
                 {
-                    throw new InvalidOperationException(
-                        $"Command '{Name}': the configuration callback for argument '{name}' returned null."
+                    throw new CommandConfigurationException(
+                        $"Command '{Name}': the configuration callback for argument '{name}' returned null.",
+                        Name
                     );
                 }
             }
@@ -445,18 +467,13 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
 
             string normalized = NormalizeName(Name, name);
-            for (int i = 0; i < _subcommands.Count; ++i)
+            foreach (CommandBuilder existing in _subcommands)
             {
-                if (
-                    string.Equals(
-                        _subcommands[i].Name,
-                        normalized,
-                        StringComparison.OrdinalIgnoreCase
-                    )
-                )
+                if (string.Equals(existing.Name, normalized, StringComparison.OrdinalIgnoreCase))
                 {
-                    throw new InvalidOperationException(
-                        $"Command '{Name}': duplicate subcommand name '{normalized}'."
+                    throw new CommandConfigurationException(
+                        $"Command '{Name}': duplicate subcommand name '{normalized}'.",
+                        Name
                     );
                 }
             }
@@ -465,17 +482,19 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             configure(subcommand);
             if (subcommand._contexts != CommandExecutionContextSets.Gameplay)
             {
-                throw new InvalidOperationException(
+                throw new CommandConfigurationException(
                     $"Command '{Name} {normalized}': subcommands run inside the parent's "
-                        + "execution contexts; do not set Contexts on a subcommand."
+                        + "execution contexts; do not set Contexts on a subcommand.",
+                    Name
                 );
             }
 
             if (!subcommand._addToHistory)
             {
-                throw new InvalidOperationException(
+                throw new CommandConfigurationException(
                     $"Command '{Name} {normalized}': subcommands are recorded under the "
-                        + "parent's history policy; do not set AddToHistory on a subcommand."
+                        + "parent's history policy; do not set AddToHistory on a subcommand.",
+                    Name
                 );
             }
 
@@ -498,7 +517,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         ///     Snapshots this definition into a
         ///     <see cref="CommandDefinition"/> registered against
         ///     <paramref name="owner"/>. Throws
-        ///     <see cref="InvalidOperationException"/> for configuration
+        ///     <see cref="CommandConfigurationException"/> for configuration
         ///     errors; duplicate names against the live shell stay runtime
         ///     registration failures handled by the shell.
         /// </summary>
@@ -506,7 +525,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         {
             if (string.IsNullOrWhiteSpace(Name))
             {
-                throw new InvalidOperationException(
+                throw new CommandConfigurationException(
                     "A command name is required; pass a non-empty name to CommandBuilder.Create."
                 );
             }
@@ -548,9 +567,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         {
             if (0 < _arguments.Count)
             {
-                throw new InvalidOperationException(
+                throw new CommandConfigurationException(
                     $"Command '{name}': a command with subcommands cannot declare its own "
-                        + "arguments; declare them on the subcommands."
+                        + "arguments; declare them on the subcommands.",
+                    name
                 );
             }
 
@@ -617,9 +637,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         {
             if (0 < _arguments.Count)
             {
-                throw new InvalidOperationException(
+                throw new CommandConfigurationException(
                     $"Command '{path}': a command with subcommands cannot declare its own "
-                        + "arguments; declare them on the subcommands."
+                        + "arguments; declare them on the subcommands.",
+                    path
                 );
             }
 
@@ -639,8 +660,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                         configure callback, so re-entrant callbacks can slip a
                         second name past it; Build is the authoritative gate.
                     */
-                    throw new InvalidOperationException(
-                        $"Command '{path}': duplicate subcommand name '{route.Name}'."
+                    throw new CommandConfigurationException(
+                        $"Command '{path}': duplicate subcommand name '{route.Name}'.",
+                        path
                     );
                 }
 
@@ -664,8 +686,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         {
             if (_handler == null)
             {
-                throw new InvalidOperationException(
-                    $"Command '{path}': set a handler with CommandBuilder.Handler before registration."
+                throw new CommandConfigurationException(
+                    $"Command '{path}': set a handler with CommandBuilder.Handler before registration.",
+                    path
                 );
             }
 
@@ -677,15 +700,16 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 and defaults ambiguous.
              */
             bool seenOptional = false;
-            for (int i = 0; i < specs.Length; ++i)
+            foreach (CommandArgument spec in specs)
             {
-                if (specs[i].IsRequired)
+                if (spec.IsRequired)
                 {
                     if (seenOptional)
                     {
-                        throw new InvalidOperationException(
-                            $"Command '{path}': required argument '{specs[i].Name}' must be "
-                                + "declared before every optional argument."
+                        throw new CommandConfigurationException(
+                            $"Command '{path}': required argument '{spec.Name}' must be "
+                                + "declared before every optional argument.",
+                            path
                         );
                     }
 
@@ -701,19 +725,20 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 validation. Surfacing the contradiction here beats failing the
                 first omitted invocation.
              */
-            for (int i = 0; i < specs.Length; ++i)
+            foreach (CommandArgument spec in specs)
             {
-                if (specs[i].IsRequired)
+                if (spec.IsRequired)
                 {
                     continue;
                 }
 
-                string defaultError = specs[i].ValidateParsed(specs[i].GetDefault());
+                string defaultError = spec.ValidateParsed(spec.GetDefault());
                 if (defaultError != null)
                 {
-                    throw new InvalidOperationException(
-                        $"Command '{path}': the default for argument '{specs[i].Name}' fails "
-                            + $"its own validation: {defaultError}"
+                    throw new CommandConfigurationException(
+                        $"Command '{path}': the default for argument '{spec.Name}' fails "
+                            + $"its own validation: {defaultError}",
+                        path
                     );
                 }
             }
@@ -748,7 +773,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
             public TypedCommandHandler Fallback { get; internal set; }
 
-            public CommandCompletionProvider[] CompletionStages { get; internal set; }
+            public CommandCompletionProvider[] CompletionStages { get; internal set; } =
+                Array.Empty<CommandCompletionProvider>();
 
             public SubcommandRoute[] Children { get; internal set; }
 

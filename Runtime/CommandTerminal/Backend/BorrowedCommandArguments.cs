@@ -235,8 +235,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 past its invocation can see a shrunken backing list. Such a
                 dead view reads empty instead of reporting a negative count.
             */
-            int count = backingCount - _offset;
-            return count < 0 ? 0 : count;
+            return Math.Max(0, backingCount - _offset);
         }
 
         IEnumerator<CommandArg> IEnumerable<CommandArg>.GetEnumerator()
