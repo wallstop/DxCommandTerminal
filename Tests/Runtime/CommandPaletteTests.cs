@@ -323,6 +323,61 @@
         }
 
         [UnityTest]
+        public IEnumerator ClosingWithoutOtherFocusableUIReleasesPanelFocus()
+        {
+            yield return SpawnPalette();
+
+            _palette.Open();
+            yield return WaitForFocusedInput("The palette input takes focus on open");
+
+            yield return SendKeyDown(KeyCode.Escape);
+
+            Assert.IsFalse(_palette.IsOpen, "Escape closes the palette");
+            Assert.IsNull(
+                _palette._paletteRoot.parent,
+                "A closed palette must be detached from the panel"
+            );
+
+            int frameBudget = FrameBudget;
+            while (
+                0 < frameBudget--
+                && _palette._uiDocument.rootVisualElement.focusController.focusedElement != null
+            )
+            {
+                yield return null;
+            }
+
+            Assert.IsNull(
+                _palette._uiDocument.rootVisualElement.focusController.focusedElement,
+                "Closing without other focusable UI must release panel focus, "
+                    + "or the hidden palette keeps consuming game keys"
+            );
+        }
+
+        [UnityTest]
+        public IEnumerator ReopenAfterCloseRestoresResultsAndFocus()
+        {
+            yield return SpawnPalette();
+            RegisterPair();
+
+            _palette.Open();
+            yield return WaitForFocusedInput("The first open focuses the input");
+            _palette.Close();
+            Assert.IsNull(_palette._paletteRoot.parent, "Close detaches the palette tree");
+
+            _palette.Open();
+            yield return null;
+
+            Assert.IsTrue(_palette.IsOpen, "Reopening after close works");
+            Assert.AreEqual(
+                new[] { "paletteping1", "paletteping2" },
+                _palette._matchNames.ToArray(),
+                "Reopen re-lists commands against the current shell state"
+            );
+            yield return WaitForFocusedInput("The reopened palette focuses the input again");
+        }
+
+        [UnityTest]
         public IEnumerator TabAppliesSelectedNameToInput()
         {
             yield return SpawnPalette();

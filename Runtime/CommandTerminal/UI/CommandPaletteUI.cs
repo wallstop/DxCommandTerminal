@@ -41,6 +41,7 @@
         private static readonly Color RowHelpColor = new(0.68f, 0.68f, 0.68f, 1f);
         private static readonly Color FeedbackColor = new(0.9f, 0.45f, 0.45f, 1f);
         private static readonly Color FooterColor = new(0.62f, 0.62f, 0.62f, 1f);
+        private static readonly Color SelectedRowBackground = new(0.27f, 0.31f, 0.36f, 1f);
 
         public bool IsOpen => _isOpen;
 
@@ -121,6 +122,7 @@
                 return;
             }
 
+            Attach();
             CloseTerminalSurface();
             CapturePreviousFocus();
             _input.SetValueWithoutNotify(string.Empty);
@@ -140,12 +142,14 @@
             }
 
             _isOpen = false;
-            if (_paletteRoot != null)
-            {
-                _paletteRoot.style.display = DisplayStyle.None;
-            }
-
             RestorePreviousFocus();
+            /*
+                Detach instead of hiding: a display:none subtree keeps panel
+                focus, so the hidden input would keep consuming Enter/Escape/
+                Tab/arrows in games without other focusable UI. Detaching
+                releases focus and no key press can reach the closed palette.
+             */
+            _paletteRoot?.RemoveFromHierarchy();
             Closed?.Invoke();
         }
 
@@ -343,9 +347,6 @@
             _paletteRoot.style.top = 0;
             _paletteRoot.style.bottom = 0;
             _paletteRoot.style.alignItems = Align.Center;
-            _paletteRoot.style.display = DisplayStyle.None;
-            uiRoot.Add(_paletteRoot);
-
             ApplyThemePack();
             ApplyFont();
 
@@ -402,6 +403,23 @@
 
             _paletteRoot.RegisterCallback<KeyDownEvent>(HandleKeyDown, TrickleDown.TrickleDown);
             _built = true;
+        }
+
+        private void Attach()
+        {
+            if (_paletteRoot == null || _paletteRoot.panel != null)
+            {
+                return;
+            }
+
+            VisualElement uiRoot = _uiDocument.rootVisualElement;
+            if (uiRoot == null)
+            {
+                Debug.LogError("No UI root element, cannot open the command palette.", this);
+                return;
+            }
+
+            uiRoot.Add(_paletteRoot);
         }
 
         private void ApplyThemePack()
@@ -571,6 +589,11 @@
 
         private void HandleKeyDown(KeyDownEvent evt)
         {
+            if (!_isOpen)
+            {
+                return;
+            }
+
             switch (evt.keyCode)
             {
                 case KeyCode.DownArrow:
@@ -609,6 +632,12 @@
             {
                 bool selected = _selectionIndex.HasValue && _selectionIndex.Value == index;
                 _rows[index].EnableInClassList(SelectedRowClass, selected);
+                /*
+                    Inline default so the selection is visible without any
+                    stylesheet; consumers can still restyle through the
+                    palette-row-selected class in their theme.
+                 */
+                _rows[index].style.backgroundColor = selected ? SelectedRowBackground : Color.clear;
             }
 
             if (_selectionIndex.HasValue && _selectionIndex.Value < _rows.Count)
