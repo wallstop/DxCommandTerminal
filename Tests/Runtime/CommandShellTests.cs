@@ -381,5 +381,105 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 }
             }
         }
+
+        /*
+            Clear-state contract (issue #64): ClearCustomCommands clears every
+            registered command including the auto-registered set, so the
+            auto-registered tracking state must never describe commands that
+            are gone.
+         */
+        [Test]
+        public void ClearCustomCommandsClearsAutoStateAndReturnsTotalCount()
+        {
+            CommandShell shell = new CommandShell(new CommandHistory(16));
+            shell.InitializeAutoRegisteredCommands();
+            Assert.IsNotEmpty(
+                shell.AutoRegisteredCommands,
+                "Sanity: expected discovered auto commands to register"
+            );
+            Assert.IsTrue(
+                shell.AddCommand(
+                    new CommandDefinition { Name = "customClearProbe", Handler = (_, _) => { } }
+                ),
+                "Sanity: custom registration must succeed"
+            );
+
+            int expectedCount = shell.AutoRegisteredCommands.Count + 1;
+            int cleared = shell.ClearCustomCommands();
+
+            Assert.AreEqual(
+                expectedCount,
+                cleared,
+                "The returned count must cover auto and custom commands alike"
+            );
+            Assert.AreEqual(
+                0,
+                shell.Commands.Count,
+                "ClearCustomCommands must leave no commands registered"
+            );
+            Assert.IsEmpty(
+                shell.AutoRegisteredCommands,
+                "AutoRegisteredCommands must not list removed commands (issue #64)"
+            );
+            Assert.AreEqual(
+                0,
+                shell.ClearAutoRegisteredCommands(),
+                "A later auto clear must find nothing left to remove"
+            );
+        }
+
+        [Test]
+        public void ClearCustomCommandsCancelsDeferredRegistration()
+        {
+            CommandShell shell = new CommandShell(new CommandHistory(16));
+            shell.InitializeAutoRegisteredCommands(deferRegistration: true);
+            Assert.AreEqual(
+                0,
+                shell.ClearCustomCommands(),
+                "Nothing is registered before readiness"
+            );
+
+            shell.EnsureAutoCommandsRegistered();
+
+            Assert.IsFalse(
+                shell.AutoCommandsRegistered,
+                "Clearing must cancel the pending deferred registration"
+            );
+            Assert.AreEqual(
+                0,
+                shell.Commands.Count,
+                "Cleared shells must not resurrect auto commands through readiness"
+            );
+        }
+
+        [Test]
+        public void ClearAllCommandsReturnsTotalRegisteredCount()
+        {
+            CommandShell shell = new CommandShell(new CommandHistory(16));
+            shell.InitializeAutoRegisteredCommands();
+            Assert.IsTrue(
+                shell.AddCommand(
+                    new CommandDefinition { Name = "customClearProbeA", Handler = (_, _) => { } }
+                )
+            );
+            Assert.IsTrue(
+                shell.AddCommand(
+                    new CommandDefinition { Name = "customClearProbeB", Handler = (_, _) => { } }
+                )
+            );
+
+            int expectedCount = shell.AutoRegisteredCommands.Count + 2;
+            Assert.AreEqual(expectedCount, shell.ClearAllCommands());
+            Assert.AreEqual(0, shell.Commands.Count);
+            Assert.IsEmpty(shell.AutoRegisteredCommands);
+        }
+
+        [Test]
+        public void ClearCustomCommandsOnEmptyShellReturnsZero()
+        {
+            CommandShell shell = new CommandShell(new CommandHistory(16));
+            Assert.AreEqual(0, shell.ClearCustomCommands());
+            Assert.AreEqual(0, shell.ClearAllCommands());
+        }
     }
 }

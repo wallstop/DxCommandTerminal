@@ -3,12 +3,16 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     using System;
     using System.Collections.Generic;
     using System.Text;
+    using Helper;
 
     /// <summary>
     ///     Fluent authoring for one typed command: names, help, hints, history
     ///     policy, execution eligibility, typed arguments, handler, and
     ///     completion all come from one definition, registered into the same
     ///     shell through <see cref="CommandShell.AddCommand(CommandBuilder, out CommandRegistrationHandle)"/>.
+    ///     Subcommands route the first argument to nested definitions, so
+    ///     <c>inventory add pickaxe</c> and <c>inventory remove pickaxe</c>
+    ///     share one registered command.
     /// </summary>
     /// <remarks>
     ///     Argument bounds, the usage hint, and the completion provider derive
@@ -22,10 +26,13 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     /// </remarks>
     public sealed class CommandBuilder
     {
+        private static readonly CommandArgument[] NoArguments = Array.Empty<CommandArgument>();
+
         /// <summary>The command name, matched case-insensitively; spaces are stripped at registration.</summary>
         public string Name { get; }
 
         private readonly List<CommandArgument> _arguments = new();
+        private readonly List<CommandBuilder> _subcommands = new();
 
         private string _help = string.Empty;
         private string _hint;
@@ -57,26 +64,44 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             return Create(name).Help(help);
         }
 
+        private static string NormalizeName(string owner, string name)
+        {
+            string normalized = name?.Replace(" ", string.Empty, StringComparison.Ordinal);
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                throw new InvalidOperationException(
+                    $"Command '{owner ?? string.Empty}': subcommand names must not be empty."
+                );
+            }
+
+            return normalized;
+        }
+
         private static void RunTyped(
             CommandShell owner,
             CommandArgument[] specs,
             string name,
             TypedCommandHandler handler,
             CommandExecutionContext context,
-            BorrowedCommandArguments arguments
+            BorrowedCommandArguments arguments,
+            int offset
         )
         {
             object[] parsed = new object[specs.Length];
             for (int i = 0; i < specs.Length; ++i)
             {
-                if (arguments.Count <= i)
+                if (arguments.Count <= offset + i)
                 {
-                    // The shell's derived bounds guarantee required arguments exist.
+                    /*
+                        The dispatching level guarantees required arguments
+                        exist: the shell's derived bounds for top-level
+                        commands, the router for subcommands.
+                     */
                     parsed[i] = specs[i].GetDefault();
                     continue;
                 }
 
-                CommandArg input = arguments[i];
+                CommandArg input = arguments[offset + i];
                 if (!specs[i].TryParse(input, out object value))
                 {
                     owner.IssueErrorMessage($"'{name}': {specs[i].FormatParseError(input)}");
@@ -93,7 +118,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 parsed[i] = value;
             }
 
-            handler(context, new CommandArguments(specs, parsed, arguments, context));
+            handler(context, new CommandArguments(specs, parsed, arguments.Slice(offset), context));
         }
 
         private static string BuildUsageHint(string name, CommandArgument[] specs)
@@ -147,6 +172,200 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
 
             return CommandCompletionProviders.Staged(stages);
+        }
+
+        private static CommandCompletionProvider[] BuildSpecCompletionStages(
+            CommandArgument[] specs
+        )
+        {
+            CommandCompletionProvider[] stages = new CommandCompletionProvider[specs.Length];
+            bool any = false;
+            for (int i = 0; i < specs.Length; ++i)
+            {
+                CommandArgument spec = specs[i];
+                if (!spec.HasChoices)
+                {
+                    continue;
+                }
+
+                any = true;
+                stages[i] = (
+                    in CommandCompletionContext context,
+                    List<CommandCompletion> results
+                ) => spec.AppendCompletions(context, results);
+            }
+
+            return any ? stages : null;
+        }
+
+        /*
+            Router dispatch and completion: one registered command routes the
+            first argument to nested definitions. offset counts how many
+            leading arguments belong to the routing levels already matched, so
+            the same routine serves every nesting depth.
+        */
+        private static void RouteInvocation(
+            CommandShell owner,
+            Dictionary<string, SubcommandRoute> lookup,
+            string path,
+            TypedCommandHandler fallback,
+            CommandExecutionContext context,
+            BorrowedCommandArguments arguments,
+            int offset
+        )
+        {
+            if (arguments.Count <= offset)
+            {
+                if (fallback != null)
+                {
+                    RunTyped(owner, NoArguments, path, fallback, context, arguments, offset);
+                    return;
+                }
+
+                owner.IssueErrorMessage(
+                    $"'{path}': expected a subcommand. Expected one of: {FormatRouteList(lookup)}"
+                );
+                return;
+            }
+
+            CommandArg token = arguments[offset];
+            string tokenText = token.contents ?? string.Empty;
+            if (!lookup.TryGetValue(tokenText, out SubcommandRoute route))
+            {
+                owner.IssueErrorMessage(
+                    $"'{path}': unknown subcommand '{tokenText}'. "
+                        + $"Expected one of: {FormatRouteList(lookup)}"
+                );
+                return;
+            }
+
+            if (route.IsRouter)
+            {
+                RouteInvocation(
+                    owner,
+                    route.Lookup,
+                    route.FullPath,
+                    route.Fallback,
+                    context,
+                    arguments,
+                    offset + 1
+                );
+                return;
+            }
+
+            int available = arguments.Count - (offset + 1);
+            if (available < route.RequiredCount)
+            {
+                owner.IssueErrorMessage(
+                    $"'{route.FullPath}': requires at least {route.RequiredCount} argument"
+                        + (route.RequiredCount == 1 ? string.Empty : "s")
+                        + $". Usage: {BuildUsageHint(route.FullPath, route.Specs)}"
+                );
+                return;
+            }
+
+            if (route.Specs.Length < available)
+            {
+                owner.IssueErrorMessage(
+                    $"'{route.FullPath}': expects at most {route.Specs.Length} argument"
+                        + (route.Specs.Length == 1 ? string.Empty : "s")
+                        + $". Usage: {BuildUsageHint(route.FullPath, route.Specs)}"
+                );
+                return;
+            }
+
+            RunTyped(
+                owner,
+                route.Specs,
+                route.FullPath,
+                route.Handler,
+                context,
+                arguments,
+                offset + 1
+            );
+        }
+
+        private static void RouteCompletion(
+            Dictionary<string, SubcommandRoute> lookup,
+            in CommandCompletionContext context,
+            int baseStage,
+            List<CommandCompletion> results
+        )
+        {
+            int stage = context.ActiveArgumentIndex - baseStage;
+            if (stage == 0)
+            {
+                string token = context.Token;
+                foreach (SubcommandRoute candidate in lookup.Values)
+                {
+                    if (candidate.Name.StartsWith(token, StringComparison.OrdinalIgnoreCase))
+                    {
+                        results.Add(
+                            new CommandCompletion(candidate.Name, description: candidate.Help)
+                        );
+                    }
+                }
+
+                return;
+            }
+
+            if (context.PrecedingArguments.Count <= baseStage)
+            {
+                return;
+            }
+
+            CommandArg selector = context.PrecedingArguments[baseStage];
+            if (!lookup.TryGetValue(selector.contents ?? string.Empty, out SubcommandRoute route))
+            {
+                return;
+            }
+
+            if (route.IsRouter)
+            {
+                RouteCompletion(route.Lookup, context, baseStage + 1, results);
+                return;
+            }
+
+            int childStage = stage - 1;
+            if (route.Specs.Length <= childStage)
+            {
+                return;
+            }
+
+            route.CompletionStages?[childStage]?.Invoke(context, results);
+        }
+
+        private static string FormatRouteList(Dictionary<string, SubcommandRoute> lookup)
+        {
+            using CachedStringBuilder.Scope scope = new(64);
+            StringBuilder builder = scope.Builder;
+            bool first = true;
+            foreach (SubcommandRoute route in lookup.Values)
+            {
+                if (!first)
+                {
+                    builder.Append(", ");
+                }
+
+                builder.Append(route.Usage);
+                first = false;
+            }
+
+            return builder.ToString();
+        }
+
+        private static int RequiredCount(CommandArgument[] specs)
+        {
+            int count = 0;
+            for (int i = 0; i < specs.Length; ++i)
+            {
+                if (specs[i].IsRequired)
+                {
+                    ++count;
+                }
+            }
+
+            return count;
         }
 
         /// <summary>Sets the help text shown by the built-in <c>help</c> command.</summary>
@@ -228,6 +447,62 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         }
 
         /// <summary>
+        ///     Declares a subcommand routed on this command's first argument.
+        ///     The configured builder may itself declare arguments, a handler,
+        ///     and further subcommands; it registers with the parent, never
+        ///     separately. The parent's execution contexts and history policy
+        ///     govern every subcommand, so setting
+        ///     <see cref="Contexts"/> or <see cref="AddToHistory"/> inside the
+        ///     callback throws, as does declaring parent arguments on a
+        ///     command that has subcommands.
+        /// </summary>
+        public CommandBuilder Subcommand(string name, Action<CommandBuilder> configure)
+        {
+            if (configure == null)
+            {
+                throw new ArgumentNullException(nameof(configure));
+            }
+
+            string normalized = NormalizeName(Name, name);
+            for (int i = 0; i < _subcommands.Count; ++i)
+            {
+                if (
+                    string.Equals(
+                        _subcommands[i].Name,
+                        normalized,
+                        StringComparison.OrdinalIgnoreCase
+                    )
+                )
+                {
+                    throw new InvalidOperationException(
+                        $"Command '{Name}': duplicate subcommand name '{normalized}'."
+                    );
+                }
+            }
+
+            CommandBuilder subcommand = Create(normalized);
+            configure(subcommand);
+            if (subcommand._contexts != CommandExecutionContextSets.Gameplay)
+            {
+                throw new InvalidOperationException(
+                    $"Command '{Name} {normalized}': subcommands run inside the parent's "
+                        + "execution contexts; do not set Contexts on a subcommand."
+                );
+            }
+
+            if (!subcommand._addToHistory)
+            {
+                throw new InvalidOperationException(
+                    $"Command '{Name} {normalized}': subcommands are recorded under the "
+                        + "parent's history policy; do not set AddToHistory on a subcommand."
+                );
+            }
+
+            _subcommands.Add(subcommand);
+            return this;
+        }
+
+        /// <summary>
         ///     Sets the handler. It runs only when every argument parsed and
         ///     validated; otherwise a controlled error reports the first
         ///     problem and the invocation ends.
@@ -255,14 +530,154 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 );
             }
 
-            if (_handler == null)
+            string name = NormalizeName(Name, Name);
+            if (0 < _subcommands.Count)
+            {
+                return BuildRouterDefinition(owner, name);
+            }
+
+            return BuildLeafDefinition(owner, name);
+        }
+
+        private CommandDefinition BuildLeafDefinition(CommandShell owner, string name)
+        {
+            CommandArgument[] specs = ValidateLeafConfiguration(name);
+            string hint = _hint ?? BuildUsageHint(name, specs);
+            CommandCompletionProvider provider = BuildCompletionProvider(specs);
+            TypedCommandHandler handler = _handler;
+
+            CommandHandler dispatch = (context, arguments) =>
+                RunTyped(owner, specs, name, handler, context, arguments, 0);
+
+            return new CommandDefinition
+            {
+                Name = name,
+                Help = _help,
+                Hint = hint,
+                MinArgCount = RequiredCount(specs),
+                MaxArgCount = specs.Length,
+                AddToHistory = _addToHistory,
+                Contexts = _contexts,
+                Handler = dispatch,
+                CompletionProvider = provider,
+            };
+        }
+
+        private CommandDefinition BuildRouterDefinition(CommandShell owner, string name)
+        {
+            if (0 < _arguments.Count)
             {
                 throw new InvalidOperationException(
-                    $"Command '{Name}': set a handler with CommandBuilder.Handler before registration."
+                    $"Command '{name}': a command with subcommands cannot declare its own "
+                        + "arguments; declare them on the subcommands."
                 );
             }
 
-            string name = Name.Replace(" ", string.Empty, StringComparison.Ordinal);
+            SubcommandRoute self = BuildRouterRoute(name, name);
+            TypedCommandHandler fallback = _handler;
+
+            return new CommandDefinition
+            {
+                Name = name,
+                Help = _help,
+                Hint = _hint ?? $"{name} <subcommand>",
+                MinArgCount = 0,
+                MaxArgCount = self.TotalCount,
+                AddToHistory = _addToHistory,
+                Contexts = _contexts,
+                Handler = (context, arguments) =>
+                    RouteInvocation(owner, self.Lookup, name, fallback, context, arguments, 0),
+                CompletionProvider = (
+                    in CommandCompletionContext context,
+                    List<CommandCompletion> results
+                ) => RouteCompletion(self.Lookup, context, 0, results),
+            };
+        }
+
+        /// <summary>
+        ///     Builds this builder as one route of a parent's subcommand
+        ///     router. Children never register on their own; the returned
+        ///     route is consumed by the parent's dispatch and completion.
+        /// </summary>
+        private SubcommandRoute BuildRoute(string path)
+        {
+            string name = NormalizeName(path, Name);
+            if (0 < _subcommands.Count)
+            {
+                return BuildRouterRoute(path, name);
+            }
+
+            return BuildLeafRoute(path, name);
+        }
+
+        private SubcommandRoute BuildLeafRoute(string path, string name)
+        {
+            CommandArgument[] specs = ValidateLeafConfiguration(path);
+            string usage = _hint ?? BuildUsageHint(name, specs);
+            return new SubcommandRoute
+            {
+                Name = name,
+                FullPath = path,
+                Help = _help,
+                Usage = usage,
+                Specs = specs,
+                RequiredCount = RequiredCount(specs),
+                Handler = _handler,
+                CompletionStages = BuildSpecCompletionStages(specs),
+                TotalCount = specs.Length,
+            };
+        }
+
+        private SubcommandRoute BuildRouterRoute(string path, string name)
+        {
+            if (0 < _arguments.Count)
+            {
+                throw new InvalidOperationException(
+                    $"Command '{path}': a command with subcommands cannot declare its own "
+                        + "arguments; declare them on the subcommands."
+                );
+            }
+
+            SubcommandRoute[] children = new SubcommandRoute[_subcommands.Count];
+            Dictionary<string, SubcommandRoute> lookup = new(
+                children.Length,
+                StringComparer.OrdinalIgnoreCase
+            );
+            int maxChildTotal = 0;
+            for (int i = 0; i < children.Length; ++i)
+            {
+                CommandBuilder child = _subcommands[i];
+                SubcommandRoute route = child.BuildRoute($"{path} {child.Name}");
+                children[i] = route;
+                lookup.Add(route.Name, route);
+                if (maxChildTotal < route.TotalCount)
+                {
+                    maxChildTotal = route.TotalCount;
+                }
+            }
+
+            return new SubcommandRoute
+            {
+                Name = name,
+                FullPath = path,
+                Help = _help,
+                Usage = _hint ?? $"{name} <subcommand>",
+                Fallback = _handler,
+                Children = children,
+                Lookup = lookup,
+                TotalCount = 1 + maxChildTotal,
+            };
+        }
+
+        private CommandArgument[] ValidateLeafConfiguration(string path)
+        {
+            if (_handler == null)
+            {
+                throw new InvalidOperationException(
+                    $"Command '{path}': set a handler with CommandBuilder.Handler before registration."
+                );
+            }
+
             CommandArgument[] specs = _arguments.ToArray();
 
             /*
@@ -271,7 +686,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 and defaults ambiguous.
              */
             bool seenOptional = false;
-            int requiredCount = 0;
             for (int i = 0; i < specs.Length; ++i)
             {
                 if (specs[i].IsRequired)
@@ -279,17 +693,15 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                     if (seenOptional)
                     {
                         throw new InvalidOperationException(
-                            $"Command '{name}': required argument '{specs[i].Name}' must be "
+                            $"Command '{path}': required argument '{specs[i].Name}' must be "
                                 + "declared before every optional argument."
                         );
                     }
 
-                    ++requiredCount;
+                    continue;
                 }
-                else
-                {
-                    seenOptional = true;
-                }
+
+                seenOptional = true;
             }
 
             /*
@@ -309,31 +721,47 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 if (defaultError != null)
                 {
                     throw new InvalidOperationException(
-                        $"Command '{name}': the default for argument '{specs[i].Name}' fails "
+                        $"Command '{path}': the default for argument '{specs[i].Name}' fails "
                             + $"its own validation: {defaultError}"
                     );
                 }
             }
 
-            string hint = _hint ?? BuildUsageHint(name, specs);
-            CommandCompletionProvider provider = BuildCompletionProvider(specs);
-            TypedCommandHandler handler = _handler;
+            return specs;
+        }
 
-            CommandHandler dispatch = (context, arguments) =>
-                RunTyped(owner, specs, name, handler, context, arguments);
+        /*
+            One routing target of a subcommand command: either a leaf with
+            typed argument specs and a handler, or a nested router with its
+            own children.
+        */
+        private sealed class SubcommandRoute
+        {
+            public string Name { get; internal set; }
 
-            return new CommandDefinition
-            {
-                Name = name,
-                Help = _help,
-                Hint = hint,
-                MinArgCount = requiredCount,
-                MaxArgCount = specs.Length,
-                AddToHistory = _addToHistory,
-                Contexts = _contexts,
-                Handler = dispatch,
-                CompletionProvider = provider,
-            };
+            public string FullPath { get; internal set; }
+
+            public string Help { get; internal set; }
+
+            public string Usage { get; internal set; }
+
+            public CommandArgument[] Specs { get; internal set; }
+
+            public int RequiredCount { get; internal set; }
+
+            public int TotalCount { get; internal set; }
+
+            public TypedCommandHandler Handler { get; internal set; }
+
+            public TypedCommandHandler Fallback { get; internal set; }
+
+            public CommandCompletionProvider[] CompletionStages { get; internal set; }
+
+            public SubcommandRoute[] Children { get; internal set; }
+
+            public Dictionary<string, SubcommandRoute> Lookup { get; internal set; }
+
+            public bool IsRouter => Children != null;
         }
     }
 }
