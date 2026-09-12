@@ -212,13 +212,12 @@ frontmatter validity, index freshness, and pointer-file delegation; see
   command name is inferred from the method name (`COMMAND` infix/suffix/prefix stripped),
   overridable via `Name = "..."`.
 - Non-static commands register manually: `Terminal.Shell.AddCommand(name, handler, min, max, help)`.
-- Builder commands: `CommandBuilder.Create(...)` with `.Arg<T>`, `.Subcommand` (routes the
-  first argument; children compose to any depth), and disposable handles. Definition-time
-  misconfiguration throws `CommandConfigurationException` (an `InvalidOperationException`
-  subclass carrying `CommandName`, a `CommandConfigurationFailure` kind, and the
-  argument/subcommand/type scope; wrong-type `Get<T>` reads throw
-  `CommandArgumentTypeMismatchException`) - tests must assert that exact type, not the
-  base, and branch on `Failure`, never on message text.
+- Builder commands: `CommandBuilder.Create(...)` with `.Arg<T>`, `.Subcommand`, and
+  disposable handles. Definition-time misconfiguration throws
+  `CommandConfigurationException` (an `InvalidOperationException` subclass carrying
+  `CommandName`, a `CommandConfigurationFailure` kind, and the argument/subcommand/type
+  scope; wrong-type `Get<T>` reads throw `CommandArgumentTypeMismatchException`) -
+  tests must assert that exact type and branch on `Failure`, never on message text.
 - Completion providers always receive a context scoped to the command's own arguments:
   `ActiveArgumentIndex` and `PrecedingArguments` are relative to that command, and the
   router shifts them per routing level (`CommandCompletionContext.ForSubcommand`). Never
@@ -260,6 +259,9 @@ Details: [llm-attribution](./skills/llm-attribution/SKILL.md).
   `Color`, `Quaternion`, ...), plus named-constant matching (`"red"`, `"MaxValue"`).
 - Custom parsers: `CommandArgParser.RegisterParser<T>(parser, force)`; per-call overload
   `TryGet<T>(out T, parser)`. Details: [custom-argument-parsing](./skills/custom-argument-parsing/SKILL.md).
+
+---
+
 ## Testing
 
 - Tests are PlayMode tests under `Tests/Runtime/` (Unity Test Runner); harness components live in

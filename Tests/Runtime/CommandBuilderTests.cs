@@ -696,8 +696,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
             Assert.AreEqual(
                 typeof(int),
-                typed.DeclaredType,
-                "The mismatch carries the argument's declared type"
+                typed.StoredType,
+                "The mismatch carries the argument's stored value type"
             );
             Assert.AreEqual(
                 typeof(float),

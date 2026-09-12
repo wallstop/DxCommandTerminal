@@ -64,11 +64,17 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return default;
             }
 
+            /*
+                The stored runtime type is the truthful identity: a remaining
+                argument's slot holds its element-type array, so a read of the
+                element type itself reports the array type.
+             */
+            Type storedType = value?.GetType() ?? spec.DeclaredType;
             throw new CommandArgumentTypeMismatchException(
                 $"Argument '{spec.Name}' is declared as {spec.TypeName}; "
                     + $"requested {typeof(T).Name}.",
                 spec.Name,
-                spec.DeclaredType,
+                storedType,
                 typeof(T)
             );
         }

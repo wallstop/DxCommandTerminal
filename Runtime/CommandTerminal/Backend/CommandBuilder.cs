@@ -67,7 +67,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             return Create(name).Help(help);
         }
 
-        private static string NormalizeName(string owner, string name)
+        private static string NormalizeName(string owner, string name, bool isSubcommandName = true)
         {
             string normalized = name;
             if (normalized != null && 0 <= normalized.IndexOf(' ', StringComparison.Ordinal))
@@ -81,7 +81,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                     CommandConfigurationFailure.EmptyName,
                     $"Command '{owner ?? string.Empty}': subcommand names must not be empty.",
                     owner,
-                    subcommandName: name
+                    subcommandName: isSubcommandName ? name : null
                 );
             }
 
@@ -587,7 +587,15 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
 
             CommandBuilder subcommand = Create(normalized);
-            configure(subcommand);
+            try
+            {
+                configure(subcommand);
+            }
+            catch (CommandConfigurationException e)
+            {
+                throw WithComposedScope(e, normalized);
+            }
+
             if (subcommand._contexts != CommandExecutionContextSets.Gameplay)
             {
                 throw new CommandConfigurationException(
@@ -643,7 +651,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 );
             }
 
-            string name = NormalizeName(Name, Name);
+            string name = NormalizeName(Name, Name, isSubcommandName: false);
             if (0 < _subcommands.Count)
             {
                 return BuildRouterDefinition(owner, name);
@@ -890,6 +898,31 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 e.CommandName ?? Name,
                 argumentName: e.ArgumentName ?? argumentName,
                 subcommandName: e.SubcommandName,
+                argumentType: e.ArgumentType,
+                innerException: e
+            );
+        }
+
+        /*
+            Failures thrown while configuring a subcommand report the
+            subcommand builder's own name; the parent composes the routed
+            path here so the identity matches Build-time diagnostics, which
+            name the composed path ('inventory add').
+         */
+        private CommandConfigurationException WithComposedScope(
+            CommandConfigurationException e,
+            string subcommandName
+        )
+        {
+            string innerCommand = e.CommandName;
+            return new CommandConfigurationException(
+                e.Failure,
+                e.Message,
+                string.IsNullOrEmpty(innerCommand)
+                    ? $"{Name} {subcommandName}"
+                    : $"{Name} {innerCommand}",
+                argumentName: e.ArgumentName,
+                subcommandName: e.SubcommandName ?? subcommandName,
                 argumentType: e.ArgumentType,
                 innerException: e
             );

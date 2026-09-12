@@ -405,6 +405,75 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreEqual("heal", named.CommandName);
         }
 
+        [Test]
+        public void SpecLevelFailuresPreserveTheOriginalException()
+        {
+            CommandShell shell = new(History());
+            CommandConfigurationException exception = Assert.Throws<CommandConfigurationException>(
+                () =>
+                    shell.AddCommand(
+                        CommandBuilder
+                            .Create("heal")
+                            .Arg<int>("amount", spec => spec.Range(100, 1)),
+                        out _
+                    )
+            );
+            Assert.AreEqual(
+                CommandConfigurationFailure.InvalidRange,
+                exception.Failure,
+                "The re-throw keeps the failure kind"
+            );
+            Assert.IsInstanceOf<CommandConfigurationException>(
+                exception.InnerException,
+                "The original throw rides as the inner exception"
+            );
+            CommandConfigurationException inner = (CommandConfigurationException)
+                exception.InnerException;
+            Assert.AreEqual(
+                CommandConfigurationFailure.InvalidRange,
+                inner.Failure,
+                "The inner exception keeps its kind"
+            );
+            Assert.IsNull(inner.CommandName, "The spec-level throw reports no command of its own");
+            Assert.IsNull(
+                inner.InnerException,
+                "Spec-level throws originate at the spec; there is nothing deeper"
+            );
+        }
+
+        [Test]
+        public void SpecLevelFailuresInsideSubcommandsComposeThePath()
+        {
+            CommandShell shell = new(History());
+            CommandConfigurationException exception = Assert.Throws<CommandConfigurationException>(
+                () =>
+                    shell.AddCommand(
+                        CommandBuilder
+                            .Create("inventory")
+                            .Subcommand(
+                                "add",
+                                add => add.Arg<UnparsedType>("value", spec => spec.Required())
+                            ),
+                        out _
+                    ),
+                "The subcommand's configure callback throws during Subcommand"
+            );
+            Assert.AreEqual(
+                CommandConfigurationFailure.UnparseableArgumentType,
+                exception.Failure,
+                "The failure kind survives the subcommand re-throw"
+            );
+            Assert.AreEqual(
+                "inventory add",
+                exception.CommandName,
+                "The parent composes the routed path, matching Build-time diagnostics"
+            );
+            Assert.AreEqual("add", exception.SubcommandName);
+            Assert.AreEqual("value", exception.ArgumentName);
+            Assert.AreEqual(typeof(UnparsedType), exception.ArgumentType);
+            Assert.IsNotNull(exception.InnerException);
+        }
+
         private sealed class UnparsedType { }
     }
 }

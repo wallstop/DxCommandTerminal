@@ -8,13 +8,16 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     /// </summary>
     public enum CommandConfigurationFailure
     {
-        /// <summary>Unclassified; produced only by the legacy message-only constructor.</summary>
+        /// <summary>
+        ///     Unclassified. Set only by the legacy message-only constructor
+        ///     and preserved through scope re-throws.
+        /// </summary>
         None = 0,
 
         /// <summary>A command, subcommand, or argument name is missing or blank.</summary>
         EmptyName,
 
-        /// <summary>A command, subcommand, or argument name collides with an existing one.</summary>
+        /// <summary>A subcommand or argument name collides with an existing one.</summary>
         DuplicateName,
 
         /// <summary>The command registered without a handler.</summary>
