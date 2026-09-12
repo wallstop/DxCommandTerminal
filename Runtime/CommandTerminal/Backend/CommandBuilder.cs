@@ -102,15 +102,17 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 if (spec.IsRemaining)
                 {
                     /*
-                        The remaining argument consumes every trailing token,
-                        parsing and validating each one; the collected array is
-                        one value in the parsed buffer.
+                        The remaining argument consumes every trailing token:
+                        it parses and validates each one with full type
+                        knowledge and stores its typed array in its own slot
+                        of the parsed buffer.
                      */
                     if (
                         !spec.TryParseAll(
                             arguments,
                             offset + i,
-                            out object values,
+                            parsed,
+                            i,
                             out CommandArg failedToken,
                             out string validationError
                         )
@@ -124,7 +126,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                         return;
                     }
 
-                    parsed[i] = values;
                     continue;
                 }
 

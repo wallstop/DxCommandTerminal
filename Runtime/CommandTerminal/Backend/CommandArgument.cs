@@ -54,13 +54,17 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         ///     Parses and validates every argument from
         ///     <paramref name="start"/> to the end of
         ///     <paramref name="arguments"/> with this spec's parser and
-        ///     validators, collecting the values in order. Only remaining
-        ///     arguments support this; other specs throw.
+        ///     validators, collecting the values in order and storing the
+        ///     typed array in <paramref name="slot"/> of the invocation's
+        ///     parsed-values buffer — the same boundary every parsed value
+        ///     crosses once. Only remaining arguments support this; other
+        ///     specs throw.
         /// </summary>
         internal abstract bool TryParseAll(
             BorrowedCommandArguments arguments,
             int start,
-            out object parsedValues,
+            object[] parsedValues,
+            int slot,
             out CommandArg failedToken,
             out string validationError
         );

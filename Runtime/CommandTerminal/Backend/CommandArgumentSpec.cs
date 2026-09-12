@@ -499,7 +499,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         internal override bool TryParseAll(
             BorrowedCommandArguments arguments,
             int start,
-            out object parsedValues,
+            object[] parsedValues,
+            int slot,
             out CommandArg failedToken,
             out string validationError
         )
@@ -512,31 +513,33 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 );
             }
 
+            /*
+                Every token parses straight into the typed array and each
+                value validates with full type knowledge; the collected
+                array reaches the shared parsed-values buffer as one typed
+                hand-off at its own slot, like any single parsed value.
+             */
             T[] values = new T[Math.Max(0, arguments.Count - start)];
             for (int i = 0; i < values.Length; ++i)
             {
                 CommandArg input = arguments[start + i];
-                if (!TryParse(input, out object parsed))
+                if (!input.TryGet(out values[i], _parserOverride))
                 {
                     failedToken = input;
                     validationError = null;
-                    parsedValues = null;
                     return false;
                 }
 
-                string error = ValidateParsed(parsed);
+                string error = ValidateValue(values[i]);
                 if (error != null)
                 {
                     failedToken = input;
                     validationError = error;
-                    parsedValues = null;
                     return false;
                 }
-
-                values[i] = (T)parsed;
             }
 
-            parsedValues = values;
+            parsedValues[slot] = values;
             failedToken = default;
             validationError = null;
             return true;
@@ -549,39 +552,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         internal override string ValidateParsed(object parsed)
         {
-            T value = (T)parsed;
-            if (_staticChoices != null)
-            {
-                bool matches = false;
-                for (int i = 0; i < _staticChoices.Count; ++i)
-                {
-                    if (ChoicesEqual(_staticChoices[i], value))
-                    {
-                        matches = true;
-                        break;
-                    }
-                }
-
-                if (!matches)
-                {
-                    return $"Invalid value '{FormatValue(value)}' for argument '{Name}' "
-                        + $"(expected one of: {string.Join(", ", _staticChoiceTexts)})";
-                }
-            }
-
-            string error = _rangeValidator?.Invoke(value);
-            if (error != null)
-            {
-                return error;
-            }
-
-            error = _validator?.Invoke(value);
-            if (error != null)
-            {
-                return $"Invalid value '{FormatValue(value)}' for argument '{Name}': {error}";
-            }
-
-            return null;
+            return ValidateValue((T)parsed);
         }
 
         internal override string FormatParseError(CommandArg input)
@@ -637,6 +608,42 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             {
                 AppendCandidate(FormatValue(provided[i]), Description, context, results);
             }
+        }
+
+        private string ValidateValue(T value)
+        {
+            if (_staticChoices != null)
+            {
+                bool matches = false;
+                for (int i = 0; i < _staticChoices.Count; ++i)
+                {
+                    if (ChoicesEqual(_staticChoices[i], value))
+                    {
+                        matches = true;
+                        break;
+                    }
+                }
+
+                if (!matches)
+                {
+                    return $"Invalid value '{FormatValue(value)}' for argument '{Name}' "
+                        + $"(expected one of: {string.Join(", ", _staticChoiceTexts)})";
+                }
+            }
+
+            string error = _rangeValidator?.Invoke(value);
+            if (error != null)
+            {
+                return error;
+            }
+
+            error = _validator?.Invoke(value);
+            if (error != null)
+            {
+                return $"Invalid value '{FormatValue(value)}' for argument '{Name}': {error}";
+            }
+
+            return null;
         }
     }
 }
