@@ -1,6 +1,6 @@
 ---
 name: register-terminal-command
-description: Register terminal commands in DxCommandTerminal via RegisterCommandAttribute or Terminal.Shell.AddCommand, including name inference, arg count bounds, hint text, editor/development-only flags, and ignoring built-in commands. Use when adding console commands/cheats, changing command signatures, or debugging why a command is not recognized.
+description: Register terminal commands in DxCommandTerminal via RegisterCommandAttribute or Terminal.Shell.AddCommand, including name inference, arg count bounds, hint text, editor/development-only flags, and ignoring built-in commands. Use when adding console commands/cheats, changing command signatures, debugging why a command is not recognized, or extending the typed builder and argument-spec internals.
 metadata:
   category: Feature
 ---
@@ -77,3 +77,19 @@ component; the custom editor lists discoverable commands). Register your own con
   [webgl-command-registration](../webgl-command-registration/SKILL.md).
 - Handler exceptions are not caught for you; validate inputs (`args[i].TryGet<T>`) and let the
   shell's error channel (`Terminal.IssuedError`) do the reporting.
+
+## Extending the typed builder and argument specs
+
+- Keep argument types inside the type system end to end. New internal plumbing on
+  `CommandArgument`/`CommandArgumentSpec<T>`/`CommandBuilder` must not surface `object`
+  where a generic `T` can carry the contract (PR #69 review; see issue #68 for the
+  broader typed-errors direction).
+- The one accepted `object` boundary is the invocation's parsed-values `object[]` buffer
+  in `CommandBuilder.RunTyped`: each fixed argument boxes its parsed value once into a
+  slot, and the remaining argument's multi-token parse writes its collected `T[]` into
+  one slot the same way. Parsing, validation, and completion stay typed up to that
+  buffer - never box and immediately unbox, and never return `out object` from a new
+  internal method.
+- Validation must stay shared, not duplicated: `ValidateParsed(object)` is the buffer
+  boundary's thin adapter over the typed `ValidateValue(T)`; extend `ValidateValue`
+  when adding checks so every path (fixed, remaining, defaults) validates identically.

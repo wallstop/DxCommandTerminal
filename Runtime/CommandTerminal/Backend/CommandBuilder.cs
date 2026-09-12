@@ -19,10 +19,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     ///     from the declared arguments, so help, validation, and completion
     ///     cannot drift apart. Configuration errors (missing handler,
     ///     duplicate argument names, required-after-optional ordering,
-    ///     unparseable argument types, defaults failing their own validation)
-    ///     throw at definition time with a diagnostic naming the command;
-    ///     user-input mistakes at execution become controlled shell errors
-    ///     and never run the handler.
+    ///     unparseable argument types, defaults failing their own validation,
+    ///     arguments after the remaining argument, or a default on the
+    ///     remaining argument) throw at definition time with a diagnostic
+    ///     naming the command; user-input mistakes at execution become
+    ///     controlled shell errors and never run the handler.
     /// </remarks>
     public sealed class CommandBuilder
     {
@@ -97,6 +98,37 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             object[] parsed = specs.Length == 0 ? NoValues : new object[specs.Length];
             for (int i = 0; i < specs.Length; ++i)
             {
+                CommandArgument spec = specs[i];
+                if (spec.IsRemaining)
+                {
+                    /*
+                        The remaining argument consumes every trailing token:
+                        it parses and validates each one with full type
+                        knowledge and stores its typed array in its own slot
+                        of the parsed buffer.
+                     */
+                    if (
+                        !spec.TryParseAll(
+                            arguments,
+                            offset + i,
+                            parsed,
+                            i,
+                            out CommandArg failedToken,
+                            out string validationError
+                        )
+                    )
+                    {
+                        owner.IssueErrorMessage(
+                            validationError == null
+                                ? $"'{name}': {spec.FormatParseError(failedToken)}"
+                                : $"'{name}': {validationError}"
+                        );
+                        return;
+                    }
+
+                    continue;
+                }
+
                 if (arguments.Count <= offset + i)
                 {
                     /*
@@ -104,18 +136,18 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                         exist: the shell's derived bounds for top-level
                         commands, the router for subcommands.
                      */
-                    parsed[i] = specs[i].GetDefault();
+                    parsed[i] = spec.GetDefault();
                     continue;
                 }
 
                 CommandArg input = arguments[offset + i];
-                if (!specs[i].TryParse(input, out object value))
+                if (!spec.TryParse(input, out object value))
                 {
-                    owner.IssueErrorMessage($"'{name}': {specs[i].FormatParseError(input)}");
+                    owner.IssueErrorMessage($"'{name}': {spec.FormatParseError(input)}");
                     return;
                 }
 
-                string error = specs[i].ValidateParsed(value);
+                string error = spec.ValidateParsed(value);
                 if (error != null)
                 {
                     owner.IssueErrorMessage($"'{name}': {error}");
@@ -149,12 +181,34 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         private static CommandCompletionProvider BuildCompletionProvider(CommandArgument[] specs)
         {
             CommandCompletionProvider[] stages = BuildSpecCompletionStages(specs);
+            bool hasRemaining = HasRemaining(specs);
             foreach (CommandCompletionProvider stage in stages)
             {
-                if (stage != null)
+                if (stage == null)
+                {
+                    continue;
+                }
+
+                if (!hasRemaining)
                 {
                     return CommandCompletionProviders.Staged(stages);
                 }
+
+                return (in CommandCompletionContext context, List<CommandCompletion> results) =>
+                {
+                    /*
+                        The remaining argument owns every trailing stage, so
+                        requests past the last fixed index clamp onto its
+                        choices.
+                     */
+                    int index = context.ActiveArgumentIndex;
+                    if (stages.Length <= index)
+                    {
+                        index = stages.Length - 1;
+                    }
+
+                    stages[index]?.Invoke(context, results);
+                };
             }
 
             /*
@@ -257,7 +311,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return;
             }
 
-            if (route.Specs.Length < available)
+            if (!route.HasRemaining && route.Specs.Length < available)
             {
                 owner.IssueErrorMessage(
                     $"'{route.FullPath}': expects at most {route.Specs.Length} argument"
@@ -322,7 +376,16 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             int childStage = stage - 1;
             if (route.Specs.Length <= childStage)
             {
-                return;
+                if (!route.HasRemaining)
+                {
+                    return;
+                }
+
+                /*
+                    The remaining argument owns every trailing stage, so later
+                    stages clamp onto its choices.
+                 */
+                childStage = route.Specs.Length - 1;
             }
 
             /*
@@ -368,6 +431,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             return count;
         }
 
+        private static bool HasRemaining(CommandArgument[] specs)
+        {
+            return 0 < specs.Length && specs[specs.Length - 1].IsRemaining;
+        }
+
         /// <summary>Sets the help text shown by the built-in <c>help</c> command.</summary>
         public CommandBuilder Help(string help)
         {
@@ -405,46 +473,75 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         /// <summary>
         ///     Declares one typed argument. The optional configuration callback
         ///     marks it required, gives it a default, and attaches validation
-        ///     and choices. Argument order is declaration order.
+        ///     and choices. Argument order is declaration order; declaring an
+        ///     argument after the command's
+        ///     <see cref="Remaining{T}"/> argument throws.
         /// </summary>
         public CommandBuilder Arg<T>(
             string name,
             Func<CommandArgumentSpec<T>, CommandArgumentSpec<T>> configure = null
         )
         {
-            if (string.IsNullOrWhiteSpace(name))
+            EnsureArgumentNameAvailable(name);
+            if (0 < _arguments.Count && _arguments[_arguments.Count - 1].IsRemaining)
             {
                 throw new CommandConfigurationException(
-                    $"Command '{Name}': argument names must not be empty.",
+                    $"Command '{Name}': argument '{name}' cannot follow the remaining "
+                        + $"argument '{_arguments[_arguments.Count - 1].Name}'; the remaining "
+                        + "argument consumes every trailing token.",
                     Name
                 );
             }
 
+            _arguments.Add(ConfigureArgument(name, configure, isRemaining: false));
+            return this;
+        }
+
+        /// <summary>
+        ///     Declares the command's unbounded trailing argument: every token
+        ///     after the declared arguments parses and validates as
+        ///     <typeparamref name="T"/> and collects, in input order, into one
+        ///     array the handler reads with
+        ///     <c>arguments.Get&lt;T[]&gt;(name)</c>. An invocation without
+        ///     trailing tokens reads as an empty array; mark the argument
+        ///     <see cref="CommandArgumentSpec{T}.Required"/> to demand at
+        ///     least one token instead.
+        /// </summary>
+        /// <remarks>
+        ///     The remaining argument must be the final declaration: later
+        ///     <see cref="Arg{T}"/> calls, a second
+        ///     <see cref="Remaining{T}"/> call, and
+        ///     <see cref="CommandArgumentSpec{T}.Default"/> on the remaining
+        ///     argument all throw at definition time.
+        /// </remarks>
+        public CommandBuilder Remaining<T>(
+            string name,
+            Func<CommandArgumentSpec<T>, CommandArgumentSpec<T>> configure = null
+        )
+        {
+            EnsureArgumentNameAvailable(name);
             foreach (CommandArgument argument in _arguments)
             {
-                if (string.Equals(argument.Name, name, StringComparison.OrdinalIgnoreCase))
+                if (argument.IsRemaining)
                 {
                     throw new CommandConfigurationException(
-                        $"Command '{Name}': duplicate argument name '{name}'.",
+                        $"Command '{Name}': only one remaining argument is allowed; "
+                            + $"'{argument.Name}' already consumes every trailing token.",
                         Name
                     );
                 }
             }
 
-            CommandArgumentSpec<T> spec = new(name);
-            if (configure != null)
+            CommandArgumentSpec<T> spec = ConfigureArgument(name, configure, isRemaining: true);
+            if (spec.HasExplicitDefault)
             {
-                spec = configure(spec);
-                if (spec == null)
-                {
-                    throw new CommandConfigurationException(
-                        $"Command '{Name}': the configuration callback for argument '{name}' returned null.",
-                        Name
-                    );
-                }
+                throw new CommandConfigurationException(
+                    $"Command '{Name}': the remaining argument '{name}' cannot declare a "
+                        + "default; an invocation without trailing tokens reads as an empty array.",
+                    Name
+                );
             }
 
-            spec.EnsureParseable();
             _arguments.Add(spec);
             return this;
         }
@@ -555,7 +652,12 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 Help = _help,
                 Hint = hint,
                 MinArgCount = RequiredCount(specs),
-                MaxArgCount = specs.Length,
+                /*
+                    A remaining argument consumes every trailing token, so the
+                    command is unbounded at the shell level and the typed
+                    dispatch reports per-element problems itself.
+                 */
+                MaxArgCount = HasRemaining(specs) ? (int?)null : specs.Length,
                 AddToHistory = _addToHistory,
                 Contexts = _contexts,
                 Handler = dispatch,
@@ -628,6 +730,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 PathUsage = _hint ?? BuildUsageHint(path, specs),
                 Specs = specs,
                 RequiredCount = RequiredCount(specs),
+                HasRemaining = HasRemaining(specs),
                 Handler = _handler,
                 CompletionStages = BuildSpecCompletionStages(specs),
             };
@@ -682,6 +785,51 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             };
         }
 
+        private void EnsureArgumentNameAvailable(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                throw new CommandConfigurationException(
+                    $"Command '{Name}': argument names must not be empty.",
+                    Name
+                );
+            }
+
+            foreach (CommandArgument argument in _arguments)
+            {
+                if (string.Equals(argument.Name, name, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new CommandConfigurationException(
+                        $"Command '{Name}': duplicate argument name '{name}'.",
+                        Name
+                    );
+                }
+            }
+        }
+
+        private CommandArgumentSpec<T> ConfigureArgument<T>(
+            string name,
+            Func<CommandArgumentSpec<T>, CommandArgumentSpec<T>> configure,
+            bool isRemaining
+        )
+        {
+            CommandArgumentSpec<T> spec = new(name, isRemaining);
+            if (configure != null)
+            {
+                spec = configure(spec);
+                if (spec == null)
+                {
+                    throw new CommandConfigurationException(
+                        $"Command '{Name}': the configuration callback for argument '{name}' returned null.",
+                        Name
+                    );
+                }
+            }
+
+            spec.EnsureParseable();
+            return spec;
+        }
+
         private CommandArgument[] ValidateLeafConfiguration(string path)
         {
             if (_handler == null)
@@ -727,7 +875,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
              */
             foreach (CommandArgument spec in specs)
             {
-                if (spec.IsRequired)
+                if (spec.IsRequired || spec.IsRemaining)
                 {
                     continue;
                 }
@@ -768,6 +916,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             public CommandArgument[] Specs { get; internal set; }
 
             public int RequiredCount { get; internal set; }
+
+            /// <summary>True when the route's final argument is its unbounded trailing argument.</summary>
+            public bool HasRemaining { get; internal set; }
 
             public TypedCommandHandler Handler { get; internal set; }
 

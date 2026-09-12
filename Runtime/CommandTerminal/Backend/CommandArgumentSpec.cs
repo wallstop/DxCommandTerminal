@@ -45,7 +45,18 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         public override bool HasChoices => _staticChoices != null || _dynamicChoices != null;
 
+        /// <summary>
+        ///     True when the argument is its command's unbounded trailing
+        ///     argument; see <see cref="CommandBuilder.Remaining{T}"/>.
+        /// </summary>
+        internal override bool IsRemaining => _isRemaining;
+
+        /// <summary>True when an explicit default was configured for this argument.</summary>
+        internal bool HasExplicitDefault => _hasExplicitDefault;
+
         private readonly bool _required;
+        private readonly bool _isRemaining;
+        private readonly bool _hasExplicitDefault;
         private readonly T _defaultValue;
         private readonly CommandArgParser<T> _parserOverride;
         private readonly IReadOnlyList<T> _staticChoices;
@@ -67,6 +78,20 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 description: null
             ) { }
 
+        internal CommandArgumentSpec(string name, bool isRemaining)
+            : this(
+                name,
+                required: false,
+                defaultValue: default,
+                parserOverride: null,
+                staticChoices: null,
+                dynamicChoices: null,
+                rangeValidator: null,
+                validator: null,
+                description: null,
+                isRemaining: isRemaining
+            ) { }
+
         private CommandArgumentSpec(
             string name,
             bool required,
@@ -76,11 +101,15 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             Func<CommandCompletionContext, IReadOnlyList<T>> dynamicChoices,
             Func<T, string> rangeValidator,
             Func<T, string> validator,
-            string description
+            string description,
+            bool isRemaining = false,
+            bool hasExplicitDefault = false
         )
             : base(name, GetTypeName(typeof(T)))
         {
             _required = required;
+            _isRemaining = isRemaining;
+            _hasExplicitDefault = hasExplicitDefault;
             _defaultValue = defaultValue;
             _parserOverride = parserOverride;
 
@@ -171,7 +200,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 _dynamicChoices,
                 _rangeValidator,
                 _validator,
-                Description
+                Description,
+                isRemaining: _isRemaining,
+                hasExplicitDefault: _hasExplicitDefault
             );
         }
 
@@ -192,7 +223,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 _dynamicChoices,
                 _rangeValidator,
                 _validator,
-                Description
+                Description,
+                isRemaining: _isRemaining,
+                hasExplicitDefault: true
             );
         }
 
@@ -208,7 +241,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 _dynamicChoices,
                 _rangeValidator,
                 _validator,
-                description
+                description,
+                isRemaining: _isRemaining,
+                hasExplicitDefault: _hasExplicitDefault
             );
         }
 
@@ -244,7 +279,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 _dynamicChoices,
                 _rangeValidator,
                 _validator,
-                Description
+                Description,
+                isRemaining: _isRemaining,
+                hasExplicitDefault: _hasExplicitDefault
             );
         }
 
@@ -274,7 +311,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 provider,
                 _rangeValidator,
                 _validator,
-                Description
+                Description,
+                isRemaining: _isRemaining,
+                hasExplicitDefault: _hasExplicitDefault
             );
         }
 
@@ -375,7 +414,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                         + $"[{FormatValue(min)}, {FormatValue(max)}]";
                 },
                 _validator,
-                Description
+                Description,
+                isRemaining: _isRemaining,
+                hasExplicitDefault: _hasExplicitDefault
             );
         }
 
@@ -400,7 +441,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 _dynamicChoices,
                 _rangeValidator,
                 validator,
-                Description
+                Description,
+                isRemaining: _isRemaining,
+                hasExplicitDefault: _hasExplicitDefault
             );
         }
 
@@ -421,7 +464,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 _dynamicChoices,
                 _rangeValidator,
                 _validator,
-                Description
+                Description,
+                isRemaining: _isRemaining,
+                hasExplicitDefault: _hasExplicitDefault
             );
         }
 
@@ -451,6 +496,55 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             return ok;
         }
 
+        internal override bool TryParseAll(
+            BorrowedCommandArguments arguments,
+            int start,
+            object[] parsedValues,
+            int slot,
+            out CommandArg failedToken,
+            out string validationError
+        )
+        {
+            if (!IsRemaining)
+            {
+                throw new InvalidOperationException(
+                    $"Argument '{Name}' is not a remaining argument; "
+                        + "TryParseAll collects only a command's unbounded trailing argument."
+                );
+            }
+
+            /*
+                Every token parses straight into the typed array and each
+                value validates with full type knowledge; the collected
+                array reaches the shared parsed-values buffer as one typed
+                hand-off at its own slot, like any single parsed value.
+             */
+            T[] values = new T[Math.Max(0, arguments.Count - start)];
+            for (int i = 0; i < values.Length; ++i)
+            {
+                CommandArg input = arguments[start + i];
+                if (!input.TryGet(out values[i], _parserOverride))
+                {
+                    failedToken = input;
+                    validationError = null;
+                    return false;
+                }
+
+                string error = ValidateValue(values[i]);
+                if (error != null)
+                {
+                    failedToken = input;
+                    validationError = error;
+                    return false;
+                }
+            }
+
+            parsedValues[slot] = values;
+            failedToken = default;
+            validationError = null;
+            return true;
+        }
+
         internal override object GetDefault()
         {
             return _defaultValue;
@@ -458,39 +552,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         internal override string ValidateParsed(object parsed)
         {
-            T value = (T)parsed;
-            if (_staticChoices != null)
-            {
-                bool matches = false;
-                for (int i = 0; i < _staticChoices.Count; ++i)
-                {
-                    if (ChoicesEqual(_staticChoices[i], value))
-                    {
-                        matches = true;
-                        break;
-                    }
-                }
-
-                if (!matches)
-                {
-                    return $"Invalid value '{FormatValue(value)}' for argument '{Name}' "
-                        + $"(expected one of: {string.Join(", ", _staticChoiceTexts)})";
-                }
-            }
-
-            string error = _rangeValidator?.Invoke(value);
-            if (error != null)
-            {
-                return error;
-            }
-
-            error = _validator?.Invoke(value);
-            if (error != null)
-            {
-                return $"Invalid value '{FormatValue(value)}' for argument '{Name}': {error}";
-            }
-
-            return null;
+            return ValidateValue((T)parsed);
         }
 
         internal override string FormatParseError(CommandArg input)
@@ -508,6 +570,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             builder.Append(Name);
             builder.Append(':');
             builder.Append(TypeName);
+            if (_isRemaining)
+            {
+                builder.Append("...");
+            }
+
             builder.Append(_required ? '>' : ']');
         }
 
@@ -541,6 +608,42 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             {
                 AppendCandidate(FormatValue(provided[i]), Description, context, results);
             }
+        }
+
+        private string ValidateValue(T value)
+        {
+            if (_staticChoices != null)
+            {
+                bool matches = false;
+                for (int i = 0; i < _staticChoices.Count; ++i)
+                {
+                    if (ChoicesEqual(_staticChoices[i], value))
+                    {
+                        matches = true;
+                        break;
+                    }
+                }
+
+                if (!matches)
+                {
+                    return $"Invalid value '{FormatValue(value)}' for argument '{Name}' "
+                        + $"(expected one of: {string.Join(", ", _staticChoiceTexts)})";
+                }
+            }
+
+            string error = _rangeValidator?.Invoke(value);
+            if (error != null)
+            {
+                return error;
+            }
+
+            error = _validator?.Invoke(value);
+            if (error != null)
+            {
+                return $"Invalid value '{FormatValue(value)}' for argument '{Name}': {error}";
+            }
+
+            return null;
         }
     }
 }
