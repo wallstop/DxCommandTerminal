@@ -21,6 +21,12 @@
         /// </summary>
         internal delegate bool UntypedParser(string input, out object parsed);
 
+        /// <summary>
+        ///     Types the built-in parser table covers. Internal for test
+        ///     coverage; callers cannot mutate the returned collection.
+        /// </summary>
+        internal static IReadOnlyCollection<Type> BuiltInParserTypes => BuiltInParsers.Keys;
+
         public static readonly HashSet<char> Delimiters = new() { ',', ';', ':', '_', '/', '\\' };
         public static readonly List<char> Quotes = new() { '"', '\'' };
         public static readonly HashSet<string> IgnoredValuesForCleanedTypes = new() { "\r", "\n" };

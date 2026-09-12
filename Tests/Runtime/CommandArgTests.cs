@@ -3057,6 +3057,239 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
         }
 
+        /*
+            The built-in parser table must contain exactly the expected types:
+            a removed entry fails the membership check, a stale entry fails the
+            count, and an entry whose delegate was lost fails the parse. Each
+            row drives the untyped TryGet(Type, out object) path with one
+            representative input and pins the parsed value, so a table entry
+            that stops working is caught here even without a dedicated test.
+            Adding a built-in type means adding its table entry AND a row here.
+         */
+        [Test]
+        public void BuiltInParserTableCoversEveryBuiltInType()
+        {
+            (Type type, string input, Func<object, bool> matches)[] rows =
+            {
+                (typeof(bool), "true", parsed => Equals(parsed, true)),
+                (typeof(float), "1.5", parsed => Approximately(1.5f, (float)parsed)),
+                (typeof(int), "7", parsed => Equals(parsed, 7)),
+                (typeof(uint), "9", parsed => Equals(parsed, 9u)),
+                (typeof(long), "11", parsed => Equals(parsed, 11L)),
+                (typeof(ulong), "13", parsed => Equals(parsed, 13ul)),
+                (typeof(double), "2.5", parsed => Approximately(2.5d, (double)parsed)),
+                (typeof(short), "3", parsed => Equals(parsed, (short)3)),
+                (typeof(ushort), "5", parsed => Equals(parsed, (ushort)5)),
+                (typeof(byte), "2", parsed => Equals(parsed, (byte)2)),
+                (typeof(sbyte), "-2", parsed => Equals(parsed, (sbyte)-2)),
+                (
+                    typeof(Guid),
+                    "6f9619ff-8b86-d011-b42d-00c04fc964ff",
+                    parsed => Equals(parsed, new Guid("6f9619ff-8b86-d011-b42d-00c04fc964ff"))
+                ),
+                (
+                    typeof(DateTime),
+                    "2026-01-02T03:04:05.0000000Z",
+                    parsed =>
+                        Equals(
+                            parsed,
+                            new DateTime(2026, 1, 2, 3, 4, 5, DateTimeKind.Utc).ToLocalTime()
+                        ) || Equals(parsed, new DateTime(2026, 1, 2, 3, 4, 5, DateTimeKind.Utc))
+                ),
+                (
+                    typeof(DateTimeOffset),
+                    "2026-01-02T03:04:05+00:00",
+                    parsed => Equals(parsed, new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero))
+                ),
+                (typeof(char), "x", parsed => Equals(parsed, 'x')),
+                (typeof(decimal), "1.5", parsed => Equals(parsed, 1.5m)),
+                (
+                    typeof(System.Numerics.BigInteger),
+                    "42",
+                    parsed => Equals(parsed, new System.Numerics.BigInteger(42))
+                ),
+                (typeof(TimeSpan), "00:00:03", parsed => Equals(parsed, TimeSpan.FromSeconds(3))),
+                (typeof(Version), "1.2", parsed => Equals(parsed, new Version(1, 2))),
+                (
+                    typeof(System.Net.IPAddress),
+                    "127.0.0.1",
+                    parsed => Equals(parsed, System.Net.IPAddress.Loopback)
+                ),
+                (
+                    typeof(Vector2),
+                    "1.5, 2.5",
+                    parsed =>
+                    {
+                        Vector2 vector = (Vector2)parsed;
+                        return Approximately(1.5f, vector.x) && Approximately(2.5f, vector.y);
+                    }
+                ),
+                (
+                    typeof(Vector3),
+                    "1.5, 2.5, 3.5",
+                    parsed =>
+                    {
+                        Vector3 vector = (Vector3)parsed;
+                        return Approximately(1.5f, vector.x)
+                            && Approximately(2.5f, vector.y)
+                            && Approximately(3.5f, vector.z);
+                    }
+                ),
+                (
+                    typeof(Vector4),
+                    "1.5, 2.5, 3.5, 4.5",
+                    parsed =>
+                    {
+                        Vector4 vector = (Vector4)parsed;
+                        return Approximately(1.5f, vector.x)
+                            && Approximately(2.5f, vector.y)
+                            && Approximately(3.5f, vector.z)
+                            && Approximately(4.5f, vector.w);
+                    }
+                ),
+                (typeof(Vector2Int), "1, 2", parsed => Equals(parsed, new Vector2Int(1, 2))),
+                (typeof(Vector3Int), "1, 2, 3", parsed => Equals(parsed, new Vector3Int(1, 2, 3))),
+                (
+                    typeof(Color),
+                    "1, 0, 0, 1",
+                    parsed =>
+                    {
+                        Color color = (Color)parsed;
+                        return Approximately(1f, color.r)
+                            && Approximately(0f, color.g)
+                            && Approximately(0f, color.b)
+                            && Approximately(1f, color.a);
+                    }
+                ),
+                (
+                    typeof(Quaternion),
+                    "0, 0, 0, 1",
+                    parsed =>
+                    {
+                        Quaternion quaternion = (Quaternion)parsed;
+                        return Approximately(0f, quaternion.x)
+                            && Approximately(0f, quaternion.y)
+                            && Approximately(0f, quaternion.z)
+                            && Approximately(1f, quaternion.w);
+                    }
+                ),
+                (typeof(Rect), "1, 2, 3, 4", parsed => Equals(parsed, new Rect(1f, 2f, 3f, 4f))),
+                (typeof(RectInt), "1, 2, 3, 4", parsed => Equals(parsed, new RectInt(1, 2, 3, 4))),
+                (
+                    typeof(Bounds),
+                    "1, 2, 3, 4, 5, 6",
+                    parsed =>
+                    {
+                        Bounds bounds = (Bounds)parsed;
+                        return Approximately(1f, bounds.center.x)
+                            && Approximately(2f, bounds.center.y)
+                            && Approximately(3f, bounds.center.z)
+                            && Approximately(4f, bounds.size.x)
+                            && Approximately(5f, bounds.size.y)
+                            && Approximately(6f, bounds.size.z);
+                    }
+                ),
+                (
+                    typeof(BoundsInt),
+                    "1, 2, 3, 4, 5, 6",
+                    parsed =>
+                    {
+                        BoundsInt bounds = (BoundsInt)parsed;
+                        return bounds.position.x == 1
+                            && bounds.position.y == 2
+                            && bounds.position.z == 3
+                            && bounds.size.x == 4
+                            && bounds.size.y == 5
+                            && bounds.size.z == 6;
+                    }
+                ),
+                (
+                    typeof(RectOffset),
+                    "4, 8, 2, 6",
+                    parsed =>
+                    {
+                        RectOffset offset = (RectOffset)parsed;
+                        return offset.left == 4
+                            && offset.right == 8
+                            && offset.top == 2
+                            && offset.bottom == 6;
+                    }
+                ),
+                (
+                    typeof(Plane),
+                    "0, 1, 0, 5",
+                    parsed =>
+                    {
+                        Plane plane = (Plane)parsed;
+                        return Approximately(0f, plane.normal.x)
+                            && Approximately(1f, plane.normal.y)
+                            && Approximately(0f, plane.normal.z)
+                            && Approximately(5f, plane.distance);
+                    }
+                ),
+                (
+                    typeof(Ray),
+                    "1, 2, 3, 0, 0, -1",
+                    parsed =>
+                    {
+                        Ray ray = (Ray)parsed;
+                        return Approximately(1f, ray.origin.x)
+                            && Approximately(2f, ray.origin.y)
+                            && Approximately(3f, ray.origin.z)
+                            && Approximately(0f, ray.direction.x)
+                            && Approximately(0f, ray.direction.y)
+                            && Approximately(-1f, ray.direction.z);
+                    }
+                ),
+                (
+                    typeof(System.Numerics.Complex),
+                    "1.5, -2.5",
+                    parsed => Equals(parsed, new System.Numerics.Complex(1.5, -2.5))
+                ),
+            };
+
+            /*
+                Table membership first: the expected type list must match the
+                table exactly, so a removed entry or an unregistered new
+                built-in fails here before any parse runs.
+             */
+            Type[] expectedTypes = rows.Select(row => row.type).ToArray();
+            Type[] registeredTypes = CommandArg.BuiltInParserTypes.ToArray();
+            Assert.AreEqual(
+                expectedTypes.Length,
+                registeredTypes.Length,
+                "Built-in parser table size drifted; expected: ["
+                    + $"{string.Join(", ", expectedTypes.Select(type => type.Name))}], "
+                    + $"registered: [{string.Join(", ", registeredTypes.Select(type => type.Name))}]"
+            );
+            foreach (Type expectedType in expectedTypes)
+            {
+                Assert.IsTrue(
+                    registeredTypes.Contains(expectedType),
+                    $"{expectedType.Name} is missing from the built-in parser table"
+                );
+            }
+
+            foreach ((Type type, string input, Func<object, bool> matches) in rows)
+            {
+                CommandArg arg = new(input);
+                Assert.IsTrue(
+                    arg.TryGet(type, out object parsed),
+                    $"{type.Name} is in the built-in table but failed to parse '{input}'"
+                );
+                Assert.IsTrue(
+                    matches(parsed),
+                    $"{type.Name} parsed '{input}' to {parsed}, which does not match the expected value"
+                );
+
+                arg = new CommandArg("asdf-junk");
+                Assert.IsFalse(
+                    arg.TryGet(type, out object junk),
+                    $"{type.Name} unexpectedly parsed junk as {junk}"
+                );
+            }
+        }
+
         [Test]
         public void Untyped()
         {
