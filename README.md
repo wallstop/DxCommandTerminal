@@ -187,6 +187,32 @@ void OnDisable() => handle?.Dispose();
 
 Arguments parse through the same `CommandArg` parsers as `[RegisterCommand]` methods (including your registered custom parsers). Bad user input - unknown values, out-of-range numbers, too many arguments - is rejected with a descriptive error before the handler runs. Static and dynamic choices feed Tab completion stage by stage: with `pickaxe` as a preceding argument, the second argument's provider sees it and completes the next stage.
 
+Subcommands route one registered command through its first argument, each with its own arguments, validation, and completion. `inventory` below registers once; `inventory add pickaxe 3` and `inventory remove pickaxe` route to their own handlers:
+
+```csharp
+Terminal.Shell.AddCommand(
+    CommandBuilder
+        .Create("inventory", "Manage the inventory")
+        .Handler((context, arguments) => { /* runs for a bare `inventory` */ })
+        .Subcommand(
+            "add",
+            add => add
+                .Arg<string>("item", spec => spec.Required())
+                .Arg<int>("count", spec => spec.Default(1).Range(1, 99))
+                .Handler((context, arguments) => { /* ... */ })
+        )
+        .Subcommand(
+            "remove",
+            remove => remove
+                .Arg<string>("item", spec => spec.Required())
+                .Handler((context, arguments) => { /* ... */ })
+        ),
+    out handle
+);
+```
+
+Tab completion offers subcommand names at the first argument and the routed subcommand's choices beyond it. Bare invocations run the parent handler when one is set, otherwise a descriptive error lists the available subcommands. The parent's execution contexts and history policy govern every subcommand; declaring parent arguments on a command that has subcommands, or setting `Contexts`/`AddToHistory` on a subcommand, throws at definition time. Like any command with a completion provider, a routed command keeps provider-owned completion: history-based suggestions do not apply to its arguments.
+
 Note: if your `TerminalUI` uses `Reset State On Init`, the terminal rebuilds its shell during its own startup. Register commands from `Start` (or after the terminal is ready) rather than from another component's `OnEnable`, or the registration can be discarded by that reset.
 
 ---

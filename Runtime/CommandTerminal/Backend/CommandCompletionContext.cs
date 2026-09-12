@@ -70,17 +70,66 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             bool isQuoted,
             char? quoteCharacter
         )
+            : this(
+                executionContext,
+                input,
+                caretIndex,
+                activeArgumentIndex,
+                new BorrowedCommandArguments(precedingArguments),
+                token,
+                replacementStart,
+                replacementLength,
+                isQuoted,
+                quoteCharacter
+            ) { }
+
+        private CommandCompletionContext(
+            CommandExecutionContext executionContext,
+            string input,
+            int caretIndex,
+            int activeArgumentIndex,
+            BorrowedCommandArguments precedingArguments,
+            string token,
+            int replacementStart,
+            int replacementLength,
+            bool isQuoted,
+            char? quoteCharacter
+        )
         {
             ExecutionContext = executionContext;
             Input = input;
             CaretIndex = caretIndex;
             ActiveArgumentIndex = activeArgumentIndex;
-            PrecedingArguments = new BorrowedCommandArguments(precedingArguments);
+            PrecedingArguments = precedingArguments;
             Token = token;
             ReplacementStart = replacementStart;
             ReplacementLength = replacementLength;
             IsQuoted = isQuoted;
             QuoteCharacter = quoteCharacter;
+        }
+
+        /// <summary>
+        ///     The same request as a routed subcommand sees it: the stage
+        ///     counts from the subcommand's first argument and the preceding
+        ///     arguments cover exactly the subcommand's own arguments, with
+        ///     the tokens that selected it excluded. Dynamic choice providers
+        ///     therefore read the same shape on a subcommand as on any
+        ///     top-level command.
+        /// </summary>
+        internal CommandCompletionContext ForSubcommand(int routerTokens)
+        {
+            return new CommandCompletionContext(
+                ExecutionContext,
+                Input,
+                CaretIndex,
+                ActiveArgumentIndex - routerTokens,
+                PrecedingArguments.Slice(routerTokens),
+                Token,
+                ReplacementStart,
+                ReplacementLength,
+                IsQuoted,
+                QuoteCharacter
+            );
         }
     }
 }

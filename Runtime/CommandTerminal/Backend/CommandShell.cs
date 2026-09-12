@@ -568,12 +568,24 @@
 
         public int ClearAllCommands()
         {
-            return ClearAutoRegisteredCommands() + ClearCustomCommands();
+            return ClearCustomCommands();
         }
 
+        /// <summary>
+        ///     Clears every registered command from this shell, including the
+        ///     auto-registered set, and cancels a pending deferred registration.
+        ///     The returned count covers all commands that were registered. The
+        ///     owning terminal re-applies its configuration on its next refresh,
+        ///     which restores auto commands on the following readiness.
+        /// </summary>
         public int ClearCustomCommands()
         {
-            int count = _commands.Count;
+            /*
+                The auto-registered set tracks names in _commands, so clearing
+                _commands without it would leave counts and AutoRegisteredCommands
+                describing commands that no longer exist (issue #64).
+            */
+            int count = ClearAutoRegisteredCommands() + _commands.Count;
             _commands.Clear();
             return count;
         }

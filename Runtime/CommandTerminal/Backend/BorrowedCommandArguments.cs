@@ -29,15 +29,15 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             {
                 if (_array != null)
                 {
-                    return _array.Length;
+                    return VisibleCount(_array.Length);
                 }
 
                 if (_list != null)
                 {
-                    return _list.Count;
+                    return VisibleCount(_list.Count);
                 }
 
-                return _fallback?.Count ?? 0;
+                return VisibleCount(_fallback?.Count ?? 0);
             }
         }
 
@@ -55,32 +55,32 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             {
                 if (_array != null)
                 {
-                    if ((uint)_array.Length <= (uint)index)
+                    if ((uint)Count <= (uint)index)
                     {
                         throw new ArgumentOutOfRangeException(nameof(index));
                     }
 
-                    return _array[index];
+                    return _array[_offset + index];
                 }
 
                 if (_list != null)
                 {
-                    if ((uint)_list.Count <= (uint)index)
+                    if ((uint)Count <= (uint)index)
                     {
                         throw new ArgumentOutOfRangeException(nameof(index));
                     }
 
-                    return _list[index];
+                    return _list[_offset + index];
                 }
 
                 if (_fallback != null)
                 {
-                    if ((uint)_fallback.Count <= (uint)index)
+                    if ((uint)Count <= (uint)index)
                     {
                         throw new ArgumentOutOfRangeException(nameof(index));
                     }
 
-                    return _fallback[index];
+                    return _fallback[_offset + index];
                 }
 
                 throw new ArgumentOutOfRangeException(nameof(index));
@@ -88,35 +88,50 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         }
 
         /*
-           Specialized storage: Unity does not de-virtualize IReadOnlyList
-           indexers, so array and list keep direct element access. The
-           fallback covers exotic callers only.
+            Specialized storage: Unity does not de-virtualize IReadOnlyList
+            indexers, so array and list keep direct element access. The
+            fallback covers exotic callers only. _offset carves out a
+            subcommand's share of the backing buffer without copying: every
+            view runs from _offset through the end of the backing storage.
         */
         private readonly CommandArg[] _array;
         private readonly List<CommandArg> _list;
         private readonly IReadOnlyList<CommandArg> _fallback;
+        private readonly int _offset;
 
         internal BorrowedCommandArguments(CommandArg[] array)
+            : this(array, 0) { }
+
+        internal BorrowedCommandArguments(List<CommandArg> list)
+            : this(list, 0) { }
+
+        internal BorrowedCommandArguments(IReadOnlyList<CommandArg> arguments)
+            : this(arguments, 0) { }
+
+        private BorrowedCommandArguments(CommandArg[] array, int offset)
         {
             _array = array;
             _list = null;
             _fallback = null;
+            _offset = offset;
         }
 
-        internal BorrowedCommandArguments(List<CommandArg> list)
+        private BorrowedCommandArguments(List<CommandArg> list, int offset)
         {
             _array = null;
             _list = list;
             _fallback = null;
+            _offset = offset;
         }
 
-        internal BorrowedCommandArguments(IReadOnlyList<CommandArg> arguments)
+        private BorrowedCommandArguments(IReadOnlyList<CommandArg> arguments, int offset)
         {
             if (arguments is CommandArg[] array)
             {
                 _array = array;
                 _list = null;
                 _fallback = null;
+                _offset = offset;
                 return;
             }
 
@@ -125,17 +140,19 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 _array = null;
                 _list = list;
                 _fallback = null;
+                _offset = offset;
                 return;
             }
 
             _array = null;
             _list = null;
             _fallback = arguments;
+            _offset = offset;
         }
 
         public Enumerator GetEnumerator()
         {
-            return new Enumerator(_array, _list, _fallback);
+            return new Enumerator(_array, _list, _fallback, _offset, Count);
         }
 
         /// <summary>
@@ -145,17 +162,23 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         /// </summary>
         public CommandArg[] ToArray()
         {
+            int count = Count;
+            if (count == 0)
+            {
+                return EmptyArguments;
+            }
+
             if (_array != null)
             {
-                CommandArg[] arrayCopy = new CommandArg[_array.Length];
-                Array.Copy(_array, arrayCopy, arrayCopy.Length);
+                CommandArg[] arrayCopy = new CommandArg[count];
+                Array.Copy(_array, _offset, arrayCopy, 0, count);
                 return arrayCopy;
             }
 
             if (_list != null)
             {
-                CommandArg[] listCopy = new CommandArg[_list.Count];
-                _list.CopyTo(listCopy, 0);
+                CommandArg[] listCopy = new CommandArg[count];
+                _list.CopyTo(_offset, listCopy, 0, count);
                 return listCopy;
             }
 
@@ -164,13 +187,55 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return EmptyArguments;
             }
 
-            CommandArg[] copy = new CommandArg[_fallback.Count];
-            for (int i = 0; i < copy.Length; ++i)
+            CommandArg[] copy = new CommandArg[count];
+            for (int i = 0; i < count; ++i)
             {
-                copy[i] = _fallback[i];
+                copy[i] = _fallback[_offset + i];
             }
 
             return copy;
+        }
+
+        /// <summary>
+        ///     A zero-copy view over the arguments from
+        ///     <paramref name="offset"/> to the end, for dispatching a
+        ///     subcommand's share of one invocation. The view aliases the same
+        ///     backing storage and is valid exactly as long as this view is.
+        /// </summary>
+        internal BorrowedCommandArguments Slice(int offset)
+        {
+            if (offset < 0 || Count < offset)
+            {
+                throw new ArgumentOutOfRangeException(nameof(offset));
+            }
+
+            if (offset == 0)
+            {
+                return this;
+            }
+
+            int absolute = _offset + offset;
+            if (_array != null)
+            {
+                return new BorrowedCommandArguments(_array, absolute);
+            }
+
+            if (_list != null)
+            {
+                return new BorrowedCommandArguments(_list, absolute);
+            }
+
+            return new BorrowedCommandArguments(_fallback, absolute);
+        }
+
+        private int VisibleCount(int backingCount)
+        {
+            /*
+                Offset views alias a reused dispatch buffer, so a view retained
+                past its invocation can see a shrunken backing list. Such a
+                dead view reads empty instead of reporting a negative count.
+            */
+            return Math.Max(0, backingCount - _offset);
         }
 
         IEnumerator<CommandArg> IEnumerable<CommandArg>.GetEnumerator()
@@ -197,50 +262,32 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             private readonly CommandArg[] _array;
             private readonly List<CommandArg> _list;
             private readonly IReadOnlyList<CommandArg> _fallback;
+            private readonly int _offset;
+            private readonly int _end;
             private int _index;
             private CommandArg _current;
 
             internal Enumerator(
                 CommandArg[] array,
                 List<CommandArg> list,
-                IReadOnlyList<CommandArg> fallback
+                IReadOnlyList<CommandArg> fallback,
+                int offset,
+                int count
             )
             {
                 _array = array;
                 _list = list;
                 _fallback = fallback;
-                _index = -1;
+                _offset = offset;
+                _end = offset + count;
+                _index = offset - 1;
                 _current = default;
             }
 
             public bool MoveNext()
             {
                 int nextIndex = _index + 1;
-                if (_array != null)
-                {
-                    if (_array.Length <= nextIndex)
-                    {
-                        _current = default;
-                        return false;
-                    }
-                }
-                else if (_list != null)
-                {
-                    if (_list.Count <= nextIndex)
-                    {
-                        _current = default;
-                        return false;
-                    }
-                }
-                else if (_fallback != null)
-                {
-                    if (_fallback.Count <= nextIndex)
-                    {
-                        _current = default;
-                        return false;
-                    }
-                }
-                else
+                if (_end <= nextIndex)
                 {
                     _current = default;
                     return false;
@@ -265,7 +312,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
             public void Reset()
             {
-                _index = -1;
+                _index = _offset - 1;
                 _current = default;
             }
 

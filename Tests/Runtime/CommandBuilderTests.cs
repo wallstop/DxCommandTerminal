@@ -689,8 +689,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void MissingHandlerFailsAtDefinitionTime()
         {
             CommandShell shell = new(History());
-            InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() =>
-                shell.AddCommand(CommandBuilder.Create("handlerless"), out _)
+            CommandConfigurationException exception = Assert.Throws<CommandConfigurationException>(
+                () =>
+                    shell.AddCommand(CommandBuilder.Create("handlerless"), out _)
             );
             Assert.That(
                 exception.Message,
@@ -703,15 +704,16 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void DuplicateArgumentNamesFailAtDefinitionTime()
         {
             CommandShell shell = new(History());
-            InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() =>
-                shell.AddCommand(
-                    CommandBuilder
-                        .Create("dupe")
-                        .Arg<int>("count")
-                        .Arg<int>("count")
-                        .Handler((context, arguments) => { }),
-                    out _
-                )
+            CommandConfigurationException exception = Assert.Throws<CommandConfigurationException>(
+                () =>
+                    shell.AddCommand(
+                        CommandBuilder
+                            .Create("dupe")
+                            .Arg<int>("count")
+                            .Arg<int>("count")
+                            .Handler((context, arguments) => { }),
+                        out _
+                    )
             );
             Assert.That(exception.Message, Does.Contain("count"));
         }
@@ -720,14 +722,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void UnparseableArgumentTypeFailsAtDefinitionTime()
         {
             CommandShell shell = new(History());
-            InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() =>
-                shell.AddCommand(
-                    CommandBuilder
-                        .Create("custom")
-                        .Arg<UnregisteredType>("value", spec => spec.Required())
-                        .Handler((context, arguments) => { }),
-                    out _
-                )
+            CommandConfigurationException exception = Assert.Throws<CommandConfigurationException>(
+                () =>
+                    shell.AddCommand(
+                        CommandBuilder
+                            .Create("custom")
+                            .Arg<UnregisteredType>("value", spec => spec.Required())
+                            .Handler((context, arguments) => { }),
+                        out _
+                    )
             );
             Assert.That(exception.Message, Does.Contain("UnregisteredType"));
 
@@ -791,14 +794,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void DefaultsMustSatisfyTheirOwnValidation()
         {
             CommandShell shell = new(History());
-            InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() =>
-                shell.AddCommand(
-                    CommandBuilder
-                        .Create("bounded-default")
-                        .Arg<int>("count", spec => spec.Default(0).Range(1, 100))
-                        .Handler((context, arguments) => { }),
-                    out _
-                )
+            CommandConfigurationException exception = Assert.Throws<CommandConfigurationException>(
+                () =>
+                    shell.AddCommand(
+                        CommandBuilder
+                            .Create("bounded-default")
+                            .Arg<int>("count", spec => spec.Default(0).Range(1, 100))
+                            .Handler((context, arguments) => { }),
+                        out _
+                    )
             );
             Assert.That(
                 exception.Message,

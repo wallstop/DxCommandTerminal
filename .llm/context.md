@@ -133,6 +133,9 @@ frontmatter validity, index freshness, and pointer-file delegation; see
     types (`int?`, nullable structs). `CommandInfo.maxArgCount` and `AddCommand` use `int?`
     (legacy negative values normalize to `null`). `RegisterCommandAttribute.MaxArgCount`
     keeps `int` because attribute properties cannot be nullable; `CommandInfo` normalizes.
+    The same rule bans null returns from helpers: expose `TryXxx`/`out`/`Array.Empty`
+    instead (an internal helper returning null-for-none is a flagged review finding, PR
+    #67), and prefer `Math.Max`/`Math.Clamp` over manual `cond ? a : b` clamps.
 17. No `params` on frequently-called APIs; provide fixed-arity overloads (`params` allocates).
     One-time configuration APIs may use `params`.
 18. Hot-path collection access avoids interface dispatch: specialize arrays and `List<T>`
@@ -191,6 +194,17 @@ frontmatter validity, index freshness, and pointer-file delegation; see
    `TerminalThemeStyleSheetHelper`, not per-code style mutations.
 4. Runtime code must stay WebGL/IL2CPP-safe: no managed reflection-dependent APIs outside the
    command registration path (see [webgl-command-registration](./skills/webgl-command-registration/SKILL.md)).
+5. Files on the generator-tests CI path filter (`Runtime/Attributes/RegisterCommandAttribute.cs`,
+   `CommandArg.cs`, `CommandCatalogEntry.cs`, `Runtime/Analyzers/**`) get compiled under
+   `EnableNETAnalyzers` on netstandard2.0 in CI: no `string.Contains(char)` (CA1307), no
+   `Contains(string)` for single chars (CA1847), and no `Contains(char, StringComparison)`
+   (missing on netstandard2.0). Use `0 <= s.IndexOf(' ', StringComparison.Ordinal)` and
+   `string.Replace(" ", ..., StringComparison.Ordinal)`; explicit null checks before
+   dereference in public methods (CA1062). When converting a `?.` chain to an IndexOf
+   guard, carry the null check over - dropping it turns a typed definition error into a
+   NullReferenceException (Bugbot finding on PR #67; pinned by a null-name test).
+   Reproduce with
+   `dotnet test Generator~/WallstopStudios.DxCommandTerminal.SourceGenerators.Tests`.
 
 ### Command Registration (Quick Reference)
 
@@ -198,6 +212,14 @@ frontmatter validity, index freshness, and pointer-file delegation; see
   command name is inferred from the method name (`COMMAND` infix/suffix/prefix stripped),
   overridable via `Name = "..."`.
 - Non-static commands register manually: `Terminal.Shell.AddCommand(name, handler, min, max, help)`.
+- Builder commands: `CommandBuilder.Create(...)` with `.Arg<T>`, `.Subcommand` (routes the
+  first argument; children compose to any depth), and disposable handles. Definition-time
+  misconfiguration throws `CommandConfigurationException` (an `InvalidOperationException`
+  subclass carrying `CommandName`) - tests must assert that exact type, not the base.
+- Completion providers always receive a context scoped to the command's own arguments:
+  `ActiveArgumentIndex` and `PrecedingArguments` are relative to that command, and the
+  router shifts them per routing level (`CommandCompletionContext.ForSubcommand`). Never
+  hand a provider a parent-shifted context.
 - Details: [register-terminal-command](./skills/register-terminal-command/SKILL.md).
 
 ### User-Facing Copy (STE)
