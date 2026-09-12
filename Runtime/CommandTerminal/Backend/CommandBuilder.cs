@@ -27,6 +27,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     public sealed class CommandBuilder
     {
         private static readonly CommandArgument[] NoArguments = Array.Empty<CommandArgument>();
+        private static readonly object[] NoValues = Array.Empty<object>();
 
         /// <summary>The command name, matched case-insensitively; spaces are stripped at registration.</summary>
         public string Name { get; }
@@ -87,7 +88,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             int offset
         )
         {
-            object[] parsed = new object[specs.Length];
+            object[] parsed = specs.Length == 0 ? NoValues : new object[specs.Length];
             for (int i = 0; i < specs.Length; ++i)
             {
                 if (arguments.Count <= offset + i)
@@ -141,34 +142,14 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         private static CommandCompletionProvider BuildCompletionProvider(CommandArgument[] specs)
         {
-            bool anyChoices = false;
-            for (int i = 0; i < specs.Length; ++i)
-            {
-                anyChoices |= specs[i].HasChoices;
-            }
-
-            if (!anyChoices)
+            CommandCompletionProvider[] stages = BuildSpecCompletionStages(specs);
+            if (stages == null)
             {
                 /*
                     No choices anywhere: leave the provider unset so the
                     command keeps the shared history-based completion path.
                  */
                 return null;
-            }
-
-            CommandCompletionProvider[] stages = new CommandCompletionProvider[specs.Length];
-            for (int i = 0; i < specs.Length; ++i)
-            {
-                CommandArgument spec = specs[i];
-                if (!spec.HasChoices)
-                {
-                    continue;
-                }
-
-                stages[i] = (
-                    in CommandCompletionContext context,
-                    List<CommandCompletion> results
-                ) => spec.AppendCompletions(context, results);
             }
 
             return CommandCompletionProviders.Staged(stages);
@@ -259,7 +240,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 owner.IssueErrorMessage(
                     $"'{route.FullPath}': requires at least {route.RequiredCount} argument"
                         + (route.RequiredCount == 1 ? string.Empty : "s")
-                        + $". Usage: {route.PathUsage}"
+                        + $"\n    -> Usage: {route.PathUsage}"
                 );
                 return;
             }
@@ -269,7 +250,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 owner.IssueErrorMessage(
                     $"'{route.FullPath}': expects at most {route.Specs.Length} argument"
                         + (route.Specs.Length == 1 ? string.Empty : "s")
-                        + $". Usage: {route.PathUsage}"
+                        + $"\n    -> Usage: {route.PathUsage}"
                 );
                 return;
             }

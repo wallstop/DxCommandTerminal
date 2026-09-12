@@ -162,9 +162,14 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         /// </summary>
         public CommandArg[] ToArray()
         {
+            int count = Count;
+            if (count == 0)
+            {
+                return EmptyArguments;
+            }
+
             if (_array != null)
             {
-                int count = Count;
                 CommandArg[] arrayCopy = new CommandArg[count];
                 Array.Copy(_array, _offset, arrayCopy, 0, count);
                 return arrayCopy;
@@ -172,7 +177,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
             if (_list != null)
             {
-                int count = Count;
                 CommandArg[] listCopy = new CommandArg[count];
                 _list.CopyTo(_offset, listCopy, 0, count);
                 return listCopy;
@@ -183,9 +187,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return EmptyArguments;
             }
 
-            int fallbackCount = Count;
-            CommandArg[] copy = new CommandArg[fallbackCount];
-            for (int i = 0; i < fallbackCount; ++i)
+            CommandArg[] copy = new CommandArg[count];
+            for (int i = 0; i < count; ++i)
             {
                 copy[i] = _fallback[_offset + i];
             }
