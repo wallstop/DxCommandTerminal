@@ -78,7 +78,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
         [ThreadStatic]
         private static StringBuilder CachedBuilder;
 
-        internal static string Emit(List<CommandModel> commands)
+        internal static string Emit(List<CommandModel> commands, bool preserveCatalog)
         {
             int capacity = BaseCapacityEstimate + PerCommandCapacityEstimate * commands.Count;
             StringBuilder builder = RentBuilder(capacity);
@@ -94,6 +94,21 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             }
 
             AppendHeader(builder);
+            if (preserveCatalog)
+            {
+                /*
+                    Unity's linker honors [Preserve] as a root annotation. A
+                    type-level preserve keeps only the type and its default
+                    constructor, so the class attribute exists to keep the
+                    type resolvable for the shell's GetType probe, and the
+                    method attribute on Collect makes that entry method a
+                    root; the linker's reachability walk from a root keeps
+                    Build, the binder factories, and every directly created
+                    handler delegate. Private handlers stay bound by name and
+                    keep their per-site requirements.
+                 */
+                builder.Append(Indent2).AppendLine("[global::UnityEngine.Scripting.Preserve]");
+            }
             builder.Append(Indent2).AppendLine("internal static class CommandCatalog");
             builder.Append(Indent2).AppendLine("{");
             builder
@@ -102,6 +117,10 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                 .Append(EntryListType)
                 .AppendLine(" Entries = Build();");
             builder.AppendLine();
+            if (preserveCatalog)
+            {
+                builder.Append(Indent3).AppendLine("[global::UnityEngine.Scripting.Preserve]");
+            }
             builder
                 .Append(Indent3)
                 .Append("public static void Collect(")

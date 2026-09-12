@@ -11,15 +11,27 @@ metadata:
 
 Attribute-based command discovery is catalog-first: the bundled source generator emits an
 internal `WallstopStudios.DxCommandTerminal.Generated.CommandCatalog` into every assembly that
-declares `[RegisterCommand]` methods, and the shell binds those catalogs directly. Catalogs
-still address handler methods by name (direct delegate creation for accessible methods, exact
-reflection identity for private ones), so IL2CPP managed stripping can still remove attributed
-methods the generated code cannot prove referenced - the failure mode is the same, just
-narrower. Assemblies without a catalog (precompiled DLLs) fall back to the reflection scan,
-which has the original full exposure.
+declares `[RegisterCommand]` methods, and the shell binds those catalogs directly. The catalog
+type is reached only through reflection (`assembly.GetType`/`GetMethod`), so managed stripping
+could otherwise remove it and every command it carries. The generator therefore emits
+`[UnityEngine.Scripting.Preserve]` - on the catalog class and on its `Collect` entry method -
+whenever the compilation resolves `UnityEngine.Scripting.PreserveAttribute` (every Unity
+compilation does; a noEngineReferences compilation gets no attribute and keeps the historical
+behavior). Unity linker semantics: a type-level preserve keeps only the type and its default
+constructor, while a method-level preserve roots the method, its declaring type, and the
+method's reachable dependency graph - so the attribute on `Collect` is what keeps `Build`,
+the binder factories, and every directly created handler delegate alive at any Managed
+Stripping Level, on IL2CPP and WebGL alike.
 
-**Required setting** (Player > WebGL > Other Settings > Optimizations > Managed Stripping Level):
-`Low`, `Minimal`, or `None`. `Medium` or `High` breaks command registration.
+Two paths stay reflection-bound and can still be stripped at `Medium` or `High`:
+
+1. Handlers in private, non-partial types: the catalog binds them by exact reflection
+   identity (string-addressed, invisible to the linker).
+2. Assemblies without a catalog (precompiled DLLs): discovered by the reflection scan.
+
+**Required setting**: any Managed Stripping Level works for generated catalogs of accessible
+handlers. For the two paths above, `Low`, `Minimal`, or `None` is still required unless the
+mitigations below apply.
 
 ## When the stripping level cannot be lowered
 
@@ -30,16 +42,22 @@ which has the original full exposure.
    through stripping, but is per-site and easy to forget - prefer manual registration for
    stripping-restricted pipelines.
 3. **link.xml** can preserve whole assemblies (`<assembly fullname="YourGame" preserve="all"/>`);
-   use surgically, it defeats stripping benefits at that scope.
+   use surgically, it defeats stripping benefits at that scope. The package ships none: the
+   generator-emitted `[Preserve]` covers the generated surface without forcing whole-assembly
+   preservation on consumers.
 
 ## Rules for Runtime changes
 
 - Keep reflection confined to the command-registration scan path; do not add new
   reflection-dependent public APIs to `Runtime/` (see `context.md` Unity Package Rules).
-- `EditorOnly`/`DevelopmentOnly` commands are filtered by build target, not by stripping; they
-  still require the stripping fix above on WebGL.
-- After touching the registration path, validate on a WebGL build with an attribute-registered
-  command before merging.
+- If the emitter gains a new reflection-by-name binding, extend the generated code's
+  stripping protection in the same change and pin it in the generator driver tests (see
+  `GeneratedCatalogCarriesStrippingPreservation`); the payload byte-compare lane fails on
+  a stale shipped analyzer DLL.
+- `EditorOnly`/`DevelopmentOnly` commands are filtered by build target, not by stripping;
+  generated catalogs carry the same `[Preserve]` regardless.
+- After touching the registration path or the generator, validate on a WebGL build with an
+  attribute-registered command before merging.
 
 ## Diagnosing "commands missing in build"
 

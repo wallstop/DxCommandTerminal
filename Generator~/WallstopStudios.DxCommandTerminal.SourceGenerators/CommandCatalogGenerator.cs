@@ -30,6 +30,9 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
         private const string ContextsMetadataName =
             "WallstopStudios.DxCommandTerminal.Backend.CommandExecutionContexts";
 
+        private const string PreserveAttributeMetadataName =
+            "UnityEngine.Scripting.PreserveAttribute";
+
         private const string GeneratedHintName = "DxCommandTerminalCommandCatalog.g.cs";
 
         private static bool IsRegisterCommand(INamedTypeSymbol attributeClass)
@@ -196,6 +199,18 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                 return;
             }
 
+            /*
+                Stripping preservation: the generated catalog is bound only
+                through reflection, so without [Preserve] the linker can strip
+                it and every command it carries. Unity compilations always
+                reference UnityEngine, but a consumer with noEngineReferences
+                would fail to compile the attribute, so emission is gated on
+                the attribute type actually resolving; without it the catalog
+                keeps today's stripping behavior.
+             */
+            bool preserveCatalog =
+                compilation.GetTypeByMetadataName(PreserveAttributeMetadataName) != null;
+
             List<CommandModel> commands = new List<CommandModel>();
             HashSet<IMethodSymbol> seenMethods = new HashSet<IMethodSymbol>(
                 SymbolEqualityComparer.Default
@@ -268,7 +283,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                 }
             }
 
-            string source = CatalogEmitter.Emit(commands);
+            string source = CatalogEmitter.Emit(commands, preserveCatalog);
             context.AddSource(GeneratedHintName, source);
         }
     }

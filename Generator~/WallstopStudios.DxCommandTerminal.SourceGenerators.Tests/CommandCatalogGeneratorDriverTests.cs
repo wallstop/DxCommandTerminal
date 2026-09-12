@@ -554,6 +554,47 @@ namespace Fixtures
         }
 
         [Fact]
+        public void GeneratedCatalogCarriesStrippingPreservation()
+        {
+            string generated = TestCompilationFactory
+                .RunGenerator(
+                    TestCompilationFactory.CreateCompilation("Preserved", DeterminismFixture)
+                )
+                .generated?.ToString();
+
+            Assert.NotNull(generated);
+            string preserveAttribute = "[global::UnityEngine.Scripting.Preserve]";
+            Assert.Contains(preserveAttribute, generated, StringComparison.Ordinal);
+            Assert.Contains(
+                preserveAttribute
+                    + Environment.NewLine
+                    + "        internal static class CommandCatalog",
+                generated,
+                StringComparison.Ordinal
+            );
+            Assert.Contains(
+                preserveAttribute + Environment.NewLine + "            public static void Collect(",
+                generated,
+                StringComparison.Ordinal
+            );
+        }
+
+        [Fact]
+        public void CatalogOmitsPreservationWithoutUnityEngine()
+        {
+            (SyntaxTree generated, _) = TestCompilationFactory.RunGenerator(
+                TestCompilationFactory.CreateCompilation(
+                    "NoUnity",
+                    DeterminismFixture,
+                    includeUnityShim: false
+                )
+            );
+
+            Assert.NotNull(generated);
+            Assert.DoesNotContain("Preserve", generated.ToString(), StringComparison.Ordinal);
+        }
+
+        [Fact]
         public void EntryOrderMatchesDeclarationOrder()
         {
             Assembly assembly = TestCompilationFactory.CompileAndLoad(
