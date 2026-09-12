@@ -231,6 +231,8 @@ Terminal.Shell.AddCommand(
 
 The remaining argument must be the final declaration: arguments declared after it, a second remaining argument, or a default on it throw at definition time.
 
+Definition-time mistakes throw `CommandConfigurationException`, which carries structured data for programmatic handling: `Failure` classifies the problem (empty name, duplicate name, missing handler, argument ordering, remaining-argument misuse, unparseable argument type, unsupported argument feature, invalid choices or range or default, subcommand conflicts, null configure result), and `CommandName`, `ArgumentName`, `SubcommandName`, and `ArgumentType` identify what failed - no message parsing required. Reading a parsed argument with the wrong type inside a handler throws `CommandArgumentTypeMismatchException`, carrying `ArgumentName`, `StoredType`, and `RequestedType`; remaining arguments store an array of their element type, so reading the element type itself reports `StoredType` as that array type.
+
 Note: if your `TerminalUI` uses `Reset State On Init`, the terminal rebuilds its shell during its own startup. Register commands from `Start` (or after the terminal is ready) rather than from another component's `OnEnable`, or the registration can be discarded by that reset.
 
 ---

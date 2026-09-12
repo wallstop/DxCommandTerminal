@@ -212,10 +212,12 @@ frontmatter validity, index freshness, and pointer-file delegation; see
   command name is inferred from the method name (`COMMAND` infix/suffix/prefix stripped),
   overridable via `Name = "..."`.
 - Non-static commands register manually: `Terminal.Shell.AddCommand(name, handler, min, max, help)`.
-- Builder commands: `CommandBuilder.Create(...)` with `.Arg<T>`, `.Subcommand` (routes the
-  first argument; children compose to any depth), and disposable handles. Definition-time
-  misconfiguration throws `CommandConfigurationException` (an `InvalidOperationException`
-  subclass carrying `CommandName`) - tests must assert that exact type, not the base.
+- Builder commands: `CommandBuilder.Create(...)` with `.Arg<T>`, `.Subcommand`, and
+  disposable handles. Definition-time misconfiguration throws
+  `CommandConfigurationException` (an `InvalidOperationException` subclass carrying
+  `CommandName`, a `CommandConfigurationFailure` kind, and the argument/subcommand/type
+  scope; wrong-type `Get<T>` reads throw `CommandArgumentTypeMismatchException`) -
+  tests must assert that exact type and branch on `Failure`, never on message text.
 - Completion providers always receive a context scoped to the command's own arguments:
   `ActiveArgumentIndex` and `PrecedingArguments` are relative to that command, and the
   router shifts them per routing level (`CommandCompletionContext.ForSubcommand`). Never
@@ -263,10 +265,9 @@ Details: [llm-attribution](./skills/llm-attribution/SKILL.md).
 ## Testing
 
 - Tests are PlayMode tests under `Tests/Runtime/` (Unity Test Runner); harness components live in
-  `Tests/Runtime/Components/`.
-- Command-behavior tests are data-driven over `CommandArg`/`CommandShell`/`Terminal` static
-  facades; see `Tests/Runtime/CommandArgTests.cs` and `CommandShellTests.cs` for the house style.
-- Run via Unity Test Runner (Window > General > Test Runner) or Unity CLI `-runTests`.
+  `Tests/Runtime/Components/`. Run via Unity Test Runner or Unity CLI `-runTests`.
+- Command-behavior tests are data-driven over the static facades; see
+  `Tests/Runtime/CommandArgTests.cs` and `CommandShellTests.cs` for the house style.
 - See [run-terminal-tests](./skills/run-terminal-tests/SKILL.md) before writing or debugging tests.
 
 ---

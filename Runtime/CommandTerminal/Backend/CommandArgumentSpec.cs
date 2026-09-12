@@ -45,6 +45,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         public override bool HasChoices => _staticChoices != null || _dynamicChoices != null;
 
+        internal override Type DeclaredType => typeof(T);
+
         /// <summary>
         ///     True when the argument is its command's unbounded trailing
         ///     argument; see <see cref="CommandBuilder.Remaining{T}"/>.
@@ -256,7 +258,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             if (values == null || values.Length == 0)
             {
                 throw new CommandConfigurationException(
-                    $"Argument '{Name}' needs at least one choice."
+                    CommandConfigurationFailure.InvalidChoices,
+                    $"Argument '{Name}' needs at least one choice.",
+                    argumentName: Name
                 );
             }
 
@@ -265,7 +269,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 if (values[i] == null)
                 {
                     throw new CommandConfigurationException(
-                        $"Argument '{Name}' choices must not contain null."
+                        CommandConfigurationFailure.InvalidChoices,
+                        $"Argument '{Name}' choices must not contain null.",
+                        argumentName: Name
                     );
                 }
             }
@@ -326,7 +332,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             if (typeof(T) != typeof(bool))
             {
                 throw new CommandConfigurationException(
-                    $"Argument '{Name}' of type {TypeName} cannot use {nameof(BoolChoices)}; only bool arguments can."
+                    CommandConfigurationFailure.UnsupportedArgumentFeature,
+                    $"Argument '{Name}' of type {TypeName} cannot use {nameof(BoolChoices)}; only bool arguments can.",
+                    argumentName: Name,
+                    argumentType: typeof(T)
                 );
             }
 
@@ -344,7 +353,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             if (!typeof(T).IsEnum)
             {
                 throw new CommandConfigurationException(
-                    $"Argument '{Name}' of type {TypeName} cannot use {nameof(EnumChoices)}; only enum arguments can."
+                    CommandConfigurationFailure.UnsupportedArgumentFeature,
+                    $"Argument '{Name}' of type {TypeName} cannot use {nameof(EnumChoices)}; only enum arguments can.",
+                    argumentName: Name,
+                    argumentType: typeof(T)
                 );
             }
 
@@ -371,7 +383,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             )
             {
                 throw new CommandConfigurationException(
-                    $"Argument '{Name}' of type {TypeName} cannot use {nameof(Range)}; {type} is not comparable."
+                    CommandConfigurationFailure.UnsupportedArgumentFeature,
+                    $"Argument '{Name}' of type {TypeName} cannot use {nameof(Range)}; {type} is not comparable.",
+                    argumentName: Name,
+                    argumentType: type
                 );
             }
 
@@ -392,7 +407,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             if (0 < comparer.Compare(min, max))
             {
                 throw new CommandConfigurationException(
-                    $"Argument '{Name}' range {FormatValue(min)}..{FormatValue(max)} is inverted."
+                    CommandConfigurationFailure.InvalidRange,
+                    $"Argument '{Name}' range {FormatValue(min)}..{FormatValue(max)} is inverted.",
+                    argumentName: Name
                 );
             }
 
@@ -483,9 +500,12 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
 
             throw new CommandConfigurationException(
+                CommandConfigurationFailure.UnparseableArgumentType,
                 $"Argument '{Name}' of type {typeof(T)} has no registered parser. "
                     + $"Register one through {nameof(CommandArg)}.{nameof(CommandArg.RegisterParser)} "
-                    + "or provide one with CommandArgumentSpec.Parser."
+                    + "or provide one with CommandArgumentSpec.Parser.",
+                argumentName: Name,
+                argumentType: typeof(T)
             );
         }
 

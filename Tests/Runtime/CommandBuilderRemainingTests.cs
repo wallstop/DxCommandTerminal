@@ -250,6 +250,22 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 mismatch,
                 "Reading a remaining argument as its element type is a programming error"
             );
+            Assert.IsTrue(
+                mismatch is CommandArgumentTypeMismatchException,
+                "The element-type read throws the typed binder exception"
+            );
+            CommandArgumentTypeMismatchException typed =
+                (CommandArgumentTypeMismatchException)mismatch;
+            Assert.AreEqual(
+                typeof(string[]),
+                typed.StoredType,
+                "The remaining argument's slot holds the element-type array"
+            );
+            Assert.AreEqual(
+                typeof(string),
+                typed.RequestedType,
+                "The element-type read requested the bare element type"
+            );
         }
 
         [TestCase("", ExpectedResult = "say [message:string...]")]

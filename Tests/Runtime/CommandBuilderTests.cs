@@ -683,6 +683,27 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 mismatch,
                 "Reading an argument with the wrong type fails with a descriptive error"
             );
+            Assert.IsTrue(
+                mismatch is CommandArgumentTypeMismatchException,
+                "The mismatch throws the typed binder exception"
+            );
+            CommandArgumentTypeMismatchException typed =
+                (CommandArgumentTypeMismatchException)mismatch;
+            Assert.AreEqual(
+                "score",
+                typed.ArgumentName,
+                "The mismatch names the argument that was read"
+            );
+            Assert.AreEqual(
+                typeof(int),
+                typed.StoredType,
+                "The mismatch carries the argument's stored value type"
+            );
+            Assert.AreEqual(
+                typeof(float),
+                typed.RequestedType,
+                "The mismatch carries the requested type"
+            );
         }
 
         [Test]

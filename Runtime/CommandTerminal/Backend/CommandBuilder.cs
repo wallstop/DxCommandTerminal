@@ -53,6 +53,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             if (string.IsNullOrWhiteSpace(name))
             {
                 throw new CommandConfigurationException(
+                    CommandConfigurationFailure.EmptyName,
                     "A command name is required; pass a non-empty name to CommandBuilder.Create."
                 );
             }
@@ -66,7 +67,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             return Create(name).Help(help);
         }
 
-        private static string NormalizeName(string owner, string name)
+        private static string NormalizeName(string owner, string name, bool isSubcommandName = true)
         {
             string normalized = name;
             if (normalized != null && 0 <= normalized.IndexOf(' ', StringComparison.Ordinal))
@@ -77,8 +78,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             if (string.IsNullOrWhiteSpace(normalized))
             {
                 throw new CommandConfigurationException(
+                    CommandConfigurationFailure.EmptyName,
                     $"Command '{owner ?? string.Empty}': subcommand names must not be empty.",
-                    owner
+                    owner,
+                    subcommandName: isSubcommandName ? name : null
                 );
             }
 
@@ -486,10 +489,12 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             if (0 < _arguments.Count && _arguments[_arguments.Count - 1].IsRemaining)
             {
                 throw new CommandConfigurationException(
+                    CommandConfigurationFailure.InvalidRemainingArgument,
                     $"Command '{Name}': argument '{name}' cannot follow the remaining "
                         + $"argument '{_arguments[_arguments.Count - 1].Name}'; the remaining "
                         + "argument consumes every trailing token.",
-                    Name
+                    Name,
+                    argumentName: name
                 );
             }
 
@@ -525,9 +530,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 if (argument.IsRemaining)
                 {
                     throw new CommandConfigurationException(
+                        CommandConfigurationFailure.InvalidRemainingArgument,
                         $"Command '{Name}': only one remaining argument is allowed; "
                             + $"'{argument.Name}' already consumes every trailing token.",
-                        Name
+                        Name,
+                        argumentName: name
                     );
                 }
             }
@@ -536,9 +543,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             if (spec.HasExplicitDefault)
             {
                 throw new CommandConfigurationException(
+                    CommandConfigurationFailure.InvalidRemainingArgument,
                     $"Command '{Name}': the remaining argument '{name}' cannot declare a "
                         + "default; an invocation without trailing tokens reads as an empty array.",
-                    Name
+                    Name,
+                    argumentName: name
                 );
             }
 
@@ -569,29 +578,43 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 if (string.Equals(existing.Name, normalized, StringComparison.OrdinalIgnoreCase))
                 {
                     throw new CommandConfigurationException(
+                        CommandConfigurationFailure.DuplicateName,
                         $"Command '{Name}': duplicate subcommand name '{normalized}'.",
-                        Name
+                        Name,
+                        subcommandName: normalized
                     );
                 }
             }
 
             CommandBuilder subcommand = Create(normalized);
-            configure(subcommand);
+            try
+            {
+                configure(subcommand);
+            }
+            catch (CommandConfigurationException e)
+            {
+                throw WithComposedScope(e, normalized);
+            }
+
             if (subcommand._contexts != CommandExecutionContextSets.Gameplay)
             {
                 throw new CommandConfigurationException(
+                    CommandConfigurationFailure.InvalidSubcommandConfiguration,
                     $"Command '{Name} {normalized}': subcommands run inside the parent's "
                         + "execution contexts; do not set Contexts on a subcommand.",
-                    Name
+                    Name,
+                    subcommandName: normalized
                 );
             }
 
             if (!subcommand._addToHistory)
             {
                 throw new CommandConfigurationException(
+                    CommandConfigurationFailure.InvalidSubcommandConfiguration,
                     $"Command '{Name} {normalized}': subcommands are recorded under the "
                         + "parent's history policy; do not set AddToHistory on a subcommand.",
-                    Name
+                    Name,
+                    subcommandName: normalized
                 );
             }
 
@@ -623,11 +646,12 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             if (string.IsNullOrWhiteSpace(Name))
             {
                 throw new CommandConfigurationException(
+                    CommandConfigurationFailure.EmptyName,
                     "A command name is required; pass a non-empty name to CommandBuilder.Create."
                 );
             }
 
-            string name = NormalizeName(Name, Name);
+            string name = NormalizeName(Name, Name, isSubcommandName: false);
             if (0 < _subcommands.Count)
             {
                 return BuildRouterDefinition(owner, name);
@@ -670,6 +694,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             if (0 < _arguments.Count)
             {
                 throw new CommandConfigurationException(
+                    CommandConfigurationFailure.InvalidSubcommandConfiguration,
                     $"Command '{name}': a command with subcommands cannot declare its own "
                         + "arguments; declare them on the subcommands.",
                     name
@@ -741,6 +766,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             if (0 < _arguments.Count)
             {
                 throw new CommandConfigurationException(
+                    CommandConfigurationFailure.InvalidSubcommandConfiguration,
                     $"Command '{path}': a command with subcommands cannot declare its own "
                         + "arguments; declare them on the subcommands.",
                     path
@@ -764,8 +790,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                         second name past it; Build is the authoritative gate.
                     */
                     throw new CommandConfigurationException(
+                        CommandConfigurationFailure.DuplicateName,
                         $"Command '{path}': duplicate subcommand name '{route.Name}'.",
-                        path
+                        path,
+                        subcommandName: route.Name
                     );
                 }
 
@@ -790,8 +818,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             if (string.IsNullOrWhiteSpace(name))
             {
                 throw new CommandConfigurationException(
+                    CommandConfigurationFailure.EmptyName,
                     $"Command '{Name}': argument names must not be empty.",
-                    Name
+                    Name,
+                    argumentName: name
                 );
             }
 
@@ -800,8 +830,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 if (string.Equals(argument.Name, name, StringComparison.OrdinalIgnoreCase))
                 {
                     throw new CommandConfigurationException(
+                        CommandConfigurationFailure.DuplicateName,
                         $"Command '{Name}': duplicate argument name '{name}'.",
-                        Name
+                        Name,
+                        argumentName: name
                     );
                 }
             }
@@ -816,18 +848,84 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             CommandArgumentSpec<T> spec = new(name, isRemaining);
             if (configure != null)
             {
-                spec = configure(spec);
+                try
+                {
+                    spec = configure(spec);
+                }
+                catch (CommandConfigurationException e)
+                {
+                    throw WithCommandScope(e, name);
+                }
+
                 if (spec == null)
                 {
                     throw new CommandConfigurationException(
+                        CommandConfigurationFailure.NullConfigurationResult,
                         $"Command '{Name}': the configuration callback for argument '{name}' returned null.",
-                        Name
+                        Name,
+                        argumentName: name
                     );
                 }
             }
 
-            spec.EnsureParseable();
+            try
+            {
+                spec.EnsureParseable();
+            }
+            catch (CommandConfigurationException e)
+            {
+                throw WithCommandScope(e, name);
+            }
+
             return spec;
+        }
+
+        /*
+            Spec-level misconfigurations throw without knowing their owning
+            command; re-throwing through the builder attaches the command and
+            argument scope so every definition-time failure reports the same
+            structured identity. The original exception rides as the inner
+            exception, keeping its throw-site stack.
+         */
+        private CommandConfigurationException WithCommandScope(
+            CommandConfigurationException e,
+            string argumentName
+        )
+        {
+            return new CommandConfigurationException(
+                e.Failure,
+                e.Message,
+                e.CommandName ?? Name,
+                argumentName: e.ArgumentName ?? argumentName,
+                subcommandName: e.SubcommandName,
+                argumentType: e.ArgumentType,
+                innerException: e
+            );
+        }
+
+        /*
+            Failures thrown while configuring a subcommand report the
+            subcommand builder's own name; the parent composes the routed
+            path here so the identity matches Build-time diagnostics, which
+            name the composed path ('inventory add').
+         */
+        private CommandConfigurationException WithComposedScope(
+            CommandConfigurationException e,
+            string subcommandName
+        )
+        {
+            string innerCommand = e.CommandName;
+            return new CommandConfigurationException(
+                e.Failure,
+                e.Message,
+                string.IsNullOrEmpty(innerCommand)
+                    ? $"{Name} {subcommandName}"
+                    : $"{Name} {innerCommand}",
+                argumentName: e.ArgumentName,
+                subcommandName: e.SubcommandName ?? subcommandName,
+                argumentType: e.ArgumentType,
+                innerException: e
+            );
         }
 
         private CommandArgument[] ValidateLeafConfiguration(string path)
@@ -835,6 +933,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             if (_handler == null)
             {
                 throw new CommandConfigurationException(
+                    CommandConfigurationFailure.MissingHandler,
                     $"Command '{path}': set a handler with CommandBuilder.Handler before registration.",
                     path
                 );
@@ -855,9 +954,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                     if (seenOptional)
                     {
                         throw new CommandConfigurationException(
+                            CommandConfigurationFailure.ArgumentOrdering,
                             $"Command '{path}': required argument '{spec.Name}' must be "
                                 + "declared before every optional argument.",
-                            path
+                            path,
+                            argumentName: spec.Name
                         );
                     }
 
@@ -884,9 +985,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 if (defaultError != null)
                 {
                     throw new CommandConfigurationException(
+                        CommandConfigurationFailure.InvalidDefault,
                         $"Command '{path}': the default for argument '{spec.Name}' fails "
                             + $"its own validation: {defaultError}",
-                        path
+                        path,
+                        argumentName: spec.Name
                     );
                 }
             }
