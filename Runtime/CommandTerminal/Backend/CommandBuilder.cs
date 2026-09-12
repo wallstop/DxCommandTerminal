@@ -68,7 +68,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         private static string NormalizeName(string owner, string name)
         {
             string normalized = name;
-            if (0 <= normalized.IndexOf(' ', StringComparison.Ordinal))
+            if (normalized != null && 0 <= normalized.IndexOf(' ', StringComparison.Ordinal))
             {
                 normalized = normalized.Replace(" ", string.Empty, StringComparison.Ordinal);
             }

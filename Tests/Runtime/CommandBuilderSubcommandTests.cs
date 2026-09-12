@@ -861,6 +861,16 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 Does.Contain("subcommand names must not be empty"),
                 "Names that normalize to nothing are rejected"
             );
+
+            CommandConfigurationException nullName = Assert.Throws<CommandConfigurationException>(
+                () =>
+                    CommandBuilder.Create("inventory").Subcommand(null, _ => { })
+            );
+            Assert.That(
+                nullName.Message,
+                Does.Contain("subcommand names must not be empty"),
+                "A null subcommand name is a definition error, not a crash"
+            );
         }
 
         [Test]

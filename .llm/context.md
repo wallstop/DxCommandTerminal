@@ -200,7 +200,10 @@ frontmatter validity, index freshness, and pointer-file delegation; see
    `Contains(string)` for single chars (CA1847), and no `Contains(char, StringComparison)`
    (missing on netstandard2.0). Use `0 <= s.IndexOf(' ', StringComparison.Ordinal)` and
    `string.Replace(" ", ..., StringComparison.Ordinal)`; explicit null checks before
-   dereference in public methods (CA1062). Reproduce with
+   dereference in public methods (CA1062). When converting a `?.` chain to an IndexOf
+   guard, carry the null check over - dropping it turns a typed definition error into a
+   NullReferenceException (Bugbot finding on PR #67; pinned by a null-name test).
+   Reproduce with
    `dotnet test Generator~/WallstopStudios.DxCommandTerminal.SourceGenerators.Tests`.
 
 ### Command Registration (Quick Reference)
