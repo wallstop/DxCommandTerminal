@@ -1,7 +1,8 @@
 /*
    Minimal Unity scripting shim so Unity-free generator test compilations can include the
    real Runtime sources that reference UnityEngine types (pattern adapted from unity-helpers,
-   MIT, Ambiguous-Interactive). Only the members CommandArg.cs actually touches are provided.
+   MIT, Ambiguous-Interactive). Only the members CommandArg.cs and CommandArgParsers.cs
+   actually touch are provided.
 */
 namespace UnityEngine
 {
@@ -154,6 +155,70 @@ namespace UnityEngine
             this.y = y;
             this.z = z;
             this.w = w;
+        }
+    }
+
+    public struct Bounds
+    {
+        public Vector3 center;
+        public Vector3 size;
+
+        public Bounds(Vector3 center, Vector3 size)
+        {
+            this.center = center;
+            this.size = size;
+        }
+    }
+
+    public struct BoundsInt
+    {
+        public Vector3Int position;
+        public Vector3Int size;
+
+        public BoundsInt(Vector3Int position, Vector3Int size)
+        {
+            this.position = position;
+            this.size = size;
+        }
+    }
+
+    public sealed class RectOffset
+    {
+        public int left;
+        public int right;
+        public int top;
+        public int bottom;
+
+        public RectOffset(int left, int right, int top, int bottom)
+        {
+            this.left = left;
+            this.right = right;
+            this.top = top;
+            this.bottom = bottom;
+        }
+    }
+
+    public struct Plane
+    {
+        public Vector3 normal;
+        public float distance;
+
+        public Plane(Vector3 normal, float distance)
+        {
+            this.normal = normal;
+            this.distance = distance;
+        }
+    }
+
+    public struct Ray
+    {
+        public Vector3 origin;
+        public Vector3 direction;
+
+        public Ray(Vector3 origin, Vector3 direction)
+        {
+            this.origin = origin;
+            this.direction = direction;
         }
     }
 }

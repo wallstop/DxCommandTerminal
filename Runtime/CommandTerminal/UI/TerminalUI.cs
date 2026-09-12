@@ -3,7 +3,7 @@
     using System;
     using System.Collections.Generic;
     using System.ComponentModel;
-    using System.Linq;
+    using System.Globalization;
     using Attributes;
     using Backend;
     using Extensions;
@@ -25,6 +25,10 @@
 
         // Cache log callback to reduce allocations
         private static readonly Application.LogCallback UnityLogCallback = HandleUnityLog;
+
+        private static readonly List<TerminalLogType> EmptyLogTypes = new();
+
+        private static readonly List<string> EmptyStrings = new();
 
         // ReSharper disable once MemberCanBePrivate.Global
         public bool IsClosed =>
@@ -229,12 +233,6 @@
         private bool _tokenCompletionQuoted;
 
         /*
-            Caret to restore on the next focus pass; negative keeps the
-            focus-at-end behavior. Token completions set it.
-         */
-        private int _pendingCaretIndex = -1;
-
-        /*
             The last value RefreshUI wrote to the field. The panel re-emits it
             as a synthetic change event; matching it keeps that echo from
             resetting completion state like user input.
@@ -244,6 +242,12 @@
 #if UNITY_EDITOR
         private readonly EditorApplication.CallbackFunction _checkForChanges;
 #endif
+        /*
+            Caret to restore on the next focus pass; negative keeps the
+            focus-at-end behavior. Token completions set it. Internal for
+            completion-caret test coverage.
+         */
+        internal int _pendingCaretIndex = -1;
         private ITerminalInput _input;
 
         public TerminalUI()
@@ -348,13 +352,13 @@
                         switch (value)
                         {
                             case List<string> stringList:
-                                value = stringList.ToList();
+                                value = new List<string>(stringList);
                                 break;
                             case List<TerminalLogType> logTypeList:
-                                value = logTypeList.ToList();
+                                value = new List<TerminalLogType>(logTypeList);
                                 break;
                             case List<Font> fontList:
-                                value = fontList.ToList();
+                                value = new List<Font>(fontList);
                                 break;
                         }
                         _propertyValues[property.name] = value;
@@ -454,16 +458,10 @@
                 {
                     Terminal.Buffer.Resize(logBufferSize);
                 }
-                if (
-                    !Terminal.Buffer.ignoredLogTypes.SetEquals(
-                        _ignoredLogTypes ?? Enumerable.Empty<TerminalLogType>()
-                    )
-                )
+                if (!Terminal.Buffer.ignoredLogTypes.SetEquals(_ignoredLogTypes ?? EmptyLogTypes))
                 {
                     Terminal.Buffer.ignoredLogTypes.Clear();
-                    Terminal.Buffer.ignoredLogTypes.UnionWith(
-                        _ignoredLogTypes ?? Enumerable.Empty<TerminalLogType>()
-                    );
+                    Terminal.Buffer.ignoredLogTypes.UnionWith(_ignoredLogTypes ?? EmptyLogTypes);
                 }
             }
 
@@ -490,9 +488,7 @@
             if (
                 Terminal.Shell.IgnoringDefaultCommands != ignoreDefaultCommands
                 || !Terminal.Shell.AutoCommandsRegistered
-                || !Terminal.Shell.IgnoredCommands.SetEquals(
-                    _disabledCommands ?? Enumerable.Empty<string>()
-                )
+                || !Terminal.Shell.IgnoredCommands.SetEquals(_disabledCommands ?? EmptyStrings)
             )
             {
                 Terminal.Shell.ClearAutoRegisteredCommands();
@@ -597,10 +593,10 @@
                         && previousValue is List<string> previousStringList
                     )
                     {
-                        if (!currentStringList.SequenceEqual(previousStringList))
+                        if (!ListsEqual(currentStringList, previousStringList))
                         {
                             needRefresh = true;
-                            _propertyValues[property.name] = currentStringList.ToList();
+                            _propertyValues[property.name] = new List<string>(currentStringList);
                         }
 
                         continue;
@@ -610,10 +606,12 @@
                         && previousValue is List<TerminalLogType> previousLogTypeList
                     )
                     {
-                        if (!currentLogTypeList.SequenceEqual(previousLogTypeList))
+                        if (!ListsEqual(currentLogTypeList, previousLogTypeList))
                         {
                             needRefresh = true;
-                            _propertyValues[property.name] = currentLogTypeList.ToList();
+                            _propertyValues[property.name] = new List<TerminalLogType>(
+                                currentLogTypeList
+                            );
                         }
 
                         continue;
@@ -836,6 +834,76 @@
             Terminal.Buffer?.HandleLog(message, stackTrace, (TerminalLogType)type);
         }
 
+        private static bool NamesContain(List<string> names, string candidate)
+        {
+            foreach (string name in names)
+            {
+                if (string.Equals(name, candidate, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static string FindName(List<string> names, string marker)
+        {
+            foreach (string name in names)
+            {
+                if (name.Contains(marker, StringComparison.OrdinalIgnoreCase))
+                {
+                    return name;
+                }
+            }
+
+            return null;
+        }
+
+        private static Font FindFont(List<Font> fonts, bool requireMono, bool requireRegular)
+        {
+            foreach (Font font in fonts)
+            {
+                string fontName = font.name;
+                if (!requireMono || fontName.Contains("Mono", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (
+                        !requireRegular
+                        || fontName.Contains("Regular", StringComparison.OrdinalIgnoreCase)
+                    )
+                    {
+                        return font;
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        private static bool ListsEqual<T>(List<T> left, List<T> right)
+        {
+            if (ReferenceEquals(left, right))
+            {
+                return true;
+            }
+
+            if (left.Count != right.Count)
+            {
+                return false;
+            }
+
+            EqualityComparer<T> comparer = EqualityComparer<T>.Default;
+            for (int index = 0; index < left.Count; ++index)
+            {
+                if (!comparer.Equals(left[index], right[index]))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
         public void ToggleState(TerminalState newState)
         {
             SetState(_state == newState ? TerminalState.Closed : newState);
@@ -1019,7 +1087,7 @@
                 }
 
                 List<string> themeNames = _themePack._themeNames;
-                if (themeNames.Contains(theme, StringComparer.OrdinalIgnoreCase))
+                if (NamesContain(themeNames, theme))
                 {
                     validTheme = theme;
                     return true;
@@ -1027,7 +1095,7 @@
 
                 foreach (string themeName in ThemeNameHelper.GetPossibleThemeNames(theme))
                 {
-                    if (themeNames.Contains(themeName, StringComparer.OrdinalIgnoreCase))
+                    if (NamesContain(themeNames, themeName))
                     {
                         validTheme = themeName;
                         return true;
@@ -1063,10 +1131,14 @@
                     return;
                 }
 
-                string[] loadedThemes = terminalRoot
-                    .GetClasses()
-                    .Where(ThemeNameHelper.IsThemeName)
-                    .ToArray();
+                List<string> loadedThemes = new();
+                foreach (string cssClass in terminalRoot.GetClasses())
+                {
+                    if (ThemeNameHelper.IsThemeName(cssClass))
+                    {
+                        loadedThemes.Add(cssClass);
+                    }
+                }
 
                 foreach (string loadedTheme in loadedThemes)
                 {
@@ -1263,6 +1335,45 @@
             {
                 _needsFocus = true;
             }
+        }
+
+        internal void ApplyPendingCaret()
+        {
+            if (_pendingCaretIndex < 0 || _commandInput == null)
+            {
+                return;
+            }
+
+            if (_commandInput.value.Length < _pendingCaretIndex)
+            {
+                /*
+                   The queued position targets input the field does not hold
+                   yet; the value sync applies it once the field catches up.
+                */
+                return;
+            }
+
+            bool focused =
+                _textInput != null
+                && _textInput.focusController != null
+                && _textInput.focusController.focusedElement == _textInput;
+
+            /*
+                The field applies programmatic value writes on its own
+                schedule, and that apply can re-clamp the caret after this
+                pass's write. Consume the marker only while focused once the
+                caret stuck on a later pass; an unfocused field keeps the
+                marker (Bugbot: unfocused completion caret jump) so a later
+                fresh focus cannot send the caret to line end.
+             */
+            if (focused && _commandInput.cursorIndex == _pendingCaretIndex)
+            {
+                _pendingCaretIndex = -1;
+                return;
+            }
+
+            _commandInput.cursorIndex = _pendingCaretIndex;
+            _commandInput.selectIndex = _pendingCaretIndex;
         }
 
         private void ResetAutoComplete()
@@ -1715,18 +1826,14 @@
 
             if (themeNames is { Count: > 0 })
             {
-                _runtimeTheme = themeNames.FirstOrDefault(theme =>
-                    theme.Contains("dark", StringComparison.OrdinalIgnoreCase)
-                );
+                _runtimeTheme = FindName(themeNames, "dark");
                 if (_runtimeTheme == null)
                 {
-                    _runtimeTheme = themeNames.FirstOrDefault(theme =>
-                        theme.Contains("light", StringComparison.OrdinalIgnoreCase)
-                    );
+                    _runtimeTheme = FindName(themeNames, "light");
                 }
                 if (_runtimeTheme == null)
                 {
-                    _runtimeTheme = themeNames.FirstOrDefault();
+                    _runtimeTheme = themeNames[0];
                 }
 
                 /*
@@ -1764,25 +1871,18 @@
             List<Font> loadedFonts = _fontPack._fonts;
             if (loadedFonts is { Count: > 0 })
             {
-                _runtimeFont = loadedFonts.FirstOrDefault(font =>
-                    font.name.Contains("Mono", StringComparison.OrdinalIgnoreCase)
-                    && font.name.Contains("Regular", StringComparison.OrdinalIgnoreCase)
-                );
+                _runtimeFont = FindFont(loadedFonts, requireMono: true, requireRegular: true);
                 if (_runtimeFont == null)
                 {
-                    _runtimeFont = loadedFonts.FirstOrDefault(font =>
-                        font.name.Contains("Mono", StringComparison.OrdinalIgnoreCase)
-                    );
+                    _runtimeFont = FindFont(loadedFonts, requireMono: true, requireRegular: false);
                 }
                 if (_runtimeFont == null)
                 {
-                    _runtimeFont = loadedFonts.FirstOrDefault(font =>
-                        font.name.Contains("Regular", StringComparison.OrdinalIgnoreCase)
-                    );
+                    _runtimeFont = FindFont(loadedFonts, requireMono: false, requireRegular: true);
                 }
                 if (_runtimeFont == null)
                 {
-                    _runtimeFont = loadedFonts.FirstOrDefault();
+                    _runtimeFont = loadedFonts[0];
                 }
             }
 
@@ -1886,8 +1986,10 @@
             }
 
             /*
-               Pending carets are consumed on every pass: an accepted
-               completion can be a text no-op that must still move the caret.
+               Pending carets are applied on every pass: an accepted
+               completion can be a text no-op that must still move the
+               caret. The marker is consumed once the write sticks on a
+               focused pass.
             */
             ApplyPendingCaret();
             RefreshStateButtons();
@@ -1916,42 +2018,6 @@
             int textEndPosition = _commandInput.value.Length;
             _commandInput.cursorIndex = textEndPosition;
             _commandInput.selectIndex = textEndPosition;
-        }
-
-        private void ApplyPendingCaret()
-        {
-            if (_pendingCaretIndex < 0 || _commandInput == null)
-            {
-                return;
-            }
-
-            if (_commandInput.value.Length < _pendingCaretIndex)
-            {
-                /*
-                   The queued position targets input the field does not hold
-                   yet; the value sync applies it once the field catches up.
-                */
-                return;
-            }
-
-            bool focused =
-                _textInput != null
-                && _textInput.focusController != null
-                && _textInput.focusController.focusedElement == _textInput;
-
-            /*
-                Consume the marker only while focused: the queued position is
-                what keeps a later fresh-focus pass from sending the caret to
-                line end (Bugbot: unfocused completion caret jump).
-             */
-            int caretPosition = _pendingCaretIndex;
-            if (focused)
-            {
-                _pendingCaretIndex = -1;
-            }
-
-            _commandInput.cursorIndex = caretPosition;
-            _commandInput.selectIndex = caretPosition;
         }
 
         private void RefreshLogs()

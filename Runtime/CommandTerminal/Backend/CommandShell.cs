@@ -3,13 +3,13 @@
     using System;
     using System.Collections.Generic;
     using System.Diagnostics;
-    using System.Linq;
     using System.Reflection;
     using System.Runtime.CompilerServices;
     using System.Text;
     using System.Threading;
     using Attributes;
     using DataStructures;
+    using Helper;
     using UnityEngine;
     using Debug = UnityEngine.Debug;
 
@@ -123,13 +123,21 @@
         private readonly CommandHistory _history;
         private readonly HashSet<string> _ignoredCommands = new(StringComparer.OrdinalIgnoreCase);
 
-        private readonly SortedDictionary<string, MethodInfo> _rejectedCommands = new(
+        /*
+            Rejected signatures store their formatted "Found: ..." text at
+            rejection time, so the error pass never reflects over MethodInfo.
+            Rejections only arise on the reflection compatibility path; the
+            generator catalog never produces them.
+         */
+        private readonly SortedDictionary<string, string> _rejectedCommands = new(
             StringComparer.OrdinalIgnoreCase
         );
 
         private readonly SortedDictionary<string, CommandArg> _variables = new(
             StringComparer.OrdinalIgnoreCase
         );
+
+        private readonly List<string> _variableClearBuffer = new();
 
         /*
             Depth-scoped parse buffers: one per active RunCommand/TryComplete
@@ -614,7 +622,7 @@
             IgnoringDefaultCommands = ignoreDefaultCommands;
             ClearAutoRegisteredCommands();
             _ignoredCommands.Clear();
-            _ignoredCommands.UnionWith(ignoredCommands ?? Enumerable.Empty<string>());
+            _ignoredCommands.UnionWith(ignoredCommands ?? Array.Empty<string>());
             foreach (string ignoredCommand in _ignoredCommands)
             {
                 _commands.Remove(ignoredCommand);
@@ -1024,6 +1032,28 @@
             return _variables.Remove(name);
         }
 
+        /*
+            Clears every variable in one call. The snapshot list is cached so
+            repeated bulk clears (or a clear run from inside a command while
+            the shell is iterating) never allocate; dictionary keys cannot be
+            enumerated while entries are being removed.
+         */
+        public int ClearVariables()
+        {
+            _variableClearBuffer.Clear();
+            foreach (string variable in _variables.Keys)
+            {
+                _variableClearBuffer.Add(variable);
+            }
+
+            foreach (string variable in _variableClearBuffer)
+            {
+                _variables.Remove(variable);
+            }
+
+            return _variableClearBuffer.Count;
+        }
+
         // ReSharper disable once MemberCanBePrivate.Global
         public bool SetVariable(string name, CommandArg value)
         {
@@ -1188,12 +1218,12 @@
                 StringComparer.OrdinalIgnoreCase
             );
 
-            foreach (KeyValuePair<string, MethodInfo> command in _rejectedCommands)
+            foreach (KeyValuePair<string, string> command in _rejectedCommands)
             {
                 IssueErrorMessage(
                     $"{command.Key} has an invalid signature. "
-                        + $"Expected: {command.Value.Name}(CommandArg[]). "
-                        + $"Found: {command.Value.Name}({string.Join(",", command.Value.GetParameters().Select(p => p.ParameterType.Name))})"
+                        + $"Expected: {command.Key}(CommandArg[]). "
+                        + $"Found: {command.Value}"
                 );
             }
 
@@ -1235,7 +1265,22 @@
                 return;
             }
 
-            _rejectedCommands.TryAdd(commandName, method);
+            using CachedStringBuilder.Scope found = new(64);
+            found.Builder.Append(method.Name).Append('(');
+            bool first = true;
+            foreach (ParameterInfo parameter in method.GetParameters())
+            {
+                if (!first)
+                {
+                    found.Builder.Append(',');
+                }
+
+                found.Builder.Append(parameter.ParameterType.Name);
+                first = false;
+            }
+
+            found.Builder.Append(')');
+            _rejectedCommands.TryAdd(commandName, found.Builder.ToString());
         }
 
         private List<CommandArg> GetDispatchScope(int depth)

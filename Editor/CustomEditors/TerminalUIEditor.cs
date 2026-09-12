@@ -5,7 +5,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
     using System.Collections.Generic;
     using System.Diagnostics;
     using System.IO;
-    using System.Linq;
+    using Attributes;
     using Backend;
     using DxCommandTerminal.Helper;
     using UnityEditor;
@@ -25,6 +25,16 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
     public sealed class TerminalUIEditor : Editor
     {
         private static readonly TimeSpan CycleInterval = TimeSpan.FromSeconds(0.75);
+        private static List<TerminalThemePack> _themePackNamesSource;
+        private static string[] _themePackNames;
+        private static List<TerminalFontPack> _fontPackNamesSource;
+        private static string[] _fontPackNames;
+        private static List<string> _themeDisplayNameSource;
+        private static string[] _themeDisplayNames;
+        private static bool _fontKeyCacheStale = true;
+        private static string[] _fontKeyCache = Array.Empty<string>();
+        private static bool _secondFontKeyCacheStale = true;
+        private static string[] _secondFontKeyCache = Array.Empty<string>();
 
         private int _commandIndex;
         private TerminalUI _lastSeen;
@@ -45,6 +55,13 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
         private readonly List<TerminalFontPack> _fontPacks = new();
         private readonly List<TerminalThemePack> _themePacks = new();
 
+        /*
+            OnGUI redraws every frame, so the popup option arrays and font-key
+            arrays are cached and rebuilt only when their source changes
+            (reference + count stamps). Static because the derived data is a
+            pure function of the shared pack lists; every inspector instance
+            renders the same options.
+         */
         private int _themeIndex = -1;
         private int _fontKey = -1;
         private int _secondFontKey = -1;
@@ -393,15 +410,25 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
             }
         }
 
+        private static bool NamesContain(List<string> names, string candidate)
+        {
+            foreach (string name in names)
+            {
+                if (string.Equals(name, candidate, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         private static bool TrySetupDefaultTheme(TerminalUI terminal)
         {
             if (
                 !string.IsNullOrWhiteSpace(terminal.CurrentTheme)
                 && terminal._themePack != null
-                && terminal._themePack._themeNames.Contains(
-                    terminal.CurrentTheme,
-                    StringComparer.OrdinalIgnoreCase
-                )
+                && NamesContain(terminal._themePack._themeNames, terminal.CurrentTheme)
             )
             {
                 return false;
@@ -412,23 +439,67 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                 return false;
             }
 
-            string defaultTheme = terminal._themePack._themeNames.FirstOrDefault(theme =>
-                theme.Contains("Dark", StringComparison.OrdinalIgnoreCase)
-            );
-            if (string.IsNullOrWhiteSpace(defaultTheme))
-            {
-                defaultTheme = terminal._themePack._themeNames.FirstOrDefault(theme =>
-                    theme.Contains("Light", StringComparison.OrdinalIgnoreCase)
-                );
-            }
-
-            if (string.IsNullOrWhiteSpace(defaultTheme))
-            {
-                defaultTheme = terminal._themePack._themeNames.FirstOrDefault();
-            }
+            string defaultTheme = FindThemeName(terminal._themePack._themeNames, "Dark", "Light");
 
             terminal.SetTheme(defaultTheme, persist: true);
             return true;
+        }
+
+        private static string FindThemeName(
+            List<string> names,
+            string firstMarker,
+            string secondMarker
+        )
+        {
+            string name = FindName(names, firstMarker);
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                name = FindName(names, secondMarker);
+            }
+
+            if (string.IsNullOrWhiteSpace(name) && 0 < names.Count)
+            {
+                name = names[0];
+            }
+
+            return name;
+        }
+
+        private static string FindName(List<string> names, string marker)
+        {
+            foreach (string name in names)
+            {
+                if (name.Contains(marker, StringComparison.OrdinalIgnoreCase))
+                {
+                    return name;
+                }
+            }
+
+            return null;
+        }
+
+        private static string FindFontName(
+            List<Font> fonts,
+            string firstMarker,
+            string secondMarker
+        )
+        {
+            foreach (Font font in fonts)
+            {
+                string fontName = font.name;
+                if (
+                    fontName.Contains(firstMarker, StringComparison.OrdinalIgnoreCase)
+                    && (
+                        secondMarker == null
+                        || fontName.Contains(secondMarker, StringComparison.OrdinalIgnoreCase)
+                    )
+                )
+                {
+                    return fontName;
+                }
+            }
+
+            return null;
         }
 
         private static bool TrySetupDefaultFont(TerminalUI terminal)
@@ -447,36 +518,146 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                 return false;
             }
 
-            Font defaultFont = terminal._fontPack._fonts.FirstOrDefault(font =>
-                font.name.Contains("SourceCodePro", StringComparison.OrdinalIgnoreCase)
-                && font.name.Contains("Regular", StringComparison.OrdinalIgnoreCase)
-            );
-            if (defaultFont == null)
+            List<Font> fonts = terminal._fontPack._fonts;
+            string defaultFontName = FindFontName(fonts, "SourceCodePro", "Regular");
+            if (string.IsNullOrWhiteSpace(defaultFontName))
             {
-                defaultFont = terminal._fontPack._fonts.FirstOrDefault(font =>
-                    font.name.Contains("Mono", StringComparison.OrdinalIgnoreCase)
-                    && font.name.Contains("Regular", StringComparison.OrdinalIgnoreCase)
-                );
+                defaultFontName = FindFontName(fonts, "Mono", "Regular");
             }
-            if (defaultFont == null)
+            if (string.IsNullOrWhiteSpace(defaultFontName))
             {
-                defaultFont = terminal._fontPack._fonts.FirstOrDefault(font =>
-                    font.name.Contains("Mono", StringComparison.OrdinalIgnoreCase)
-                );
+                defaultFontName = FindFontName(fonts, "Mono", null);
             }
-            if (defaultFont == null)
+            if (string.IsNullOrWhiteSpace(defaultFontName))
             {
-                defaultFont = terminal._fontPack._fonts.FirstOrDefault(font =>
-                    font.name.Contains("Regular", StringComparison.OrdinalIgnoreCase)
-                );
+                defaultFontName = FindFontName(fonts, "Regular", null);
             }
-            if (defaultFont == null)
+
+            Font defaultFont;
+            if (string.IsNullOrWhiteSpace(defaultFontName))
             {
-                defaultFont = terminal._fontPack._fonts.FirstOrDefault();
+                defaultFont = fonts[0];
+            }
+            else
+            {
+                defaultFont = null;
+                foreach (Font font in fonts)
+                {
+                    if (font.name == defaultFontName)
+                    {
+                        defaultFont = font;
+                        break;
+                    }
+                }
             }
 
             terminal.SetFont(defaultFont, persist: true);
             return true;
+        }
+
+        /*
+            One cache builder for every derived name array: rebuilds only when
+            the source list changes (reference + count stamps) and otherwise
+            hands back the cached array, so OnGUI never allocates per frame.
+         */
+        private static string[] RefreshCache<T>(
+            List<T> source,
+            Func<T, string> nameOf,
+            ref List<T> cachedSource,
+            ref string[] cached
+        )
+        {
+            if (
+                cached == null
+                || !ReferenceEquals(cachedSource, source)
+                || cached.Length != source.Count
+            )
+            {
+                string[] names = new string[source.Count];
+                int position = 0;
+                foreach (T item in source)
+                {
+                    names[position++] = nameOf(item);
+                }
+
+                cachedSource = source;
+                cached = names;
+            }
+
+            return cached;
+        }
+
+        private static string[] PackNames(List<TerminalThemePack> themePacks)
+        {
+            return RefreshCache(
+                themePacks,
+                static pack => pack.name,
+                ref _themePackNamesSource,
+                ref _themePackNames
+            );
+        }
+
+        private static string[] PackNames(List<TerminalFontPack> fontPacks)
+        {
+            return RefreshCache(
+                fontPacks,
+                static pack => pack.name,
+                ref _fontPackNamesSource,
+                ref _fontPackNames
+            );
+        }
+
+        private static string[] FriendlyThemeNames(List<string> themeNames)
+        {
+            return RefreshCache(
+                themeNames,
+                static name => FriendlyThemeName(name),
+                ref _themeDisplayNameSource,
+                ref _themeDisplayNames
+            );
+        }
+
+        /*
+            Strips the "-theme"/"theme-" markers only when present, so clean
+            names never allocate a replacement string.
+         */
+        private static string FriendlyThemeName(string themeName)
+        {
+            if (
+                themeName.Contains("-theme", StringComparison.OrdinalIgnoreCase)
+                || themeName.Contains("theme-", StringComparison.OrdinalIgnoreCase)
+            )
+            {
+                return themeName
+                    .Replace("-theme", string.Empty, StringComparison.OrdinalIgnoreCase)
+                    .Replace("theme-", string.Empty, StringComparison.OrdinalIgnoreCase);
+            }
+
+            return themeName;
+        }
+
+        /*
+            One key-array builder for both popups: `keys` is a live collection
+            view, so the caller decides when its contents may have changed
+            (force) and otherwise the cache holds on reference + count.
+            Rebuilds use ICollection<string>.CopyTo, the bulk operation.
+         */
+        private static string[] RefreshKeyCache(
+            ICollection<string> keys,
+            bool force,
+            ref bool stale,
+            ref string[] cached
+        )
+        {
+            if (!force && !stale && cached.Length == keys.Count)
+            {
+                return cached;
+            }
+
+            string[] rebuilt = new string[keys.Count];
+            keys.CopyTo(rebuilt, 0);
+            stale = false;
+            return cached = rebuilt;
         }
 
         public override void OnInspectorGUI()
@@ -494,7 +675,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
 
             if (_allCommands.Count == 0 || _defaultCommands.Count == 0)
             {
-                HydrateCommandCaches();
+                RefreshCommandCaches();
             }
 
             TerminalUI terminal = target as TerminalUI;
@@ -543,29 +724,32 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
             }
         }
 
+        private string[] FontKeys()
+        {
+            return RefreshKeyCache(
+                _fontsByPrefix.Keys,
+                force: false,
+                ref _fontKeyCacheStale,
+                ref _fontKeyCache
+            );
+        }
+
+        private string[] SecondFontKeys(SortedDictionary<string, Font> availableFonts)
+        {
+            return RefreshKeyCache(
+                availableFonts.Keys,
+                force: _fontKeyCacheStale,
+                ref _secondFontKeyCacheStale,
+                ref _secondFontKeyCache
+            );
+        }
+
         private void OnEnable()
         {
-            _allCommands.Clear();
-            _allCommands.UnionWith(
-                CommandShell
-                    .RegisteredCommands.Value.Select(tuple => tuple.attribute)
-                    .Select(attribute => attribute.Name)
-            );
-            _defaultCommands.Clear();
-            _defaultCommands.UnionWith(
-                CommandShell
-                    .RegisteredCommands.Value.Select(tuple => tuple.attribute)
-                    .Where(tuple => tuple.Default)
-                    .Select(attribute => attribute.Name)
-            );
-            _nonDefaultCommands.Clear();
-            _nonDefaultCommands.UnionWith(
-                CommandShell
-                    .RegisteredCommands.Value.Select(tuple => tuple.attribute)
-                    .Where(tuple => !tuple.Default)
-                    .Select(attribute => attribute.Name)
-            );
+            RefreshCommandCaches();
             _fontsByPrefix.Clear();
+            _fontKeyCacheStale = true;
+            _secondFontKeyCacheStale = true;
 
             ResetStateIdempotent(force: true);
 
@@ -598,13 +782,13 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
             }
             TerminalAssetPackPostProcessor.NewFontPacks.Clear();
 
-            if (!_fontPacks.Any())
+            if (_fontPacks.Count == 0)
             {
                 _fontPacks.Clear();
                 _fontPacks.AddRange(LoadAll<TerminalFontPack>());
             }
 
-            if (!_themePacks.Any())
+            if (_themePacks.Count == 0)
             {
                 _themePacks.Clear();
                 _themePacks.AddRange(LoadAll<TerminalThemePack>());
@@ -617,6 +801,8 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
             }
 
             _fontsByPrefix.Clear();
+            _fontKeyCacheStale = true;
+            _secondFontKeyCacheStale = true;
             CollectFonts(terminal, _fontsByPrefix);
 
             _persistThemeChanges = false;
@@ -685,7 +871,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
 
             try
             {
-                return _fontsByPrefix.ToArray()[_fontKey].Value.ToArray()[_secondFontKey].Value;
+                return FontByKeys(_fontKey, _secondFontKey);
             }
             catch
             {
@@ -693,28 +879,31 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
             }
         }
 
-        private void HydrateCommandCaches()
+        private Font FontByKeys(int fontKey, int secondFontKey)
+        {
+            string[] fontKeys = FontKeys();
+            SortedDictionary<string, Font> availableFonts = _fontsByPrefix[fontKeys[fontKey]];
+            return availableFonts[SecondFontKeys(availableFonts)[secondFontKey]];
+        }
+
+        private void RefreshCommandCaches()
         {
             _allCommands.Clear();
-            _allCommands.UnionWith(
-                CommandShell
-                    .RegisteredCommands.Value.Select(tuple => tuple.attribute)
-                    .Select(attribute => attribute.Name)
-            );
             _defaultCommands.Clear();
-            _defaultCommands.UnionWith(
-                CommandShell
-                    .RegisteredCommands.Value.Select(tuple => tuple.attribute)
-                    .Where(tuple => tuple.Default)
-                    .Select(attribute => attribute.Name)
-            );
             _nonDefaultCommands.Clear();
-            _nonDefaultCommands.UnionWith(
-                CommandShell
-                    .RegisteredCommands.Value.Select(tuple => tuple.attribute)
-                    .Where(tuple => !tuple.Default)
-                    .Select(attribute => attribute.Name)
-            );
+            foreach (var (method, attribute) in CommandShell.RegisteredCommands.Value)
+            {
+                string commandName = attribute.Name;
+                _allCommands.Add(commandName);
+                if (attribute.Default)
+                {
+                    _defaultCommands.Add(commandName);
+                }
+                else
+                {
+                    _nonDefaultCommands.Add(commandName);
+                }
+            }
         }
 
         private void RenderCyclingPreviews()
@@ -957,7 +1146,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
             EditorGUILayout.BeginHorizontal();
             try
             {
-                if (!_themePacks.Any())
+                if (_themePacks.Count == 0)
                 {
                     GUILayout.Label("NO THEME PACKS", _impactLabelStyle);
                 }
@@ -975,7 +1164,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
 
                     _themePackIndex = EditorGUILayout.Popup(
                         _themePackIndex,
-                        _themePacks.Select(themePack => themePack.name).ToArray()
+                        PackNames(_themePacks)
                     );
                     if (0 <= _themePackIndex && _themePackIndex < _themePacks.Count)
                     {
@@ -1009,7 +1198,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
             EditorGUILayout.BeginHorizontal();
             try
             {
-                if (!_fontPacks.Any())
+                if (_fontPacks.Count == 0)
                 {
                     GUILayout.Label("NO FONT PACKS", _impactLabelStyle);
                 }
@@ -1025,10 +1214,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                         GUILayout.Label("Select Font Pack:");
                     }
 
-                    _fontPackIndex = EditorGUILayout.Popup(
-                        _fontPackIndex,
-                        _fontPacks.Select(fontPack => fontPack.name).ToArray()
-                    );
+                    _fontPackIndex = EditorGUILayout.Popup(_fontPackIndex, PackNames(_fontPacks));
                     if (0 <= _fontPackIndex && _fontPackIndex < _fontPacks.Count)
                     {
                         TerminalFontPack fontPack = _fontPacks[_fontPackIndex];
@@ -1082,21 +1268,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
 
                     _themeIndex = EditorGUILayout.Popup(
                         _themeIndex,
-                        terminal
-                            ._themePack._themeNames.Select(theme =>
-                                theme
-                                    .Replace(
-                                        "-theme",
-                                        string.Empty,
-                                        StringComparison.OrdinalIgnoreCase
-                                    )
-                                    .Replace(
-                                        "theme-",
-                                        string.Empty,
-                                        StringComparison.OrdinalIgnoreCase
-                                    )
-                            )
-                            .ToArray()
+                        FriendlyThemeNames(terminal._themePack._themeNames)
                     );
 
                     if (0 <= _themeIndex && _themeIndex < terminal._themePack._themeNames.Count)
@@ -1182,7 +1354,8 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
 
             if (0 < _intermediateResults.Count)
             {
-                string[] ignorableCommands = _intermediateResults.ToArray();
+                string[] ignorableCommands = new string[_intermediateResults.Count];
+                _intermediateResults.CopyTo(ignorableCommands, 0);
 
                 EditorGUILayout.BeginHorizontal();
                 try
@@ -1289,7 +1462,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                         GUILayout.Label("Select Font:");
                     }
 
-                    string[] fontKeys = _fontsByPrefix.Keys.ToArray();
+                    string[] fontKeys = FontKeys();
                     _fontKey = EditorGUILayout.Popup(_fontKey, fontKeys);
 
                     if (currentFontKey != _fontKey)
@@ -1297,13 +1470,14 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                         _secondFontKey = -1;
                     }
 
-                    if (0 <= _fontKey && _fontKey < fontKeys.Length)
+                    if (0 <= _fontKey && _fontKey < _fontKeyCache.Length)
                     {
                         string selectedFontKey = fontKeys[_fontKey];
                         SortedDictionary<string, Font> availableFonts = _fontsByPrefix[
                             selectedFontKey
                         ];
-                        string[] secondFontKeys = availableFonts.Keys.ToArray();
+                        string[] secondFontKeys = SecondFontKeys(availableFonts);
+
                         Font selectedFont = null;
                         switch (secondFontKeys.Length)
                         {
@@ -1323,7 +1497,12 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                             }
                             case 1:
                             {
-                                selectedFont = availableFonts.Values.Single();
+                                selectedFont = null;
+                                foreach (Font font in availableFonts.Values)
+                                {
+                                    selectedFont = font;
+                                    break;
+                                }
                                 break;
                             }
                         }

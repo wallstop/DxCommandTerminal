@@ -60,6 +60,20 @@ repos:
           Two or more consecutive comment-only '//' lines must be one '/*'...'*/' block
           comment instead. Single '//' lines and '///' doc comments stay legal. Use
           `--fix` to convert runs to block comments.
+      - id: linq-production-lint
+        name: Lint LINQ ban in production code (Runtime/, Editor/; PR #60 review)
+        entry: node tooling~/scripts/lint-linq-production.mjs
+        language: system
+        always_run: true
+        pass_filenames: false
+        stages:
+          - pre-commit
+          - pre-push
+        description: >
+          Every LINQ operator allocates enumerators and closures, so shipped code bans
+          it outright: 'using System.Linq', qualified 'System.Linq.' calls, and static
+          'Enumerable.' calls all fail under Runtime/ and Editor/. No --fix by design;
+          rewrite call sites as loops with caller-owned buffers.
       - id: llm-instructions-lint
         name: Lint .llm instructions (SKILL.md spec, index freshness, pointer delegation)
         entry: pwsh -NoProfile -File tooling~/scripts/lint-llm-instructions.ps1

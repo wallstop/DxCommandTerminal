@@ -90,6 +90,9 @@ jobs:
       - name: Lint multi-line comments
         run: node tooling~/scripts/lint-multiline-comments.mjs
 
+      - name: Lint LINQ ban in production code
+        run: node tooling~/scripts/lint-linq-production.mjs
+
   package-content:
     # Clean-install guard for the UPM artifact (issue #22, PLAN.md T02
     # "package-content validators"): packs the package exactly like npm/UPM
