@@ -14,6 +14,12 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     /// </summary>
     public sealed class CommandArgumentSpec<T> : CommandArgument
     {
+        /*
+            C# keyword aliases for usage text and errors. nameof cannot express
+            these: it resolves to the type's name (nameof(Int32) is "Int32"),
+            and the keyword spellings are keywords, not identifiers. Unmapped
+            types fall back to Type.Name.
+         */
         private static readonly Dictionary<Type, string> FriendlyTypeNames = new()
         {
             [typeof(bool)] = "bool",
