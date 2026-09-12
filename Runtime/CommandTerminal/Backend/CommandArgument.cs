@@ -1,5 +1,6 @@
 namespace WallstopStudios.DxCommandTerminal.Backend
 {
+    using System;
     using System.Collections.Generic;
     using System.Text;
 
@@ -34,6 +35,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         /// <summary>True when the argument contributes completion candidates.</summary>
         public abstract bool HasChoices { get; }
+
+        /// <summary>The runtime type the argument parses and validates as.</summary>
+        internal abstract Type DeclaredType { get; }
 
         /// <summary>
         ///     True when the argument is the command's unbounded trailing

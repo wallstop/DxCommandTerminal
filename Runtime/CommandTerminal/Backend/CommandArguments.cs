@@ -64,9 +64,12 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return default;
             }
 
-            throw new InvalidOperationException(
+            throw new CommandArgumentTypeMismatchException(
                 $"Argument '{spec.Name}' is declared as {spec.TypeName}; "
-                    + $"requested {typeof(T).Name}."
+                    + $"requested {typeof(T).Name}.",
+                spec.Name,
+                spec.DeclaredType,
+                typeof(T)
             );
         }
 
@@ -78,9 +81,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         /// <summary>
         ///     The parsed value at <paramref name="index"/>, in definition
         ///     order. Throws <see cref="ArgumentOutOfRangeException"/> for an
-        ///     out-of-range index and <see cref="InvalidOperationException"/>
-        ///     when the requested type differs from the argument's declared
-        ///     type.
+        ///     out-of-range index and
+        ///     <see cref="CommandArgumentTypeMismatchException"/> when the
+        ///     requested type differs from the argument's declared type.
         /// </summary>
         public T Get<T>(int index)
         {
@@ -126,7 +129,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         /// <summary>
         ///     The parsed value of the argument named <paramref name="name"/>.
         ///     Throws <see cref="ArgumentException"/> for an unknown name and
-        ///     <see cref="InvalidOperationException"/> on a type mismatch.
+        ///     <see cref="CommandArgumentTypeMismatchException"/> on a type
+        ///     mismatch.
         /// </summary>
         public T Get<T>(string name)
         {
