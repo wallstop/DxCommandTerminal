@@ -194,6 +194,14 @@ frontmatter validity, index freshness, and pointer-file delegation; see
    `TerminalThemeStyleSheetHelper`, not per-code style mutations.
 4. Runtime code must stay WebGL/IL2CPP-safe: no managed reflection-dependent APIs outside the
    command registration path (see [webgl-command-registration](./skills/webgl-command-registration/SKILL.md)).
+5. Files on the generator-tests CI path filter (`Runtime/Attributes/RegisterCommandAttribute.cs`,
+   `CommandArg.cs`, `CommandCatalogEntry.cs`, `Runtime/Analyzers/**`) get compiled under
+   `EnableNETAnalyzers` on netstandard2.0 in CI: no `string.Contains(char)` (CA1307), no
+   `Contains(string)` for single chars (CA1847), and no `Contains(char, StringComparison)`
+   (missing on netstandard2.0). Use `0 <= s.IndexOf(' ', StringComparison.Ordinal)` and
+   `string.Replace(" ", ..., StringComparison.Ordinal)`; explicit null checks before
+   dereference in public methods (CA1062). Reproduce with
+   `dotnet test Generator~/WallstopStudios.DxCommandTerminal.SourceGenerators.Tests`.
 
 ### Command Registration (Quick Reference)
 
