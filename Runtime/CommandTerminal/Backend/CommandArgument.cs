@@ -35,6 +35,13 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         /// <summary>True when the argument contributes completion candidates.</summary>
         public abstract bool HasChoices { get; }
 
+        /// <summary>
+        ///     True when the argument is the command's unbounded trailing
+        ///     argument: every token after the declared arguments parses and
+        ///     validates as this argument's type and collects into one array.
+        /// </summary>
+        internal virtual bool IsRemaining => false;
+
         internal CommandArgument(string name, string typeName)
         {
             Name = name;
@@ -42,6 +49,21 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         }
 
         internal abstract bool TryParse(CommandArg input, out object parsed);
+
+        /// <summary>
+        ///     Parses and validates every argument from
+        ///     <paramref name="start"/> to the end of
+        ///     <paramref name="arguments"/> with this spec's parser and
+        ///     validators, collecting the values in order. Only remaining
+        ///     arguments support this; other specs throw.
+        /// </summary>
+        internal abstract bool TryParseAll(
+            BorrowedCommandArguments arguments,
+            int start,
+            out object parsedValues,
+            out CommandArg failedToken,
+            out string validationError
+        );
 
         internal abstract object GetDefault();
 

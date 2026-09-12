@@ -213,6 +213,24 @@ Terminal.Shell.AddCommand(
 
 Tab completion offers subcommand names at the first argument and the routed subcommand's choices beyond it. Bare invocations run the parent handler when one is set, otherwise a descriptive error lists the available subcommands. The parent's execution contexts and history policy govern every subcommand; declaring parent arguments on a command that has subcommands, or setting `Contexts`/`AddToHistory` on a subcommand, throws at definition time. Like any command with a completion provider, a routed command keeps provider-owned completion: history-based suggestions do not apply to its arguments.
 
+`.Remaining<T>(name)` declares the command's unbounded trailing argument: every token after the declared arguments parses and validates with the same rules as any typed argument and collects, in order, into one array the handler reads with `arguments.Get<T[]>(name)`. An invocation without trailing tokens reads as an empty array; mark the argument `.Required()` to demand at least one token instead. The usage hint marks it (`announce <message:string...>`), and its choices complete every trailing stage:
+
+```csharp
+Terminal.Shell.AddCommand(
+    CommandBuilder
+        .Create("say", "Prints a message")
+        .Remaining<string>("message")
+        .Handler((context, arguments) =>
+        {
+            string[] message = arguments.Get<string[]>("message");
+            // ...
+        }),
+    out handle
+);
+```
+
+The remaining argument must be the final declaration: arguments declared after it, a second remaining argument, or a default on it throw at definition time.
+
 Note: if your `TerminalUI` uses `Reset State On Init`, the terminal rebuilds its shell during its own startup. Register commands from `Start` (or after the terminal is ready) rather than from another component's `OnEnable`, or the registration can be discarded by that reset.
 
 ---
