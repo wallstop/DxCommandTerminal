@@ -187,6 +187,8 @@ void OnDisable() => handle?.Dispose();
 
 Arguments parse through the same `CommandArg` parsers as `[RegisterCommand]` methods (including your registered custom parsers). Bad user input - unknown values, out-of-range numbers, too many arguments - is rejected with a descriptive error before the handler runs. Static and dynamic choices feed Tab completion stage by stage: with `pickaxe` as a preceding argument, the second argument's provider sees it and completes the next stage.
 
+Note: if your `TerminalUI` uses `Reset State On Init`, the terminal rebuilds its shell during its own startup. Register commands from `Start` (or after the terminal is ready) rather than from another component's `OnEnable`, or the registration can be discarded by that reset.
+
 ---
 
 # Custom Parsing

@@ -30,6 +30,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [SetUp]
         public void SetUp()
         {
+            /*
+                RegisterParser is TryAdd-based; a prior session that unwound
+                between register and its finally (Enter Play Mode Options with
+                no domain reload) would otherwise block every later run.
+             */
+            CommandArg.UnregisterParser<UnregisteredType>();
             _previousAmbientProvider = CommandExecutionContext.AmbientContextProvider;
             CommandExecutionContext.AmbientContextProvider = null;
         }

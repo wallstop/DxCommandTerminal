@@ -1014,9 +1014,10 @@
         ///     Registers a typed command from a <see cref="CommandBuilder"/>
         ///     and returns a handle that removes exactly this registration on
         ///     dispose. Configuration errors (no handler, duplicate argument
-        ///     names, unparseable argument types) throw at definition time;
-        ///     duplicate names against the live shell return false like the
-        ///     other <see cref="AddCommand"/> overloads.
+        ///     names, required-after-optional ordering, unparseable argument
+        ///     types, defaults failing their own validation) throw at
+        ///     definition time; duplicate names against the live shell return
+        ///     false like the other <see cref="AddCommand"/> overloads.
         /// </summary>
         public bool AddCommand(CommandBuilder builder, out CommandRegistrationHandle handle)
         {

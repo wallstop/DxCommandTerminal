@@ -8,6 +8,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     ///     definition before the handler runs; a value read with the wrong
     ///     type is a programming error and throws, while user-input mistakes
     ///     are rejected before the handler runs and never reach this view.
+    ///     Null defaults (optional reference-type and nullable arguments
+    ///     without an explicit default) read as <c>default(T)</c>.
     /// </summary>
     /// <remarks>
     ///     Valid only during the handler callback that received it, like the
@@ -54,10 +56,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
             /*
                 An omitted optional argument without an explicit default reads
-                as default(T): null for reference types is a valid, correctly
-                typed read, not a mismatch.
+                as default(T): null is a valid, correctly typed read for
+                reference types and nullable value types alike.
              */
-            if (value == null && !typeof(T).IsValueType)
+            if (value == null && ReadsAsNull<T>())
             {
                 return default;
             }
@@ -68,10 +70,17 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             );
         }
 
+        private static bool ReadsAsNull<T>()
+        {
+            return !typeof(T).IsValueType || Nullable.GetUnderlyingType(typeof(T)) != null;
+        }
+
         /// <summary>
         ///     The parsed value at <paramref name="index"/>, in definition
-        ///     order. Throws <see cref="InvalidOperationException"/> when the
-        ///     requested type differs from the argument's declared type.
+        ///     order. Throws <see cref="ArgumentOutOfRangeException"/> for an
+        ///     out-of-range index and <see cref="InvalidOperationException"/>
+        ///     when the requested type differs from the argument's declared
+        ///     type.
         /// </summary>
         public T Get<T>(int index)
         {
@@ -104,7 +113,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return true;
             }
 
-            if (raw == null && !typeof(T).IsValueType)
+            if (raw == null && ReadsAsNull<T>())
             {
                 value = default;
                 return true;

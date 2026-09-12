@@ -14,10 +14,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     ///     Argument bounds, the usage hint, and the completion provider derive
     ///     from the declared arguments, so help, validation, and completion
     ///     cannot drift apart. Configuration errors (missing handler,
-    ///     duplicate argument names, unparseable argument types) throw at
-    ///     definition time with a diagnostic naming the command; user-input
-    ///     mistakes at execution become controlled shell errors and never run
-    ///     the handler.
+    ///     duplicate argument names, required-after-optional ordering,
+    ///     unparseable argument types, defaults failing their own validation)
+    ///     throw at definition time with a diagnostic naming the command;
+    ///     user-input mistakes at execution become controlled shell errors
+    ///     and never run the handler.
     /// </remarks>
     public sealed class CommandBuilder
     {
