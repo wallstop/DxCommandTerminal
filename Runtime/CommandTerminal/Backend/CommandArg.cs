@@ -411,6 +411,21 @@
             return parserCount;
         }
 
+        /*
+            Build-time parseability probe for the typed command builder: a
+            definition is only accepted when its argument types can parse at
+            execution. Mirrors the ordinary TryGet paths (registered parsers,
+            built-in parsers, strings, enums); types that rely solely on the
+            named-constant fallback need an explicit parser registration.
+         */
+        internal static bool CanParse(Type type)
+        {
+            return type == typeof(string)
+                || type.IsEnum
+                || BuiltInParsers.ContainsKey(type)
+                || RegisteredParsers.ContainsKey(type);
+        }
+
         private static Dictionary<string, PropertyInfo> LoadStaticPropertiesForType(Type type)
         {
             Dictionary<string, PropertyInfo> properties = new(StringComparer.OrdinalIgnoreCase);
