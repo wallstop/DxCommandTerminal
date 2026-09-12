@@ -90,11 +90,16 @@
             string assemblyName,
             string fixtureSource,
             string[] defines = null,
-            bool includeCommandCatalogEntry = true
+            bool includeCommandCatalogEntry = true,
+            bool includeUnityShim = true
         )
         {
             List<SyntaxTree> syntaxTrees = new List<SyntaxTree>();
-            syntaxTrees.AddRange(UnityShimSources);
+            if (includeUnityShim)
+            {
+                syntaxTrees.AddRange(UnityShimSources);
+            }
+
             syntaxTrees.AddRange(CoreRuntimeSources);
             if (includeCommandCatalogEntry)
             {

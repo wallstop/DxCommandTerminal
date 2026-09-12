@@ -345,9 +345,9 @@ When InputActions are not bound, there is an order of precedence for input check
 This order is irrelevant when using PlayerInput.
 
 # Web GL
-If you are relying on `RegisterCommandAttribute` to wire up your commands to the CommandShell instead of manually registering them, you will need to set `Managed Stripping Level` to `Low`, `Minimal`, or `None` under `Player > WebGL > Other Settings > Optimizations > Managed Stripping Level` in order for command registration to work. Settings of `Medium` or higher will break the reflection code that loads the commands, causing the terminal to forget about its capabilities.
+The shipped source generator emits `[Preserve]` onto every generated command catalog, and the catalog binds accessible command methods through direct delegate creation, so commands registered with `RegisterCommandAttribute` keep working through managed code stripping (IL2CPP/WebGL players) at every Managed Stripping Level.
 
-The package ships a `Runtime/link.xml` that preserves its own runtime assembly, so built-in commands and generated catalogs stay intact through managed stripping on IL2CPP and WebGL players at every stripping level. Commands declared in your own assemblies are not covered by it. At `Medium` or higher, keep them with `[Preserve]` on the command methods, a `link.xml` entry for your assembly, or manual registration through `Terminal.Shell.AddCommand`.
+At `Medium` or higher, commands reached only through reflection can still be stripped: handlers in private, non-partial types, and commands in precompiled DLLs without a generated catalog. Keep those available with `[Preserve]` on the methods, a `link.xml` entry for the assembly, or manual registration through `Terminal.Shell.AddCommand`.
 
 ![png](https://raw.githubusercontent.com/wallstop/DxCommandTerminal/master/Media/ManagedStrippingLevel.png)
 

@@ -222,3 +222,9 @@ namespace UnityEngine
         }
     }
 }
+
+namespace UnityEngine.Scripting
+{
+    [System.AttributeUsage(System.AttributeTargets.All, AllowMultiple = false, Inherited = true)]
+    public sealed class PreserveAttribute : System.Attribute { }
+}

@@ -78,7 +78,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
         [ThreadStatic]
         private static StringBuilder CachedBuilder;
 
-        internal static string Emit(List<CommandModel> commands)
+        internal static string Emit(List<CommandModel> commands, bool preserveCatalog)
         {
             int capacity = BaseCapacityEstimate + PerCommandCapacityEstimate * commands.Count;
             StringBuilder builder = RentBuilder(capacity);
@@ -94,6 +94,18 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             }
 
             AppendHeader(builder);
+            if (preserveCatalog)
+            {
+                /*
+                    Unity's managed-code linker honors this attribute: it roots
+                    the catalog type and its members, and the members' direct
+                    delegate creations transitively root every accessible
+                    handler, so generated catalogs and the commands they carry
+                    survive IL2CPP/WebGL stripping. Private handlers stay bound
+                    by name and keep their per-site requirements.
+                 */
+                builder.Append(Indent2).AppendLine("[global::UnityEngine.Scripting.Preserve]");
+            }
             builder.Append(Indent2).AppendLine("internal static class CommandCatalog");
             builder.Append(Indent2).AppendLine("{");
             builder
