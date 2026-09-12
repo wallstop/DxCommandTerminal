@@ -421,6 +421,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 shell.AutoRegisteredCommands,
                 "AutoRegisteredCommands must not list removed commands (issue #64)"
             );
+            Assert.IsFalse(
+                shell.AutoCommandsRegistered,
+                "Clearing a registered shell must reset the readiness flag the terminal restore path keys on"
+            );
             Assert.AreEqual(
                 0,
                 shell.ClearAutoRegisteredCommands(),

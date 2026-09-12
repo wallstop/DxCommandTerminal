@@ -259,7 +259,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 owner.IssueErrorMessage(
                     $"'{route.FullPath}': requires at least {route.RequiredCount} argument"
                         + (route.RequiredCount == 1 ? string.Empty : "s")
-                        + $". Usage: {BuildUsageHint(route.FullPath, route.Specs)}"
+                        + $". Usage: {route.PathUsage}"
                 );
                 return;
             }
@@ -269,7 +269,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 owner.IssueErrorMessage(
                     $"'{route.FullPath}': expects at most {route.Specs.Length} argument"
                         + (route.Specs.Length == 1 ? string.Empty : "s")
-                        + $". Usage: {BuildUsageHint(route.FullPath, route.Specs)}"
+                        + $". Usage: {route.PathUsage}"
                 );
                 return;
             }
@@ -582,7 +582,12 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 Help = _help,
                 Hint = _hint ?? $"{name} <subcommand>",
                 MinArgCount = 0,
-                MaxArgCount = self.TotalCount,
+                /*
+                    Unbounded at the shell level: the router knows which leaf
+                    owns the arguments only after routing, so it issues the
+                    precise composed bounds errors itself.
+                */
+                MaxArgCount = null,
                 AddToHistory = _addToHistory,
                 Contexts = _contexts,
                 Handler = (context, arguments) =>
@@ -613,18 +618,17 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         private SubcommandRoute BuildLeafRoute(string path, string name)
         {
             CommandArgument[] specs = ValidateLeafConfiguration(path);
-            string usage = _hint ?? BuildUsageHint(name, specs);
             return new SubcommandRoute
             {
                 Name = name,
                 FullPath = path,
                 Help = _help,
-                Usage = usage,
+                Usage = _hint ?? BuildUsageHint(name, specs),
+                PathUsage = _hint ?? BuildUsageHint(path, specs),
                 Specs = specs,
                 RequiredCount = RequiredCount(specs),
                 Handler = _handler,
                 CompletionStages = BuildSpecCompletionStages(specs),
-                TotalCount = specs.Length,
             };
         }
 
@@ -643,17 +647,23 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 children.Length,
                 StringComparer.OrdinalIgnoreCase
             );
-            int maxChildTotal = 0;
             for (int i = 0; i < children.Length; ++i)
             {
                 CommandBuilder child = _subcommands[i];
                 SubcommandRoute route = child.BuildRoute($"{path} {child.Name}");
-                children[i] = route;
-                lookup.Add(route.Name, route);
-                if (maxChildTotal < route.TotalCount)
+                if (!lookup.TryAdd(route.Name, route))
                 {
-                    maxChildTotal = route.TotalCount;
+                    /*
+                        The Subcommand-time duplicate scan runs before each
+                        configure callback, so re-entrant callbacks can slip a
+                        second name past it; Build is the authoritative gate.
+                    */
+                    throw new InvalidOperationException(
+                        $"Command '{path}': duplicate subcommand name '{route.Name}'."
+                    );
                 }
+
+                children[i] = route;
             }
 
             return new SubcommandRoute
@@ -662,10 +672,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 FullPath = path,
                 Help = _help,
                 Usage = _hint ?? $"{name} <subcommand>",
+                PathUsage = _hint ?? $"{path} <subcommand>",
                 Fallback = _handler,
                 Children = children,
                 Lookup = lookup,
-                TotalCount = 1 + maxChildTotal,
             };
         }
 
@@ -743,13 +753,15 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
             public string Help { get; internal set; }
 
+            /// <summary>Usage within a route listing, e.g. <c>add &lt;item:string&gt;</c>.</summary>
             public string Usage { get; internal set; }
+
+            /// <summary>Usage with the composed path for bounds errors, e.g. <c>inventory add &lt;item:string&gt;</c>.</summary>
+            public string PathUsage { get; internal set; }
 
             public CommandArgument[] Specs { get; internal set; }
 
             public int RequiredCount { get; internal set; }
-
-            public int TotalCount { get; internal set; }
 
             public TypedCommandHandler Handler { get; internal set; }
 

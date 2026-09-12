@@ -211,7 +211,7 @@ Terminal.Shell.AddCommand(
 );
 ```
 
-Tab completion offers subcommand names at the first argument and the routed subcommand's choices beyond it. Bare invocations run the parent handler when one is set, otherwise a descriptive error lists the available subcommands. The parent's execution contexts and history policy govern every subcommand; declaring parent arguments on a command that has subcommands, or setting `Contexts`/`AddToHistory` on a subcommand, throws at definition time.
+Tab completion offers subcommand names at the first argument and the routed subcommand's choices beyond it. Bare invocations run the parent handler when one is set, otherwise a descriptive error lists the available subcommands. The parent's execution contexts and history policy govern every subcommand; declaring parent arguments on a command that has subcommands, or setting `Contexts`/`AddToHistory` on a subcommand, throws at definition time. Like any command with a completion provider, a routed command keeps provider-owned completion: history-based suggestions do not apply to its arguments.
 
 Note: if your `TerminalUI` uses `Reset State On Init`, the terminal rebuilds its shell during its own startup. Register commands from `Start` (or after the terminal is ready) rather than from another component's `OnEnable`, or the registration can be discarded by that reset.
 

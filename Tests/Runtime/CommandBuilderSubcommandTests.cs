@@ -137,6 +137,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.IsTrue(shell.RunCommand("inventory ADD"));
             Assert.AreEqual(1, invocations, "Routing matches command-name case rules");
             Assert.IsNull(ConsumeAllErrors(shell));
+
+            Assert.IsTrue(shell.RunCommand("inventory \"add\""));
+            Assert.AreEqual(
+                2,
+                invocations,
+                "Quoted subcommand tokens route on their stripped contents"
+            );
+            Assert.IsNull(ConsumeAllErrors(shell));
         }
 
         [Test]
@@ -298,14 +306,24 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
 
             /*
-                The wide sibling raises the shell-level bound, so the router
-                itself must reject the extra argument for the narrow leaf.
+                The shell-level bound is open for routers, so even an over-fill
+                of the widest sibling gets the precise composed message.
              */
             Assert.IsTrue(shell.RunCommand("inventory add pickaxe spare"));
             string error = ConsumeError(shell);
             Assert.IsNotNull(error);
             Assert.That(error, Does.Contain("'inventory add': expects at most 1 argument"));
             Assert.That(error, Does.Contain("Usage: inventory add <item:string>"));
+            Assert.AreEqual(0, invocations);
+
+            Assert.IsTrue(shell.RunCommand("inventory add pickaxe spare third fourth"));
+            error = ConsumeError(shell);
+            Assert.IsNotNull(error);
+            Assert.That(
+                error,
+                Does.Contain("'inventory add': expects at most 1 argument"),
+                "Over-filling the widest sibling's span still names the routed leaf"
+            );
             Assert.AreEqual(0, invocations);
         }
 
@@ -416,6 +434,16 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 Does.Contain("'inv group': unknown subcommand 'forge'"),
                 "Nested diagnostics compose every routing level"
             );
+
+            Assert.IsTrue(shell.RunCommand("inv group"));
+            error = ConsumeError(shell);
+            Assert.IsNotNull(error);
+            Assert.That(
+                error,
+                Does.Contain("'inv group': expected a subcommand"),
+                "A nested router without a fallback errors on a bare invocation"
+            );
+            Assert.That(error, Does.Contain("add"));
         }
 
         [Test]
@@ -741,6 +769,27 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 "The diagnostic names the composed path"
             );
             Assert.That(missingHandler.Message, Does.Contain("set a handler"));
+
+            InvalidOperationException colliding = Assert.Throws<InvalidOperationException>(() =>
+                CommandBuilder
+                    .Create("inventory")
+                    .Subcommand("ad d", _ => { })
+                    .Subcommand("ADD", _ => { })
+            );
+            Assert.That(
+                colliding.Message,
+                Does.Contain("duplicate subcommand name 'ADD'"),
+                "Normalization happens before duplicate detection"
+            );
+
+            InvalidOperationException emptyName = Assert.Throws<InvalidOperationException>(() =>
+                CommandBuilder.Create("inventory").Subcommand("   ", _ => { })
+            );
+            Assert.That(
+                emptyName.Message,
+                Does.Contain("subcommand names must not be empty"),
+                "Names that normalize to nothing are rejected"
+            );
         }
 
         [Test]
@@ -779,10 +828,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 info.minArgCount,
                 "Bare invocations must reach the router, so the minimum is zero"
             );
-            Assert.AreEqual(
-                3,
+            Assert.IsNull(
                 info.maxArgCount,
-                "The widest subcommand plus its selector sets the maximum"
+                "The router owns bounds after routing, so the shell leaves the maximum open"
             );
         }
 

@@ -27,22 +27,17 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         {
             get
             {
-                if (0 <= _length)
-                {
-                    return _length;
-                }
-
                 if (_array != null)
                 {
-                    return _array.Length - _offset;
+                    return VisibleCount(_array.Length);
                 }
 
                 if (_list != null)
                 {
-                    return _list.Count - _offset;
+                    return VisibleCount(_list.Count);
                 }
 
-                return (_fallback?.Count ?? 0) - _offset;
+                return VisibleCount(_fallback?.Count ?? 0);
             }
         }
 
@@ -93,18 +88,16 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         }
 
         /*
-                    Specialized storage: Unity does not de-virtualize IReadOnlyList
-                    indexers, so array and list keep direct element access. The
-                    fallback covers exotic callers only. _offset/_length carve out a
-                    subcommand's share of the backing buffer without copying:
-                    _offset is the first visible index and _length >= 0 pins the
-                    visible count (-1 means through the end of the backing storage).
-                */
+            Specialized storage: Unity does not de-virtualize IReadOnlyList
+            indexers, so array and list keep direct element access. The
+            fallback covers exotic callers only. _offset carves out a
+            subcommand's share of the backing buffer without copying: every
+            view runs from _offset through the end of the backing storage.
+        */
         private readonly CommandArg[] _array;
         private readonly List<CommandArg> _list;
         private readonly IReadOnlyList<CommandArg> _fallback;
         private readonly int _offset;
-        private readonly int _length;
 
         internal BorrowedCommandArguments(CommandArg[] array)
             : this(array, 0) { }
@@ -115,26 +108,21 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         internal BorrowedCommandArguments(IReadOnlyList<CommandArg> arguments)
             : this(arguments, 0) { }
 
-        private BorrowedCommandArguments(
-            CommandArg[] array,
-            List<CommandArg> list,
-            IReadOnlyList<CommandArg> fallback,
-            int offset,
-            int length
-        )
+        private BorrowedCommandArguments(CommandArg[] array, int offset)
         {
             _array = array;
-            _list = list;
-            _fallback = fallback;
+            _list = null;
+            _fallback = null;
             _offset = offset;
-            _length = length;
         }
 
-        private BorrowedCommandArguments(CommandArg[] array, int offset)
-            : this(array, null, null, offset, -1) { }
-
         private BorrowedCommandArguments(List<CommandArg> list, int offset)
-            : this(null, list, null, offset, -1) { }
+        {
+            _array = null;
+            _list = list;
+            _fallback = null;
+            _offset = offset;
+        }
 
         private BorrowedCommandArguments(IReadOnlyList<CommandArg> arguments, int offset)
         {
@@ -144,7 +132,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 _list = null;
                 _fallback = null;
                 _offset = offset;
-                _length = -1;
                 return;
             }
 
@@ -154,7 +141,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 _list = list;
                 _fallback = null;
                 _offset = offset;
-                _length = -1;
                 return;
             }
 
@@ -162,7 +148,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             _list = null;
             _fallback = arguments;
             _offset = offset;
-            _length = -1;
         }
 
         public Enumerator GetEnumerator()
@@ -238,6 +223,17 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
 
             return new BorrowedCommandArguments(_fallback, absolute);
+        }
+
+        private int VisibleCount(int backingCount)
+        {
+            /*
+                Offset views alias a reused dispatch buffer, so a view retained
+                past its invocation can see a shrunken backing list. Such a
+                dead view reads empty instead of reporting a negative count.
+            */
+            int count = backingCount - _offset;
+            return count < 0 ? 0 : count;
         }
 
         IEnumerator<CommandArg> IEnumerable<CommandArg>.GetEnumerator()
