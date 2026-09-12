@@ -563,15 +563,17 @@ namespace Fixtures
                 .generated?.ToString();
 
             Assert.NotNull(generated);
+            string preserveAttribute = "[global::UnityEngine.Scripting.Preserve]";
+            Assert.Contains(preserveAttribute, generated, StringComparison.Ordinal);
             Assert.Contains(
-                "[global::UnityEngine.Scripting.Preserve]",
+                preserveAttribute
+                    + Environment.NewLine
+                    + "        internal static class CommandCatalog",
                 generated,
                 StringComparison.Ordinal
             );
             Assert.Contains(
-                "[global::UnityEngine.Scripting.Preserve]"
-                    + Environment.NewLine
-                    + "        internal static class CommandCatalog",
+                preserveAttribute + Environment.NewLine + "            public static void Collect(",
                 generated,
                 StringComparison.Ordinal
             );

@@ -97,12 +97,15 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             if (preserveCatalog)
             {
                 /*
-                    Unity's managed-code linker honors this attribute: it roots
-                    the catalog type and its members, and the members' direct
-                    delegate creations transitively root every accessible
-                    handler, so generated catalogs and the commands they carry
-                    survive IL2CPP/WebGL stripping. Private handlers stay bound
-                    by name and keep their per-site requirements.
+                    Unity's linker honors [Preserve] as a root annotation. A
+                    type-level preserve keeps only the type and its default
+                    constructor, so the class attribute exists to keep the
+                    type resolvable for the shell's GetType probe, and the
+                    method attribute on Collect makes that entry method a
+                    root; the linker's reachability walk from a root keeps
+                    Build, the binder factories, and every directly created
+                    handler delegate. Private handlers stay bound by name and
+                    keep their per-site requirements.
                  */
                 builder.Append(Indent2).AppendLine("[global::UnityEngine.Scripting.Preserve]");
             }
@@ -114,6 +117,10 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                 .Append(EntryListType)
                 .AppendLine(" Entries = Build();");
             builder.AppendLine();
+            if (preserveCatalog)
+            {
+                builder.Append(Indent3).AppendLine("[global::UnityEngine.Scripting.Preserve]");
+            }
             builder
                 .Append(Indent3)
                 .Append("public static void Collect(")

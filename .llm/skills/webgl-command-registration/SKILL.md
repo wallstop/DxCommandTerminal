@@ -14,11 +14,13 @@ internal `WallstopStudios.DxCommandTerminal.Generated.CommandCatalog` into every
 declares `[RegisterCommand]` methods, and the shell binds those catalogs directly. The catalog
 type is reached only through reflection (`assembly.GetType`/`GetMethod`), so managed stripping
 could otherwise remove it and every command it carries. The generator therefore emits
-`[UnityEngine.Scripting.Preserve]` onto the catalog class whenever the compilation resolves
-`UnityEngine.Scripting.PreserveAttribute` (every Unity compilation does; a
-noEngineReferences compilation gets no attribute and keeps the historical behavior). The
-class-level preserve roots the catalog and, through the catalog members' direct delegate
-creations, every accessible handler - including all built-in commands - at any Managed
+`[UnityEngine.Scripting.Preserve]` - on the catalog class and on its `Collect` entry method -
+whenever the compilation resolves `UnityEngine.Scripting.PreserveAttribute` (every Unity
+compilation does; a noEngineReferences compilation gets no attribute and keeps the historical
+behavior). Unity linker semantics: a type-level preserve keeps only the type and its default
+constructor, while a method-level preserve roots the method, its declaring type, and the
+method's reachable dependency graph - so the attribute on `Collect` is what keeps `Build`,
+the binder factories, and every directly created handler delegate alive at any Managed
 Stripping Level, on IL2CPP and WebGL alike.
 
 Two paths stay reflection-bound and can still be stripped at `Medium` or `High`:
