@@ -10,9 +10,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
     ///     instrument is Unity's own allocation constraint over the profiler
     ///     "Allocated In Frame" counter; the byte reader reads
     ///     <see cref="GC.GetAllocatedBytesForCurrentThread"/> as a secondary
-    ///     capability. Nothing is trusted before the positive control proves
-    ///     it detects a deliberate allocation (adapted from unity-helpers,
-    ///     MIT).
+    ///     capability, windowed around the subject call only so probe
+    ///     overhead is never attributed to the subject. Nothing is trusted
+    ///     before the positive control proves it detects a deliberate
+    ///     allocation (adapted from unity-helpers, MIT).
     /// </summary>
     internal static class AllocationProbe
     {
@@ -56,22 +57,21 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
             }
 
             /*
-                Warm the control loop first so JIT and first-touch costs stay
-                outside the measured window. One window then validates both
-                capabilities independently: the detection verdict gates the
-                instrument, and the raw (ungated) byte delta gates the byte
-                reader - gating the control's bytes on the capability being
-                validated would make that capability impossible to approve.
-            */
+    Warm the control loop first so JIT and first-touch costs stay
+    outside the measured window. One window then validates both
+    capabilities independently: the detection verdict gates the
+    instrument, and the subject-scoped byte delta gates the byte
+    reader. Gating the control's bytes on the capability being
+    validated would make that capability impossible to approve.
+*/
             AllocationAssertions.ForceControlAllocation();
-            TryReadThreadAllocatedBytes(out long controlStart);
-            bool detected = DetectsAllocations(AllocationAssertions.ForceControlAllocation);
-            TryReadThreadAllocatedBytes(out long controlEnd);
+            bool detected = DetectsAllocations(
+                AllocationAssertions.ForceControlAllocation,
+                out long controlBytes
+            );
             _instrumentValid = detected;
             _byteCapabilityValid =
-                controlStart != AllocationMeasurement.Unavailable
-                && controlEnd != AllocationMeasurement.Unavailable
-                && 0 < controlEnd - controlStart;
+                controlBytes != AllocationMeasurement.Unavailable && 0 < controlBytes;
             _validated = true;
         }
 
@@ -124,34 +124,37 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
 
         private static AllocationMeasurement MeasureWindow(Action subject)
         {
-            TryReadThreadAllocatedBytes(out long startBytes);
-            bool detected = DetectsAllocations(subject);
-            TryReadThreadAllocatedBytes(out long endBytes);
+            bool detected = DetectsAllocations(subject, out long subjectBytes);
 
             long allocatedBytes = AllocationMeasurement.Unavailable;
-            if (
-                _byteCapabilityValid
-                && startBytes != AllocationMeasurement.Unavailable
-                && endBytes != AllocationMeasurement.Unavailable
-            )
+            if (_byteCapabilityValid && subjectBytes != AllocationMeasurement.Unavailable)
             {
-                allocatedBytes = endBytes - startBytes;
+                allocatedBytes = subjectBytes;
             }
 
             return AllocationMeasurement.Measured(detected, allocatedBytes);
         }
 
-        private static bool DetectsAllocations(Action subject)
+        private static bool DetectsAllocations(Action subject, out long subjectBytes)
         {
             /*
                 The constraint captures the delegate's exceptions into its own
                 failure verdict, so guard the subject and rethrow afterwards:
                 a throwing subject must reach the caller, not masquerade as a
                 clean no-allocation window.
+
+                The byte reads bracket only the subject call, inside the
+                guarded delegate. Probe overhead (the guard closure, the
+                TestDelegate, the constraint, NUnit machinery) is allocated
+                before the delegate runs, so a subject-scoped window never
+                attributes it to the subject.
             */
             Exception subjectFailure = null;
+            long innerStart = AllocationMeasurement.Unavailable;
+            long innerEnd = AllocationMeasurement.Unavailable;
             Action guardedSubject = () =>
             {
+                TryReadThreadAllocatedBytes(out innerStart);
                 try
                 {
                     subject();
@@ -160,6 +163,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
                 {
                     subjectFailure = failure;
                 }
+
+                TryReadThreadAllocatedBytes(out innerEnd);
             };
 
             bool detected;
@@ -178,6 +183,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
                 ExceptionDispatchInfo.Capture(subjectFailure).Throw();
             }
 
+            subjectBytes =
+                innerStart != AllocationMeasurement.Unavailable
+                && innerEnd != AllocationMeasurement.Unavailable
+                    ? innerEnd - innerStart
+                    : AllocationMeasurement.Unavailable;
             return detected;
         }
     }
