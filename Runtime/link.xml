@@ -1,0 +1,12 @@
+<linker>
+    <!--
+        Preserve the DxCommandTerminal runtime assembly through managed code stripping
+        (IL2CPP / WebGL). Generated command catalogs are bound by name through
+        reflection, not by direct reference, so without this entry the linker can
+        strip the catalog and every attributed built-in command with it; the terminal
+        then forgets all commands in player builds. Consumer assemblies that declare
+        their own [RegisterCommand] methods still need their own stripping
+        configuration at Medium or higher; see the README.
+    -->
+    <assembly fullname="WallstopStudios.DxCommandTerminal" preserve="all" />
+</linker>

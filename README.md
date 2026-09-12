@@ -347,6 +347,8 @@ This order is irrelevant when using PlayerInput.
 # Web GL
 If you are relying on `RegisterCommandAttribute` to wire up your commands to the CommandShell instead of manually registering them, you will need to set `Managed Stripping Level` to `Low`, `Minimal`, or `None` under `Player > WebGL > Other Settings > Optimizations > Managed Stripping Level` in order for command registration to work. Settings of `Medium` or higher will break the reflection code that loads the commands, causing the terminal to forget about its capabilities.
 
+The package ships a `Runtime/link.xml` that preserves its own runtime assembly, so built-in commands and generated catalogs stay intact through managed stripping on IL2CPP and WebGL players at every stripping level. Commands declared in your own assemblies are not covered by it. At `Medium` or higher, keep them with `[Preserve]` on the command methods, a `link.xml` entry for your assembly, or manual registration through `Terminal.Shell.AddCommand`.
+
 ![png](https://raw.githubusercontent.com/wallstop/DxCommandTerminal/master/Media/ManagedStrippingLevel.png)
 
 See [Unity docs on Managed Stripping Level](https://docs.unity3d.com/2022.3/Documentation/ScriptReference/ManagedStrippingLevel.html) for more details.

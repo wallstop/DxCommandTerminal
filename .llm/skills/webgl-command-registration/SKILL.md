@@ -21,6 +21,14 @@ which has the original full exposure.
 **Required setting** (Player > WebGL > Other Settings > Optimizations > Managed Stripping Level):
 `Low`, `Minimal`, or `None`. `Medium` or `High` breaks command registration.
 
+The package ships `Runtime/link.xml` preserving its own runtime assembly, so built-in
+commands and generated catalogs survive stripping at every level. That link.xml covers
+only `WallstopStudios.DxCommandTerminal` - consumer assemblies declaring their own
+`[RegisterCommand]` methods still need the settings above (or the mitigations below) at
+`Medium`/`High`. Keep the link.xml entry in sync if the runtime assembly is ever renamed;
+`tooling~/scripts/release/validate-package-contents.mjs` fails the package build if it is
+missing or no longer preserves that assembly name.
+
 ## When the stripping level cannot be lowered
 
 1. **Manual registration** avoids reflection entirely:
@@ -30,7 +38,8 @@ which has the original full exposure.
    through stripping, but is per-site and easy to forget - prefer manual registration for
    stripping-restricted pipelines.
 3. **link.xml** can preserve whole assemblies (`<assembly fullname="YourGame" preserve="all"/>`);
-   use surgically, it defeats stripping benefits at that scope.
+   use surgically, it defeats stripping benefits at that scope. The package's own
+   `Runtime/link.xml` follows this pattern for its runtime assembly only.
 
 ## Rules for Runtime changes
 

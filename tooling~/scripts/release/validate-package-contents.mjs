@@ -19,7 +19,9 @@ const REQUIRED_FILES = [
   "Editor/WallstopStudios.DxCommandTerminal.Editor.asmdef",
   "Editor/WallstopStudios.DxCommandTerminal.Editor.asmdef.meta",
   "Tests/Runtime/WallstopStudios.DxCommandTerminal.Tests.Runtime.asmdef",
-  "Tests/Runtime/WallstopStudios.DxCommandTerminal.Tests.Runtime.asmdef.meta"
+  "Tests/Runtime/WallstopStudios.DxCommandTerminal.Tests.Runtime.asmdef.meta",
+  "Runtime/link.xml",
+  "Runtime/link.xml.meta"
 ];
 
 const FORBIDDEN_EXACT = new Set([
@@ -202,6 +204,18 @@ function main() {
     check(
       typeof parsed.name === "string" && 0 < parsed.name.length,
       `asmdef missing a name: ${asmdef}`
+    );
+  }
+
+  const linkXml = "Runtime/link.xml";
+  if (entrySet.has(linkXml)) {
+    const linkXmlContent = extractFile(tarball, linkXml);
+    check(/<linker[\s>]/.test(linkXmlContent), "link.xml must declare a <linker> root");
+    check(
+      /<assembly\s+fullname="WallstopStudios\.DxCommandTerminal"[^>]*preserve="all"/.test(
+        linkXmlContent
+      ),
+      "link.xml must preserve the WallstopStudios.DxCommandTerminal runtime assembly"
     );
   }
 
