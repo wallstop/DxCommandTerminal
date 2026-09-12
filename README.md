@@ -158,6 +158,37 @@ In this case the command name (`add`) will be inferred from the method name, you
 Terminal.Shell.AddCommand("add", CommandAdd, 2, 2, "Adds 2 numbers");
 ```
 
+### 3. Using the typed command builder:
+
+For instance-owned commands (per-player abilities, scene tools, debug overlays), the fluent `CommandBuilder` derives argument bounds, the usage hint, validation, and Tab completion from one declaration, and returns a disposable handle that removes exactly its own registration on dispose:
+
+```csharp
+// Register on enable, dispose on disable.
+CommandRegistrationHandle handle;
+void OnEnable()
+{
+    Terminal.Shell.AddCommand(
+        CommandBuilder
+            .Create("heal", "Heals a target")
+            .Arg<int>("amount", spec => spec.Required().Range(1, 100))
+            .Arg<string>("target", spec => spec.Default("self").Choices("self", "ally"))
+            .Handler((context, arguments) =>
+            {
+                int amount = arguments.Get<int>(0);
+                string target = arguments.Get<string>("target");
+                // ...
+            }),
+        out handle
+    );
+}
+
+void OnDisable() => handle?.Dispose();
+```
+
+Arguments parse through the same `CommandArg` parsers as `[RegisterCommand]` methods (including your registered custom parsers). Bad user input - unknown values, out-of-range numbers, too many arguments - is rejected with a descriptive error before the handler runs. Static and dynamic choices feed Tab completion stage by stage: with `pickaxe` as a preceding argument, the second argument's provider sees it and completes the next stage.
+
+Note: if your `TerminalUI` uses `Reset State On Init`, the terminal rebuilds its shell during its own startup. Register commands from `Start` (or after the terminal is ready) rather than from another component's `OnEnable`, or the registration can be discarded by that reset.
+
 ---
 
 # Custom Parsing

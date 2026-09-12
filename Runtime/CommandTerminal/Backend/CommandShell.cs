@@ -1010,6 +1010,33 @@
             return AddCommand(name, info);
         }
 
+        /// <summary>
+        ///     Registers a typed command from a <see cref="CommandBuilder"/>
+        ///     and returns a handle that removes exactly this registration on
+        ///     dispose. Configuration errors (no handler, duplicate argument
+        ///     names, required-after-optional ordering, unparseable argument
+        ///     types, defaults failing their own validation) throw at
+        ///     definition time; duplicate names against the live shell return
+        ///     false like the other <see cref="AddCommand"/> overloads.
+        /// </summary>
+        public bool AddCommand(CommandBuilder builder, out CommandRegistrationHandle handle)
+        {
+            if (builder == null)
+            {
+                throw new ArgumentNullException(nameof(builder));
+            }
+
+            handle = null;
+            CommandDefinition definition = builder.Build(this);
+            if (!AddCommand(definition))
+            {
+                return false;
+            }
+
+            handle = new CommandRegistrationHandle(this, definition.Name, definition.Handler);
+            return true;
+        }
+
         public bool SetVariable(string name, string value)
         {
             value ??= string.Empty;
@@ -1097,6 +1124,30 @@
                 (parameters is { Length: > 0 } ? string.Format(format, parameters) : format)
                 ?? string.Empty;
             _errorMessages.Enqueue(formattedMessage);
+        }
+
+        /// <summary>
+        ///     Removes the command registered by <paramref name="registration"/>
+        ///     under <paramref name="name"/>, identified by its handler
+        ///     delegate, so a stale registration handle can never remove a
+        ///     later replacement registered with the same name.
+        /// </summary>
+        internal bool TryRemoveCommand(string name, CommandHandler registration)
+        {
+            if (string.IsNullOrWhiteSpace(name) || registration == null)
+            {
+                return false;
+            }
+
+            if (
+                !_commands.TryGetValue(name, out CommandInfo existing)
+                || !ReferenceEquals(existing.handler, registration)
+            )
+            {
+                return false;
+            }
+
+            return _commands.Remove(name);
         }
 
         private void RegisterAutoCommands()

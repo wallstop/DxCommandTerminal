@@ -203,11 +203,11 @@ frontmatter validity, index freshness, and pointer-file delegation; see
 ### User-Facing Copy (STE)
 
 All text a human reads (PR titles, PR descriptions, commit messages, review comments,
-code comments, issues) uses Simplified Technical English: short sentences, active voice,
-present tense, common words, ASCII only. PRs and commits follow a "Why" / "What changed" /
-"How we know" order; omit sections that add nothing. Length budgets are hard limits:
-PR descriptions stay at or under ~20 lines, commit bodies at or under ~12, one line per
-bullet, no nested bullets. Code comments stay minimal - only what the code cannot say.
+code comments, issues) uses Simplified Technical English: extremely short, simple,
+direct. A few sentences is the ceiling, not the target - cut before adding. PRs cover
+how (plus why/what): `Why` 1-2 sentences, `What` 3-6 one-line bullets, optional 1-3
+evidence lines, ~12 lines total. Commit bodies ~8 lines. No per-file tours, no process
+narration, no restated context. Code comments state only what the code cannot say.
 Details: [simple-writing](./skills/simple-writing/SKILL.md).
 
 ### CHANGELOG (user-facing only)
