@@ -1,4 +1,4 @@
-namespace WallstopStudios.DxCommandTerminal.Input
+﻿namespace WallstopStudios.DxCommandTerminal.Input
 {
     using System;
     using System.Collections.Generic;
@@ -13,7 +13,9 @@ namespace WallstopStudios.DxCommandTerminal.Input
     {
         private static readonly string[] ShiftModifiers = { "shift+", "#" };
 
-        private static readonly Dictionary<string, string> CachedSubstrings = new();
+        private static readonly string[] CtrlModifiers = { "ctrl+", "control+" };
+
+        private static readonly Dictionary<string, CachedKeyName> CachedKeys = new();
 
         private static readonly Dictionary<string, KeyCode> KeyCodeMapping = new(
             StringComparer.OrdinalIgnoreCase
@@ -281,82 +283,38 @@ namespace WallstopStudios.DxCommandTerminal.Input
                 return false;
             }
 
-            bool shiftRequired = false;
-            string keyName = key;
-            int startIndex = 0;
-
-            foreach (string shiftModifier in ShiftModifiers)
+            if (!CachedKeys.TryGetValue(key, out CachedKeyName cached))
             {
-                if (
-                    key.StartsWith(shiftModifier, StringComparison.OrdinalIgnoreCase)
-                    && key != shiftModifier
-                )
-                {
-                    shiftRequired = true;
-                    startIndex = shiftModifier.Length;
-                    break;
-                }
+                cached = ResolveKeyName(key);
+                CachedKeys[key] = cached;
             }
 
-            if (!shiftRequired && key.Length == 1)
-            {
-                char keyChar = key[0];
-                if (char.IsUpper(keyChar) && char.IsLetter(keyChar))
-                {
-                    shiftRequired = true;
-                }
-                else if (
-                    AlternativeSpecialShiftedKeyCodeMap.TryGetValue(
-                        key,
-                        out string legacyShiftedKeyName
-                    )
-                )
-                {
-                    shiftRequired = true;
-                    keyName = legacyShiftedKeyName;
-                }
-            }
-
-            if (0 < startIndex)
-            {
-                if (!CachedSubstrings.TryGetValue(key, out keyName))
-                {
-                    keyName = key[startIndex..];
-                    if (keyName.NeedsTrim())
-                    {
-                        keyName = keyName.Trim();
-                    }
-
-                    if (keyName.Length == 1 && keyName.NeedsLowerInvariantConversion())
-                    {
-                        keyName = keyName.ToLowerInvariant();
-                    }
-
-                    CachedSubstrings[key] = keyName;
-                }
-            }
-
-            if (string.IsNullOrWhiteSpace(keyName))
+            string resolvedName = cached.Name;
+            if (string.IsNullOrWhiteSpace(resolvedName))
             {
                 return false;
             }
+
 #pragma warning disable CS0612 // Type or member is obsolete
             if (inputMode == InputMode.LegacyInputSystem)
 #pragma warning restore CS0612 // Type or member is obsolete
             {
 #if ENABLE_LEGACY_INPUT_MANAGER
                 if (
-                    Enum.TryParse(keyName, ignoreCase: true, out KeyCode keyCode)
-                    || KeyCodeMapping.TryGetValue(keyName, out keyCode)
+                    Enum.TryParse(resolvedName, ignoreCase: true, out KeyCode keyCode)
+                    || KeyCodeMapping.TryGetValue(resolvedName, out keyCode)
                 )
                 {
                     return Input.GetKeyDown(keyCode)
                         && (
-                            !shiftRequired
-                            || Input.GetKey(KeyCode.LeftShift)
+                            !cached.ShiftRequired
                             || Input.GetKey(KeyCode.LeftShift)
                             || Input.GetKey(KeyCode.RightShift)
-                            || Input.GetKey(KeyCode.RightShift)
+                        )
+                        && (
+                            !cached.CtrlRequired
+                            || Input.GetKey(KeyCode.LeftControl)
+                            || Input.GetKey(KeyCode.RightControl)
                         );
                 }
 #endif
@@ -368,33 +326,145 @@ namespace WallstopStudios.DxCommandTerminal.Input
 #pragma warning restore CS0612 // Type or member is obsolete
             {
 #if ENABLE_INPUT_SYSTEM
+                string lookupName = resolvedName;
+                bool shiftRequired = cached.ShiftRequired;
                 if (
                     !shiftRequired
                     && (
                         AlternativeSpecialShiftedKeyCodeMap.TryGetValue(
-                            keyName,
+                            lookupName,
                             out string shiftedKeyName
-                        ) || SpecialShiftedKeyCodeMap.TryGetValue(keyName, out shiftedKeyName)
+                        ) || SpecialShiftedKeyCodeMap.TryGetValue(lookupName, out shiftedKeyName)
                     )
                 )
                 {
                     shiftRequired = true;
-                    keyName = shiftedKeyName;
+                    lookupName = shiftedKeyName;
                 }
 
                 Keyboard currentKeyboard = Keyboard.current;
                 return (!shiftRequired || currentKeyboard.shiftKey.isPressed)
+                    && (!cached.CtrlRequired || currentKeyboard.ctrlKey.isPressed)
                     && (
                         currentKeyboard.TryGetChildControl<KeyControl>(
-                            SpecialKeyCodeMap.GetValueOrDefault(keyName, keyName)
+                            SpecialKeyCodeMap.GetValueOrDefault(lookupName, lookupName)
                         )
                             is { wasPressedThisFrame: true }
-                        || currentKeyboard.TryGetChildControl<KeyControl>(keyName)
+                        || currentKeyboard.TryGetChildControl<KeyControl>(lookupName)
                             is { wasPressedThisFrame: true }
                     );
 #endif
             }
             return false;
+        }
+
+        /// <summary>
+        ///     Resolves a hotkey string into its key name and modifier
+        ///     requirements. Internal for test coverage of the parse surface
+        ///     (see WallstopStudios.DxCommandTerminal.Tests.Runtime).
+        /// </summary>
+        internal static CachedKeyName ResolveKeyName(string key)
+        {
+            bool ctrlRequired = false;
+            bool shiftRequired = false;
+            string keyName = key;
+            /*
+                Modifiers strip in either order ("ctrl+shift+a" and
+                "shift+ctrl+a" both work); a bare modifier never strips
+                (guarded in StripModifier), so the loop always terminates
+                within two iterations.
+             */
+            for (int i = 0; i < 2; ++i)
+            {
+                if (!ctrlRequired && StripModifier(keyName, CtrlModifiers, out string withoutCtrl))
+                {
+                    ctrlRequired = true;
+                    keyName = withoutCtrl;
+                    continue;
+                }
+
+                if (
+                    !shiftRequired
+                    && StripModifier(keyName, ShiftModifiers, out string withoutShift)
+                )
+                {
+                    shiftRequired = true;
+                    keyName = withoutShift;
+                    continue;
+                }
+
+                break;
+            }
+
+            if (!shiftRequired && keyName.Length == 1)
+            {
+                char keyChar = keyName[0];
+                if (char.IsUpper(keyChar) && char.IsLetter(keyChar))
+                {
+                    shiftRequired = true;
+                }
+                else if (
+                    AlternativeSpecialShiftedKeyCodeMap.TryGetValue(
+                        keyName,
+                        out string legacyShiftedKeyName
+                    )
+                )
+                {
+                    shiftRequired = true;
+                    keyName = legacyShiftedKeyName;
+                }
+            }
+
+            /*
+                Modifier stripping and special-key rewriting are deterministic
+                per input string; the resolved name and its modifier
+                requirements are cached so repeated per-frame polling never
+                allocates. Invalid keys keep an empty name so they also skip
+                the parse on later calls.
+             */
+            return new CachedKeyName(keyName, shiftRequired, ctrlRequired);
+        }
+
+        private static bool StripModifier(string key, string[] modifiers, out string stripped)
+        {
+            foreach (string modifier in modifiers)
+            {
+                if (
+                    key.StartsWith(modifier, StringComparison.OrdinalIgnoreCase)
+                    && key.Length != modifier.Length
+                )
+                {
+                    stripped = key[modifier.Length..];
+                    if (stripped.NeedsTrim())
+                    {
+                        stripped = stripped.Trim();
+                    }
+
+                    if (stripped.Length == 1 && stripped.NeedsLowerInvariantConversion())
+                    {
+                        stripped = stripped.ToLowerInvariant();
+                    }
+
+                    return true;
+                }
+            }
+
+            stripped = key;
+            return false;
+        }
+
+        internal readonly struct CachedKeyName
+        {
+            public readonly string Name;
+            public readonly bool ShiftRequired;
+            public readonly bool CtrlRequired;
+
+            public CachedKeyName(string name, bool shiftRequired, bool ctrlRequired)
+            {
+                Name = name;
+                ShiftRequired = shiftRequired;
+                CtrlRequired = ctrlRequired;
+            }
         }
     }
 }

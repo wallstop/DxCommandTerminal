@@ -6,9 +6,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     using Backend;
     using Components;
     using NUnit.Framework;
+    using Themes;
     using UI;
     using UnityEngine;
     using UnityEngine.TestTools;
+    using UnityEngine.UIElements;
+#if UNITY_EDITOR
+    using UnityEditor;
+#endif
 
     public sealed class TerminalTests
     {
@@ -35,6 +40,44 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             terminal.ignoreDefaultCommands = ignoreDefaultCommands;
             StartTracker startTracker = go.GetComponent<StartTracker>();
             yield return new WaitUntil(() => startTracker.Started);
+        }
+
+        /*
+            A scripted add leaves the serialized _uiDocument null while a
+            UIDocument component exists on the GameObject (consumer-reported
+            failure mode: a TerminalUI in an empty scene never launches).
+            SetupUI must recover through TryGetComponent and build the tree.
+         */
+        [UnityTest]
+        public IEnumerator MissingSerializedDocumentRecoversFromComponent()
+        {
+            const string PackageRoot = "Packages/com.wallstop-studios.dxcommandterminal";
+            PanelSettings settings = ScriptableObject.CreateInstance<PanelSettings>();
+            GameObject go = new("TerminalUnassignedDoc");
+            go.SetActive(false);
+            go.AddComponent<UIDocument>().panelSettings = settings;
+            TerminalUI terminal = go.AddComponent<TerminalUI>();
+            terminal.resetStateOnInit = true;
+            terminal._themePack = AssetDatabase.LoadAssetAtPath<TerminalThemePack>(
+                $"{PackageRoot}/Packs/Themes/Medium.asset"
+            );
+            terminal._fontPack = AssetDatabase.LoadAssetAtPath<TerminalFontPack>(
+                $"{PackageRoot}/Packs/Fonts/Medium.asset"
+            );
+            go.AddComponent<StartTracker>();
+
+            go.SetActive(true);
+            StartTracker tracker = go.GetComponent<StartTracker>();
+            yield return new WaitUntil(() => tracker.Started);
+
+            Assert.AreEqual(
+                1,
+                go.GetComponent<UIDocument>().rootVisualElement.childCount,
+                "SetupUI must recover via TryGetComponent and build the terminal tree"
+            );
+            Assert.IsNotNull(terminal._commandInput, "The command input must exist after recovery");
+
+            UnityEngine.Object.Destroy(settings);
         }
 
         [TearDown]
