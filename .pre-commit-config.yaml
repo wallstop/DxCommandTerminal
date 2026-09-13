@@ -74,6 +74,20 @@ repos:
           it outright: 'using System.Linq', qualified 'System.Linq.' calls, and static
           'Enumerable.' calls all fail under Runtime/ and Editor/. No --fix by design;
           rewrite call sites as loops with caller-owned buffers.
+      - id: theme-palette-tokens-lint
+        name: Lint palette theme tokens (Themes/ coverage, .palette-* var() fallbacks)
+        entry: node tooling~/scripts/lint-theme-palette-tokens.mjs
+        language: system
+        always_run: true
+        pass_filenames: false
+        stages:
+          - pre-commit
+          - pre-push
+        description: >
+          The command palette styles only through theme custom properties: every theme
+          block in Styles/Themes/*.uss must define the full required-variable list, and
+          every var() inside a .palette-* rule in BaseStyles.uss must name a required
+          token and carry a fallback so an unthemed palette still renders.
       - id: llm-instructions-lint
         name: Lint .llm instructions (SKILL.md spec, index freshness, pointer delegation)
         entry: pwsh -NoProfile -File tooling~/scripts/lint-llm-instructions.ps1

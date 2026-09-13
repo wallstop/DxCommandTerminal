@@ -22,26 +22,20 @@
         private const string PalettePanelName = "PalettePanel";
         private const string PaletteResultsName = "PaletteResults";
         private const string PaletteInputName = "PaletteInput";
+        private const string PaletteDividerName = "PaletteDivider";
         private const string PaletteFeedbackName = "PaletteFeedback";
         private const string PaletteFooterName = "PaletteFooter";
         private const string RowName = "PaletteRow";
         private const string RowNameLabel = "PaletteRowName";
         private const string RowHelpName = "PaletteRowHelp";
         private const string SelectedRowClass = "palette-row-selected";
-        private const string FooterText = "Enter run · Up/Down select · Tab apply · Esc close";
+        private const string FooterText = "↑↓ select · Enter run · Tab apply · Esc close";
 
         public event Action Opened;
 
         public event Action Closed;
 
         public static CommandPaletteUI Instance { get; private set; }
-
-        private static readonly Color InputTextColor = new(0.92f, 0.92f, 0.92f, 1f);
-        private static readonly Color RowNameColor = new(0.92f, 0.92f, 0.92f, 1f);
-        private static readonly Color RowHelpColor = new(0.68f, 0.68f, 0.68f, 1f);
-        private static readonly Color FeedbackColor = new(0.9f, 0.45f, 0.45f, 1f);
-        private static readonly Color FooterColor = new(0.62f, 0.62f, 0.62f, 1f);
-        private static readonly Color SelectedRowBackground = new(0.27f, 0.31f, 0.36f, 1f);
 
         public bool IsOpen => _isOpen;
 
@@ -56,11 +50,11 @@
 
         [Tooltip("Maximum visible result rows; additional results scroll")]
         [Range(1, 32)]
-        public int maxVisibleRows = 8;
+        public int maxVisibleRows = 6;
 
         [Tooltip("Height of one result row in pixels")]
         [Min(16f)]
-        public float rowHeight = 32f;
+        public float rowHeight = 30f;
 
         [Tooltip("Close the palette when a command runs successfully")]
         public bool closeOnSuccessfulExecution = true;
@@ -86,6 +80,7 @@
         internal VisualElement _paletteRoot;
         internal TextField _input;
         internal ScrollView _results;
+        internal VisualElement _divider;
         internal Label _feedback;
         internal readonly List<string> _matchNames = new();
 
@@ -168,6 +163,7 @@
         /// <summary>
         ///     Re-runs the palette search for <paramref name="query"/>, rebuilding
         ///     the result rows and resetting the selection to the first match.
+        ///     A blank query clears the results, leaving only the search bar.
         /// </summary>
         public void SetQuery(string query)
         {
@@ -176,11 +172,21 @@
                 return;
             }
 
-            RefreshSource();
-            CommandPaletteSearch.Filter(query ?? string.Empty, _sourceNames, _matchNames);
+            string effectiveQuery = query ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(effectiveQuery))
+            {
+                _matchNames.Clear();
+            }
+            else
+            {
+                RefreshSource();
+                CommandPaletteSearch.Filter(effectiveQuery, _sourceNames, _matchNames);
+            }
+
             _selectionIndex = _matchNames.Count == 0 ? (int?)null : 0;
             RefreshRows();
             UpdateSelectionVisual();
+            UpdateResultsVisibility();
         }
 
         public bool MoveSelection(int direction)
@@ -199,6 +205,7 @@
 
             _selectionIndex = target;
             UpdateSelectionVisual();
+            DisplaySelected();
             return true;
         }
 
@@ -213,16 +220,18 @@
             }
 
             ClearFeedback();
-            _input.SetValueWithoutNotify(selected);
+            SetInputValue(selected);
             SetQuery(selected);
             FocusInput();
             return true;
         }
 
         /// <summary>
-        ///     Runs the current input through the command shell. Blank input runs
-        ///     the selected row. On success the palette closes by default;
-        ///     failures keep it open with visible feedback.
+        ///     Runs the current input through the command shell. Blank input
+        ///     falls back to the selected row when one exists (for example
+        ///     after a direct <see cref="SetQuery"/> call). On success the
+        ///     palette closes by default; failures keep it open with visible
+        ///     feedback.
         /// </summary>
         public bool Submit()
         {
@@ -290,6 +299,7 @@
             _paletteRoot = null;
             _panel = null;
             _results = null;
+            _divider = null;
             _input = null;
             _feedback = null;
             _rows.Clear();
@@ -363,53 +373,40 @@
 
             _panel = new VisualElement { name = PalettePanelName };
             _panel.AddToClassList("palette-panel");
+            /*
+                Geometry stays inline because width and position follow
+                serialized fields; every other value lives in BaseStyles.uss
+                so theme tokens drive the look.
+             */
             _panel.style.position = Position.Absolute;
             _panel.style.top = Length.Percent(Mathf.Clamp(verticalPosition, 0f, 1f) * 100f);
             _panel.style.width = width;
             _panel.style.maxWidth = Length.Percent(100f);
-            _panel.style.backgroundColor = new Color(0.12f, 0.12f, 0.12f, 0.96f);
-            _panel.style.borderTopColor = new Color(0.3f, 0.3f, 0.3f, 1f);
-            _panel.style.borderBottomColor = new Color(0.3f, 0.3f, 0.3f, 1f);
-            _panel.style.borderLeftColor = new Color(0.3f, 0.3f, 0.3f, 1f);
-            _panel.style.borderRightColor = new Color(0.3f, 0.3f, 0.3f, 1f);
-            _panel.style.borderTopWidth = 1f;
-            _panel.style.borderBottomWidth = 1f;
-            _panel.style.borderLeftWidth = 1f;
-            _panel.style.borderRightWidth = 1f;
-            _panel.style.borderTopLeftRadius = 8f;
-            _panel.style.borderTopRightRadius = 8f;
-            _panel.style.borderBottomLeftRadius = 8f;
-            _panel.style.borderBottomRightRadius = 8f;
-            _panel.style.paddingLeft = 12f;
-            _panel.style.paddingRight = 12f;
-            _panel.style.paddingTop = 10f;
-            _panel.style.paddingBottom = 8f;
             _paletteRoot.Add(_panel);
 
             _input = new TextField { name = PaletteInputName };
             _input.AddToClassList("palette-input");
-            _input.style.marginBottom = 6f;
-            _input.style.color = InputTextColor;
             _panel.Add(_input);
             _input.RegisterCallback<ChangeEvent<string>>(OnInputChanged);
+
+            _divider = new VisualElement { name = PaletteDividerName };
+            _divider.AddToClassList("palette-divider");
+            _divider.style.display = DisplayStyle.None;
+            _panel.Add(_divider);
 
             _results = new ScrollView(ScrollViewMode.Vertical) { name = PaletteResultsName };
             _results.AddToClassList("palette-results");
             _results.style.maxHeight = maxVisibleRows * rowHeight;
+            _results.style.display = DisplayStyle.None;
             _panel.Add(_results);
 
             _feedback = new Label { name = PaletteFeedbackName };
             _feedback.AddToClassList("palette-feedback");
             _feedback.style.display = DisplayStyle.None;
-            _feedback.style.color = FeedbackColor;
-            _feedback.style.whiteSpace = WhiteSpace.Normal;
             _panel.Add(_feedback);
 
             Label footer = new(FooterText) { name = PaletteFooterName };
             footer.AddToClassList("palette-footer");
-            footer.style.color = FooterColor;
-            footer.style.fontSize = 10f;
-            footer.style.marginTop = 6f;
             _panel.Add(footer);
 
             _paletteRoot.RegisterCallback<KeyDownEvent>(HandleKeyDown, TrickleDown.TrickleDown);
@@ -547,29 +544,14 @@
             {
                 VisualElement row = new() { name = RowName };
                 row.AddToClassList("palette-row");
-                row.style.flexDirection = FlexDirection.Row;
-                row.style.paddingTop = 4f;
-                row.style.paddingBottom = 4f;
-                row.style.paddingLeft = 8f;
-                row.style.paddingRight = 8f;
-                row.style.borderTopLeftRadius = 4f;
-                row.style.borderTopRightRadius = 4f;
-                row.style.borderBottomLeftRadius = 4f;
-                row.style.borderBottomRightRadius = 4f;
                 row.style.height = rowHeight;
 
                 Label nameLabel = new() { name = RowNameLabel };
                 nameLabel.AddToClassList("palette-row-name");
-                nameLabel.style.flexShrink = 0f;
-                nameLabel.style.minWidth = 140f;
-                nameLabel.style.color = RowNameColor;
                 row.Add(nameLabel);
 
                 Label helpLabel = new() { name = RowHelpName };
                 helpLabel.AddToClassList("palette-row-help");
-                helpLabel.style.flexGrow = 1f;
-                helpLabel.style.color = RowHelpColor;
-                helpLabel.style.whiteSpace = WhiteSpace.Normal;
                 row.Add(helpLabel);
 
                 row.RegisterCallback<ClickEvent>(OnRowClicked);
@@ -595,6 +577,12 @@
 
             _selectionIndex = index;
             UpdateSelectionVisual();
+            /*
+                Sync the input to the clicked row before submitting: after an
+                arrow auto-load the input still holds the previously
+                highlighted name, and Submit reads the input value.
+             */
+            DisplaySelected();
             Submit();
         }
 
@@ -643,18 +631,41 @@
             {
                 bool selected = _selectionIndex.HasValue && _selectionIndex.Value == index;
                 _rows[index].EnableInClassList(SelectedRowClass, selected);
-                /*
-                    Inline default so the selection is visible without any
-                    stylesheet; consumers can still restyle through the
-                    palette-row-selected class in their theme.
-                 */
-                _rows[index].style.backgroundColor = selected ? SelectedRowBackground : Color.clear;
             }
 
             if (_selectionIndex.HasValue && _selectionIndex.Value < _rows.Count)
             {
                 _results.ScrollTo(_rows[_selectionIndex.Value]);
             }
+        }
+
+        private void UpdateResultsVisibility()
+        {
+            bool visible = 0 < _matchNames.Count;
+            _results.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+            _divider.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+        }
+
+        private void DisplaySelected()
+        {
+            if (!TryGetSelected(out string selected))
+            {
+                return;
+            }
+
+            /*
+                Launcher-style auto-load: the input shows the highlighted
+                command name while the match list stays put. SetValueWithoutNotify
+                fires no change event, so the typed query keeps driving the
+                filter until the user edits the text again.
+             */
+            SetInputValue(selected);
+        }
+
+        private void SetInputValue(string value)
+        {
+            _input.SetValueWithoutNotify(value);
+            _input.cursorIndex = _input.selectIndex = value.Length;
         }
 
         private void FocusInput()

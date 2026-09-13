@@ -164,7 +164,7 @@
         }
 
         [UnityTest]
-        public IEnumerator OpenShowsCommandsAndFocusesInput()
+        public IEnumerator OpenShowsBarOnlyAndFocusesInput()
         {
             yield return SpawnPalette();
             Terminal.Shell.AddCommand("paletteping", _ => { }, help: "test command");
@@ -177,32 +177,12 @@
             Assert.IsTrue(_palette.IsOpen, "Open() must open the palette");
             Assert.AreEqual(1, openedCount, "Opened must fire exactly once per open");
             Assert.AreEqual(
-                new[] { "paletteping" },
-                _palette._matchNames.ToArray(),
-                "A fresh deferred shell lists only its manually registered commands"
+                0,
+                _palette._matchNames.Count,
+                "A blank query keeps the bar collapsed with no listed commands"
             );
+            AssertResultsCollapsed("Opening without a query shows only the bar");
             yield return WaitForFocusedInput("The palette input should be focused after open");
-        }
-
-        [UnityTest]
-        public IEnumerator BlankInputListsCommandsInOrdinalOrder()
-        {
-            yield return SpawnPalette();
-            RegisterPair();
-
-            _palette.Open();
-            yield return null;
-
-            Assert.AreEqual(
-                new[] { "paletteping1", "paletteping2" },
-                _palette._matchNames.ToArray(),
-                "Blank input lists every command in the shell's ordinal order"
-            );
-            Assert.IsTrue(
-                _palette.TryGetSelected(out string selected),
-                "A non-empty match list always has a selection"
-            );
-            Assert.AreEqual("paletteping1", selected, "Selection starts on the first row");
         }
 
         [UnityTest]
@@ -224,16 +204,52 @@
             );
             Assert.IsTrue(_palette.TryGetSelected(out string selected));
             Assert.AreEqual("alphabet", selected, "Selection resets to the first match");
+            AssertResultsExpanded("Typing reveals the results dropdown");
         }
 
         [UnityTest]
-        public IEnumerator NavigateMovesSelectionWithinBounds()
+        public IEnumerator TypingRevealsResultsAndClearingCollapses()
         {
             yield return SpawnPalette();
             RegisterPair();
 
             _palette.Open();
             yield return null;
+            AssertResultsCollapsed("A blank bar starts collapsed");
+
+            _palette._input.value = "paletteping";
+            yield return null;
+
+            AssertResultsExpanded("Typing reveals the results dropdown");
+            Assert.AreEqual(
+                new[] { "paletteping1", "paletteping2" },
+                _palette._matchNames.ToArray(),
+                "Matches list in the shell's ordinal order"
+            );
+
+            _palette._input.value = string.Empty;
+            yield return null;
+
+            Assert.AreEqual(0, _palette._matchNames.Count, "Clearing the input clears the matches");
+            AssertResultsCollapsed("Clearing the input collapses back to the bar");
+        }
+
+        [UnityTest]
+        public IEnumerator NavigateAutoLoadsSelectionIntoInput()
+        {
+            yield return SpawnPalette();
+            RegisterPair();
+
+            _palette.Open();
+            yield return null;
+            _palette._input.value = "paletteping";
+            yield return null;
+
+            Assert.AreEqual(
+                new[] { "paletteping1", "paletteping2" },
+                _palette._matchNames.ToArray(),
+                "Both commands match the typed prefix in ordinal order"
+            );
 
             Assert.IsTrue(_palette.MoveSelection(1), "Moving down from the first row succeeds");
             Assert.IsTrue(
@@ -241,11 +257,88 @@
                 "Selection survives navigation"
             );
             Assert.AreEqual("paletteping2", down, "One down move lands on the second row");
+            Assert.AreEqual(
+                "paletteping2",
+                _palette._input.value,
+                "Arrow navigation auto-loads the selected command name into the input"
+            );
+            Assert.AreEqual(
+                new[] { "paletteping1", "paletteping2" },
+                _palette._matchNames.ToArray(),
+                "Auto-loading keeps the match list so the typed query still drives the filter"
+            );
+
             Assert.IsFalse(_palette.MoveSelection(1), "Moving past the last row is rejected");
+            Assert.AreEqual(
+                "paletteping2",
+                _palette._input.value,
+                "A rejected move keeps the loaded name"
+            );
+
             Assert.IsTrue(_palette.MoveSelection(-1), "Moving up from the second row succeeds");
             Assert.IsTrue(_palette.TryGetSelected(out string up), "Selection survives navigation");
             Assert.AreEqual("paletteping1", up);
+            Assert.AreEqual("paletteping1", _palette._input.value, "Moving up auto-loads again");
             Assert.IsFalse(_palette.MoveSelection(-1), "Moving past the first row is rejected");
+            Assert.AreEqual(
+                "paletteping1".Length,
+                _palette._input.cursorIndex,
+                "Auto-loading parks the caret at the end of the loaded name"
+            );
+            Assert.AreEqual(
+                _palette._input.cursorIndex,
+                _palette._input.selectIndex,
+                "Auto-loading collapses the selection"
+            );
+        }
+
+        [UnityTest]
+        public IEnumerator EnterAfterAutoLoadRunsLoadedName()
+        {
+            yield return SpawnPalette();
+            RegisterPair();
+
+            _palette.Open();
+            yield return null;
+            _palette._input.value = "paletteping";
+            yield return null;
+            Assert.IsTrue(_palette.MoveSelection(1), "Navigate to the second row");
+            Assert.AreEqual("paletteping2", _palette._input.value, "The selection auto-loads");
+
+            yield return SendKeyDown(KeyCode.Return);
+
+            Assert.IsFalse(_palette.IsOpen, "Enter runs the loaded name and closes");
+            string[] history = CollectHistory();
+            Assert.IsTrue(0 < history.Length, "The executed command must be recorded in history");
+            Assert.AreEqual(
+                "paletteping2",
+                history[^1],
+                "Enter executes the auto-loaded name, not the typed filter query"
+            );
+        }
+
+        [UnityTest]
+        public IEnumerator EditingAfterAutoLoadReFilters()
+        {
+            yield return SpawnPalette();
+            RegisterPair();
+
+            _palette.Open();
+            yield return null;
+            _palette._input.value = "paletteping";
+            yield return null;
+            Assert.IsTrue(_palette.MoveSelection(1), "Navigate to the second row");
+            Assert.AreEqual("paletteping2", _palette._input.value, "The selection auto-loads");
+
+            _palette._input.value = "paletteping1x";
+            yield return null;
+
+            Assert.AreEqual(
+                0,
+                _palette._matchNames.Count,
+                "Editing after auto-load re-runs the filter on the edited text"
+            );
+            AssertResultsCollapsed("No matches collapse the results");
         }
 
         [UnityTest]
@@ -266,23 +359,23 @@
         }
 
         [UnityTest]
-        public IEnumerator EnterOnBlankInputRunsSelectedRow()
+        public IEnumerator EnterWithNoResultsIsNoOp()
         {
             yield return SpawnPalette();
             RegisterPair();
 
             _palette.Open();
             yield return null;
-            Assert.IsTrue(_palette.MoveSelection(1), "Navigate to the second row");
-            Assert.IsTrue(_palette.TryGetSelected(out string expected));
-            Assert.AreEqual("paletteping2", expected);
 
             yield return SendKeyDown(KeyCode.Return);
 
-            Assert.IsFalse(_palette.IsOpen, "Enter executes the selection and closes");
-            string[] history = CollectHistory();
-            Assert.IsTrue(0 < history.Length, "The executed command must be recorded in history");
-            Assert.AreEqual("paletteping2", history[^1], "The selected row must execute");
+            Assert.IsTrue(_palette.IsOpen, "Enter without any results leaves the palette open");
+            Assert.AreEqual(
+                0,
+                CollectHistory().Length,
+                "Enter without any results executes nothing"
+            );
+            AssertResultsCollapsed("The bar stays collapsed");
         }
 
         [UnityTest]
@@ -297,6 +390,7 @@
 
             Assert.IsFalse(_palette.Submit(), "An unknown command fails to submit");
             Assert.IsTrue(_palette.IsOpen, "A failed submission keeps the palette open");
+            AssertResultsCollapsed("No matches keep the bar collapsed");
             StringAssert.StartsWith(
                 "Error:",
                 _palette._feedback.text,
@@ -355,13 +449,16 @@
         }
 
         [UnityTest]
-        public IEnumerator ReopenAfterCloseRestoresResultsAndFocus()
+        public IEnumerator ReopenAfterCloseShowsBarAndFocus()
         {
             yield return SpawnPalette();
             RegisterPair();
 
             _palette.Open();
             yield return WaitForFocusedInput("The first open focuses the input");
+            _palette._input.value = "paletteping";
+            yield return null;
+            AssertResultsExpanded("Typing before close expands the results");
             _palette.Close();
             Assert.IsNull(_palette._paletteRoot.parent, "Close detaches the palette tree");
 
@@ -369,11 +466,8 @@
             yield return null;
 
             Assert.IsTrue(_palette.IsOpen, "Reopening after close works");
-            Assert.AreEqual(
-                new[] { "paletteping1", "paletteping2" },
-                _palette._matchNames.ToArray(),
-                "Reopen re-lists commands against the current shell state"
-            );
+            Assert.AreEqual(0, _palette._matchNames.Count, "Reopen resets to the bar-only state");
+            AssertResultsCollapsed("Reopen shows only the bar");
             yield return WaitForFocusedInput("The reopened palette focuses the input again");
         }
 
@@ -384,6 +478,8 @@
             RegisterPair();
 
             _palette.Open();
+            yield return null;
+            _palette._input.value = "paletteping";
             yield return null;
             Assert.IsTrue(_palette.MoveSelection(1), "Navigate to the second row");
 
@@ -396,6 +492,11 @@
             );
             Assert.IsTrue(_palette.TryGetSelected(out string selected), "Selection stays valid");
             Assert.AreEqual("paletteping2", selected, "Tab keeps the applied row selected");
+            Assert.AreEqual(
+                new[] { "paletteping2" },
+                _palette._matchNames.ToArray(),
+                "Applying re-filters to the exact command"
+            );
         }
 
         [UnityTest]
@@ -536,6 +637,22 @@
                 _palette._uiDocument.rootVisualElement.focusController.focusedElement,
                 message
             );
+        }
+
+        /*
+    Visibility asserts read the imperative inline display state: test panels
+    carry no stylesheet, so USS-driven visibility would not resolve here.
+ */
+        private void AssertResultsCollapsed(string message)
+        {
+            Assert.AreEqual(DisplayStyle.None, _palette._results.style.display.value, message);
+            Assert.AreEqual(DisplayStyle.None, _palette._divider.style.display.value, message);
+        }
+
+        private void AssertResultsExpanded(string message)
+        {
+            Assert.AreEqual(DisplayStyle.Flex, _palette._results.style.display.value, message);
+            Assert.AreEqual(DisplayStyle.Flex, _palette._divider.style.display.value, message);
         }
 
         /*
