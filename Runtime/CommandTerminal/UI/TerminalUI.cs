@@ -669,7 +669,11 @@
                 CommandCompletion candidate = candidates[i];
                 CommandCompletion active = current[i];
                 if (
-                    candidate.InsertionText != active.InsertionText
+                    !string.Equals(
+                        candidate.InsertionText,
+                        active.InsertionText,
+                        StringComparison.Ordinal
+                    )
                     || candidate.HasReplacementOverride != active.HasReplacementOverride
                 )
                 {

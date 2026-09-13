@@ -93,6 +93,9 @@ jobs:
       - name: Lint LINQ ban in production code
         run: node tooling~/scripts/lint-linq-production.mjs
 
+      - name: Lint explicit string comparisons
+        run: node tooling~/scripts/lint-string-equality.mjs
+
   package-content:
     # Clean-install guard for the UPM artifact (issue #22, PLAN.md T02
     # "package-content validators"): packs the package exactly like npm/UPM

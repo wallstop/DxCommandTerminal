@@ -561,7 +561,14 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                 defaultFont = null;
                 foreach (Font font in fonts)
                 {
-                    if (font != null && font.name == defaultFontName)
+                    if (
+                        font != null
+                        && string.Equals(
+                            font.name,
+                            defaultFontName,
+                            StringComparison.OrdinalIgnoreCase
+                        )
+                    )
                     {
                         defaultFont = font;
                         break;

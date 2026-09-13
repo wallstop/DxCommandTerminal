@@ -399,6 +399,16 @@ export function consumeLiteral(text, start) {
       let depth = 1;
       i++;
       while (i < text.length && 0 < depth) {
+        /*
+            Holes live inside the literal, so (for non-verbatim literals) the literal's escape
+            rules still apply inside them: `\\` and `\\"` must be consumed as data before the
+            quote check, or an escaped quote inside a hole starts a phantom nested literal
+            that swallows the rest of the file.
+         */
+        if (!verbatim && text[i] === "\\") {
+          i += 2;
+          continue;
+        }
         if (text[i] === "{") {
           depth++;
         } else if (text[i] === "}") {
