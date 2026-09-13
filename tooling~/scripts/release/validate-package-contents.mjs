@@ -91,6 +91,16 @@ function extractFile(tarball, entry) {
   });
 }
 
+function extractTarball(tarball) {
+  const destination = fs.mkdtempSync(path.join(os.tmpdir(), "dxt-extract-"));
+  execFileSync("tar", ["-xzf", tarball, "-C", destination]);
+  return path.join(destination, "package");
+}
+
+function extractGuids(text) {
+  return [...text.matchAll(/guid: ([0-9a-f]{32})/g)].map((match) => match[1]);
+}
+
 function trackedFiles() {
   const stdout = execFileSync("git", ["ls-files"], { cwd: REPO_ROOT, encoding: "utf8" });
   return new Set(stdout.split(/\r?\n/).filter(Boolean));
@@ -204,6 +214,50 @@ function main() {
       `asmdef missing a name: ${asmdef}`
     );
   }
+
+  // Font payload invariants (#52): every shipped font file must be referenced
+  // by a shipped asset pack, and every pack reference must resolve to a
+  // shipped asset. Together they keep the font payload curated - unreferenced
+  // weights, italics, or variable-font duplicates fail the pack.
+  const extracted = extractTarball(tarball);
+  const guidToAssetPath = new Map();
+  for (const entry of entries) {
+    if (!entry.endsWith(".meta")) {
+      continue;
+    }
+    const guid = extractGuids(fs.readFileSync(path.join(extracted, entry), "utf8"))[0];
+    if (guid !== undefined) {
+      guidToAssetPath.set(guid, entry.slice(0, -".meta".length));
+    }
+  }
+
+  const packAssetPaths = entries.filter((entry) => /^Packs\/.*\.asset$/.test(entry));
+  const referencedGuids = new Set();
+  for (const packAsset of packAssetPaths) {
+    for (const guid of extractGuids(fs.readFileSync(path.join(extracted, packAsset), "utf8"))) {
+      referencedGuids.add(guid);
+    }
+  }
+
+  for (const entry of entries) {
+    if (!/^Fonts\/.*\.(ttf|otf)$/.test(entry)) {
+      continue;
+    }
+    const metaText = fs.readFileSync(path.join(extracted, `${entry}.meta`), "utf8");
+    const guid = extractGuids(metaText)[0];
+    check(
+      guid !== undefined && referencedGuids.has(guid),
+      `shipped font not referenced by any asset pack (payload bloat): ${entry}`
+    );
+  }
+
+  for (const guid of referencedGuids) {
+    check(
+      guidToAssetPath.has(guid),
+      `asset pack references an asset missing from the tarball (guid ${guid})`
+    );
+  }
+
 
   console.log(
     `[package-validate] ${path.basename(tarball)}\n` +
