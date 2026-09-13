@@ -20,11 +20,30 @@
         private GameObject _paletteObject;
         private GameObject _terminalObject;
         private PanelSettings _panelSettings;
+        private TerminalUI _sharedTerminal;
 
         private static void RegisterPair()
         {
             Terminal.Shell.AddCommand("paletteping1", _ => { }, help: "first");
             Terminal.Shell.AddCommand("paletteping2", _ => { }, help: "second");
+        }
+
+        private static void RegisterEchoCommand()
+        {
+            /*
+                Emits the two log shapes an output-producing command produces
+                (like list-fonts) so the palette's output capture has entries
+                to surface.
+             */
+            Terminal.Shell.AddCommand(
+                "paletteecho",
+                _ =>
+                {
+                    Terminal.Log(TerminalLogType.Message, "Fira Mono");
+                    Terminal.Log(TerminalLogType.Warning, "No font pack found.");
+                },
+                help: "Echoes two output lines"
+            );
         }
 
         private static void AssertResolved(string key, string expectedName, bool shift, bool ctrl)
@@ -56,6 +75,8 @@
             {
                 UnityEngine.Object.Destroy(_terminalObject);
             }
+
+            _sharedTerminal = null;
 
             if (_panelSettings != null)
             {
@@ -280,6 +301,8 @@
             Assert.AreEqual("paletteping1", up);
             Assert.AreEqual("paletteping1", _palette._input.value, "Moving up auto-loads again");
             Assert.IsFalse(_palette.MoveSelection(-1), "Moving past the first row is rejected");
+            yield return null;
+
             Assert.AreEqual(
                 "paletteping1".Length,
                 _palette._input.cursorIndex,
@@ -541,21 +564,124 @@
         }
 
         [UnityTest]
-        public IEnumerator OpeningTerminalClosesOpenPalette()
+        public IEnumerator SharedSurfaceKeepsRootHeightAndFocus()
         {
-            yield return SpawnPalette();
-            _palette.Open();
-            yield return null;
-            Assert.IsTrue(_palette.IsOpen, "The palette is open");
+            yield return SpawnSharedSurface();
+            RegisterPair();
 
-            yield return SpawnTerminal();
             TerminalUI.Instance.SetState(TerminalState.OpenSmall);
             yield return null;
-
-            Assert.IsFalse(_palette.IsOpen, "Opening the terminal closes the palette");
             Assert.IsFalse(
                 TerminalUI.Instance.IsClosed,
-                "The terminal stays open after taking over"
+                "Sanity: the terminal is open before the palette opens"
+            );
+
+            _palette.Open();
+            yield return null;
+            Assert.IsTrue(_palette.IsOpen, "The palette opens over the shared terminal");
+
+            int frameBudget = 10;
+            while (0 < frameBudget--)
+            {
+                yield return null;
+            }
+
+            VisualElement documentRoot = _palette._uiDocument.rootVisualElement;
+            Assert.AreEqual(
+                StyleKeyword.Auto,
+                documentRoot.style.height.keyword,
+                "The terminal must not clamp the shared root to its own window "
+                    + "height while the palette owns the surface"
+            );
+            Assert.IsTrue(
+                InputOwnsFocus(),
+                "The palette input keeps panel focus while the terminal runs its "
+                    + "close animation"
+            );
+
+            _palette.Close();
+            yield return null;
+
+            Assert.AreNotEqual(
+                StyleKeyword.Auto,
+                documentRoot.style.height.keyword,
+                "Closing the palette hands the shared root back to the terminal's "
+                    + "own window height"
+            );
+        }
+
+        [UnityTest]
+        public IEnumerator OutputCommandStaysOpenAndShowsOutput()
+        {
+            yield return SpawnPalette();
+            RegisterEchoCommand();
+
+            _palette.Open();
+            yield return null;
+            _palette._input.value = "paletteecho";
+            yield return null;
+
+            Assert.IsTrue(_palette.Submit(), "An output-producing command submits");
+            Assert.IsTrue(_palette.IsOpen, "Output-producing commands keep the palette open");
+            Assert.AreEqual(
+                DisplayStyle.Flex,
+                _palette._output.style.display.value,
+                "The command output is displayed"
+            );
+            StringAssert.Contains("Fira Mono", _palette._output.text, "Output lines shown");
+            StringAssert.Contains("No font pack found.", _palette._output.text, "Warnings shown");
+            StringAssert.DoesNotContain(
+                "paletteecho",
+                _palette._output.text,
+                "The input echo is not part of the displayed output"
+            );
+
+            _palette._input.value = "heal";
+            yield return null;
+
+            Assert.AreEqual(
+                DisplayStyle.None,
+                _palette._output.style.display.value,
+                "Typing a new query clears the previous run's output"
+            );
+        }
+
+        [UnityTest]
+        public IEnumerator ResultsScrollerIsNotFocusable()
+        {
+            yield return SpawnPalette();
+            for (int index = 0; index < 10; ++index)
+            {
+                Terminal.Shell.AddCommand(
+                    "palettescroll" + index,
+                    _ => { },
+                    help: "overflow row " + index
+                );
+            }
+
+            _palette.Open();
+            yield return null;
+            _palette._input.value = "palettescroll";
+            yield return null;
+
+            Assert.IsTrue(
+                10 <= _palette._matchNames.Count,
+                "Sanity: the query matches enough rows to overflow"
+            );
+
+            int frameBudget = FrameBudget;
+            while (0 < frameBudget-- && _palette._results.verticalScroller == null)
+            {
+                yield return null;
+            }
+
+            Assert.IsNotNull(
+                _palette._results.verticalScroller,
+                "The overflowing results create a scroller"
+            );
+            Assert.IsFalse(
+                _palette._results.verticalScroller.focusable,
+                "Clicking the scrollbar must not steal panel focus from the input"
             );
         }
 
@@ -568,6 +694,24 @@
             document.panelSettings = _panelSettings;
             _palette = _paletteObject.AddComponent<CommandPaletteUI>();
             _palette._uiDocument = document;
+            _paletteObject.SetActive(true);
+            yield return null;
+        }
+
+        private IEnumerator SpawnSharedSurface()
+        {
+            _panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
+            _paletteObject = new GameObject("SharedSurface");
+            _paletteObject.SetActive(false);
+            UIDocument document = _paletteObject.AddComponent<UIDocument>();
+            document.panelSettings = _panelSettings;
+            _sharedTerminal = _paletteObject.AddComponent<TerminalUI>();
+            _palette = _paletteObject.AddComponent<CommandPaletteUI>();
+            _sharedTerminal._uiDocument = document;
+            _palette._uiDocument = document;
+            LogAssert.Expect(LogType.Error, "No theme pack assigned, cannot initialize theme.");
+            LogAssert.Expect(LogType.Error, "No font pack assigned, cannot initialize font.");
+            LogAssert.Expect(LogType.Error, "Failed to load any themes!");
             _paletteObject.SetActive(true);
             yield return null;
         }

@@ -379,6 +379,12 @@
     color: var(--text-shell, rgba(174, 174, 174, 1));
 }
 
+.palette-output {
+    margin-top: 4px;
+    white-space: normal;
+    color: var(--text-message, rgba(235, 235, 235, 1));
+}
+
 .palette-feedback {
     margin-top: 4px;
     white-space: normal;

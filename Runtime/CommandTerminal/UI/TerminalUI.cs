@@ -940,7 +940,15 @@
             }
             else
             {
-                _input.CommandText = string.Empty;
+                /*
+                    OnDisable routes through here and can run before Awake on a
+                    never-enabled component, where _input is not resolved yet.
+                 */
+                if (_input != null)
+                {
+                    _input.CommandText = string.Empty;
+                }
+
                 ResetAutoComplete();
             }
         }
@@ -1952,6 +1960,18 @@
                 return;
             }
 
+            /*
+                The palette shares this document when both surfaces live on one
+                GameObject. While it is open it owns the root: RefreshUI would
+                force the root height to the terminal's (zero when closed), so
+                the palette panel's percent position collapses to the top, and
+                its focus/caret writes steal keys from the palette input.
+             */
+            if (IsPaletteSurfaceOpen())
+            {
+                return;
+            }
+
             _uiDocument.rootVisualElement.style.height = _currentWindowHeight;
             _terminalContainer.style.height = _currentWindowHeight;
             _terminalContainer.style.width = Screen.width;
@@ -1987,9 +2007,11 @@
                         Retry focus only: the scheduled pass must not re-run
                         the caret-to-end behavior of a fresh focus, which
                         would clobber a caret the user or a completion placed
-                        in the meantime.
+                        in the meantime. The gate keeps a retry scheduled
+                        before the palette took over from stealing focus
+                        after it opens.
                      */
-                    _textInput.schedule.Execute(_textInput.Focus).ExecuteLater(0);
+                    _textInput.schedule.Execute(RetryInputFocus).ExecuteLater(0);
                     FocusInput();
                 }
 
@@ -2022,6 +2044,16 @@
                 return;
             }
 
+            /*
+                A retry scheduled before the palette opened must not yank
+                panel focus back to the terminal input after the palette
+                took over.
+             */
+            if (IsPaletteSurfaceOpen())
+            {
+                return;
+            }
+
             bool alreadyFocused = _textInput.focusController.focusedElement == _textInput;
             if (alreadyFocused || 0 <= _pendingCaretIndex)
             {
@@ -2038,6 +2070,27 @@
             int textEndPosition = _commandInput.value.Length;
             _commandInput.cursorIndex = textEndPosition;
             _commandInput.selectIndex = textEndPosition;
+        }
+
+        private void RetryInputFocus()
+        {
+            if (IsPaletteSurfaceOpen())
+            {
+                return;
+            }
+
+            _textInput?.Focus();
+        }
+
+        /*
+            Document-scoped: a terminal only yields its shared surface to a
+            palette opened on the same UIDocument, independent of which
+            palette claimed the static Instance.
+         */
+        private bool IsPaletteSurfaceOpen()
+        {
+            UIDocument document = _uiDocument;
+            return document != null && CommandPaletteUI.IsOpenOn(document);
         }
 
         private void RefreshLogs()

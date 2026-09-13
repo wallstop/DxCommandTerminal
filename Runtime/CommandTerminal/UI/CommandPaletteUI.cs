@@ -3,6 +3,7 @@
     using System;
     using System.Collections.Generic;
     using Backend;
+    using Helper;
     using Input;
     using Themes;
     using UnityEngine;
@@ -23,6 +24,7 @@
         private const string PaletteResultsName = "PaletteResults";
         private const string PaletteInputName = "PaletteInput";
         private const string PaletteDividerName = "PaletteDivider";
+        private const string PaletteOutputName = "PaletteOutput";
         private const string PaletteFeedbackName = "PaletteFeedback";
         private const string PaletteFooterName = "PaletteFooter";
         private const string RowName = "PaletteRow";
@@ -36,6 +38,8 @@
         public event Action Closed;
 
         public static CommandPaletteUI Instance { get; private set; }
+
+        private static readonly List<CommandPaletteUI> _livePalettes = new();
 
         public bool IsOpen => _isOpen;
 
@@ -81,6 +85,7 @@
         internal TextField _input;
         internal ScrollView _results;
         internal VisualElement _divider;
+        internal Label _output;
         internal Label _feedback;
         internal readonly List<string> _matchNames = new();
 
@@ -94,7 +99,10 @@
         private int? _selectionIndex;
         private bool _isOpen;
         private bool _built;
+        private bool _lastRunProducedOutput;
+        private int _pendingCaretIndex = -1;
         private VisualElement _previousFocus;
+        private readonly List<string> _outputLines = new();
 
         public static void CloseActive()
         {
@@ -102,6 +110,31 @@
             {
                 Instance.Close();
             }
+        }
+
+        /// <summary>
+        ///     Reports whether any live palette is open on <paramref name="document"/>.
+        ///     Terminals gate their per-frame document writes on this so an open
+        ///     palette owns the shared surface, independent of which component
+        ///     claimed <see cref="Instance"/>.
+        /// </summary>
+        public static bool IsOpenOn(UIDocument document)
+        {
+            if (document == null)
+            {
+                return false;
+            }
+
+            for (int index = 0; index < _livePalettes.Count; ++index)
+            {
+                CommandPaletteUI palette = _livePalettes[index];
+                if (palette._uiDocument == document && palette.IsOpen)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         public void Open()
@@ -120,8 +153,13 @@
             Attach();
             CloseTerminalSurface();
             CapturePreviousFocus();
+            /*
+                The terminal clamps the shared document root to its own window
+                height while it owns the surface; restore automatic sizing so
+                the panel's percent position measures the full viewport.
+             */
+            _uiDocument.rootVisualElement.style.height = new StyleLength(StyleKeyword.Auto);
             _input.SetValueWithoutNotify(string.Empty);
-            ClearFeedback();
             _paletteRoot.style.display = DisplayStyle.Flex;
             _isOpen = true;
             SetQuery(string.Empty);
@@ -137,6 +175,7 @@
             }
 
             _isOpen = false;
+            _pendingCaretIndex = -1;
             RestorePreviousFocus();
             /*
                 Detach instead of hiding: a display:none subtree keeps panel
@@ -163,7 +202,8 @@
         /// <summary>
         ///     Re-runs the palette search for <paramref name="query"/>, rebuilding
         ///     the result rows and resetting the selection to the first match.
-        ///     A blank query clears the results, leaving only the search bar.
+        ///     A blank query clears the results, leaving only the search bar;
+        ///     any displayed output or feedback from a previous run is cleared.
         /// </summary>
         public void SetQuery(string query)
         {
@@ -187,6 +227,7 @@
             RefreshRows();
             UpdateSelectionVisual();
             UpdateResultsVisibility();
+            ClearFeedback();
         }
 
         public bool MoveSelection(int direction)
@@ -219,7 +260,6 @@
                 return false;
             }
 
-            ClearFeedback();
             SetInputValue(selected);
             SetQuery(selected);
             FocusInput();
@@ -230,8 +270,9 @@
         ///     Runs the current input through the command shell. Blank input
         ///     falls back to the selected row when one exists (for example
         ///     after a direct <see cref="SetQuery"/> call). On success the
-        ///     palette closes by default; failures keep it open with visible
-        ///     feedback.
+        ///     palette closes by default unless the command printed output —
+        ///     the output is shown so commands like <c>list-fonts</c> stay
+        ///     readable. Failures keep it open with visible feedback.
         /// </summary>
         public bool Submit()
         {
@@ -252,7 +293,8 @@
             }
 
             bool success = RunCommandText(commandText.Trim());
-            if (success && closeOnSuccessfulExecution)
+            bool close = success && closeOnSuccessfulExecution && !_lastRunProducedOutput;
+            if (close)
             {
                 Close();
             }
@@ -286,20 +328,25 @@
             {
                 Instance = this;
             }
+
+            _livePalettes.Add(this);
         }
 
         private void OnDisable()
         {
+            _livePalettes.Remove(this);
             Close();
             if (_built && _uiDocument != null)
             {
                 _uiDocument.rootVisualElement?.Clear();
             }
 
+            _pendingCaretIndex = -1;
             _paletteRoot = null;
             _panel = null;
             _results = null;
             _divider = null;
+            _output = null;
             _input = null;
             _feedback = null;
             _rows.Clear();
@@ -319,6 +366,7 @@
 
         private void Update()
         {
+            ApplyPendingCaret();
             if (InputHelpers.IsKeyPressed(toggleHotkey, inputMode))
             {
                 Toggle();
@@ -398,7 +446,23 @@
             _results.AddToClassList("palette-results");
             _results.style.maxHeight = maxVisibleRows * rowHeight;
             _results.style.display = DisplayStyle.None;
+            Scroller verticalScroller = _results.verticalScroller;
+            if (verticalScroller != null)
+            {
+                /*
+                    Clicking the dragger would move panel focus to the slider
+                    and leave the input unable to receive typing; scrolling
+                    stays wheel- and arrow-driven instead.
+                 */
+                verticalScroller.focusable = false;
+            }
+
             _panel.Add(_results);
+
+            _output = new Label { name = PaletteOutputName };
+            _output.AddToClassList("palette-output");
+            _output.style.display = DisplayStyle.None;
+            _panel.Add(_output);
 
             _feedback = new Label { name = PaletteFeedbackName };
             _feedback.AddToClassList("palette-feedback");
@@ -621,7 +685,6 @@
 
         private void OnInputChanged(ChangeEvent<string> evt)
         {
-            ClearFeedback();
             SetQuery(evt.newValue);
         }
 
@@ -664,8 +727,29 @@
 
         private void SetInputValue(string value)
         {
+            /*
+                A value change can re-run the text element's own caret reset
+                after this call, so the caret writes are retried every frame
+                until they stick, like the terminal's pending caret.
+             */
             _input.SetValueWithoutNotify(value);
-            _input.cursorIndex = _input.selectIndex = value.Length;
+            _pendingCaretIndex = value.Length;
+            ApplyPendingCaret();
+        }
+
+        private void ApplyPendingCaret()
+        {
+            if (_pendingCaretIndex < 0 || _input == null)
+            {
+                return;
+            }
+
+            int index = _pendingCaretIndex;
+            _input.cursorIndex = _input.selectIndex = index;
+            if (_input.cursorIndex == index)
+            {
+                _pendingCaretIndex = -1;
+            }
         }
 
         private void FocusInput()
@@ -724,6 +808,10 @@
                 return false;
             }
 
+            CommandLog buffer = Terminal.Buffer;
+            long versionBefore = buffer != null ? buffer.Version : 0;
+            _lastRunProducedOutput = false;
+
             Terminal.Log(TerminalLogType.Input, commandText);
             bool success = shell.RunCommand(commandText);
             string firstError = null;
@@ -736,9 +824,83 @@
             if (firstError != null)
             {
                 ShowFeedback($"Error: {firstError}");
+                return success;
+            }
+
+            List<string> output = CollectOutput(buffer, versionBefore);
+            if (0 < output.Count)
+            {
+                ShowOutput(output);
+                return success;
             }
 
             return success;
+        }
+
+        /*
+            Output-producing commands print through Terminal.Log into the
+            shared buffer; the palette cannot redirect that, so it reads the
+            entries added since the run started. The Input echo is skipped so
+            only the command's own lines show.
+         */
+        private List<string> CollectOutput(CommandLog buffer, long versionBefore)
+        {
+            _outputLines.Clear();
+            if (buffer == null)
+            {
+                return _outputLines;
+            }
+
+            int added = (int)(buffer.Version - versionBefore);
+            if (added <= 0)
+            {
+                return _outputLines;
+            }
+
+            IReadOnlyList<LogItem> logs = buffer.Logs;
+            int first = Mathf.Max(0, logs.Count - added);
+            for (int index = first; index < logs.Count; ++index)
+            {
+                LogItem log = logs[index];
+                if (log.type == TerminalLogType.Input)
+                {
+                    continue;
+                }
+
+                if (!string.IsNullOrWhiteSpace(log.message))
+                {
+                    _outputLines.Add(log.message);
+                }
+            }
+
+            return _outputLines;
+        }
+
+        private void ShowOutput(List<string> lines)
+        {
+            const int MaxOutputLines = 8;
+            using CachedStringBuilder.Scope builder = new(256);
+            int shown = Mathf.Min(lines.Count, MaxOutputLines);
+            for (int index = 0; index < shown; ++index)
+            {
+                if (0 < index)
+                {
+                    builder.Builder.Append('\n');
+                }
+
+                builder.Builder.Append(lines[index]);
+            }
+
+            int remaining = lines.Count - shown;
+            if (0 < remaining)
+            {
+                builder.Builder.Append('\n');
+                builder.Builder.Append("(+").Append(remaining).Append(" more lines)");
+            }
+
+            _output.text = builder.Builder.ToString();
+            _output.style.display = DisplayStyle.Flex;
+            _lastRunProducedOutput = true;
         }
 
         private void ShowFeedback(string message)
@@ -751,6 +913,8 @@
         {
             _feedback.text = string.Empty;
             _feedback.style.display = DisplayStyle.None;
+            _output.text = string.Empty;
+            _output.style.display = DisplayStyle.None;
         }
     }
 }
