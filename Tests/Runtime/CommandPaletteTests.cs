@@ -635,6 +635,24 @@
                 _palette._output.text,
                 "The input echo is not part of the displayed output"
             );
+            Assert.AreEqual(
+                string.Empty,
+                _palette._input.value,
+                "The executed command leaves the bar so the output reads on its own"
+            );
+            AssertResultsCollapsed(
+                "The executed command's result rows collapse with the cleared bar"
+            );
+            Assert.IsFalse(
+                _palette.Submit(),
+                "Enter with the cleared bar does not re-run the command"
+            );
+            Assert.IsTrue(_palette.IsOpen, "A no-op Enter keeps the output visible");
+            Assert.AreEqual(
+                DisplayStyle.Flex,
+                _palette._output.style.display.value,
+                "The no-op Enter keeps the output visible"
+            );
 
             _palette._input.value = "heal";
             yield return null;
@@ -644,6 +662,40 @@
                 _palette._output.style.display.value,
                 "Typing a new query clears the previous run's output"
             );
+        }
+
+        [UnityTest]
+        public IEnumerator DownAfterOutputRunKeepsInputClean()
+        {
+            yield return SpawnPalette();
+            RegisterEchoCommand();
+
+            _palette.Open();
+            yield return null;
+            _palette._input.value = "paletteecho";
+            yield return null;
+
+            Assert.IsTrue(_palette.Submit(), "The command runs and shows output");
+            Assert.AreEqual(
+                string.Empty,
+                _palette._input.value,
+                "Sanity: the completed command left the bar"
+            );
+
+            yield return null;
+            yield return SendKeyDown(KeyCode.DownArrow);
+
+            Assert.AreEqual(
+                _palette._input.selectIndex,
+                _palette._input.cursorIndex,
+                "Down after a completed command never selects input text"
+            );
+            Assert.AreEqual(
+                string.Empty,
+                _palette._input.value,
+                "Down after a completed command leaves the bar clear"
+            );
+            Assert.IsTrue(_palette.IsOpen, "The output stays visible");
         }
 
         [UnityTest]

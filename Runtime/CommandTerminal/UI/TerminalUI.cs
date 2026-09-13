@@ -1406,6 +1406,11 @@
 
         private void ResetAutoComplete()
         {
+            if (_input == null)
+            {
+                return;
+            }
+
             _lastKnownCommandText = _input.CommandText ?? string.Empty;
             ResetTokenCompletion();
             if (hintDisplayMode == HintDisplayMode.Always)

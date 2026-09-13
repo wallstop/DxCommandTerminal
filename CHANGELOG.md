@@ -45,9 +45,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- Quick-launch bar output visibility: commands that print output (`list-fonts`, `list-themes`, `help`, ...) now display it inside the bar and keep it open instead of closing silently on success; silent successes still close per `closeOnSuccessfulExecution`, and typing a new query clears the shown output.
+- Quick-launch bar output visibility: commands that print output (`list-fonts`, `list-themes`, `help`, ...) now clear the executed command from the bar, display the output inside the palette, and keep it open instead of closing silently on success; silent successes still close per `closeOnSuccessfulExecution`, Enter with the cleared bar does not re-run, and typing a new query clears the shown output.
 - Quick-launch bar shared-surface layout: with a `TerminalUI` and `CommandPaletteUI` on the same UIDocument, the terminal's per-frame window-height clamp no longer tweens the palette to the top of the screen while it is open; the terminal yields the shared document root while the palette owns it and reclaims it when the palette closes.
-- Quick-launch bar input focus: auto-loading a command name into the input now reliably parks the caret at the end (the text field could reset the caret mid-name), and clicking the results scrollbar no longer steals panel focus from the search input.
+- Quick-launch bar input focus: auto-loading a command name into the input now reliably parks the caret at the end (the text field's own deferred caret reset raced the write and could leave the caret mid-name or visibly select the loaded text), and clicking the results scrollbar no longer steals panel focus from the search input.
 - `TerminalUI.SetState` no longer throws a NullReferenceException when the terminal component is disabled before its UI setup completed.
 
 

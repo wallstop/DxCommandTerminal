@@ -215,18 +215,18 @@
             string effectiveQuery = query ?? string.Empty;
             if (string.IsNullOrWhiteSpace(effectiveQuery))
             {
-                _matchNames.Clear();
+                CollapseResults();
             }
             else
             {
                 RefreshSource();
                 CommandPaletteSearch.Filter(effectiveQuery, _sourceNames, _matchNames);
+                _selectionIndex = _matchNames.Count == 0 ? (int?)null : 0;
+                RefreshRows();
+                UpdateSelectionVisual();
+                UpdateResultsVisibility();
             }
 
-            _selectionIndex = _matchNames.Count == 0 ? (int?)null : 0;
-            RefreshRows();
-            UpdateSelectionVisual();
-            UpdateResultsVisibility();
             ClearFeedback();
         }
 
@@ -271,8 +271,9 @@
         ///     falls back to the selected row when one exists (for example
         ///     after a direct <see cref="SetQuery"/> call). On success the
         ///     palette closes by default unless the command printed output —
-        ///     the output is shown so commands like <c>list-fonts</c> stay
-        ///     readable. Failures keep it open with visible feedback.
+        ///     the output is shown, the input is cleared, and the palette
+        ///     stays open so commands like <c>list-fonts</c> stay readable.
+        ///     Failures keep it open with visible feedback.
         /// </summary>
         public bool Submit()
         {
@@ -297,6 +298,17 @@
             if (close)
             {
                 Close();
+                return success;
+            }
+
+            /*
+                Output-producing commands keep the palette open, but the run is
+                finished: clear the executed command so the output reads on its
+                own and Enter does not re-run it.
+             */
+            if (_lastRunProducedOutput)
+            {
+                ClearInput();
             }
 
             return success;
@@ -366,11 +378,19 @@
 
         private void Update()
         {
-            ApplyPendingCaret();
             if (InputHelpers.IsKeyPressed(toggleHotkey, inputMode))
             {
                 Toggle();
             }
+        }
+
+        private void LateUpdate()
+        {
+            /*
+                After the panel's internal update: a pending caret write lands
+                once the text element's own reset has already run.
+             */
+            ApplyPendingCaret();
         }
 
         private void EnsureBuilt()
@@ -728,13 +748,15 @@
         private void SetInputValue(string value)
         {
             /*
-                A value change can re-run the text element's own caret reset
-                after this call, so the caret writes are retried every frame
-                until they stick, like the terminal's pending caret.
+                A value change makes the text element re-run its own caret
+                reset after this call, so the caret write is retried from
+                LateUpdate (after the panel's internal update) until it
+                sticks, like the terminal's pending caret. Applying it inline
+                races that reset: the caret lands wherever the reset leaves
+                it, which can leave the input text visually selected.
              */
             _input.SetValueWithoutNotify(value);
             _pendingCaretIndex = value.Length;
-            ApplyPendingCaret();
         }
 
         private void ApplyPendingCaret()
@@ -901,6 +923,31 @@
             _output.text = builder.Builder.ToString();
             _output.style.display = DisplayStyle.Flex;
             _lastRunProducedOutput = true;
+        }
+
+        /*
+            Drops the result rows without touching the run diagnostics: the
+            executed-command cleanup after an output run must keep the output
+            visible, while a new blank query clears everything.
+         */
+        private void CollapseResults()
+        {
+            _matchNames.Clear();
+            _selectionIndex = null;
+            RefreshRows();
+            UpdateSelectionVisual();
+            UpdateResultsVisibility();
+        }
+
+        /*
+            Post-run cleanup for an output-producing command: the executed
+            command leaves the bar, the stale result rows collapse, and the
+            output stays below. Enter with the cleared bar is a no-op.
+         */
+        private void ClearInput()
+        {
+            SetInputValue(string.Empty);
+            CollapseResults();
         }
 
         private void ShowFeedback(string message)
