@@ -696,54 +696,6 @@
             return true;
         }
 
-        private static string QuoteInsertionIfNeeded(string insertion, bool tokenQuoted)
-        {
-            if (tokenQuoted)
-            {
-                return insertion;
-            }
-
-            bool containsSpace = false;
-            bool containsDoubleQuote = false;
-            bool containsSingleQuote = false;
-            foreach (char character in insertion)
-            {
-                switch (character)
-                {
-                    case ' ':
-                        containsSpace = true;
-                        break;
-                    case '"':
-                        containsDoubleQuote = true;
-                        break;
-                    case '\'':
-                        containsSingleQuote = true;
-                        break;
-                }
-            }
-
-            if (!containsSpace && !containsDoubleQuote && !containsSingleQuote)
-            {
-                return insertion;
-            }
-
-            if (!containsDoubleQuote)
-            {
-                return "\"" + insertion + "\"";
-            }
-
-            if (!containsSingleQuote)
-            {
-                return "'" + insertion + "'";
-            }
-
-            /*
-               The insertion mixes both quote characters; insert it verbatim
-               rather than producing an untokenizable quoting.
-            */
-            return insertion;
-        }
-
         private static void InitializeScrollView(ScrollView scrollView)
         {
             VisualElement parent = scrollView.Q<VisualElement>(
@@ -1638,7 +1590,7 @@
                 return;
             }
 
-            string insertion = QuoteInsertionIfNeeded(
+            string insertion = CommandTokenizer.QuoteInsertionIfNeeded(
                 completion.InsertionText,
                 _tokenCompletionQuoted
             );

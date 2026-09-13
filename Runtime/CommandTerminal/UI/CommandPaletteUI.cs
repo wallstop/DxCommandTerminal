@@ -12,9 +12,13 @@
     /// <summary>
     ///     Runtime quick-launch bar: a compact command search surface that
     ///     opens on a configurable hotkey (default Ctrl+Space), ranks command
-    ///     names by exact/prefix/fuzzy-subsequence match, and runs the selected
-    ///     command through the shared <see cref="Terminal.Shell"/>. Independent
-    ///     of <see cref="TerminalUI"/>: opening one surface closes the other.
+    ///     names by exact/prefix/fuzzy-subsequence match, runs the selected
+    ///     command through the shared <see cref="Terminal.Shell"/>, and chains
+    ///     argument completion: once the input resolves to an eligible
+    ///     command with an active argument, rows show the shell's dynamic
+    ///     completion candidates and Tab applies the selected one to the
+    ///     active token. Independent of <see cref="TerminalUI"/>: opening one
+    ///     surface closes the other.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class CommandPaletteUI : MonoBehaviour
@@ -88,14 +92,19 @@
         internal Label _output;
         internal Label _feedback;
         internal readonly List<string> _matchNames = new();
+        internal readonly List<CommandCompletion> _completions = new();
+        internal readonly List<VisualElement> _rows = new();
 
         [SerializeField]
         private Font _font;
         private VisualElement _panel;
-        private readonly List<VisualElement> _rows = new();
         private readonly List<Label> _rowNameLabels = new();
         private readonly List<Label> _rowHelpLabels = new();
         private readonly List<string> _sourceNames = new();
+        private readonly List<CommandCompletion> _completionsBuffer = new();
+        private readonly List<CommandToken> _tokenBuffer = new();
+        private CommandCompletionContext _completionContext;
+        private bool _completionMode;
         private int? _selectionIndex;
         private bool _isOpen;
         private bool _built;
@@ -223,34 +232,19 @@
         }
 
         /// <summary>
-        ///     Re-runs the palette search for <paramref name="query"/>, rebuilding
-        ///     the result rows and resetting the selection to the first match.
-        ///     A blank query clears the results, leaving only the search bar;
-        ///     any displayed output or feedback from a previous run is cleared.
+        ///     Re-runs the palette search for <paramref name="query"/>,
+        ///     rebuilding the result rows and resetting the selection to the
+        ///     first match. Argument completion first: when the query resolves
+        ///     to an eligible command with an active argument stage, rows show
+        ///     the shell's completion candidates. Otherwise the query filters
+        ///     command names. A blank query clears the results, leaving only
+        ///     the search bar; any displayed output or feedback from a
+        ///     previous run is cleared. Completion reads the caret at the end
+        ///     of the query.
         /// </summary>
         public void SetQuery(string query)
         {
-            if (!_isOpen)
-            {
-                return;
-            }
-
-            string effectiveQuery = query ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(effectiveQuery))
-            {
-                CollapseResults();
-            }
-            else
-            {
-                RefreshSource();
-                CommandPaletteSearch.Filter(effectiveQuery, _sourceNames, _matchNames);
-                _selectionIndex = _matchNames.Count == 0 ? (int?)null : 0;
-                RefreshRows();
-                UpdateSelectionVisual();
-                UpdateResultsVisibility();
-            }
-
-            ClearFeedback();
+            RefreshQuery(query, query != null ? query.Length : 0);
         }
 
         public bool MoveSelection(int direction)
@@ -269,18 +263,42 @@
 
             _selectionIndex = target;
             UpdateSelectionVisual();
-            DisplaySelected();
+            /*
+                Command rows auto-load the highlighted name (launcher style);
+                completion rows must not: loading an insertion text would
+                corrupt the command text the user is assembling.
+             */
+            if (!_completionMode)
+            {
+                DisplaySelected();
+            }
+
             return true;
         }
 
         /// <summary>
-        ///     Applies the selected command name to the input (Tab behavior).
+        ///     Applies the selected row to the input (Tab behavior). Command
+        ///     rows load the command name; argument completion rows insert the
+        ///     candidate at the active token's replacement range and re-run
+        ///     the search on the updated text.
         /// </summary>
         public bool ApplySelected()
         {
             if (!IsOpen || !TryGetSelected(out string selected))
             {
                 return false;
+            }
+
+            if (_completionMode)
+            {
+                int index = _selectionIndex ?? -1;
+                if (index < 0 || _completions.Count <= index)
+                {
+                    return false;
+                }
+
+                ApplyCompletion(_completions[index]);
+                return true;
             }
 
             SetInputValue(selected);
@@ -353,6 +371,58 @@
             return false;
         }
 
+        /*
+            Row activation (pointer click) resolves to an index, then drives
+            the same selection path as keyboard navigation. Split from the
+            ClickEvent callback because Unity's dispatcher drops synthetic
+            pointer events, leaving only real input injection for parity
+            testing (see TerminalUI pointer-parity note).
+         */
+        internal void RowActivated(int index)
+        {
+            _selectionIndex = index;
+            UpdateSelectionVisual();
+            /*
+                Command rows sync the input to the clicked name before
+                submitting (after an arrow auto-load the input still holds the
+                previously highlighted name). Completion rows apply instead of
+                submitting: the command may need more arguments.
+             */
+            if (_completionMode)
+            {
+                ApplySelected();
+                return;
+            }
+
+            DisplaySelected();
+            Submit();
+        }
+
+        private void RefreshQuery(string query, int caretIndex)
+        {
+            if (!_isOpen)
+            {
+                return;
+            }
+
+            string effectiveQuery = query ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(effectiveQuery))
+            {
+                CollapseResults();
+            }
+            else if (!TryRefreshCompletions(effectiveQuery, caretIndex))
+            {
+                RefreshSource();
+                CommandPaletteSearch.Filter(effectiveQuery, _sourceNames, _matchNames);
+                _selectionIndex = _matchNames.Count == 0 ? (int?)null : 0;
+                RefreshRows();
+                UpdateSelectionVisual();
+                UpdateResultsVisibility();
+            }
+
+            ClearFeedback();
+        }
+
         private void OnEnable()
         {
             /*
@@ -387,6 +457,7 @@
             _rows.Clear();
             _rowNameLabels.Clear();
             _rowHelpLabels.Clear();
+            ClearCompletionState();
             _built = false;
             _previousFocus = null;
         }
@@ -631,6 +702,14 @@
             {
                 VisualElement row = _rows[index];
                 row.style.display = DisplayStyle.Flex;
+                if (_completionMode)
+                {
+                    CommandCompletion completion = _completions[index];
+                    _rowNameLabels[index].text = completion.EffectiveDisplayLabel;
+                    _rowHelpLabels[index].text = completion.Description ?? string.Empty;
+                    continue;
+                }
+
                 _rowNameLabels[index].text = _matchNames[index];
                 string help = null;
                 if (
@@ -648,6 +727,130 @@
             {
                 _rows[index].style.display = DisplayStyle.None;
             }
+        }
+
+        /*
+            Argument completion. When the shell's completion provider answers
+            the query (the input resolves to an eligible command and the caret
+            sits in an argument stage), the rows show its candidates and Tab
+            applies the selected one to the active token. Returns false when
+            the query stays a command-name search: blank input, no resolved
+            command, no active argument stage, or an ineligible command.
+         */
+        private bool TryRefreshCompletions(string query, int caret)
+        {
+            CommandShell shell = Terminal.Shell;
+            if (shell == null)
+            {
+                return false;
+            }
+
+            _completionsBuffer.Clear();
+            bool hasProvider = shell.TryComplete(
+                CommandExecutionContext.Current,
+                query,
+                NormalizeCaret(caret, query),
+                _completionsBuffer,
+                out CommandCompletionContext context
+            );
+            if (!hasProvider || !IsEligibleCompletionTarget(context, shell))
+            {
+                ClearCompletionState();
+                return false;
+            }
+
+            _completionContext = context;
+            _completions.Clear();
+            _completions.AddRange(_completionsBuffer);
+            _completionMode = true;
+            _matchNames.Clear();
+            foreach (CommandCompletion completion in _completions)
+            {
+                _matchNames.Add(completion.EffectiveDisplayLabel);
+            }
+
+            _selectionIndex = _matchNames.Count == 0 ? (int?)null : 0;
+            RefreshRows();
+            UpdateSelectionVisual();
+            UpdateResultsVisibility();
+            return true;
+        }
+
+        /*
+            The shell answers providers without checking eligibility, so the
+            resolved command is verified here: an Editor-only command must not
+            offer its argument candidates from a player or Edit Mode context.
+         */
+        private bool IsEligibleCompletionTarget(
+            CommandCompletionContext context,
+            CommandShell shell
+        )
+        {
+            _tokenBuffer.Clear();
+            CommandTokenizer.Tokenize(context.Input, _tokenBuffer);
+            if (_tokenBuffer.Count == 0)
+            {
+                return false;
+            }
+
+            return shell.Commands.TryGetValue(_tokenBuffer[0].Contents, out CommandInfo info)
+                && context.ExecutionContext.IsEligibleFor(info.executionContexts);
+        }
+
+        private void ApplyCompletion(CommandCompletion completion)
+        {
+            string input = _input.value ?? string.Empty;
+            int replacementStart;
+            int replacementLength;
+            if (completion.Replacement is CommandCompletionReplacement replacementOverride)
+            {
+                replacementStart = replacementOverride.Start;
+                replacementLength = replacementOverride.Length;
+            }
+            else
+            {
+                replacementStart = _completionContext.ReplacementStart;
+                replacementLength = _completionContext.ReplacementLength;
+            }
+
+            if (
+                replacementStart < 0
+                || replacementLength < 0
+                || input.Length < replacementStart
+                || input.Length - replacementStart < replacementLength
+            )
+            {
+                return;
+            }
+
+            string insertion = CommandTokenizer.QuoteInsertionIfNeeded(
+                completion.InsertionText,
+                _completionContext.IsQuoted
+            );
+            string newInput = input
+                .Remove(replacementStart, replacementLength)
+                .Insert(replacementStart, insertion);
+            /*
+                The value change rides SetValueWithoutNotify so exactly one
+                refresh runs, through SetQuery below; the caret lands after
+                the inserted token like the terminal's token completion.
+             */
+            _input.SetValueWithoutNotify(newInput);
+            _pendingCaretIndex = replacementStart + insertion.Length;
+            RefreshQuery(newInput, _pendingCaretIndex);
+            FocusInput();
+        }
+
+        private void ClearCompletionState()
+        {
+            _completionMode = false;
+            _completionContext = default;
+            _completions.Clear();
+        }
+
+        private int NormalizeCaret(int caret, string query)
+        {
+            return caret < 0 || query.Length < caret ? query.Length : caret;
         }
 
         private void EnsureRowCapacity(int count)
@@ -682,20 +885,10 @@
             }
 
             int index = _rows.IndexOf(row);
-            if (index < 0)
+            if (0 <= index)
             {
-                return;
+                RowActivated(index);
             }
-
-            _selectionIndex = index;
-            UpdateSelectionVisual();
-            /*
-                Sync the input to the clicked row before submitting: after an
-                arrow auto-load the input still holds the previously
-                highlighted name, and Submit reads the input value.
-             */
-            DisplaySelected();
-            Submit();
         }
 
         private void HandleKeyDown(KeyDownEvent evt)
@@ -733,7 +926,19 @@
 
         private void OnInputChanged(ChangeEvent<string> evt)
         {
-            SetQuery(evt.newValue);
+            /*
+                Programmatic value writes and end-of-line typing leave the
+                caret at the new tail; the text field's own cursorIndex can
+                lag its value at event time (it stays put on value writes).
+                An append therefore completes at the new end, and anything
+                else (mid-line edit) reads the live caret.
+             */
+            string previous = evt.previousValue ?? string.Empty;
+            string updated = evt.newValue ?? string.Empty;
+            int caret = updated.StartsWith(previous, StringComparison.Ordinal)
+                ? updated.Length
+                : _input.cursorIndex;
+            RefreshQuery(updated, caret);
         }
 
         private void UpdateSelectionVisual()
@@ -961,6 +1166,7 @@
          */
         private void CollapseResults()
         {
+            ClearCompletionState();
             _matchNames.Clear();
             _selectionIndex = null;
             RefreshRows();
