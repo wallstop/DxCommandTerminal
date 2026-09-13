@@ -42,6 +42,10 @@ Built-in packs ship as ScriptableObject assets under `Packs/Themes/` and `Packs/
   styles are shared by all themes.
 - Keep selectors minimal and stable - `TerminalUI` queries elements by name; renaming UI elements
   requires updating selectors in the same change.
+- Command palette rules live in `BaseStyles.uss` under `.palette-*`. They may only consume the
+  required theme variables, and each `var()` there needs a fallback value so the palette renders
+  when no theme sheet is attached. `npm --prefix tooling~ run lint:theme-palette-tokens` enforces
+  both contracts (and that every theme block defines the full required list).
 
 ## Editor inspection
 
