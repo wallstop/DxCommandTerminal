@@ -930,6 +930,12 @@
             if (newState != TerminalState.Closed)
             {
                 CommandPaletteUI.CloseActive();
+                /*
+                    Sweep every palette sharing this document: CloseActive only
+                    closes the Instance palette, and a leftover palette would
+                    keep the shared-surface gate closed forever.
+                 */
+                CommandPaletteUI.CloseAllOn(_uiDocument);
             }
 
             _state = newState;

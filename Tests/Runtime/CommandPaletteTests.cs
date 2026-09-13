@@ -21,6 +21,7 @@
         private GameObject _terminalObject;
         private PanelSettings _panelSettings;
         private TerminalUI _sharedTerminal;
+        private GameObject _extraPaletteObject;
 
         private static void RegisterPair()
         {
@@ -78,6 +79,11 @@
 
             _sharedTerminal = null;
 
+            if (_extraPaletteObject != null)
+            {
+                UnityEngine.Object.Destroy(_extraPaletteObject);
+                _extraPaletteObject = null;
+            }
             if (_panelSettings != null)
             {
                 UnityEngine.Object.Destroy(_panelSettings);
@@ -611,6 +617,65 @@
         }
 
         [UnityTest]
+        public IEnumerator OpeningTerminalClosesAllPalettesOnSharedDocument()
+        {
+            yield return SpawnSharedSurface();
+            RegisterPair();
+
+            /*
+                A second palette shares the document without claiming the
+                static Instance (the first palette owns it); CloseActive alone
+                leaves it open and the terminal never reclaims the surface.
+             */
+            _extraPaletteObject = new GameObject("ExtraPalette");
+            UIDocument extraDocument = _extraPaletteObject.AddComponent<UIDocument>();
+            extraDocument.panelSettings = _panelSettings;
+            CommandPaletteUI extraPalette = _extraPaletteObject.AddComponent<CommandPaletteUI>();
+            extraPalette._uiDocument = _palette._uiDocument;
+            extraPalette.verticalPosition = 0.8f;
+            extraPalette.Open();
+
+            TerminalUI.Instance.SetState(TerminalState.OpenSmall);
+            _palette.Open();
+            extraPalette.Open();
+            yield return null;
+
+            Assert.IsTrue(_palette.IsOpen, "Sanity: the instance palette is open");
+            Assert.IsTrue(extraPalette.IsOpen, "Sanity: the extra palette is open");
+
+            TerminalUI.Instance.SetState(TerminalState.OpenSmall);
+            yield return null;
+
+            Assert.IsFalse(_palette.IsOpen, "Opening the terminal closes the instance palette");
+            Assert.IsFalse(
+                extraPalette.IsOpen,
+                "Opening the terminal closes every palette on the shared document"
+            );
+            Assert.IsFalse(
+                TerminalUI.Instance.IsClosed,
+                "The terminal stays open and reclaims the surface"
+            );
+
+            int frameBudget = FrameBudget;
+            while (
+                0 < frameBudget--
+                && _palette._uiDocument.rootVisualElement.style.height.keyword == StyleKeyword.Auto
+            )
+            {
+                yield return null;
+            }
+
+            Assert.AreNotEqual(
+                StyleKeyword.Auto,
+                _palette._uiDocument.rootVisualElement.style.height.keyword,
+                "The terminal reasserts the shared root height once no palette holds it"
+            );
+
+            UnityEngine.Object.Destroy(_extraPaletteObject);
+            _extraPaletteObject = null;
+        }
+
+        [UnityTest]
         public IEnumerator OutputCommandStaysOpenAndShowsOutput()
         {
             yield return SpawnPalette();
@@ -734,6 +799,61 @@
             Assert.IsFalse(
                 _palette._results.verticalScroller.focusable,
                 "Clicking the scrollbar must not steal panel focus from the input"
+            );
+            Assert.IsNotNull(
+                _palette._results.verticalScroller.slider,
+                "The scroller hosts the slider UITK focuses on click"
+            );
+            Assert.IsFalse(
+                _palette._results.verticalScroller.slider.focusable,
+                "The child slider must opt out of focus too; it is what takes the caret"
+            );
+        }
+
+        [UnityTest]
+        public IEnumerator RunDiagnosticsReplaceEachOther()
+        {
+            yield return SpawnPalette();
+            RegisterEchoCommand();
+
+            _palette.Open();
+            yield return null;
+            _palette._input.value = "paletteecho";
+            yield return null;
+            Assert.IsTrue(_palette.Submit(), "The output command runs");
+            Assert.AreEqual(
+                DisplayStyle.Flex,
+                _palette._output.style.display.value,
+                "Sanity: the output is shown"
+            );
+
+            _palette._input.value = "palettenosuchcommand";
+            yield return null;
+            Assert.IsFalse(_palette.Submit(), "The unknown command runs and fails");
+
+            Assert.AreEqual(
+                DisplayStyle.None,
+                _palette._output.style.display.value,
+                "A later error hides the previous run's output"
+            );
+            StringAssert.StartsWith(
+                "Error:",
+                _palette._feedback.text,
+                "The later error is the visible diagnostic"
+            );
+
+            _palette._input.value = "paletteecho";
+            yield return null;
+            Assert.IsTrue(_palette.Submit(), "The output command runs again");
+            Assert.AreEqual(
+                DisplayStyle.Flex,
+                _palette._output.style.display.value,
+                "Sanity: the output is shown again"
+            );
+            Assert.AreEqual(
+                DisplayStyle.None,
+                _palette._feedback.style.display.value,
+                "A later output hides the previous run's error"
             );
         }
 

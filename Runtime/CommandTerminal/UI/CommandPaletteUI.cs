@@ -137,6 +137,29 @@
             return false;
         }
 
+        /// <summary>
+        ///     Closes every open palette on <paramref name="document"/> -
+        ///     including palettes that never claimed <see cref="Instance"/> -
+        ///     so a terminal state change reclaims the shared surface even in
+        ///     multi-palette setups.
+        /// </summary>
+        public static void CloseAllOn(UIDocument document)
+        {
+            if (document == null)
+            {
+                return;
+            }
+
+            for (int index = _livePalettes.Count - 1; 0 <= index; --index)
+            {
+                CommandPaletteUI palette = _livePalettes[index];
+                if (palette._uiDocument == document && palette.IsOpen)
+                {
+                    palette.Close();
+                }
+            }
+        }
+
         public void Open()
         {
             if (_isOpen)
@@ -470,11 +493,16 @@
             if (verticalScroller != null)
             {
                 /*
-                    Clicking the dragger would move panel focus to the slider
-                    and leave the input unable to receive typing; scrolling
-                    stays wheel- and arrow-driven instead.
+                    UITK moves panel focus to the child slider on click, and
+                    the slider is what steals caret from the search input;
+                    both the scroller and its slider opt out so scrolling
+                    stays wheel- and arrow-driven.
                  */
                 verticalScroller.focusable = false;
+                if (verticalScroller.slider != null)
+                {
+                    verticalScroller.slider.focusable = false;
+                }
             }
 
             _panel.Add(_results);
@@ -920,6 +948,7 @@
                 builder.Builder.Append("(+").Append(remaining).Append(" more lines)");
             }
 
+            _feedback.style.display = DisplayStyle.None;
             _output.text = builder.Builder.ToString();
             _output.style.display = DisplayStyle.Flex;
             _lastRunProducedOutput = true;
@@ -952,6 +981,7 @@
 
         private void ShowFeedback(string message)
         {
+            _output.style.display = DisplayStyle.None;
             _feedback.text = message;
             _feedback.style.display = DisplayStyle.Flex;
         }
