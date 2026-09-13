@@ -87,6 +87,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             bool firstFont = true;
             foreach (Font font in fonts)
             {
+                if (font == null)
+                {
+                    continue;
+                }
+
                 if (!firstFont)
                 {
                     fontNames.Builder.Append(BulkSeparator);
@@ -241,7 +246,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             string fontName = args[0].contents;
 
             int newFontIndex = terminal._fontPack._fonts.FindIndex(font =>
-                string.Equals(font.name, fontName, StringComparison.OrdinalIgnoreCase)
+                font != null
+                && string.Equals(font.name, fontName, StringComparison.OrdinalIgnoreCase)
             );
             if (newFontIndex < 0)
             {
@@ -272,6 +278,12 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
 
             Font font = terminal.SetRandomFont();
+            if (font == null)
+            {
+                Terminal.Log(TerminalLogType.Warning, "No fonts available to select.");
+                return;
+            }
+
             Terminal.Log(
                 TerminalLogType.Message,
                 $"Randomly selected and set font to '{font.name}'."
