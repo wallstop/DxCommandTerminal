@@ -103,6 +103,13 @@
         private readonly List<string> _sourceNames = new();
         private readonly List<CommandCompletion> _completionsBuffer = new();
         private readonly List<CommandToken> _tokenBuffer = new();
+
+        /*
+            Only the scalar geometry of the last request (replacement range,
+            quoted flag) is read after the refresh, and always before the
+            next shell call; PrecedingArguments is valid only inside the
+            provider callback and must never be consumed from here.
+         */
         private CommandCompletionContext _completionContext;
         private bool _completionMode;
         private int? _selectionIndex;

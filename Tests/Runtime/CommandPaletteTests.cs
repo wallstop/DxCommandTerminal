@@ -1126,6 +1126,58 @@
                 _palette._input.value,
                 "Tab applies the selected stage-one candidate"
             );
+            Assert.AreEqual(
+                new[] { "1", "2", "3" },
+                _palette._matchNames.ToArray(),
+                "The caret stays on the applied token, so Tab can keep cycling its candidates"
+            );
+            AssertResultsExpanded("The applied stage keeps its candidate list visible");
+        }
+
+        [UnityTest]
+        public IEnumerator TypingAfterCommandApplyContinuesIntoArgumentCompletion()
+        {
+            yield return SpawnPalette();
+            RegisterInventoryCommand();
+
+            _palette.Open();
+            yield return null;
+            _palette._input.value = "pickitem";
+            yield return null;
+            Assert.AreEqual(
+                new[] { "pickitem" },
+                _palette._matchNames.ToArray(),
+                "The name filter answers the command name first"
+            );
+
+            yield return SendKeyDown(KeyCode.Tab);
+            Assert.AreEqual(
+                "pickitem",
+                _palette._input.value,
+                "Tab commits the selected command name"
+            );
+
+            /*
+               Appending to the committed command derives the caret from the
+               change itself (the text field's cursorIndex lags value writes),
+               so the next keystroke completes the new token, not the stale
+               caret position.
+             */
+            _palette._input.value = "pickitem ";
+            yield return null;
+            Assert.AreEqual(
+                new[] { "pickaxe", "torch", "torch pick" },
+                _palette._matchNames.ToArray(),
+                "The append opens the command's stage-zero candidates"
+            );
+
+            _palette._input.value = "pickitem to";
+            yield return null;
+            Assert.AreEqual(
+                new[] { "torch", "torch pick" },
+                _palette._matchNames.ToArray(),
+                "The append-derived caret completes the token the user is editing"
+            );
         }
 
         [UnityTest]
