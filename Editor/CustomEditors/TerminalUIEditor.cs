@@ -378,6 +378,11 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
 
             foreach (Font font in terminal._fontPack._fonts)
             {
+                if (font == null)
+                {
+                    continue;
+                }
+
                 string fontName = font.name;
                 int indexOfSplit = fontName.IndexOf('-', StringComparison.OrdinalIgnoreCase);
                 if (indexOfSplit < 0)
@@ -486,6 +491,11 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
         {
             foreach (Font font in fonts)
             {
+                if (font == null)
+                {
+                    continue;
+                }
+
                 string fontName = font.name;
                 if (
                     fontName.Contains(firstMarker, StringComparison.OrdinalIgnoreCase)
@@ -536,14 +546,29 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
             Font defaultFont;
             if (string.IsNullOrWhiteSpace(defaultFontName))
             {
-                defaultFont = fonts[0];
+                defaultFont = null;
+                foreach (Font font in fonts)
+                {
+                    if (font != null)
+                    {
+                        defaultFont = font;
+                        break;
+                    }
+                }
             }
             else
             {
                 defaultFont = null;
                 foreach (Font font in fonts)
                 {
-                    if (font.name == defaultFontName)
+                    if (
+                        font != null
+                        && string.Equals(
+                            font.name,
+                            defaultFontName,
+                            StringComparison.OrdinalIgnoreCase
+                        )
+                    )
                     {
                         defaultFont = font;
                         break;
@@ -850,12 +875,25 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                 TerminalUI terminal = target as TerminalUI;
                 if (terminal != null && terminal._fontPack._fonts is { Count: > 0 })
                 {
+                    List<Font> fonts = terminal._fontPack._fonts;
                     Font currentFont = GetCurrentlySelectedFont(terminal);
-                    int fontIndex = terminal._fontPack._fonts.IndexOf(currentFont);
-                    int newFontIndex = (fontIndex + 1) % terminal._fontPack._fonts.Count;
-                    Font newFont = terminal._fontPack._fonts[newFontIndex];
-                    terminal.SetFont(newFont, persist: _persistThemeChanges);
-                    TrySetFontKeysFromFont(newFont);
+                    int fontIndex = fonts.IndexOf(currentFont);
+                    Font newFont = null;
+                    for (int offset = 1; offset <= fonts.Count; ++offset)
+                    {
+                        Font candidate = fonts[(fontIndex + offset) % fonts.Count];
+                        if (candidate != null && candidate != currentFont)
+                        {
+                            newFont = candidate;
+                            break;
+                        }
+                    }
+
+                    if (newFont != null)
+                    {
+                        terminal.SetFont(newFont, persist: _persistThemeChanges);
+                        TrySetFontKeysFromFont(newFont);
+                    }
                 }
 
                 _lastFontCycleTime = _timer.Elapsed;
@@ -1016,19 +1054,11 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                     && terminal._fontPack._fonts is { Count: > 0 }
                 )
                 {
-                    Font currentlySelectedFont = GetCurrentlySelectedFont(terminal);
-                    int oldFontIndex = terminal._fontPack._fonts.IndexOf(currentlySelectedFont);
-                    int newFontIndex;
-                    do
+                    Font newFont = terminal.SetRandomFont(persist: _persistThemeChanges);
+                    if (newFont != null)
                     {
-                        newFontIndex = ThreadLocalRandom.Instance.Next(
-                            terminal._fontPack._fonts.Count
-                        );
-                    } while (newFontIndex == oldFontIndex && terminal._fontPack._fonts.Count != 1);
-
-                    Font newFont = terminal._fontPack._fonts[newFontIndex];
-                    terminal.SetFont(newFont, persist: _persistThemeChanges);
-                    TrySetFontKeysFromFont(newFont);
+                        TrySetFontKeysFromFont(newFont);
+                    }
                 }
             }
         }

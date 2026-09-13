@@ -61,13 +61,29 @@ const FORBIDDEN_PREFIXES = [
 
 const NPM = process.platform === "win32" ? "npm.cmd" : "npm";
 
+const tempDirs = [];
+process.on("exit", () => {
+  for (const dir of tempDirs) {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 function fail(message) {
   console.error(`[package-validate] ERROR: ${message}`);
   process.exitCode = 1;
 }
 
+function readText(filePath) {
+  try {
+    return fs.readFileSync(filePath, "utf8");
+  } catch {
+    return null;
+  }
+}
+
 function pack() {
   const destination = fs.mkdtempSync(path.join(os.tmpdir(), "dxt-pack-"));
+  tempDirs.push(destination);
   const stdout = execFileSync(NPM, ["pack", "--pack-destination", destination], {
     cwd: REPO_ROOT,
     encoding: "utf8"
@@ -89,6 +105,17 @@ function extractFile(tarball, entry) {
     encoding: "utf8",
     maxBuffer: 16 * 1024 * 1024
   });
+}
+
+function extractTarball(tarball) {
+  const destination = fs.mkdtempSync(path.join(os.tmpdir(), "dxt-extract-"));
+  tempDirs.push(destination);
+  execFileSync("tar", ["-xzf", tarball, "-C", destination]);
+  return path.join(destination, "package");
+}
+
+function extractGuids(text) {
+  return [...text.matchAll(/guid: ([0-9a-f]{32})/g)].map((match) => match[1]);
 }
 
 function trackedFiles() {
@@ -202,6 +229,61 @@ function main() {
     check(
       typeof parsed.name === "string" && 0 < parsed.name.length,
       `asmdef missing a name: ${asmdef}`
+    );
+  }
+
+  // Font payload invariants (#52): every shipped font file must be referenced
+  // by a shipped asset pack, and every pack reference must resolve to a
+  // shipped asset. Together they keep the font payload curated - unreferenced
+  // weights, italics, or variable-font duplicates fail the pack.
+  const extracted = extractTarball(tarball);
+  const guidToAssetPath = new Map();
+  for (const entry of entries) {
+    if (!entry.endsWith(".meta")) {
+      continue;
+    }
+    const metaText = readText(path.join(extracted, entry));
+    if (metaText === null) {
+      continue;
+    }
+    const guid = extractGuids(metaText)[0];
+    if (guid !== undefined) {
+      guidToAssetPath.set(guid, entry.slice(0, -".meta".length));
+    }
+  }
+
+  const packAssetPaths = entries.filter((entry) => /^Packs\/.*\.asset$/.test(entry));
+  const referencedGuids = new Set();
+  for (const packAsset of packAssetPaths) {
+    const assetText = readText(path.join(extracted, packAsset));
+    if (assetText === null) {
+      continue;
+    }
+    for (const guid of extractGuids(assetText)) {
+      referencedGuids.add(guid);
+    }
+  }
+
+  for (const entry of entries) {
+    if (!/^Fonts\/.*\.(ttf|otf)$/.test(entry)) {
+      continue;
+    }
+    const metaText = readText(path.join(extracted, `${entry}.meta`));
+    if (metaText === null) {
+      // Reported by the shipped-file-without-meta check above.
+      continue;
+    }
+    const guid = extractGuids(metaText)[0];
+    check(
+      guid !== undefined && referencedGuids.has(guid),
+      `shipped font not referenced by any asset pack (payload bloat): ${entry}`
+    );
+  }
+
+  for (const guid of referencedGuids) {
+    check(
+      guidToAssetPath.has(guid),
+      `asset pack references an asset missing from the tarball (guid ${guid})`
     );
   }
 

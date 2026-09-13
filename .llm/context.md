@@ -113,7 +113,12 @@ frontmatter validity, index freshness, and pointer-file delegation; see
 5. Zero warnings. No dead code, no commented-out code.
 6. Prefer `TryXxx` patterns over exceptions for expected failures; validate inputs on all public
    methods (see `CommandArg.TryGet<T>` for the canonical example).
-7. String comparisons are `OrdinalIgnoreCase` / ordinal - never culture-sensitive defaults.
+7. String comparisons state their rule: `string.Equals(a, b, StringComparison.Ordinal|OrdinalIgnoreCase)`;
+   string-typed `IndexOf`/`StartsWith`/`EndsWith`/`Contains`/`Replace` take an explicit `StringComparison` - never
+   culture-sensitive defaults, never `==`/`!=` on string values (`== null`, enums, and Unity references stay legal).
+   Name-shaped identifiers (font/theme/command names) are `OrdinalIgnoreCase`. Enforced by
+   `npm --prefix tooling~ run lint:string-equality` (pre-commit + CI; catches string-literal and `string.Empty`
+   operands; identifier-vs-identifier string equality stays a review convention the tokenizer cannot type-check).
 8. Use `nameof()` instead of magic strings.
 9. Internal APIs over reflection on our own code; `InternalsVisibleTo` is already granted to the
    Editor and Tests.Runtime assemblies (`Runtime/AssemblyInfo.cs`).
@@ -166,15 +171,13 @@ frontmatter validity, index freshness, and pointer-file delegation; see
     intermediate sequences. `List<T>.ToArray()`/`CopyTo` instance methods stay legal.
     Tests and `Generator~` tooling are exempt. Enforced by
     `npm --prefix tooling~ run lint:linq-production` (pre-commit + CI; no `:fix` by design).
-23. Replacing LINQ is not enough - the loop must not re-introduce the allocation. Rules
-    that came out of the PR #60 allocation review:
-    - String assembly on repeated paths rents a builder:
-      `CachedStringBuilder.Rent(capacity)` / `Return(builder)` in `Runtime/Helper/`
-      (ThreadStatic, capacity retained). Never `new StringBuilder()` per call.
-    - Derived data drawn every `OnGUI`/editor tick is cached against its source
-      (reference + count stamp) and rebuilt only when the source changes - e.g. the
-      popup option arrays and font-key arrays in `TerminalUIEditor`. A fresh array or
-      list per frame is a regression even when the loop itself is allocation-free.
+23. Replacing LINQ is not enough - the loop must not re-introduce the allocation (PR #60 review):
+    - String assembly on repeated paths rents `CachedStringBuilder.Rent(capacity)` /
+      `Return(builder)` (`Runtime/Helper/`, ThreadStatic). Never `new StringBuilder()` per call.
+    - Derived data drawn every `OnGUI`/editor tick is cached against its source (reference +
+      count stamp; e.g. the `TerminalUIEditor` popup/font-key arrays) and rebuilt only when the
+      source changes. A fresh array or list per frame is a regression even when the loop itself
+      is allocation-free.
     - Snapshot-then-mutate patterns (clear all variables while iterating a dictionary)
       live on the owning type with a cached buffer field (`CommandShell.ClearVariables`),
       not in command handlers that build throwaway lists.
@@ -219,9 +222,8 @@ frontmatter validity, index freshness, and pointer-file delegation; see
   scope; wrong-type `Get<T>` reads throw `CommandArgumentTypeMismatchException`) -
   tests must assert that exact type and branch on `Failure`, never on message text.
 - Completion providers always receive a context scoped to the command's own arguments:
-  `ActiveArgumentIndex` and `PrecedingArguments` are relative to that command, and the
-  router shifts them per routing level (`CommandCompletionContext.ForSubcommand`). Never
-  hand a provider a parent-shifted context.
+  `ActiveArgumentIndex`/`PrecedingArguments` are relative to that command, and the router shifts them per
+  routing level (`CommandCompletionContext.ForSubcommand`). Never hand a provider a parent-shifted context.
 - Details: [register-terminal-command](./skills/register-terminal-command/SKILL.md).
 
 ### User-Facing Copy (STE)
@@ -241,15 +243,13 @@ serialized-data changes, behavior changes, fixes, install-size or console-output
 Internal work (refactors, tooling, style enforcement, linters, measurement, CI lanes)
 stays out, and so do internal numbers (timings, allocation counts, test tallies) - those
 live in PR descriptions, issues, and `progress/` logs. If a user cannot observe the
-difference, it does not belong in the changelog. New `Unreleased` entries follow the
-policy stated in the file header; a PR that touches `CHANGELOG.md` keeps entries in the
-existing `Added/Changed/Fixed/Removed` buckets.
+difference, it does not belong in the changelog; new `Unreleased` entries keep the
+existing `Added/Changed/Fixed/Removed` buckets per the policy in the file header.
 
 ### LLM Attribution (GitHub)
 
-LLM-generated comments, issues, PR descriptions, and reviews start with
-`DISCLOSURE: LLM-GENERATED TEXT` as the first line. Never auto-respond to outside
-contributors; summarize and wait for wallstop.
+LLM-generated comments, issues, PR descriptions, and reviews start with `DISCLOSURE: LLM-GENERATED TEXT` as the first line.
+Never auto-respond to outside contributors; summarize and wait for wallstop.
 Details: [llm-attribution](./skills/llm-attribution/SKILL.md).
 
 ### Argument Parsing (Quick Reference)

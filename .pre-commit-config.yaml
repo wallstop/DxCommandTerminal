@@ -74,6 +74,20 @@ repos:
           it outright: 'using System.Linq', qualified 'System.Linq.' calls, and static
           'Enumerable.' calls all fail under Runtime/ and Editor/. No --fix by design;
           rewrite call sites as loops with caller-owned buffers.
+      - id: string-equality-lint
+        name: Lint explicit string comparisons (Runtime/, Editor/; PR #73 review)
+        entry: node tooling~/scripts/lint-string-equality.mjs
+        language: system
+        always_run: true
+        pass_filenames: false
+        stages:
+          - pre-commit
+          - pre-push
+        description: >
+          Shipped code compares strings via string.Equals with an explicit StringComparison
+          (context.md rule 7): the linter flags ==/!= whose operand is a string literal or
+          string.Empty. No --fix by design; Ordinal vs OrdinalIgnoreCase is a semantic
+          choice per site, and name-shaped comparisons are OrdinalIgnoreCase by convention.
       - id: theme-palette-tokens-lint
         name: Lint palette theme tokens (Themes/ coverage, .palette-* var() fallbacks)
         entry: node tooling~/scripts/lint-theme-palette-tokens.mjs

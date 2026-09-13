@@ -199,7 +199,8 @@ namespace WallstopStudios.DxCommandTerminal.Persistence
                         else
                         {
                             fontIndex = terminal._fontPack._fonts.FindIndex(font =>
-                                string.Equals(
+                                font != null
+                                && string.Equals(
                                     font.name,
                                     existingConfiguration.font,
                                     StringComparison.OrdinalIgnoreCase

@@ -669,7 +669,11 @@
                 CommandCompletion candidate = candidates[i];
                 CommandCompletion active = current[i];
                 if (
-                    candidate.InsertionText != active.InsertionText
+                    !string.Equals(
+                        candidate.InsertionText,
+                        active.InsertionText,
+                        StringComparison.Ordinal
+                    )
                     || candidate.HasReplacementOverride != active.HasReplacementOverride
                 )
                 {
@@ -879,6 +883,11 @@
         {
             foreach (Font font in fonts)
             {
+                if (font == null)
+                {
+                    continue;
+                }
+
                 string fontName = font.name;
                 if (!requireMono || fontName.Contains("Mono", StringComparison.OrdinalIgnoreCase))
                 {
@@ -972,15 +981,29 @@
                 return _runtimeFont;
             }
 
+            int validFontCount = 0;
+            foreach (Font font in loadedFonts)
+            {
+                if (font != null)
+                {
+                    ++validFontCount;
+                }
+            }
+
+            if (validFontCount == 0)
+            {
+                return _runtimeFont;
+            }
+
             int currentFontIndex = loadedFonts.IndexOf(_runtimeFont);
 
             int newFontIndex;
+            Font newFont;
             do
             {
                 newFontIndex = ThreadLocalRandom.Instance.Next(loadedFonts.Count);
-            } while (newFontIndex == currentFontIndex && loadedFonts.Count != 1);
-
-            Font newFont = loadedFonts[newFontIndex];
+                newFont = loadedFonts[newFontIndex];
+            } while (newFont == null || (newFontIndex == currentFontIndex && validFontCount != 1));
             SetFont(newFont, persist);
             return newFont;
         }
@@ -1921,7 +1944,14 @@
                 }
                 if (_runtimeFont == null)
                 {
-                    _runtimeFont = loadedFonts[0];
+                    foreach (Font font in loadedFonts)
+                    {
+                        if (font != null)
+                        {
+                            _runtimeFont = font;
+                            break;
+                        }
+                    }
                 }
             }
 

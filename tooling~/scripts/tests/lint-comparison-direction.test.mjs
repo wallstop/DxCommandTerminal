@@ -82,6 +82,16 @@ const FLAGGED = [
   ["an indexer comparison", "if (arr[i] >= arr[j]) { }", 1],
   ["a comparison inside a lambda body", "Func<int, bool> f = x => x > 0;", 1],
   ["a comparison in an interpolation hole", 'string s = $"{x > y}";', 1],
+  [
+    "a comparison in an interpolation hole beside an escaped quote",
+    'string s = $"{x > \\"y\\"}";',
+    1,
+  ],
+  [
+    "a comparison after an interpolated string with an escaped quote in its hole",
+    'string s = $"a {\\"b\\"}";\nif (i > 0) { }',
+    1,
+  ],
   ["a comparison after an increment", "if (i++ > 0) { }", 1],
   ["both operators on one line", "if (a > b && c >= d) { }", 2],
   ["a property pattern beside a comparison", "if (o is { Count: > 0 } && n > 0) { }", 1],

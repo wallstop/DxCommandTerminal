@@ -179,7 +179,7 @@ namespace WallstopStudios.DxCommandTerminal.Extensions
             {
                 string fieldName = pathParts[i];
 
-                if (fieldName == "Array")
+                if (string.Equals(fieldName, "Array", StringComparison.Ordinal))
                 {
                     // Move to "data[i]"
                     ++i;

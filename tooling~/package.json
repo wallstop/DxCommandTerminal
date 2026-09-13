@@ -15,6 +15,7 @@
     "lint:multiline-comments": "node scripts/lint-multiline-comments.mjs",
     "lint:multiline-comments:fix": "node scripts/lint-multiline-comments.mjs --fix",
     "lint:linq-production": "node scripts/lint-linq-production.mjs",
+    "lint:string-equality": "node scripts/lint-string-equality.mjs",
     "lint:theme-palette-tokens": "node scripts/lint-theme-palette-tokens.mjs",
     "unity:mcp:probe": "node scripts/mcp/unity-mcp.mjs probe",
     "unity:mcp:configure": "node scripts/mcp/unity-mcp.mjs configure",
