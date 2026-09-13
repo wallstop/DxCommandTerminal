@@ -45,6 +45,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Quick-launch bar output visibility: commands that print output (`list-fonts`, `list-themes`, `help`, ...) now display it inside the bar and keep it open instead of closing silently on success; silent successes still close per `closeOnSuccessfulExecution`, and typing a new query clears the shown output.
+- Quick-launch bar shared-surface layout: with a `TerminalUI` and `CommandPaletteUI` on the same UIDocument, the terminal's per-frame window-height clamp no longer tweens the palette to the top of the screen while it is open; the terminal yields the shared document root while the palette owns it and reclaims it when the palette closes.
+- Quick-launch bar input focus: auto-loading a command name into the input now reliably parks the caret at the end (the text field could reset the caret mid-name), and clicking the results scrollbar no longer steals panel focus from the search input.
+- `TerminalUI.SetState` no longer throws a NullReferenceException when the terminal component is disabled before its UI setup completed.
+
+
+
 - Dynamic choice providers on subcommand arguments now receive a subcommand-relative completion context: `ActiveArgumentIndex` counts from the subcommand's first argument and `PrecedingArguments` contains exactly the subcommand's own arguments, matching what the same provider sees on a top-level command. Previously router tokens leaked into both.
 - `CommandShell.ClearCustomCommands` no longer leaves the auto-registered tracking state stale: it now also cancels a pending deferred registration and reports `AutoRegisteredCommands`/`ClearAutoRegisteredCommands` counts that match the actually registered commands. The returned count still covers every registered command (auto and custom), and `ClearAllCommands` returns the same total.
 - The input caret no longer jumps to line end when a scheduled focus pass re-fires; accepted completions place the caret after the insertion.
