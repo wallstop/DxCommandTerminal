@@ -259,6 +259,21 @@
 
         private void Awake()
         {
+            /*
+                The serialized field is assigned by the editor when the
+                component is added through the inspector; adds that bypass
+                that hook (scripted adds, components added before editor
+                scripts compile) leave it null while a UIDocument component
+                may still exist on this GameObject. Recovering here keeps the
+                terminal launchable and runs before the editor property
+                snapshot, so the recovered document does not register as a
+                tracked change.
+             */
+            if (_uiDocument == null)
+            {
+                TryGetComponent(out _uiDocument);
+            }
+
             switch (_logBufferSize)
             {
                 case <= 0:

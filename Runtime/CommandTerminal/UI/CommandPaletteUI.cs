@@ -324,6 +324,17 @@
 
             if (_uiDocument == null)
             {
+                /*
+                    Same recovery as TerminalUI: scripted adds leave the
+                    serialized field null while a UIDocument component may
+                    exist on this GameObject (typically shared with the
+                    terminal's document).
+                 */
+                TryGetComponent(out _uiDocument);
+            }
+
+            if (_uiDocument == null)
+            {
                 Debug.LogError("No UIDocument assigned, cannot open the command palette.", this);
                 return;
             }
