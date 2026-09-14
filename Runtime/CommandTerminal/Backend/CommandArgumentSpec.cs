@@ -624,7 +624,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return;
             }
 
-            for (int i = 0; i < provided.Count; ++i)
+            int providedCount = provided.Count;
+            for (int i = 0; i < providedCount; ++i)
             {
                 AppendCandidate(FormatValue(provided[i]), Description, context, results);
             }
@@ -635,7 +636,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             if (_staticChoices != null)
             {
                 bool matches = false;
-                for (int i = 0; i < _staticChoices.Count; ++i)
+                int choiceCount = _staticChoices.Count;
+                for (int i = 0; i < choiceCount; ++i)
                 {
                     if (ChoicesEqual(_staticChoices[i], value))
                     {

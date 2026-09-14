@@ -150,7 +150,8 @@
                 return false;
             }
 
-            for (int index = 0; index < _livePalettes.Count; ++index)
+            int livePaletteCount = _livePalettes.Count;
+            for (int index = 0; index < livePaletteCount; ++index)
             {
                 CommandPaletteUI palette = _livePalettes[index];
                 if (palette._uiDocument == document && palette.IsOpen)
@@ -773,7 +774,8 @@
         {
             EnsureRowCapacity(_matchNames.Count);
             CommandShell shell = Terminal.Shell;
-            for (int index = 0; index < _matchNames.Count; ++index)
+            int matchCount = _matchNames.Count;
+            for (int index = 0; index < matchCount; ++index)
             {
                 VisualElement row = _rows[index];
                 row.style.display = DisplayStyle.Flex;
@@ -798,7 +800,9 @@
                 _rowHelpLabels[index].text = string.IsNullOrWhiteSpace(help) ? string.Empty : help;
             }
 
-            for (int index = _matchNames.Count; index < _rows.Count; ++index)
+            int excessRowStart = _matchNames.Count;
+            int rowCount = _rows.Count;
+            for (int index = excessRowStart; index < rowCount; ++index)
             {
                 _rows[index].style.display = DisplayStyle.None;
             }
@@ -1026,7 +1030,8 @@
 
         private void UpdateSelectionVisual()
         {
-            for (int index = 0; index < _rows.Count; ++index)
+            int rowCount = _rows.Count;
+            for (int index = 0; index < rowCount; ++index)
             {
                 bool selected = _selectionIndex.HasValue && _selectionIndex.Value == index;
                 _rows[index].EnableInClassList(SelectedRowClass, selected);
@@ -1185,8 +1190,9 @@
             }
 
             IReadOnlyList<LogItem> logs = buffer.Logs;
-            int first = Mathf.Max(0, logs.Count - added);
-            for (int index = first; index < logs.Count; ++index)
+            int logCount = logs.Count;
+            int first = Mathf.Max(0, logCount - added);
+            for (int index = first; index < logCount; ++index)
             {
                 LogItem log = logs[index];
                 if (log.type == TerminalLogType.Input)

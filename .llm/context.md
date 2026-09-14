@@ -135,55 +135,55 @@ frontmatter validity, index freshness, and pointer-file delegation; see
 15. No raw bitwise flag math at call sites; use the allocation-free
     `EnumExtensions.HasFlagNoAlloc` helper (adapted from unity-helpers, MIT).
 16. No sentinel/magic values where the type system can express optionality: use nullable
-    types (`int?`, nullable structs). `CommandInfo.maxArgCount` and `AddCommand` use `int?`
-    (legacy negatives normalize to `null`); `RegisterCommandAttribute.MaxArgCount` keeps
-    `int` (attribute properties cannot be nullable) and `CommandInfo` normalizes. Optional
-    fields take nullable types too, never `-1` sentinels (caret markers, PR #76 review).
-    Null helper returns are equally banned: expose `TryXxx`/`out`/`Array.Empty` (PR #67);
-    prefer `Math.Max`/`Math.Clamp` over manual `cond ? a : b` clamps.
+    types (`int?`, nullable structs). `CommandInfo.maxArgCount`/`AddCommand` use `int?`
+    (legacy negatives normalize); `RegisterCommandAttribute.MaxArgCount` stays `int`
+    (attribute properties cannot be nullable). Optional fields take nullable types, never
+    `-1` sentinels (caret markers, inspector selection/popup state, PR #76). Normalize
+    IndexOf/FindIndex results to `null` at the field boundary; guard with `HasValue`/`is
+    not int x` (lifted `null < 0` is `false`); IMGUI `Popup` takes/returns `int` (`-1` =
+    none) - coalesce there via `GetValueOrDefault(-1)`. Null helper returns banned too
+    (`TryXxx`/`out`/`Array.Empty`, PR #67); prefer `Math.Max`/`Math.Clamp` over `?:` clamps.
 17. No `params` on frequently-called APIs; provide fixed-arity overloads (`params` allocates).
     One-time configuration APIs may use `params`.
 18. Hot-path collection access avoids interface dispatch: specialize arrays and `List<T>`
     (Unity does not de-virtualize `IReadOnlyList` indexers); arrays are preferred (bound-check
     elision). Copy with `Array.Copy` / `CopyTo`, not element loops; reserve `Clone()` for
-    cases where its `object` return is acceptable.
+    cases where its `object` return is acceptable. Counting loops hoist `List<T>.Count`,
+    interface `Count`, and UIToolkit `childCount` reads out of the condition (per-iteration
+    property/interface dispatch, PR #73 review); keep `array.Length`/`string.Length` inline
+    (bounds-check elision / inlined read); never hoist when the body mutates the collection.
 19. Comparison operators read left-to-right in ascending order: only `<`, `<=` and `==`. Never
     `>` or `>=` -- write `0 <= index` and `b < a`, not `index >= 0` or `a > b` (issue #51).
     Enforced by `npm --prefix tooling~ run lint:comparison-direction` (pre-commit + CI; `:fix`
     swaps operands, refusing rewrites where both sides can have side effects).
 20. One member ordering across every C# type: const, events, delegates, static properties,
     static fields, properties, fields, constructors, static methods, methods; each tier
-    public > protected > internal > private, and nested types go at the END of their containing
-    type (issue #50, per the unity-helpers rule). Static properties come before static fields
-    and properties before fields by design; const takes the accessibility ordering too.
-    Enforced by `npm --prefix tooling~ run lint:member-ordering` (pre-commit + CI; `:fix` is a
-    permutation-only reorder that never crosses `#if` boundaries or type-load-initializer
-    dependencies).
+    public > protected > internal > private; nested types go at the END of their containing
+    type (issue #50). Enforced by `npm --prefix tooling~ run lint:member-ordering` (pre-commit
+    + CI; `:fix` is a permutation-only reorder that never crosses `#if` boundaries).
 21. Multi-line comments are block comments: two or more consecutive comment-only `//` lines
-    must be one `/*` ... `*/` block instead. Single `//` lines and `///` doc comments stay
-    legal. Enforced by `npm --prefix tooling~ run lint:multiline-comments` (pre-commit + CI;
-    `:fix` converts runs, refusing content that contains the block-comment close).
-22. No LINQ in production code (`Runtime/`, `Editor/`): every operator allocates
-    enumerators and closures, and several copy the whole sequence, so shipped code bans it
-    outright - no `using System.Linq`, no qualified `System.Linq.` calls, no static
-    `Enumerable.` calls. Write plain loops over the concrete collection type; reuse
-    caller-owned buffers (`List<T>` fill/`Clear` methods, `CopyTo`) instead of building
-    intermediate sequences. `List<T>.ToArray()`/`CopyTo` instance methods stay legal.
-    Tests and `Generator~` tooling are exempt. Enforced by
-    `npm --prefix tooling~ run lint:linq-production` (pre-commit + CI; no `:fix` by design).
-23. Replacing LINQ is not enough - the loop must not re-introduce the allocation (PR #60 review):
+    must be one `/* ... */` block; single `//` lines and `///` doc comments stay legal.
+    Enforced by `npm --prefix tooling~ run lint:multiline-comments` (pre-commit + CI; `:fix`
+    converts runs, refusing content that contains the block-comment close).
+22. No LINQ in production code (`Runtime/`, `Editor/`) - every operator allocates
+    enumerators/closures and some copy whole sequences: no `using System.Linq`, no qualified
+    `System.Linq.` calls, no static `Enumerable.` calls. Plain loops over the concrete
+    collection type; reuse caller-owned buffers (`List<T>` fill/`Clear`, `CopyTo`) instead of
+    intermediate sequences; `List<T>.ToArray()`/`CopyTo` instance methods stay legal. Tests
+    and `Generator~` tooling are exempt. Enforced by `npm --prefix tooling~ run
+    lint:linq-production` (pre-commit + CI; no `:fix` by design).
+23. Replacing LINQ is not enough - the loop must not re-introduce the allocation (PR #60):
     - String assembly on repeated paths rents `CachedStringBuilder.Rent(capacity)` /
-      `Return(builder)` (`Runtime/Helper/`, ThreadStatic). Never `new StringBuilder()` per call.
+      `Return(builder)` (`Runtime/Helper/`, ThreadStatic); never `new StringBuilder()` per
+      call; multi-part messages interpolate (`$"..."`), no 3+ operand `+` chains (PR #76).
     - Derived data drawn every `OnGUI`/editor tick is cached against its source (reference +
-      count stamp; e.g. the `TerminalUIEditor` popup/font-key arrays) and rebuilt only when the
-      source changes. A fresh array or list per frame is a regression even when the loop itself
-      is allocation-free.
-    - Snapshot-then-mutate patterns (clear all variables while iterating a dictionary)
-      live on the owning type with a cached buffer field (`CommandShell.ClearVariables`),
-      not in command handlers that build throwaway lists.
-    - When converting LINQ, enumerate with `foreach` over the concrete type (struct
-      enumerator, bounds-check elision); keep counting loops only where the index is
-      genuinely used, per rule 11.
+      count stamp; e.g. the `TerminalUIEditor` popup/font-key arrays), rebuilt only when the
+      source changes - a fresh array/list per frame is a regression even when allocation-free.
+    - Snapshot-then-mutate (clear all variables while iterating a dictionary) lives on the
+      owning type with a cached buffer field (`CommandShell.ClearVariables`), not in
+      command handlers that build throwaway lists.
+    - When converting LINQ, `foreach` over the concrete type (struct enumerator,
+      bounds-check elision); counting loops only where the index is genuinely used (rule 11).
 
 ### Unity Package Rules
 

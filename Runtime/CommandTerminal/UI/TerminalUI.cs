@@ -664,7 +664,8 @@
                 return false;
             }
 
-            for (int i = 0; i < candidates.Count; ++i)
+            int candidateCount = candidates.Count;
+            for (int i = 0; i < candidateCount; ++i)
             {
                 CommandCompletion candidate = candidates[i];
                 CommandCompletion active = current[i];
@@ -869,7 +870,8 @@
             }
 
             EqualityComparer<T> comparer = EqualityComparer<T>.Default;
-            for (int index = 0; index < left.Count; ++index)
+            int leftCount = left.Count;
+            for (int index = 0; index < leftCount; ++index)
             {
                 if (!comparer.Equals(left[index], right[index]))
                 {
@@ -2115,7 +2117,8 @@
                 }
                 else if (logs.Count < content.childCount)
                 {
-                    for (int i = content.childCount - 1; logs.Count <= i; --i)
+                    int logCount = logs.Count;
+                    for (int i = content.childCount - 1; logCount <= i; --i)
                     {
                         content.RemoveAt(i);
                     }
@@ -2126,7 +2129,9 @@
 
             if (dirty)
             {
-                for (int i = 0; i < logs.Count && i < content.childCount; ++i)
+                int logCount = logs.Count;
+                int childCount = content.childCount;
+                for (int i = 0; i < logCount && i < childCount; ++i)
                 {
                     VisualElement item = content[i];
                     switch (item)
@@ -2287,7 +2292,8 @@
 
                 if (dirty)
                 {
-                    for (int i = 0; i < _autoCompleteContainer.childCount && i < bufferLength; ++i)
+                    int hintCount = _autoCompleteContainer.childCount;
+                    for (int i = 0; i < hintCount && i < bufferLength; ++i)
                     {
                         VisualElement hintElement = _autoCompleteContainer[i];
                         switch (hintElement)
@@ -2445,7 +2451,8 @@
             _stateButtonContainer.style.top = _currentWindowHeight;
             DisplayStyle displayStyle = showGUIButtons ? DisplayStyle.Flex : DisplayStyle.None;
 
-            for (int i = 0; i < _stateButtonContainer.childCount; ++i)
+            int stateButtonCount = _stateButtonContainer.childCount;
+            for (int i = 0; i < stateButtonCount; ++i)
             {
                 VisualElement child = _stateButtonContainer[i];
                 child.style.display = displayStyle;

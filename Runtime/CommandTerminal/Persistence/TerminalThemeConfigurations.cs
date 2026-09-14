@@ -17,7 +17,8 @@ namespace WallstopStudios.DxCommandTerminal.Persistence
             int existingIndex = -1;
             if (terminal != null)
             {
-                for (int i = 0; i < configurations.Count; ++i)
+                int configurationCount = configurations.Count;
+                for (int i = 0; i < configurationCount; ++i)
                 {
                     if (
                         string.Equals(
@@ -47,7 +48,8 @@ namespace WallstopStudios.DxCommandTerminal.Persistence
         public bool AddOrUpdate(TerminalThemeConfiguration configuration)
         {
             int existingIndex = -1;
-            for (int i = 0; i < configurations.Count; ++i)
+            int configurationCount = configurations.Count;
+            for (int i = 0; i < configurationCount; ++i)
             {
                 if (
                     string.Equals(

@@ -903,8 +903,9 @@
                    occurrence wins and provider order is preserved.
                 */
                 int writeIndex = 0;
+                int resultCount = results.Count;
                 _completionDeduplication.Clear();
-                for (int readIndex = 0; readIndex < results.Count; ++readIndex)
+                for (int readIndex = 0; readIndex < resultCount; ++readIndex)
                 {
                     CommandCompletion completion = results[readIndex];
                     if (string.IsNullOrEmpty(completion.InsertionText))
