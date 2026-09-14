@@ -1229,18 +1229,17 @@
 
             _palette._pendingCaretIndex = 14;
             _palette._input.value = "pickitem torchx";
+            int caret = _palette._input.cursorIndex;
             _palette.ApplyPendingCaret();
             Assert.AreEqual(
                 -1,
                 _palette._pendingCaretIndex,
                 "A field change is a user edit and cancels the queued caret"
             );
-            int caret = _palette._input.cursorIndex;
-            yield return null;
             Assert.AreEqual(
                 caret,
                 _palette._input.cursorIndex,
-                "No queued write fights the user's caret after the edit"
+                "The cancelled caret writes nothing on the pass"
             );
         }
 
