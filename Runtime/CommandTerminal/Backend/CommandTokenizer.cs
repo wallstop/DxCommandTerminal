@@ -158,5 +158,57 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             isNewArgument = true;
             return true;
         }
+
+        /// <summary>
+        ///     Quotes an accepted completion's insertion text so the token it
+        ///     forms still tokenizes: unquoted insertions containing spaces or
+        ///     quotes get the first quote character that does not occur inside
+        ///     them, insertions replacing an already-quoted token go in
+        ///     verbatim, and an insertion mixing both quote characters stays
+        ///     verbatim rather than producing an untokenizable quoting.
+        /// </summary>
+        public static string QuoteInsertionIfNeeded(string insertion, bool tokenQuoted)
+        {
+            if (tokenQuoted)
+            {
+                return insertion;
+            }
+
+            bool containsSpace = false;
+            bool containsDoubleQuote = false;
+            bool containsSingleQuote = false;
+            foreach (char character in insertion)
+            {
+                switch (character)
+                {
+                    case ' ':
+                        containsSpace = true;
+                        break;
+                    case '"':
+                        containsDoubleQuote = true;
+                        break;
+                    case '\'':
+                        containsSingleQuote = true;
+                        break;
+                }
+            }
+
+            if (!containsSpace && !containsDoubleQuote && !containsSingleQuote)
+            {
+                return insertion;
+            }
+
+            if (!containsDoubleQuote)
+            {
+                return "\"" + insertion + "\"";
+            }
+
+            if (!containsSingleQuote)
+            {
+                return "'" + insertion + "'";
+            }
+
+            return insertion;
+        }
     }
 }

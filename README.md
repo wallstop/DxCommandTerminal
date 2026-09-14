@@ -27,6 +27,13 @@ This is a fork of [Command Terminal](https://github.com/stillwwater/command_term
 | Unity 6 | &check; |
 | URP | &check; |
 | HDRP | &check; |
+| .NET Standard 2.0 API level | &check; |
+| .NET Framework 4.x API level | &check; |
+
+The package ships no precompiled assemblies and uses only APIs available to both API
+compatibility levels; the full test suite passes with the project set to either
+`.NET Standard 2.0` or `.NET Framework` in Player Settings (verified on Unity
+6000.4.6f1).
 
 # Installation
 
@@ -123,7 +130,7 @@ Enter `help` in the console to view all available commands, use the up and down 
 
 ## Quick-Launch Bar
 
-Add a `CommandPaletteUI` component next to a `UIDocument` to get a launcher-style command bar with no terminal animation. Press Ctrl+Space (configurable via `toggleHotkey`) to open a compact search bar; results appear as you type, ranked exact-first, then prefix, then fuzzy subsequence, and run through the same shell as the terminal. Up/Down selects a result and auto-loads its name into the input (the match list stays put until you edit the text again), Tab commits the selected name, Enter runs it (a failed command keeps the bar open with visible feedback), and Escape closes while restoring the previous focus. Commands that print output (`list-fonts`, `list-themes`, `help`, ...) clear the executed command from the bar, show their results inside the palette, and stay open, so the output is readable; Enter does not re-run until you type a new query. Opening the terminal closes the bar and vice versa, so a hotkey press can never execute twice, and the `Opened`/`Closed` events let gameplay code release its own input maps. Styling rides the terminal's stylesheet chain and every shipped `TerminalThemePack` theme, so the bar, its results, and its slim scrollbar follow whatever theme the terminal is using. As with the terminal itself, full visuals require the package's `BaseStyles.uss` on the panel settings; without it the bar falls back to engine defaults.
+Add a `CommandPaletteUI` component next to a `UIDocument` to get a launcher-style command bar with no terminal animation. Press Ctrl+Space (configurable via `toggleHotkey`) to open a compact search bar; results appear as you type, ranked exact-first, then prefix, then fuzzy subsequence, and run through the same shell as the terminal. Up/Down selects a result and auto-loads its name into the input (the match list stays put until you edit the text again), Tab commits the selected name, Enter runs it (a failed command keeps the bar open with visible feedback), and Escape closes while restoring the previous focus. Once the input names a command and reaches an argument, the bar shows that command's completion candidates (static choices and dynamic providers, staged across arguments): Tab applies the selected candidate to the active token — quoting values that contain spaces when the token is not already quoted — and clicking a row applies it without running. Commands that print output (`list-fonts`, `list-themes`, `help`, ...) clear the executed command from the bar, show their results inside the palette, and stay open, so the output is readable; Enter does not re-run until you type a new query. Opening the terminal closes the bar and vice versa, so a hotkey press can never execute twice, and the `Opened`/`Closed` events let gameplay code release its own input maps. Styling rides the terminal's stylesheet chain and every shipped `TerminalThemePack` theme, so the bar, its results, and its slim scrollbar follow whatever theme the terminal is using. As with the terminal itself, full visuals require the package's `BaseStyles.uss` on the panel settings; without it the bar falls back to engine defaults.
 
 ## Registering Commands
 

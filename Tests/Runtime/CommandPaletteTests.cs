@@ -16,6 +16,8 @@
     {
         private const int FrameBudget = 60;
 
+        private static readonly string[] InventoryItems = { "pickaxe", "torch", "torch pick" };
+
         private CommandPaletteUI _palette;
         private GameObject _paletteObject;
         private GameObject _terminalObject;
@@ -53,6 +55,95 @@
             Assert.AreEqual(expectedName, resolved.Name, $"Resolved key name for '{key}'");
             Assert.AreEqual(shift, resolved.ShiftRequired, $"Shift requirement for '{key}'");
             Assert.AreEqual(ctrl, resolved.CtrlRequired, $"Ctrl requirement for '{key}'");
+        }
+
+        private static CommandCompletionProvider InventoryStage()
+        {
+            return (in CommandCompletionContext context, List<CommandCompletion> results) =>
+            {
+                foreach (string item in InventoryItems)
+                {
+                    if (item.StartsWith(context.Token, StringComparison.Ordinal))
+                    {
+                        results.Add(new CommandCompletion(item));
+                    }
+                }
+            };
+        }
+
+        private static void RegisterInventoryCommand()
+        {
+            Assert.IsTrue(
+                Terminal.Shell.AddCommand(
+                    new CommandDefinition
+                    {
+                        Name = "pickitem",
+                        Handler = (context, arguments) => { },
+                        CompletionProvider = InventoryStage(),
+                    }
+                )
+            );
+        }
+
+        private static void RegisterSpawnItemCommand()
+        {
+            Assert.IsTrue(
+                Terminal.Shell.AddCommand(
+                    new CommandDefinition
+                    {
+                        Name = "spawnitem",
+                        Handler = (context, arguments) => { },
+                        CompletionProvider = CommandCompletionProviders.Staged(
+                            InventoryStage(),
+                            (
+                                in CommandCompletionContext context,
+                                List<CommandCompletion> results
+                            ) =>
+                            {
+                                foreach (string count in new[] { "1", "2", "3" })
+                                {
+                                    results.Add(new CommandCompletion(count));
+                                }
+                            }
+                        ),
+                    }
+                )
+            );
+        }
+
+        private static void RegisterEmptyChoiceCommand()
+        {
+            Assert.IsTrue(
+                Terminal.Shell.AddCommand(
+                    new CommandDefinition
+                    {
+                        Name = "emptychoice",
+                        Handler = (context, arguments) => { },
+                        CompletionProvider = (
+                            in CommandCompletionContext context,
+                            List<CommandCompletion> results
+                        ) => { },
+                    }
+                )
+            );
+        }
+
+        private static void RegisterEditorOnlyCommand()
+        {
+            Assert.IsTrue(
+                Terminal.Shell.AddCommand(
+                    new CommandDefinition
+                    {
+                        Name = "editcommand",
+                        Contexts = CommandExecutionContexts.EditorEditMode,
+                        Handler = (context, arguments) => { },
+                        CompletionProvider = (
+                            in CommandCompletionContext context,
+                            List<CommandCompletion> results
+                        ) => results.Add(new CommandCompletion("editvalue")),
+                    }
+                )
+            );
         }
 
         [SetUp]
@@ -855,6 +946,327 @@
                 _palette._feedback.style.display.value,
                 "A later output hides the previous run's error"
             );
+        }
+
+        [UnityTest]
+        public IEnumerator ArgumentCompletionListsProviderCandidates()
+        {
+            yield return SpawnPalette();
+            RegisterInventoryCommand();
+            RegisterSpawnItemCommand();
+
+            _palette.Open();
+            yield return null;
+
+            (string query, string[] expectedRows)[] cases =
+            {
+                ("pickitem ", new[] { "pickaxe", "torch", "torch pick" }),
+                ("pickitem to", new[] { "torch", "torch pick" }),
+                ("pickitem \"pi", new[] { "pickaxe" }),
+            };
+            foreach ((string query, string[] expectedRows) in cases)
+            {
+                _palette.SetQuery(query);
+                yield return null;
+
+                Assert.AreEqual(
+                    expectedRows,
+                    _palette._matchNames.ToArray(),
+                    $"Completion rows for '{query}'"
+                );
+                string[] insertions = new string[expectedRows.Length];
+                for (int index = 0; index < _palette._completions.Count; ++index)
+                {
+                    insertions[index] = _palette._completions[index].InsertionText;
+                }
+
+                CollectionAssert.AreEqual(
+                    expectedRows,
+                    insertions,
+                    $"Completion insertions for '{query}'"
+                );
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator ZeroCandidateProviderCollapsesResults()
+        {
+            yield return SpawnPalette();
+            RegisterEmptyChoiceCommand();
+
+            _palette.Open();
+            yield return null;
+            _palette._input.value = "emptychoice x";
+            yield return null;
+
+            Assert.AreEqual(
+                0,
+                _palette._completions.Count,
+                "A provider answer without candidates leaves no completion state"
+            );
+            AssertResultsCollapsed("An empty provider answer must not fall back to name filtering");
+        }
+
+        [UnityTest]
+        public IEnumerator ArgumentCompletionFallsBackToCommandNames()
+        {
+            yield return SpawnPalette();
+            RegisterInventoryCommand();
+            RegisterPair();
+
+            _palette.Open();
+            yield return null;
+            _palette._input.value = "pickitem";
+            yield return null;
+
+            Assert.AreEqual(
+                0,
+                _palette._completions.Count,
+                "A query without an active argument stage stays a command-name search"
+            );
+            Assert.AreEqual(
+                new[] { "pickitem" },
+                _palette._matchNames.ToArray(),
+                "Command-name filtering keeps answering while no argument is active"
+            );
+        }
+
+        [UnityTest]
+        public IEnumerator IneligibleCommandArgumentIsNotCompleted()
+        {
+            yield return SpawnPalette();
+            RegisterEditorOnlyCommand();
+
+            _palette.Open();
+            yield return null;
+            _palette._input.value = "editcommand ";
+            yield return null;
+
+            Assert.AreEqual(
+                0,
+                _palette._completions.Count,
+                "An Editor-only command must not offer argument candidates in Play Mode"
+            );
+            Assert.AreEqual(
+                0,
+                _palette._matchNames.Count,
+                "The name filter also hides the ineligible command"
+            );
+            AssertResultsCollapsed("The bar stays collapsed for an ineligible command");
+        }
+
+        [UnityTest]
+        public IEnumerator TabAppliesArgumentCompletionWithQuoting()
+        {
+            yield return SpawnPalette();
+            RegisterInventoryCommand();
+
+            _palette.Open();
+            yield return null;
+            _palette._input.value = "pickitem ";
+            yield return null;
+            Assert.IsTrue(_palette.MoveSelection(2), "Navigate to the multi-word item");
+
+            yield return SendKeyDown(KeyCode.Tab);
+            yield return WaitForCaret(21, "The caret lands after the quoted insertion");
+
+            Assert.AreEqual(
+                "pickitem \"torch pick\"",
+                _palette._input.value,
+                "Tab quotes an insertion containing spaces when the token is unquoted"
+            );
+        }
+
+        [UnityTest]
+        public IEnumerator TabAppliesInsideExistingQuotesVerbatim()
+        {
+            yield return SpawnPalette();
+            RegisterInventoryCommand();
+
+            _palette.Open();
+            yield return null;
+            _palette._input.value = "pickitem \"to";
+            yield return null;
+            Assert.AreEqual(
+                new[] { "torch", "torch pick" },
+                _palette._matchNames.ToArray(),
+                "The quoted token prefix still filters provider candidates"
+            );
+
+            yield return SendKeyDown(KeyCode.Tab);
+            yield return WaitForCaret(15, "The caret lands after the inserted item");
+
+            Assert.AreEqual(
+                "pickitem \"torch",
+                _palette._input.value,
+                "Tab inside an open quote inserts verbatim without extra quoting"
+            );
+        }
+
+        [UnityTest]
+        public IEnumerator ArgumentCompletionChainsToNextStage()
+        {
+            yield return SpawnPalette();
+            RegisterSpawnItemCommand();
+
+            _palette.Open();
+            yield return null;
+            _palette._input.value = "spawnitem torch ";
+            yield return null;
+            Assert.AreEqual(
+                new[] { "1", "2", "3" },
+                _palette._matchNames.ToArray(),
+                "The second argument stage answers after the first is parsed"
+            );
+
+            yield return SendKeyDown(KeyCode.Tab);
+
+            Assert.AreEqual(
+                "spawnitem torch 1",
+                _palette._input.value,
+                "Tab applies the selected stage-one candidate"
+            );
+            Assert.AreEqual(
+                new[] { "1", "2", "3" },
+                _palette._matchNames.ToArray(),
+                "The caret stays on the applied token, so Tab can keep cycling its candidates"
+            );
+            AssertResultsExpanded("The applied stage keeps its candidate list visible");
+        }
+
+        [UnityTest]
+        public IEnumerator TypingAfterCommandApplyContinuesIntoArgumentCompletion()
+        {
+            yield return SpawnPalette();
+            RegisterInventoryCommand();
+
+            _palette.Open();
+            yield return null;
+            _palette._input.value = "pickitem";
+            yield return null;
+            Assert.AreEqual(
+                new[] { "pickitem" },
+                _palette._matchNames.ToArray(),
+                "The name filter answers the command name first"
+            );
+
+            yield return SendKeyDown(KeyCode.Tab);
+            Assert.AreEqual(
+                "pickitem",
+                _palette._input.value,
+                "Tab commits the selected command name"
+            );
+
+            /*
+               Appending to the committed command derives the caret from the
+               change itself (the text field's cursorIndex lags value writes),
+               so the next keystroke completes the new token, not the stale
+               caret position.
+             */
+            _palette._input.value = "pickitem ";
+            yield return null;
+            Assert.AreEqual(
+                new[] { "pickaxe", "torch", "torch pick" },
+                _palette._matchNames.ToArray(),
+                "The append opens the command's stage-zero candidates"
+            );
+
+            _palette._input.value = "pickitem to";
+            yield return null;
+            Assert.AreEqual(
+                new[] { "torch", "torch pick" },
+                _palette._matchNames.ToArray(),
+                "The append-derived caret completes the token the user is editing"
+            );
+        }
+
+        [UnityTest]
+        public IEnumerator EnterRunsArgumentCompletedCommand()
+        {
+            yield return SpawnPalette();
+            int executed = 0;
+            Assert.IsTrue(
+                Terminal.Shell.AddCommand(
+                    new CommandDefinition
+                    {
+                        Name = "pickitem",
+                        Handler = (context, arguments) =>
+                        {
+                            ++executed;
+                        },
+                        CompletionProvider = InventoryStage(),
+                    }
+                )
+            );
+
+            _palette.Open();
+            yield return null;
+            _palette._input.value = "pickitem torch";
+            yield return null;
+            Assert.AreEqual(
+                new[] { "torch", "torch pick" },
+                _palette._matchNames.ToArray(),
+                "The argument stage shows the provider's candidates"
+            );
+
+            yield return SendKeyDown(KeyCode.Return);
+
+            Assert.AreEqual(1, executed, "Enter runs the command with its completed arguments");
+            Assert.IsFalse(_palette.IsOpen, "A successful run closes the palette");
+        }
+
+        [UnityTest]
+        public IEnumerator RowActivationAppliesArgumentCompletionWithoutRunning()
+        {
+            yield return SpawnPalette();
+            int executed = 0;
+            Assert.IsTrue(
+                Terminal.Shell.AddCommand(
+                    new CommandDefinition
+                    {
+                        Name = "pickitem",
+                        Handler = (context, arguments) =>
+                        {
+                            ++executed;
+                        },
+                        CompletionProvider = InventoryStage(),
+                    }
+                )
+            );
+
+            _palette.Open();
+            yield return null;
+            _palette._input.value = "pickitem to";
+            yield return null;
+            Assert.AreEqual(2, _palette._rows.Count, "The activation target row exists");
+
+            /*
+                Unity's dispatcher drops synthetic pointer events (the
+                session-016 pointer-parity limitation), so the row's
+                activation logic is driven at the index level; the
+                ClickEvent binding itself is Unity plumbing.
+             */
+            _palette.RowActivated(0);
+            yield return null;
+
+            Assert.AreEqual(0, executed, "Applying an argument completion must not run anything");
+            Assert.IsTrue(_palette.IsOpen, "Applying keeps the palette open");
+            Assert.AreEqual(
+                "pickitem torch",
+                _palette._input.value,
+                "The activation applies the selected candidate to the active token"
+            );
+        }
+
+        private IEnumerator WaitForCaret(int expected, string message)
+        {
+            int frameBudget = FrameBudget;
+            while (0 < frameBudget-- && _palette._input.cursorIndex != expected)
+            {
+                yield return null;
+            }
+
+            Assert.AreEqual(expected, _palette._input.cursorIndex, message);
         }
 
         private IEnumerator SpawnPalette()
