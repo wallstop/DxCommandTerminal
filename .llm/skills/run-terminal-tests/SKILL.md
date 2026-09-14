@@ -80,6 +80,14 @@ field write is frame-coupled and flakes under session sequences
   moved the caret. The caret is parked only after it holds for two passes
   (`CaretStickPasses`), and a field change cancels the queued caret
   (`_pendingCaretIndex` is `int?`; null = none).
+- Known order-dependent flakes on unmodified master (observed 2026-09-14):
+  `TerminalUITokenCompletionTests.QuotedTokensAcceptUnquotedInsertions` and
+  `CommandPaletteTests.TabAppliesArgumentCompletionWithQuoting` can fail inside full-suite
+  runs (stale autocomplete candidate applied, or a stale caret read - e.g. `"pickup "pickaxe"`
+  instead of `"pickup "torch"`, caret 13/9 vs 21) while passing in isolation both before and
+  after a code change. Before hunting a regression, re-run the failing test isolated; an
+  isolated PASS after a full-run FAIL is suite-order flake, and a domain reload clears the
+  stale panel state between attempts.
 - UITK clamps `cursorIndex` writes to the last LAID-OUT text length, not
   the value length. The cap converges with layout and its convergence is
   nondeterministic under session sequences: a fresh field can sit capped

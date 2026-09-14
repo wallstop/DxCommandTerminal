@@ -81,7 +81,8 @@ namespace WallstopStudios.DxCommandTerminal.Extensions
             comparer ??= Comparer<T>.Default;
 
             T previous = list[0];
-            for (int i = 1; i < list.Count; ++i)
+            int itemCount = list.Count;
+            for (int i = 1; i < itemCount; ++i)
             {
                 T current = list[i];
                 if (0 < comparer.Compare(previous, current))

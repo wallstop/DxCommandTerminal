@@ -124,7 +124,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
 
             caret = Math.Clamp(caret, 0, line.Length);
-            for (int i = 0; i < tokens.Count; ++i)
+            int tokenCount = tokens.Count;
+            for (int i = 0; i < tokenCount; ++i)
             {
                 CommandToken token = tokens[i];
                 if (caret < token.Start || token.End < caret)
@@ -200,12 +201,12 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
             if (!containsDoubleQuote)
             {
-                return "\"" + insertion + "\"";
+                return $"\"{insertion}\"";
             }
 
             if (!containsSingleQuote)
             {
-                return "'" + insertion + "'";
+                return $"'{insertion}'";
             }
 
             return insertion;
