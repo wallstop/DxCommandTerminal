@@ -59,6 +59,18 @@
             new ConditionalWeakTable<Assembly, DiscoveryCache>();
 
         /*
+            Ordered discovery providers consulted between the generated-catalog
+            probe and the reflection compatibility walk while auto registration
+            applies. Editor services register from Unity initialization hooks,
+            which run before any shell exists in the domain, so registration
+            precedes every session reset. Read on whatever thread reaches
+            readiness (the readiness handoff is Interlocked-guarded, like the
+            discovery caches); mutate only through RegisterDiscoveryProvider
+            handles.
+         */
+        private static readonly List<ICommandDiscoveryProvider> DiscoveryProviders = new();
+
+        /*
             Readiness boundary: the first observation of command state applies
             any deferred auto registration before returning, so a single-
             threaded caller never sees a half-initialized catalog. Concurrent
@@ -220,6 +232,169 @@
             }
 
             return true;
+        }
+
+        /*
+            Registers an ordered discovery provider consulted while auto
+            registration applies (after generated catalogs, before the
+            reflection walk). The returned handle removes exactly that
+            provider; disposing twice is a no-op. Duplicate registration of
+            the same provider instance is a no-op returning a fresh handle,
+            so a hook rerun cannot double-serve assemblies.
+         */
+        internal static IDisposable RegisterDiscoveryProvider(ICommandDiscoveryProvider provider)
+        {
+            if (provider == null)
+            {
+                throw new ArgumentNullException(nameof(provider));
+            }
+
+            bool alreadyRegistered = false;
+            foreach (ICommandDiscoveryProvider registered in DiscoveryProviders)
+            {
+                if (ReferenceEquals(registered, provider))
+                {
+                    alreadyRegistered = true;
+                    break;
+                }
+            }
+
+            if (!alreadyRegistered)
+            {
+                DiscoveryProviders.Add(provider);
+            }
+
+            return new DiscoveryProviderRegistration(provider);
+        }
+
+        /*
+            Collects auto-registered commands for one assembly: from its
+            generated catalog when the generator produced one, then from the
+            ordered discovery providers, otherwise from the reflection
+            compatibility walk. Never walks types for an assembly that
+            produced a non-empty catalog. Returns where the commands came
+            from.
+
+            Constraint: a non-empty catalog replaces reflection for its
+            assembly. Commands emitted into that assembly by a *different*
+            source generator (invisible to this generator's syntax receiver)
+            would be dropped, so such assemblies must register manually or
+            through their own catalog-compatible surface. The same constraint
+            applies to a provider that claims an assembly.
+
+            Internal for test coverage of the provider stage (see
+            WallstopStudios.DxCommandTerminal.Tests.Runtime).
+         */
+        internal static AutoCommandSource CollectAutoCommands(
+            Assembly assembly,
+            List<AutoCommand> commands
+        )
+        {
+            DiscoveryCache cache = GetOrCreateDiscoveryCache(assembly);
+            if (
+                TryGetCatalogCollector(
+                    assembly,
+                    cache,
+                    out Action<List<CommandCatalogEntry>> collector
+                )
+            )
+            {
+                List<CommandCatalogEntry> entries = new();
+                bool collected = false;
+                try
+                {
+                    collector(entries);
+                    collected = true;
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning(
+                        $"[DxCommandTerminal] Generated command catalog in "
+                            + $"{assembly.GetName().Name} failed to collect: {e.Message}; "
+                            + $"falling back to provider and reflection discovery"
+                    );
+                }
+
+                if (collected && 0 < entries.Count)
+                {
+                    foreach (CommandCatalogEntry entry in entries)
+                    {
+                        commands.Add(AutoCommand.FromCatalog(entry));
+                    }
+
+                    return AutoCommandSource.Catalog;
+                }
+
+                /*
+                   An empty or failed catalog is not proof that the assembly has
+                   no commands; the provider and reflection stages below stay
+                   compatible with it.
+                */
+            }
+
+            /*
+               The count is snapshotted so a provider that mutates the registry
+               mid-collection (out of contract) can never overflow the loop;
+               a provider that disposes registrations during its own call can
+               shrink the registry instead, so each read rechecks the live
+               count. A provider that appends and then throws has its partial
+               appends rolled back, so the assembly falls through to the
+               remaining stages from a clean state.
+            */
+            List<ICommandDiscoveryProvider> providers = DiscoveryProviders;
+            int providerCount = providers.Count;
+            for (int i = 0; i < providerCount; ++i)
+            {
+                if (providers.Count <= i)
+                {
+                    break;
+                }
+
+                ICommandDiscoveryProvider provider = providers[i];
+                int appended = commands.Count;
+                try
+                {
+                    if (provider.TryCollect(assembly, commands))
+                    {
+                        return AutoCommandSource.Provider;
+                    }
+                }
+                catch (Exception e)
+                {
+                    /*
+                       A provider that removed from the shared buffer before
+                       throwing (out of contract) makes the rollback count
+                       negative; clamping keeps containment from throwing.
+                    */
+                    int rolledBack = commands.Count - appended;
+                    if (0 < rolledBack)
+                    {
+                        commands.RemoveRange(appended, rolledBack);
+                    }
+
+                    Debug.LogWarning(
+                        $"[DxCommandTerminal] Command discovery provider "
+                            + $"{provider.GetType().Name} failed for assembly "
+                            + $"{assembly.GetName().Name}: {e.Message}"
+                    );
+                }
+            }
+
+            if (cache.ReflectedCommands == null)
+            {
+                List<(MethodInfo method, RegisterCommandAttribute attribute)> reflected = new();
+                CollectReflectedCommands(assembly, reflected);
+                List<AutoCommand> cached = new(reflected.Count);
+                foreach ((MethodInfo method, RegisterCommandAttribute attribute) in reflected)
+                {
+                    cached.Add(AutoCommand.FromReflected(method, attribute));
+                }
+
+                cache.ReflectedCommands = cached;
+            }
+
+            commands.AddRange(cache.ReflectedCommands);
+            return AutoCommandSource.Reflected;
         }
 
         internal static bool MayContainCommands(Assembly assembly, AssemblyName self)
@@ -455,80 +630,6 @@
                 );
                 return null;
             }
-        }
-
-        /*
-            Collects auto-registered commands for one assembly: from its
-            generated catalog when the generator produced one, otherwise from
-            the reflection compatibility walk. Never walks types for an
-            assembly that produced a non-empty catalog. Returns whether the
-            catalog path was used.
-
-            Constraint: a non-empty catalog replaces reflection for its
-            assembly. Commands emitted into that assembly by a *different*
-            source generator (invisible to this generator's syntax receiver)
-            would be dropped, so such assemblies must register manually or
-            through their own catalog-compatible surface.
-         */
-        private static bool CollectAutoCommands(Assembly assembly, List<AutoCommand> commands)
-        {
-            DiscoveryCache cache = GetOrCreateDiscoveryCache(assembly);
-            if (
-                TryGetCatalogCollector(
-                    assembly,
-                    cache,
-                    out Action<List<CommandCatalogEntry>> collector
-                )
-            )
-            {
-                List<CommandCatalogEntry> entries = new();
-                bool collected = false;
-                try
-                {
-                    collector(entries);
-                    collected = true;
-                }
-                catch (Exception e)
-                {
-                    Debug.LogWarning(
-                        $"[DxCommandTerminal] Generated command catalog in "
-                            + $"{assembly.GetName().Name} failed to collect: {e.Message}; "
-                            + $"falling back to reflection discovery"
-                    );
-                }
-
-                if (collected && 0 < entries.Count)
-                {
-                    foreach (CommandCatalogEntry entry in entries)
-                    {
-                        commands.Add(AutoCommand.FromCatalog(entry));
-                    }
-
-                    return true;
-                }
-
-                /*
-                   An empty or failed catalog is not proof that the assembly has
-                   no commands; the reflection walk below stays compatible with
-                   it.
-                */
-            }
-
-            if (cache.ReflectedCommands == null)
-            {
-                List<(MethodInfo method, RegisterCommandAttribute attribute)> reflected = new();
-                CollectReflectedCommands(assembly, reflected);
-                List<AutoCommand> cached = new(reflected.Count);
-                foreach ((MethodInfo method, RegisterCommandAttribute attribute) in reflected)
-                {
-                    cached.Add(AutoCommand.FromReflected(method, attribute));
-                }
-
-                cache.ReflectedCommands = cached;
-            }
-
-            commands.AddRange(cache.ReflectedCommands);
-            return false;
         }
 
         private static bool TryGetScanTypes(Assembly assembly, out Type[] types)
@@ -1170,6 +1271,7 @@
 #endif
             int registeredCount = 0;
             int catalogAssemblies = 0;
+            int providerAssemblies = 0;
             int reflectedAssemblies = 0;
 
             Assembly[] loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies();
@@ -1181,13 +1283,23 @@
             List<AutoCommand> autoCommands = new();
             foreach (Assembly assembly in scanCandidates)
             {
-                if (CollectAutoCommands(assembly, autoCommands))
+                switch (CollectAutoCommands(assembly, autoCommands))
                 {
-                    catalogAssemblies++;
-                }
-                else
-                {
-                    reflectedAssemblies++;
+                    case AutoCommandSource.Catalog:
+                    {
+                        catalogAssemblies++;
+                        break;
+                    }
+                    case AutoCommandSource.Provider:
+                    {
+                        providerAssemblies++;
+                        break;
+                    }
+                    default:
+                    {
+                        reflectedAssemblies++;
+                        break;
+                    }
                 }
             }
 
@@ -1297,7 +1409,9 @@
             Debug.Log(
                 $"[DxCommandTerminal] Registered {registeredCount} auto-registered commands in "
                     + $"{stopwatch.Elapsed.TotalMilliseconds:F2} ms "
-                    + $"({catalogAssemblies} generated catalog(s), {reflectedAssemblies} reflection-scanned assembly(ies))"
+                    + $"({catalogAssemblies} generated catalog(s), {providerAssemblies} "
+                    + $"provider-served assembly(ies), {reflectedAssemblies} "
+                    + $"reflection-scanned assembly(ies))"
             );
 #endif
         }
@@ -1544,10 +1658,12 @@
 
         /*
             One generated command registration, shared by the generated-catalog
-            path and the reflection compatibility path so both apply identical
-            filtering, validation, and diagnostics.
+            path, the discovery-provider path, and the reflection compatibility
+            path so all apply identical filtering, validation, and diagnostics.
+            Internal so Editor discovery services (and tests) can produce
+            candidates through the shared factories.
          */
-        private readonly struct AutoCommand
+        internal readonly struct AutoCommand
         {
             public readonly string Name;
             public readonly string MethodName;
@@ -1671,6 +1787,52 @@
             public Action<List<CommandCatalogEntry>> Collector;
             public bool CollectorProbed;
             public List<AutoCommand> ReflectedCommands;
+        }
+
+        /*
+            Where one assembly's auto commands came from, for the readiness
+            accounting and readiness log. Internal for the discovery tests.
+         */
+        internal enum AutoCommandSource
+        {
+            Catalog,
+            Provider,
+            Reflected,
+        }
+
+        /*
+            Removes its provider on the first dispose; a second dispose is a
+            no-op. Duplicate registrations of the same provider produce
+            independent handles, so a later registrant's dispose removes the
+            provider the first registrant still holds.
+         */
+        private sealed class DiscoveryProviderRegistration : IDisposable
+        {
+            private ICommandDiscoveryProvider _provider;
+
+            public DiscoveryProviderRegistration(ICommandDiscoveryProvider provider)
+            {
+                _provider = provider;
+            }
+
+            public void Dispose()
+            {
+                ICommandDiscoveryProvider provider = _provider;
+                if (provider == null)
+                {
+                    return;
+                }
+
+                _provider = null;
+                for (int i = 0; i < DiscoveryProviders.Count; ++i)
+                {
+                    if (ReferenceEquals(DiscoveryProviders[i], provider))
+                    {
+                        DiscoveryProviders.RemoveAt(i);
+                        return;
+                    }
+                }
+            }
         }
     }
 }
