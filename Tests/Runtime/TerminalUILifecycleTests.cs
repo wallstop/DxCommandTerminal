@@ -200,7 +200,78 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
         }
 
-        private IEnumerator SpawnTerminalWithDocument()
+        /*
+            The frame the close animation snaps to the closed target is the
+            frame the final height (0) and the hidden input display are
+            written; a gate evaluated after the snap would skip that write
+            and freeze the surface at the last animated height (with a
+            zero-duration close, at the full open height).
+         */
+        [UnityTest]
+        public IEnumerator ClosingWritesFinalClosedHeights()
+        {
+            yield return SpawnTerminalWithDocument();
+
+            _terminal.SetState(TerminalState.OpenFull);
+            yield return WaitForInputVisible("Sanity: the terminal is open and laid out");
+
+            _terminal.SetState(TerminalState.Closed);
+            int frameBudget = 10;
+            while (0 < frameBudget-- && !_terminal.IsClosed)
+            {
+                yield return null;
+            }
+
+            Assert.IsTrue(
+                _terminal.IsClosed,
+                "Sanity: the zero-duration close settles on the next frame"
+            );
+            yield return null;
+
+            Assert.AreEqual(
+                0f,
+                _terminal._uiDocument.rootVisualElement.resolvedStyle.height,
+                "The closing frame must write the final closed height to the document root"
+            );
+            Assert.AreEqual(
+                DisplayStyle.None,
+                _terminal
+                    ._uiDocument.rootVisualElement.Q<VisualElement>("InputContainer")
+                    .resolvedStyle.display,
+                "The closing frame must hide the input container"
+            );
+        }
+
+        /*
+            On-screen state buttons are the open controls for a closed
+            terminal; the opt-in showGUIButtons mode builds its tree eagerly
+            on enable so the buttons exist before any open.
+         */
+        [UnityTest]
+        public IEnumerator StateButtonsBuildEagerlyWhileClosed()
+        {
+            yield return SpawnTerminalWithDocument(showButtons: true);
+
+            VisualElement stateButtons = _terminal._uiDocument.rootVisualElement.Q(
+                "StateButtonContainer"
+            );
+            Assert.AreEqual(
+                1,
+                _terminal._uiDocument.rootVisualElement.childCount,
+                "The showGUIButtons mode builds its tree on enable"
+            );
+            Assert.IsNotNull(
+                stateButtons,
+                "The state button container exists while the terminal is closed"
+            );
+            Assert.AreEqual(
+                2,
+                stateButtons.childCount,
+                "Both state buttons are built while the terminal is closed"
+            );
+        }
+
+        private IEnumerator SpawnTerminalWithDocument(bool showButtons = false)
         {
             _panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
             _terminalObject = new GameObject("TerminalUILifecycle");
@@ -212,6 +283,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             _terminal.resetStateOnInit = true;
             _terminal.easeOutTime = 0f;
             _terminal.easeInTime = 0f;
+            _terminal.showGUIButtons = showButtons;
             _terminal._themePack = LoadAsset<TerminalThemePack>("Packs/Themes/Medium.asset");
             _terminal._fontPack = LoadAsset<TerminalFontPack>("Packs/Fonts/Medium.asset");
             StartTracker tracker = _terminalObject.AddComponent<StartTracker>();

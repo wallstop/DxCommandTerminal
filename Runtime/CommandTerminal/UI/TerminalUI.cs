@@ -314,7 +314,7 @@
 #if UNITY_EDITOR
             _serializedObject = new SerializedObject(this);
 
-            string[] uiPropertiesTracked = { nameof(_uiDocument) };
+            string[] uiPropertiesTracked = { nameof(_uiDocument), nameof(showGUIButtons) };
             TrackProperties(uiPropertiesTracked, _uiProperties);
 
             string[] themePropertiesTracked = { nameof(_themePack) };
@@ -397,6 +397,18 @@
                 _unityLogAttached = true;
             }
 
+            /*
+                On-screen state buttons are the open controls for a closed
+                terminal, so this opt-in mode builds its tree eagerly and
+                stays on the always-refresh path (LateUpdate exempts it from
+                the idle gate). Terminals without the buttons defer the whole
+                tree to the first open.
+             */
+            if (showGUIButtons)
+            {
+                EnsureUI();
+            }
+
 #if UNITY_EDITOR
             EditorApplication.update += _checkForChanges;
 #endif
@@ -449,6 +461,21 @@
 
         private void LateUpdate()
         {
+            /*
+                The idle check runs before the animation step: the frame where
+                HandleHeightAnimation snaps to the closed target is the frame
+                RefreshUI must write the final height and input display; a
+                gate evaluated after the snap would skip that final write and
+                freeze the surface at the last animated height.
+             */
+            bool idleClosed =
+                IsClosed
+                && !_needsFocus
+                && !_needsScrollToEnd
+                && !_pendingCaretIndex.HasValue
+                && !IsPaletteSurfaceOpen()
+                && !showGUIButtons;
+
             ResetWindowIdempotent();
             HandleHeightAnimation();
 
@@ -464,20 +491,19 @@
             {
                 _paletteHeldSurface = true;
             }
-            else if (
-                !IsClosed
-                || _needsFocus
-                || _needsScrollToEnd
-                || _pendingCaretIndex.HasValue
-                || _paletteHeldSurface
-            )
+            else if (idleClosed && !_paletteHeldSurface)
             {
                 /*
                     Everything below is UI-sync work: style writes, log
                     sync, hints, focus, and caret application. A fully
                     closed terminal with no pending work skips it and
-                    resumes on the next open or buffer change.
+                    resumes on the next open or buffer change. Terminals
+                    with on-screen state buttons stay on the always-refresh
+                    path: their buttons are the open controls while closed.
                  */
+            }
+            else
+            {
                 _paletteHeldSurface = false;
                 RefreshUI();
             }
@@ -1981,11 +2007,6 @@
                 return;
             }
 
-            if (_commandIssuedThisFrame)
-            {
-                return;
-            }
-
             /*
                 The palette shares this document when both surfaces live on one
                 GameObject. While it is open it owns the root: RefreshUI would
@@ -1998,6 +2019,13 @@
                 return;
             }
 
+            /*
+                Heights and the input display are written on every pass,
+                including state-transition frames: the idle gate can skip the
+                very next pass, and a zero-duration close snaps its height on
+                the same frame SetState flags the transition, so this is the
+                only pass that can land the final closed height.
+             */
             _uiDocument.rootVisualElement.style.height = _currentWindowHeight;
             _terminalContainer.style.height = _currentWindowHeight;
             _terminalContainer.style.width = Screen.width;
@@ -2008,6 +2036,11 @@
                 _inputContainer.resolvedStyle.display != commandInputStyle
                 && commandInputStyle == DisplayStyle.Flex;
             _inputContainer.style.display = commandInputStyle;
+
+            if (_commandIssuedThisFrame)
+            {
+                return;
+            }
 
             RefreshLogs();
             RefreshAutoCompleteHints();
