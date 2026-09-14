@@ -47,8 +47,15 @@ namespace WallstopStudios.DxCommandTerminal.Samples
                 return;
             }
 
-            Terminal.Shell.AddCommand(builder, out CommandRegistrationHandle handle);
-            _handles.Add(handle);
+            /*
+                AddCommand returns false for a duplicate name against the
+                live shell (the shell queues that error) and leaves the
+                handle null; only a successful registration owns a handle.
+             */
+            if (Terminal.Shell.AddCommand(builder, out CommandRegistrationHandle handle))
+            {
+                _handles.Add(handle);
+            }
         }
 
         protected abstract void RegisterCommands();

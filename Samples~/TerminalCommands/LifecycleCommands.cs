@@ -28,12 +28,23 @@ namespace WallstopStudios.DxCommandTerminal.Samples
                 return;
             }
 
-            Terminal.Shell.AddCommand(
-                CommandBuilder
-                    .Create("ping", "Replies with pong")
-                    .Handler((context, arguments) => Terminal.Log("pong")),
-                out _pingHandle
-            );
+            /*
+                A failed add (duplicate name) leaves the handle null; the
+                disable path null-guards it.
+             */
+            if (
+                !Terminal.Shell.AddCommand(
+                    CommandBuilder
+                        .Create("ping", "Replies with pong")
+                        .Handler((context, arguments) => Terminal.Log("pong")),
+                    out _pingHandle
+                )
+            )
+            {
+                Terminal.Log("ping was not registered (duplicate name).");
+                return;
+            }
+
             Terminal.Log("ping registered (handle disposed: {0})", _pingHandle.IsDisposed);
         }
 
