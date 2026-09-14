@@ -26,10 +26,6 @@
         // Cache log callback to reduce allocations
         private static readonly Application.LogCallback UnityLogCallback = HandleUnityLog;
 
-        private static readonly List<TerminalLogType> EmptyLogTypes = new();
-
-        private static readonly List<string> EmptyStrings = new();
-
         // ReSharper disable once MemberCanBePrivate.Global
         public bool IsClosed =>
             _state != TerminalState.OpenFull
@@ -462,61 +458,20 @@
 
         private void RefreshStaticState(bool force)
         {
-            int logBufferSize = Mathf.Max(0, _logBufferSize);
-            if (force || Terminal.Buffer == null)
-            {
-                Terminal.Buffer = new CommandLog(logBufferSize, _ignoredLogTypes);
-            }
-            else
-            {
-                if (Terminal.Buffer.Capacity != logBufferSize)
-                {
-                    Terminal.Buffer.Resize(logBufferSize);
-                }
-                if (!Terminal.Buffer.ignoredLogTypes.SetEquals(_ignoredLogTypes ?? EmptyLogTypes))
-                {
-                    Terminal.Buffer.ignoredLogTypes.Clear();
-                    Terminal.Buffer.ignoredLogTypes.UnionWith(_ignoredLogTypes ?? EmptyLogTypes);
-                }
-            }
+            bool shellReconfigured = TerminalSession.Current.Apply(
+                new TerminalSession.Config(
+                    logBufferSize: _logBufferSize,
+                    historyBufferSize: _historyBufferSize,
+                    ignoredLogTypes: _ignoredLogTypes,
+                    disabledCommands: _disabledCommands,
+                    ignoreDefaultCommands: ignoreDefaultCommands
+                ),
+                force
+            );
 
-            int historyBufferSize = Mathf.Max(0, _historyBufferSize);
-            if (force || Terminal.History == null)
+            if (shellReconfigured && _started)
             {
-                Terminal.History = new CommandHistory(historyBufferSize);
-            }
-            else if (Terminal.History.Capacity != historyBufferSize)
-            {
-                Terminal.History.Resize(historyBufferSize);
-            }
-
-            if (force || Terminal.Shell == null)
-            {
-                Terminal.Shell = new CommandShell(Terminal.History);
-            }
-
-            if (force || Terminal.AutoComplete == null)
-            {
-                Terminal.AutoComplete = new CommandAutoComplete(Terminal.History, Terminal.Shell);
-            }
-
-            if (
-                Terminal.Shell.IgnoringDefaultCommands != ignoreDefaultCommands
-                || !Terminal.Shell.AutoCommandsRegistered
-                || !Terminal.Shell.IgnoredCommands.SetEquals(_disabledCommands ?? EmptyStrings)
-            )
-            {
-                Terminal.Shell.ClearAutoRegisteredCommands();
-                Terminal.Shell.InitializeAutoRegisteredCommands(
-                    ignoredCommands: _disabledCommands,
-                    ignoreDefaultCommands: ignoreDefaultCommands,
-                    deferRegistration: true
-                );
-
-                if (_started)
-                {
-                    ResetAutoComplete();
-                }
+                ResetAutoComplete();
             }
         }
 
