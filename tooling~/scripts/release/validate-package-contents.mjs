@@ -210,7 +210,15 @@ function main() {
     }
   }
 
+  // Samples~ content is exempt from the meta checks below: the tilde
+  // folder is invisible to Unity inside the package cache, and Package
+  // Manager copies samples into the consuming project on import, where
+  // Unity generates fresh metas for the copied files.
   for (const directory of impliedDirectories) {
+    if (directory === "Samples~" || directory.startsWith("Samples~/")) {
+      continue;
+    }
+
     check(
       entrySet.has(`${directory}.meta`),
       `shipped directory without its folder meta: ${directory}`
@@ -224,7 +232,7 @@ function main() {
         entrySet.has(target) || impliedDirectories.has(target),
         `orphan meta in tarball: ${file}`
       );
-    } else if (file !== "package.json") {
+    } else if (file !== "package.json" && !file.startsWith("Samples~/")) {
       check(entrySet.has(`${file}.meta`), `shipped file without meta: ${file}`);
     }
   }
@@ -240,6 +248,61 @@ function main() {
     check(
       typeof parsed.name === "string" && 0 < parsed.name.length,
       `asmdef missing a name: ${asmdef}`
+    );
+  }
+
+  // Sample invariants: package.json declares every shipped Samples~/
+  // directory (Package Manager lists and imports exactly the declared
+  // samples), each declared sample ships an .asmdef so importing it
+  // compiles, and no Samples~ content ships outside a declaration.
+  const declaredSamples = Array.isArray(rootManifest.samples)
+    ? rootManifest.samples
+    : [];
+  const shippedSampleEntries = entries.filter((entry) =>
+    entry.startsWith("Samples~/")
+  );
+  if (0 < shippedSampleEntries.length) {
+    check(
+      0 < declaredSamples.length,
+      "Samples~/ content ships without a package.json samples declaration"
+    );
+  }
+  for (const sample of declaredSamples) {
+    if (sample === null || typeof sample !== "object") {
+      fail(`sample entry is not an object: ${JSON.stringify(sample) ?? String(sample)}`);
+      problems += 1;
+      continue;
+    }
+    check(
+      typeof sample.path === "string" && sample.path.startsWith("Samples~/"),
+      `sample path must live under Samples~/: ${sample.path}`
+    );
+    check(
+      typeof sample.displayName === "string" && 0 < sample.displayName.length,
+      `sample is missing a displayName: ${sample.path}`
+    );
+    const sampleFiles = shippedSampleEntries.filter((entry) =>
+      entry.startsWith(`${sample.path}/`)
+    );
+    check(
+      0 < sampleFiles.length,
+      `declared sample missing from tarball: ${sample.path}`
+    );
+    check(
+      sampleFiles.some((entry) => entry.endsWith(".asmdef")),
+      `declared sample ships without an .asmdef: ${sample.path}`
+    );
+  }
+  for (const entry of shippedSampleEntries) {
+    check(
+      declaredSamples.some(
+        (sample) =>
+          sample != null &&
+          typeof sample === "object" &&
+          typeof sample.path === "string" &&
+          entry.startsWith(`${sample.path}/`)
+      ),
+      `shipped sample file outside every declared sample: ${entry}`
     );
   }
 

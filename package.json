@@ -16,6 +16,13 @@
     "cheats"
   ],
   "license": "MIT",
+  "samples": [
+    {
+      "displayName": "Typed Command Builder Examples",
+      "description": "Runnable examples for typed commands: arguments, validation, subcommands, dynamic completion, and lifecycle-safe registration.",
+      "path": "Samples~/TerminalCommands"
+    }
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/wallstop/DxCommandTerminal.git"
@@ -39,6 +46,7 @@
     "Tests.meta",
     "Fonts",
     "Fonts.meta",
+    "Samples~",
     "CHANGELOG.md",
     "CHANGELOG.md.meta",
     "LICENSE",
