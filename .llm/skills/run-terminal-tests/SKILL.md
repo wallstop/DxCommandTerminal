@@ -70,10 +70,8 @@ field write is frame-coupled and flakes under session sequences
   directly (see `PendingCaretWritesAndKeepsMarkerWhileUnfocused`).
 - One failure mode survives everything: long agent sessions can leave the
   editor in a state where panel events stop processing entirely (writes
-  re-clamp or never land, for 30+ frames). It clears with a domain reload
-  (Assets > Refresh). If a previously green UI suite fails with stale values
-  across several consecutive runs, refresh first, then re-run before hunting a
-  code bug.
+  re-clamp or never land, for 30+ frames). See the first Debugging failures
+  bullet for the verify-then-refresh recipe.
 - Palette caret flakes: `CommandPaletteUI._logCaretPasses = true` (editor
   eval or a test) logs every pending-caret pass with frame, pending,
   cursor/select, and focus owner, so a #74-class re-clamp shows which pass
@@ -95,12 +93,26 @@ field write is frame-coupled and flakes under session sequences
   the value length. The cap converges with layout and its convergence is
   nondeterministic under session sequences: a fresh field can sit capped
   below the value length for a whole poll budget, and re-focusing does
-  not force it. UI tests must not assume a full-length caret park sticks;
-  either readiness-poll the park or probe for a holdable position and pin
-  position-independent rules against it (see
+  not force it. Worse, the panel can RE-CLAMP a caret write after it
+  already landed (observed session-023: a mid-line park held, then lost
+  frames later). UI tests must not assume a caret park sticks once; retry
+  the write and readiness-poll for it to HOLD (see
+  `TerminalUITokenCompletionTests.SetInput`'s retry loop), or probe for a
+  holdable position and pin position-independent rules against it (see
   `CommandPaletteTests.PendingCaretConsumesOnlyAfterStablePasses`).
+  Synchronous caret reads one frame after a value write are also clamped
+  (`PendingCaretWritesAndKeepsMarkerWhileUnfocused` readiness-polls its
+  applied positions).
 
 ## Debugging failures
+
+- A test failing ISOLATED that passed isolated earlier in the same session
+  is the poisoned-panel state below, not a code change - but verify with a
+  real domain reload first: Assets > Refresh (or any script edit that
+  recompiles). A no-op `recompile` ("up_to_date") does NOT reload the
+  domain and does not clear it; Assets > Refresh does (session-023: the
+  palette auto-load caret stuck at 9/1 for whole budgets, cleared after
+  refresh).
 
 - Errors are queued on the terminal (not only the last one) - assert on the full error set where
   relevant.

@@ -28,9 +28,7 @@
 
         // ReSharper disable once MemberCanBePrivate.Global
         public bool IsClosed =>
-            _state != TerminalState.OpenFull
-            && _state != TerminalState.OpenSmall
-            && Mathf.Approximately(_currentWindowHeight, _targetWindowHeight);
+            !IsOpenState(_state) && Mathf.Approximately(_currentWindowHeight, _targetWindowHeight);
 
         public string CurrentTheme =>
             !string.IsNullOrWhiteSpace(_runtimeTheme) ? _runtimeTheme : _persistedTheme;
@@ -432,7 +430,7 @@
             }
 
             SetState(TerminalState.Closed);
-            TeardownUi();
+            TeardownUI();
         }
 
         private void OnDestroy()
@@ -837,6 +835,17 @@
             return false;
         }
 
+        /*
+            The only states that count as open; everything else (closed, and
+            any unknown/invalid value a serialized asset might hold) is
+            treated as closed. Whitelisting keeps future enum additions from
+            silently behaving as open.
+         */
+        private static bool IsOpenState(TerminalState state)
+        {
+            return state is TerminalState.OpenSmall or TerminalState.OpenFull;
+        }
+
         private static string FindName(List<string> names, string marker)
         {
             foreach (string name in names)
@@ -908,7 +917,7 @@
         public void SetState(TerminalState newState)
         {
             _commandIssuedThisFrame = true;
-            if (newState != TerminalState.Closed)
+            if (IsOpenState(newState))
             {
                 CommandPaletteUI.CloseActive();
                 /*
@@ -920,13 +929,13 @@
             }
 
             _state = newState;
-            if (_state != TerminalState.Closed)
+            if (IsOpenState(_state))
             {
                 EnsureUI();
             }
 
             ResetWindowIdempotent();
-            if (_state != TerminalState.Closed)
+            if (IsOpenState(_state))
             {
                 _needsFocus = true;
             }
@@ -1192,7 +1201,7 @@
 
         public void HandlePrevious()
         {
-            if (_state == TerminalState.Closed)
+            if (!IsOpenState(_state))
             {
                 return;
             }
@@ -1205,7 +1214,7 @@
 
         public void HandleNext()
         {
-            if (_state == TerminalState.Closed)
+            if (!IsOpenState(_state))
             {
                 return;
             }
@@ -1232,7 +1241,7 @@
 
         public void EnterCommand()
         {
-            if (_state == TerminalState.Closed)
+            if (!IsOpenState(_state))
             {
                 return;
             }
@@ -1270,7 +1279,7 @@
 
         public void CompleteCommand(bool searchForward = true)
         {
-            if (_state == TerminalState.Closed)
+            if (!IsOpenState(_state))
             {
                 return;
             }
@@ -1695,7 +1704,7 @@
             been cleared; the stale detached elements must not be mistaken
             for a built tree by EnsureUI.
          */
-        private void TeardownUi()
+        private void TeardownUI()
         {
             _terminalContainer = null;
             _logScrollView = null;
