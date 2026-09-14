@@ -8,8 +8,6 @@ Every skill is a `SKILL.md` folder following the [Agent Skills](https://agentski
 (`AGENTS.md`, `CLAUDE.md`, `.cursorrules`, `.github/copilot-instructions.md`) are thin wrappers
 that delegate here; this file is the single source of truth.
 
----
-
 ## Repository Overview
 
 **Package**: `com.wallstop-studios.dxcommandterminal`
@@ -22,8 +20,6 @@ that delegate here; this file is the single source of truth.
 **Design Principles**: Performance-first in-game console (O(1) buffer wrap, pooled allocations),
 defensive input validation on all public APIs, immutable-by-default collections, zero warnings,
 CSharpier-formatted code, self-documenting names over comments.
-
----
 
 ## Project Structure
 
@@ -73,8 +69,6 @@ over the authenticated MCP bridge in `tooling~/scripts/mcp/unity-mcp.mjs` (see t
 live in gitignored `.env.local` (see `.env.example`); agent MCP configs are
 generated, never hand-edited; `npm test` runs the Node tooling suite.
 
----
-
 ## Skills Reference
 
 See the generated [Skills Index](./skills/index.md). Regenerate it after adding or editing any
@@ -83,20 +77,15 @@ skill: `pwsh -NoProfile -File tooling~/scripts/generate-skills-index.ps1` (valid
 
 ### SKILL.md Contract
 
-Each skill is a directory `.llm/skills/<skill-name>/SKILL.md` where:
-
-1. Frontmatter `name` is required, `a-z0-9-` only, 1-64 chars, no leading/trailing/double hyphens,
-   and MUST match the parent directory name.
-2. Frontmatter `description` is required, single-line, ASCII-only, 1-1024 chars, and describes
-   both what the skill does and when to use it (keyword-rich for discovery).
-3. `metadata.category` is one of `Core`, `Performance`, `Feature` (default `Feature`).
-4. Body is the skill instructions; keep the whole file under the line limit below.
+Each skill is a directory `.llm/skills/<skill-name>/SKILL.md` where: frontmatter `name` is
+required (`a-z0-9-`, 1-64 chars, no leading/trailing/double hyphens, MUST match the parent
+directory name), `description` is required (single-line, ASCII-only, 1-1024 chars, keyword-rich
+for discovery: what it does + when to use it), `metadata.category` is one of `Core`,
+`Performance`, `Feature` (default `Feature`), and the body stays under the line limit below.
 
 Adding a skill: create the directory + `SKILL.md`, then run the generator. The linter enforces
 frontmatter validity, index freshness, and pointer-file delegation; see
 [manage-skills](./skills/manage-skills/SKILL.md).
-
----
 
 ## Critical Rules Summary
 
@@ -184,6 +173,12 @@ frontmatter validity, index freshness, and pointer-file delegation; see
       command handlers that build throwaway lists.
     - When converting LINQ, `foreach` over the concrete type (struct enumerator,
       bounds-check elision); counting loops only where the index is genuinely used (rule 11).
+24. Enum state checks whitelist the valid states (`state is TerminalState.OpenSmall or
+    TerminalState.OpenFull` via a helper like `TerminalUI.IsOpenState`), never blacklist
+    (`!= Closed`) - `TerminalState`/`HintDisplayMode` carry an obsolete `Unknown = 0`
+    sentinel, and a blacklist silently treats invalid/serialized values (and any future
+    enum member) as the non-sentinel branch (PR #82 review). Acronyms in identifiers
+    stay all-caps: `TeardownUI`, not `TeardownUi`.
 
 ### Unity Package Rules
 
@@ -260,8 +255,6 @@ Details: [llm-attribution](./skills/llm-attribution/SKILL.md).
 - Custom parsers: `CommandArgParser.RegisterParser<T>(parser, force)`; per-call overload
   `TryGet<T>(out T, parser)`. Details: [custom-argument-parsing](./skills/custom-argument-parsing/SKILL.md).
 
----
-
 ## Testing
 
 - Tests are PlayMode tests under `Tests/Runtime/` (Unity Test Runner); harness components live in
@@ -269,8 +262,6 @@ Details: [llm-attribution](./skills/llm-attribution/SKILL.md).
 - Command-behavior tests are data-driven over the static facades; see
   `Tests/Runtime/CommandArgTests.cs` and `CommandShellTests.cs` for the house style.
 - See [run-terminal-tests](./skills/run-terminal-tests/SKILL.md) before writing or debugging tests.
-
----
 
 ## Enforcement (LLM Context Hygiene)
 

@@ -52,6 +52,28 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     .Equals(b.ToString(CultureInfo.InvariantCulture));
         }
 
+        /*
+            Mono's double.ToString("R") is not guaranteed to round-trip every
+            double (it can lose the last bit for some values), so parsing a
+            formatted random double may differ from the original by a few
+            ULPs - far below any meaningful parse error at these magnitudes
+            (values are bounded by short.MaxValue, where one ULP is ~1e-12).
+            The round-trip assertions therefore compare componentwise with a
+            1e-9 tolerance instead of exact equality; a genuine parser
+            regression shifting a component by more than that still fails.
+         */
+        private static void AssertComplexRoundTrips(
+            System.Numerics.Complex expected,
+            System.Numerics.Complex value
+        )
+        {
+            Assert.IsTrue(
+                Approximately(expected.Real, value.Real, 0.000000001)
+                    && Approximately(expected.Imaginary, value.Imaginary, 0.000000001),
+                $"Expected {value} to round-trip as {expected}."
+            );
+        }
+
         [SetUp]
         [TearDown]
         public void CleanUp()
@@ -2431,7 +2453,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                         + $",{imaginary.ToString("R", CultureInfo.InvariantCulture)}"
                 );
                 Assert.IsTrue(arg.TryGet(out value), $"Failed to parse {arg.contents} as Complex");
-                Assert.AreEqual(expected, value);
+                AssertComplexRoundTrips(expected, value);
 
                 foreach (
                     (string pre, string post) in _prepend.Zip(
@@ -2448,7 +2470,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                         arg.TryGet(out value),
                         $"Failed to parse {arg.contents} as Complex"
                     );
-                    Assert.AreEqual(expected, value);
+                    AssertComplexRoundTrips(expected, value);
                 }
             }
 

@@ -28,9 +28,7 @@
 
         // ReSharper disable once MemberCanBePrivate.Global
         public bool IsClosed =>
-            _state != TerminalState.OpenFull
-            && _state != TerminalState.OpenSmall
-            && Mathf.Approximately(_currentWindowHeight, _targetWindowHeight);
+            !IsOpenState(_state) && Mathf.Approximately(_currentWindowHeight, _targetWindowHeight);
 
         public string CurrentTheme =>
             !string.IsNullOrWhiteSpace(_runtimeTheme) ? _runtimeTheme : _persistedTheme;
@@ -183,8 +181,9 @@
         private bool _started;
         private bool _needsFocus;
         private bool _needsScrollToEnd;
-        private bool _needsAutoCompleteReset;
         private long? _lastSeenBufferVersion;
+        private bool _paletteHeldSurface;
+        private bool _needsInitialRefresh;
         private string _lastKnownCommandText;
         private int? _lastCompletionIndex;
         private int? _previousLastCompletionIndex;
@@ -314,7 +313,7 @@
 #if UNITY_EDITOR
             _serializedObject = new SerializedObject(this);
 
-            string[] uiPropertiesTracked = { nameof(_uiDocument) };
+            string[] uiPropertiesTracked = { nameof(_uiDocument), nameof(showGUIButtons) };
             TrackProperties(uiPropertiesTracked, _uiProperties);
 
             string[] themePropertiesTracked = { nameof(_themePack) };
@@ -397,7 +396,17 @@
                 _unityLogAttached = true;
             }
 
-            SetupUI();
+            /*
+                On-screen state buttons are the open controls for a closed
+                terminal, so this opt-in mode builds its tree eagerly and
+                stays on the always-refresh path (LateUpdate exempts it from
+                the idle gate). Terminals without the buttons defer the whole
+                tree to the first open.
+             */
+            if (showGUIButtons)
+            {
+                EnsureUI();
+            }
 
 #if UNITY_EDITOR
             EditorApplication.update += _checkForChanges;
@@ -421,6 +430,7 @@
             }
 
             SetState(TerminalState.Closed);
+            TeardownUI();
         }
 
         private void OnDestroy()
@@ -450,9 +460,60 @@
 
         private void LateUpdate()
         {
+            /*
+                The idle check runs before the animation step: the frame where
+                HandleHeightAnimation snaps to the closed target is the frame
+                RefreshUI must write the final height and input display; a
+                gate evaluated after the snap would skip that final write and
+                freeze the surface at the last animated height.
+             */
+            bool idleClosed =
+                IsClosed
+                && !_needsFocus
+                && !_needsScrollToEnd
+                && !_pendingCaretIndex.HasValue
+                && !IsPaletteSurfaceOpen()
+                && !showGUIButtons
+                && !_needsInitialRefresh;
+
             ResetWindowIdempotent();
             HandleHeightAnimation();
-            RefreshUI();
+
+            /*
+                A palette on this document owns the shared root: RefreshUI
+                must not clamp the root to the terminal's own window height
+                while the panel is up, and the terminal's close animation
+                resumes only after the surface is handed back. Latch the
+                takeover so the first pass after the palette closes
+                reasserts the terminal's root height exactly once.
+             */
+            if (IsPaletteSurfaceOpen())
+            {
+                _paletteHeldSurface = true;
+            }
+            else if (idleClosed && !_paletteHeldSurface)
+            {
+                /*
+                    Everything below is UI-sync work: style writes, log
+                    sync, hints, focus, and caret application. A fully
+                    closed terminal with no pending work skips it and
+                    resumes on the next open or buffer change. Terminals
+                    with on-screen state buttons stay on the always-refresh
+                    path: their buttons are the open controls while closed.
+                 */
+            }
+            else
+            {
+                /*
+                    A rebuild can happen out-of-band while closed (the editor
+                    change hook), leaving stale heights and a visible input;
+                    one refresh pass clamps the tree before idling again.
+                 */
+                _paletteHeldSurface = false;
+                _needsInitialRefresh = false;
+                RefreshUI();
+            }
+
             _commandIssuedThisFrame = false;
         }
 
@@ -501,7 +562,7 @@
 
             if (CheckForRefresh(_themeProperties))
             {
-                if (_uiDocument != null)
+                if (_uiDocument != null && _terminalContainer != null)
                 {
                     InitializeTheme(
                         _uiDocument.rootVisualElement?.Q<VisualElement>(TerminalRootName)
@@ -774,6 +835,17 @@
             return false;
         }
 
+        /*
+            The only states that count as open; everything else (closed, and
+            any unknown/invalid value a serialized asset might hold) is
+            treated as closed. Whitelisting keeps future enum additions from
+            silently behaving as open.
+         */
+        private static bool IsOpenState(TerminalState state)
+        {
+            return state is TerminalState.OpenSmall or TerminalState.OpenFull;
+        }
+
         private static string FindName(List<string> names, string marker)
         {
             foreach (string name in names)
@@ -845,7 +917,7 @@
         public void SetState(TerminalState newState)
         {
             _commandIssuedThisFrame = true;
-            if (newState != TerminalState.Closed)
+            if (IsOpenState(newState))
             {
                 CommandPaletteUI.CloseActive();
                 /*
@@ -857,13 +929,25 @@
             }
 
             _state = newState;
+            if (IsOpenState(_state))
+            {
+                EnsureUI();
+            }
+
             ResetWindowIdempotent();
-            if (_state != TerminalState.Closed)
+            if (IsOpenState(_state))
             {
                 _needsFocus = true;
             }
             else
             {
+                /*
+                    A focus queued while open can never be applied once the
+                    terminal closes; dropping it keeps the closed state idle
+                    instead of re-running the refresh loop every frame.
+                 */
+                _needsFocus = false;
+
                 /*
                     OnDisable routes through here and can run before Awake on a
                     never-enabled component, where _input is not resolved yet.
@@ -1117,7 +1201,7 @@
 
         public void HandlePrevious()
         {
-            if (_state == TerminalState.Closed)
+            if (!IsOpenState(_state))
             {
                 return;
             }
@@ -1130,7 +1214,7 @@
 
         public void HandleNext()
         {
-            if (_state == TerminalState.Closed)
+            if (!IsOpenState(_state))
             {
                 return;
             }
@@ -1157,7 +1241,7 @@
 
         public void EnterCommand()
         {
-            if (_state == TerminalState.Closed)
+            if (!IsOpenState(_state))
             {
                 return;
             }
@@ -1195,7 +1279,7 @@
 
         public void CompleteCommand(bool searchForward = true)
         {
-            if (_state == TerminalState.Closed)
+            if (!IsOpenState(_state))
             {
                 return;
             }
@@ -1599,6 +1683,41 @@
             }
         }
 
+        /*
+            Builds the visual tree the first time the terminal opens. The
+            tree is not constructed while the terminal is closed, so a
+            component that never opens pays no UI-construction cost.
+         */
+        private void EnsureUI()
+        {
+            if (_terminalContainer != null)
+            {
+                return;
+            }
+
+            SetupUI();
+        }
+
+        /*
+            Drops the built visual tree references so the next open rebuilds
+            from scratch. Called from OnDisable after the document root has
+            been cleared; the stale detached elements must not be mistaken
+            for a built tree by EnsureUI.
+         */
+        private void TeardownUI()
+        {
+            _terminalContainer = null;
+            _logScrollView = null;
+            _autoCompleteContainer = null;
+            _inputContainer = null;
+            _runButton = null;
+            _inputCaretLabel = null;
+            _commandInput = null;
+            _textInput = null;
+            _stateButtonContainer = null;
+            _lastCodeSyncedValue = null;
+        }
+
         private void SetupUI()
         {
             if (_uiDocument == null)
@@ -1679,11 +1798,27 @@
             _commandInput.name = "CommandInput";
             _commandInput.AddToClassList("terminal-input-field");
             _commandInput.pickingMode = PickingMode.Position;
-            _lastCodeSyncedValue = _input.CommandText;
-            _commandInput.value = _input.CommandText;
+            /*
+                SetupUI can run before Awake (an external SetState while the
+                component is inactive); the input abstraction may not exist
+                yet, so the initial field sync tolerates that and the first
+                RefreshUI pass applies it once Awake has resolved it.
+             */
+            _lastCodeSyncedValue = _input != null ? _input.CommandText : string.Empty;
+            _commandInput.value = _lastCodeSyncedValue;
             _commandInput.RegisterCallback<ChangeEvent<string>, TerminalUI>(
                 (evt, context) =>
                 {
+                    if (context._input == null)
+                    {
+                        /*
+                            The input abstraction is not resolved yet (Awake
+                            has not run); there is nothing to sync with.
+                         */
+                        evt.StopPropagation();
+                        return;
+                    }
+
                     if (
                         context._commandIssuedThisFrame
                         || Array.Exists(
@@ -1746,6 +1881,14 @@
             _stateButtonContainer.AddToClassList("state-button-container");
             root.Add(_stateButtonContainer);
             RefreshStateButtons();
+
+            /*
+                A freshly built tree carries stale heights until a RefreshUI
+                pass clamps them; the idle gate owes that pass before it may
+                skip (an out-of-band rebuild while closed would otherwise
+                render at the wrong height until the next open).
+             */
+            _needsInitialRefresh = true;
         }
 
         private void InitializeTheme(VisualElement root)
@@ -1905,11 +2048,6 @@
                 return;
             }
 
-            if (_commandIssuedThisFrame)
-            {
-                return;
-            }
-
             /*
                 The palette shares this document when both surfaces live on one
                 GameObject. While it is open it owns the root: RefreshUI would
@@ -1922,6 +2060,13 @@
                 return;
             }
 
+            /*
+                Heights and the input display are written on every pass,
+                including state-transition frames: the idle gate can skip the
+                very next pass, and a zero-duration close snaps its height on
+                the same frame SetState flags the transition, so this is the
+                only pass that can land the final closed height.
+             */
             _uiDocument.rootVisualElement.style.height = _currentWindowHeight;
             _terminalContainer.style.height = _currentWindowHeight;
             _terminalContainer.style.width = Screen.width;
@@ -1932,6 +2077,11 @@
                 _inputContainer.resolvedStyle.display != commandInputStyle
                 && commandInputStyle == DisplayStyle.Flex;
             _inputContainer.style.display = commandInputStyle;
+
+            if (_commandIssuedThisFrame)
+            {
+                return;
+            }
 
             RefreshLogs();
             RefreshAutoCompleteHints();

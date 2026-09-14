@@ -14,7 +14,15 @@
 
     public sealed class CommandPaletteTests
     {
-        private const int FrameBudget = 60;
+        /*
+            Readiness-poll headroom, not a fixed expectation: under editor
+            throttling (unfocused/agent-driven panels) caret parks and focus
+            writes can take far more than the ~60 frames a focused editor
+            needs, and the two-pass caret stick rule needs several passes to
+            land. The polls exit the frame they succeed, so the extra
+            headroom never slows a green run.
+         */
+        private const int FrameBudget = 600;
 
         private static readonly string[] InventoryItems = { "pickaxe", "torch", "torch pick" };
 

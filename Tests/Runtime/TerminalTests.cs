@@ -33,7 +33,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         internal static IEnumerator SpawnTerminal(bool resetStateOnInit, bool ignoreDefaultCommands)
         {
-            LogAssert.Expect(LogType.Error, "No UIDocument assigned, cannot setup UI.");
             GameObject go = new("Terminal", typeof(StartTracker), typeof(TerminalUI));
             TerminalUI terminal = go.GetComponent<TerminalUI>();
             terminal.resetStateOnInit = resetStateOnInit;
@@ -69,6 +68,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             go.SetActive(true);
             StartTracker tracker = go.GetComponent<StartTracker>();
             yield return new WaitUntil(() => tracker.Started);
+
+            /*
+                The tree builds on the first open; Awake's TryGetComponent
+                recovery assigns the document before SetupUI can run.
+             */
+            terminal.SetState(TerminalState.OpenFull);
 
             Assert.AreEqual(
                 1,
@@ -112,7 +117,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             terminal.enabled = false;
             terminal.resetStateOnInit = false;
             terminal.ignoreDefaultCommands = !terminal.ignoreDefaultCommands;
-            LogAssert.Expect(LogType.Error, "No UIDocument assigned, cannot setup UI.");
             terminal.enabled = true;
             Assert.AreSame(
                 shell,
