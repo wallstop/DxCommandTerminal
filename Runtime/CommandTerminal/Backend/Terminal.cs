@@ -4,10 +4,29 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
     public static class Terminal
     {
-        public static CommandLog Buffer { get; internal set; }
-        public static CommandShell Shell { get; internal set; }
-        public static CommandHistory History { get; internal set; }
-        public static CommandAutoComplete AutoComplete { get; internal set; }
+        public static CommandLog Buffer
+        {
+            get => TerminalSession.Current.Buffer;
+            internal set => TerminalSession.Current.Buffer = value;
+        }
+
+        public static CommandShell Shell
+        {
+            get => TerminalSession.Current.Shell;
+            internal set => TerminalSession.Current.Shell = value;
+        }
+
+        public static CommandHistory History
+        {
+            get => TerminalSession.Current.History;
+            internal set => TerminalSession.Current.History = value;
+        }
+
+        public static CommandAutoComplete AutoComplete
+        {
+            get => TerminalSession.Current.AutoComplete;
+            internal set => TerminalSession.Current.AutoComplete = value;
+        }
 
         [StringFormatMethod("format")]
         public static bool Log(string format, params object[] parameters)
