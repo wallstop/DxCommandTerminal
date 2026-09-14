@@ -1207,11 +1207,7 @@
             );
 
             _palette.ApplyPendingCaret();
-            Assert.AreEqual(
-                -1,
-                _palette._pendingCaretIndex,
-                "Two stable passes consume the marker"
-            );
+            Assert.IsNull(_palette._pendingCaretIndex, "Two stable passes consume the marker");
             Assert.AreEqual(
                 target,
                 _palette._input.cursorIndex,
@@ -1228,7 +1224,7 @@
             Assert.AreEqual(30, _palette._pendingCaretIndex, "The marker waits for the value sync");
 
             _palette._input.cursorIndex = 2;
-            _palette._pendingCaretIndex = -1;
+            _palette._pendingCaretIndex = null;
             _palette.ApplyPendingCaret();
             Assert.AreEqual(2, _palette._input.cursorIndex, "No marker means no caret write");
         }
@@ -1247,8 +1243,7 @@
             _palette._input.value = "pickitem torchx";
             int caret = _palette._input.cursorIndex;
             _palette.ApplyPendingCaret();
-            Assert.AreEqual(
-                -1,
+            Assert.IsNull(
                 _palette._pendingCaretIndex,
                 "A field change is a user edit and cancels the queued caret"
             );
@@ -1428,13 +1423,12 @@
         private IEnumerator WaitForPendingCaretDrained()
         {
             int frameBudget = FrameBudget;
-            while (0 < frameBudget-- && 0 <= _palette._pendingCaretIndex)
+            while (0 < frameBudget-- && _palette._pendingCaretIndex != null)
             {
                 yield return null;
             }
 
-            Assert.AreEqual(
-                -1,
+            Assert.IsNull(
                 _palette._pendingCaretIndex,
                 "The queued caret drains once the position holds"
             );

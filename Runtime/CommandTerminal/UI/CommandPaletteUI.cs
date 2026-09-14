@@ -102,7 +102,7 @@
         internal readonly List<string> _matchNames = new();
         internal readonly List<CommandCompletion> _completions = new();
         internal readonly List<VisualElement> _rows = new();
-        internal int _pendingCaretIndex = -1;
+        internal int? _pendingCaretIndex;
         internal int _caretStickPasses;
 
         [SerializeField]
@@ -223,7 +223,7 @@
             }
 
             _isOpen = false;
-            QueueCaret(-1);
+            QueueCaret(null);
             RestorePreviousFocus();
             /*
                 Detach instead of hiding: a display:none subtree keeps panel
@@ -416,12 +416,11 @@
 
         internal void ApplyPendingCaret()
         {
-            if (_pendingCaretIndex < 0 || _input == null)
+            if (_pendingCaretIndex is not int index || _input == null)
             {
                 return;
             }
 
-            int index = _pendingCaretIndex;
             if (_input.value.Length < index)
             {
                 /*
@@ -440,19 +439,9 @@
                     : focused == _input || _input.Contains(focused) ? "input"
                     : focused.name;
                 Debug.Log(
-                    "[CommandPaletteUI] caret pass frame="
-                        + Time.frameCount
-                        + " pending="
-                        + index
-                        + " cursor="
-                        + _input.cursorIndex
-                        + " select="
-                        + _input.selectIndex
-                        + " valueLength="
-                        + _input.value.Length
-                        + " focus='"
-                        + focusOwner
-                        + "'",
+                    $"[CommandPaletteUI] caret pass frame={Time.frameCount} pending={index}"
+                        + $" cursor={_input.cursorIndex} select={_input.selectIndex}"
+                        + $" valueLength={_input.value.Length} focus='{focusOwner}'",
                     this
                 );
             }
@@ -479,7 +468,7 @@
 
             if (CaretStickPasses <= _caretStickPasses)
             {
-                QueueCaret(-1);
+                QueueCaret(null);
             }
         }
 
@@ -531,7 +520,7 @@
                 _uiDocument.rootVisualElement?.Clear();
             }
 
-            _pendingCaretIndex = -1;
+            _pendingCaretIndex = null;
             _caretStickPasses = 0;
             _paletteRoot = null;
             _panel = null;
@@ -922,8 +911,9 @@
                 the inserted token like the terminal's token completion.
              */
             _input.SetValueWithoutNotify(newInput);
-            QueueCaret(replacementStart + insertion.Length);
-            RefreshQuery(newInput, _pendingCaretIndex);
+            int caretIndex = replacementStart + insertion.Length;
+            QueueCaret(caretIndex);
+            RefreshQuery(newInput, caretIndex);
             FocusInput();
         }
 
@@ -1018,7 +1008,7 @@
                 the caret from here, so any queued caret write is cancelled
                 before it can fight the user's typing.
              */
-            QueueCaret(-1);
+            QueueCaret(null);
             /*
                 Programmatic value writes and end-of-line typing leave the
                 caret at the new tail; the text field's own cursorIndex can
@@ -1083,7 +1073,7 @@
             QueueCaret(value.Length);
         }
 
-        private void QueueCaret(int index)
+        private void QueueCaret(int? index)
         {
             _pendingCaretIndex = index;
             _caretStickPasses = 0;
