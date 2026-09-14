@@ -189,6 +189,17 @@ function main() {
     }
   }
 
+  // Precompiled payload invariant (#22): the only shipped DLL is the source
+  // generator analyzer payload. A vendored precompiled dependency
+  // (System.Collections.Immutable et al) once broke consumer assembly
+  // loading; any new DLL outside the analyzer payload fails the package.
+  for (const entry of entries) {
+    if (entry.endsWith(".dll") && !entry.startsWith("Runtime/Analyzers/")) {
+      fail(`precompiled DLL outside the analyzer payload (#22): ${entry}`);
+      problems += 1;
+    }
+  }
+
   const shippedFiles = entries.filter((entry) => !entry.endsWith("/"));
   const impliedDirectories = new Set();
   for (const file of shippedFiles) {

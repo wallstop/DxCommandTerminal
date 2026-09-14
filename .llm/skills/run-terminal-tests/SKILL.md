@@ -74,6 +74,11 @@ field write is frame-coupled and flakes under session sequences
   (Assets > Refresh). If a previously green UI suite fails with stale values
   across several consecutive runs, refresh first, then re-run before hunting a
   code bug.
+- Palette caret flakes: `CommandPaletteUI._logCaretPasses = true` (editor
+  eval or a test) logs every pending-caret pass with frame, pending,
+  cursor/select, and focus owner, so a #74-class re-clamp shows which pass
+  moved the caret. The caret is parked only after it holds for two passes
+  (`CaretStickPasses`), and a field change cancels the queued caret.
 
 ## Debugging failures
 
