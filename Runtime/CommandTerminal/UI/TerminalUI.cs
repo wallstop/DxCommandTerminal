@@ -185,6 +185,7 @@
         private bool _needsScrollToEnd;
         private long? _lastSeenBufferVersion;
         private bool _paletteHeldSurface;
+        private bool _needsInitialRefresh;
         private string _lastKnownCommandText;
         private int? _lastCompletionIndex;
         private int? _previousLastCompletionIndex;
@@ -474,7 +475,8 @@
                 && !_needsScrollToEnd
                 && !_pendingCaretIndex.HasValue
                 && !IsPaletteSurfaceOpen()
-                && !showGUIButtons;
+                && !showGUIButtons
+                && !_needsInitialRefresh;
 
             ResetWindowIdempotent();
             HandleHeightAnimation();
@@ -504,7 +506,13 @@
             }
             else
             {
+                /*
+                    A rebuild can happen out-of-band while closed (the editor
+                    change hook), leaving stale heights and a visible input;
+                    one refresh pass clamps the tree before idling again.
+                 */
                 _paletteHeldSurface = false;
+                _needsInitialRefresh = false;
                 RefreshUI();
             }
 
@@ -1781,11 +1789,27 @@
             _commandInput.name = "CommandInput";
             _commandInput.AddToClassList("terminal-input-field");
             _commandInput.pickingMode = PickingMode.Position;
-            _lastCodeSyncedValue = _input.CommandText;
-            _commandInput.value = _input.CommandText;
+            /*
+                SetupUI can run before Awake (an external SetState while the
+                component is inactive); the input abstraction may not exist
+                yet, so the initial field sync tolerates that and the first
+                RefreshUI pass applies it once Awake has resolved it.
+             */
+            _lastCodeSyncedValue = _input != null ? _input.CommandText : string.Empty;
+            _commandInput.value = _lastCodeSyncedValue;
             _commandInput.RegisterCallback<ChangeEvent<string>, TerminalUI>(
                 (evt, context) =>
                 {
+                    if (context._input == null)
+                    {
+                        /*
+                            The input abstraction is not resolved yet (Awake
+                            has not run); there is nothing to sync with.
+                         */
+                        evt.StopPropagation();
+                        return;
+                    }
+
                     if (
                         context._commandIssuedThisFrame
                         || Array.Exists(
@@ -1848,6 +1872,14 @@
             _stateButtonContainer.AddToClassList("state-button-container");
             root.Add(_stateButtonContainer);
             RefreshStateButtons();
+
+            /*
+                A freshly built tree carries stale heights until a RefreshUI
+                pass clamps them; the idle gate owes that pass before it may
+                skip (an out-of-band rebuild while closed would otherwise
+                render at the wrong height until the next open).
+             */
+            _needsInitialRefresh = true;
         }
 
         private void InitializeTheme(VisualElement root)
