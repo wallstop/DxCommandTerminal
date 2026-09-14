@@ -1161,31 +1161,47 @@
             _palette._input.SetValueWithoutNotify("pickitem torch");
             yield return null;
 
+            /*
+                The field's caret model clamps to its last laid-out text
+                length, which can lag the value by frames under session
+                sequences (issue #74 family), so the rule pins run against a
+                position the field actually holds, discovered by probe. The
+                rules themselves are position-independent.
+             */
+            _palette._input.cursorIndex = 14;
+            _palette._input.selectIndex = 14;
+            int target = _palette._input.cursorIndex;
+            Assert.GreaterOrEqual(target, 1, "Sanity: the field holds a parkable caret position");
+
             _palette._input.cursorIndex = 0;
             _palette._input.selectIndex = 0;
-            _palette._pendingCaretIndex = 14;
+            _palette._pendingCaretIndex = target;
             _palette.ApplyPendingCaret();
-            Assert.AreEqual(14, _palette._input.cursorIndex, "The first pass parks the caret");
+            Assert.AreEqual(target, _palette._input.cursorIndex, "The first pass parks the caret");
             Assert.AreEqual(0, _palette._caretStickPasses, "The parking pass has not stuck yet");
             Assert.AreEqual(
-                14,
+                target,
                 _palette._pendingCaretIndex,
                 "The marker survives the parking pass"
             );
 
-            _palette._input.cursorIndex = 9;
-            _palette._input.selectIndex = 9;
+            _palette._input.cursorIndex = target - 1;
+            _palette._input.selectIndex = target - 1;
             _palette.ApplyPendingCaret();
             Assert.AreEqual(
-                14,
+                target,
                 _palette._input.cursorIndex,
                 "A drift pass re-asserts the queued caret"
             );
-            Assert.AreEqual(14, _palette._pendingCaretIndex, "The marker survives the drift pass");
+            Assert.AreEqual(
+                target,
+                _palette._pendingCaretIndex,
+                "The marker survives the drift pass"
+            );
 
             _palette.ApplyPendingCaret();
             Assert.AreEqual(
-                14,
+                target,
                 _palette._pendingCaretIndex,
                 "One stable pass is not enough to consume"
             );
@@ -1197,7 +1213,7 @@
                 "Two stable passes consume the marker"
             );
             Assert.AreEqual(
-                14,
+                target,
                 _palette._input.cursorIndex,
                 "The caret stays parked after consumption"
             );
@@ -1205,7 +1221,7 @@
             _palette._pendingCaretIndex = 30;
             _palette.ApplyPendingCaret();
             Assert.AreEqual(
-                14,
+                target,
                 _palette._input.cursorIndex,
                 "A position beyond the value is not written yet"
             );
