@@ -36,12 +36,20 @@
         private const string RowHelpName = "PaletteRowHelp";
         private const string SelectedRowClass = "palette-row-selected";
         private const string FooterText = "↑↓ select · Enter run · Tab apply · Esc close";
+        private const int CaretStickPasses = 2;
 
         public event Action Opened;
 
         public event Action Closed;
 
         public static CommandPaletteUI Instance { get; private set; }
+
+        /*
+            Per-pass caret logging for #74-class investigations: a flake that
+            only reproduces under full-suite session sequences. Test/editor
+            diagnostics only; never enabled in normal runs.
+         */
+        internal static bool _logCaretPasses;
 
         private static readonly List<CommandPaletteUI> _livePalettes = new();
 
@@ -94,6 +102,8 @@
         internal readonly List<string> _matchNames = new();
         internal readonly List<CommandCompletion> _completions = new();
         internal readonly List<VisualElement> _rows = new();
+        internal int? _pendingCaretIndex;
+        internal int _caretStickPasses;
 
         [SerializeField]
         private Font _font;
@@ -116,7 +126,6 @@
         private bool _isOpen;
         private bool _built;
         private bool _lastRunProducedOutput;
-        private int _pendingCaretIndex = -1;
         private VisualElement _previousFocus;
         private readonly List<string> _outputLines = new();
 
@@ -214,7 +223,7 @@
             }
 
             _isOpen = false;
-            _pendingCaretIndex = -1;
+            QueueCaret(null);
             RestorePreviousFocus();
             /*
                 Detach instead of hiding: a display:none subtree keeps panel
@@ -405,6 +414,64 @@
             Submit();
         }
 
+        internal void ApplyPendingCaret()
+        {
+            if (_pendingCaretIndex is not int index || _input == null)
+            {
+                return;
+            }
+
+            if (_input.value.Length < index)
+            {
+                /*
+                    The queued position targets input the field does not hold
+                    yet; the write applies once the value sync lands.
+                 */
+                return;
+            }
+
+            if (_logCaretPasses)
+            {
+                VisualElement focused =
+                    _input.panel?.focusController?.focusedElement as VisualElement;
+                string focusOwner =
+                    focused == null ? "none"
+                    : focused == _input || _input.Contains(focused) ? "input"
+                    : focused.name;
+                Debug.Log(
+                    $"[CommandPaletteUI] caret pass frame={Time.frameCount} pending={index}"
+                        + $" cursor={_input.cursorIndex} select={_input.selectIndex}"
+                        + $" valueLength={_input.value.Length} focus='{focusOwner}'",
+                    this
+                );
+            }
+
+            if (_input.cursorIndex == index && _input.selectIndex == index)
+            {
+                /*
+                    The position held across a panel pass; once it has held
+                    for two, later movement is the user's or a settled reset.
+                 */
+                ++_caretStickPasses;
+            }
+            else
+            {
+                /*
+                    A panel-driven re-clamp moved the caret away after an
+                    earlier pass (issue #74); re-assert and wait for it to
+                    hold again.
+                 */
+                _caretStickPasses = 0;
+                _input.cursorIndex = index;
+                _input.selectIndex = index;
+            }
+
+            if (CaretStickPasses <= _caretStickPasses)
+            {
+                QueueCaret(null);
+            }
+        }
+
         private void RefreshQuery(string query, int caretIndex)
         {
             if (!_isOpen)
@@ -453,7 +520,8 @@
                 _uiDocument.rootVisualElement?.Clear();
             }
 
-            _pendingCaretIndex = -1;
+            _pendingCaretIndex = null;
+            _caretStickPasses = 0;
             _paletteRoot = null;
             _panel = null;
             _results = null;
@@ -843,8 +911,9 @@
                 the inserted token like the terminal's token completion.
              */
             _input.SetValueWithoutNotify(newInput);
-            _pendingCaretIndex = replacementStart + insertion.Length;
-            RefreshQuery(newInput, _pendingCaretIndex);
+            int caretIndex = replacementStart + insertion.Length;
+            QueueCaret(caretIndex);
+            RefreshQuery(newInput, caretIndex);
             FocusInput();
         }
 
@@ -934,6 +1003,13 @@
         private void OnInputChanged(ChangeEvent<string> evt)
         {
             /*
+                A value change from the field is a user edit (programmatic
+                writes ride SetValueWithoutNotify and fire no event); it owns
+                the caret from here, so any queued caret write is cancelled
+                before it can fight the user's typing.
+             */
+            QueueCaret(null);
+            /*
                 Programmatic value writes and end-of-line typing leave the
                 caret at the new tail; the text field's own cursorIndex can
                 lag its value at event time (it stays put on value writes).
@@ -989,29 +1065,18 @@
         {
             /*
                 A value change makes the text element re-run its own caret
-                reset after this call, so the caret write is retried from
-                LateUpdate (after the panel's internal update) until it
-                sticks, like the terminal's pending caret. Applying it inline
-                races that reset: the caret lands wherever the reset leaves
-                it, which can leave the input text visually selected.
+                reset after this call, and that reset can land after this
+                frame's LateUpdate write, so the write is retried until it
+                holds for two consecutive passes (ApplyPendingCaret).
              */
             _input.SetValueWithoutNotify(value);
-            _pendingCaretIndex = value.Length;
+            QueueCaret(value.Length);
         }
 
-        private void ApplyPendingCaret()
+        private void QueueCaret(int? index)
         {
-            if (_pendingCaretIndex < 0 || _input == null)
-            {
-                return;
-            }
-
-            int index = _pendingCaretIndex;
-            _input.cursorIndex = _input.selectIndex = index;
-            if (_input.cursorIndex == index)
-            {
-                _pendingCaretIndex = -1;
-            }
+            _pendingCaretIndex = index;
+            _caretStickPasses = 0;
         }
 
         private void FocusInput()

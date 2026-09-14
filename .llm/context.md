@@ -136,11 +136,11 @@ frontmatter validity, index freshness, and pointer-file delegation; see
     `EnumExtensions.HasFlagNoAlloc` helper (adapted from unity-helpers, MIT).
 16. No sentinel/magic values where the type system can express optionality: use nullable
     types (`int?`, nullable structs). `CommandInfo.maxArgCount` and `AddCommand` use `int?`
-    (legacy negative values normalize to `null`). `RegisterCommandAttribute.MaxArgCount`
-    keeps `int` because attribute properties cannot be nullable; `CommandInfo` normalizes.
-    The same rule bans null returns from helpers: expose `TryXxx`/`out`/`Array.Empty`
-    instead (an internal helper returning null-for-none is a flagged review finding, PR
-    #67), and prefer `Math.Max`/`Math.Clamp` over manual `cond ? a : b` clamps.
+    (legacy negatives normalize to `null`); `RegisterCommandAttribute.MaxArgCount` keeps
+    `int` (attribute properties cannot be nullable) and `CommandInfo` normalizes. Optional
+    fields take nullable types too, never `-1` sentinels (caret markers, PR #76 review).
+    Null helper returns are equally banned: expose `TryXxx`/`out`/`Array.Empty` (PR #67);
+    prefer `Math.Max`/`Math.Clamp` over manual `cond ? a : b` clamps.
 17. No `params` on frequently-called APIs; provide fixed-arity overloads (`params` allocates).
     One-time configuration APIs may use `params`.
 18. Hot-path collection access avoids interface dispatch: specialize arrays and `List<T>`

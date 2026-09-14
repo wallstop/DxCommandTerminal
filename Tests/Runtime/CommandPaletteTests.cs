@@ -1103,6 +1103,157 @@
             );
         }
 
+        /*
+            Issue #74: a panel-driven re-clamp can move the caret away after
+            the first parking pass already landed. The queued caret must
+            re-assert, then drain so later movement is never fought.
+         */
+        [UnityTest]
+        public IEnumerator TabCaretSurvivesPanelReclamp()
+        {
+            yield return SpawnPalette();
+            RegisterInventoryCommand();
+
+            _palette.Open();
+            yield return null;
+            _palette._input.value = "pickitem to";
+            yield return null;
+            Assert.AreEqual(
+                new[] { "torch", "torch pick" },
+                _palette._matchNames.ToArray(),
+                "Sanity: the stage offers the item candidates"
+            );
+
+            yield return SendKeyDown(KeyCode.Tab);
+            yield return WaitForCaret(14, "The caret lands after the applied candidate");
+
+            _palette._input.cursorIndex = 9;
+            _palette._input.selectIndex = 9;
+
+            yield return WaitForCaret(
+                14,
+                "The queued caret re-asserts after a panel-driven re-clamp"
+            );
+            Assert.AreEqual(
+                14,
+                _palette._input.selectIndex,
+                "The re-asserted caret is not left selected at the stale position"
+            );
+
+            yield return WaitForPendingCaretDrained();
+            _palette._input.cursorIndex = 2;
+            yield return null;
+            yield return null;
+            Assert.AreEqual(
+                2,
+                _palette._input.cursorIndex,
+                "Movement after the caret settles is never re-asserted"
+            );
+        }
+
+        [UnityTest]
+        public IEnumerator PendingCaretConsumesOnlyAfterStablePasses()
+        {
+            yield return SpawnPalette();
+            _palette.Open();
+            yield return null;
+
+            _palette._input.SetValueWithoutNotify("pickitem torch");
+            yield return null;
+
+            /*
+                The field's caret model clamps to its last laid-out text
+                length, which can lag the value by frames under session
+                sequences (issue #74 family), so the rule pins run against a
+                position the field actually holds, discovered by probe. The
+                rules themselves are position-independent.
+             */
+            _palette._input.cursorIndex = 14;
+            _palette._input.selectIndex = 14;
+            int target = _palette._input.cursorIndex;
+            Assert.GreaterOrEqual(target, 1, "Sanity: the field holds a parkable caret position");
+
+            _palette._input.cursorIndex = 0;
+            _palette._input.selectIndex = 0;
+            _palette._pendingCaretIndex = target;
+            _palette.ApplyPendingCaret();
+            Assert.AreEqual(target, _palette._input.cursorIndex, "The first pass parks the caret");
+            Assert.AreEqual(0, _palette._caretStickPasses, "The parking pass has not stuck yet");
+            Assert.AreEqual(
+                target,
+                _palette._pendingCaretIndex,
+                "The marker survives the parking pass"
+            );
+
+            _palette._input.cursorIndex = target - 1;
+            _palette._input.selectIndex = target - 1;
+            _palette.ApplyPendingCaret();
+            Assert.AreEqual(
+                target,
+                _palette._input.cursorIndex,
+                "A drift pass re-asserts the queued caret"
+            );
+            Assert.AreEqual(
+                target,
+                _palette._pendingCaretIndex,
+                "The marker survives the drift pass"
+            );
+
+            _palette.ApplyPendingCaret();
+            Assert.AreEqual(
+                target,
+                _palette._pendingCaretIndex,
+                "One stable pass is not enough to consume"
+            );
+
+            _palette.ApplyPendingCaret();
+            Assert.IsNull(_palette._pendingCaretIndex, "Two stable passes consume the marker");
+            Assert.AreEqual(
+                target,
+                _palette._input.cursorIndex,
+                "The caret stays parked after consumption"
+            );
+
+            _palette._pendingCaretIndex = 30;
+            _palette.ApplyPendingCaret();
+            Assert.AreEqual(
+                target,
+                _palette._input.cursorIndex,
+                "A position beyond the value is not written yet"
+            );
+            Assert.AreEqual(30, _palette._pendingCaretIndex, "The marker waits for the value sync");
+
+            _palette._input.cursorIndex = 2;
+            _palette._pendingCaretIndex = null;
+            _palette.ApplyPendingCaret();
+            Assert.AreEqual(2, _palette._input.cursorIndex, "No marker means no caret write");
+        }
+
+        [UnityTest]
+        public IEnumerator UserEditCancelsPendingCaret()
+        {
+            yield return SpawnPalette();
+            _palette.Open();
+            yield return null;
+
+            _palette._input.SetValueWithoutNotify("pickitem torch");
+            yield return null;
+
+            _palette._pendingCaretIndex = 14;
+            _palette._input.value = "pickitem torchx";
+            int caret = _palette._input.cursorIndex;
+            _palette.ApplyPendingCaret();
+            Assert.IsNull(
+                _palette._pendingCaretIndex,
+                "A field change is a user edit and cancels the queued caret"
+            );
+            Assert.AreEqual(
+                caret,
+                _palette._input.cursorIndex,
+                "The cancelled caret writes nothing on the pass"
+            );
+        }
+
         [UnityTest]
         public IEnumerator ArgumentCompletionChainsToNextStage()
         {
@@ -1267,6 +1418,20 @@
             }
 
             Assert.AreEqual(expected, _palette._input.cursorIndex, message);
+        }
+
+        private IEnumerator WaitForPendingCaretDrained()
+        {
+            int frameBudget = FrameBudget;
+            while (0 < frameBudget-- && _palette._pendingCaretIndex != null)
+            {
+                yield return null;
+            }
+
+            Assert.IsNull(
+                _palette._pendingCaretIndex,
+                "The queued caret drains once the position holds"
+            );
         }
 
         private IEnumerator SpawnPalette()

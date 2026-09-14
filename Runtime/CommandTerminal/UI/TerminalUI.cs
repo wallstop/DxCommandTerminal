@@ -247,7 +247,7 @@
             focus-at-end behavior. Token completions set it. Internal for
             completion-caret test coverage.
          */
-        internal int _pendingCaretIndex = -1;
+        internal int? _pendingCaretIndex;
         private ITerminalInput _input;
 
         public TerminalUI()
@@ -1348,12 +1348,12 @@
 
         internal void ApplyPendingCaret()
         {
-            if (_pendingCaretIndex < 0 || _commandInput == null)
+            if (_pendingCaretIndex is not int index || _commandInput == null)
             {
                 return;
             }
 
-            if (_commandInput.value.Length < _pendingCaretIndex)
+            if (_commandInput.value.Length < index)
             {
                 /*
                    The queued position targets input the field does not hold
@@ -1375,14 +1375,14 @@
                 marker (Bugbot: unfocused completion caret jump) so a later
                 fresh focus cannot send the caret to line end.
              */
-            if (focused && _commandInput.cursorIndex == _pendingCaretIndex)
+            if (focused && _commandInput.cursorIndex == index)
             {
-                _pendingCaretIndex = -1;
+                _pendingCaretIndex = null;
                 return;
             }
 
-            _commandInput.cursorIndex = _pendingCaretIndex;
-            _commandInput.selectIndex = _pendingCaretIndex;
+            _commandInput.cursorIndex = index;
+            _commandInput.selectIndex = index;
         }
 
         private void ResetAutoComplete()
@@ -1455,7 +1455,7 @@
             _tokenCompletionReplacementLength = 0;
             _tokenCompletionQuoted = false;
             _tokenCompletionAppliedText = null;
-            _pendingCaretIndex = -1;
+            _pendingCaretIndex = null;
             _tokenCompletions.Clear();
         }
 
@@ -2048,7 +2048,7 @@
             }
 
             bool alreadyFocused = _textInput.focusController.focusedElement == _textInput;
-            if (alreadyFocused || 0 <= _pendingCaretIndex)
+            if (alreadyFocused || _pendingCaretIndex.HasValue)
             {
                 /*
                     The field already holds focus, or a completion queued a

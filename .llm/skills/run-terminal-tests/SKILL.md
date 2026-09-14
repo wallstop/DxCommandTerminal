@@ -74,6 +74,20 @@ field write is frame-coupled and flakes under session sequences
   (Assets > Refresh). If a previously green UI suite fails with stale values
   across several consecutive runs, refresh first, then re-run before hunting a
   code bug.
+- Palette caret flakes: `CommandPaletteUI._logCaretPasses = true` (editor
+  eval or a test) logs every pending-caret pass with frame, pending,
+  cursor/select, and focus owner, so a #74-class re-clamp shows which pass
+  moved the caret. The caret is parked only after it holds for two passes
+  (`CaretStickPasses`), and a field change cancels the queued caret
+  (`_pendingCaretIndex` is `int?`; null = none).
+- UITK clamps `cursorIndex` writes to the last LAID-OUT text length, not
+  the value length. The cap converges with layout and its convergence is
+  nondeterministic under session sequences: a fresh field can sit capped
+  below the value length for a whole poll budget, and re-focusing does
+  not force it. UI tests must not assume a full-length caret park sticks;
+  either readiness-poll the park or probe for a holdable position and pin
+  position-independent rules against it (see
+  `CommandPaletteTests.PendingCaretConsumesOnlyAfterStablePasses`).
 
 ## Debugging failures
 
