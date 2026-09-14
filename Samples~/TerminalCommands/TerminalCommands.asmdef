@@ -1,0 +1,16 @@
+{
+    "name": "WallstopStudios.DxCommandTerminal.Samples.TerminalCommands",
+    "rootNamespace": "WallstopStudios.DxCommandTerminal.Samples",
+    "references": [
+        "WallstopStudios.DxCommandTerminal"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
