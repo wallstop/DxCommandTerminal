@@ -183,8 +183,8 @@
         private bool _started;
         private bool _needsFocus;
         private bool _needsScrollToEnd;
-        private bool _needsAutoCompleteReset;
         private long? _lastSeenBufferVersion;
+        private bool _paletteHeldSurface;
         private string _lastKnownCommandText;
         private int? _lastCompletionIndex;
         private int? _previousLastCompletionIndex;
@@ -397,8 +397,6 @@
                 _unityLogAttached = true;
             }
 
-            SetupUI();
-
 #if UNITY_EDITOR
             EditorApplication.update += _checkForChanges;
 #endif
@@ -421,6 +419,7 @@
             }
 
             SetState(TerminalState.Closed);
+            TeardownUi();
         }
 
         private void OnDestroy()
@@ -452,7 +451,37 @@
         {
             ResetWindowIdempotent();
             HandleHeightAnimation();
-            RefreshUI();
+
+            /*
+                A palette on this document owns the shared root: RefreshUI
+                must not clamp the root to the terminal's own window height
+                while the panel is up, and the terminal's close animation
+                resumes only after the surface is handed back. Latch the
+                takeover so the first pass after the palette closes
+                reasserts the terminal's root height exactly once.
+             */
+            if (IsPaletteSurfaceOpen())
+            {
+                _paletteHeldSurface = true;
+            }
+            else if (
+                !IsClosed
+                || _needsFocus
+                || _needsScrollToEnd
+                || _pendingCaretIndex.HasValue
+                || _paletteHeldSurface
+            )
+            {
+                /*
+                    Everything below is UI-sync work: style writes, log
+                    sync, hints, focus, and caret application. A fully
+                    closed terminal with no pending work skips it and
+                    resumes on the next open or buffer change.
+                 */
+                _paletteHeldSurface = false;
+                RefreshUI();
+            }
+
             _commandIssuedThisFrame = false;
         }
 
@@ -501,7 +530,7 @@
 
             if (CheckForRefresh(_themeProperties))
             {
-                if (_uiDocument != null)
+                if (_uiDocument != null && _terminalContainer != null)
                 {
                     InitializeTheme(
                         _uiDocument.rootVisualElement?.Q<VisualElement>(TerminalRootName)
@@ -857,6 +886,11 @@
             }
 
             _state = newState;
+            if (_state != TerminalState.Closed)
+            {
+                EnsureUI();
+            }
+
             ResetWindowIdempotent();
             if (_state != TerminalState.Closed)
             {
@@ -864,6 +898,13 @@
             }
             else
             {
+                /*
+                    A focus queued while open can never be applied once the
+                    terminal closes; dropping it keeps the closed state idle
+                    instead of re-running the refresh loop every frame.
+                 */
+                _needsFocus = false;
+
                 /*
                     OnDisable routes through here and can run before Awake on a
                     never-enabled component, where _input is not resolved yet.
@@ -1597,6 +1638,41 @@
                     StartHeightAnimation();
                 }
             }
+        }
+
+        /*
+            Builds the visual tree the first time the terminal opens. The
+            tree is not constructed while the terminal is closed, so a
+            component that never opens pays no UI-construction cost.
+         */
+        private void EnsureUI()
+        {
+            if (_terminalContainer != null)
+            {
+                return;
+            }
+
+            SetupUI();
+        }
+
+        /*
+            Drops the built visual tree references so the next open rebuilds
+            from scratch. Called from OnDisable after the document root has
+            been cleared; the stale detached elements must not be mistaken
+            for a built tree by EnsureUI.
+         */
+        private void TeardownUi()
+        {
+            _terminalContainer = null;
+            _logScrollView = null;
+            _autoCompleteContainer = null;
+            _inputContainer = null;
+            _runButton = null;
+            _inputCaretLabel = null;
+            _commandInput = null;
+            _textInput = null;
+            _stateButtonContainer = null;
+            _lastCodeSyncedValue = null;
         }
 
         private void SetupUI()

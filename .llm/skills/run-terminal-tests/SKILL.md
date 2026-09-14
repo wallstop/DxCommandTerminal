@@ -87,7 +87,10 @@ field write is frame-coupled and flakes under session sequences
   instead of `"pickup "torch"`, caret 13/9 vs 21) while passing in isolation both before and
   after a code change. Before hunting a regression, re-run the failing test isolated; an
   isolated PASS after a full-run FAIL is suite-order flake, and a domain reload clears the
-  stale panel state between attempts.
+  stale panel state between attempts. Root cause class: readiness polls too short for
+  throttled panels (session-023 raised the token-completion and palette poll budgets to 600
+  frames, and `TerminalUITokenCompletionTests.SetInput` now readiness-polls the caret park,
+  which cleared this class from full-suite runs).
 - UITK clamps `cursorIndex` writes to the last LAID-OUT text length, not
   the value length. The cap converges with layout and its convergence is
   nondeterministic under session sequences: a fresh field can sit capped

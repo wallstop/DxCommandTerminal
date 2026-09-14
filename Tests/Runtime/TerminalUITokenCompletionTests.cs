@@ -340,8 +340,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         /*
             A programmatic value write does not preserve a mid-line caret
             across the panel's next update tick, so the rig settles the value
-            first and places the caret in a second step, with no panel tick
-            between the caret placement and the completion request.
+            first and places the caret in a second step. UITK clamps caret
+            writes to the last laid-out text length, and the cap converges
+            with layout (see the run-terminal-tests skill), so the placement
+            is readiness-polled: the completion request runs on the first
+            frame the requested index sticks, and falls back to the clamped
+            position when the park never lands.
          */
         private IEnumerator SetInput(string text, int caretIndex)
         {
@@ -349,6 +353,20 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return null;
             _terminal._commandInput.cursorIndex = caretIndex;
             _terminal._commandInput.selectIndex = caretIndex;
+
+            /*
+                A fresh field can sit caret-capped below the value length for
+                a whole short poll budget under editor throttling (see the
+                run-terminal-tests skill), so the placement gets the same
+                headroom as the visibility poll: it exits the frame the
+                requested index sticks and falls back to the clamped
+                position when the park never lands.
+             */
+            int frameBudget = 600;
+            while (0 < frameBudget-- && _terminal._commandInput.cursorIndex != caretIndex)
+            {
+                yield return null;
+            }
         }
 
         /*
@@ -358,7 +376,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
          */
         private IEnumerator WaitForInput(string expected, string message)
         {
-            int frameBudget = 30;
+            int frameBudget = 600;
             while (
                 0 < frameBudget--
                 && !string.Equals(_terminal._commandInput.value, expected, StringComparison.Ordinal)
@@ -384,7 +402,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
          */
         private IEnumerator WaitForCaret(int expectedCaretIndex, string message)
         {
-            int frameBudget = 30;
+            int frameBudget = 600;
             while (0 < frameBudget-- && _terminal._commandInput.cursorIndex != expectedCaretIndex)
             {
                 yield return null;
