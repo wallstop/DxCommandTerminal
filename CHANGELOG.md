@@ -43,6 +43,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - The npm tarball no longer ships `Media/` (README screenshots and the demo GIF). The README references them through absolute repository URLs so rendering on GitHub and npm is unchanged. This cuts 7.5 MB from the tarball consumers download.
 - Command argument parsing is culture-invariant: numeric, `DateTime`, `DateTimeOffset`, `TimeSpan`, and `BigInteger` arguments parse with `CultureInfo.InvariantCulture` regardless of the device locale, so `1.5` means one and a half on every machine. Locale-formatted input (for example `1,5` on a comma-decimal locale, or locale-formatted dates) is no longer accepted for these types.
 - `RegisterCommandAttribute.NormalizeName` validates its method argument and throws `ArgumentNullException` for null instead of failing later at registration.
+- In the Editor, commands declared in assemblies without a generated catalog (precompiled DLLs, and source assemblies whose commands the generator cannot emit, such as private nested or file-local classes) are now discovered through Unity's TypeCache index instead of walking the assembly's types and methods, with the same registered commands as before. Generated catalogs stay the primary registration path; the shell's auto-registration log now also counts provider-served assemblies.
 
 ### Fixed
 
