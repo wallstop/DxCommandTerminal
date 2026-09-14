@@ -52,6 +52,25 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     .Equals(b.ToString(CultureInfo.InvariantCulture));
         }
 
+        /*
+            Mono's double.ToString("R") is not guaranteed to round-trip every
+            double (it can lose the last bit for some values), so parsing a
+            formatted random double may differ from the original by one ULP.
+            The round-trip assertions therefore compare componentwise with
+            the Approximately fallback instead of exact equality.
+         */
+        private static void AssertComplexRoundTrips(
+            System.Numerics.Complex expected,
+            System.Numerics.Complex value
+        )
+        {
+            Assert.IsTrue(
+                Approximately(expected.Real, value.Real)
+                    && Approximately(expected.Imaginary, value.Imaginary),
+                $"Expected {value} to round-trip as {expected}."
+            );
+        }
+
         [SetUp]
         [TearDown]
         public void CleanUp()
@@ -2431,7 +2450,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                         + $",{imaginary.ToString("R", CultureInfo.InvariantCulture)}"
                 );
                 Assert.IsTrue(arg.TryGet(out value), $"Failed to parse {arg.contents} as Complex");
-                Assert.AreEqual(expected, value);
+                AssertComplexRoundTrips(expected, value);
 
                 foreach (
                     (string pre, string post) in _prepend.Zip(
@@ -2448,7 +2467,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                         arg.TryGet(out value),
                         $"Failed to parse {arg.contents} as Complex"
                     );
-                    Assert.AreEqual(expected, value);
+                    AssertComplexRoundTrips(expected, value);
                 }
             }
 
