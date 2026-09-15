@@ -401,6 +401,17 @@
         {
             RefreshStaticState(force: resetStateOnInit);
             _configOwner = this;
+
+            /*
+                A component that lost Instance or config ownership to a peer
+                while disabled reclaims them on re-enable: it is now the
+                newest enabled claim. The registry entry moves to the back so
+                the newest-enabled ordering holds for handoff targets too.
+             */
+            Instance = this;
+            LiveTerminals.Remove(this);
+            LiveTerminals.Add(this);
+
             ConsumeAndLogErrors();
 
             if (_logUnityMessages && !_unityLogAttached)
@@ -438,7 +449,15 @@
 
             if (_unityLogAttached)
             {
+                /*
+                    Both delegates detach defensively: the inspector toggle
+                    path attaches HandleUnityLog while OnDisable's attach-time
+                    flag only knows about UnityLogCallback, so a toggle after
+                    the last refresh could otherwise leak the callback into
+                    the disabled state (and across Play Mode sessions).
+                 */
                 Application.logMessageReceivedThreaded -= UnityLogCallback;
+                Application.logMessageReceivedThreaded -= HandleUnityLog;
                 _unityLogAttached = false;
             }
 
@@ -713,9 +732,11 @@
         internal static void ResetForNextPlaySession()
         {
             Instance = null;
+            _configOwner = null;
             LiveTerminals.Clear();
             TerminalSession.Current.ResetState();
             Application.logMessageReceivedThreaded -= UnityLogCallback;
+            Application.logMessageReceivedThreaded -= HandleUnityLog;
         }
 
         private static void ConsumeAndLogErrors()
@@ -875,7 +896,6 @@
 
         private static bool TryHandOffToLivePeer(out TerminalUI peer)
         {
-            peer = null;
             int liveCount = LiveTerminals.Count;
             for (int i = liveCount - 1; 0 <= i; --i)
             {
@@ -887,6 +907,7 @@
                 }
             }
 
+            peer = null;
             return false;
         }
 

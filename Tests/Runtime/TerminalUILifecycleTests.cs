@@ -657,9 +657,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [UnityTest]
         public IEnumerator LoggingBeforeStartSurvivesWithoutReset()
         {
+            /*
+                The buffer may already hold entries from earlier tests (the
+                reset-off path reuses the shared buffer), so the assert is
+                baseline-relative.
+             */
+            int baseline = Terminal.Buffer?.Logs.Count ?? 0;
             yield return LogBeforeStartAndAwaitStart(resetStateOnInit: false);
             Assert.AreEqual(
-                1,
+                baseline + 1,
                 Terminal.Buffer.Logs.Count,
                 "A pre-Start log survives Start when resetStateOnInit is off"
             );
@@ -686,6 +692,19 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void PlaySessionResetClearsStaleStaticStateAndIsIdempotent()
         {
+            /*
+                Seed the shared session so the test is order-independent: a
+                fresh domain running only this fixture starts with no
+                backends at all.
+             */
+            if (Terminal.Buffer == null)
+            {
+                TerminalSession.Current.Apply(
+                    new TerminalSession.Config(64, 64, null, null, false),
+                    force: false
+                );
+            }
+
             CommandLog originalBuffer = Terminal.Buffer;
             CommandHistory originalHistory = Terminal.History;
             CommandShell originalShell = Terminal.Shell;
