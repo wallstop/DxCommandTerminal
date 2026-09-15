@@ -101,6 +101,35 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         }
 
         /// <summary>
+        ///     Explicit readiness boundary for callers without a TerminalUI
+        ///     component: applies <paramref name="config"/> to the backend
+        ///     objects and completes deferred auto-command registration
+        ///     synchronously, so the first command request and logging work
+        ///     before any UI enables. Idempotent: repeated calls reuse the
+        ///     existing objects.
+        /// </summary>
+        public void EnsureReady(Config config, bool force)
+        {
+            Apply(config, force);
+            Shell.EnsureAutoCommandsRegistered();
+        }
+
+        /// <summary>
+        ///     Drops the backend objects so the next <see cref="Apply"/>
+        ///     recreates them from scratch. Used by the play-session reset:
+        ///     with disabled domain reload, a previous Play Mode session's
+        ///     backends (and any registrations made through them) would
+        ///     otherwise survive into the next session.
+        /// </summary>
+        public void ResetState()
+        {
+            Buffer = null;
+            History = null;
+            Shell = null;
+            AutoComplete = null;
+        }
+
+        /// <summary>
         ///     Serialized terminal configuration for one <see cref="Apply"/> call.
         ///     Null lists are treated as empty.
         /// </summary>

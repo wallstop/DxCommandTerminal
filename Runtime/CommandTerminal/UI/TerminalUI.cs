@@ -26,6 +26,18 @@
         // Cache log callback to reduce allocations
         private static readonly Application.LogCallback UnityLogCallback = HandleUnityLog;
 
+        /*
+            Live registry for lifecycle handoff: Instance and session-config
+            ownership transfer to the newest live enabled terminal when the
+            current owner is disabled or destroyed, so built-in commands and
+            the shared session keep working while a peer remains. Cleared by
+            the play-session reset (entries become stale across Play Mode
+            sessions with disabled domain reload).
+         */
+        private static readonly List<TerminalUI> LiveTerminals = new();
+
+        private static TerminalUI _configOwner;
+
         // ReSharper disable once MemberCanBePrivate.Global
         public bool IsClosed =>
             !IsOpenState(_state) && Mathf.Approximately(_currentWindowHeight, _targetWindowHeight);
@@ -100,7 +112,7 @@
 
         [Header("System")]
         [SerializeField]
-        private int _logBufferSize = 256;
+        internal int _logBufferSize = 256;
 
         [SerializeField]
         private int _historyBufferSize = 512;
@@ -138,7 +150,7 @@
         internal TerminalThemePack _themePack;
 
         [SerializeField]
-        private bool _logUnityMessages;
+        internal bool _logUnityMessages;
 
         private IInputHandler[] _inputHandlers;
 
@@ -189,7 +201,6 @@
         private int? _previousLastCompletionIndex;
         private string _focusedControl;
         private bool _isCommandFromCode;
-        private bool _initialResetStateOnInit;
         private bool _commandIssuedThisFrame;
         private string _runtimeTheme;
         private Font _runtimeFont;
@@ -309,6 +320,7 @@
             }
 
             Instance = this;
+            LiveTerminals.Add(this);
 
 #if UNITY_EDITOR
             _serializedObject = new SerializedObject(this);
@@ -388,6 +400,18 @@
         private void OnEnable()
         {
             RefreshStaticState(force: resetStateOnInit);
+            _configOwner = this;
+
+            /*
+                A component that lost Instance or config ownership to a peer
+                while disabled reclaims them on re-enable: it is now the
+                newest enabled claim. The registry entry moves to the back so
+                the newest-enabled ordering holds for handoff targets too.
+             */
+            Instance = this;
+            LiveTerminals.Remove(this);
+            LiveTerminals.Add(this);
+
             ConsumeAndLogErrors();
 
             if (_logUnityMessages && !_unityLogAttached)
@@ -425,22 +449,55 @@
 
             if (_unityLogAttached)
             {
+                /*
+                    Every attach site (the enable path and the inspector
+                    toggle path) binds the same static HandleUnityLog method,
+                    so the delegates are structurally equal and this single
+                    removal drops exactly this component's one occurrence -
+                    never a peer's subscription. Removing twice would strip a
+                    surviving terminal's forwarding when two components
+                    forward Unity logs.
+                 */
                 Application.logMessageReceivedThreaded -= UnityLogCallback;
                 _unityLogAttached = false;
             }
 
             SetState(TerminalState.Closed);
             TeardownUI();
+
+            /*
+                Lifecycle handoff: this component applied the last session
+                configuration, so a remaining enabled terminal reapplies its
+                own; Instance follows so built-in UI commands reach a working
+                surface. Without a peer, both stay with this component and a
+                later re-enable reclaims them.
+             */
+            if (_configOwner == this && TryHandOffToLivePeer(out TerminalUI peer))
+            {
+                _configOwner = peer;
+                peer.RefreshStaticState(force: false);
+            }
+
+            if (Instance == this && TryHandOffToLivePeer(out TerminalUI instancePeer))
+            {
+                Instance = instancePeer;
+            }
         }
 
         private void OnDestroy()
         {
+            LiveTerminals.Remove(this);
+
             if (Instance != this)
             {
                 return;
             }
 
-            Instance = null;
+            /*
+                The owner is destroyed; it can never re-enable, so hand
+                Instance to a live enabled peer or clear it.
+             */
+            Instance = TryHandOffToLivePeer(out TerminalUI peer) ? peer : null;
         }
 
         private void Start()
@@ -662,6 +719,36 @@
         }
 #endif
 
+        /*
+            Runs once per Play Mode session with the earliest load type, so
+            with disabled domain reload it clears what a previous session's
+            components left behind: stale static references (the registry
+            and Instance hold destroyed components after play exits), the
+            shared session's backends (a previous session's shell would
+            otherwise keep its manual registrations), and any log callback
+            left attached by an abnormal exit. Exactly-once per session and
+            idempotent on repeat.
+         */
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        internal static void ResetForNextPlaySession()
+        {
+            Instance = null;
+            _configOwner = null;
+            LiveTerminals.Clear();
+            TerminalSession.Current.ResetState();
+
+            /*
+                No live component exists here (scene Awake has not run and the
+                previous session's components are destroyed), so these
+                removals cannot strip a legitimate subscription; they clean
+                leaked occurrences from an abnormal exit. A leaked occurrence
+                that survives is inert: HandleUnityLog reads the buffer, which
+                is null until the next Apply.
+             */
+            Application.logMessageReceivedThreaded -= UnityLogCallback;
+            Application.logMessageReceivedThreaded -= HandleUnityLog;
+        }
+
         private static void ConsumeAndLogErrors()
         {
             while (Terminal.Shell?.TryConsumeErrorMessage(out string error) == true)
@@ -815,6 +902,23 @@
                     trackerElement.RemoveFromClassList("dragger-hovered");
                 }
             }
+        }
+
+        private static bool TryHandOffToLivePeer(out TerminalUI peer)
+        {
+            int liveCount = LiveTerminals.Count;
+            for (int i = liveCount - 1; 0 <= i; --i)
+            {
+                TerminalUI candidate = LiveTerminals[i];
+                if (candidate != null && candidate.isActiveAndEnabled)
+                {
+                    peer = candidate;
+                    return true;
+                }
+            }
+
+            peer = null;
+            return false;
         }
 
         private static void HandleUnityLog(string message, string stackTrace, LogType type)
