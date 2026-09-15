@@ -8,6 +8,7 @@
   "scripts": {
     "test": "node --test \"scripts/mcp/__tests__/*.test.mjs\" \"scripts/tests/*.test.mjs\"",
     "package:validate": "node scripts/release/validate-package-contents.mjs",
+    "package:export": "node scripts/release/export-unitypackage.mjs",
     "lint:comparison-direction": "node scripts/lint-comparison-direction.mjs",
     "lint:comparison-direction:fix": "node scripts/lint-comparison-direction.mjs --fix",
     "lint:member-ordering": "node scripts/lint-member-ordering.mjs --verbose",

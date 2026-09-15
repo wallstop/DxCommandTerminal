@@ -58,6 +58,7 @@
   "scripts": {
     "test": "npm --prefix tooling~ run test --",
     "package:validate": "npm --prefix tooling~ run package:validate --",
+    "package:export": "npm --prefix tooling~ run package:export --",
     "unity:mcp:probe": "npm --prefix tooling~ run unity:mcp:probe --",
     "unity:mcp:configure": "npm --prefix tooling~ run unity:mcp:configure --",
     "unity:mcp:bridge": "npm --prefix tooling~ run unity:mcp:bridge --",
