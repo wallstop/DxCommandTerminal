@@ -28,7 +28,6 @@ const REPO_ROOT = path.resolve(fileURLToPath(new URL("../../..", import.meta.url
 const DEFAULT_ROOT_PREFIX_TEMPLATE = "Packages/{name}";
 const TAR_BLOCK = 512;
 const TAR_RECORD = 20 * TAR_BLOCK;
-const GUID_PATTERN = /^[0-9a-f]{32}$/;
 const FOLDER_ASSET_PATTERN = /^folderAsset:\s*yes\b/m;
 const GUID_LINE_PATTERN = /^guid:\s*([0-9a-fA-F]{32})\b/m;
 
@@ -99,18 +98,10 @@ function isDirectory(packageRoot, relativePath) {
   }
 }
 
-function isFile(packageRoot, relativePath) {
-  try {
-    return fs.statSync(path.join(packageRoot, relativePath)).isFile();
-  } catch {
-    return false;
-  }
-}
-
 /*
     Pairs shipped files with their metas and validates GUID identity.
-    Returns { assets, excludedSampleCount } where each asset is
-    { path, metaPath, isFolder, guid } sorted by path (ordinal).
+    Returns { assets, excludedSampleCount, violations } where each asset is
+    { path, metaPath, isFolder, guid, metaText } sorted by path (ordinal).
 */
 function collectAssets(packageRoot, shippedPaths) {
   const shippedSet = new Set(shippedPaths);
@@ -120,15 +111,6 @@ function collectAssets(packageRoot, shippedPaths) {
   const excludedSampleCount = shippedPaths.filter(
     (entry) => entry === "Samples~" || entry.startsWith("Samples~/")
   ).length;
-
-  const directories = new Set();
-  for (const entry of shippedPaths) {
-    let current = path.dirname(entry);
-    while (current && current !== ".") {
-      directories.add(current);
-      current = path.dirname(current);
-    }
-  }
 
   const assets = [];
   const guidOwners = new Map();
@@ -153,10 +135,11 @@ function collectAssets(packageRoot, shippedPaths) {
       continue;
     }
     const target = entry.slice(0, -".meta".length);
-    if (!directories.has(target) || !isDirectory(packageRoot, target)) {
-      continue;
+    if (isDirectory(packageRoot, target)) {
+      assets.push({ path: target, metaPath: entry, isFolder: true });
+    } else if (!shippedSet.has(target)) {
+      report(`orphan meta without its target file or folder: ${entry}`);
     }
-    assets.push({ path: target, metaPath: entry, isFolder: true });
   }
 
   assets.sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0));
@@ -291,7 +274,6 @@ function exportUnityPackage(options) {
     throw new Error("no assets discovered; refusing to emit an empty package");
   }
   for (const asset of collected.assets) {
-    asset.packageRoot = packageRoot;
     asset.absolutePath = path.join(packageRoot, asset.path);
   }
   const rootPrefix = resolveRootPrefix(options.rootPrefix ?? "", name);
@@ -320,7 +302,7 @@ function main() {
   } catch (error) {
     console.error(`[unitypackage-export] ERROR: ${error.message}`);
     console.error(
-      "usage: node export-unitypackage.js [--package-root <dir>] " +
+      "usage: node export-unitypackage.mjs [--package-root <dir>] " +
         "[--out <path>] [--root-prefix <prefix>]"
     );
     process.exitCode = 1;

@@ -284,6 +284,27 @@ test("a folder meta without folderAsset: yes fails the export", () => {
   );
 });
 
+test("an orphan meta without its target fails the export", () => {
+  const root = tempRoot("orphan");
+  makeFixture(root);
+  writeMeta(root, "Gone.cs", "e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5", false);
+  const { violations } = collectAssets(root, [
+    "package.json",
+    "package.json.meta",
+    "README.md",
+    "README.md.meta",
+    "Runtime",
+    "Runtime.meta",
+    "Runtime/Foo.cs",
+    "Runtime/Foo.cs.meta",
+    "Gone.cs.meta"
+  ]);
+  assert.ok(
+    violations.some((message) => message.includes("orphan meta without its target")),
+    `expected an orphan-meta violation, got: ${violations.join("; ")}`
+  );
+});
+
 test("the real package exports, validates, and rebuilds byte-identically", () => {
   const first = packagedList(packageRoot);
   assert.ok(first.files.length > 800, "the real allowlist must ship the full tree");
