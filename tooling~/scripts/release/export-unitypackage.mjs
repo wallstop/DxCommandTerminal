@@ -31,7 +31,11 @@ const TAR_RECORD = 20 * TAR_BLOCK;
 const FOLDER_ASSET_PATTERN = /^folderAsset:\s*yes\b/m;
 const GUID_LINE_PATTERN = /^guid:\s*([0-9a-fA-F]{32})\b/m;
 
+// Node refuses to spawn .cmd/.bat without a shell on Windows (CVE-2024-27980
+// hardening: execFileSync("npm.cmd") fails outright there). All arguments are
+// literal npm flags with no spaces, so shell joining stays safe.
 const NPM = process.platform === "win32" ? "npm.cmd" : "npm";
+const NPM_SPAWN_OPTIONS = process.platform === "win32" ? { shell: true } : {};
 
 function parseArgs(argv) {
   const options = {
@@ -65,7 +69,8 @@ function packagedList(packageRoot) {
   const stdout = execFileSync(NPM, ["pack", "--dry-run", "--json"], {
     cwd: packageRoot,
     encoding: "utf8",
-    maxBuffer: 64 * 1024 * 1024
+    maxBuffer: 64 * 1024 * 1024,
+    ...NPM_SPAWN_OPTIONS
   });
   const reports = JSON.parse(stdout);
   if (!Array.isArray(reports) || reports.length !== 1) {
