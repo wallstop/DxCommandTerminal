@@ -422,5 +422,62 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     + "configuration on every refresh"
             );
         }
+
+        /*
+            The explicit readiness boundary for headless callers: one call
+            creates every backend and completes deferred auto-command
+            registration synchronously, so command requests and logging work
+            before any TerminalUI enables.
+         */
+        [Test]
+        public void EnsureReadyCreatesBackendsAndRegistersCommandsSynchronously()
+        {
+            TerminalSession session = new();
+            session.EnsureReady(Config(), force: false);
+
+            Assert.IsNotNull(session.Buffer, "EnsureReady must create the buffer");
+            Assert.IsNotNull(session.History, "EnsureReady must create the history");
+            Assert.IsNotNull(session.Shell, "EnsureReady must create the shell");
+            Assert.IsNotNull(session.AutoComplete, "EnsureReady must create the auto-complete");
+            Assert.IsTrue(
+                session.Shell.AutoCommandsRegistered,
+                "EnsureReady must complete deferred registration synchronously"
+            );
+            Assert.IsNotEmpty(
+                session.Shell.AutoRegisteredCommands,
+                "EnsureReady should surface auto commands"
+            );
+        }
+
+        [Test]
+        public void EnsureReadyIsIdempotent()
+        {
+            TerminalSession session = new();
+            session.EnsureReady(Config(), force: true);
+
+            CommandLog buffer = session.Buffer;
+            CommandHistory history = session.History;
+            CommandShell shell = session.Shell;
+            CommandAutoComplete autoComplete = session.AutoComplete;
+
+            session.EnsureReady(Config(), force: false);
+
+            Assert.AreSame(buffer, session.Buffer, "A repeated readiness call reuses the buffer");
+            Assert.AreSame(
+                history,
+                session.History,
+                "A repeated readiness call reuses the history"
+            );
+            Assert.AreSame(shell, session.Shell, "A repeated readiness call reuses the shell");
+            Assert.AreSame(
+                autoComplete,
+                session.AutoComplete,
+                "A repeated readiness call reuses the auto-complete"
+            );
+            Assert.IsTrue(
+                session.Shell.AutoCommandsRegistered,
+                "A repeated readiness call keeps registration complete"
+            );
+        }
     }
 }

@@ -1,6 +1,8 @@
 namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 {
     using System.Collections;
+    using System.Collections.Generic;
+    using System.Linq;
     using Backend;
     using Components;
     using NUnit.Framework;
@@ -30,6 +32,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private PanelSettings _panelSettings;
         private GameObject _terminalObject;
         private TerminalUI _terminal;
+        private readonly List<GameObject> _spawnedObjects = new();
 
         private static T LoadAsset<T>(string relativePath)
             where T : ScriptableObject
@@ -44,6 +47,16 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [TearDown]
         public void TearDown()
         {
+            for (int i = _spawnedObjects.Count - 1; 0 <= i; --i)
+            {
+                if (_spawnedObjects[i] != null)
+                {
+                    UnityEngine.Object.Destroy(_spawnedObjects[i]);
+                }
+            }
+
+            _spawnedObjects.Clear();
+
             if (_terminalObject != null)
             {
                 UnityEngine.Object.Destroy(_terminalObject);
@@ -374,6 +387,390 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
         }
 
+        /*
+            A terminal destroyed while another live enabled terminal exists
+            must hand TerminalUI.Instance to that peer: built-in commands
+            resolve UI operations through the static Instance, and a stale
+            null degrades them even though a working terminal remains.
+         */
+        [UnityTest]
+        public IEnumerator DestroyingInstanceOwnerHandsInstanceBackToLivePeer()
+        {
+            yield return SpawnTerminalWithDocument();
+            TerminalUI first = _terminal;
+
+            GameObject peerObject = SpawnPeerTerminal("TerminalInstanceOwner");
+            yield return new WaitUntil(() => peerObject.GetComponent<StartTracker>().Started);
+            TerminalUI second = TerminalUI.Instance;
+            Assert.AreNotSame(
+                first,
+                second,
+                "Sanity: the second terminal claims the static Instance"
+            );
+
+            UnityEngine.Object.Destroy(second.gameObject);
+            int frameBudget = 10;
+            while (
+                0 < frameBudget-- && (TerminalUI.Instance == null || TerminalUI.Instance == second)
+            )
+            {
+                yield return null;
+            }
+
+            Assert.AreSame(
+                first,
+                TerminalUI.Instance,
+                "Destroying the Instance owner must hand Instance to the live peer"
+            );
+        }
+
+        /*
+            Session configuration ownership follows the last enabled
+            component; disabling that component must restore the newest
+            remaining enabled component's configuration, not leave its own
+            applied to the shared session.
+         */
+        [UnityTest]
+        public IEnumerator DisablingConfigOwnerRestoresPeerConfig()
+        {
+            yield return SpawnTerminalWithDocument();
+            TerminalUI first = _terminal;
+
+            GameObject peerObject = SpawnPeerTerminal("TerminalConfigOwner", logBufferSize: 32);
+            yield return new WaitUntil(() => peerObject.GetComponent<StartTracker>().Started);
+
+            CommandLog buffer = Terminal.Buffer;
+            Assert.AreEqual(
+                32,
+                buffer.Capacity,
+                "Sanity: the second component's configuration wins while it is enabled"
+            );
+
+            peerObject.GetComponent<TerminalUI>().enabled = false;
+            yield return null;
+
+            Assert.AreSame(
+                buffer,
+                Terminal.Buffer,
+                "Restoring the peer configuration must reuse the shared buffer instance"
+            );
+            Assert.AreEqual(
+                first._logBufferSize,
+                Terminal.Buffer.Capacity,
+                "Disabling the config owner must restore the remaining enabled "
+                    + "component's configuration"
+            );
+        }
+
+        /*
+            Disable/enable cycles without resetStateOnInit must preserve the
+            shared session: the same backend instances, manual registrations,
+            buffer contents, history, and configured filters survive.
+         */
+        [UnityTest]
+        public IEnumerator ReenableWithoutResetPreservesSessionState()
+        {
+            yield return SpawnTerminalWithDocument(resetState: false);
+
+            Assert.IsTrue(
+                Terminal.Shell.RunCommand("log"),
+                "Sanity: the default 'log' command runs"
+            );
+            Assert.IsTrue(
+                Terminal.Shell.AddCommand(
+                    "session-preserved-cmd",
+                    _ => Terminal.Log("preserved ran"),
+                    minArgs: 0,
+                    maxArgs: 0,
+                    help: "test"
+                ),
+                "Sanity: the manual command registers"
+            );
+            CommandLog buffer = Terminal.Buffer;
+            CommandHistory history = Terminal.History;
+            CommandShell shell = Terminal.Shell;
+            CommandAutoComplete autoComplete = Terminal.AutoComplete;
+            int bufferCountBefore = buffer.Logs.Count;
+            string[] historyBefore = history
+                .GetHistory(onlySuccess: true, onlyErrorFree: true)
+                .ToArray();
+            Assert.IsNotEmpty(historyBefore, "Sanity: 'log' created a history entry");
+
+            _terminal.enabled = false;
+            yield return null;
+            _terminal.enabled = true;
+            yield return null;
+
+            Assert.AreSame(shell, Terminal.Shell, "The shell is reused without reset");
+            Assert.AreSame(buffer, Terminal.Buffer, "The buffer is reused without reset");
+            Assert.AreSame(history, Terminal.History, "The history is reused without reset");
+            Assert.AreSame(
+                autoComplete,
+                Terminal.AutoComplete,
+                "The auto-complete is reused without reset"
+            );
+            Assert.AreEqual(
+                bufferCountBefore,
+                buffer.Logs.Count,
+                "Buffer contents survive the disable/enable cycle"
+            );
+            Assert.IsTrue(
+                Terminal.Shell.RunCommand("session-preserved-cmd"),
+                "Manual registrations survive the disable/enable cycle"
+            );
+            Assert.AreEqual(
+                bufferCountBefore + 1,
+                buffer.Logs.Count,
+                "The manual command's output lands in the preserved buffer"
+            );
+            string[] historyAfter = history
+                .GetHistory(onlySuccess: true, onlyErrorFree: true)
+                .ToArray();
+            Assert.AreEqual(
+                historyBefore.Length + 1,
+                historyAfter.Length,
+                "History entries survive the disable/enable cycle"
+            );
+            Assert.AreEqual(
+                historyBefore[0],
+                historyAfter[0],
+                "The oldest history entry is preserved in order"
+            );
+        }
+
+        /*
+            With resetStateOnInit, every re-enable cycle recreates the
+            backends and reapplies the same configuration: repeated cycles
+            must be idempotent (identical command set, no error
+            accumulation).
+         */
+        [UnityTest]
+        public IEnumerator ReenableWithResetRecreatesIdempotently()
+        {
+            yield return SpawnTerminalWithDocument();
+
+            CommandLog buffer1 = Terminal.Buffer;
+            CommandShell shell1 = Terminal.Shell;
+            shell1.EnsureAutoCommandsRegistered();
+            int commandCount1 = shell1.Commands.Count;
+            Assert.AreNotEqual(0, commandCount1, "Sanity: default commands register");
+
+            _terminal.enabled = false;
+            yield return null;
+            _terminal.enabled = true;
+            yield return null;
+
+            CommandLog buffer2 = Terminal.Buffer;
+            CommandShell shell2 = Terminal.Shell;
+            Assert.AreNotSame(buffer1, buffer2, "Reset recreates the buffer");
+            Assert.AreNotSame(shell1, shell2, "Reset recreates the shell");
+            shell2.EnsureAutoCommandsRegistered();
+            Assert.AreEqual(
+                commandCount1,
+                shell2.Commands.Count,
+                "The recreated shell registers the same command set"
+            );
+            Assert.IsTrue(shell2.RunCommand("help"), "The recreated shell runs commands");
+
+            _terminal.enabled = false;
+            yield return null;
+            _terminal.enabled = true;
+            yield return null;
+
+            CommandShell shell3 = Terminal.Shell;
+            Assert.AreNotSame(shell2, shell3, "A second reset cycle recreates the shell again");
+            shell3.EnsureAutoCommandsRegistered();
+            Assert.AreEqual(
+                commandCount1,
+                shell3.Commands.Count,
+                "Repeated reset cycles stay idempotent: the command set does not drift"
+            );
+            Assert.IsTrue(
+                shell3.RunCommand("help"),
+                "Repeated reset cycles keep the shell functional"
+            );
+        }
+
+        /*
+            A terminal whose configuration ignores every discovered command
+            stays functional: no commands register, runs fail cleanly, and
+            logging and completion keep working.
+         */
+        [UnityTest]
+        public IEnumerator IgnoringEveryCommandKeepsTerminalFunctional()
+        {
+            List<string> allCommands = CommandShell
+                .RegisteredCommands.Value.Select(tuple => tuple.attribute.Name)
+                .ToList();
+            Assert.IsNotEmpty(allCommands, "Sanity: at least one command is discovered");
+
+            _panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
+            _terminalObject = new GameObject("TerminalAllIgnored");
+            _terminalObject.SetActive(false);
+            UIDocument document = _terminalObject.AddComponent<UIDocument>();
+            document.panelSettings = _panelSettings;
+            _terminal = _terminalObject.AddComponent<TerminalUI>();
+            _terminal._uiDocument = document;
+            _terminal.resetStateOnInit = true;
+            _terminal.easeOutTime = 0f;
+            _terminal.easeInTime = 0f;
+            _terminal.ignoreDefaultCommands = true;
+            _terminal._disabledCommands = new List<string>(allCommands);
+            _terminal._themePack = LoadAsset<TerminalThemePack>("Packs/Themes/Medium.asset");
+            _terminal._fontPack = LoadAsset<TerminalFontPack>("Packs/Fonts/Medium.asset");
+            StartTracker tracker = _terminalObject.AddComponent<StartTracker>();
+            _terminalObject.SetActive(true);
+            yield return new WaitUntil(() => tracker.Started);
+
+            Terminal.Shell.EnsureAutoCommandsRegistered();
+            Assert.IsEmpty(
+                Terminal.Shell.Commands,
+                "Ignoring every discovered command must leave no commands registered"
+            );
+            Assert.IsFalse(
+                Terminal.Shell.RunCommand("help"),
+                "A shell with no commands must fail runs cleanly"
+            );
+            Assert.IsTrue(
+                Terminal.Log("still-logging"),
+                "Logging keeps working with no commands registered"
+            );
+            Assert.AreEqual(
+                1,
+                Terminal.Buffer.Logs.Count,
+                "The logged message landed in the buffer"
+            );
+            List<string> completions = new();
+            Terminal.AutoComplete.Complete("he", completions);
+            Assert.IsEmpty(
+                completions,
+                "Completion must return nothing when no commands are registered"
+            );
+        }
+
+        /*
+            Logging between OnEnable and Start lands in the session the
+            enable created. With resetStateOnInit, Start's forced refresh
+            wipes it; without reset, it survives. Both outcomes are the
+            documented reset semantics.
+         */
+        [UnityTest]
+        public IEnumerator LoggingBeforeStartSurvivesWithoutReset()
+        {
+            yield return LogBeforeStartAndAwaitStart(resetStateOnInit: false);
+            Assert.AreEqual(
+                1,
+                Terminal.Buffer.Logs.Count,
+                "A pre-Start log survives Start when resetStateOnInit is off"
+            );
+        }
+
+        [UnityTest]
+        public IEnumerator LoggingBeforeStartIsWipedByForcedReset()
+        {
+            yield return LogBeforeStartAndAwaitStart(resetStateOnInit: true);
+            Assert.AreEqual(
+                0,
+                Terminal.Buffer.Logs.Count,
+                "Start's forced reset wipes a pre-Start log when resetStateOnInit is set"
+            );
+        }
+
+        /*
+            The play-session reset clears every piece of state a previous
+            Play Mode session leaves behind (stale static references, the
+            shared session's backends, a leaked log callback) and stays
+            idempotent on repeat; the next Apply recreates the session.
+            Restores the saved backends so later suites keep their session.
+         */
+        [Test]
+        public void PlaySessionResetClearsStaleStaticStateAndIsIdempotent()
+        {
+            CommandLog originalBuffer = Terminal.Buffer;
+            CommandHistory originalHistory = Terminal.History;
+            CommandShell originalShell = Terminal.Shell;
+            CommandAutoComplete originalAutoComplete = Terminal.AutoComplete;
+            try
+            {
+                Assert.IsNotNull(
+                    originalBuffer,
+                    "Sanity: the shared session has backends before the reset"
+                );
+
+                TerminalUI.ResetForNextPlaySession();
+                Assert.IsNull(
+                    TerminalUI.Instance,
+                    "The play-session reset must clear the stale static Instance"
+                );
+                Assert.IsNull(
+                    Terminal.Buffer,
+                    "The play-session reset must drop the session's backends"
+                );
+                Assert.IsNull(Terminal.History, "The history must drop with the session");
+                Assert.IsNull(Terminal.Shell, "The shell must drop with the session");
+                Assert.IsNull(
+                    Terminal.AutoComplete,
+                    "The auto-complete must drop with the session"
+                );
+
+                TerminalUI.ResetForNextPlaySession();
+                Assert.IsNull(Terminal.Buffer, "A repeated play-session reset stays cleared");
+
+                TerminalSession.Current.Apply(
+                    new TerminalSession.Config(64, 64, null, null, false),
+                    force: false
+                );
+                Assert.IsNotNull(
+                    Terminal.Buffer,
+                    "The next Apply recreates the session from the cleared state"
+                );
+            }
+            finally
+            {
+                Terminal.Buffer = originalBuffer;
+                Terminal.History = originalHistory;
+                Terminal.Shell = originalShell;
+                Terminal.AutoComplete = originalAutoComplete;
+            }
+        }
+
+        private IEnumerator LogBeforeStartAndAwaitStart(bool resetStateOnInit)
+        {
+            _panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
+            _terminalObject = new GameObject("TerminalEarlyLog");
+            _terminalObject.SetActive(false);
+            UIDocument document = _terminalObject.AddComponent<UIDocument>();
+            document.panelSettings = _panelSettings;
+            _terminal = _terminalObject.AddComponent<TerminalUI>();
+            _terminal._uiDocument = document;
+            _terminal.resetStateOnInit = resetStateOnInit;
+            _terminal._themePack = LoadAsset<TerminalThemePack>("Packs/Themes/Medium.asset");
+            _terminal._fontPack = LoadAsset<TerminalFontPack>("Packs/Fonts/Medium.asset");
+            StartTracker tracker = _terminalObject.AddComponent<StartTracker>();
+            _terminalObject.SetActive(true);
+
+            /*
+                Awake and OnEnable ran during SetActive; Start has not run
+                yet, so this is a pre-Start log.
+             */
+            Assert.IsTrue(
+                Terminal.Log(TerminalLogType.Message, "before-start"),
+                "The backends created during OnEnable accept an early log"
+            );
+
+            yield return new WaitUntil(() => tracker.Started);
+        }
+
+        private GameObject SpawnPeerTerminal(string name, int logBufferSize = 256)
+        {
+            GameObject peerObject = new(name, typeof(StartTracker), typeof(TerminalUI));
+            TerminalUI peer = peerObject.GetComponent<TerminalUI>();
+            peer.resetStateOnInit = false;
+            peer._logBufferSize = logBufferSize;
+            _spawnedObjects.Add(peerObject);
+            return peerObject;
+        }
+
         private IEnumerator WaitForInputVisible(string message)
         {
             int frameBudget = FrameBudget;
@@ -403,7 +800,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             serializedObject.ApplyModifiedProperties();
         }
 
-        private IEnumerator SpawnTerminalWithDocument(bool showButtons = false)
+        private IEnumerator SpawnTerminalWithDocument(
+            bool showButtons = false,
+            bool resetState = true
+        )
         {
 #if !UNITY_EDITOR
             Assert.Ignore("Terminal UI lifecycle coverage runs in the editor Play Mode suite.");
@@ -416,7 +816,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             document.panelSettings = _panelSettings;
             _terminal = _terminalObject.AddComponent<TerminalUI>();
             _terminal._uiDocument = document;
-            _terminal.resetStateOnInit = true;
+            _terminal.resetStateOnInit = resetState;
             _terminal.easeOutTime = 0f;
             _terminal.easeInTime = 0f;
             _terminal.showGUIButtons = showButtons;
