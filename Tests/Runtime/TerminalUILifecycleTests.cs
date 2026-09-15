@@ -425,6 +425,44 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         /*
+            Ownership follows the newest enabled claim: disabling the older
+            terminal leaves Instance with the enabled peer, and re-enabling
+            the older terminal reclaims Instance (editor property tracking
+            gates on Instance, so a reclaimed terminal must re-own it).
+         */
+        [UnityTest]
+        public IEnumerator ReenablingInstanceOwnerReclaimsInstanceFromDisabledPeer()
+        {
+            yield return SpawnTerminalWithDocument();
+            TerminalUI first = _terminal;
+
+            GameObject peerObject = SpawnPeerTerminal("TerminalInstanceReclaim");
+            yield return new WaitUntil(() => peerObject.GetComponent<StartTracker>().Started);
+            TerminalUI peer = peerObject.GetComponent<TerminalUI>();
+            Assert.AreSame(
+                peer,
+                TerminalUI.Instance,
+                "Sanity: the newer enabled terminal owns Instance"
+            );
+
+            first.enabled = false;
+            yield return null;
+            Assert.AreSame(
+                peer,
+                TerminalUI.Instance,
+                "Disabling the older terminal leaves Instance with the enabled peer"
+            );
+
+            first.enabled = true;
+            yield return null;
+            Assert.AreSame(
+                first,
+                TerminalUI.Instance,
+                "Re-enabling the older terminal must reclaim Instance"
+            );
+        }
+
+        /*
             Session configuration ownership follows the last enabled
             component; disabling that component must restore the newest
             remaining enabled component's configuration, not leave its own
@@ -459,6 +497,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 Terminal.Buffer.Capacity,
                 "Disabling the config owner must restore the remaining enabled "
                     + "component's configuration"
+            );
+            Assert.AreSame(
+                first,
+                TerminalUI.Instance,
+                "Disabling the owner must hand Instance to the remaining enabled terminal"
             );
         }
 
