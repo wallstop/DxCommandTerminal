@@ -1,5 +1,6 @@
 namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 {
+    using System;
     using System.Collections;
     using System.Collections.Generic;
     using System.Linq;
@@ -421,6 +422,61 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 first,
                 TerminalUI.Instance,
                 "Destroying the Instance owner must hand Instance to the live peer"
+            );
+        }
+
+        /*
+            With two components forwarding Unity logs, disabling one must not
+            strip the survivor's subscription: the delegate occurrence count
+            matches the number of attached components, and OnDisable removes
+            exactly one.
+         */
+        [UnityTest]
+        public IEnumerator DisablingOneForwarderKeepsTheOtherSubscribed()
+        {
+            _panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
+            _terminalObject = new GameObject("TerminalLogForwarderA");
+            _terminalObject.SetActive(false);
+            UIDocument document = _terminalObject.AddComponent<UIDocument>();
+            document.panelSettings = _panelSettings;
+            _terminal = _terminalObject.AddComponent<TerminalUI>();
+            _terminal._uiDocument = document;
+            _terminal.resetStateOnInit = false;
+            _terminal._logUnityMessages = true;
+            _terminal._themePack = LoadAsset<TerminalThemePack>("Packs/Themes/Medium.asset");
+            _terminal._fontPack = LoadAsset<TerminalFontPack>("Packs/Fonts/Medium.asset");
+            StartTracker tracker = _terminalObject.AddComponent<StartTracker>();
+            _terminalObject.SetActive(true);
+
+            GameObject peerObject = new GameObject("TerminalLogForwarderB");
+            peerObject.SetActive(false);
+            TerminalUI peer = peerObject.AddComponent<TerminalUI>();
+            peer.resetStateOnInit = false;
+            peer._logUnityMessages = true;
+            _spawnedObjects.Add(peerObject);
+            StartTracker peerTracker = peerObject.AddComponent<StartTracker>();
+            peerObject.SetActive(true);
+            yield return new WaitUntil(() => peerTracker.Started);
+
+            peer.enabled = false;
+            yield return null;
+
+            Debug.Log("unity-forwarded");
+            yield return null;
+
+            bool forwarded = false;
+            foreach (LogItem entry in Terminal.Buffer.Logs)
+            {
+                if (string.Equals(entry.message, "unity-forwarded", StringComparison.Ordinal))
+                {
+                    forwarded = true;
+                    break;
+                }
+            }
+
+            Assert.IsTrue(
+                forwarded,
+                "Disabling one log forwarder must keep the survivor subscribed"
             );
         }
 

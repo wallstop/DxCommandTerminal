@@ -150,7 +150,7 @@
         internal TerminalThemePack _themePack;
 
         [SerializeField]
-        private bool _logUnityMessages;
+        internal bool _logUnityMessages;
 
         private IInputHandler[] _inputHandlers;
 
@@ -450,16 +450,15 @@
             if (_unityLogAttached)
             {
                 /*
-                    Both delegates detach defensively: the inspector toggle
-                    path attaches HandleUnityLog while the attach-time flag
-                    pairs with UnityLogCallback; the names are structurally
-                    equal today (UnityLogCallback wraps the same static
-                    method), so either detach removes the occurrence, and
-                    detaching both keeps the pairing correct if that ever
-                    changes.
+                    Every attach site (the enable path and the inspector
+                    toggle path) binds the same static HandleUnityLog method,
+                    so the delegates are structurally equal and this single
+                    removal drops exactly this component's one occurrence -
+                    never a peer's subscription. Removing twice would strip a
+                    surviving terminal's forwarding when two components
+                    forward Unity logs.
                  */
                 Application.logMessageReceivedThreaded -= UnityLogCallback;
-                Application.logMessageReceivedThreaded -= HandleUnityLog;
                 _unityLogAttached = false;
             }
 
@@ -737,6 +736,15 @@
             _configOwner = null;
             LiveTerminals.Clear();
             TerminalSession.Current.ResetState();
+
+            /*
+                No live component exists here (scene Awake has not run and the
+                previous session's components are destroyed), so these
+                removals cannot strip a legitimate subscription; they clean
+                leaked occurrences from an abnormal exit. A leaked occurrence
+                that survives is inert: HandleUnityLog reads the buffer, which
+                is null until the next Apply.
+             */
             Application.logMessageReceivedThreaded -= UnityLogCallback;
             Application.logMessageReceivedThreaded -= HandleUnityLog;
         }
