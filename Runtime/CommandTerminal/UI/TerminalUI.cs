@@ -451,10 +451,12 @@
             {
                 /*
                     Both delegates detach defensively: the inspector toggle
-                    path attaches HandleUnityLog while OnDisable's attach-time
-                    flag only knows about UnityLogCallback, so a toggle after
-                    the last refresh could otherwise leak the callback into
-                    the disabled state (and across Play Mode sessions).
+                    path attaches HandleUnityLog while the attach-time flag
+                    pairs with UnityLogCallback; the names are structurally
+                    equal today (UnityLogCallback wraps the same static
+                    method), so either detach removes the occurrence, and
+                    detaching both keeps the pairing correct if that ever
+                    changes.
                  */
                 Application.logMessageReceivedThreaded -= UnityLogCallback;
                 Application.logMessageReceivedThreaded -= HandleUnityLog;

@@ -657,16 +657,20 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [UnityTest]
         public IEnumerator LoggingBeforeStartSurvivesWithoutReset()
         {
-            /*
-                The buffer may already hold entries from earlier tests (the
-                reset-off path reuses the shared buffer), so the assert is
-                baseline-relative.
-             */
-            int baseline = Terminal.Buffer?.Logs.Count ?? 0;
             yield return LogBeforeStartAndAwaitStart(resetStateOnInit: false);
+
+            /*
+                Content-based assert: the buffer is shared and capacity-capped
+                (ring wrap keeps Count at Capacity), so absolute or
+                baseline-relative counts are suite-order sensitive. Nothing
+                logs between the pre-Start write and Start, so the entry is
+                the newest one.
+             */
+            IReadOnlyList<LogItem> logs = Terminal.Buffer.Logs;
+            Assert.AreNotEqual(0, logs.Count, "Sanity: the pre-Start log exists");
             Assert.AreEqual(
-                baseline + 1,
-                Terminal.Buffer.Logs.Count,
+                "before-start",
+                logs[logs.Count - 1].message,
                 "A pre-Start log survives Start when resetStateOnInit is off"
             );
         }
