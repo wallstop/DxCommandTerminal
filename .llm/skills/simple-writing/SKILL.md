@@ -40,6 +40,22 @@ restated context already in linked issues or PLAN. Numbers only as evidence
 lines. LLM-posted GitHub text keeps the `DISCLOSURE: LLM-GENERATED TEXT` first
 line (see llm-attribution); it does not count against the budget.
 
+## Enforcement (PRs)
+
+PR copy is mechanically enforced, not just documented:
+
+```sh
+node tooling~/scripts/lint-pr-copy.mjs --title "Add X" --body-file body.md
+```
+
+Checks: disclosure first line, `**Why:**` 1-2 lines, `**What:**` 3-6 one-line
+bullets, optional `**How we know:**` 1-3 lines, no other sections or preamble,
+title <= 72 chars, body <= 16 content lines. The Cursor Bugbot summary block
+(`<!-- CURSOR_SUMMARY -->` ... `<!-- /CURSOR_SUMMARY -->`) is stripped before
+checking - the bot appends it and it is not authored copy. CI runs the same
+check on every PR open/edit (`.github/workflows/pr-copy-lint.yml`). Run the
+command before opening or editing any PR.
+
 ## Example
 
 Bad:

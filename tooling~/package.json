@@ -20,6 +20,7 @@
     "lint:linq-production": "node scripts/lint-linq-production.mjs",
     "lint:string-equality": "node scripts/lint-string-equality.mjs",
     "lint:theme-palette-tokens": "node scripts/lint-theme-palette-tokens.mjs",
+    "lint:pr-copy": "node scripts/lint-pr-copy.mjs",
     "unity:mcp:probe": "node scripts/mcp/unity-mcp.mjs probe",
     "unity:mcp:configure": "node scripts/mcp/unity-mcp.mjs configure",
     "unity:mcp:bridge": "node scripts/mcp/unity-mcp.mjs bridge",
