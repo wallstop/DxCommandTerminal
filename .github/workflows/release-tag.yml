@@ -1,0 +1,78 @@
+name: Release Tag
+
+# T14 phase 2 (issue #85): pushes the annotated release tag when the default
+# branch receives a release commit (the squash-merged release PR).
+#
+# Loop-safety: a tag push never re-enters this workflow, because it only
+# fires on branch pushes that touch package.json. Behaviors (tooling~/docs/
+# release-runbook.md):
+# - tag v<version> (or the historical unprefixed tag) already exists ->
+#   silent no-op
+# - subject "release: vX.Y.Z" (plus GitHub's " (#N)" squash suffix) and a
+#   matching "## [X.Y.Z] - date" changelog heading -> annotated tag pushed
+# - release subject but no changelog heading -> fail closed (workflow fails)
+# - documented version without the expected release subject -> ::warning::
+#   plus manual fallback commands; no tag is pushed
+# - ordinary package.json push (no release subject, no heading) -> no-op
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - "package.json"
+
+concurrency:
+  group: release-tag
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  tag:
+    name: tag (package.json push)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history so the tag-existence check sees every tag.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+
+      - name: Decide whether to tag
+        id: decide
+        env:
+          SUBJECT: ${{ github.event.head_commit.message }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          args=(tag-gate --version "$version" --subject "$SUBJECT" --changelog CHANGELOG.md --github-output "$GITHUB_OUTPUT")
+          # v-prefixed tags are the pipeline convention; the historical
+          # unprefixed tags (pre-pipeline releases) count as released too.
+          if git rev-parse -q --verify "refs/tags/v${version}" >/dev/null 2>&1 ||
+            git rev-parse -q --verify "refs/tags/${version}" >/dev/null 2>&1; then
+            args+=(--tag-exists)
+          fi
+          node tooling~/scripts/release/release.mjs "${args[@]}"
+
+      - name: Push the annotated tag
+        if: ${{ steps.decide.outputs.action == 'tag' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.decide.outputs.version }}
+          TAG: ${{ steps.decide.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "DxCommandTerminal $VERSION"
+          # Route the push through gh's credential helper instead of a
+          # token-bearing URL, so a failed push can never echo credentials
+          # into the public job log. persist-credentials stays false.
+          gh auth setup-git
+          git push origin "refs/tags/${TAG}"
