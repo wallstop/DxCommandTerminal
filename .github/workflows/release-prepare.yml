@@ -90,7 +90,9 @@ jobs:
         run: npm --prefix tooling~ test
 
       - name: Open the release PR
-        if: ${{ inputs.dry_run != true }}
+        # !inputs.dry_run stays correct whether the dispatch input arrives as a
+        # typed boolean or the legacy string "true".
+        if: ${{ !inputs.dry_run }}
         env:
           GH_TOKEN: ${{ secrets.RELEASE_PAT || github.token }}
           BUMP: ${{ inputs.bump }}
