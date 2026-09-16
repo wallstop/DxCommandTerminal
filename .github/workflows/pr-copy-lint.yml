@@ -1,0 +1,43 @@
+name: PR Copy Lint
+
+# STE copy rules (.llm/skills/simple-writing/SKILL.md) are enforced, not just
+# documented: PR titles and descriptions are checked against the structure in
+# tooling~/scripts/lint-pr-copy.mjs. Runs on every PR open/edit, so a bloated
+# description fails the same way a failing test does.
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - reopened
+      - synchronize
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  pr-copy:
+    name: pr-copy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+
+      - name: Lint the PR title and description
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr view "${{ github.event.pull_request.number }}" --json title,body \
+            --jq '.title' > pr-title.txt
+          gh pr view "${{ github.event.pull_request.number }}" --json title,body \
+            --jq '.body // ""' > pr-body.txt
+          node tooling~/scripts/lint-pr-copy.mjs \
+            --title "$(cat pr-title.txt)" --body-file pr-body.txt

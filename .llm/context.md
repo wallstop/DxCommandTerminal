@@ -229,6 +229,10 @@ direct. A few sentences is the ceiling, not the target - cut before adding. PRs 
 how (plus why/what): `Why` 1-2 sentences, `What` 3-6 one-line bullets, optional 1-3
 evidence lines, ~12 lines total. Commit bodies ~8 lines. No per-file tours, no process
 narration, no restated context. Code comments state only what the code cannot say.
+Enforced for PRs by `npm --prefix tooling~ run lint:pr-copy` and the pr-copy CI job
+(`tooling~/scripts/lint-pr-copy.mjs`: disclosure first line, section structure, line
+and bullet budgets; the Cursor Bugbot summary block is stripped before checking).
+Check before opening or editing a PR.
 Details: [simple-writing](./skills/simple-writing/SKILL.md).
 
 ### CHANGELOG (user-facing only)

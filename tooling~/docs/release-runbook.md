@@ -10,13 +10,12 @@ distributable is produced from plain repository content.
 | --- | --- | --- | --- |
 | Prepare | Manual dispatch (`Release Prepare`) | `.github/workflows/release-prepare.yml` | Rewrites `package.json`, rotates `CHANGELOG.md`'s `## Unreleased` content under a dated `## [X.Y.Z] - date` heading, opens the `release/vX.Y.Z` PR |
 | Tag | Push to `master` touching `package.json` | `.github/workflows/release-tag.yml` | Pushes the annotated `vX.Y.Z` tag when the squash-merge subject is `release: vX.Y.Z` |
-| Publish | Tag push | `release.yml` (next milestone, issue #85) | Verifies tag/package/changelog agreement, validates + attests, builds the `.unitypackage`, publishes npm + GitHub Release |
+| Publish | Tag push (`v*`) | `.github/workflows/release.yml` | Verifies tag/package/changelog agreement, validates + attests, builds the `.unitypackage`, publishes npm, publishes the GitHub Release |
 
 Versions are full semver including prerelease identifiers (`1.0.0-rc25.0`). Release tags
 carry a `v` prefix (`v1.0.0-rc26.0`); the historical unprefixed tags (`1.0.0-rc25.0`)
-predate the pipeline, and the tag gate treats both forms as already-released. Once the
-publish workflow lands (next milestone), prerelease versions publish to npm's `next`
-dist-tag and stable versions to `latest`.
+predate the pipeline, and the tag gate treats both forms as already-released. Prerelease
+versions publish to npm's `next` dist-tag; stable versions to `latest`.
 
 ## One-time setup
 
@@ -26,9 +25,11 @@ dist-tag and stable versions to `latest`.
   CI runs on release PRs, add a fine-grained PAT with `contents: write` +
   `pull-requests: write` as the `RELEASE_PAT` secret; the workflow uses it when present
   and falls back to `GITHUB_TOKEN` otherwise.
-- **npm Trusted Publishing (pending).** Configured once npmjs.com-side when `release.yml`
-  (publish flow) lands: register this repository + workflow as a trusted publisher for
-  `com.wallstop-studios.dxcommandterminal`.
+- **npm Trusted Publishing (one-time).** On npmjs.com: package settings -> Trusted
+  Publisher, register this repository (`wallstop/DxCommandTerminal`) + workflow filename
+  `release.yml`. Until that is configured, the `publish-npm` job fails at npm publish;
+  every earlier stage runs normally. npm publish uses OIDC (`id-token: write` +
+  `npm publish --provenance`); no npm token secret is stored in the repo.
 
 ## Preparing a release
 
@@ -54,6 +55,49 @@ Failures at this stage are all fail-closed:
   `refs/remotes/origin/release/vX.Y.Z` (what a CI checkout actually sees) exists →
   delete the stale ref or pick another version.
 - Invalid version / bump choice → fix the input.
+
+## The publish flow (Release Publish)
+
+Fires on every `v*` tag push. Five jobs, in order:
+
+1. **verify** - `release.mjs verify-release` fails closed unless the tag, the
+   `package.json` version, and the `## [X.Y.Z] - date` changelog heading all agree.
+2. **validate** - package-content validator, `npm pack`, sha256, artifact upload,
+   build-provenance attestation.
+3. **unitypackage** - required, non-skippable exporter run + sha256 + attestation; an
+   empty or failed export blocks publishing.
+4. **publish-npm** - skipped when `npm view` shows the exact name@version already on the
+   registry (safe re-runs); otherwise `npm publish --provenance` with the version-shape
+   dist-tag (`next` for prereleases, `latest` for stable).
+5. **github-release** - creates the draft Release from the changelog section (shared
+   extractor, fail-closed on missing/empty notes), uploads `.tgz`, `.tgz.sha256`,
+   `.unitypackage`, `.unitypackage.sha256`, verifies the four assets, then publishes.
+   npm publish always completes first (job dependency), never the reverse.
+
+### Rehearsing a release (no publish)
+
+Actions -> **Release Publish** -> **Run workflow** on a candidate tag:
+
+1. On a scratch branch, set `package.json` to a rehearsal version that will never be
+   released (e.g. `1.0.0-rehearsal.0`), add a matching `## [1.0.0-rehearsal.0] - date`
+   changelog heading, commit, and push the tag `v1.0.0-rehearsal.0`.
+2. Dispatch the workflow with `tag: v1.0.0-rehearsal.0` and `dry_run: true`. Verify,
+   validate, and unitypackage run for real; npm publish and the release publish step are
+   skipped, and the Release stays a draft for review.
+3. Delete the scratch branch, the rehearsal tag, and the draft release afterwards.
+
+### Re-running after a partial failure
+
+- **Prepare failed midway** (files rewritten, PR not opened): delete the local/ref
+  leftovers, revert the push if any, fix the cause, and dispatch again; the script
+  refuses to run while `release/vX.Y.Z` exists.
+- **Tag failed after the merge** (`Release Tag` job red): the changelog/package state on
+  `master` is already correct - use the manual fallback commands, or re-run the failed
+  workflow run (the tag step is idempotent; an existing tag no-ops).
+- **Publish failed after the tag**: re-run `Release Publish` from the same tag
+  (workflow_dispatch with `tag` + `dry_run: false`, or re-run the failed jobs). Every
+  stage is re-run safe: verify re-checks the same tree, npm skips a version already on
+  the registry, the draft release is reused, and assets re-upload with `--clobber`.
 
 ## Reviewing and merging the release PR
 
@@ -82,17 +126,6 @@ git tag -a vX.Y.Z -m "DxCommandTerminal X.Y.Z"
 git push origin vX.Y.Z
 ```
 
-## Re-running after a partial failure
-
-- **Prepare failed midway** (files rewritten, PR not opened): delete the local/ref
-  leftovers, revert the push if any, fix the cause, and dispatch again; the script
-  refuses to run while `release/vX.Y.Z` exists.
-- **Tag failed after the merge** (`Release Tag` job red): the changelog/package state on
-  `master` is already correct — use the manual fallback commands, or re-run the failed
-  workflow run (the tag step is idempotent; an existing tag no-ops).
-- **Publish fails after the tag** (once `release.yml` lands): re-run the publish
-  workflow from the same tag; npm skips versions already on the registry.
-
 ## Local tooling
 
 The same logic runs locally without CI:
@@ -105,7 +138,9 @@ npm run release:gate -- --version X --subject S [--tag-exists]
 
 The release CLI (`tooling~/scripts/release/release.mjs`) and the pure versioning module
 (`tooling~/scripts/release/versioning.mjs`) are contract-tested in
-`tooling~/scripts/tests/` and run in CI on every PR (node-tests lane).
+`tooling~/scripts/tests/` and run in CI on every PR (node-tests lane). The publish-flow
+subcommands (`verify-release`, `notes`, `publish-gate`) share that coverage; the PR-copy
+linter (`npm --prefix tooling~ run lint:pr-copy`) enforces the STE PR structure.
 
 ## Security notes
 

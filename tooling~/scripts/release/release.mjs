@@ -1,16 +1,25 @@
 /*
-    Release CLI (T14 phase 2, issue #85). One entry point, two subcommands:
+    Release CLI (T14 phase 2, issue #85). One entry point, four subcommands:
 
-    prepare   - rewrites package.json + CHANGELOG.md for the next release
-                (bump or explicit version), refusing when the version tag or
-                the release branch already exists. --dry-run prints the
-                prepared diff and writes nothing.
-    tag-gate  - decides whether a default-branch push that touched
-                package.json should push its release tag; release-tag.yml
-                wraps this (tag/noop/warn/fail) and executes the push.
+    prepare        - rewrites package.json + CHANGELOG.md for the next release
+                     (bump or explicit version), refusing when the version tag or
+                     the release branch already exists. --dry-run prints the
+                     prepared diff and writes nothing.
+    tag-gate       - decides whether a default-branch push that touched
+                     package.json should push its release tag; release-tag.yml
+                     wraps this (tag/noop/warn/fail) and executes the push.
+    verify-release - the release.yml verify job: confirms the tag, package.json
+                     version, and changelog heading agree, and reports the npm
+                     dist-tag for the version shape (prerelease -> next).
+    notes          - the shared changelog extractor: prints (or writes) the
+                     "## [version] - date" section body for the GitHub Release
+                     notes, failing closed on a missing or empty section.
+    publish-gate   - the release.yml npm-publish skip check: reports whether
+                     name@version is already on the registry (re-run safety)
+                     plus the dist-tag, via an injectable registry probe.
 
-    All git and file side effects live here; the pure decision and rewrite
-    logic lives in versioning.mjs.
+    All git, file, npm, and network side effects live here; the pure decision
+    and rewrite logic lives in versioning.mjs.
 */
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
@@ -21,6 +30,7 @@ import {
   changelogHasVersionHeading,
   diffLines,
   evaluateTagPush,
+  extractSection,
   parseVersion,
   rotateUnreleased
 } from "./versioning.mjs";
@@ -28,6 +38,13 @@ import {
 const REPO_ROOT = path.resolve(fileURLToPath(new URL("../../..", import.meta.url)));
 const VERSION_FIELD_PATTERN = /("version"\s*:\s*")([^"]+)(")/g;
 const BUMPS = new Set(["patch", "minor", "major"]);
+const REGEX_ESCAPE_PATTERN = /[.*+?^${}()|[\]\\]/g;
+
+// Node refuses to spawn .cmd/.bat without a shell on Windows (CVE-2024-27980
+// hardening). The npm view arguments are literals with no spaces, so shell
+// joining stays safe.
+const NPM = process.platform === "win32" ? "npm.cmd" : "npm";
+const NPM_SPAWN_OPTIONS = process.platform === "win32" ? { shell: true } : {};
 
 function defaultRefExists(ref) {
   try {
@@ -147,6 +164,116 @@ function evaluateTagGate(options) {
   });
 }
 
+/*
+    The npm dist-tag for a version shape: prerelease versions (1.0.0-rc26.0)
+    publish under "next", stable versions (1.0.1) under "latest". Locked in
+    PLAN.md T14.
+*/
+function distTagFor(version) {
+  const parsed = parseVersion(version);
+  if (parsed === null) {
+    throw new Error(`invalid semver version: ${version}`);
+  }
+  return parsed.prerelease !== null ? "next" : "latest";
+}
+
+/*
+    release.yml verify job: the tag being published, the version in
+    package.json, and the changelog heading must all agree before anything
+    is built or published. Throws (fail closed) on any disagreement.
+    Returns { version, tag, distTag } for the CLI wrapper to emit.
+*/
+function verifyRelease(options) {
+  const parsed = parseVersion(options.version);
+  if (parsed === null) {
+    throw new Error(`package.json carries an invalid version: ${options.version}`);
+  }
+  if (options.tag !== `v${options.version}`) {
+    throw new Error(
+      `tag ${options.tag} does not match package.json version ${options.version} (expected v${options.version})`
+    );
+  }
+  const changelogText = fs.readFileSync(options.changelogPath, "utf8");
+  if (!changelogHasVersionHeading(changelogText, options.version)) {
+    throw new Error(
+      `CHANGELOG has no "## [${options.version}] - date" heading for the tagged release`
+    );
+  }
+  return { version: options.version, tag: options.tag, distTag: distTagFor(options.version) };
+}
+
+/*
+    Shared changelog extractor: the "## [version] - date" section body for
+    the GitHub Release notes. Fails closed when the heading is missing or
+    the section is empty - publishing an empty notes body would mean a
+    release the changelog never documented.
+*/
+function extractReleaseNotes(options) {
+  if (parseVersion(options.version) === null) {
+    throw new Error(`invalid semver version: ${options.version}`);
+  }
+  const changelogText = fs.readFileSync(options.changelogPath, "utf8");
+  if (!changelogHasVersionHeading(changelogText, options.version)) {
+    throw new Error(
+      `CHANGELOG has no "## [${options.version}] - date" heading; release notes cannot be extracted`
+    );
+  }
+  const escaped = options.version.replace(REGEX_ESCAPE_PATTERN, "\\$&");
+  // [ \t] not \s before $: with the m flag, \s* would run across newlines and
+  // the matched heading would swallow the section's leading blank lines,
+  // breaking extractSection's exact-line lookup.
+  const heading = new RegExp(`^## \\[${escaped}\\] - (\\d{4}-\\d{2}-\\d{2})[ \\t]*$`, "m").exec(changelogText)?.[0];
+  const body = extractSection(changelogText, heading);
+  if (body === null || body.length === 0) {
+    throw new Error(`CHANGELOG section for ${options.version} is empty; nothing to publish as release notes`);
+  }
+  return body;
+}
+
+/*
+    release.yml npm-publish skip check: re-running the publish workflow must
+    not fail on (or double-publish) a version already on the registry.
+    deps.registryHasVersion is injectable so tests never touch the network.
+    Returns { publish, distTag, reason }.
+*/
+function evaluatePublishGate(options, deps = {}) {
+  const parsed = parseVersion(options.version);
+  if (parsed === null) {
+    throw new Error(`invalid semver version: ${options.version}`);
+  }
+  if (typeof options.name !== "string" || options.name.length === 0) {
+    throw new Error("missing package name");
+  }
+  const distTag = distTagFor(options.version);
+  const registryHasVersion = deps.registryHasVersion ?? defaultRegistryHasVersion;
+  if (registryHasVersion(options.name, options.version)) {
+    return {
+      publish: false,
+      distTag,
+      reason: `${options.name}@${options.version} is already on the registry; skipping publish`
+    };
+  }
+  return { publish: true, distTag, reason: `${options.name}@${options.version} is not on the registry yet` };
+}
+
+function defaultRegistryHasVersion(name, version) {
+  try {
+    execFileSync(NPM, ["view", `${name}@${version}`, "version"], {
+      stdio: ["ignore", "ignore", "ignore"],
+      ...NPM_SPAWN_OPTIONS
+    });
+    return true;
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      throw new Error("npm is unavailable; cannot check the registry for an existing publish");
+    }
+    // npm exits non-zero both for "not found" and for registry failures; a
+    // transient registry outage re-enters the not-published path, and the
+    // subsequent publish surfaces a real registry problem loudly.
+    return false;
+  }
+}
+
 const PREPARE_OPTIONS = {
   "--bump": "bump",
   "--version": "version",
@@ -161,10 +288,31 @@ const GATE_OPTIONS = {
 };
 const PREPARE_FLAGS = { "--dry-run": "dryRun" };
 const GATE_FLAGS = { "--tag-exists": "tagExists" };
+const VERIFY_OPTIONS = {
+  "--version": "version",
+  "--tag": "tag",
+  "--changelog": "changelogPath",
+  "--github-output": "githubOutput"
+};
+const NOTES_OPTIONS = {
+  "--version": "version",
+  "--changelog": "changelogPath",
+  "--output": "outputPath",
+  "--github-output": "githubOutput"
+};
+const PUBLISH_GATE_OPTIONS = {
+  "--name": "name",
+  "--version": "version",
+  "--github-output": "githubOutput"
+};
 const FALLBACK_COMMANDS = (tag, version) => [
   `git tag -a ${tag} -m "DxCommandTerminal ${version}"`,
   `git push origin ${tag}`
 ];
+
+const VERIFY_FLAGS = {};
+const NOTES_FLAGS = {};
+const PUBLISH_GATE_FLAGS = {};
 
 function writeGithubOutput(path, decision) {
   if (path === undefined) {
@@ -175,6 +323,13 @@ function writeGithubOutput(path, decision) {
     lines.push(`version=${decision.tag.slice(1)}`, `tag=${decision.tag}`);
   }
   fs.appendFileSync(path, `${lines.join("\n")}\n`);
+}
+
+function appendGithubOutput(githubOutput, lines) {
+  if (githubOutput === undefined) {
+    return;
+  }
+  fs.appendFileSync(githubOutput, `${lines.join("\n")}\n`);
 }
 
 function printDiff(changes) {
@@ -245,7 +400,66 @@ const USAGE =
   "usage: node release.mjs prepare (--bump patch|minor|major | --version X.Y.Z[-pre]) [--dry-run] " +
   "[--package-json <path>] [--changelog <path>]\n" +
   "       node release.mjs tag-gate --version X.Y.Z --subject <commit subject> --changelog <path> " +
-  "[--tag-exists] [--github-output <path>]";
+  "[--tag-exists] [--github-output <path>]\n" +
+  "       node release.mjs verify-release --version X.Y.Z --tag vX.Y.Z --changelog <path> " +
+  "[--github-output <path>]\n" +
+  "       node release.mjs notes --version X.Y.Z --changelog <path> [--output <path>] " +
+  "[--github-output <path>]\n" +
+  "       node release.mjs publish-gate --name <package> --version X.Y.Z [--github-output <path>]";
+
+function runVerifyRelease(argv) {
+  const options = parseOptionArgs(argv, VERIFY_OPTIONS, VERIFY_FLAGS);
+  if (options.version === undefined) {
+    throw new Error("missing --version");
+  }
+  if (options.tag === undefined) {
+    throw new Error("missing --tag");
+  }
+  options.changelogPath = path.resolve(options.changelogPath ?? path.join(REPO_ROOT, "CHANGELOG.md"));
+  const result = verifyRelease(options);
+  console.log(
+    `[release-verify] ok: tag ${result.tag} == package.json ${result.version}, ` +
+      `changelog heading present, dist-tag: ${result.distTag}`
+  );
+  appendGithubOutput(options.githubOutput, [
+    `version=${result.version}`,
+    `tag=${result.tag}`,
+    `dist-tag=${result.distTag}`
+  ]);
+}
+
+function runNotes(argv) {
+  const options = parseOptionArgs(argv, NOTES_OPTIONS, NOTES_FLAGS);
+  if (options.version === undefined) {
+    throw new Error("missing --version");
+  }
+  options.changelogPath = path.resolve(options.changelogPath ?? path.join(REPO_ROOT, "CHANGELOG.md"));
+  const body = extractReleaseNotes(options);
+  if (options.outputPath !== undefined) {
+    fs.mkdirSync(path.dirname(path.resolve(options.outputPath)), { recursive: true });
+    fs.writeFileSync(options.outputPath, `${body}\n`);
+    console.log(`[release-notes] wrote ${body.split("\n").length} lines to ${options.outputPath}`);
+  } else {
+    console.log(body);
+  }
+  appendGithubOutput(options.githubOutput, [`lines=${body.split("\n").length}`]);
+}
+
+function runPublishGate(argv) {
+  const options = parseOptionArgs(argv, PUBLISH_GATE_OPTIONS, PUBLISH_GATE_FLAGS);
+  if (options.version === undefined) {
+    throw new Error("missing --version");
+  }
+  if (options.name === undefined) {
+    throw new Error("missing --name");
+  }
+  const decision = evaluatePublishGate(options);
+  console.log(`[release-publish] ${decision.reason}`);
+  appendGithubOutput(options.githubOutput, [
+    `publish=${decision.publish}`,
+    `dist-tag=${decision.distTag}`
+  ]);
+}
 
 function main() {
   const [command, ...rest] = process.argv.slice(2);
@@ -254,6 +468,12 @@ function main() {
       runPrepare(rest);
     } else if (command === "tag-gate") {
       runTagGate(rest);
+    } else if (command === "verify-release") {
+      runVerifyRelease(rest);
+    } else if (command === "notes") {
+      runNotes(rest);
+    } else if (command === "publish-gate") {
+      runPublishGate(rest);
     } else {
       throw new Error(command === undefined ? "missing subcommand" : `unknown subcommand: ${command}`);
     }
@@ -271,4 +491,12 @@ if (isMain) {
   main();
 }
 
-export { FALLBACK_COMMANDS, evaluateTagGate, prepareRelease };
+export {
+  FALLBACK_COMMANDS,
+  distTagFor,
+  evaluatePublishGate,
+  evaluateTagGate,
+  extractReleaseNotes,
+  prepareRelease,
+  verifyRelease
+};
