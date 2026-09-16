@@ -252,7 +252,8 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                 CommandModel model = CommandModelBuilder.Build(
                     method,
                     attribute,
-                    commandArgumentType
+                    commandArgumentType,
+                    candidate
                 );
                 if (model != null)
                 {
@@ -342,8 +343,8 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
         public bool ContainingTypeIsUnbound;
 
         /*
-           The handler method name escaped for use as a C# identifier
-           (keyword names such as `@params`).
+            The handler method name escaped for use as a C# identifier
+            (keyword names such as `@params`).
         */
         public string MethodNameIdentifierDisplay;
 
@@ -351,8 +352,8 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
         public bool IsMethodGeneric;
 
         /*
-           False when a parameter type or the method itself is open, dynamic,
-           or otherwise not addressable by an exact typeof signature.
+            False when a parameter type or the method itself is open, dynamic,
+            or otherwise not addressable by an exact typeof signature.
         */
         public bool ExactSignatureAddressable;
 
@@ -360,10 +361,51 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             Full typeof-able expressions per parameter, in declaration order.
             Managed references (ref/out/in) are emitted as
             typeof(T).MakeByRefType() because typeof(T&) is not legal C#.
-            Null when nothing needs them (valid signatures that bind directly);
-            the unbound finder only consumes the length.
+            Null when nothing needs them (valid signatures that bind directly
+            or through a partial companion); the unbound finder only consumes
+            the length.
          */
         public string[] ParameterTypeExpressions;
+
+        /*
+            Valid signatures only. True when the generated catalog can bind
+            the inaccessible handler without reflection: the containing chain
+            is a non-generic class-or-struct chain of partial declarations
+            with no file-local level, so the emitted file carries a partial
+            companion of that chain whose nested binder names the private
+            method directly.
+        */
+        public bool PartialBindable;
+
+        /*
+            The containing chain's declaration levels, outermost first, with
+            names escaped for emission (@object). Null unless PartialBindable.
+        */
+        public PartialChainLevel[] PartialChain;
+
+        /*
+            The consumer namespace the companion is emitted into, escaped
+            segment by segment. Null for the global namespace.
+        */
+        public string PartialNamespace;
+    }
+
+    /*
+        One declaration level of a partial containing chain: the escaped
+        identifier and the type keyword exactly as the consumer wrote them
+        (class or struct), so the emitted companion merges into the
+        consumer's declarations.
+    */
+    internal readonly struct PartialChainLevel
+    {
+        public readonly string Name;
+        public readonly string Keyword;
+
+        public PartialChainLevel(string name, string keyword)
+        {
+            Name = name;
+            Keyword = keyword;
+        }
     }
 
     internal static class CommandModelBuilder
@@ -371,7 +413,8 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
         public static CommandModel Build(
             IMethodSymbol method,
             CommandAttributeData attribute,
-            ITypeSymbol commandArgumentType
+            ITypeSymbol commandArgumentType,
+            MethodDeclarationSyntax methodDeclaration
         )
         {
             /*
@@ -408,6 +451,19 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
 
             BuildSignature(method, commandArgumentType, containingTypeIsUnbound, model);
 
+            /*
+                The symbol accessibility walk cannot see file-local
+                declarations (the Roslyn this generator compiles against has
+                no file-local API; file-local levels report Internal), so the
+                syntax chain supplies the check: a file-local level cannot be
+                named from the generated file, exactly like a private nested
+                holder.
+            */
+            if (model.TypeChainNameable && HasFileLevelDeclaration(methodDeclaration))
+            {
+                model.TypeChainNameable = false;
+            }
+
             if (model.HasValidSignature && model.DirectlyBindable)
             {
                 /*
@@ -417,7 +473,12 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                 return model;
             }
 
-            BuildParameterExpressions(method, model);
+            model.PartialBindable = TryBuildPartialBindable(method, methodDeclaration, model);
+            if (!model.PartialBindable)
+            {
+                BuildParameterExpressions(method, model);
+            }
+
             return model;
         }
 
@@ -454,6 +515,160 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             }
 
             return name.Trim();
+        }
+
+        /*
+            True when any declaration in the containing chain is file-local.
+            Only attributed methods reach this walk, so the chain depth is
+            bounded by the source, not by the assembly.
+        */
+        private static bool HasFileLevelDeclaration(MethodDeclarationSyntax methodDeclaration)
+        {
+            for (
+                SyntaxNode current = methodDeclaration.Parent;
+                current is TypeDeclarationSyntax typeDeclaration;
+                current = current.Parent
+            )
+            {
+                foreach (SyntaxToken modifier in typeDeclaration.Modifiers)
+                {
+                    if (string.Equals(modifier.Text, "file", StringComparison.Ordinal))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        /*
+            A valid-signature void handler the catalog cannot name directly is
+            shimmable when its containing chain is a full partial declaration
+            chain: the emitted companion merges into the consumer's own
+            declarations and names the private method directly, keeping the
+            handler inside the catalog's static reachability graph for the
+            linker. Generic chains cannot bind a closed delegate anyway, and
+            file-local levels cannot be merged from another file.
+        */
+        private static bool TryBuildPartialBindable(
+            IMethodSymbol method,
+            MethodDeclarationSyntax methodDeclaration,
+            CommandModel model
+        )
+        {
+            if (
+                !model.HasValidSignature
+                || !method.ReturnsVoid
+                || IsAccessibleFromCatalog(method)
+                || !model.TypeChainNameable
+            )
+            {
+                return false;
+            }
+
+            if (!TryBuildPartialChain(methodDeclaration, out PartialChainLevel[] chain))
+            {
+                return false;
+            }
+
+            model.PartialChain = chain;
+            model.PartialNamespace = BuildPartialNamespace(method.ContainingType);
+            return true;
+        }
+
+        private static bool TryBuildPartialChain(
+            MethodDeclarationSyntax methodDeclaration,
+            out PartialChainLevel[] chain
+        )
+        {
+            chain = null;
+            List<PartialChainLevel> levels = null;
+            for (
+                SyntaxNode current = methodDeclaration.Parent;
+                current is TypeDeclarationSyntax typeDeclaration;
+                current = current.Parent
+            )
+            {
+                if (typeDeclaration is not (ClassDeclarationSyntax or StructDeclarationSyntax))
+                {
+                    return false;
+                }
+
+                if (typeDeclaration.TypeParameterList != null)
+                {
+                    return false;
+                }
+
+                bool partial = false;
+                foreach (SyntaxToken modifier in typeDeclaration.Modifiers)
+                {
+                    if (modifier.IsKind(SyntaxKind.PartialKeyword))
+                    {
+                        partial = true;
+                    }
+                    else if (string.Equals(modifier.Text, "file", StringComparison.Ordinal))
+                    {
+                        return false;
+                    }
+                }
+
+                if (!partial)
+                {
+                    return false;
+                }
+
+                (levels ??= new List<PartialChainLevel>()).Add(
+                    new PartialChainLevel(
+                        EscapeIdentifier(typeDeclaration.Identifier.Text),
+                        typeDeclaration.Keyword.ValueText
+                    )
+                );
+            }
+
+            if (levels == null)
+            {
+                return false;
+            }
+
+            levels.Reverse();
+            chain = levels.ToArray();
+            return true;
+        }
+
+        /*
+            Nested types share their outermost declaration's namespace, so the
+            containing type symbol's namespace is the companion's namespace.
+            Segments are re-escaped because a namespace written as
+            `namespace @object { }` reports the bare keyword name.
+        */
+        private static string BuildPartialNamespace(INamedTypeSymbol containingType)
+        {
+            INamespaceSymbol namespaceSymbol = containingType.ContainingNamespace;
+            if (namespaceSymbol == null || namespaceSymbol.IsGlobalNamespace)
+            {
+                return null;
+            }
+
+            return EscapeNamespace(namespaceSymbol.ToDisplayString());
+        }
+
+        private static string EscapeNamespace(string namespaceName)
+        {
+            List<string> escapedSegments = new List<string>();
+            int segmentStart = 0;
+            for (int i = 0; i <= namespaceName.Length; ++i)
+            {
+                if (i == namespaceName.Length || namespaceName[i] == '.')
+                {
+                    escapedSegments.Add(
+                        EscapeIdentifier(namespaceName.Substring(segmentStart, i - segmentStart))
+                    );
+                    segmentStart = i + 1;
+                }
+            }
+
+            return string.Join(".", escapedSegments);
         }
 
         private static void BuildSignature(

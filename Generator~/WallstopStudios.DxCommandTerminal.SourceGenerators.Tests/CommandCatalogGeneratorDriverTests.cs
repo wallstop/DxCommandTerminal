@@ -322,6 +322,157 @@ namespace Fixtures
     }
 }";
 
+        private const string PartialPrivateCommandFixture =
+            @"
+namespace Fixtures
+{
+    using WallstopStudios.DxCommandTerminal.Attributes;
+    using WallstopStudios.DxCommandTerminal.Backend;
+
+    public static partial class PartialPrivateCommands
+    {
+        public static int SecretInvocations;
+
+        [RegisterCommand(Help = ""private command in a partial holder"")]
+        private static void CommandSecret(CommandArg[] args)
+        {
+            SecretInvocations++;
+        }
+    }
+}";
+
+        private const string PartialPrivateNestedCommandFixture =
+            @"
+namespace Fixtures
+{
+    using WallstopStudios.DxCommandTerminal.Attributes;
+    using WallstopStudios.DxCommandTerminal.Backend;
+
+    public static partial class PartialOuter
+    {
+        public static partial class PartialInner
+        {
+            public static int SecretInvocations;
+
+            [RegisterCommand(Help = ""private command in a nested partial holder"")]
+            private static void CommandSecret(CommandArg[] args)
+            {
+                SecretInvocations++;
+            }
+        }
+    }
+}";
+
+        private const string PartialStructPrivateCommandFixture =
+            @"
+namespace Fixtures
+{
+    using WallstopStudios.DxCommandTerminal.Attributes;
+    using WallstopStudios.DxCommandTerminal.Backend;
+
+    public partial struct PartialStructCommands
+    {
+        public static int SecretInvocations;
+
+        [RegisterCommand(Help = ""private command in a partial struct"")]
+        private static void CommandSecret(CommandArg[] args)
+        {
+            SecretInvocations++;
+        }
+    }
+}";
+
+        private const string PartialMixedCommandsFixture =
+            @"
+namespace Fixtures
+{
+    using WallstopStudios.DxCommandTerminal.Attributes;
+    using WallstopStudios.DxCommandTerminal.Backend;
+
+    public static partial class PartialMixedCommands
+    {
+        public static int Invocations;
+
+        [RegisterCommand(Help = ""public command"")]
+        public static void Public(CommandArg[] args)
+        {
+            Invocations++;
+        }
+
+        [RegisterCommand(Help = ""private command one"")]
+        private static void CommandFirst(CommandArg[] args)
+        {
+            Invocations++;
+        }
+
+        [RegisterCommand(Help = ""private command two"")]
+        private static void CommandSecond(CommandArg[] args)
+        {
+            Invocations++;
+        }
+    }
+
+    public static partial class OtherPartialCommands
+    {
+        [RegisterCommand(Help = ""other private command"")]
+        private static void CommandOther(CommandArg[] args)
+        {
+        }
+    }
+}";
+
+        private const string KeywordNamedPartialHolderFixture =
+            @"
+namespace Fixtures
+{
+    using WallstopStudios.DxCommandTerminal.Attributes;
+    using WallstopStudios.DxCommandTerminal.Backend;
+
+    public static partial class @object
+    {
+        public static int SecretInvocations;
+
+        [RegisterCommand(Help = ""private command in a keyword-named holder"")]
+        private static void CommandSecret(CommandArg[] args)
+        {
+            SecretInvocations++;
+        }
+    }
+}";
+
+        private const string GenericPartialHolderFixture =
+            @"
+namespace Fixtures
+{
+    using System;
+    using WallstopStudios.DxCommandTerminal.Attributes;
+    using WallstopStudios.DxCommandTerminal.Backend;
+
+    public static partial class GenericPartialHolder<T>
+    {
+        [RegisterCommand]
+        private static void CommandSecret(CommandArg[] args)
+        {
+        }
+    }
+}";
+
+        private const string FileLocalPartialHolderFixture =
+            @"
+namespace Fixtures
+{
+    using WallstopStudios.DxCommandTerminal.Attributes;
+    using WallstopStudios.DxCommandTerminal.Backend;
+
+    file static partial class FileLocalCommands
+    {
+        [RegisterCommand]
+        public static void Run(CommandArg[] args)
+        {
+        }
+    }
+}";
+
         private const string PartialMethodFixture =
             @"
 namespace Fixtures
@@ -1000,6 +1151,266 @@ namespace Fixtures
                 )
             );
 
+            Assert.Null(generated);
+        }
+
+        [Fact]
+        public void PartialHolderPrivateCommandsBindWithoutReflection()
+        {
+            (SyntaxTree generated, CSharpCompilation output) = TestCompilationFactory.RunGenerator(
+                TestCompilationFactory.CreateCompilation(
+                    "PartialPrivate",
+                    PartialPrivateCommandFixture
+                )
+            );
+
+            Assert.NotNull(generated);
+            string source = generated.ToString();
+            Assert.Contains("DxCommandTerminalBinder", source, StringComparison.Ordinal);
+            Assert.DoesNotContain("GetMethod", source, StringComparison.Ordinal);
+
+            Assembly assembly = TestCompilationFactory.CompileAndLoad(output);
+            CatalogView catalog = CatalogView.Load(assembly);
+            object entry = Assert.Single(catalog.Entries);
+            Assert.Equal("Secret", catalog.NameOf(entry));
+            Assert.True(catalog.HasValidSignature(entry));
+            Assert.Null(catalog.MethodAccessorOf(entry));
+
+            FieldInfo invocations = assembly
+                .GetType("Fixtures.PartialPrivateCommands")
+                .GetField("SecretInvocations");
+            Assert.Equal(0, invocations.GetValue(null));
+            object[] args =
+            {
+                Array.CreateInstance(
+                    assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"),
+                    0
+                ),
+            };
+            catalog.BinderOf(entry)(args);
+            Assert.Equal(1, invocations.GetValue(null));
+        }
+
+        [Fact]
+        public void PartialHolderPrivateCommandsReuseTheCachedBinder()
+        {
+            Assembly assembly = TestCompilationFactory.CompileAndLoad(
+                TestCompilationFactory
+                    .RunGenerator(
+                        TestCompilationFactory.CreateCompilation(
+                            "PartialPrivateCached",
+                            PartialPrivateCommandFixture
+                        )
+                    )
+                    .output
+            );
+
+            CatalogView catalog = CatalogView.Load(assembly);
+            object entry = Assert.Single(catalog.Entries);
+            object[] args =
+            {
+                Array.CreateInstance(
+                    assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"),
+                    0
+                ),
+            };
+            catalog.BinderOf(entry)(args);
+            Assert.Same(catalog.BinderOf(entry)(args), catalog.BinderOf(entry)(args));
+        }
+
+        [Fact]
+        public void PartialNestedHolderPrivateCommandsBindWithoutReflection()
+        {
+            (SyntaxTree generated, CSharpCompilation output) = TestCompilationFactory.RunGenerator(
+                TestCompilationFactory.CreateCompilation(
+                    "PartialNested",
+                    PartialPrivateNestedCommandFixture
+                )
+            );
+
+            Assert.NotNull(generated);
+            string source = generated.ToString();
+            Assert.Contains("DxCommandTerminalBinder", source, StringComparison.Ordinal);
+            Assert.DoesNotContain("GetMethod", source, StringComparison.Ordinal);
+
+            Assembly assembly = TestCompilationFactory.CompileAndLoad(output);
+            CatalogView catalog = CatalogView.Load(assembly);
+            object entry = Assert.Single(catalog.Entries);
+            Assert.Equal("Secret", catalog.NameOf(entry));
+            Assert.True(catalog.HasValidSignature(entry));
+
+            FieldInfo invocations = assembly
+                .GetType("Fixtures.PartialOuter+PartialInner")
+                .GetField("SecretInvocations");
+            object[] args =
+            {
+                Array.CreateInstance(
+                    assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"),
+                    0
+                ),
+            };
+            catalog.BinderOf(entry)(args);
+            Assert.Equal(1, invocations.GetValue(null));
+        }
+
+        [Fact]
+        public void PartialStructPrivateCommandsBindWithoutReflection()
+        {
+            (SyntaxTree generated, CSharpCompilation output) = TestCompilationFactory.RunGenerator(
+                TestCompilationFactory.CreateCompilation(
+                    "PartialStruct",
+                    PartialStructPrivateCommandFixture
+                )
+            );
+
+            Assert.NotNull(generated);
+            Assert.DoesNotContain("GetMethod", generated.ToString(), StringComparison.Ordinal);
+
+            Assembly assembly = TestCompilationFactory.CompileAndLoad(output);
+            CatalogView catalog = CatalogView.Load(assembly);
+            object entry = Assert.Single(catalog.Entries);
+            Assert.True(catalog.HasValidSignature(entry));
+
+            FieldInfo invocations = assembly
+                .GetType("Fixtures.PartialStructCommands")
+                .GetField("SecretInvocations");
+            object[] args =
+            {
+                Array.CreateInstance(
+                    assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"),
+                    0
+                ),
+            };
+            catalog.BinderOf(entry)(args);
+            Assert.Equal(1, invocations.GetValue(null));
+        }
+
+        [Fact]
+        public void PartialHoldersGroupCompanionsAndKeepAccessibleCommandsDirect()
+        {
+            Assembly assembly = TestCompilationFactory.CompileAndLoad(
+                TestCompilationFactory
+                    .RunGenerator(
+                        TestCompilationFactory.CreateCompilation(
+                            "PartialMixed",
+                            PartialMixedCommandsFixture
+                        )
+                    )
+                    .output
+            );
+
+            CatalogView catalog = CatalogView.Load(assembly);
+            Assert.Equal(4, catalog.Entries.Count);
+            FieldInfo invocations = assembly
+                .GetType("Fixtures.PartialMixedCommands")
+                .GetField("Invocations");
+
+            object[] args =
+            {
+                Array.CreateInstance(
+                    assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"),
+                    0
+                ),
+            };
+            foreach (object entry in catalog.Entries)
+            {
+                catalog.BinderOf(entry)(args);
+            }
+
+            Assert.Equal(3, invocations.GetValue(null));
+        }
+
+        [Fact]
+        public void KeywordNamedPartialHoldersEmitCompilableCompanions()
+        {
+            Assembly assembly = TestCompilationFactory.CompileAndLoad(
+                TestCompilationFactory
+                    .RunGenerator(
+                        TestCompilationFactory.CreateCompilation(
+                            "KeywordPartial",
+                            KeywordNamedPartialHolderFixture
+                        )
+                    )
+                    .output
+            );
+
+            CatalogView catalog = CatalogView.Load(assembly);
+            object entry = Assert.Single(catalog.Entries);
+            Assert.True(catalog.HasValidSignature(entry));
+
+            object[] args =
+            {
+                Array.CreateInstance(
+                    assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"),
+                    0
+                ),
+            };
+            catalog.BinderOf(entry)(args);
+        }
+
+        [Fact]
+        public void NonPartialHolderPrivateCommandsKeepTheReflectionBinder()
+        {
+            (SyntaxTree generated, CSharpCompilation output) = TestCompilationFactory.RunGenerator(
+                TestCompilationFactory.CreateCompilation("NonPartialPrivate", StandardFixture)
+            );
+
+            Assert.NotNull(generated);
+            string source = generated.ToString();
+            Assert.DoesNotContain("DxCommandTerminalBinder", source, StringComparison.Ordinal);
+            Assert.Contains("GetMethod", source, StringComparison.Ordinal);
+
+            Assembly assembly = TestCompilationFactory.CompileAndLoad(output);
+            CatalogView catalog = CatalogView.Load(assembly);
+            object secret = catalog.Entries.Single(entry => catalog.NameOf(entry) == "Secret");
+            Assert.True(catalog.HasValidSignature(secret));
+            object[] args =
+            {
+                Array.CreateInstance(
+                    assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"),
+                    0
+                ),
+            };
+            catalog.BinderOf(secret)(args);
+        }
+
+        [Fact]
+        public void GenericPartialHoldersEmitNoCompanion()
+        {
+            (SyntaxTree generated, CSharpCompilation output) = TestCompilationFactory.RunGenerator(
+                TestCompilationFactory.CreateCompilation(
+                    "GenericPartial",
+                    GenericPartialHolderFixture
+                )
+            );
+
+            Assert.NotNull(generated);
+            Assert.DoesNotContain(
+                "DxCommandTerminalBinder",
+                generated.ToString(),
+                StringComparison.Ordinal
+            );
+
+            Assembly assembly = TestCompilationFactory.CompileAndLoad(output);
+            CatalogView catalog = CatalogView.Load(assembly);
+            object entry = Assert.Single(catalog.Entries);
+            Assert.False(catalog.HasValidSignature(entry));
+            Assert.NotNull(catalog.MethodAccessorOf(entry));
+        }
+
+        [Fact]
+        public void FileLocalHoldersSkipTheCatalogForTheWholeAssembly()
+        {
+            CSharpCompilation compilation = TestCompilationFactory.CreateCompilation(
+                "FileLocalPartial",
+                FileLocalPartialHolderFixture
+            );
+            Assert.DoesNotContain(
+                compilation.GetParseDiagnostics(),
+                diagnostic => diagnostic.Severity == DiagnosticSeverity.Error
+            );
+
+            (SyntaxTree generated, _) = TestCompilationFactory.RunGenerator(compilation);
             Assert.Null(generated);
         }
 
