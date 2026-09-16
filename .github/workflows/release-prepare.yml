@@ -1,0 +1,144 @@
+name: Release Prepare
+
+# T14 phase 2 (issue #85): prepares a release by rewriting package.json and
+# rotating CHANGELOG.md's "## Unreleased" content under a dated
+# "## [X.Y.Z] - date" heading, then opens the release PR. Manual dispatch
+# only, default branch. Dry-run prints the prepared diff and writes nothing.
+#
+# The PR must be squash-merged with the default subject "release: vX.Y.Z";
+# the release-tag workflow recognizes that subject (plus GitHub's " (#N)"
+# suffix) and pushes the annotated tag.
+#
+# Unity-free by policy: no Unity editor, license, or self-hosted runner is
+# ever provisioned here.
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version bump (ignored when an explicit version is given)
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+        default: patch
+        required: true
+      version:
+        description: Explicit version, e.g. 1.0.0-rc26.0 (overrides the bump choice)
+        type: string
+        required: false
+      dry_run:
+        description: Print the prepared diff without writing or pushing
+        type: boolean
+        default: false
+
+# One preparation at a time: two concurrent runs would race for the same
+# Unreleased content.
+concurrency:
+  group: release-prepare
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  prepare:
+    name: prepare (${{ inputs.dry_run && 'dry-run' || 'release PR' }})
+    runs-on: ubuntu-latest
+    # Dispatch is for the default branch only: a stale-branch dispatch would
+    # prepare from the wrong tree.
+    if: github.ref == 'refs/heads/master'
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history so the prepare script can see existing tags and
+          # release branches before it refuses a conflicting version.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+
+      - name: Install tooling dependencies
+        run: npm --prefix tooling~ install --no-audit --no-fund
+
+      - name: Prepare release files
+        env:
+          BUMP: ${{ inputs.bump }}
+          EXPLICIT_VERSION: ${{ inputs.version }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          args=()
+          if [ -n "$EXPLICIT_VERSION" ]; then
+            args+=(--version "$EXPLICIT_VERSION")
+          else
+            args+=(--bump "$BUMP")
+          fi
+          if [ "$DRY_RUN" = "true" ]; then
+            args+=(--dry-run)
+          fi
+          node tooling~/scripts/release/release.mjs prepare "${args[@]}"
+
+      - name: Node tooling tests
+        # Run on the prepared tree: the rewritten package.json and rotated
+        # changelog are exactly what the release PR will ship.
+        run: npm --prefix tooling~ test
+
+      - name: Open the release PR
+        # !inputs.dry_run stays correct whether the dispatch input arrives as a
+        # typed boolean or the legacy string "true".
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PAT || github.token }}
+          BUMP: ${{ inputs.bump }}
+          EXPLICIT_VERSION: ${{ inputs.version }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          branch="release/v${version}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add package.json CHANGELOG.md
+          git commit -m "release: v${version}"
+          # Route the push through gh's credential helper instead of a
+          # token-bearing URL, so a failed push can never echo credentials
+          # into the public job log. persist-credentials stays false.
+          gh auth setup-git
+          git push origin "HEAD:refs/heads/${branch}"
+
+          version_escaped=${version//./\\.}
+          excerpt=$(awk -v version="${version_escaped}" '
+            $0 ~ ("^## \\[" version "\\]") {inside = 1; print; next}
+            inside && /^## / {exit}
+            inside {print}
+          ' CHANGELOG.md)
+
+          cat > pr-body.md <<EOF
+          DISCLOSURE: LLM-GENERATED TEXT
+
+          Release PR for \`v${version}\`, prepared by the [release-prepare workflow](${RUN_URL}).
+
+          ### Checklist
+
+          - [ ] Changelog excerpt below is user-facing only and accurate
+          - [ ] Version is correct (bump: \`${BUMP}\`; explicit: \`${EXPLICIT_VERSION:-none}\`)
+          - [ ] The prepare job ran the full Node tooling suite on this exact prepared tree
+          - [ ] Squash-merge with the default subject \`release: v${version}\`; GitHub appends \` (#N)\`, which auto-tagging accepts
+          - [ ] Merging this PR pushes the annotated tag automatically (see tooling~/docs/release-runbook.md)
+
+          ### Changelog excerpt
+
+          ${excerpt}
+          EOF
+
+          gh pr create \
+            --base master \
+            --head "$branch" \
+            --title "release: v${version}" \
+            --body-file pr-body.md
