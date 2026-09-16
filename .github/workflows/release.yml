@@ -40,7 +40,10 @@ on:
         default: false
 
 concurrency:
-  group: release-publish-${{ github.ref }}
+  # Key on the effective tag, not github.ref: a dispatch re-run of one tag
+  # must serialize against the original tag-push run, and dispatches of
+  # different tags from the same branch must not share a group.
+  group: release-publish-${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
   cancel-in-progress: false
 
 permissions: {}
@@ -269,11 +272,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           # Re-run safety: an existing draft (or published) release is reused
-          # instead of failing the re-run.
+          # instead of failing the re-run. Prerelease versions (dist-tag
+          # next) must never become GitHub "Latest", so they carry
+          # --prerelease explicitly (gh does not infer it from the tag).
+          args=(--draft --title "DxCommandTerminal ${{ needs.verify.outputs.version }}" --notes-file release-notes.md)
+          if [ "${{ needs.verify.outputs.dist-tag }}" = "next" ]; then
+            args+=(--prerelease)
+          fi
           gh release view "$TAG" > /dev/null 2>&1 || \
-            gh release create "$TAG" --draft \
-              --title "DxCommandTerminal ${{ needs.verify.outputs.version }}" \
-              --notes-file release-notes.md
+            gh release create "$TAG" "${args[@]}"
 
       - name: Upload and verify the assets
         env:

@@ -189,6 +189,27 @@ test("empty body fails on the disclosure and missing sections", () => {
   assert.ok(violations.some((violation) => /missing "\*\*Why:\*\*"/.test(violation)));
 });
 
+test("release-PR titles skip the body checks (machine-generated excerpt)", () => {
+  const title = "release: v1.0.0-rc26.0";
+  const body = [
+    "DISCLOSURE: LLM-GENERATED TEXT",
+    "",
+    "Release PR for `v1.0.0-rc26.0`.",
+    "",
+    "### Checklist",
+    "",
+    "- [ ] Changelog excerpt below is user-facing only and accurate",
+    "",
+    "### Changelog excerpt",
+    "",
+    ...Array.from({ length: 20 }, (_, index) => `- Entry ${index}.`)
+  ].join("\n");
+  assert.deepStrictEqual(lintPullRequestCopy({ title, body }), []);
+  // The title check still applies.
+  const violations = lintPullRequestCopy({ title: `release: v${"x".repeat(70)}`, body });
+  assert.ok(violations.some((violation) => /title is \d+ chars \(max 72\)/.test(violation)));
+});
+
 test("CLI exits 0 on a valid copy and 1 with violations listed", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dxt-pr-copy-"));
   try {

@@ -13,6 +13,7 @@ on:
       - synchronize
 
 permissions:
+  contents: read
   pull-requests: read
 
 jobs:

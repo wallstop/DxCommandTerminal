@@ -12,6 +12,11 @@
     - Nothing else: no preamble after the disclosure line, no unknown
       "**X:**" sections, no duplicates, sections in that order.
 
+    Carve-out: a PR titled "release: vX.Y.Z" (opened by release-prepare.yml)
+    carries the machine-generated changelog excerpt as its body - that is
+    shipped content, not authored copy - so its body is skipped; the title
+    check still applies.
+
     The Cursor Bugbot summary block ("<!-- CURSOR_SUMMARY -->" through
     "<!-- /CURSOR_SUMMARY -->") is stripped before checking: the bot appends
     it to PR bodies after the fact, and it is not authored copy.
@@ -32,6 +37,7 @@ const EVIDENCE_MAX_LINES = 3;
 const SECTION_MARKERS = ["Why", "What", "How we know"];
 const CURSOR_SUMMARY_START = "<!-- CURSOR_SUMMARY -->";
 const CURSOR_SUMMARY_END = "<!-- /CURSOR_SUMMARY -->";
+const RELEASE_TITLE_PATTERN = /^release: v/;
 
 /*
     Strips the Cursor Bugbot summary block (bot-appended, not authored copy)
@@ -92,6 +98,10 @@ function lintPullRequestCopy(pullRequest) {
     violations.push("title is empty");
   } else if (TITLE_MAX_CHARS < title.length) {
     violations.push(`title is ${title.length} chars (max ${TITLE_MAX_CHARS}): keep it imperative and short`);
+  }
+  if (RELEASE_TITLE_PATTERN.test(title)) {
+    // Automated release PR: body is the machine-generated changelog excerpt.
+    return violations;
   }
 
   const lines = bodyLines(pullRequest.body);

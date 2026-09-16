@@ -52,7 +52,9 @@ Checks: disclosure first line, `**Why:**` 1-2 lines, `**What:**` 3-6 one-line
 bullets, optional `**How we know:**` 1-3 lines, no other sections or preamble,
 title <= 72 chars, body <= 16 content lines. The Cursor Bugbot summary block
 (`<!-- CURSOR_SUMMARY -->` ... `<!-- /CURSOR_SUMMARY -->`) is stripped before
-checking - the bot appends it and it is not authored copy. CI runs the same
+checking - the bot appends it and it is not authored copy. A PR titled
+`release: vX.Y.Z` skips the body checks: release-prepare generates that
+body as the machine-generated changelog excerpt. CI runs the same
 check on every PR open/edit (`.github/workflows/pr-copy-lint.yml`). Run the
 command before opening or editing any PR.
 
