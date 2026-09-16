@@ -16,7 +16,15 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators.Tests
         the measured window. Compilation and fixture construction stay
         outside it; only RunGenerators is timed, warmed up first per the
         plan's steady-state sampling rules.
+
+        The non-parallelized collection keeps every other test compilation
+        off the CPU cores during the measured window; on two-core CI runners
+        the default collection parallelism put the p95 over the gate.
      */
+    [CollectionDefinition("GeneratorTimingGateSequential", DisableParallelization = true)]
+    public sealed class GeneratorTimingGateSequentialDefinition { }
+
+    [Collection("GeneratorTimingGateSequential")]
     public sealed class GeneratorTimingGateTests
     {
         private const int ReferenceCommandCount = 1000;
