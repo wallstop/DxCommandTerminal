@@ -59,7 +59,12 @@ const FORBIDDEN_PREFIXES = [
   "Media"
 ];
 
+// Node refuses to spawn .cmd/.bat without a shell on Windows (CVE-2024-27980
+// hardening: execFileSync("npm.cmd") fails outright there). Flag arguments are
+// literal; the one path argument (--pack-destination) is quoted so shell
+// joining cannot split a temp dir containing spaces.
 const NPM = process.platform === "win32" ? "npm.cmd" : "npm";
+const NPM_SPAWN_OPTIONS = process.platform === "win32" ? { shell: true } : {};
 
 const tempDirs = [];
 process.on("exit", () => {
@@ -84,9 +89,12 @@ function readText(filePath) {
 function pack() {
   const destination = fs.mkdtempSync(path.join(os.tmpdir(), "dxt-pack-"));
   tempDirs.push(destination);
-  const stdout = execFileSync(NPM, ["pack", "--pack-destination", destination], {
+  const destinationArgument =
+    process.platform === "win32" ? `"${destination}"` : destination;
+  const stdout = execFileSync(NPM, ["pack", "--pack-destination", destinationArgument], {
     cwd: REPO_ROOT,
-    encoding: "utf8"
+    encoding: "utf8",
+    ...NPM_SPAWN_OPTIONS
   });
   return path.join(destination, stdout.trim().split(/\r?\n/).at(-1));
 }
