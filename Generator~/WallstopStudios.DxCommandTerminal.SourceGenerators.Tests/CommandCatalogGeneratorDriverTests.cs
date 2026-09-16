@@ -1154,6 +1154,88 @@ namespace Fixtures
             Assert.Null(generated);
         }
 
+        [Theory]
+        [InlineData("public", ",", 2)]
+        [InlineData("private", ",", 2)]
+        [InlineData("public", ",,", 3)]
+        [InlineData("private", ",,", 3)]
+        public void MultidimensionalCommandArraysRemainRejectedInPartialHolders(
+            string accessibility,
+            string dimensions,
+            int rank
+        )
+        {
+            string fixture =
+                @"
+namespace Fixtures
+{
+    using WallstopStudios.DxCommandTerminal.Attributes;
+    using WallstopStudios.DxCommandTerminal.Backend;
+
+    public static partial class ArrayCommands
+    {
+        public static int Invocations;
+
+        [RegisterCommand]
+        "
+                + accessibility
+                + @" static void Matrix(CommandArg["
+                + dimensions
+                + @"] args) { }
+
+        [RegisterCommand]
+        private static void Vector(CommandArg[] args)
+        {
+            Invocations++;
+        }
+    }
+}";
+            CSharpCompilation compilation = TestCompilationFactory.CreateCompilation(
+                "MultidimensionalArrays" + accessibility + rank,
+                fixture
+            );
+            Assert.DoesNotContain(
+                compilation.GetDiagnostics(),
+                diagnostic => diagnostic.Severity == DiagnosticSeverity.Error
+            );
+
+            (SyntaxTree generated, CSharpCompilation output) = TestCompilationFactory.RunGenerator(
+                compilation
+            );
+            Assert.NotNull(generated);
+            Assembly assembly = TestCompilationFactory.CompileAndLoad(output);
+            CatalogView catalog = CatalogView.Load(assembly);
+            Assert.Equal(2, catalog.Entries.Count);
+            object matrix = catalog.Entries[0];
+            Assert.Equal("Matrix", catalog.NameOf(matrix));
+            Assert.False(catalog.HasValidSignature(matrix));
+            Assert.Null(catalog.BinderOf(matrix));
+            MethodInfo accessor = catalog.MethodAccessorOf(matrix);
+            Assert.NotNull(accessor);
+            Assert.Equal("Matrix", accessor.Name);
+            Assert.Equal(
+                rank,
+                Assert.Single(accessor.GetParameters()).ParameterType.GetArrayRank()
+            );
+
+            object vector = catalog.Entries[1];
+            Assert.True(catalog.HasValidSignature(vector));
+            Assert.Null(catalog.MethodAccessorOf(vector));
+            catalog.BinderOf(vector)(
+                new object[]
+                {
+                    Array.CreateInstance(
+                        assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"),
+                        0
+                    ),
+                }
+            );
+            Assert.Equal(
+                1,
+                assembly.GetType("Fixtures.ArrayCommands").GetField("Invocations").GetValue(null)
+            );
+        }
+
         [Fact]
         public void PartialHolderPrivateCommandsBindWithoutReflection()
         {
