@@ -173,6 +173,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
 
             builder.Append(Indent2).AppendLine("}");
             builder.AppendLine("}");
+            EmitPartialCompanions(builder, commands);
             string source = builder.ToString();
             ReturnBuilder(builder);
             return source;
@@ -427,39 +428,206 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             builder.Append(Indent3).AppendLine("{");
             builder.Append(Indent4).Append("if (").Append(fieldName).AppendLine(" == null)");
             builder.Append(Indent4).AppendLine("{");
-            builder
-                .Append(Indent5)
-                .Append(fieldName)
-                .Append(" = (")
-                .Append(BinderType)
-                .AppendLine(")");
-            builder.Append(Indent5).AppendLine("global::System.Delegate.CreateDelegate(");
-            builder.Append(Indent6).Append("typeof(").Append(BinderType).AppendLine("),");
-            builder
-                .Append(Indent6)
-                .Append("typeof(")
-                .Append(command.ContainingTypeDisplay)
-                .AppendLine(").GetMethod(");
-            AppendLiteral(builder, command.MethodName, Indent6 + "    ");
-            builder.AppendLine(",");
-            builder.Append(Indent6).Append("    ").Append(BindingFlagsExpression).AppendLine(",");
-            builder.Append(Indent6).AppendLine("    null,");
-            builder.Append(Indent6).AppendLine("    new global::System.Type[]");
-            builder.Append(Indent6).AppendLine("    {");
-            AppendParameterExpressions(
-                builder,
-                command.ParameterTypeExpressions,
-                Indent6 + "        "
-            );
+            if (command.PartialBindable)
+            {
+                /*
+                    The companion was emitted beside the catalog; the binder
+                    call keeps the cached-field shape so repeated discovery
+                    cycles reuse one delegate.
+                */
+                builder
+                    .Append(Indent5)
+                    .Append(fieldName)
+                    .Append(" = ")
+                    .Append(command.ContainingTypeDisplay)
+                    .Append(".DxCommandTerminalBinder.Bind")
+                    .Append(binderIndex)
+                    .AppendLine("();");
+            }
+            else
+            {
+                builder
+                    .Append(Indent5)
+                    .Append(fieldName)
+                    .Append(" = (")
+                    .Append(BinderType)
+                    .AppendLine(")");
+                builder.Append(Indent5).AppendLine("global::System.Delegate.CreateDelegate(");
+                builder.Append(Indent6).Append("typeof(").Append(BinderType).AppendLine("),");
+                builder
+                    .Append(Indent6)
+                    .Append("typeof(")
+                    .Append(command.ContainingTypeDisplay)
+                    .AppendLine(").GetMethod(");
+                AppendLiteral(builder, command.MethodName, Indent6 + "    ");
+                builder.AppendLine(",");
+                builder
+                    .Append(Indent6)
+                    .Append("    ")
+                    .Append(BindingFlagsExpression)
+                    .AppendLine(",");
+                builder.Append(Indent6).AppendLine("    null,");
+                builder.Append(Indent6).AppendLine("    new global::System.Type[]");
+                builder.Append(Indent6).AppendLine("    {");
+                AppendParameterExpressions(
+                    builder,
+                    command.ParameterTypeExpressions,
+                    Indent6 + "        "
+                );
 
-            builder.Append(Indent6).AppendLine("    },");
-            builder.Append(Indent6).AppendLine("    null");
-            builder.Append(Indent5).AppendLine(")");
-            builder.Append(Indent5).AppendLine(");");
+                builder.Append(Indent6).AppendLine("    },");
+                builder.Append(Indent6).AppendLine("    null");
+                builder.Append(Indent5).AppendLine(")");
+                builder.Append(Indent5).AppendLine(");");
+            }
+
             builder.Append(Indent4).AppendLine("}");
             builder.AppendLine();
             builder.Append(Indent4).Append("return ").Append(fieldName).AppendLine(";");
             builder.Append(Indent3).AppendLine("}");
+        }
+
+        /*
+            Emits the partial companions that expose inaccessible command
+            handlers to the catalog without reflection. Commands arrive in the
+            receiver's declaration order, which is the same order the catalog
+            body and binder indices use, so grouping in first-appearance order
+            keeps the output deterministic for a given compilation.
+        */
+        private static void EmitPartialCompanions(
+            StringBuilder builder,
+            List<CommandModel> commands
+        )
+        {
+            List<CompanionNamespace> namespaces = new List<CompanionNamespace>();
+            Dictionary<string, CompanionNamespace> namespaceIndex = new Dictionary<
+                string,
+                CompanionNamespace
+            >(StringComparer.Ordinal);
+            for (int i = 0; i < commands.Count; ++i)
+            {
+                CommandModel command = commands[i];
+                if (!command.PartialBindable)
+                {
+                    continue;
+                }
+
+                string namespaceKey = command.PartialNamespace ?? string.Empty;
+                if (
+                    !namespaceIndex.TryGetValue(namespaceKey, out CompanionNamespace namespaceGroup)
+                )
+                {
+                    namespaceGroup = new CompanionNamespace { Name = command.PartialNamespace };
+                    namespaceIndex.Add(namespaceKey, namespaceGroup);
+                    namespaces.Add(namespaceGroup);
+                }
+
+                string chainKey = JoinChainNames(command.PartialChain);
+                if (!namespaceGroup.ChainIndex.TryGetValue(chainKey, out CompanionChain chainGroup))
+                {
+                    chainGroup = new CompanionChain { Chain = command.PartialChain };
+                    namespaceGroup.ChainIndex.Add(chainKey, chainGroup);
+                    namespaceGroup.Chains.Add(chainGroup);
+                }
+
+                chainGroup.Commands.Add(
+                    new CompanionCommand
+                    {
+                        CommandIndex = i,
+                        MethodIdentifier = command.MethodNameIdentifierDisplay,
+                    }
+                );
+            }
+
+            if (namespaces.Count == 0)
+            {
+                return;
+            }
+
+            builder.AppendLine();
+            builder.AppendLine();
+            builder.AppendLine("// Partial companions for inaccessible command handlers; the");
+            builder.AppendLine("// catalog binds them without reflection. Member names are");
+            builder.AppendLine("// generator-owned: a partial holder declaring its own");
+            builder.AppendLine("// DxCommandTerminalBinder member would collide at compile time.");
+            foreach (CompanionNamespace namespaceGroup in namespaces)
+            {
+                bool hasNamespace = namespaceGroup.Name != null;
+                if (hasNamespace)
+                {
+                    builder.Append("namespace ").Append(namespaceGroup.Name).AppendLine();
+                    builder.AppendLine("{");
+                }
+
+                string indent = hasNamespace ? Indent1 : string.Empty;
+                foreach (CompanionChain chainGroup in namespaceGroup.Chains)
+                {
+                    foreach (PartialChainLevel level in chainGroup.Chain)
+                    {
+                        builder
+                            .Append(indent)
+                            .Append("partial ")
+                            .Append(level.Keyword)
+                            .Append(' ')
+                            .AppendLine(level.Name);
+                        builder.Append(indent).AppendLine("{");
+                        indent += Indent1;
+                    }
+
+                    builder
+                        .Append(indent)
+                        .AppendLine("internal static class DxCommandTerminalBinder");
+                    builder.Append(indent).AppendLine("{");
+                    string methodIndent = indent + Indent1;
+                    foreach (CompanionCommand companionCommand in chainGroup.Commands)
+                    {
+                        builder
+                            .Append(methodIndent)
+                            .Append("internal static ")
+                            .Append(BinderType)
+                            .Append(" Bind")
+                            .Append(companionCommand.CommandIndex)
+                            .AppendLine("()");
+                        builder.Append(methodIndent).AppendLine("{");
+                        builder
+                            .Append(methodIndent)
+                            .Append(Indent1)
+                            .Append("return new ")
+                            .Append(BinderType)
+                            .Append("(")
+                            .Append(companionCommand.MethodIdentifier)
+                            .AppendLine(");");
+                        builder.Append(methodIndent).AppendLine("}");
+                    }
+
+                    builder.Append(indent).AppendLine("}");
+                    for (
+                        int levelIndex = chainGroup.Chain.Length - 1;
+                        0 <= levelIndex;
+                        --levelIndex
+                    )
+                    {
+                        indent = indent.Substring(0, indent.Length - Indent1.Length);
+                        builder.Append(indent).AppendLine("}");
+                    }
+                }
+
+                if (hasNamespace)
+                {
+                    builder.AppendLine("}");
+                }
+            }
+        }
+
+        private static string JoinChainNames(PartialChainLevel[] chain)
+        {
+            string joined = chain[0].Name;
+            for (int i = 1; i < chain.Length; ++i)
+            {
+                joined += "." + chain[i].Name;
+            }
+
+            return joined;
         }
 
         /*
@@ -498,6 +666,28 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             builder.Append(
                 value == null ? "null" : SymbolDisplay.FormatLiteral(value, quote: true)
             );
+        }
+
+        private sealed class CompanionCommand
+        {
+            public int CommandIndex;
+            public string MethodIdentifier;
+        }
+
+        private sealed class CompanionChain
+        {
+            public PartialChainLevel[] Chain;
+            public List<CompanionCommand> Commands = new List<CompanionCommand>();
+        }
+
+        private sealed class CompanionNamespace
+        {
+            public string Name;
+            public List<CompanionChain> Chains = new List<CompanionChain>();
+            public Dictionary<string, CompanionChain> ChainIndex = new Dictionary<
+                string,
+                CompanionChain
+            >(StringComparer.Ordinal);
         }
     }
 }

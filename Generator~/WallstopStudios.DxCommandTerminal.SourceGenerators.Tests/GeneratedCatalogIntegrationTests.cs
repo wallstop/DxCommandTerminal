@@ -13,8 +13,10 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators.Tests
         analyzer (referenced through the <Analyzer> item) generates this
         assembly's catalog at build time, so these tests validate the exact
         binary Unity loads — not a fresh rebuild of the sources beside it.
+        Partial so the private command rides the emitted companion instead
+        of the reflection binder.
      */
-    public static class CatalogFixtureCommands
+    public static partial class CatalogFixtureCommands
     {
         public static int PublicInvocations;
         public static int SecretInvocations;
@@ -212,6 +214,22 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators.Tests
                     );
                 }
             }
+        }
+
+        [Fact]
+        public void TestAssemblyPrivateCommandHasAPartialCompanion()
+        {
+            /*
+                The companion's existence pins that the shipped payload binds
+                the private fixture command without reflection; its behavior
+                is covered by BindersExecutePublicAndPrivateCommands.
+            */
+            Type companion = typeof(GeneratedCatalogIntegrationTests).Assembly.GetType(
+                "WallstopStudios.DxCommandTerminal.SourceGenerators.Tests"
+                    + ".CatalogFixtureCommands+DxCommandTerminalBinder",
+                false
+            );
+            Assert.NotNull(companion);
         }
 
         [Fact]

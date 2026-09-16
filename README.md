@@ -432,7 +432,7 @@ When InputActions are not bound, there is an order of precedence for input check
 This order is irrelevant when using PlayerInput.
 
 # Web GL
-The shipped source generator emits `[Preserve]` onto every generated command catalog - on the catalog type and on its `Collect` entry method - and the catalog binds accessible command methods through direct delegate creation. The linker keeps the rooted `Collect` entry and everything reachable from it, so commands registered with `RegisterCommandAttribute` keep working through managed code stripping (IL2CPP/WebGL players) at every Managed Stripping Level.
+The shipped source generator emits `[Preserve]` onto every generated command catalog - on the catalog type and on its `Collect` entry method - and the catalog binds accessible command methods through direct delegate creation. Private command handlers in partial types are bound through an emitted partial companion (no reflection), so they are inside the catalog's static reachability graph too. The linker keeps the rooted `Collect` entry and everything reachable from it, so commands registered with `RegisterCommandAttribute` keep working through managed code stripping (IL2CPP/WebGL players) at every Managed Stripping Level.
 
 At `Medium` or higher, commands reached only through reflection can still be stripped: handlers in private, non-partial types, and commands in precompiled DLLs without a generated catalog. Keep those available with `[Preserve]` on the methods, a `link.xml` entry for the assembly, or manual registration through `Terminal.Shell.AddCommand`.
 

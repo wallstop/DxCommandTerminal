@@ -54,3 +54,7 @@ jobs:
       - name: Verify shipped analyzer payload
         shell: pwsh
         run: ./tooling~/scripts/verify-analyzer-payload.ps1
+
+      - name: Verify payload from two checkout directories
+        shell: pwsh
+        run: ./tooling~/scripts/verify-analyzer-payload.ps1 -TwoCheckout
