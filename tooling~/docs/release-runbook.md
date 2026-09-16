@@ -142,6 +142,60 @@ The release CLI (`tooling~/scripts/release/release.mjs`) and the pure versioning
 subcommands (`verify-release`, `notes`, `publish-gate`) share that coverage; the PR-copy
 linter (`npm --prefix tooling~ run lint:pr-copy`) enforces the STE PR structure.
 
+## The .unitypackage import drill (local, maintainer-run)
+
+T13's release gate: import the actual release artifact into a clean throwaway
+Unity project and verify it compiles there. CI never imports Unity packages;
+this runs on a machine with the local Unity license and network access (the
+scratch project's manifest pulls the package's UPM dependencies -
+`com.unity.inputsystem`, `com.unity.test-framework` - from the registry so
+every shipped asmdef actually compiles).
+
+**Never import the artifact into the live maintainer project via the editor or
+the MCP bridge.** The first drill (session-025) did exactly that:
+`AssetDatabase.ImportPackage` popped a modal dialog against the live project,
+the main thread blocked, and the editor has been unreachable from the bridge
+ever since. The drill tool avoids the whole failure mode: batch mode, a
+scratch project, a non-interactive import, a hard timeout, and a separate
+process.
+
+```sh
+npm run package:export --prefix tooling~ -- --out /tmp/drill.unitypackage
+npm run package:import-drill --prefix tooling~ -- \
+  --artifact /tmp/drill.unitypackage \
+  --unity "<path to Unity editor binary>"   # e.g. .../6000.4.6f1/Editor/Unity.exe
+```
+
+The tool probes `<unity> -version`, scaffolds a scratch project under
+`.artifacts/import-drill/`, imports the artifact with the non-interactive
+`AssetDatabase.ImportPackage(artifact, false)` via
+`-batchmode -nographics -executeMethod`, waits out the triggered compilation
+(the driver exits only after `isCompiling`/`isUpdating` clear), then
+validates the result on disk:
+
+- every artifact entry exists at `<project>/<pathname>` with a `.meta` whose
+  GUID matches the artifact's GUID directory;
+- analyzer payload metas keep the `RoslynAnalyzer` label;
+- every imported `.asmdef` compiled to `Library/ScriptAssemblies/<name>.dll`
+  (dependency resolution and compilation in one check).
+
+The drill proves the generator payload imports with its label and that the
+package compiles with it present; it does not execute the generator.
+Generator behavior stays gated by the Unity-free generator suite and the
+payload byte-compare in CI.
+
+A clean run deletes the scratch project and writes a manifest (environment,
+SHA-256, per-check results) under `.artifacts/import-drill/`. Any failure
+after Unity launches keeps the project, the Unity log, and the manifest for
+diagnosis and exits non-zero; pre-flight failures (corrupt artifact, bad
+editor path, non-empty `--project`) fail before anything is scaffolded.
+`--keep` keeps the scratch project even on success; `--timeout-minutes`
+overrides the 20-minute default.
+
+If the editor from the first drill is still wedged (the bridge times out on
+every call): dismiss the modal import dialog by hand, delete
+`Assets/DxTerminalUnityPackageDrill`, and refresh assets (issue #85).
+
 ## Security notes
 
 - Every workflow pins action SHAs, requests minimal per-job permissions, and sets

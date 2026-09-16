@@ -9,6 +9,7 @@
     "test": "node --test \"scripts/mcp/__tests__/*.test.mjs\" \"scripts/tests/*.test.mjs\"",
     "package:validate": "node scripts/release/validate-package-contents.mjs",
     "package:export": "node scripts/release/export-unitypackage.mjs",
+    "package:import-drill": "node scripts/release/import-drill.mjs",
     "release:prepare": "node scripts/release/release.mjs prepare",
     "release:gate": "node scripts/release/release.mjs tag-gate",
     "lint:comparison-direction": "node scripts/lint-comparison-direction.mjs",
