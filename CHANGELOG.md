@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- `CommandArg.TryGetRaw` and builder `.RawParser(...)` pass uncleaned token contents to explicit parsers. Scene-object samples use this path so CR/LF names do not resolve to a different object; existing parsers keep their cleanup behavior.
 - Opt-in `SceneObjectArgumentAdapter<T>` resolves GameObject and Component arguments by name, with fresh completion choices and configurable duplicate-name handling. New sample commands show object lookup and component access.
 - Dynamic builder choices accept an explicit text formatter, so custom parsers can complete identifiers without changing existing choice formatting.
 - Package samples: `Samples~/TerminalCommands` ships runnable typed-builder examples (importable through Package Manager) covering required/optional arguments with range and choice validation, bool/enum arguments, nested subcommands with a bare-invocation fallback, live dynamic completion against game state, the unbounded trailing argument, execution contexts with Edit Mode opt-in, and enable/disable registration lifetime.

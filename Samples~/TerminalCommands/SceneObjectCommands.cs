@@ -18,7 +18,7 @@ namespace WallstopStudios.DxCommandTerminal.Samples
                         "target",
                         spec =>
                             spec.Required()
-                                .Parser(objects.TryParse)
+                                .RawParser(objects.TryParse)
                                 .Choices(objects.GetChoices, objects.FormatChoice)
                     )
                     .Handler(
@@ -36,7 +36,7 @@ namespace WallstopStudios.DxCommandTerminal.Samples
                         "target",
                         spec =>
                             spec.Required()
-                                .Parser(transforms.TryParse)
+                                .RawParser(transforms.TryParse)
                                 .Choices(transforms.GetChoices, transforms.FormatChoice)
                     )
                     .Handler(

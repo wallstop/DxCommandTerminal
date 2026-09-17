@@ -39,7 +39,8 @@ Open the terminal (default hotkey: backtick), then:
 - Type `object-info ` or `object-position ` and press Tab for current names.
 
 `SceneObjectArgumentAdapter<T>` supports `GameObject`, `Component`, and component subclasses.
-Use `.Parser(adapter.TryParse).Choices(adapter.GetChoices, adapter.FormatChoice)` to opt into name parsing and completion.
+Use `.RawParser(adapter.TryParse).Choices(adapter.GetChoices, adapter.FormatChoice)` to opt into name parsing and completion.
+Raw parsing preserves CR and LF in object names instead of removing them before lookup.
 The formatter affects dynamic completions only; existing choices and error messages retain their original formatting.
 Names match exactly, ignoring case. Paths and instance IDs have no special syntax.
 The default `FirstMatch` selects the first result in Unity's instance-ID order, not hierarchy order.

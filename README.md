@@ -346,6 +346,29 @@ Assert.IsFalse(arg.TryGet(out float invalidFloat)); // Failed to parse
 Assert.IsFalse(arg.TryGet(out Color invalidColor)); // Failed to parse
 ```
 
+Use `arg.TryGetRaw(out T value, parser)` when identifiers must retain CR, LF, spaces, and other original characters. It passes `contents` without cleaning and calls only the supplied parser. A null parser returns `false` with `default(T)`; null input and a default `CommandArg` pass an empty string. The parser's result and output are returned unchanged, with no fallback.
+
+Typed arguments opt in with `.RawParser(parser)`, including every token in `.Remaining<T>`. Fluent copies retain the policy; a later `.Parser(parser)` restores normal cleaning, and a later `.RawParser(parser)` selects raw input again. Neither API changes global registrations, built-in parsers, or cleaning sets. `.RawParser(null)` throws `ArgumentNullException`.
+
+Scene-object adapters need raw input so a name such as `"A\r\nB"` cannot resolve to an object named `"AB"`:
+
+```csharp
+SceneObjectArgumentAdapter<GameObject> adapter = new();
+CommandArg argument = new("A\r\nB");
+bool found = argument.TryGetRaw(out GameObject target, adapter.TryParse);
+CommandBuilder command = CommandBuilder
+    .Create("inspect-object")
+    .Arg<GameObject>(
+        "target",
+        spec => spec.Required()
+            .RawParser(adapter.TryParse)
+            .Choices(adapter.GetChoices, adapter.FormatChoice)
+    )
+    .Handler((context, arguments) => Terminal.Log("{0}", arguments.Get<GameObject>("target").name));
+```
+
+The same setup works for component types. `FormatChoice` preserves the original name; it does not normalize line endings. Raw parsing does not bypass command tokenization or variable expansion: quote names that contain whitespace and use the shared completion insertion path.
+
 If a parsing function is common enough, it can be registered via:
 
 ```csharp

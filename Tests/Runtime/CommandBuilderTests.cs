@@ -50,6 +50,166 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             }
         }
 
+        [TestCase("required", false)]
+        [TestCase("default", false)]
+        [TestCase("describe", false)]
+        [TestCase("staticChoices", false)]
+        [TestCase("dynamicChoices", false)]
+        [TestCase("formattedChoices", false)]
+        [TestCase("range", false)]
+        [TestCase("validate", false)]
+        [TestCase("rawParser", false)]
+        [TestCase("required", true)]
+        [TestCase("describe", true)]
+        [TestCase("staticChoices", true)]
+        [TestCase("dynamicChoices", true)]
+        [TestCase("formattedChoices", true)]
+        [TestCase("range", true)]
+        [TestCase("validate", true)]
+        [TestCase("rawParser", true)]
+        public void RawParserPolicySurvivesFluentCopies(string copy, bool remaining)
+        {
+            const string input = "1\r\n2";
+            List<string> observed = new();
+            CommandArgParser<int> parser = (string text, out int parsed) =>
+            {
+                observed.Add(text);
+                parsed = text.Length;
+                return true;
+            };
+            bool requiresBase =
+                !remaining && !string.Equals(copy, "required", StringComparison.Ordinal);
+            CommandArgumentSpec<int> original = new("value", remaining);
+            if (requiresBase)
+            {
+                original = original.Required();
+            }
+            original = original.RawParser(parser);
+            CommandArgumentSpec<int> configured = copy switch
+            {
+                "required" => original.Required(),
+                "default" => original.Default(4),
+                "describe" => original.Describe("value"),
+                "staticChoices" => original.Choices(4),
+                "dynamicChoices" => original.Choices(context => new[] { 4 }),
+                "formattedChoices" => original.Choices(context => new[] { 4 }, value => input),
+                "range" => original.Range(4, 4),
+                "validate" => original.Validate(value => value == 4 ? null : "Expected raw input"),
+                "rawParser" => original.RawParser(parser),
+                _ => throw new ArgumentOutOfRangeException(nameof(copy)),
+            };
+            Assert.AreNotSame(original, configured);
+            Assert.AreEqual(remaining, configured.IsRemaining);
+            Assert.AreEqual(
+                string.Equals(copy, "required", StringComparison.Ordinal)
+                    || (requiresBase && !string.Equals(copy, "default", StringComparison.Ordinal)),
+                configured.IsRequired
+            );
+            Assert.AreEqual(requiresBase, original.IsRequired);
+            Assert.IsFalse(original.HasChoices);
+            Assert.IsFalse(original.HasExplicitDefault);
+            Assert.IsNull(original.Description);
+            Assert.IsTrue(original.TryParse(new CommandArg(input), out object originalValue));
+            Assert.AreEqual(4, originalValue);
+            observed.Clear();
+            CommandShell shell = new(History());
+            CommandBuilder builder = CommandBuilder
+                .Create("raw-copy")
+                .Contexts(CommandExecutionContextSets.All);
+            builder = remaining
+                ? builder.Remaining<int>("value", spec => configured)
+                : builder.Arg<int>("value", spec => configured);
+            int[] values = null;
+            Assert.IsTrue(
+                shell.AddCommand(
+                    builder.Handler(
+                        (context, arguments) =>
+                            values = remaining
+                                ? arguments.Get<int[]>("value")
+                                : new[] { arguments.Get<int>("value") }
+                    ),
+                    out CommandRegistrationHandle handle
+                )
+            );
+            using (handle)
+            {
+                Assert.IsTrue(
+                    shell.RunCommand(
+                        remaining ? $"raw-copy \"{input}\" \"{input}\"" : $"raw-copy \"{input}\""
+                    )
+                );
+                Assert.IsNull(ConsumeError(shell));
+                CollectionAssert.AreEqual(remaining ? new[] { 4, 4 } : new[] { 4 }, values);
+                CollectionAssert.AreEqual(
+                    remaining ? new[] { input, input } : new[] { input },
+                    observed
+                );
+            }
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void BoolAndEnumChoicesRetainRawParserPolicy(bool remaining)
+        {
+            CommandArgumentSpec<bool> boolean = new("value", remaining);
+            boolean = boolean
+                .RawParser(
+                    (string input, out bool parsed) =>
+                    {
+                        parsed = string.Equals(input, "tr\r\nue", StringComparison.Ordinal);
+                        return parsed;
+                    }
+                )
+                .BoolChoices();
+            Assert.IsTrue(boolean.TryParse(new CommandArg("tr\r\nue"), out object booleanValue));
+            Assert.AreEqual(true, booleanValue);
+            Assert.AreEqual(remaining, boolean.IsRemaining);
+            CommandArgumentSpec<WeaponType> weapon = new("value", remaining);
+            weapon = weapon
+                .RawParser(
+                    (string input, out WeaponType parsed) =>
+                    {
+                        parsed = WeaponType.Sword;
+                        return string.Equals(input, "Sw\r\nord", StringComparison.Ordinal);
+                    }
+                )
+                .EnumChoices();
+            Assert.IsTrue(weapon.TryParse(new CommandArg("Sw\r\nord"), out object weaponValue));
+            Assert.AreEqual(WeaponType.Sword, weaponValue);
+            Assert.AreEqual(remaining, weapon.IsRemaining);
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void LastParserSelectionControlsCleaningWithoutMutatingOriginal(bool remaining)
+        {
+            CommandArgParser<int> parser = (string input, out int parsed) =>
+            {
+                parsed = input.Length;
+                return true;
+            };
+            CommandArgumentSpec<int> original = new("value", remaining);
+            CommandArgumentSpec<int> raw = original.RawParser(parser);
+            CommandArgumentSpec<int> cleaned = raw.Parser(parser);
+            CommandArgumentSpec<int> rawAgain = cleaned.RawParser(parser);
+            CommandArg input = new("1\r\n2");
+            Assert.IsTrue(raw.TryParse(input, out object rawValue));
+            Assert.AreEqual(4, rawValue);
+            Assert.IsTrue(cleaned.TryParse(input, out object cleanedValue));
+            Assert.AreEqual(2, cleanedValue);
+            Assert.IsTrue(rawAgain.TryParse(input, out object rawAgainValue));
+            Assert.AreEqual(4, rawAgainValue);
+            Assert.IsTrue(original.TryParse(input, out object originalValue));
+            Assert.AreEqual(12, originalValue);
+            Assert.AreEqual(remaining, cleaned.IsRemaining);
+            Assert.AreEqual(remaining, rawAgain.IsRemaining);
+            ArgumentNullException exception = Assert.Throws<ArgumentNullException>(() =>
+                raw.RawParser(null)
+            );
+            Assert.AreEqual("parser", exception.ParamName);
+            Assert.Throws<ArgumentNullException>(() => raw.Parser(null));
+        }
+
         [Test]
         public void TypedArgumentsParseAndDispatch()
         {

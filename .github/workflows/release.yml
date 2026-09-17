@@ -15,9 +15,13 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing version tag, e.g. v1.0.0-rc26.0
+        description: Existing version tag (required for publishing; omit for candidate rehearsal)
         type: string
-        required: true
+        required: false
+      candidate_ref:
+        description: Rehearsal-only branch or full commit SHA (blank defaults to master when tag is blank)
+        type: string
+        required: false
       dry_run:
         description: Artifact-only rehearsal (no npm, Release, or attestation writes)
         type: boolean
@@ -34,16 +38,44 @@ env:
 
 jobs:
   verify:
-    name: verify (${{ inputs.tag }})
+    name: verify (${{ inputs.tag || inputs.candidate_ref || 'master' }})
     if: github.repository == 'wallstop/DxCommandTerminal' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
+      - name: Select source
+        id: source
+        env:
+          TAG: ${{ inputs.tag }}
+          CANDIDATE_REF: ${{ inputs.candidate_ref }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          if [ -n "$TAG" ]; then
+            test -z "$CANDIDATE_REF" || { echo "::error::tag and candidate_ref are mutually exclusive"; exit 1; }
+            git check-ref-format "refs/tags/$TAG"
+            echo "ref=refs/tags/$TAG" >> "$GITHUB_OUTPUT"
+          else
+            if [ "$DRY_RUN" != "true" ] || [ "$GITHUB_EVENT_NAME" != "workflow_dispatch" ]; then
+              echo "::error::A tag is required except for manual artifact-only rehearsal"; exit 1;
+            fi
+            ref=${CANDIDATE_REF:-master}
+            if [[ ! "$ref" =~ ^[a-f0-9]{40}$ ]]; then
+              case "$ref" in
+                refs/heads/*) ref=${ref#refs/heads/} ;;
+                refs/*) echo "::error::Candidate must be a branch or full commit SHA"; exit 1 ;;
+              esac
+              [[ "$ref" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ ]] || exit 1
+              ref="refs/heads/$ref"
+              git check-ref-format "$ref"
+            fi
+            echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout the tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: refs/tags/${{ env.TAG }}
+          ref: ${{ steps.source.outputs.ref }}
           persist-credentials: false
 
       - name: Verify handoff commit
@@ -70,9 +102,14 @@ jobs:
         id: verify
         run: |
           version=$(node -p "require('./package.json').version")
-          node tooling~/scripts/release/release.mjs verify-release \
-            --version "$version" --tag "$TAG" \
-            --changelog CHANGELOG.md --github-output "$GITHUB_OUTPUT"
+          if [ -n "$TAG" ]; then
+            node tooling~/scripts/release/release.mjs verify-release \
+              --version "$version" --tag "$TAG" \
+              --changelog CHANGELOG.md --github-output "$GITHUB_OUTPUT"
+          else
+            node tooling~/scripts/release/release.mjs verify-candidate --dry-run \
+              --version "$version" --changelog CHANGELOG.md --github-output "$GITHUB_OUTPUT"
+          fi
 
     outputs:
       sha: ${{ steps.commit.outputs.sha }}
