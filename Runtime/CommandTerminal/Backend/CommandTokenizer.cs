@@ -160,14 +160,93 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             return true;
         }
 
-        /// <summary>
-        ///     Quotes an accepted completion's insertion text so the token it
-        ///     forms still tokenizes: unquoted insertions containing spaces or
-        ///     quotes get the first quote character that does not occur inside
-        ///     them, insertions replacing an already-quoted token go in
-        ///     verbatim, and an insertion mixing both quote characters stays
-        ///     verbatim rather than producing an untokenizable quoting.
-        /// </summary>
+        public static bool TryPrepareInsertion(
+            string input,
+            string value,
+            int start,
+            int length,
+            bool tokenQuoted,
+            out string insertion,
+            out int replacementStart,
+            out int replacementLength,
+            bool wholeToken = true
+        )
+        {
+            if (
+                input == null
+                || string.IsNullOrEmpty(value)
+                || start < 0
+                || length < 0
+                || input.Length < start
+                || input.Length - start < length
+            )
+            {
+                insertion = string.Empty;
+                replacementStart = start;
+                replacementLength = length;
+                return false;
+            }
+
+            replacementStart = start;
+            replacementLength = length;
+            if (!wholeToken)
+            {
+                insertion =
+                    tokenQuoted ? value
+                    : TrySerializeValue(value, out string serialized, out bool _) ? serialized
+                    : value;
+                return true;
+            }
+
+            if (tokenQuoted)
+            {
+                if (start == 0 || !CommandArg.Quotes.Contains(input[start - 1]))
+                {
+                    insertion = string.Empty;
+                    return false;
+                }
+
+                char quote = input[start - 1];
+                int end = start + length;
+                int closing = input.IndexOf(quote, start);
+                if (closing != end && !(closing < 0 && end == input.Length))
+                {
+                    insertion = string.Empty;
+                    return false;
+                }
+
+                --start;
+                ++length;
+                if (closing == end)
+                {
+                    ++length;
+                }
+                replacementStart = start;
+                replacementLength = length;
+                if (value.IndexOf(quote) < 0)
+                {
+                    insertion = $"{quote}{value}{quote}";
+                    return true;
+                }
+            }
+
+            if (!TrySerializeValue(value, out insertion, out bool quotedInsertion))
+            {
+                insertion = string.Empty;
+                return false;
+            }
+
+            if (!quotedInsertion && start + length < input.Length && input[start + length] != ' ')
+            {
+                insertion = string.Empty;
+                return false;
+            }
+
+            replacementStart = start;
+            replacementLength = length;
+            return true;
+        }
+
         public static string QuoteInsertionIfNeeded(string insertion, bool tokenQuoted)
         {
             if (tokenQuoted)
@@ -175,41 +254,51 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return insertion;
             }
 
-            bool containsSpace = false;
-            bool containsDoubleQuote = false;
-            bool containsSingleQuote = false;
-            foreach (char character in insertion)
+            TryPrepareInsertion(
+                string.Empty,
+                insertion,
+                0,
+                0,
+                false,
+                out string serialized,
+                out _,
+                out _,
+                wholeToken: false
+            );
+            return serialized;
+        }
+
+        private static bool TrySerializeValue(
+            string value,
+            out string insertion,
+            out bool quotedInsertion
+        )
+        {
+            bool requiresQuote =
+                value[0] == '$'
+                || char.IsWhiteSpace(value[0])
+                || CommandArg.Quotes.Contains(value[0])
+                || 0 <= value.IndexOf(' ');
+            foreach (char quote in CommandArg.Quotes)
             {
-                switch (character)
+                if (char.IsWhiteSpace(quote) || 0 <= value.IndexOf(quote))
                 {
-                    case ' ':
-                        containsSpace = true;
-                        break;
-                    case '"':
-                        containsDoubleQuote = true;
-                        break;
-                    case '\'':
-                        containsSingleQuote = true;
-                        break;
+                    continue;
                 }
+
+                if (requiresQuote || 0 <= value.IndexOf('"') || 0 <= value.IndexOf('\''))
+                {
+                    insertion = $"{quote}{value}{quote}";
+                    quotedInsertion = true;
+                    return true;
+                }
+
+                break;
             }
 
-            if (!containsSpace && !containsDoubleQuote && !containsSingleQuote)
-            {
-                return insertion;
-            }
-
-            if (!containsDoubleQuote)
-            {
-                return $"\"{insertion}\"";
-            }
-
-            if (!containsSingleQuote)
-            {
-                return $"'{insertion}'";
-            }
-
-            return insertion;
+            insertion = requiresQuote ? string.Empty : value;
+            quotedInsertion = false;
+            return !requiresQuote;
         }
     }
 }

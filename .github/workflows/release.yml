@@ -1,60 +1,41 @@
 name: Release Publish
 
-# T14 phase 2, second half (issue #85): the publish flow. Fires on a v* tag
-# push (the tag the release-tag workflow pushes) and produces every
-# distributable without Unity:
-#
-#   verify         - tag == package.json version == changelog heading (fail
-#                    closed on any disagreement); reports the npm dist-tag.
-#   validate       - package-content validator, npm pack, sha256, artifact
-#                    upload, build-provenance attestation.
-#   unitypackage   - required, non-skippable export + sha256 + attestation. A
-#                    failed, missing, or empty export blocks publishing.
-#   publish-npm    - OIDC Trusted Publishing (--provenance); prerelease ->
-#                    next, stable -> latest; skips a version already on the
-#                    registry so re-runs are safe.
-#   github-release - draft Release with notes from the shared changelog
-#                    extractor, uploads + verifies the artifacts, then
-#                    publishes. Ordering invariant: npm publish (publish-npm
-#                    job) completes strictly before this job runs.
-#
-# workflow_dispatch exists only for the documented rehearsal (runbook:
-# "Rehearsing a release"): dry_run runs verify/validate/unitypackage and
-# leaves the Release as a draft - no npm publish, no release publish.
-#
-# Unity-free by policy: no Unity editor, license, or self-hosted runner is
-# ever provisioned here.
 on:
-  push:
-    tags:
-      - "v*"
-  workflow_dispatch:
+  workflow_call:
     inputs:
       tag:
-        description: Tag to release, e.g. v1.0.0-rc26.0 (must exist)
+        type: string
+        required: true
+      expected_sha:
         type: string
         required: true
       dry_run:
-        description: Rehearsal - skip publishing; leave the Release as a draft
         type: boolean
-        default: false
+        default: true
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag, e.g. v1.0.0-rc26.0
+        type: string
+        required: true
+      dry_run:
+        description: Artifact-only rehearsal (no npm, Release, or attestation writes)
+        type: boolean
+        default: true
 
 concurrency:
-  # Key on the effective tag, not github.ref: a dispatch re-run of one tag
-  # must serialize against the original tag-push run, and dispatches of
-  # different tags from the same branch must not share a group.
-  group: release-publish-${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
+  group: release-publish-${{ inputs.tag }}
   cancel-in-progress: false
 
 permissions: {}
 
 env:
-  # Push events carry the tag as the ref; the rehearsal dispatch names it.
-  TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
+  TAG: ${{ inputs.tag }}
 
 jobs:
   verify:
-    name: verify (${{ github.event_name == 'push' && github.ref_name || inputs.tag }})
+    name: verify (${{ inputs.tag }})
+    if: github.repository == 'wallstop/DxCommandTerminal' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -62,8 +43,23 @@ jobs:
       - name: Checkout the tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ env.TAG }}
+          ref: refs/tags/${{ env.TAG }}
           persist-credentials: false
+
+      - name: Verify handoff commit
+        id: commit
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          RELEASE_ENABLED: ${{ vars.RELEASE_PUBLISH_ENABLED }}
+        run: |
+          sha=$(git rev-parse HEAD)
+          test -z "$EXPECTED_SHA" || test "$sha" = "$EXPECTED_SHA"
+          if [ "$DRY_RUN" != "true" ]; then
+            test "$RELEASE_ENABLED" = "true" || { echo "::error::Publishing disabled: maintainer prerequisites not confirmed"; exit 1; }
+            test "$sha" = "$GITHUB_SHA" || { echo "::error::Publish commit must match workflow provenance SHA"; exit 1; }
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
       - name: Setup Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -79,22 +75,21 @@ jobs:
             --changelog CHANGELOG.md --github-output "$GITHUB_OUTPUT"
 
     outputs:
+      sha: ${{ steps.commit.outputs.sha }}
       version: ${{ steps.verify.outputs.version }}
       dist-tag: ${{ steps.verify.outputs.dist-tag }}
 
   validate:
-    name: validate (npm pack + attest)
+    name: validate (npm pack)
     runs-on: ubuntu-latest
     needs: verify
     permissions:
       contents: read
-      id-token: write
-      attestations: write
     steps:
       - name: Checkout the tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ env.TAG }}
+          ref: ${{ needs.verify.outputs.sha }}
           persist-credentials: false
 
       - name: Setup Node
@@ -114,11 +109,6 @@ jobs:
           sha256sum "$tgz" > "$tgz.sha256"
           cat "$tgz.sha256"
 
-      - name: Attest build provenance
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
-        with:
-          subject-path: com.wallstop-studios.dxcommandterminal-*.tgz
-
       - name: Upload tarball artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -134,13 +124,11 @@ jobs:
     needs: verify
     permissions:
       contents: read
-      id-token: write
-      attestations: write
     steps:
       - name: Checkout the tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ env.TAG }}
+          ref: ${{ needs.verify.outputs.sha }}
           persist-credentials: false
 
       - name: Setup Node
@@ -165,11 +153,6 @@ jobs:
           sha256sum "$artifact" > "$artifact.sha256"
           cat "$artifact.sha256"
 
-      - name: Attest build provenance
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
-        with:
-          subject-path: com.wallstop-studios.dxcommandterminal-*.unitypackage
-
       - name: Upload unitypackage artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -179,10 +162,34 @@ jobs:
             com.wallstop-studios.dxcommandterminal-*.unitypackage.sha256
           if-no-files-found: error
 
+  attest:
+    runs-on: ubuntu-latest
+    needs: [validate, unitypackage]
+    if: ${{ !inputs.dry_run }}
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: Download the artifacts
+        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e
+        with:
+          pattern: "{npm-tarball,unitypackage}"
+          merge-multiple: true
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8
+        with:
+          subject-path: |
+            com.wallstop-studios.dxcommandterminal-*.tgz
+            com.wallstop-studios.dxcommandterminal-*.unitypackage
+
   publish-npm:
     name: publish (npm ${{ needs.verify.outputs.dist-tag }})
     runs-on: ubuntu-latest
-    needs: [verify, validate, unitypackage]
+    environment: release
+    needs: [verify, validate, unitypackage, attest]
     if: ${{ !inputs.dry_run }}
     permissions:
       contents: read
@@ -191,7 +198,7 @@ jobs:
       - name: Checkout the tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ env.TAG }}
+          ref: ${{ needs.verify.outputs.sha }}
           persist-credentials: false
 
       - name: Setup Node (registry + OIDC)
@@ -211,7 +218,11 @@ jobs:
           version=${{ needs.verify.outputs.version }}
           name=$(node -p "require('./package.json').name")
           node tooling~/scripts/release/release.mjs publish-gate \
-            --name "$name" --version "$version" --github-output "$GITHUB_OUTPUT"
+            --name "$name" --version "$version" \
+            --artifact "com.wallstop-studios.dxcommandterminal-${version}.tgz" --github-output "$GITHUB_OUTPUT"
+
+      - name: Verify remote tag before npm
+        run: node tooling~/scripts/release/release.mjs verify-remote-tag --tag "$TAG" --sha "$GITHUB_SHA"
 
       - name: Publish to npm
         if: ${{ steps.gate.outputs.publish == 'true' }}
@@ -223,22 +234,16 @@ jobs:
   github-release:
     name: github-release (draft, then publish)
     runs-on: ubuntu-latest
-    # publish-npm is skipped in rehearsal dry-runs; its failure (not skip)
-    # blocks this job, so npm publish always precedes a published Release.
+    environment: release
     needs: [verify, validate, unitypackage, publish-npm]
-    if: >-
-      ${{ !cancelled()
-      && needs.verify.result == 'success'
-      && needs.validate.result == 'success'
-      && needs.unitypackage.result == 'success'
-      && (needs.publish-npm.result == 'success' || needs.publish-npm.result == 'skipped') }}
+    if: ${{ !inputs.dry_run }}
     permissions:
       contents: write
     steps:
       - name: Checkout the tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ env.TAG }}
+          ref: ${{ needs.verify.outputs.sha }}
           persist-credentials: false
 
       - name: Setup Node
@@ -275,7 +280,8 @@ jobs:
           # instead of failing the re-run. Prerelease versions (dist-tag
           # next) must never become GitHub "Latest", so they carry
           # --prerelease explicitly (gh does not infer it from the tag).
-          args=(--draft --title "DxCommandTerminal ${{ needs.verify.outputs.version }}" --notes-file release-notes.md)
+          node tooling~/scripts/release/release.mjs verify-remote-tag --tag "$TAG" --sha "$GITHUB_SHA"
+          args=(--verify-tag --draft --title "DxCommandTerminal ${{ needs.verify.outputs.version }}" --notes-file release-notes.md)
           if [ "${{ needs.verify.outputs.dist-tag }}" = "next" ]; then
             args+=(--prerelease)
           fi
@@ -288,6 +294,7 @@ jobs:
         run: |
           version=${{ needs.verify.outputs.version }}
           prefix="com.wallstop-studios.dxcommandterminal-${version}"
+          node tooling~/scripts/release/release.mjs verify-remote-tag --tag "$TAG" --sha "$GITHUB_SHA"
           gh release upload "$TAG" --clobber \
             "$prefix.tgz" "$prefix.tgz.sha256" \
             "$prefix.unitypackage" "$prefix.unitypackage.sha256"
@@ -295,8 +302,8 @@ jobs:
           test "$assets" -eq 4 || { echo "::error::expected 4 assets, found $assets"; exit 1; }
 
       - name: Publish the release
-        # Rehearsals stop here: the Release stays a draft for review.
-        if: ${{ !inputs.dry_run }}
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release edit "$TAG" --draft=false
+        run: |
+          node tooling~/scripts/release/release.mjs verify-remote-tag --tag "$TAG" --sha "$GITHUB_SHA"
+          gh release edit "$TAG" --draft=false

@@ -7,10 +7,12 @@
 import test from "node:test";
 import assert from "node:assert";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { runInNewContext } from "node:vm";
 
 const toolingRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const releaseCli = path.join(toolingRoot, "scripts", "release", "release.mjs");
@@ -38,6 +40,126 @@ function changelogFor(version, body = ["### Added", "", "- Something shipped."])
   fs.writeFileSync(changelogPath, text);
   return changelogPath;
 }
+
+const workflowRoot = path.resolve(toolingRoot, "../.github/workflows");
+const publishWorkflow = fs.readFileSync(path.join(workflowRoot, "release.yml"), "utf8");
+const tagWorkflow = fs.readFileSync(path.join(workflowRoot, "release-tag.yml"), "utf8");
+
+function job(text, name) {
+  const start = text.indexOf(`\n  ${name}:\n`);
+  assert.notStrictEqual(start, -1, `missing job ${name}`);
+  return text.slice(start + 1).split(/\n(?=  [a-z][a-z-]*:\n)/)[0];
+}
+
+function condition(text) {
+  return text.match(/^    if: (.+)$/m)?.[1];
+}
+
+function enabled(text, context) {
+  return runInNewContext(condition(text).replace(/^\$\{\{ | \}\}$/g, ""), context, { timeout: 100 });
+}
+
+test("workflow structure: no tag-push trigger and both entry points default to rehearsal", () => {
+  const triggers = publishWorkflow.split("\nconcurrency:")[0];
+  assert.doesNotMatch(triggers, /^  push:/m);
+  for (const entry of ["workflow_call", "workflow_dispatch"]) {
+    const block = triggers.split(`  ${entry}:`)[1].split(/\n  \w+:/)[0];
+    assert.match(block, /dry_run:[\s\S]*?default: true/);
+  }
+});
+
+test("workflow structure: rehearsal excludes all Release, npm, and attestation writer jobs", () => {
+  for (const name of ["attest", "publish-npm", "github-release"]) {
+    const writer = job(publishWorkflow, name);
+    assert.strictEqual(condition(writer), "${{ !inputs.dry_run }}");
+    assert.strictEqual(enabled(writer, { inputs: { dry_run: true } }), false);
+    assert.strictEqual(enabled(writer, { inputs: { dry_run: false } }), true);
+  }
+  for (const name of ["verify", "validate", "unitypackage"]) {
+    const build = job(publishWorkflow, name);
+    assert.match(build, /contents: read/);
+    assert.doesNotMatch(build, /(?:contents|id-token|attestations): write|gh release|npm publish|attest-build-provenance/);
+  }
+  assert.doesNotMatch(job(publishWorkflow, "github-release"), /always\(\)|cancelled\(\)|result == 'skipped'/);
+});
+
+test("workflow structure: publishing depends on npm success and references the release environment", () => {
+  assert.match(job(publishWorkflow, "publish-npm"), /needs: \[verify, validate, unitypackage, attest\]/);
+  assert.match(job(publishWorkflow, "github-release"), /needs: \[verify, validate, unitypackage, publish-npm\]/);
+  for (const name of ["publish-npm", "github-release"]) {
+    assert.match(job(publishWorkflow, name), /environment: release/);
+  }
+});
+
+test("workflow structure: automatic tag handoff depends on successful tagging", () => {
+  const handoff = job(tagWorkflow, "publish");
+  assert.match(handoff, /needs: tag/);
+  assert.strictEqual(condition(handoff), "${{ needs.tag.outputs.action == 'tag' }}");
+  assert.match(handoff, /uses: \.\/\.github\/workflows\/release.yml/);
+  assert.match(handoff, /tag: \$\{\{ needs.tag.outputs.tag \}\}/);
+  assert.match(handoff, /expected_sha: \$\{\{ github.sha \}\}/);
+  assert.match(handoff, /dry_run: false/);
+  for (const action of ["tag", "noop", "warn", "fail", ""]) {
+    assert.strictEqual(enabled(handoff, { needs: { tag: { outputs: { action } } } }), action === "tag");
+  }
+  assert.doesNotMatch(handoff, /always\(\)|continue-on-error|secrets: inherit/);
+  for (const permission of ["contents", "id-token", "attestations"]) {
+    assert.match(handoff, new RegExp(`${permission}: write`));
+  }
+  assert.match(job(tagWorkflow, "tag"), /action: \$\{\{ steps.decide.outputs.action \}\}/);
+  assert.match(job(tagWorkflow, "tag"), /tag: \$\{\{ steps.decide.outputs.tag \}\}/);
+});
+
+test("workflow structure: default-branch guard and immutable checkouts", () => {
+  const verify = job(publishWorkflow, "verify");
+  assert.strictEqual(condition(verify), "github.repository == 'wallstop/DxCommandTerminal' && github.ref == 'refs/heads/master'");
+  assert.match(verify, /ref: refs\/tags\/\$\{\{ env.TAG \}\}/);
+  assert.match(verify, /EXPECTED_SHA: \$\{\{ inputs.expected_sha \}\}/);
+  assert.match(verify, /test -z "\$EXPECTED_SHA" \|\| test "\$sha" = "\$EXPECTED_SHA"/);
+  for (const name of ["validate", "unitypackage", "publish-npm", "github-release"]) {
+    assert.match(job(publishWorkflow, name), /ref: \$\{\{ needs.verify.outputs.sha \}\}/);
+  }
+});
+
+test("workflow structure: remote checks precede npm and all Release mutations", () => {
+  assert.strictEqual(publishWorkflow.match(/verify-remote-tag --tag "\$TAG" --sha "\$GITHUB_SHA"/g)?.length, 4);
+  assert.match(job(publishWorkflow, "publish-npm"), /verify-remote-tag[\s\S]*npm publish/);
+  assert.match(job(publishWorkflow, "publish-npm"), /--artifact "com.wallstop-studios.dxcommandterminal-\$\{version\}.tgz"/);
+  assert.match(job(publishWorkflow, "github-release"), /args=\(--verify-tag --draft/);
+  const ci = fs.readFileSync(path.join(workflowRoot, "tooling-tests.yml"), "utf8");
+  assert.strictEqual(ci.match(/"\.github\/workflows\/release\*\.yml"/g)?.length, 2);
+});
+
+test("workflow shell prerequisite fails closed without opt-in or matching provenance SHA", { skip: process.platform === "win32" }, () => {
+  const verify = job(publishWorkflow, "verify");
+  assert.match(verify, /RELEASE_ENABLED: \$\{\{ vars.RELEASE_PUBLISH_ENABLED \}\}/);
+  assert.match(verify, /DRY_RUN: \$\{\{ inputs.dry_run \}\}/);
+  const script = verify.split("        run: |\n")[1].split("\n\n")[0].replace(/^          /gm, "");
+  const sha = "a".repeat(40);
+  for (const [dryRun, enabled, eventSha, expected, succeeds] of [
+    ["true", "", "b".repeat(40), "", true],
+    ["false", "", sha, "", false],
+    ["false", "false", sha, "", false],
+    ["false", "TRUE", sha, "", false],
+    ["false", "true", "b".repeat(40), "", false],
+    ["false", "true", sha, "b".repeat(40), false],
+    ["false", "true", sha, sha, true]
+  ]) {
+    const out = path.join(tempRoot("prerequisite"), "output");
+    const invoke = () => execFileSync("bash", ["-e", "-c", `git() { printf '%s\\n' "$BUILD_SHA"; };\n${script}`], {
+      encoding: "utf8", stdio: "pipe",
+      env: { ...process.env, BUILD_SHA: sha, GITHUB_SHA: eventSha, EXPECTED_SHA: expected,
+        DRY_RUN: dryRun, RELEASE_ENABLED: enabled, GITHUB_OUTPUT: out }
+    });
+    if (succeeds) {
+      invoke();
+      assert.strictEqual(fs.readFileSync(out, "utf8"), `sha=${sha}\n`);
+    } else {
+      assert.throws(invoke, (error) => error.status === 1);
+      assert.strictEqual(fs.existsSync(out), false);
+    }
+  }
+});
 
 const RC = "1.0.0-rc26.0";
 const STABLE = "1.0.1";
@@ -167,27 +289,35 @@ test("extractReleaseNotes fails closed on a missing or empty section", () => {
   );
 });
 
-test("evaluatePublishGate skips a version already on the registry", () => {
-  const decision = evaluatePublishGate(
-    { name: "com.wallstop-studios.dxcommandterminal", version: RC },
-    { registryHasVersion: () => true }
-  );
-  assert.deepStrictEqual(decision, {
-    publish: false,
-    distTag: "next",
-    reason: "com.wallstop-studios.dxcommandterminal@1.0.0-rc26.0 is already on the registry; skipping publish"
+for (const version of [RC, STABLE]) {
+  test(`registry boundary accepts identical bytes only: ${version}`, () => {
+    const artifact = path.join(tempRoot("integrity"), "package.tgz");
+    fs.writeFileSync(artifact, "release bytes");
+    const integrity = `sha512-${createHash("sha512").update("release bytes").digest("base64")}`;
+    const options = { name: "com.wallstop-studios.dxcommandterminal", version, artifact };
+    const exec = (command, args) => {
+      assert.match(command, /^npm(?:\.cmd)?$/);
+      assert.deepStrictEqual(args, ["view", `${options.name}@${version}`, "dist.integrity", "--json", "--registry=https://registry.npmjs.org"]);
+      return JSON.stringify(integrity);
+    };
+    assert.strictEqual(evaluatePublishGate(options, { exec }).publish, false);
+    fs.writeFileSync(artifact, "different bytes");
+    assert.throws(() => evaluatePublishGate(options, { exec }), /integrity does not match/);
+    for (const output of ["", "null", '"sha1-old"', "{}", "[]"]) {
+      assert.throws(() => evaluatePublishGate(options, { exec: () => output }));
+    }
+    for (const code of ["E404", "E401", "E503", undefined]) {
+      const probe = () => { throw { status: 1, stdout: JSON.stringify({ error: { code } }) }; };
+      if (code === "E404") {
+        const result = evaluatePublishGate(options, { exec: probe });
+        assert.strictEqual(result.publish, true);
+        assert.strictEqual(result.distTag, version === RC ? "next" : "latest");
+      } else {
+        assert.throws(() => evaluatePublishGate(options, { exec: probe }), /registry probe failed/);
+      }
+    }
   });
-});
-
-test("evaluatePublishGate publishes an unseen version with the shape's dist-tag", () => {
-  const seen = new Set([`${"com.wallstop-studios.dxcommandterminal"}@1.0.0`]);
-  const decision = evaluatePublishGate(
-    { name: "com.wallstop-studios.dxcommandterminal", version: RC },
-    { registryHasVersion: (name, version) => seen.has(`${name}@${version}`) }
-  );
-  assert.deepStrictEqual(decision.publish, true);
-  assert.strictEqual(decision.distTag, "next");
-});
+}
 
 test("evaluatePublishGate validates its inputs", () => {
   assert.throws(
@@ -232,22 +362,49 @@ test("CLI verify-release emits github-output; notes writes the notes file", () =
   assert.strictEqual(fs.readFileSync(notesPath, "utf8"), "### Added\n\n- Something shipped.\n");
 });
 
-test("CLI publish-gate reports publish=true for an unseen version", () => {
-  const out = path.join(tempRoot("gate"), "output.txt");
-  const stdout = execFileSync(
-    process.execPath,
-    [
-      releaseCli,
-      "publish-gate",
-      "--name",
-      "com.wallstop-studios.dxcommandterminal",
-      "--version",
-      RC,
-      "--github-output",
-      out
-    ],
-    { encoding: "utf8" }
-  );
-  assert.match(stdout, /is not on the registry yet/);
-  assert.strictEqual(fs.readFileSync(out, "utf8"), "publish=true\ndist-tag=next\n");
+function mockedCli(args, output, expectedCommand, expectedArgs) {
+  const preload = `import cp from "node:child_process";
+    import {syncBuiltinESMExports} from "node:module";
+    import assert from "node:assert/strict";
+    cp.execFileSync = (command, args) => {
+      assert.equal(command, ${JSON.stringify(expectedCommand)});
+      assert.deepEqual(args, ${JSON.stringify(expectedArgs)});
+      const output = ${JSON.stringify(output)};
+      if (output === null) throw Error("remote unavailable");
+      return output;
+    };
+    syncBuiltinESMExports();`;
+  return execFileSync(process.execPath, ["--import", `data:text/javascript,${encodeURIComponent(preload)}`, releaseCli, ...args],
+    { encoding: "utf8", stdio: "pipe" });
+}
+
+for (const tag of ["v1.0.1", "v1.0.0-rc26.0", "v1.0.1-candidate.1"]) {
+  test(`CLI remote tag boundary: ${tag}, annotated/lightweight/moved/deleted/unavailable`, () => {
+    const sha = "a".repeat(40);
+    const ref = `refs/tags/${tag}`;
+    const args = ["verify-remote-tag", "--tag", tag, "--sha", sha];
+    const gitArgs = ["ls-remote", "--exit-code", "origin", ref, `${ref}^{}`];
+    for (const output of [`${sha}\t${ref}\n`, `${"b".repeat(40)}\t${ref}\n${sha}\t${ref}^{}\n`]) {
+      mockedCli(args, output, "git", gitArgs);
+    }
+    for (const output of [`${"b".repeat(40)}\t${ref}\n`, `${sha}\t${ref}\n${"b".repeat(40)}\t${ref}^{}\n`, "", null]) {
+      assert.throws(() => mockedCli(args, output, "git", gitArgs), (error) => error.status === 1);
+    }
+  });
+}
+
+test("CLI publish-gate compares downloaded tarball bytes before emitting skip output", () => {
+  const dir = tempRoot("cli-integrity");
+  const artifact = path.join(dir, "package.tgz");
+  const out = path.join(dir, "output.txt");
+  fs.writeFileSync(artifact, "release bytes");
+  const integrity = `sha512-${createHash("sha512").update("release bytes").digest("base64")}`;
+  const args = ["publish-gate", "--name", "pkg", "--version", RC, "--artifact", artifact, "--github-output", out];
+  const npmArgs = ["view", `pkg@${RC}`, "dist.integrity", "--json", "--registry=https://registry.npmjs.org"];
+  mockedCli(args, JSON.stringify(integrity), process.platform === "win32" ? "npm.cmd" : "npm", npmArgs);
+  assert.strictEqual(fs.readFileSync(out, "utf8"), "publish=false\ndist-tag=next\n");
+  fs.writeFileSync(artifact, "different bytes");
+  fs.unlinkSync(out);
+  assert.throws(() => mockedCli(args, JSON.stringify(integrity), process.platform === "win32" ? "npm.cmd" : "npm", npmArgs));
+  assert.strictEqual(fs.existsSync(out), false);
 });

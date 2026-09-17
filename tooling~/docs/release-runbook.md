@@ -10,7 +10,7 @@ distributable is produced from plain repository content.
 | --- | --- | --- | --- |
 | Prepare | Manual dispatch (`Release Prepare`) | `.github/workflows/release-prepare.yml` | Rewrites `package.json`, rotates `CHANGELOG.md`'s `## Unreleased` content under a dated `## [X.Y.Z] - date` heading, opens the `release/vX.Y.Z` PR |
 | Tag | Push to `master` touching `package.json` | `.github/workflows/release-tag.yml` | Pushes the annotated `vX.Y.Z` tag when the squash-merge subject is `release: vX.Y.Z` |
-| Publish | Tag push (`v*`) | `.github/workflows/release.yml` | Verifies tag/package/changelog agreement, validates + attests, builds the `.unitypackage`, publishes npm, publishes the GitHub Release |
+| Publish | Explicit call after auto-tagging, or manual dispatch from `master` | `.github/workflows/release.yml` | Verifies tag/package/changelog agreement, builds artifacts, then attests and publishes only with `dry_run: false` |
 
 Versions are full semver including prerelease identifiers (`1.0.0-rc25.0`). Release tags
 carry a `v` prefix (`v1.0.0-rc26.0`); the historical unprefixed tags (`1.0.0-rc25.0`)
@@ -25,11 +25,21 @@ versions publish to npm's `next` dist-tag; stable versions to `latest`.
   CI runs on release PRs, add a fine-grained PAT with `contents: write` +
   `pull-requests: write` as the `RELEASE_PAT` secret; the workflow uses it when present
   and falls back to `GITHUB_TOKEN` otherwise.
-- **npm Trusted Publishing (one-time).** On npmjs.com: package settings -> Trusted
-  Publisher, register this repository (`wallstop/DxCommandTerminal`) + workflow filename
-  `release.yml`. Until that is configured, the `publish-npm` job fails at npm publish;
-  every earlier stage runs normally. npm publish uses OIDC (`id-token: write` +
-  `npm publish --provenance`); no npm token secret is stored in the repo.
+- **Release approval.** Create the `release` environment with required maintainer
+  reviewers, prevent self-review, and allow only `master` deployments. Do this before
+  merging a release PR. YAML references do not configure protection rules.
+  **Blocked:** review found this environment absent; no remote settings were changed.
+- **Publish opt-in.** Leave repository variable `RELEASE_PUBLISH_ENABLED` unset until
+  a maintainer verifies the environment, npm trust, tag protections, and hosted acceptance.
+  Only exact `true` enables publishing. This is a manual prerequisite confirmation,
+  not an API audit; remove it before changing or removing those protections.
+- **Tag protection.** Protect version tags against updates and deletion. Remote SHA
+  checks run before npm and each Release mutation, but cannot make separate API calls atomic.
+- **npm Trusted Publishing.** Register `wallstop/DxCommandTerminal` with environment
+  `release` and workflow `release.yml` for manual publishing. Add a separate publisher
+  for `release-tag.yml` for automatic tags: npm validates the calling workflow, not
+  the reusable callee. Both need direct `npm publish` permission. Keep OIDC enabled;
+  do not add an npm token fallback. These settings need maintainer verification.
 
 ## Preparing a release
 
@@ -58,38 +68,41 @@ Failures at this stage are all fail-closed:
 
 ## The publish flow (Release Publish)
 
-Fires on every `v*` tag push. Five jobs, in order:
+Tag pushes alone do not start this workflow. A successful auto-tag job calls it
+explicitly with the tag and expected merge SHA. Manual runs use `master`, name an
+existing version tag, and default to `dry_run: true`. Other repositories and workflow
+refs are rejected. All downstream checkouts use the verified commit SHA.
 
-1. **verify** - `release.mjs verify-release` fails closed unless the tag, the
-   `package.json` version, and the `## [X.Y.Z] - date` changelog heading all agree.
-2. **validate** - package-content validator, `npm pack`, sha256, artifact upload,
-   build-provenance attestation.
-3. **unitypackage** - required, non-skippable exporter run + sha256 + attestation; an
-   empty or failed export blocks publishing.
-4. **publish-npm** - skipped when `npm view` shows the exact name@version already on the
-   registry (safe re-runs); otherwise `npm publish --provenance` with the version-shape
-   dist-tag (`next` for prereleases, `latest` for stable).
-5. **github-release** - creates the draft Release from the changelog section (shared
-   extractor, fail-closed on missing/empty notes), uploads `.tgz`, `.tgz.sha256`,
-   `.unitypackage`, `.unitypackage.sha256`, verifies the four assets, then publishes.
-   npm publish always completes first (job dependency), never the reverse.
+1. **verify** - requires tag/package version agreement and non-empty dated release notes.
+   Publishing requires opt-in and tag SHA equal to the workflow event SHA, including
+   manual runs. Rehearsals may use an older tag. Automatic handoffs also check the merge SHA.
+2. **validate** and **unitypackage** - read-only package validation, packing/export,
+   checksums, and Actions artifact uploads. Missing or empty artifacts fail the run.
+3. **attest** - publish-only build provenance, behind the `release` environment.
+4. **publish-npm** - publish-only OIDC, behind the same environment. An existing npm
+   version is skipped only when its SHA-512 `dist.integrity` matches the tarball.
+   Missing integrity, different bytes, and registry failures block publication.
+   New versions use `next` for prereleases and `latest` for stable.
+5. **github-release** - publish-only, behind the same environment and npm success.
+   Creates or reuses a Release, uploads four assets, then publishes the draft.
+   Explicit publishing still replaces existing assets with `--clobber`; review reruns.
 
 ### Rehearsing a release (no publish)
 
-There is no publish-free rehearsal path yet. Treat every `v*` tag push as a
-real release.
+The implemented rehearsal path runs only `verify`, `validate`, and `unitypackage`.
+It writes Actions artifacts, not npm packages, attestations, or GitHub Releases.
+Existing draft and published Releases are not queried or changed.
 
-- A tag push starts `Release Publish` in publish mode: npm publish and the
-  Release publish run before any manual `dry_run` dispatch could happen.
-  Never push a candidate tag to rehearse.
-- Never dispatch `dry_run: true` on an already-published tag: the
-  github-release job reuses the existing published Release and re-uploads its
-  assets with `--clobber`, replacing public artifacts, and the Release stays
-  published (it never becomes a draft).
-- On a manual dispatch, `dry_run` only skips npm publish and the release
-  publish step. It is not a rehearsal control for published tags. A true
-  dry-run path needs a workflow change that separates dispatch rehearsal
-  from push-triggered publishing.
+**Blocked pending hosted acceptance (#93). No operational rehearsal recipe is approved.**
+Acceptance evidence must include candidate and existing-published-version runs, all
+write jobs skipped, both artifact hashes, and unchanged public asset IDs/hashes.
+Local structural and mocked-boundary tests do not prove hosted behavior. Restore the
+recipe only after a maintainer records that evidence and run URLs.
+
+Candidate tags must match `package.json` and a non-empty dated changelog section.
+A mismatched `v*-candidate` label fails verification. A tag that points to an older
+commit containing the old push workflow can still run that old workflow on push;
+do not push rehearsal tags to pre-fix commits.
 
 ### Re-running after a partial failure
 
@@ -99,10 +112,11 @@ real release.
 - **Tag failed after the merge** (`Release Tag` job red): the changelog/package state on
   `master` is already correct - use the manual fallback commands, or re-run the failed
   workflow run (the tag step is idempotent; an existing tag no-ops).
-- **Publish failed after the tag**: re-run `Release Publish` from the same tag
-  (workflow_dispatch with `tag` + `dry_run: false`, or re-run the failed jobs). Every
-  stage is re-run safe: verify re-checks the same tree, npm skips a version already on
-  the registry, the draft release is reused, and assets re-upload with `--clobber`.
+- **Publish failed after the tag**: rerun failed jobs on the original workflow SHA.
+  A new manual publish is allowed only while the selected tag matches `master`'s event
+  SHA. Never move a tag to satisfy this check. Approval and opt-in remain required.
+  Rerunning all tag jobs no-ops on existing tags and does not call publishing.
+  npm skips identical bytes only; Release assets are replaced only in publish mode.
 
 ## Reviewing and merging the release PR
 
@@ -124,7 +138,7 @@ real release.
 | Changelog documents `X.Y.Z` but the subject is not a release subject | `::warning::` with manual fallback commands; no tag pushed |
 | Ordinary `package.json` push | Silent no-op |
 
-Manual fallback (also printed by the warning):
+Manual tag fallback (also printed by the warning; tagging alone does not publish):
 
 ```sh
 git tag -a vX.Y.Z -m "DxCommandTerminal X.Y.Z"
