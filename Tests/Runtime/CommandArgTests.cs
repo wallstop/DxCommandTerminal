@@ -3348,6 +3348,122 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreEqual(arg.contents, value);
         }
 
+        [TestCase("A\rB", "AB")]
+        [TestCase("A\nB", "AB")]
+        [TestCase(" A\r\nB\t ", " AB\t ")]
+        [TestCase("", "")]
+        [TestCase(null, "")]
+        public void RawParserPreservesInputWhileLegacyOverrideCleans(string input, string cleaned)
+        {
+            CommandArg argument = new(input, '\'', '\'');
+            string observed = null;
+            CommandArgParser<int> parser = (string text, out int parsed) =>
+            {
+                observed = text;
+                parsed = text.Length;
+                return true;
+            };
+            Assert.IsTrue(argument.TryGetRaw(out int raw, parser));
+            Assert.AreEqual(input ?? string.Empty, observed);
+            Assert.AreEqual((input ?? string.Empty).Length, raw);
+            Assert.IsTrue(argument.TryGet(out int legacy, parser));
+            Assert.AreEqual(cleaned, observed);
+            Assert.AreEqual(cleaned.Length, legacy);
+            Assert.AreEqual(input ?? string.Empty, argument.contents);
+        }
+
+        [Test]
+        public void RawParserNormalizesDefaultArgumentToEmpty()
+        {
+            CommandArg argument = default;
+            Assert.IsTrue(
+                argument.TryGetRaw(
+                    out string parsed,
+                    (string input, out string value) =>
+                    {
+                        value = input;
+                        return true;
+                    }
+                )
+            );
+            Assert.AreEqual(string.Empty, parsed);
+        }
+
+        [TestCase(true)]
+        [TestCase(false)]
+        public void RawParserReturnsDelegateResultWithoutFallback(bool succeeds)
+        {
+            CommandArg argument = new("12\r\n3");
+            int registeredCalls = 0;
+            Assert.IsTrue(
+                CommandArg.RegisterParser<int>(
+                    (string input, out int parsed) =>
+                    {
+                        ++registeredCalls;
+                        Assert.AreEqual("123", input);
+                        parsed = 7;
+                        return true;
+                    }
+                )
+            );
+            int calls = 0;
+            Assert.AreEqual(
+                succeeds,
+                argument.TryGetRaw(
+                    out int value,
+                    (string input, out int parsed) =>
+                    {
+                        ++calls;
+                        Assert.AreEqual("12\r\n3", input);
+                        parsed = 42;
+                        return succeeds;
+                    }
+                )
+            );
+            Assert.AreEqual(42, value);
+            Assert.AreEqual(1, calls);
+            Assert.AreEqual(0, registeredCalls);
+            Assert.IsFalse(argument.TryGetRaw(out int missing, null));
+            Assert.AreEqual(0, missing);
+            Assert.AreEqual(0, registeredCalls);
+            Assert.IsTrue(argument.TryGet(out value));
+            Assert.AreEqual(7, value);
+            Assert.AreEqual(1, registeredCalls);
+            Assert.IsTrue(CommandArg.UnregisterParser<int>());
+            Assert.IsFalse(argument.TryGetRaw(out missing, null));
+            Assert.AreEqual(0, missing);
+            Assert.IsTrue(argument.TryGet(out value));
+            Assert.AreEqual(123, value);
+        }
+
+        [Test]
+        public void RawParserIgnoresCleaningControlSets()
+        {
+            const string ignored = "DxRawIgnored";
+            bool added = CommandArg.IgnoredValuesForCleanedTypes.Add(ignored);
+            try
+            {
+                CommandArg argument = new(ignored);
+                Assert.IsTrue(argument.TryGetRaw(out int raw, ParseLength));
+                Assert.AreEqual(ignored.Length, raw);
+                Assert.IsTrue(argument.TryGet(out int cleaned, ParseLength));
+                Assert.AreEqual(0, cleaned);
+            }
+            finally
+            {
+                if (added)
+                {
+                    CommandArg.IgnoredValuesForCleanedTypes.Remove(ignored);
+                }
+            }
+
+            static bool ParseLength(string input, out int parsed)
+            {
+                parsed = input.Length;
+                return true;
+            }
+        }
+
         [Test]
         public void CustomParserBuiltInType()
         {

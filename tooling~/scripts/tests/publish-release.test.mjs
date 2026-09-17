@@ -65,8 +65,8 @@ function condition(text) {
   return text.match(/^    if: (.+)$/m)?.[1];
 }
 
-function shellScript(jobText) {
-  return jobText.split("        run: |\n")[1].split("\n\n")[0].replace(/^          /gm, "");
+function shellScript(jobText, step = "Verify handoff commit") {
+  return jobText.split(`- name: ${step}\n`)[1].split("        run: |\n")[1].split("\n\n")[0].replace(/^          /gm, "");
 }
 
 test("workflow scanners extract jobs, conditions, and shell identically from LF and CRLF", () => {
@@ -149,7 +149,7 @@ test("workflow structure: automatic tag handoff depends on successful tagging", 
 test("workflow structure: default-branch guard and immutable checkouts", () => {
   const verify = job(publishWorkflow, "verify");
   assert.strictEqual(condition(verify), "github.repository == 'wallstop/DxCommandTerminal' && github.ref == 'refs/heads/master'");
-  assert.match(verify, /ref: refs\/tags\/\$\{\{ env.TAG \}\}/);
+  assert.match(verify, /ref: \$\{\{ steps.source.outputs.ref \}\}/);
   assert.match(verify, /EXPECTED_SHA: \$\{\{ inputs.expected_sha \}\}/);
   assert.match(verify, /test -z "\$EXPECTED_SHA" \|\| test "\$sha" = "\$EXPECTED_SHA"/);
   for (const name of ["validate", "unitypackage", "publish-npm", "github-release"]) {
@@ -174,6 +174,8 @@ test("workflow shell prerequisite fails closed without opt-in or matching proven
   const sha = "a".repeat(40);
   for (const [dryRun, enabled, eventSha, expected, succeeds] of [
     ["true", "", "b".repeat(40), "", true],
+    ["true", "", "b".repeat(40), sha, true],
+    ["true", "", sha, "b".repeat(40), false],
     ["false", "", sha, "", false],
     ["false", "false", sha, "", false],
     ["false", "TRUE", sha, "", false],
@@ -196,6 +198,81 @@ test("workflow shell prerequisite fails closed without opt-in or matching proven
     }
   }
 });
+
+test("candidate source is dispatch-only, read-only, and selected before checkout", { skip: process.platform === "win32" }, () => {
+  const verify = job(publishWorkflow, "verify");
+  const script = shellScript(verify, "Select source");
+  assert.ok(verify.indexOf("- name: Select source") < verify.indexOf("uses: actions/checkout@"));
+  assert.match(verify, /CANDIDATE_REF: \$\{\{ inputs.candidate_ref \}\}/);
+  const triggers = publishWorkflow.split("\nconcurrency:")[0];
+  assert.doesNotMatch(triggers.split("  workflow_dispatch:")[0], /candidate_ref:/);
+  assert.match(triggers.split("  workflow_dispatch:")[1], /tag:[\s\S]*?required: false/);
+  for (const [tag, candidate, dryRun, event, ref] of [
+    ["", "", "true", "workflow_dispatch", "refs/heads/master"],
+    ["", "session/rehearsal", "true", "workflow_dispatch", "refs/heads/session/rehearsal"],
+    ["", "refs/heads/master", "true", "workflow_dispatch", "refs/heads/master"],
+    ["", "a".repeat(40), "true", "workflow_dispatch", "a".repeat(40)],
+    ["v1.0.1", "", "false", "push", "refs/tags/v1.0.1"],
+    ["v1.0.1", "", "true", "workflow_dispatch", "refs/tags/v1.0.1"],
+    ...["false", "", "TRUE"].map((dry) => ["", "master", dry, "workflow_dispatch", null]),
+    ["", "", "false", "workflow_dispatch", null],
+    ["v1.0.1", "master", "true", "workflow_dispatch", null],
+    ["v1.0.1", "master", "false", "workflow_dispatch", null],
+    ["", "master", "true", "push", null],
+    ...["refs/tags/v1.0.1", "master~1", "-bad", "bad\nref"].map((ref) => ["", ref, "true", "workflow_dispatch", null])
+  ]) {
+    const out = path.join(tempRoot("source"), "output");
+    const invoke = () => execFileSync("bash", ["-e", "-c", script], {
+      encoding: "utf8", stdio: "pipe",
+      env: { ...process.env, TAG: tag, CANDIDATE_REF: candidate, DRY_RUN: dryRun,
+        GITHUB_EVENT_NAME: event, GITHUB_OUTPUT: out }
+    });
+    if (ref === null) {
+      assert.throws(invoke, (error) => error.status !== 0);
+      assert.strictEqual(fs.existsSync(out), false);
+    } else {
+      invoke();
+      assert.strictEqual(fs.readFileSync(out, "utf8"), `ref=${ref}\n`);
+    }
+  }
+});
+
+test("candidate verification uses the selected package version without a synthetic release tag", () => {
+  const verify = job(publishWorkflow, "verify");
+  assert.match(verify, /version=\$\(node -p "require\('\.\/package.json'\).version"\)/);
+  assert.match(verify, /if \[ -n "\$TAG" \]; then[\s\S]*verify-release[\s\S]*--tag "\$TAG"[\s\S]*else[\s\S]*verify-candidate --dry-run/);
+  for (const repository of ["wallstop/DxCommandTerminal", "other/fork"]) {
+    for (const ref of ["refs/heads/master", "refs/heads/candidate", "refs/tags/v1.0.1"]) {
+      assert.strictEqual(enabled(verify, { github: { repository, ref } }),
+        repository === "wallstop/DxCommandTerminal" && ref === "refs/heads/master");
+    }
+  }
+});
+
+for (const version of ["1.0.0-rc25.0", "1.0.1"]) {
+  test(`CLI candidate verifies existing ${version} without tags or publication`, () => {
+    const changelogPath = changelogFor(version);
+    const before = fs.readFileSync(changelogPath);
+    const out = path.join(tempRoot("candidate"), "output");
+    const args = [releaseCli, "verify-candidate", "--version", version, "--changelog", changelogPath, "--github-output", out];
+    const invoke = (args) => execFileSync(process.execPath, args, { encoding: "utf8", stdio: "pipe" });
+    mockedCli([...args.slice(1), "--dry-run"], null, "no child process allowed", []);
+    assert.strictEqual(fs.readFileSync(out, "utf8"), `version=${version}\ndist-tag=${version.includes("-") ? "next" : "latest"}\n`);
+    fs.unlinkSync(out);
+    for (const invalid of [args, [...args, "--dry-run", "--tag", `v${version}`],
+      [releaseCli, "verify-release", "--version", version, "--changelog", changelogPath, "--dry-run"],
+      [releaseCli, "publish-gate", "--candidate-ref", "master"]]) {
+      assert.throws(() => invoke(invalid), (error) => error.status === 1);
+      assert.strictEqual(fs.existsSync(out), false);
+    }
+    assert.deepStrictEqual(fs.readFileSync(changelogPath), before);
+    for (const text of [`## [${version}] - 2026-09-16\n\n`, "## Unreleased\n\n- Not released.\n"]) {
+      fs.writeFileSync(changelogPath, text);
+      assert.throws(() => invoke([...args, "--dry-run"]), (error) => error.status === 1);
+      assert.strictEqual(fs.existsSync(out), false);
+    }
+  });
+}
 
 const RC = "1.0.0-rc26.0";
 const STABLE = "1.0.1";

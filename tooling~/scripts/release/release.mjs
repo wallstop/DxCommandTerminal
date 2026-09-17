@@ -424,6 +424,7 @@ const USAGE =
   "[--tag-exists] [--github-output <path>]\n" +
   "       node release.mjs verify-release --version X.Y.Z --tag vX.Y.Z --changelog <path> " +
   "[--github-output <path>]\n" +
+  "       node release.mjs verify-candidate --dry-run --version X.Y.Z --changelog <path> [--github-output <path>]\n" +
   "       node release.mjs notes --version X.Y.Z --changelog <path> [--output <path>] " +
   "[--github-output <path>]\n" +
   "       node release.mjs publish-gate --name <package> --version X.Y.Z --artifact <tgz> [--github-output <path>]\n" +
@@ -448,6 +449,22 @@ function runVerifyRelease(argv) {
     `tag=${result.tag}`,
     `dist-tag=${result.distTag}`
   ]);
+}
+
+function runVerifyCandidate(argv) {
+  const options = parseOptionArgs(argv, {
+    "--version": "version",
+    "--changelog": "changelogPath",
+    "--github-output": "githubOutput"
+  }, { "--dry-run": "dryRun" });
+  if (options.dryRun !== true) {
+    throw new Error("verify-candidate requires --dry-run; publishing requires verify-release and a version tag");
+  }
+  options.changelogPath = path.resolve(options.changelogPath ?? path.join(REPO_ROOT, "CHANGELOG.md"));
+  extractReleaseNotes(options);
+  const distTag = distTagFor(options.version);
+  console.log(`[release-candidate] artifact-only: package.json ${options.version}, dated notes verified; not publish authorization`);
+  appendGithubOutput(options.githubOutput, [`version=${options.version}`, `dist-tag=${distTag}`]);
 }
 
 function runNotes(argv) {
@@ -492,6 +509,8 @@ function main() {
       runTagGate(rest);
     } else if (command === "verify-release") {
       runVerifyRelease(rest);
+    } else if (command === "verify-candidate") {
+      runVerifyCandidate(rest);
     } else if (command === "notes") {
       runNotes(rest);
     } else if (command === "verify-remote-tag") {

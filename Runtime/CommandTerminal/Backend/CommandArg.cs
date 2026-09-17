@@ -636,6 +636,17 @@
             return false;
         }
 
+        public bool TryGetRaw<T>(out T parsed, CommandArgParser<T> parser)
+        {
+            if (parser == null)
+            {
+                parsed = default;
+                return false;
+            }
+
+            return parser(contents ?? string.Empty, out parsed);
+        }
+
         public override string ToString()
         {
             return contents;

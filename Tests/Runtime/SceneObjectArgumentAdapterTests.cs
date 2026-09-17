@@ -9,6 +9,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
     [TestFixture(typeof(GameObject))]
     [TestFixture(typeof(Transform))]
+    [TestFixture(typeof(BoxCollider))]
     public sealed class SceneObjectArgumentAdapterTests<T>
         where T : Object
     {
@@ -169,9 +170,88 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             T target = CreateTarget();
             SceneObjectArgumentAdapter<T> adapter = new();
             Assert.IsFalse(CommandArg.CanParse(typeof(T)));
-            Assert.IsTrue(new CommandArg(TargetName).TryGet(out T result, adapter.TryParse));
+            Assert.IsTrue(new CommandArg(TargetName).TryGetRaw(out T result, adapter.TryParse));
             Assert.AreSame(target, result);
             Assert.IsFalse(CommandArg.CanParse(typeof(T)));
+        }
+
+        [TestCase("\r")]
+        [TestCase("\n")]
+        [TestCase("\r\n")]
+        public void ExplicitParserPreservesLineBreakNameIdentity(string lineBreak)
+        {
+            T target = CreateTarget();
+            target.name = $"DxAdapter{lineBreak}Target";
+            T decoy = CreateTarget();
+            decoy.name = "DxAdapterTarget";
+            SceneObjectArgumentAdapter<T> adapter = new();
+            Assert.IsTrue(adapter.TryParse(target.name, out T direct));
+            Assert.AreSame(target, direct);
+            Assert.IsTrue(new CommandArg(target.name).TryGetRaw(out T parsed, adapter.TryParse));
+            Assert.AreSame(target, parsed);
+            Assert.AreNotSame(decoy, parsed);
+        }
+
+        [TestCase("\r", false)]
+        [TestCase("\n", false)]
+        [TestCase("\r\n", false)]
+        [TestCase("\r", true)]
+        [TestCase("\n", true)]
+        [TestCase("\r\n", true)]
+        public void BuilderPreservesLineBreakNameIdentity(string lineBreak, bool remaining)
+        {
+            T target = CreateTarget();
+            target.name = $"DxAdapter{lineBreak}Target";
+            T decoy = CreateTarget();
+            decoy.name = "DxAdapterTarget";
+            SceneObjectArgumentAdapter<T> adapter = new();
+            CommandShell shell = new(new CommandHistory(16));
+            T[] resolved = null;
+            int calls = 0;
+            CommandBuilder builder = CommandBuilder
+                .Create("inspect-object")
+                .Contexts(CommandExecutionContextSets.All);
+            builder = remaining
+                ? builder.Remaining<T>(
+                    "target",
+                    spec => spec.RawParser(adapter.TryParse).Required()
+                )
+                : builder.Arg<T>("target", spec => spec.RawParser(adapter.TryParse).Required());
+            Assert.IsTrue(
+                shell.AddCommand(
+                    builder.Handler(
+                        (context, arguments) =>
+                        {
+                            resolved = remaining
+                                ? arguments.Get<T[]>("target")
+                                : new[] { arguments.Get<T>("target") };
+                            ++calls;
+                        }
+                    ),
+                    out CommandRegistrationHandle handle
+                )
+            );
+            using (handle)
+            {
+                string input = $"inspect-object \"{target.name}\"";
+                if (remaining)
+                {
+                    input = $"{input} \"{decoy.name}\" \"{target.name}\"";
+                }
+
+                Assert.IsTrue(shell.RunCommand(input));
+                Assert.IsFalse(shell.TryConsumeErrorMessage(out string error), error);
+                Assert.AreEqual(1, calls);
+                Assert.IsNotNull(resolved);
+                Assert.AreEqual(remaining ? 3 : 1, resolved.Length);
+                Assert.AreSame(target, resolved[0]);
+                Assert.AreNotSame(decoy, resolved[0]);
+                if (remaining)
+                {
+                    Assert.AreSame(decoy, resolved[1]);
+                    Assert.AreSame(target, resolved[2]);
+                }
+            }
         }
 
         [TestCase(SceneObjectAmbiguityPolicy.FirstMatch, 1)]
@@ -194,7 +274,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                             "target",
                             spec =>
                                 spec.Required()
-                                    .Parser(adapter.TryParse)
+                                    .RawParser(adapter.TryParse)
                                     .Choices(adapter.GetChoices, adapter.FormatChoice)
                         )
                         .Handler(
@@ -259,12 +339,22 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [TestCase("DxAdapter Target", "inspect-object DxAdapter")]
         [TestCase("DxAdapter'target", "inspect-object DxAdapter")]
         [TestCase("DxAdapter\"target", "inspect-object DxAdapter")]
-        public void AcceptedNameCompletionDispatchesSelectedObject(string name, string input)
+        [TestCase("DxAdapter\rTarget", "inspect-object \"DxAdapter\r", "DxAdapterTarget")]
+        [TestCase("DxAdapter\nTarget", "inspect-object \"DxAdapter\n", "DxAdapterTarget")]
+        [TestCase("DxAdapter\r\nTarget", "inspect-object \"DxAdapter\r\n", "DxAdapterTarget")]
+        [TestCase("DxAdapter\rTarget", "inspect-object \"DxAdapter\r\"", "DxAdapterTarget")]
+        [TestCase("DxAdapter\nTarget", "inspect-object \"DxAdapter\n\"", "DxAdapterTarget")]
+        [TestCase("DxAdapter\r\nTarget", "inspect-object \"DxAdapter\r\n\"", "DxAdapterTarget")]
+        public void AcceptedNameCompletionDispatchesSelectedObject(
+            string name,
+            string input,
+            string decoyName = "OtherTarget"
+        )
         {
             T target = CreateTarget();
             target.name = name;
             T decoy = CreateTarget();
-            decoy.name = "OtherTarget";
+            decoy.name = decoyName;
             SceneObjectArgumentAdapter<T> adapter = new();
             CommandShell shell = new(new CommandHistory(16));
             Assert.IsTrue(shell.SetVariable("target", decoy.name));
@@ -279,7 +369,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                             "target",
                             spec =>
                                 spec.Required()
-                                    .Parser(adapter.TryParse)
+                                    .RawParser(adapter.TryParse)
                                     .Choices(adapter.GetChoices, adapter.FormatChoice)
                         )
                         .Handler(
@@ -352,7 +442,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                             "target",
                             spec =>
                                 spec.Required()
-                                    .Parser(adapter.TryParse)
+                                    .RawParser(adapter.TryParse)
                                     .Choices(adapter.GetChoices, adapter.FormatChoice)
                         )
                         .Handler((context, arguments) => resolved = arguments.Get<T>("target")),
@@ -413,7 +503,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     CommandBuilder
                         .Create("inspect-object")
                         .Contexts(CommandExecutionContextSets.All)
-                        .Arg<T>("target", spec => spec.Required().Parser(adapter.TryParse))
+                        .Arg<T>("target", spec => spec.Required().RawParser(adapter.TryParse))
                         .Handler((context, arguments) => resolved = arguments.Get<T>("target")),
                     out CommandRegistrationHandle handle
                 )
@@ -431,6 +521,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             SceneObjectArgumentAdapter<BoxCollider> adapter = new();
             CreateTarget();
+            BoxCollider existing = _objects[0].GetComponent<BoxCollider>();
+            if (existing != null)
+            {
+                Object.DestroyImmediate(existing);
+            }
+
             Assert.IsFalse(adapter.TryParse(TargetName, out _));
             BoxCollider collider = _objects[0].AddComponent<BoxCollider>();
             Assert.IsTrue(adapter.TryParse(TargetName, out BoxCollider result));
@@ -486,6 +582,38 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreEqual(string.Empty, adapter.FormatChoice(target));
         }
 
+        [Test]
+        public void FormatChoicePreservesOriginalCRLF()
+        {
+            const string name = "DxAdapter\r\nTarget";
+            T target = CreateTarget();
+            target.name = name;
+            SceneObjectArgumentAdapter<T> adapter = new();
+            string formatted = adapter.FormatChoice(target);
+            Assert.AreEqual(name, formatted);
+            Assert.AreEqual('\r', formatted[9]);
+            Assert.AreEqual('\n', formatted[10]);
+        }
+
+        [TestCase("\r")]
+        [TestCase("\n")]
+        [TestCase("\r\n")]
+        public void LegacyOverridesKeepCleanedNameResolution(string lineBreak)
+        {
+            T target = CreateTarget();
+            target.name = $"DxAdapter{lineBreak}Target";
+            T decoy = CreateTarget();
+            decoy.name = "DxAdapterTarget";
+            SceneObjectArgumentAdapter<T> adapter = new();
+            CommandArg input = new(target.name);
+            Assert.IsTrue(input.TryGet(out T parsed, adapter.TryParse));
+            Assert.AreSame(decoy, parsed);
+            CommandArgumentSpec<T> spec = new("target");
+            Assert.IsTrue(spec.Parser(adapter.TryParse).TryParse(input, out object value));
+            Assert.AreSame(decoy, value);
+            Assert.IsFalse(CommandArg.DoNotCleanTypes.Contains(typeof(T)));
+        }
+
         [TestCase(" DxAdapter Target ")]
         [TestCase("DxAdapter\tTarget")]
         public void NonblankSceneNamesPreserveWhitespace(string name)
@@ -537,7 +665,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 .Required()
                 .Describe("target")
                 .Validate(value => null)
-                .Parser(adapter.TryParse);
+                .RawParser(adapter.TryParse);
             List<CommandCompletion> results = new();
             copy.AppendCompletions(CompletionContext(), results);
             Assert.IsTrue(
@@ -569,7 +697,18 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             GameObject target = new(TargetName);
             _objects.Add(target);
-            return target is T gameObject ? gameObject : target.transform as T;
+            if (target is T gameObject)
+            {
+                return gameObject;
+            }
+
+            Component component = target.GetComponent(typeof(T));
+            if (component == null)
+            {
+                component = target.AddComponent(typeof(T));
+            }
+
+            return component as T;
         }
     }
 }

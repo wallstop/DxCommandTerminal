@@ -69,13 +69,14 @@ Failures at this stage are all fail-closed:
 ## The publish flow (Release Publish)
 
 Tag pushes alone do not start this workflow. A successful auto-tag job calls it
-explicitly with the tag and expected merge SHA. Manual runs use `master`, name an
-existing version tag, and default to `dry_run: true`. Other repositories and workflow
-refs are rejected. All downstream checkouts use the verified commit SHA.
+explicitly with the tag and expected merge SHA. Manual runs use workflow ref `master`
+and default to `dry_run: true`. Publishing requires an existing version tag; rehearsal
+can instead select a branch or commit. Other repositories and workflow refs are rejected.
+All downstream checkouts use the verified commit SHA.
 
-1. **verify** - requires tag/package version agreement and non-empty dated release notes.
-   Publishing requires opt-in and tag SHA equal to the workflow event SHA, including
-   manual runs. Rehearsals may use an older tag. Automatic handoffs also check the merge SHA.
+1. **verify** - requires non-empty dated notes for the checked-out package version.
+   Tag runs also require tag/package agreement. Publishing requires opt-in and tag SHA
+   equal to the workflow event SHA, including manual runs. Automatic handoffs check the merge SHA.
 2. **validate** and **unitypackage** - read-only package validation, packing/export,
    checksums, and Actions artifact uploads. Missing or empty artifacts fail the run.
 3. **attest** - publish-only build provenance, behind the `release` environment.
@@ -99,10 +100,34 @@ write jobs skipped, both artifact hashes, and unchanged public asset IDs/hashes.
 Local structural and mocked-boundary tests do not prove hosted behavior. Restore the
 recipe only after a maintainer records that evidence and run URLs.
 
-Candidate tags must match `package.json` and a non-empty dated changelog section.
-A mismatched `v*-candidate` label fails verification. A tag that points to an older
-commit containing the old push workflow can still run that old workflow on push;
-do not push rehearsal tags to pre-fix commits.
+#### Candidate contract (awaiting approval; do not dispatch yet)
+
+The tag-only path could not rehearse current tooling: all existing tags were historical,
+unprefixed releases. Creating a new release tag is not needed for artifact acceptance.
+
+- Select workflow ref `master`, keep `dry_run: true`, and leave `tag` blank.
+- `candidate_ref` accepts a branch name, `refs/heads/...`, or a full lowercase commit SHA.
+  Blank selects `master`. Other values are branch names, not abbreviated SHAs or revision expressions.
+- Prefer a reviewed full SHA for repeatable evidence. A branch resolves once at checkout;
+  every build uses that resolved SHA. Workflow event SHA can differ only for rehearsal.
+- The candidate must contain current tooling, a valid package version, and its non-empty
+  dated changelog section. Existing versions are allowed; Unreleased is not substituted.
+- Candidate mode is manual-only. Publishing with a candidate, no tag, or both inputs fails
+  before checkout. Reusable publishing still requires `tag` and `expected_sha`.
+- No version, changelog, tag, registry, or Release mutation occurs in candidate verification.
+  Artifacts are rehearsal bytes, not evidence that an existing release has identical bytes.
+
+Local verification without any tag or publication:
+
+```sh
+node tooling~/scripts/release/release.mjs verify-candidate --dry-run \
+  --version "$(node -p "require('./package.json').version")" --changelog CHANGELOG.md
+```
+
+After approval and merge, record the selected ref, resolved build SHA, workflow event SHA,
+run URL, skipped write jobs, both artifact hashes, and unchanged public asset IDs/hashes.
+Do not enable publishing or create tags to gather this evidence. Tag-mode verification
+still requires exact `v<package-version>` agreement; `v*-candidate` labels do not bypass it.
 
 ### Re-running after a partial failure
 

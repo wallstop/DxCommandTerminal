@@ -61,6 +61,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         private readonly bool _hasExplicitDefault;
         private readonly T _defaultValue;
         private readonly CommandArgParser<T> _parserOverride;
+        private readonly bool _useRawInput;
         private readonly IReadOnlyList<T> _staticChoices;
         private readonly string[] _staticChoiceTexts;
         private readonly Func<CommandCompletionContext, IReadOnlyList<T>> _dynamicChoices;
@@ -107,7 +108,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             string description,
             bool isRemaining = false,
             bool hasExplicitDefault = false,
-            Func<T, string> choiceFormatter = null
+            Func<T, string> choiceFormatter = null,
+            bool useRawInput = false
         )
             : base(name, GetTypeName(typeof(T)))
         {
@@ -116,6 +118,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             _hasExplicitDefault = hasExplicitDefault;
             _defaultValue = defaultValue;
             _parserOverride = parserOverride;
+            _useRawInput = useRawInput;
 
             /*
                 Copy caller-owned choice arrays: the spec is immutable, so a
@@ -211,7 +214,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 Description,
                 isRemaining: _isRemaining,
                 hasExplicitDefault: _hasExplicitDefault,
-                choiceFormatter: _choiceFormatter
+                choiceFormatter: _choiceFormatter,
+                useRawInput: _useRawInput
             );
         }
 
@@ -235,7 +239,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 Description,
                 isRemaining: _isRemaining,
                 hasExplicitDefault: true,
-                choiceFormatter: _choiceFormatter
+                choiceFormatter: _choiceFormatter,
+                useRawInput: _useRawInput
             );
         }
 
@@ -254,7 +259,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 description,
                 isRemaining: _isRemaining,
                 hasExplicitDefault: _hasExplicitDefault,
-                choiceFormatter: _choiceFormatter
+                choiceFormatter: _choiceFormatter,
+                useRawInput: _useRawInput
             );
         }
 
@@ -297,7 +303,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 Description,
                 isRemaining: _isRemaining,
                 hasExplicitDefault: _hasExplicitDefault,
-                choiceFormatter: _choiceFormatter
+                choiceFormatter: _choiceFormatter,
+                useRawInput: _useRawInput
             );
         }
 
@@ -343,7 +350,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 Description,
                 isRemaining: _isRemaining,
                 hasExplicitDefault: _hasExplicitDefault,
-                choiceFormatter: formatter
+                choiceFormatter: formatter,
+                useRawInput: _useRawInput
             );
         }
 
@@ -458,7 +466,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 Description,
                 isRemaining: _isRemaining,
                 hasExplicitDefault: _hasExplicitDefault,
-                choiceFormatter: _choiceFormatter
+                choiceFormatter: _choiceFormatter,
+                useRawInput: _useRawInput
             );
         }
 
@@ -486,32 +495,20 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 Description,
                 isRemaining: _isRemaining,
                 hasExplicitDefault: _hasExplicitDefault,
-                choiceFormatter: _choiceFormatter
+                choiceFormatter: _choiceFormatter,
+                useRawInput: _useRawInput
             );
         }
 
         /// <summary>Overrides the parser used to convert input to this argument's type.</summary>
         public CommandArgumentSpec<T> Parser(CommandArgParser<T> parser)
         {
-            if (parser == null)
-            {
-                throw new ArgumentNullException(nameof(parser));
-            }
+            return WithParser(parser, useRawInput: false);
+        }
 
-            return new CommandArgumentSpec<T>(
-                Name,
-                _required,
-                _defaultValue,
-                parser,
-                _staticChoices,
-                _dynamicChoices,
-                _rangeValidator,
-                _validator,
-                Description,
-                isRemaining: _isRemaining,
-                hasExplicitDefault: _hasExplicitDefault,
-                choiceFormatter: _choiceFormatter
-            );
+        public CommandArgumentSpec<T> RawParser(CommandArgParser<T> parser)
+        {
+            return WithParser(parser, useRawInput: true);
         }
 
         /// <summary>
@@ -538,7 +535,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         internal override bool TryParse(CommandArg input, out object parsed)
         {
-            bool ok = input.TryGet(out T value, _parserOverride);
+            bool ok = TryParseValue(input, out T value);
             parsed = value;
             return ok;
         }
@@ -570,7 +567,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             for (int i = 0; i < values.Length; ++i)
             {
                 CommandArg input = arguments[start + i];
-                if (!input.TryGet(out values[i], _parserOverride))
+                if (!TryParseValue(input, out values[i]))
                 {
                     failedToken = input;
                     validationError = null;
@@ -657,6 +654,37 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 string text = _choiceFormatter(provided[i]);
                 AppendCandidate(text, Description, context, results);
             }
+        }
+
+        private CommandArgumentSpec<T> WithParser(CommandArgParser<T> parser, bool useRawInput)
+        {
+            if (parser == null)
+            {
+                throw new ArgumentNullException(nameof(parser));
+            }
+
+            return new CommandArgumentSpec<T>(
+                Name,
+                _required,
+                _defaultValue,
+                parser,
+                _staticChoices,
+                _dynamicChoices,
+                _rangeValidator,
+                _validator,
+                Description,
+                isRemaining: _isRemaining,
+                hasExplicitDefault: _hasExplicitDefault,
+                choiceFormatter: _choiceFormatter,
+                useRawInput: useRawInput
+            );
+        }
+
+        private bool TryParseValue(CommandArg input, out T value)
+        {
+            return _useRawInput
+                ? input.TryGetRaw(out value, _parserOverride)
+                : input.TryGet(out value, _parserOverride);
         }
 
         private string ValidateValue(T value)
