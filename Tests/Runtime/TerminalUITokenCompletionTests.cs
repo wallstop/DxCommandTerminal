@@ -153,10 +153,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             _terminal.CompleteCommand(true);
             yield return WaitForInput(
-                "pickup \"torch",
-                "Inside an open quote the insertion goes in verbatim"
+                "pickup \"torch\"",
+                "Completion closes the token to preserve its literal value"
             );
-            yield return WaitForCaret(13, "The caret lands after the quoted insertion");
+            yield return WaitForCaret(14, "The caret parks on the closed token");
         }
 
         [UnityTest]

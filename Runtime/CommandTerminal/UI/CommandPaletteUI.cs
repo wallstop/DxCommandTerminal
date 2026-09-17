@@ -902,10 +902,23 @@
                 return;
             }
 
-            string insertion = CommandTokenizer.QuoteInsertionIfNeeded(
-                completion.InsertionText,
-                _completionContext.IsQuoted
-            );
+            if (
+                !CommandTokenizer.TryPrepareInsertion(
+                    input,
+                    completion.InsertionText,
+                    replacementStart,
+                    replacementLength,
+                    _completionContext.IsQuoted,
+                    out string insertion,
+                    out replacementStart,
+                    out replacementLength,
+                    wholeToken: replacementStart == _completionContext.ReplacementStart
+                        && replacementLength == _completionContext.ReplacementLength
+                )
+            )
+            {
+                return;
+            }
             string newInput = input
                 .Remove(replacementStart, replacementLength)
                 .Insert(replacementStart, insertion);
@@ -917,7 +930,16 @@
             _input.SetValueWithoutNotify(newInput);
             int caretIndex = replacementStart + insertion.Length;
             QueueCaret(caretIndex);
-            RefreshQuery(newInput, caretIndex);
+            int completionCaret = caretIndex;
+            if (
+                1 < insertion.Length
+                && CommandArg.Quotes.Contains(insertion[0])
+                && insertion[insertion.Length - 1] == insertion[0]
+            )
+            {
+                --completionCaret;
+            }
+            RefreshQuery(newInput, completionCaret);
             FocusInput();
         }
 

@@ -1084,7 +1084,7 @@
         }
 
         [UnityTest]
-        public IEnumerator TabAppliesInsideExistingQuotesVerbatim()
+        public IEnumerator TabClosesExistingQuotes()
         {
             yield return SpawnPalette();
             RegisterInventoryCommand();
@@ -1100,12 +1100,12 @@
             );
 
             yield return SendKeyDown(KeyCode.Tab);
-            yield return WaitForCaret(15, "The caret lands after the inserted item");
+            yield return WaitForCaret(16, "The caret parks on the closed token");
 
             Assert.AreEqual(
-                "pickitem \"torch",
+                "pickitem \"torch\"",
                 _palette._input.value,
-                "Tab inside an open quote inserts verbatim without extra quoting"
+                "Tab closes the token to preserve its literal value"
             );
         }
 

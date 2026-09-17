@@ -1735,10 +1735,23 @@
                 return;
             }
 
-            string insertion = CommandTokenizer.QuoteInsertionIfNeeded(
-                completion.InsertionText,
-                _tokenCompletionQuoted
-            );
+            if (
+                !CommandTokenizer.TryPrepareInsertion(
+                    input,
+                    completion.InsertionText,
+                    replacementStart,
+                    replacementLength,
+                    _tokenCompletionQuoted,
+                    out string insertion,
+                    out replacementStart,
+                    out replacementLength,
+                    wholeToken: replacementStart == _tokenCompletionReplacementStart
+                        && replacementLength == _tokenCompletionReplacementLength
+                )
+            )
+            {
+                return;
+            }
             string newInput = input
                 .Remove(replacementStart, replacementLength)
                 .Insert(replacementStart, insertion);

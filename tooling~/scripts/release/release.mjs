@@ -22,6 +22,7 @@
     and rewrite logic lives in versioning.mjs.
 */
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -225,12 +226,6 @@ function extractReleaseNotes(options) {
   return body;
 }
 
-/*
-    release.yml npm-publish skip check: re-running the publish workflow must
-    not fail on (or double-publish) a version already on the registry.
-    deps.registryHasVersion is injectable so tests never touch the network.
-    Returns { publish, distTag, reason }.
-*/
 function evaluatePublishGate(options, deps = {}) {
   const parsed = parseVersion(options.version);
   if (parsed === null) {
@@ -240,32 +235,62 @@ function evaluatePublishGate(options, deps = {}) {
     throw new Error("missing package name");
   }
   const distTag = distTagFor(options.version);
-  const registryHasVersion = deps.registryHasVersion ?? defaultRegistryHasVersion;
-  if (registryHasVersion(options.name, options.version)) {
+  const integrity = registryIntegrity(options.name, options.version, deps.exec ?? execFileSync);
+  if (integrity !== null) {
+    const actual = `sha512-${createHash("sha512").update(fs.readFileSync(options.artifact)).digest("base64")}`;
+    if (integrity !== actual) {
+      throw new Error("registry integrity does not match the release tarball; refusing to skip publish");
+    }
     return {
       publish: false,
       distTag,
-      reason: `${options.name}@${options.version} is already on the registry; skipping publish`
+      reason: `${options.name}@${options.version} has identical registry integrity; skipping publish`
     };
   }
   return { publish: true, distTag, reason: `${options.name}@${options.version} is not on the registry yet` };
 }
 
-function defaultRegistryHasVersion(name, version) {
+function registryIntegrity(name, version, exec) {
+  let output;
   try {
-    execFileSync(NPM, ["view", `${name}@${version}`, "version"], {
-      stdio: ["ignore", "ignore", "ignore"],
+    output = exec(NPM, ["view", `${name}@${version}`, "dist.integrity", "--json", "--registry=https://registry.npmjs.org"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
       ...NPM_SPAWN_OPTIONS
     });
-    return true;
   } catch (error) {
-    if (error.code === "ENOENT") {
-      throw new Error("npm is unavailable; cannot check the registry for an existing publish");
+    let code;
+    try {
+      code = JSON.parse(String(error.stdout)).error?.code;
+    } catch {}
+    if (error.status === 1 && code === "E404") {
+      return null;
     }
-    // npm exits non-zero both for "not found" and for registry failures; a
-    // transient registry outage re-enters the not-published path, and the
-    // subsequent publish surfaces a real registry problem loudly.
-    return false;
+    throw new Error("registry probe failed; cannot prove whether the version exists");
+  }
+  const integrity = JSON.parse(output);
+  if (typeof integrity !== "string" || !/^sha512-[A-Za-z0-9+/]{86}==$/.test(integrity)) {
+    throw new Error("registry returned missing or unsupported integrity");
+  }
+  return integrity;
+}
+
+function verifyRemoteTag(options, deps = {}) {
+  if (!/^v/.test(options.tag ?? "") || parseVersion(options.tag.slice(1)) === null ||
+      !/^[a-f0-9]{40}$/.test(options.sha ?? "")) {
+    throw new Error("expected a version tag and full commit SHA");
+  }
+  const ref = `refs/tags/${options.tag}`;
+  const output = (deps.exec ?? execFileSync)("git", ["ls-remote", "--exit-code", "origin", ref, `${ref}^{}`], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+  const byName = new Map(output.trim().split(/\r?\n/).map((line) => {
+    const [sha, name] = line.split(/\s+/);
+    return [name, sha];
+  }));
+  if (!byName.has(ref) || (byName.get(`${ref}^{}`) ?? byName.get(ref)) !== options.sha) {
+    throw new Error("remote tag is missing or does not point to the verified commit");
   }
 }
 
@@ -298,6 +323,7 @@ const NOTES_OPTIONS = {
 const PUBLISH_GATE_OPTIONS = {
   "--name": "name",
   "--version": "version",
+  "--artifact": "artifact",
   "--github-output": "githubOutput"
 };
 const FALLBACK_COMMANDS = (tag, version) => [
@@ -400,7 +426,8 @@ const USAGE =
   "[--github-output <path>]\n" +
   "       node release.mjs notes --version X.Y.Z --changelog <path> [--output <path>] " +
   "[--github-output <path>]\n" +
-  "       node release.mjs publish-gate --name <package> --version X.Y.Z [--github-output <path>]";
+  "       node release.mjs publish-gate --name <package> --version X.Y.Z --artifact <tgz> [--github-output <path>]\n" +
+  "       node release.mjs verify-remote-tag --tag vX.Y.Z --sha <commit>";
 
 function runVerifyRelease(argv) {
   const options = parseOptionArgs(argv, VERIFY_OPTIONS, VERIFY_FLAGS);
@@ -467,6 +494,8 @@ function main() {
       runVerifyRelease(rest);
     } else if (command === "notes") {
       runNotes(rest);
+    } else if (command === "verify-remote-tag") {
+      verifyRemoteTag(parseOptionArgs(rest, { "--tag": "tag", "--sha": "sha" }));
     } else if (command === "publish-gate") {
       runPublishGate(rest);
     } else {
@@ -493,5 +522,6 @@ export {
   evaluateTagGate,
   extractReleaseNotes,
   prepareRelease,
-  verifyRelease
+  verifyRelease,
+  verifyRemoteTag
 };

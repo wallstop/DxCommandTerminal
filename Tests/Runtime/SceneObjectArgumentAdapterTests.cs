@@ -245,6 +245,187 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             }
         }
 
+        [TestCase("$target", "inspect-object $")]
+        [TestCase("$target", "inspect-object \"$")]
+        [TestCase("$target", "inspect-object '$")]
+        [TestCase("$target\"quoted", "inspect-object \"$\"")]
+        [TestCase("$target's", "inspect-object '$'")]
+        [TestCase("DxAdapter\"'target", "inspect-object \"DxAdapter\"")]
+        [TestCase("$target", "inspect-object \"$\"")]
+        [TestCase("$target", "inspect-object '$'")]
+        [TestCase("$target's", "inspect-object $")]
+        [TestCase("$target\"quoted", "inspect-object $")]
+        [TestCase("$target name", "inspect-object $")]
+        [TestCase("DxAdapter Target", "inspect-object DxAdapter")]
+        [TestCase("DxAdapter'target", "inspect-object DxAdapter")]
+        [TestCase("DxAdapter\"target", "inspect-object DxAdapter")]
+        public void AcceptedNameCompletionDispatchesSelectedObject(string name, string input)
+        {
+            T target = CreateTarget();
+            target.name = name;
+            T decoy = CreateTarget();
+            decoy.name = "OtherTarget";
+            SceneObjectArgumentAdapter<T> adapter = new();
+            CommandShell shell = new(new CommandHistory(16));
+            Assert.IsTrue(shell.SetVariable("target", decoy.name));
+            T resolved = null;
+            int calls = 0;
+            Assert.IsTrue(
+                shell.AddCommand(
+                    CommandBuilder
+                        .Create("inspect-object")
+                        .Contexts(CommandExecutionContextSets.All)
+                        .Arg<T>(
+                            "target",
+                            spec =>
+                                spec.Required()
+                                    .Parser(adapter.TryParse)
+                                    .Choices(adapter.GetChoices, adapter.FormatChoice)
+                        )
+                        .Handler(
+                            (context, arguments) =>
+                            {
+                                resolved = arguments.Get<T>("target");
+                                ++calls;
+                            }
+                        ),
+                    out CommandRegistrationHandle handle
+                )
+            );
+            using (handle)
+            {
+                List<CommandCompletion> results = new();
+                int caret = input.Length - (input.EndsWith('"') || input.EndsWith('\'') ? 1 : 0);
+                Assert.IsTrue(
+                    shell.TryComplete(
+                        CommandExecutionContext.Current,
+                        input,
+                        caret,
+                        results,
+                        out CommandCompletionContext completionContext
+                    )
+                );
+                Assert.AreEqual(1, results.Count);
+                Assert.AreEqual(name, results[0].InsertionText);
+                Assert.IsTrue(
+                    CommandTokenizer.TryPrepareInsertion(
+                        input,
+                        results[0].InsertionText,
+                        completionContext.ReplacementStart,
+                        completionContext.ReplacementLength,
+                        completionContext.IsQuoted,
+                        out string insertion,
+                        out int replacementStart,
+                        out int replacementLength
+                    )
+                );
+                string completed = input
+                    .Remove(replacementStart, replacementLength)
+                    .Insert(replacementStart, insertion);
+                Assert.IsTrue(shell.RunCommand(completed));
+                Assert.IsFalse(shell.TryConsumeErrorMessage(out string error), error);
+                Assert.AreEqual(1, calls);
+                Assert.AreSame(target, resolved);
+                Assert.AreNotSame(decoy, resolved);
+            }
+        }
+
+        [TestCase("inspect-object $")]
+        [TestCase("inspect-object \"$")]
+        [TestCase("inspect-object '$'")]
+        public void UnrepresentableNameCompletionDoesNotSelectDecoy(string input)
+        {
+            T target = CreateTarget();
+            target.name = "$target\"'";
+            T decoy = CreateTarget();
+            decoy.name = "OtherTarget";
+            SceneObjectArgumentAdapter<T> adapter = new();
+            CommandShell shell = new(new CommandHistory(16));
+            Assert.IsTrue(shell.SetVariable("target\"'", decoy.name));
+            T resolved = null;
+            Assert.IsTrue(
+                shell.AddCommand(
+                    CommandBuilder
+                        .Create("inspect-object")
+                        .Contexts(CommandExecutionContextSets.All)
+                        .Arg<T>(
+                            "target",
+                            spec =>
+                                spec.Required()
+                                    .Parser(adapter.TryParse)
+                                    .Choices(adapter.GetChoices, adapter.FormatChoice)
+                        )
+                        .Handler((context, arguments) => resolved = arguments.Get<T>("target")),
+                    out CommandRegistrationHandle handle
+                )
+            );
+            using (handle)
+            {
+                List<CommandCompletion> results = new();
+                int caret = input.Length - (input.EndsWith('\'') ? 1 : 0);
+                Assert.IsTrue(
+                    shell.TryComplete(
+                        CommandExecutionContext.Current,
+                        input,
+                        caret,
+                        results,
+                        out CommandCompletionContext context
+                    )
+                );
+                Assert.AreEqual(1, results.Count);
+                Assert.AreEqual(target.name, results[0].InsertionText);
+                Assert.IsFalse(
+                    CommandTokenizer.TryPrepareInsertion(
+                        input,
+                        results[0].InsertionText,
+                        context.ReplacementStart,
+                        context.ReplacementLength,
+                        context.IsQuoted,
+                        out _,
+                        out _,
+                        out _
+                    )
+                );
+                Assert.IsNull(resolved);
+                Assert.IsTrue(shell.RunCommand($"inspect-object {target.name}"));
+                Assert.AreSame(decoy, resolved);
+                Assert.AreNotSame(target, resolved);
+            }
+        }
+
+        [TestCase("$target", true)]
+        [TestCase("\"$target\"", false)]
+        [TestCase("'$target'", false)]
+        [TestCase("\"$target", true)]
+        [TestCase("'$target", true)]
+        public void ManualVariableInputKeepsExistingResolution(string argument, bool expands)
+        {
+            T target = CreateTarget();
+            target.name = "$target";
+            T decoy = CreateTarget();
+            decoy.name = "OtherTarget";
+            SceneObjectArgumentAdapter<T> adapter = new();
+            CommandShell shell = new(new CommandHistory(16));
+            Assert.IsTrue(shell.SetVariable("target", decoy.name));
+            T resolved = null;
+            Assert.IsTrue(
+                shell.AddCommand(
+                    CommandBuilder
+                        .Create("inspect-object")
+                        .Contexts(CommandExecutionContextSets.All)
+                        .Arg<T>("target", spec => spec.Required().Parser(adapter.TryParse))
+                        .Handler((context, arguments) => resolved = arguments.Get<T>("target")),
+                    out CommandRegistrationHandle handle
+                )
+            );
+            using (handle)
+            {
+                Assert.IsTrue(shell.RunCommand($"inspect-object {argument}"));
+                Assert.IsFalse(shell.TryConsumeErrorMessage(out string error), error);
+                Assert.AreSame(expands ? decoy : target, resolved);
+            }
+        }
+
         [Test]
         public void MissingComponentAndDestroyedComponentAreNotResolved()
         {

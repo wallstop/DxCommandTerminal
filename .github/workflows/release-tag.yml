@@ -33,6 +33,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      action: ${{ steps.decide.outputs.action }}
+      tag: ${{ steps.decide.outputs.tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -76,3 +79,16 @@ jobs:
           # into the public job log. persist-credentials stays false.
           gh auth setup-git
           git push origin "refs/tags/${TAG}"
+
+  publish:
+    needs: tag
+    if: ${{ needs.tag.outputs.action == 'tag' }}
+    uses: ./.github/workflows/release.yml
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    with:
+      tag: ${{ needs.tag.outputs.tag }}
+      expected_sha: ${{ github.sha }}
+      dry_run: false
