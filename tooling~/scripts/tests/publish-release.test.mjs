@@ -42,18 +42,54 @@ function changelogFor(version, body = ["### Added", "", "- Something shipped."])
 }
 
 const workflowRoot = path.resolve(toolingRoot, "../.github/workflows");
-const publishWorkflow = fs.readFileSync(path.join(workflowRoot, "release.yml"), "utf8");
-const tagWorkflow = fs.readFileSync(path.join(workflowRoot, "release-tag.yml"), "utf8");
+
+function toLf(text) {
+  return text.replaceAll("\r\n", "\n");
+}
+
+function readWorkflow(name) {
+  return toLf(fs.readFileSync(path.join(workflowRoot, name), "utf8"));
+}
+
+const publishWorkflow = readWorkflow("release.yml");
+const tagWorkflow = readWorkflow("release-tag.yml");
 
 function job(text, name) {
-  const start = text.indexOf(`\n  ${name}:\n`);
+  const normalized = toLf(text);
+  const start = normalized.indexOf(`\n  ${name}:\n`);
   assert.notStrictEqual(start, -1, `missing job ${name}`);
-  return text.slice(start + 1).split(/\n(?=  [a-z][a-z-]*:\n)/)[0];
+  return normalized.slice(start + 1).split(/\n(?=  [a-z][a-z-]*:\n)/)[0];
 }
 
 function condition(text) {
   return text.match(/^    if: (.+)$/m)?.[1];
 }
+
+function shellScript(jobText) {
+  return jobText.split("        run: |\n")[1].split("\n\n")[0].replace(/^          /gm, "");
+}
+
+test("workflow scanners extract jobs, conditions, and shell identically from LF and CRLF", () => {
+  const lf = readWorkflow("release.yml");
+  assert.doesNotMatch(lf, /\r/);
+  const crlf = lf.replaceAll("\n", "\r\n");
+  for (const [name, expected] of [
+    ["verify", "github.repository == 'wallstop/DxCommandTerminal' && github.ref == 'refs/heads/master'"],
+    ["attest", "${{ !inputs.dry_run }}"],
+    ["publish-npm", "${{ !inputs.dry_run }}"],
+    ["github-release", "${{ !inputs.dry_run }}"]
+  ]) {
+    assert.strictEqual(job(crlf, name), job(lf, name), `${name} extraction differs by EOL`);
+    for (const writer of [job(lf, name), job(crlf, name)]) {
+      assert.doesNotMatch(writer, /\r/);
+      assert.strictEqual(condition(writer), expected);
+    }
+  }
+  const script = shellScript(job(crlf, "verify"));
+  assert.strictEqual(script, shellScript(job(lf, "verify")));
+  assert.match(script, /test -z "\$EXPECTED_SHA" \|\| test "\$sha" = "\$EXPECTED_SHA"/);
+  assert.match(script, /echo "sha=\$sha" >> "\$GITHUB_OUTPUT"/);
+});
 
 function enabled(text, context) {
   return runInNewContext(condition(text).replace(/^\$\{\{ | \}\}$/g, ""), context, { timeout: 100 });
@@ -126,7 +162,7 @@ test("workflow structure: remote checks precede npm and all Release mutations", 
   assert.match(job(publishWorkflow, "publish-npm"), /verify-remote-tag[\s\S]*npm publish/);
   assert.match(job(publishWorkflow, "publish-npm"), /--artifact "com.wallstop-studios.dxcommandterminal-\$\{version\}.tgz"/);
   assert.match(job(publishWorkflow, "github-release"), /args=\(--verify-tag --draft/);
-  const ci = fs.readFileSync(path.join(workflowRoot, "tooling-tests.yml"), "utf8");
+  const ci = readWorkflow("tooling-tests.yml");
   assert.strictEqual(ci.match(/"\.github\/workflows\/release\*\.yml"/g)?.length, 2);
 });
 
@@ -134,7 +170,7 @@ test("workflow shell prerequisite fails closed without opt-in or matching proven
   const verify = job(publishWorkflow, "verify");
   assert.match(verify, /RELEASE_ENABLED: \$\{\{ vars.RELEASE_PUBLISH_ENABLED \}\}/);
   assert.match(verify, /DRY_RUN: \$\{\{ inputs.dry_run \}\}/);
-  const script = verify.split("        run: |\n")[1].split("\n\n")[0].replace(/^          /gm, "");
+  const script = shellScript(job(publishWorkflow, "verify"));
   const sha = "a".repeat(40);
   for (const [dryRun, enabled, eventSha, expected, succeeds] of [
     ["true", "", "b".repeat(40), "", true],
