@@ -20,6 +20,7 @@ const drillScript = path.resolve(
 const toolingRoot = path.resolve(path.dirname(drillScript), "../..");
 const {
   buildImportDriver,
+  importUnityArgs,
   listArtifact,
   metaLabels,
   parseArgs,
@@ -27,6 +28,7 @@ const {
   readTar,
   runImportDrill,
   scaffoldProject,
+  settleUnityArgs,
   validateImportedProject
 } = await import(pathToFileURL(drillScript).href);
 
@@ -338,16 +340,40 @@ test("metaLabels reads inline and list label blocks in any order", () => {
   assert.deepStrictEqual(metaLabels("guid: aabb\n"), new Set());
 });
 
-test("buildImportDriver is deterministic, environment-fed, and waits out compilation", () => {
+test("buildImportDriver is deterministic, holds no import logic, and waits out compilation", () => {
   const first = buildImportDriver();
   assert.strictEqual(first, buildImportDriver());
-  assert.match(first, /DX_IMPORT_DRILL_ARTIFACT/);
-  assert.match(first, /AssetDatabase\.ImportPackage\(artifact, false\)/);
   assert.match(first, /InitializeOnLoad/);
   assert.match(first, /isCompiling \|\| EditorApplication\.isUpdating/);
-  assert.match(first, /SessionState\.SetBool\("DX_IMPORT_DRILL_IMPORTED", true\)/);
-  assert.doesNotMatch(first, /interactive:\s*true/);
+  assert.match(first, /EditorApplication\.Exit\(0\)/);
+  assert.match(first, /settle timeout/);
+  assert.doesNotMatch(first, /ImportPackage/);
+  assert.doesNotMatch(first, /SessionState/);
   assert.doesNotMatch(first, /"[A-Za-z]:[\\/]|\/workspaces\//u);
+});
+
+test("importUnityArgs and settleUnityArgs shape the two Unity invocations", () => {
+  assert.deepStrictEqual(importUnityArgs("/proj", "/a.unitypackage", "/log1"), [
+    "-batchmode",
+    "-nographics",
+    "-quit",
+    "-projectPath",
+    "/proj",
+    "-importPackage",
+    "/a.unitypackage",
+    "-logFile",
+    "/log1"
+  ]);
+  assert.deepStrictEqual(settleUnityArgs("/proj", "/log2"), [
+    "-batchmode",
+    "-nographics",
+    "-executeMethod",
+    "DxTerminalImportDrill.WaitForImportAndCompile",
+    "-projectPath",
+    "/proj",
+    "-logFile",
+    "/log2"
+  ]);
 });
 
 test("scaffoldProject writes the version file, dependency manifest, and driver", () => {
@@ -526,16 +552,28 @@ test("parseArgs applies defaults and validates input", () => {
   assert.throws(() => parseArgs(["--artifact", "a", "--unity", "u", "--timeout-minutes", "0"]), /positive number/);
 });
 
-function stubRunUnity(behavior) {
-  return async (unityPath, projectDir, logPath, artifactPath) => {
-    if (behavior.imports === true) {
+/*
+    Stubs the generic Unity process runner. Each phase is `{ imports, logLines,
+    result }`; the stub dispatches on the invocation shape (phase 1 carries
+    -importPackage, phase 2 -executeMethod). A phase left undefined settles
+    successfully without writing a log.
+*/
+function stubRunUnity({ importPhase = {}, settlePhase = {}, calls = [] } = {}) {
+  return async (unityPath, args, logPath, timeoutMs) => {
+    const phase = args.includes("-importPackage") ? importPhase : settlePhase;
+    calls.push({ args, logPath, timeoutMs });
+    if (phase.imports === true) {
+      const artifactPath = args[args.indexOf("-importPackage") + 1];
+      const projectDir = args[args.indexOf("-projectPath") + 1];
       const artifact = listArtifact(fs.readFileSync(artifactPath));
       materializeImportedProject(projectDir, artifact);
     }
-    if (behavior.logLines !== undefined) {
-      writeFile(logPath, behavior.logLines.join("\n"));
+    if (phase.logLines !== undefined) {
+      writeFile(logPath, phase.logLines.join("\n"));
     }
-    return behavior.result;
+    return (
+      phase.result ?? { timedOut: false, code: 0, signal: null }
+    );
   };
 }
 
@@ -543,14 +581,15 @@ test("runImportDrill completes end to end and cleans up the scratch project", as
   const reportDir = tempRoot("run-ok");
   const artifactPath = path.join(reportDir, "drill.unitypackage");
   fs.writeFileSync(artifactPath, standardArtifact());
+  const calls = [];
   const manifest = await runImportDrill(
     { ...parseArgs(["--artifact", artifactPath, "--unity", "unity"]), reportDir },
     {
       probeEditorVersion: () => "6000.4.6f1",
       runUnity: stubRunUnity({
-        imports: true,
-        logLines: ["[import-drill] import completed"],
-        result: { timedOut: false, code: 0, signal: null }
+        importPhase: { imports: true, logLines: ["Import package from :drill.unitypackage !"] },
+        settlePhase: { logLines: ["[import-drill] import and compile settled"] },
+        calls
       })
     }
   );
@@ -558,13 +597,19 @@ test("runImportDrill completes end to end and cleans up the scratch project", as
   assert.strictEqual(manifest.failed, false);
   assert.deepStrictEqual(manifest.logErrors, []);
   assert.strictEqual(manifest.editorVersion, "6000.4.6f1");
-  assert.strictEqual(manifest.unityExitCode, 0);
   assert.strictEqual(manifest.timedOut, false);
   assert.strictEqual(manifest.entries, 4);
   assert.strictEqual(manifest.importRoot, ROOT);
   assert.deepStrictEqual(manifest.upmDependencies, { "com.unity.inputsystem": "1.7.0" });
   assert.ok(manifest.checks.length > 0, "manifest records validation checks");
   assert.ok(manifest.artifactSha256.length === 64);
+  assert.strictEqual(manifest.unityImport.exitCode, 0);
+  assert.strictEqual(manifest.unityImport.timedOut, false);
+  assert.strictEqual(manifest.unitySettle.exitCode, 0);
+  assert.strictEqual(calls.length, 2, "import phase runs before the settle phase");
+  assert.ok(calls[0].args.includes("-importPackage"));
+  assert.ok(calls[1].args.includes("-executeMethod"));
+  assert.ok(calls[1].args.includes("DxTerminalImportDrill.WaitForImportAndCompile"));
   assert.ok(!fs.existsSync(manifest.project), "scratch project should be removed on success");
 });
 
@@ -577,18 +622,22 @@ test("runImportDrill keeps the project with --keep and ignores unrelated warning
     {
       probeEditorVersion: () => "6000.4.6f1",
       runUnity: stubRunUnity({
-        imports: true,
-        logLines: [
-          "warning CS0168: The variable 'unused' is declared but never used",
-          "[import-drill] import completed"
-        ],
-        result: { timedOut: false, code: 0, signal: null }
+        importPhase: {
+          imports: true,
+          logLines: [
+            "warning CS0168: The variable 'unused' is declared but never used",
+            "Import package from :drill.unitypackage !"
+          ]
+        },
+        settlePhase: { logLines: ["[import-drill] import and compile settled"] }
       })
     }
   );
   assert.strictEqual(manifest.outcome, null);
   assert.deepStrictEqual(manifest.logErrors, []);
   assert.ok(fs.existsSync(path.join(manifest.project, "Assets", "DxTerminalImportDrill.cs")));
+  assert.ok(fs.existsSync(manifest.unityImport.log));
+  assert.ok(fs.existsSync(manifest.unitySettle.log));
 });
 
 const compilationFailures = [
@@ -606,50 +655,86 @@ const runFailures = [
   ...compilationFailures.map((diagnostic) => ({
     name: `exit zero with compiled DLLs and ${diagnostic}`,
     behavior: {
-      imports: true,
-      result: { timedOut: false, code: 0, signal: null },
-      logLines: ["[import-drill] import completed", diagnostic]
+      importPhase: {
+        imports: true,
+        result: { timedOut: false, code: 0, signal: null },
+        logLines: ["Import package from :drill.unitypackage !", diagnostic]
+      },
+      settlePhase: { logLines: ["[import-drill] import and compile settled"] }
     },
     matches: /unity log validation failed/,
     expectedLogErrors: [diagnostic]
   })),
   {
-    name: "exit zero with compiled DLLs but no log",
-    behavior: { imports: true, result: { timedOut: false, code: 0, signal: null } },
+    name: "exit zero with compiled DLLs but no import log",
+    behavior: {
+      importPhase: { imports: true, result: { timedOut: false, code: 0, signal: null } },
+      settlePhase: { logLines: ["[import-drill] import and compile settled"] }
+    },
     matches: /unity log validation failed/,
     expectedLogErrors: ["(unity produced no log file)"]
   },
   {
-    name: "unity exits nonzero",
+    name: "import phase exits nonzero",
     behavior: {
-      imports: false,
-      result: { timedOut: false, code: 3, signal: null },
-      logLines: ["Aborting batchmode due to failure"]
+      importPhase: {
+        imports: false,
+        result: { timedOut: false, code: 3, signal: null },
+        logLines: ["Aborting batchmode due to failure"]
+      }
     },
-    matches: /unity exited 3/,
-    logMatches: /Aborting batchmode/
+    matches: /unity import phase exited 3/,
+    logMatches: /Aborting batchmode/,
+    assertSettleNeverRan: true
+  },
+  {
+    name: "settle phase exits nonzero",
+    behavior: {
+      importPhase: { imports: true, result: { timedOut: false, code: 0, signal: null } },
+      settlePhase: { result: { timedOut: false, code: 3, signal: null } }
+    },
+    matches: /unity settle phase exited 3/
   },
   {
     name: "unity killed by signal",
-    behavior: { imports: false, result: { timedOut: false, code: null, signal: "SIGKILL" } },
-    matches: /killed by signal SIGKILL/
+    behavior: {
+      importPhase: { imports: false, result: { timedOut: false, code: null, signal: "SIGKILL" } }
+    },
+    matches: /unity import phase killed by signal SIGKILL/
   },
   {
     name: "unity times out",
-    behavior: { imports: false, result: { timedOut: true, code: null, signal: null } },
-    matches: /timed out after 20 minutes/
+    behavior: {
+      importPhase: { imports: false, result: { timedOut: true, code: null, signal: null } }
+    },
+    matches: /unity import phase timed out/,
+    assertTimedOut: true
+  },
+  {
+    name: "settle phase times out",
+    behavior: {
+      importPhase: { imports: true, result: { timedOut: false, code: 0, signal: null } },
+      settlePhase: { result: { timedOut: true, code: null, signal: null } }
+    },
+    matches: /unity settle phase timed out/,
+    assertTimedOut: true
   },
   {
     name: "unity cannot launch",
-    behavior: { imports: false, result: { timedOut: false, code: null, signal: null, spawnError: "ENOENT" } },
+    behavior: {
+      importPhase: { imports: false, result: { timedOut: false, code: null, signal: null, spawnError: "ENOENT" } }
+    },
     matches: /could not launch unity/
   },
   {
     name: "import is incomplete",
     behavior: {
-      imports: false,
-      result: { timedOut: false, code: 0, signal: null },
-      logLines: ["Assets/Terminal.cs(12,3): error CS1002: ; expected"]
+      importPhase: {
+        imports: false,
+        result: { timedOut: false, code: 0, signal: null },
+        logLines: ["Assets/Terminal.cs(12,3): error CS1002: ; expected"]
+      },
+      settlePhase: { result: { timedOut: false, code: 0, signal: null } }
     },
     matches: /validation failed/,
     logMatches: /error CS1002/
@@ -673,6 +758,12 @@ for (const failure of runFailures) {
     if (failure.name === "import is incomplete") {
       assert.ok(manifest.checks.length > 0, "validation failures record their checks");
     }
+    if (failure.assertSettleNeverRan === true) {
+      assert.strictEqual(manifest.unitySettle, null);
+    }
+    if (failure.assertTimedOut === true) {
+      assert.strictEqual(manifest.timedOut, true);
+    }
     if (failure.logMatches !== undefined) {
       assert.match(manifest.logErrors.join("\n"), failure.logMatches);
     }
@@ -687,8 +778,11 @@ for (const failure of runFailures) {
     }
     assert.ok(fs.existsSync(manifest.project), "failed runs keep the project for diagnosis");
     assert.ok(fs.existsSync(path.join(reportDir, "manifest.json")));
-    if (failure.behavior.logLines !== undefined) {
-      assert.ok(fs.existsSync(path.join(reportDir, "unity.log")));
+    if (failure.behavior.importPhase?.logLines !== undefined) {
+      assert.ok(fs.existsSync(path.join(reportDir, "unity-import.log")));
+    }
+    if (failure.behavior.settlePhase?.logLines !== undefined) {
+      assert.ok(fs.existsSync(path.join(reportDir, "unity-settle.log")));
     }
   });
 }
@@ -704,7 +798,10 @@ test("runImportDrill refuses a non-empty --project directory", async () => {
     () =>
       runImportDrill(
         { ...parseArgs(["--artifact", artifactPath, "--unity", "unity", "--project", busy]), reportDir },
-        { probeEditorVersion: () => "6000.4.6f1", runUnity: stubRunUnity({ imports: true, result: { timedOut: false, code: 0, signal: null } }) }
+        {
+          probeEditorVersion: () => "6000.4.6f1",
+          runUnity: stubRunUnity({ importPhase: { imports: true } })
+        }
       ),
     /empty or missing directory/
   );
