@@ -85,6 +85,37 @@ for (const testCase of verifyFailures) {
   });
 }
 
+for (const [label, body] of [
+  ["empty at EOF", []],
+  ["whitespace only", ["", " \t", ""]],
+  ["empty before an older release", ["## [0.9.0] - 2026-01-01", "", "- Older release notes."]]
+]) {
+  test(`verify-release rejects ${label} notes before emitting workflow outputs`, () => {
+    const changelogPath = changelogFor(RC, body);
+    const before = fs.readFileSync(changelogPath);
+    const outputPath = path.join(tempRoot("verify-empty"), "github-output.txt");
+    assert.throws(
+      () => verifyRelease({ version: RC, tag: `v${RC}`, changelogPath }),
+      /is empty; nothing to publish as release notes/
+    );
+    assert.throws(
+      () => execFileSync(
+        process.execPath,
+        [releaseCli, "verify-release", "--version", RC, "--tag", `v${RC}`,
+          "--changelog", changelogPath, "--github-output", outputPath],
+        { encoding: "utf8", stdio: "pipe" }
+      ),
+      (error) => {
+        assert.strictEqual(error.status, 1);
+        assert.match(error.stderr, /is empty; nothing to publish as release notes/);
+        return true;
+      }
+    );
+    assert.strictEqual(fs.existsSync(outputPath), false);
+    assert.deepStrictEqual(fs.readFileSync(changelogPath), before);
+  });
+}
+
 test("distTagFor branches on prerelease shape", () => {
   assert.strictEqual(distTagFor(RC), "next");
   assert.strictEqual(distTagFor(STABLE), "latest");

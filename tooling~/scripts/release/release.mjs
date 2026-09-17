@@ -193,12 +193,7 @@ function verifyRelease(options) {
       `tag ${options.tag} does not match package.json version ${options.version} (expected v${options.version})`
     );
   }
-  const changelogText = fs.readFileSync(options.changelogPath, "utf8");
-  if (!changelogHasVersionHeading(changelogText, options.version)) {
-    throw new Error(
-      `CHANGELOG has no "## [${options.version}] - date" heading for the tagged release`
-    );
-  }
+  extractReleaseNotes(options);
   return { version: options.version, tag: options.tag, distTag: distTagFor(options.version) };
 }
 

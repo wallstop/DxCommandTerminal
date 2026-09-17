@@ -745,7 +745,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
 
         private static bool IsCommandArgArray(ITypeSymbol type, ITypeSymbol commandArgumentType)
         {
-            if (type is not IArrayTypeSymbol arrayType)
+            if (type is not IArrayTypeSymbol arrayType || arrayType.Rank != 1)
             {
                 return false;
             }
