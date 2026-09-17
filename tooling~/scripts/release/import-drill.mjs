@@ -41,7 +41,12 @@ const REPO_ROOT = path.resolve(fileURLToPath(new URL("../../..", import.meta.url
 const TAR_BLOCK = 512;
 const GUID_PATTERN = /^[0-9a-f]{32}$/u;
 const GUID_LINE_PATTERN = /^guid:\s*([0-9a-fA-F]{32})\b/m;
-const LOG_ERROR_PATTERNS = [/\berror CS\d+/u, /^Aborting batchmode/u, /Scripts have compiler errors/u];
+const LOG_ERROR_PATTERNS = [
+  /\berror CS\d+\b/u,
+  /\b(?:warning|error) (?:CS8032|CS8784|CS8785|CS9057|AD0001)\b/u,
+  /^Aborting batchmode/u,
+  /Scripts have compiler errors/u
+];
 const ARTIFACT_ENV = "DX_IMPORT_DRILL_ARTIFACT";
 const IMPORTED_FLAG = "DX_IMPORT_DRILL_IMPORTED";
 
@@ -692,6 +697,11 @@ export async function runImportDrill(options, probes = {}) {
     outcome = `validation failed:\n  - ${validation.failures.join("\n  - ")}`;
   }
 
+  const logErrors = scanLogForErrors(logPath);
+  if (outcome === null && logErrors.length > 0) {
+    outcome = `unity log validation failed:\n  - ${logErrors.join("\n  - ")}`;
+  }
+
   const manifest = {
     timestamp: new Date().toISOString(),
     failed: outcome !== null,
@@ -709,7 +719,7 @@ export async function runImportDrill(options, probes = {}) {
     elapsedSeconds,
     outcome,
     checks: validation.checks,
-    logErrors: outcome === null ? [] : scanLogForErrors(logPath),
+    logErrors,
     revision: gitRevision()
   };
   fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);

@@ -15,8 +15,8 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
     public sealed class TerminalFontPackEditor : Editor
     {
         private readonly HashSet<Font> _fontCache = new();
-        private FontType _fontRemovalType = FontType.None;
-        private FontType _fontAdditionType = FontType.None;
+        private FontType _fontRemovalType = default;
+        private FontType _fontAdditionType = default;
         private string _lastSelectedDirectory;
         private GUIStyle _impactButtonStyle;
 
@@ -27,7 +27,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                 return false;
             }
 
-            if (toCheck == FontType.None)
+            if (toCheck == default)
             {
                 return false;
             }
@@ -238,12 +238,13 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
         private void OnEnable()
         {
             _fontCache.Clear();
-            _fontRemovalType = FontType.None;
+            _fontRemovalType = default;
         }
 
         [Flags]
         private enum FontType
         {
+            [Obsolete("Use default for an empty font selection")]
             None = 0,
             Normal = 1 << 0,
             Bold = 1 << 1,

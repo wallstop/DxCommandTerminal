@@ -424,10 +424,76 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 shell.TryComplete(CommandExecutionContext.Current, "equip ", 6, results, out _)
             );
             CollectionAssert.AreEqual(
-                new[] { "Sword", "Bow", "Staff" },
+                new[] { "Unknown", "Bow", "Staff", "Sword" },
                 results.ConvertAll(completion => completion.InsertionText),
                 "Enum choices list every enum name"
             );
+        }
+
+        [TestCase("Unknown")]
+        [TestCase("0")]
+        [TestCase("-1")]
+        [TestCase("2147483647")]
+        public void ExplicitEnumChoicesRejectInvalidValuesBeforeDispatch(string input)
+        {
+            CommandShell shell = new(History());
+            int invocations = 0;
+            Assert.IsTrue(
+                shell.AddCommand(
+                    CommandBuilder
+                        .Create("equip")
+                        .Arg<WeaponType>(
+                            "weapon",
+                            spec =>
+                                spec.Required()
+                                    .Choices(WeaponType.Sword, WeaponType.Bow, WeaponType.Staff)
+                        )
+                        .Handler((context, arguments) => ++invocations),
+                    out CommandRegistrationHandle handle
+                )
+            );
+            using (handle)
+            {
+                Assert.IsTrue(shell.RunCommand($"equip {input}"));
+                Assert.IsNotNull(ConsumeError(shell));
+                Assert.AreEqual(0, invocations);
+                Assert.IsTrue(shell.RunCommand("equip Sword"));
+                Assert.IsNull(ConsumeError(shell));
+                Assert.AreEqual(1, invocations);
+            }
+        }
+
+        [Test]
+        public void ExplicitEnumChoicesRejectInvalidOptionalDefault()
+        {
+            CommandShell shell = new(History());
+            CommandConfigurationException exception = Assert.Throws<CommandConfigurationException>(
+                () =>
+                    shell.AddCommand(
+                        CommandBuilder
+                            .Create("equip")
+                            .Arg<WeaponType>(
+                                "weapon",
+                                spec =>
+                                    spec.Choices(WeaponType.Sword, WeaponType.Bow, WeaponType.Staff)
+                                        .Default(default)
+                            )
+                            .Handler((context, arguments) => { }),
+                        out _
+                    )
+            );
+            Assert.AreEqual(CommandConfigurationFailure.InvalidDefault, exception.Failure);
+        }
+
+        [Test]
+        public void EnumChoicesPreserveValidLegacyZero()
+        {
+            CommandArgumentSpec<TerminalLogType> spec = new CommandArgumentSpec<TerminalLogType>(
+                "type"
+            ).EnumChoices();
+            Assert.IsTrue(spec.TryParse(new CommandArg("0"), out object parsed));
+            Assert.AreEqual(TerminalLogType.Error, parsed);
+            Assert.IsNull(spec.ValidateParsed(parsed));
         }
 
         [Test]
@@ -1070,9 +1136,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         private enum WeaponType
         {
-            Sword,
-            Bow,
-            Staff,
+            [Obsolete("Use a valid value")]
+            Unknown = 0,
+            Sword = 3,
+            Bow = 1,
+            Staff = 2,
         }
     }
 

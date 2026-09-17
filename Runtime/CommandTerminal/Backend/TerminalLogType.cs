@@ -9,7 +9,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         Warning = LogType.Warning,
         Message = LogType.Log,
         Exception = LogType.Exception,
-        Input,
-        ShellMessage,
+        Input = 5,
+        ShellMessage = 6,
     }
 }

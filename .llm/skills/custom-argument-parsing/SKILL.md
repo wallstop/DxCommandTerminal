@@ -61,6 +61,19 @@ Built-in parser functions cannot be unregistered; user registrations can. Custom
 Mutate these sets only during initialization, not per-frame or per-command, and document any
 non-default configuration - it changes parsing for every terminal in the process.
 
+## Identifier and completion boundaries
+
+- Scene-object names reject null, empty, and whitespace-only input; preserve meaningful
+  leading/trailing whitespace in nonblank names. Never trim identifiers implicitly.
+- General command arguments can contain quoted whitespace. Do not replace all
+  `IsNullOrEmpty` checks with `IsNullOrWhiteSpace`; test the value's contract first.
+- Dynamic choice formatters must round-trip through their parser. Keep formatting
+  opt-in so existing `ToString()`-based parsers remain compatible.
+- Add negative cases for unsupported types, default/invalid policies, missing and
+  destroyed objects, malformed input, and throwing providers/formatters with recovery.
+- Obsolete enum members are not automatically rejected by enum parsers or choices.
+  Use explicit valid choices and a valid `.Default(...)` for optional enum arguments.
+
 ## House rules for parsers
 
 - Parser signature is `bool X(string input, out T value)`; return `false` on any invalid input,

@@ -212,9 +212,7 @@
         {
             Assert.IsFalse(InputHelpers.IsKeyPressed(null, InputMode.LegacyInputSystem));
             Assert.IsFalse(InputHelpers.IsKeyPressed(string.Empty, InputMode.LegacyInputSystem));
-#pragma warning disable CS0612 // Type or member is obsolete
-            Assert.IsFalse(InputHelpers.IsKeyPressed("space", InputMode.None));
-#pragma warning restore CS0612 // Type or member is obsolete
+            Assert.IsFalse(InputHelpers.IsKeyPressed("space", default));
         }
 
         [Test]

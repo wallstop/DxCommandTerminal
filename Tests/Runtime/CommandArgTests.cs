@@ -3634,47 +3634,53 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         private enum TestEnum1
         {
-            [UsedImplicitly]
-            Value1,
+            [Obsolete("Use a valid value")]
+            Unknown = 0,
 
             [UsedImplicitly]
-            Value2,
+            Value1 = 5,
 
             [UsedImplicitly]
-            Value3,
+            Value2 = 1,
 
             [UsedImplicitly]
-            Value4,
+            Value3 = 2,
 
             [UsedImplicitly]
-            Value5,
+            Value4 = 3,
+
+            [UsedImplicitly]
+            Value5 = 4,
         }
 
         private enum TestEnum2
         {
-            [UsedImplicitly]
-            Value1,
+            [Obsolete("Use a valid value")]
+            Unknown = 0,
 
             [UsedImplicitly]
-            Value2,
+            Value1 = 8,
 
             [UsedImplicitly]
-            Value3,
+            Value2 = 1,
 
             [UsedImplicitly]
-            Value4,
+            Value3 = 2,
 
             [UsedImplicitly]
-            Value5,
+            Value4 = 3,
 
             [UsedImplicitly]
-            Value6,
+            Value5 = 4,
 
             [UsedImplicitly]
-            Value7,
+            Value6 = 5,
 
             [UsedImplicitly]
-            Value8,
+            Value7 = 6,
+
+            [UsedImplicitly]
+            Value8 = 7,
         }
     }
 }

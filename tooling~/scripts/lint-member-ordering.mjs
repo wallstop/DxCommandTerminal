@@ -65,6 +65,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { tokenize } from "./lint-comparison-direction.mjs";
 
 const REPO_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -74,7 +75,7 @@ const REPO_ROOT = path.resolve(
 // Overridable so the self-test can point the scan at a fixture tree. Nothing in CI sets it.
 const SCAN_ROOTS = process.env.NESTED_TYPE_PLACEMENT_ROOTS
   ? process.env.NESTED_TYPE_PLACEMENT_ROOTS.split(path.delimiter).filter(Boolean)
-  : ["Runtime", "Editor", "Tests", "Generator~"];
+  : ["Runtime", "Editor", "Tests", "Samples~", "Generator~"];
 
 const TYPE_KEYWORDS = ["class", "struct", "interface", "record", "enum"];
 const TYPE_DECLARATION = new RegExp(`\\b(${TYPE_KEYWORDS.join("|")})\\s+(@?[A-Za-z_]\\w*)`);
@@ -905,11 +906,97 @@ function directivePrefixEnd(text, start, end) {
  * conditional boundary, so members on opposite sides of an `#if` are never compared -- and the
  * nested types fall back to the targeted move that keeps every `#if` member in place.
  */
-export function analyzeFile(text) {
+export function enumViolations(text, file = "") {
+  const tokens = tokenize(text).filter((token) => token.hole === undefined);
+  const violations = [];
+  const keys = regionKeys(text);
+  const valueOf = (expression) => {
+    if (/^1(?:[uU][lL]?|[lL][uU]?)?<<(?:[0-5]?\d|6[0-3])$/.test(expression)) return 1n;
+    const literal = expression.replaceAll("_", "").replace(/[uUlL]+$/, "");
+    if (!/^[+-]?(?:0[xX][\da-fA-F]+|0[bB][01]+|\d+)$/.test(literal)) return null;
+    const sign = literal.startsWith("-") ? -1n : 1n;
+    return sign * BigInt(literal.replace(/^[+-]/, ""));
+  };
+  for (let index = 0; index < tokens.length; index += 1) {
+    if (tokens[index].text !== "enum" || tokens[index].kind !== "keyword" || tokens[index + 1]?.kind !== "identifier") continue;
+    const declaration = tokens[index];
+    const container = tokens[++index]?.text;
+    while (index < tokens.length && !["{", ";", "}"].includes(tokens[index].text)) index += 1;
+    if (tokens[index]?.text !== "{") continue;
+    const legacy = file.replaceAll("\\", "/") === "Runtime/CommandTerminal/Backend/TerminalLogType.cs" &&
+      tokens.slice(0, index + 1).map((token) => token.text).join("") ===
+        "namespaceWallstopStudios.DxCommandTerminal.Backend{usingUnityEngine;publicenumTerminalLogType{";
+    const report = (token, message) => violations.push({
+      line: token.line, kind: "enum contract", container, message
+    });
+    const members = [];
+    let member = [];
+    let depth = 0;
+    for (index += 1; index < tokens.length; index += 1) {
+      const token = tokens[index];
+      if (depth === 0 && [",", "}"].includes(token.text)) {
+        if (member.length) members.push(member);
+        member = [];
+        if (token.text === "}") break;
+      } else {
+        member.push(token);
+        if (["[", "(", "{"].includes(token.text)) depth += 1;
+        if (["]", ")", "}"].includes(token.text)) depth -= 1;
+      }
+    }
+    let sentinel = false;
+    const mapping = [];
+    for (const member of members) {
+      let cursor = 0;
+      let obsolete = false;
+      while (member[cursor]?.text === "[") {
+        let attribute = "";
+        let depth = 0;
+        for (cursor += 1; cursor < member.length; cursor += 1) {
+          const word = member[cursor].text;
+          if (depth === 0 && ["(", ",", "]"].includes(word)) {
+            obsolete ||= /^(?:global::)?(?:System\.)?Obsolete(?:Attribute)?$/.test(attribute) &&
+              keys[member[cursor - 1].start] === keys[declaration.start];
+            attribute = "";
+          }
+          if (word === "]" && depth === 0) break;
+          if (depth === 0 && !["(", ","].includes(word)) attribute += word;
+          if (["(", "[", "{"].includes(word)) depth += 1;
+          if ([")", "]", "}"].includes(word)) depth -= 1;
+        }
+        cursor += 1;
+      }
+      const name = member[cursor];
+      const expression = member.slice(cursor + 2).map((token) => token.text).join("");
+      if (!name || member[cursor + 1]?.text !== "=" || !expression) {
+        report(name ?? declaration, "Every enum member needs an explicit assigned value; preserve existing ordinals by hand.");
+        continue;
+      }
+      mapping.push(`${name.text}=${expression}`);
+      if (legacy) continue;
+      const value = valueOf(expression);
+      if (value === null) {
+        report(name, "Use an integer literal or single-bit shift (1 << n) so the zero contract can be checked; preserve existing ordinals.");
+        continue;
+      }
+      const isSentinel = ["Unknown", "None"].includes(name.text.replace(/^@/, ""));
+      if (value === 0n && isSentinel && obsolete && keys[name.start] === keys[declaration.start]) sentinel = true;
+      else if (value === 0n || isSentinel) report(name, "Only an [Obsolete] Unknown or None may represent zero; sentinels must equal zero.");
+    }
+    if (legacy) {
+      if (mapping.join(",") !== "Error=LogType.Error,Assert=LogType.Assert,Warning=LogType.Warning,Message=LogType.Log,Exception=LogType.Exception,Input=5,ShellMessage=6") {
+        report(declaration, "Preserve the exact TerminalLogType Unity serialized mapping (Error = 0).");
+      }
+    } else if (!sentinel) report(declaration, "Enum needs an [Obsolete] Unknown = 0 or None = 0 member; do not shift existing ordinals.");
+  }
+  return violations;
+}
+
+export function analyzeFile(text, file = "") {
   const masked = maskNoise(text);
   const keys = regionKeys(text);
   const bodies = typeBodies(masked);
-  const violations = [];
+  const violations = enumViolations(text, file);
   const edits = [];
 
   for (const body of bodies) {
@@ -1235,7 +1322,7 @@ function main(argv) {
   for (const relative of scanned) {
     const file = filesByRelative.get(relative);
     let text = fs.readFileSync(file, "utf8");
-    let result = analyzeFile(text);
+    let result = analyzeFile(text, relative);
 
     if (fix && 0 < result.edits.length) {
       // Nesting means an outer move can expose an inner one; re-analyze until the file settles.
@@ -1257,7 +1344,7 @@ function main(argv) {
           break;
         }
         text = updated;
-        result = analyzeFile(text);
+        result = analyzeFile(text, relative);
         guard += 1;
       }
       if (text !== original) {
@@ -1268,6 +1355,10 @@ function main(argv) {
     }
 
     for (const violation of result.violations) {
+      if (violation.kind === "enum contract") {
+        remaining.push(`${relative}:${violation.line}: ${violation.container}: ${violation.message}`);
+        continue;
+      }
       if (violation.kind === "unclassified member") {
         remaining.push(
           `${relative}:${violation.line}: a member of '${violation.container}' defeats the ` +

@@ -1,5 +1,6 @@
 namespace WallstopStudios.DxCommandTerminal.Samples
 {
+    using System;
     using Backend;
     using UnityEngine;
 
@@ -32,7 +33,17 @@ namespace WallstopStudios.DxCommandTerminal.Samples
             Register(
                 CommandBuilder
                     .Create("weather", "Sets the weather")
-                    .Arg<WeatherCondition>("condition", spec => spec.EnumChoices())
+                    .Arg<WeatherCondition>(
+                        "condition",
+                        spec =>
+                            spec.Default(WeatherCondition.Clear)
+                                .Choices(
+                                    WeatherCondition.Clear,
+                                    WeatherCondition.Rain,
+                                    WeatherCondition.Storm,
+                                    WeatherCondition.Fog
+                                )
+                    )
                     .Handler(
                         (context, arguments) =>
                         {
@@ -58,10 +69,12 @@ namespace WallstopStudios.DxCommandTerminal.Samples
 
         private enum WeatherCondition
         {
-            Clear,
-            Rain,
-            Storm,
-            Fog,
+            [Obsolete("Use a valid value")]
+            Unknown = 0,
+            Clear = 4,
+            Rain = 1,
+            Storm = 2,
+            Fog = 3,
         }
     }
 }

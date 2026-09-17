@@ -5,6 +5,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     using System.Linq;
     using Backend;
     using NUnit.Framework;
+    using UnityEngine;
+    using UnityEngine.TestTools;
 
     public sealed class CommandCompletionTests
     {
@@ -33,6 +35,177 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 false,
                 null
             );
+        }
+
+        [Test]
+        public void ChoiceFormattingPreservesQuotedWhitespace(
+            [Values("static", "dynamic", "formatted")] string source,
+            [Values(" ", "\t", "\r\n", "\u2003", " padded ")] string value
+        )
+        {
+            CommandShell shell = new(new CommandHistory(16));
+            string received = null;
+            Assert.IsTrue(
+                shell.AddCommand(
+                    CommandBuilder
+                        .Create("whitespace-choice")
+                        .Contexts(CommandExecutionContextSets.All)
+                        .Arg<string>(
+                            "value",
+                            spec =>
+                                source switch
+                                {
+                                    "static" => spec.Required().Choices(value),
+                                    "dynamic" => spec.Required()
+                                        .Choices(context => new[] { value }),
+                                    _ => spec.Required()
+                                        .Choices(context => new[] { value }, item => item),
+                                }
+                        )
+                        .Handler((context, arguments) => received = arguments.Get<string>("value")),
+                    out CommandRegistrationHandle handle
+                )
+            );
+            using (handle)
+            {
+                const string input = "whitespace-choice \"\"";
+                List<CommandCompletion> results = new();
+                Assert.IsTrue(
+                    shell.TryComplete(
+                        CommandExecutionContext.Current,
+                        input,
+                        input.Length - 1,
+                        results,
+                        out CommandCompletionContext context
+                    )
+                );
+                Assert.AreEqual(1, results.Count);
+                Assert.AreEqual(value, results[0].InsertionText);
+                Assert.IsTrue(context.IsQuoted);
+                string insertion = CommandTokenizer.QuoteInsertionIfNeeded(
+                    results[0].InsertionText,
+                    context.IsQuoted
+                );
+                string completed = input
+                    .Remove(context.ReplacementStart, context.ReplacementLength)
+                    .Insert(context.ReplacementStart, insertion);
+                shell.RunCommand(completed);
+                Assert.AreEqual(value, received);
+                Assert.IsFalse(shell.TryConsumeErrorMessage(out _));
+            }
+        }
+
+        [TestCase("static")]
+        [TestCase("dynamic")]
+        [TestCase("formatted")]
+        public void EmptyChoiceTextIsSkippedBeforePrefixMatching(string source)
+        {
+            CommandArgumentSpec<string> spec = new("value");
+            spec = source switch
+            {
+                "static" => spec.Choices(string.Empty, "valid"),
+                "dynamic" => spec.Choices(context => new[] { string.Empty, "valid" }),
+                _ => spec.Choices(context => new[] { null, string.Empty, "valid" }, value => value),
+            };
+            List<CommandCompletion> results = new();
+            spec.AppendCompletions(CreateContext(0), results);
+            CollectionAssert.AreEqual(
+                new[] { "valid" },
+                results.Select(item => item.InsertionText)
+            );
+        }
+
+        [TestCase(true, false, false)]
+        [TestCase(false, true, false)]
+        [TestCase(false, false, true)]
+        public void ChoiceCallbackFailuresDiscardResultsAndRecover(
+            bool providerThrows,
+            bool providerReturnsNull,
+            bool formatterThrows
+        )
+        {
+            CommandShell shell = new(new CommandHistory(16));
+            bool fail = true;
+            Assert.IsTrue(
+                shell.AddCommand(
+                    CommandBuilder
+                        .Create("callback-choice")
+                        .Contexts(CommandExecutionContextSets.All)
+                        .Arg<string>(
+                            "value",
+                            spec =>
+                                spec.Choices(
+                                    context =>
+                                    {
+                                        if (fail && providerThrows)
+                                        {
+                                            throw new InvalidOperationException("choice failed");
+                                        }
+
+                                        return fail && providerReturnsNull
+                                            ? null
+                                            : new[] { "first", "second" };
+                                    },
+                                    value =>
+                                    {
+                                        if (
+                                            fail
+                                            && formatterThrows
+                                            && string.Equals(
+                                                value,
+                                                "second",
+                                                StringComparison.Ordinal
+                                            )
+                                        )
+                                        {
+                                            throw new InvalidOperationException("choice failed");
+                                        }
+
+                                        return value;
+                                    }
+                                )
+                        )
+                        .Handler((context, arguments) => { }),
+                    out CommandRegistrationHandle handle
+                )
+            );
+            using (handle)
+            {
+                const string input = "callback-choice ";
+                List<CommandCompletion> results = new() { new CommandCompletion("stale") };
+                if (!providerReturnsNull)
+                {
+                    LogAssert.Expect(
+                        LogType.Error,
+                        "[DxCommandTerminal] Completion provider for 'callback-choice' failed: choice failed"
+                    );
+                }
+
+                Assert.IsTrue(
+                    shell.TryComplete(
+                        CommandExecutionContext.Current,
+                        input,
+                        input.Length,
+                        results,
+                        out _
+                    )
+                );
+                Assert.IsEmpty(results);
+                fail = false;
+                Assert.IsTrue(
+                    shell.TryComplete(
+                        CommandExecutionContext.Current,
+                        input,
+                        input.Length,
+                        results,
+                        out _
+                    )
+                );
+                CollectionAssert.AreEqual(
+                    new[] { "first", "second" },
+                    results.Select(item => item.InsertionText)
+                );
+            }
         }
 
         [Test]

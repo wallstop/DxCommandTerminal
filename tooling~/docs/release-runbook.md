@@ -76,15 +76,20 @@ Fires on every `v*` tag push. Five jobs, in order:
 
 ### Rehearsing a release (no publish)
 
-Actions -> **Release Publish** -> **Run workflow** on a candidate tag:
+There is no publish-free rehearsal path yet. Treat every `v*` tag push as a
+real release.
 
-1. On a scratch branch, set `package.json` to a rehearsal version that will never be
-   released (e.g. `1.0.0-rehearsal.0`), add a matching `## [1.0.0-rehearsal.0] - date`
-   changelog heading, commit, and push the tag `v1.0.0-rehearsal.0`.
-2. Dispatch the workflow with `tag: v1.0.0-rehearsal.0` and `dry_run: true`. Verify,
-   validate, and unitypackage run for real; npm publish and the release publish step are
-   skipped, and the Release stays a draft for review.
-3. Delete the scratch branch, the rehearsal tag, and the draft release afterwards.
+- A tag push starts `Release Publish` in publish mode: npm publish and the
+  Release publish run before any manual `dry_run` dispatch could happen.
+  Never push a candidate tag to rehearse.
+- Never dispatch `dry_run: true` on an already-published tag: the
+  github-release job reuses the existing published Release and re-uploads its
+  assets with `--clobber`, replacing public artifacts, and the Release stays
+  published (it never becomes a draft).
+- On a manual dispatch, `dry_run` only skips npm publish and the release
+  publish step. It is not a rehearsal control for published tags. A true
+  dry-run path needs a workflow change that separates dispatch rehearsal
+  from push-triggered publishing.
 
 ### Re-running after a partial failure
 
@@ -177,7 +182,9 @@ validates the result on disk:
   GUID matches the artifact's GUID directory;
 - analyzer payload metas keep the `RoslynAnalyzer` label;
 - every imported `.asmdef` compiled to `Library/ScriptAssemblies/<name>.dll`
-  (dependency resolution and compilation in one check).
+  (dependency resolution and compilation in one check);
+- the Unity log carries no compiler errors or analyzer-failure diagnostics
+  (`CS8032`, `CS8784`, `CS8785`, `CS9057`, `AD0001`), even when Unity exits 0.
 
 The drill proves the generator payload imports with its label and that the
 package compiles with it present; it does not execute the generator.

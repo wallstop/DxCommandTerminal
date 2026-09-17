@@ -64,7 +64,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         public bool IsEligibleFor(CommandExecutionContexts allowedContexts)
         {
-            return allowedContexts.HasFlagNoAlloc(Environment);
+            return Environment
+                    is CommandExecutionContexts.EditorEditMode
+                        or CommandExecutionContexts.EditorPlayMode
+                        or CommandExecutionContexts.Player
+                && allowedContexts.HasFlagNoAlloc(Environment);
         }
     }
 }

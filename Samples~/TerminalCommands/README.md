@@ -22,6 +22,7 @@ components in a scene with a TerminalUI.
 | `AnnounceCommands` | `say <message...>` | The unbounded trailing argument |
 | `SceneCommands` | `scene-reload`, `scene-info` | Execution contexts and Edit Mode opt-in |
 | `LifecycleCommands` | `ping` | Raw handle lifetime: register, dispose, re-register |
+| `SceneObjectCommands` | `object-info <name>`, `object-position <name>` | Opt-in object/component parsers and fresh name completion |
 
 ## Try it
 
@@ -33,6 +34,22 @@ Open the terminal (default hotkey: backtick), then:
 - `game time scale 0.5`
 - `say hello world`
 - `ping`
+- Add `SceneObjectCommands`, create an active object named `Demo Target`, then run `object-info "Demo Target"`.
+- `object-position "Demo Target"` resolves its `Transform`; duplicate names reject execution.
+- Type `object-info ` or `object-position ` and press Tab for current names.
+
+`SceneObjectArgumentAdapter<T>` supports `GameObject`, `Component`, and component subclasses.
+Use `.Parser(adapter.TryParse).Choices(adapter.GetChoices, adapter.FormatChoice)` to opt into name parsing and completion.
+The formatter affects dynamic completions only; existing choices and error messages retain their original formatting.
+Names match exactly, ignoring case. Paths and instance IDs have no special syntax.
+The default `FirstMatch` selects the first result in Unity's instance-ID order, not hierarchy order.
+Use `SceneObjectAmbiguityPolicy.RequireUnique` to reject duplicate matches, including multiple components on one object.
+Completions remain suggestions; execution checks the name again and reports the standard parser error on failure.
+Queries run on Unity's main thread for every parse and completion request, without caching.
+They search loaded objects, exclude assets and `HideFlags.DontSave`, and allocate Unity's result array each time.
+Inactive objects are excluded unless `includeInactive: true` is passed to the adapter constructor.
+Unity sorts each query; large scenes can make per-keystroke completion expensive.
+No parsers or commands are registered globally by the adapter.
 
 If `Reset State On Init` is enabled on the `TerminalUI`, the shell is rebuilt
 during the terminal's own startup (its OnEnable and Start); register from

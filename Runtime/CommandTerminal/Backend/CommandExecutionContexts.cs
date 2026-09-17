@@ -11,6 +11,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     public enum CommandExecutionContexts
     {
         /// <summary>The command never runs. Rejects every dispatch.</summary>
+        [Obsolete("Use default to disable execution, or select valid contexts")]
         None = 0,
 
         /// <summary>The Unity Editor outside Play Mode.</summary>

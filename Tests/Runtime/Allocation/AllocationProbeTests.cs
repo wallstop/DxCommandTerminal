@@ -49,6 +49,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
         }
 
         [Test]
+        public void DefaultMeasurementCannotApproveZeroClaims()
+        {
+            AllocationMeasurement measurement = default;
+            Assert.AreEqual(default(AllocationMeasurementStatus), measurement.Status);
+            Assert.IsFalse(measurement.IsZeroAllocation);
+            Assert.That(measurement.Describe(), Does.Contain("unvalidated"));
+        }
+
+        [Test]
         public void NoOpSubjectMeasuresZero()
         {
             AllocationAssertions.AssertZeroAllocations("no-op control", () => { });

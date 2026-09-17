@@ -1795,9 +1795,11 @@
          */
         internal enum AutoCommandSource
         {
-            Catalog,
-            Provider,
-            Reflected,
+            [Obsolete("Use a valid value")]
+            Unknown = 0,
+            Catalog = 3,
+            Provider = 1,
+            Reflected = 2,
         }
 
         /*

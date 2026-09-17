@@ -547,11 +547,16 @@ test("runImportDrill completes end to end and cleans up the scratch project", as
     { ...parseArgs(["--artifact", artifactPath, "--unity", "unity"]), reportDir },
     {
       probeEditorVersion: () => "6000.4.6f1",
-      runUnity: stubRunUnity({ imports: true, result: { timedOut: false, code: 0, signal: null } })
+      runUnity: stubRunUnity({
+        imports: true,
+        logLines: ["[import-drill] import completed"],
+        result: { timedOut: false, code: 0, signal: null }
+      })
     }
   );
   assert.strictEqual(manifest.outcome, null);
   assert.strictEqual(manifest.failed, false);
+  assert.deepStrictEqual(manifest.logErrors, []);
   assert.strictEqual(manifest.editorVersion, "6000.4.6f1");
   assert.strictEqual(manifest.unityExitCode, 0);
   assert.strictEqual(manifest.timedOut, false);
@@ -563,7 +568,7 @@ test("runImportDrill completes end to end and cleans up the scratch project", as
   assert.ok(!fs.existsSync(manifest.project), "scratch project should be removed on success");
 });
 
-test("runImportDrill keeps the project with --keep", async () => {
+test("runImportDrill keeps the project with --keep and ignores unrelated warnings", async () => {
   const reportDir = tempRoot("run-keep");
   const artifactPath = path.join(reportDir, "drill.unitypackage");
   fs.writeFileSync(artifactPath, standardArtifact());
@@ -571,14 +576,49 @@ test("runImportDrill keeps the project with --keep", async () => {
     { ...parseArgs(["--artifact", artifactPath, "--unity", "unity", "--keep"]), reportDir },
     {
       probeEditorVersion: () => "6000.4.6f1",
-      runUnity: stubRunUnity({ imports: true, result: { timedOut: false, code: 0, signal: null } })
+      runUnity: stubRunUnity({
+        imports: true,
+        logLines: [
+          "warning CS0168: The variable 'unused' is declared but never used",
+          "[import-drill] import completed"
+        ],
+        result: { timedOut: false, code: 0, signal: null }
+      })
     }
   );
   assert.strictEqual(manifest.outcome, null);
+  assert.deepStrictEqual(manifest.logErrors, []);
   assert.ok(fs.existsSync(path.join(manifest.project, "Assets", "DxTerminalImportDrill.cs")));
 });
 
+const compilationFailures = [
+  "Assets/Terminal.cs(12,3): error CS1002: ; expected",
+  "Aborting batchmode due to failure",
+  "Scripts have compiler errors",
+  "warning CS8032: An instance of analyzer DxGenerators cannot be created",
+  "warning CS8784: Generator 'DxGenerators' failed to initialize.",
+  "warning CS8785: Generator 'DxGenerators' failed to generate source.",
+  "warning CS9057: The analyzer assembly 'DxGenerators' references version '4.8.0.0' of the compiler, which is newer than the currently running version '4.3.0.0'.",
+  "warning AD0001: Analyzer 'DxGenerators' threw an exception."
+];
+
 const runFailures = [
+  ...compilationFailures.map((diagnostic) => ({
+    name: `exit zero with compiled DLLs and ${diagnostic}`,
+    behavior: {
+      imports: true,
+      result: { timedOut: false, code: 0, signal: null },
+      logLines: ["[import-drill] import completed", diagnostic]
+    },
+    matches: /unity log validation failed/,
+    expectedLogErrors: [diagnostic]
+  })),
+  {
+    name: "exit zero with compiled DLLs but no log",
+    behavior: { imports: true, result: { timedOut: false, code: 0, signal: null } },
+    matches: /unity log validation failed/,
+    expectedLogErrors: ["(unity produced no log file)"]
+  },
   {
     name: "unity exits nonzero",
     behavior: {
@@ -635,6 +675,15 @@ for (const failure of runFailures) {
     }
     if (failure.logMatches !== undefined) {
       assert.match(manifest.logErrors.join("\n"), failure.logMatches);
+    }
+    if (failure.expectedLogErrors !== undefined) {
+      assert.deepStrictEqual(manifest.logErrors, failure.expectedLogErrors);
+      assert.ok(manifest.checks.length > 0);
+      assert.ok(manifest.checks.every((check) => check.ok));
+      assert.deepStrictEqual(
+        JSON.parse(fs.readFileSync(path.join(reportDir, "manifest.json"), "utf8")),
+        manifest
+      );
     }
     assert.ok(fs.existsSync(manifest.project), "failed runs keep the project for diagnosis");
     assert.ok(fs.existsSync(path.join(reportDir, "manifest.json")));

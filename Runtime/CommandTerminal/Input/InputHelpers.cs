@@ -271,9 +271,7 @@
 
         public static bool IsKeyPressed(string key, InputMode inputMode)
         {
-#pragma warning disable CS0612 // Type or member is obsolete
-            if (inputMode == InputMode.None)
-#pragma warning restore CS0612 // Type or member is obsolete
+            if (inputMode == default)
             {
                 return false;
             }
