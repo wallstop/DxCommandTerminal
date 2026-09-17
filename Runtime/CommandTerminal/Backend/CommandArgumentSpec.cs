@@ -64,6 +64,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         private readonly IReadOnlyList<T> _staticChoices;
         private readonly string[] _staticChoiceTexts;
         private readonly Func<CommandCompletionContext, IReadOnlyList<T>> _dynamicChoices;
+        private readonly Func<T, string> _choiceFormatter;
         private readonly Func<T, string> _rangeValidator;
         private readonly Func<T, string> _validator;
 
@@ -105,7 +106,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             Func<T, string> validator,
             string description,
             bool isRemaining = false,
-            bool hasExplicitDefault = false
+            bool hasExplicitDefault = false,
+            Func<T, string> choiceFormatter = null
         )
             : base(name, GetTypeName(typeof(T)))
         {
@@ -136,6 +138,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
             _staticChoiceTexts = _staticChoices == null ? null : FormatChoices(_staticChoices);
             _dynamicChoices = dynamicChoices;
+            _choiceFormatter = choiceFormatter;
             _rangeValidator = rangeValidator;
             _validator = validator;
             Description = description;
@@ -204,7 +207,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 _validator,
                 Description,
                 isRemaining: _isRemaining,
-                hasExplicitDefault: _hasExplicitDefault
+                hasExplicitDefault: _hasExplicitDefault,
+                choiceFormatter: _choiceFormatter
             );
         }
 
@@ -227,7 +231,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 _validator,
                 Description,
                 isRemaining: _isRemaining,
-                hasExplicitDefault: true
+                hasExplicitDefault: true,
+                choiceFormatter: _choiceFormatter
             );
         }
 
@@ -245,7 +250,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 _validator,
                 description,
                 isRemaining: _isRemaining,
-                hasExplicitDefault: _hasExplicitDefault
+                hasExplicitDefault: _hasExplicitDefault,
+                choiceFormatter: _choiceFormatter
             );
         }
 
@@ -287,7 +293,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 _validator,
                 Description,
                 isRemaining: _isRemaining,
-                hasExplicitDefault: _hasExplicitDefault
+                hasExplicitDefault: _hasExplicitDefault,
+                choiceFormatter: _choiceFormatter
             );
         }
 
@@ -303,9 +310,22 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             Func<CommandCompletionContext, IReadOnlyList<T>> provider
         )
         {
+            return Choices(provider, FormatValue);
+        }
+
+        public CommandArgumentSpec<T> Choices(
+            Func<CommandCompletionContext, IReadOnlyList<T>> provider,
+            Func<T, string> formatter
+        )
+        {
             if (provider == null)
             {
                 throw new ArgumentNullException(nameof(provider));
+            }
+
+            if (formatter == null)
+            {
+                throw new ArgumentNullException(nameof(formatter));
             }
 
             return new CommandArgumentSpec<T>(
@@ -319,7 +339,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 _validator,
                 Description,
                 isRemaining: _isRemaining,
-                hasExplicitDefault: _hasExplicitDefault
+                hasExplicitDefault: _hasExplicitDefault,
+                choiceFormatter: formatter
             );
         }
 
@@ -433,7 +454,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 _validator,
                 Description,
                 isRemaining: _isRemaining,
-                hasExplicitDefault: _hasExplicitDefault
+                hasExplicitDefault: _hasExplicitDefault,
+                choiceFormatter: _choiceFormatter
             );
         }
 
@@ -460,7 +482,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 validator,
                 Description,
                 isRemaining: _isRemaining,
-                hasExplicitDefault: _hasExplicitDefault
+                hasExplicitDefault: _hasExplicitDefault,
+                choiceFormatter: _choiceFormatter
             );
         }
 
@@ -483,7 +506,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 _validator,
                 Description,
                 isRemaining: _isRemaining,
-                hasExplicitDefault: _hasExplicitDefault
+                hasExplicitDefault: _hasExplicitDefault,
+                choiceFormatter: _choiceFormatter
             );
         }
 
@@ -627,7 +651,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             int providedCount = provided.Count;
             for (int i = 0; i < providedCount; ++i)
             {
-                AppendCandidate(FormatValue(provided[i]), Description, context, results);
+                string text = _choiceFormatter(provided[i]);
+                if (!string.IsNullOrEmpty(text))
+                {
+                    AppendCandidate(text, Description, context, results);
+                }
             }
         }
 

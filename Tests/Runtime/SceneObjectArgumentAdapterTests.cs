@@ -1,0 +1,340 @@
+namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
+{
+    using System;
+    using System.Collections.Generic;
+    using Backend;
+    using NUnit.Framework;
+    using UnityEngine;
+    using Object = UnityEngine.Object;
+
+    [TestFixture(typeof(GameObject))]
+    [TestFixture(typeof(Transform))]
+    public sealed class SceneObjectArgumentAdapterTests<T>
+        where T : Object
+    {
+        private const string TargetName = "DxAdapter Target";
+        private readonly List<GameObject> _objects = new();
+
+        private static CommandCompletionContext CompletionContext()
+        {
+            return new CommandCompletionContext(
+                default,
+                string.Empty,
+                0,
+                0,
+                new List<CommandArg>(),
+                string.Empty,
+                0,
+                0,
+                false,
+                null
+            );
+        }
+
+        [TearDown]
+        public void TearDown()
+        {
+            foreach (GameObject target in _objects)
+            {
+                if (target)
+                {
+                    Object.DestroyImmediate(target);
+                }
+            }
+
+            _objects.Clear();
+        }
+
+        [TestCase("DxAdapter Target", true)]
+        [TestCase("dxadapter target", true)]
+        [TestCase("DxAdapter", false)]
+        [TestCase("DxAdapter Missing", false)]
+        [TestCase(null, false)]
+        [TestCase("", false)]
+        public void NamesMatchExactlyIgnoringCase(string input, bool expected)
+        {
+            T target = CreateTarget();
+            SceneObjectArgumentAdapter<T> adapter = new();
+            Assert.AreEqual(expected, adapter.TryParse(input, out T result));
+            Assert.AreEqual(expected ? target : null, result);
+        }
+
+        [TestCase(SceneObjectAmbiguityPolicy.FirstMatch, true)]
+        [TestCase(SceneObjectAmbiguityPolicy.RequireUnique, false)]
+        public void DuplicateNamesFollowPolicy(SceneObjectAmbiguityPolicy policy, bool expected)
+        {
+            T first = CreateTarget();
+            T second = CreateTarget();
+            second.name = TargetName.ToLowerInvariant();
+            SceneObjectArgumentAdapter<T> adapter = new(policy);
+            Assert.AreEqual(expected, adapter.TryParse(TargetName, out T result));
+            T firstByID =
+#if UNITY_6000_4_OR_NEWER
+                first.GetEntityId().CompareTo(second.GetEntityId()) < 0 ? first : second;
+#else
+                first.GetInstanceID() < second.GetInstanceID() ? first : second;
+#endif
+            Assert.AreEqual(expected ? firstByID : null, result);
+        }
+
+        [Test]
+        public void DefaultPolicyReturnsFirstQueryMatch()
+        {
+            CreateTarget();
+            CreateTarget();
+            SceneObjectArgumentAdapter<T> adapter = new();
+            Assert.IsTrue(adapter.TryParse(TargetName, out T result));
+            foreach (T candidate in adapter.GetChoices(default))
+            {
+                if (string.Equals(candidate.name, TargetName, StringComparison.Ordinal))
+                {
+                    Assert.AreSame(candidate, result);
+                    return;
+                }
+            }
+
+            Assert.Fail("The parsed object must occur in the fresh choices.");
+        }
+
+        [TestCase(false, false)]
+        [TestCase(true, true)]
+        public void InactiveObjectsRequireOptIn(bool includeInactive, bool expected)
+        {
+            T target = CreateTarget();
+            _objects[0].SetActive(false);
+            SceneObjectArgumentAdapter<T> adapter = new(includeInactive: includeInactive);
+            Assert.AreEqual(expected, adapter.TryParse(TargetName, out T result));
+            Assert.AreEqual(expected ? target : null, result);
+            Assert.AreEqual(expected, new List<T>(adapter.GetChoices(default)).Contains(target));
+        }
+
+        [TestCase("rename")]
+        [TestCase("destroy")]
+        [TestCase("deactivate")]
+        public void QueriesDoNotReusePreviousResults(string mutation)
+        {
+            T target = CreateTarget();
+            SceneObjectArgumentAdapter<T> adapter = new();
+            Assert.IsTrue(adapter.TryParse(TargetName, out _));
+            Assert.Contains(target, new List<T>(adapter.GetChoices(default)));
+            switch (mutation)
+            {
+                case "rename":
+                    target.name = "DxAdapter Renamed";
+                    break;
+                case "destroy":
+                    Object.DestroyImmediate(_objects[0]);
+                    break;
+                case "deactivate":
+                    _objects[0].SetActive(false);
+                    break;
+            }
+
+            Assert.IsFalse(adapter.TryParse(TargetName, out T missing));
+            Assert.IsNull(missing);
+            foreach (T candidate in adapter.GetChoices(default))
+            {
+                Assert.IsFalse(string.Equals(TargetName, candidate.name, StringComparison.Ordinal));
+            }
+
+            T replacement = CreateTarget();
+            Assert.IsTrue(adapter.TryParse(TargetName, out T result));
+            Assert.AreSame(replacement, result);
+            Assert.Contains(replacement, new List<T>(adapter.GetChoices(default)));
+        }
+
+        [Test]
+        public void ExplicitParserDoesNotRegisterGlobally()
+        {
+            T target = CreateTarget();
+            SceneObjectArgumentAdapter<T> adapter = new();
+            Assert.IsFalse(CommandArg.CanParse(typeof(T)));
+            Assert.IsTrue(new CommandArg(TargetName).TryGet(out T result, adapter.TryParse));
+            Assert.AreSame(target, result);
+            Assert.IsFalse(CommandArg.CanParse(typeof(T)));
+        }
+
+        [TestCase(SceneObjectAmbiguityPolicy.FirstMatch, 1)]
+        [TestCase(SceneObjectAmbiguityPolicy.RequireUnique, 0)]
+        public void BuilderUsesParserAndFreshNameChoices(
+            SceneObjectAmbiguityPolicy policy,
+            int expectedCalls
+        )
+        {
+            T target = CreateTarget();
+            SceneObjectArgumentAdapter<T> adapter = new(policy);
+            CommandShell shell = new(new CommandHistory(16));
+            int calls = 0;
+            Assert.IsTrue(
+                shell.AddCommand(
+                    CommandBuilder
+                        .Create("inspect-object")
+                        .Contexts(CommandExecutionContextSets.All)
+                        .Arg<T>(
+                            "target",
+                            spec =>
+                                spec.Required()
+                                    .Parser(adapter.TryParse)
+                                    .Choices(adapter.GetChoices, adapter.FormatChoice)
+                        )
+                        .Handler(
+                            (context, arguments) =>
+                            {
+                                Assert.IsNotNull(arguments.Get<T>("target"));
+                                ++calls;
+                            }
+                        ),
+                    out CommandRegistrationHandle handle
+                )
+            );
+            using (handle)
+            {
+                List<CommandCompletion> results = new();
+                const string input = "inspect-object dxadapter";
+                Assert.IsTrue(
+                    shell.TryComplete(
+                        CommandExecutionContext.Current,
+                        input,
+                        input.Length,
+                        results,
+                        out _
+                    )
+                );
+                CollectionAssert.AreEqual(
+                    new[] { TargetName },
+                    results.ConvertAll(choice => choice.InsertionText)
+                );
+                CreateTarget();
+                shell.RunCommand($"inspect-object \"{TargetName}\"");
+                Assert.AreEqual(expectedCalls, calls);
+                Assert.AreEqual(expectedCalls == 0, shell.TryConsumeErrorMessage(out _));
+                target.name = "DxAdapter Renamed";
+                Assert.IsTrue(
+                    shell.TryComplete(
+                        CommandExecutionContext.Current,
+                        input,
+                        input.Length,
+                        results,
+                        out _
+                    )
+                );
+                CollectionAssert.AreEquivalent(
+                    new[] { TargetName, target.name },
+                    results.ConvertAll(choice => choice.InsertionText)
+                );
+            }
+        }
+
+        [Test]
+        public void MissingComponentAndDestroyedComponentAreNotResolved()
+        {
+            SceneObjectArgumentAdapter<BoxCollider> adapter = new();
+            CreateTarget();
+            Assert.IsFalse(adapter.TryParse(TargetName, out _));
+            BoxCollider collider = _objects[0].AddComponent<BoxCollider>();
+            Assert.IsTrue(adapter.TryParse(TargetName, out BoxCollider result));
+            Assert.AreSame(collider, result);
+            Object.DestroyImmediate(collider);
+            Assert.IsFalse(adapter.TryParse(TargetName, out BoxCollider missing));
+            Assert.IsNull(missing);
+        }
+
+        [TestCase(SceneObjectAmbiguityPolicy.FirstMatch, true)]
+        [TestCase(SceneObjectAmbiguityPolicy.RequireUnique, false)]
+        public void MultipleComponentsOnOneObjectFollowPolicy(
+            SceneObjectAmbiguityPolicy policy,
+            bool expected
+        )
+        {
+            CreateTarget();
+            _objects[0].AddComponent<BoxCollider>();
+            _objects[0].AddComponent<BoxCollider>();
+            SceneObjectArgumentAdapter<BoxCollider> adapter = new(policy);
+            Assert.AreEqual(expected, adapter.TryParse(TargetName, out BoxCollider result));
+            Assert.AreEqual(expected, result != null);
+        }
+
+        [Test]
+        public void RejectsUnsupportedTypesAndInvalidPolicies()
+        {
+            Assert.Throws<ArgumentException>(() => new SceneObjectArgumentAdapter<Material>());
+            Assert.Throws<ArgumentOutOfRangeException>(() =>
+                new SceneObjectArgumentAdapter<T>((SceneObjectAmbiguityPolicy)42)
+            );
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void DefaultChoiceFormattingKeepsToStringRoundTrip(bool dynamicChoices)
+        {
+            T target = CreateTarget();
+            string identifier = target.ToString();
+            CommandArgumentSpec<T> spec = new("target");
+            spec = spec.Parser(
+                (string input, out T parsed) =>
+                {
+                    bool matches = string.Equals(input, identifier, StringComparison.Ordinal);
+                    parsed = matches ? target : null;
+                    return matches;
+                }
+            );
+            spec = dynamicChoices
+                ? spec.Choices(context => new[] { target })
+                : spec.Choices(target);
+            List<CommandCompletion> results = new();
+            spec.AppendCompletions(CompletionContext(), results);
+            Assert.AreEqual(identifier, results[0].InsertionText);
+            Assert.IsTrue(
+                spec.TryParse(new CommandArg(results[0].InsertionText), out object value)
+            );
+            Assert.AreSame(target, value);
+        }
+
+        [Test]
+        public void ExplicitFormatterSurvivesFluentCopiesWithoutMutatingOriginal()
+        {
+            T target = CreateTarget();
+            SceneObjectArgumentAdapter<T> adapter = new();
+            CommandArgumentSpec<T> original = new("target");
+            original = original.Choices(adapter.GetChoices, adapter.FormatChoice);
+            CommandArgumentSpec<T> copy = original
+                .Default(target)
+                .Required()
+                .Describe("target")
+                .Validate(value => null)
+                .Parser(adapter.TryParse);
+            List<CommandCompletion> results = new();
+            copy.AppendCompletions(CompletionContext(), results);
+            Assert.IsTrue(
+                results.Exists(choice =>
+                    string.Equals(choice.InsertionText, TargetName, StringComparison.Ordinal)
+                )
+            );
+            results.Clear();
+            original
+                .Choices(context => new[] { target })
+                .AppendCompletions(CompletionContext(), results);
+            Assert.AreEqual(target.ToString(), results[0].InsertionText);
+            Assert.AreEqual(string.Empty, adapter.FormatChoice(null));
+            Object.DestroyImmediate(_objects[0]);
+            Assert.AreEqual(string.Empty, adapter.FormatChoice(target));
+        }
+
+        [Test]
+        public void ChoiceFormatterRejectsNullConfiguration()
+        {
+            CommandArgumentSpec<T> spec = new("target");
+            Assert.Throws<ArgumentNullException>(() => spec.Choices(null, value => "name"));
+            Assert.Throws<ArgumentNullException>(() =>
+                spec.Choices(context => Array.Empty<T>(), null)
+            );
+        }
+
+        private T CreateTarget()
+        {
+            GameObject target = new(TargetName);
+            _objects.Add(target);
+            return target is T gameObject ? gameObject : target.transform as T;
+        }
+    }
+}
