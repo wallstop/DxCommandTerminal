@@ -391,7 +391,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             CommandConfigurationException unnamed = new("Something was misconfigured.");
             Assert.AreEqual(
-                CommandConfigurationFailure.None,
+                default(CommandConfigurationFailure),
                 unnamed.Failure,
                 "The message-only constructor predates the kinds"
             );
@@ -401,7 +401,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.IsNull(unnamed.ArgumentType);
 
             CommandConfigurationException named = new("Bad", "heal");
-            Assert.AreEqual(CommandConfigurationFailure.None, named.Failure);
+            Assert.AreEqual(default(CommandConfigurationFailure), named.Failure);
             Assert.AreEqual("heal", named.CommandName);
         }
 

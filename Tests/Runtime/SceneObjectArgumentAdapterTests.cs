@@ -15,6 +15,22 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private const string TargetName = "DxAdapter Target";
         private readonly List<GameObject> _objects = new();
 
+        private static IEnumerable<TestCaseData> UnsupportedTypes()
+        {
+            yield return new TestCaseData(
+                new TestDelegate(() => new SceneObjectArgumentAdapter<Texture2D>())
+            ).SetName("RejectsTexture2D");
+            yield return new TestCaseData(
+                new TestDelegate(() => new SceneObjectArgumentAdapter<Object>())
+            ).SetName("RejectsUnityObject");
+            yield return new TestCaseData(
+                new TestDelegate(() => new SceneObjectArgumentAdapter<ScriptableObject>())
+            ).SetName("RejectsScriptableObject");
+            yield return new TestCaseData(
+                new TestDelegate(() => new SceneObjectArgumentAdapter<Material>())
+            ).SetName("RejectsNonComponentAsset");
+        }
+
         private static CommandCompletionContext CompletionContext()
         {
             return new CommandCompletionContext(
@@ -36,7 +52,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             foreach (GameObject target in _objects)
             {
-                if (target)
+                if (target != null)
                 {
                     Object.DestroyImmediate(target);
                 }
@@ -51,6 +67,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [TestCase("DxAdapter Missing", false)]
         [TestCase(null, false)]
         [TestCase("", false)]
+        [TestCase(" ", false)]
+        [TestCase("\t\r\n", false)]
+        [TestCase(" DxAdapter Target", false)]
+        [TestCase("DxAdapter Target ", false)]
         public void NamesMatchExactlyIgnoringCase(string input, bool expected)
         {
             T target = CreateTarget();
@@ -254,13 +274,47 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreEqual(expected, result != null);
         }
 
-        [Test]
-        public void RejectsUnsupportedTypesAndInvalidPolicies()
+        [TestCaseSource(nameof(UnsupportedTypes))]
+        public void RejectsUnsupportedTypes(TestDelegate construct)
         {
-            Assert.Throws<ArgumentException>(() => new SceneObjectArgumentAdapter<Material>());
-            Assert.Throws<ArgumentOutOfRangeException>(() =>
-                new SceneObjectArgumentAdapter<T>((SceneObjectAmbiguityPolicy)42)
+            ArgumentException exception = Assert.Throws<ArgumentException>(construct);
+            Assert.AreEqual("T", exception.ParamName);
+        }
+
+        [TestCase(0)]
+        [TestCase(-1)]
+        [TestCase(int.MaxValue)]
+        public void RejectsInvalidPolicies(int policy)
+        {
+            ArgumentOutOfRangeException exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
+                new SceneObjectArgumentAdapter<T>((SceneObjectAmbiguityPolicy)policy)
             );
+            Assert.AreEqual("ambiguityPolicy", exception.ParamName);
+        }
+
+        [TestCase("")]
+        [TestCase(" ")]
+        [TestCase("\t\r\n")]
+        public void BlankSceneNamesAreNotIdentifiers(string name)
+        {
+            T target = CreateTarget();
+            target.name = name;
+            SceneObjectArgumentAdapter<T> adapter = new();
+            Assert.IsFalse(adapter.TryParse(name, out T result));
+            Assert.IsNull(result);
+            Assert.AreEqual(string.Empty, adapter.FormatChoice(target));
+        }
+
+        [TestCase(" DxAdapter Target ")]
+        [TestCase("DxAdapter\tTarget")]
+        public void NonblankSceneNamesPreserveWhitespace(string name)
+        {
+            T target = CreateTarget();
+            target.name = name;
+            SceneObjectArgumentAdapter<T> adapter = new();
+            Assert.IsTrue(adapter.TryParse(name, out T result));
+            Assert.AreSame(target, result);
+            Assert.AreEqual(name, adapter.FormatChoice(target));
         }
 
         [TestCase(false)]

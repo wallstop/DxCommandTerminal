@@ -823,7 +823,7 @@
                 className: "unity-base-slider__dragger"
             );
 
-            ScrollBarCaptureState scrollBarCaptureState = ScrollBarCaptureState.None;
+            ScrollBarCaptureState scrollBarCaptureState = ScrollBarCaptureState.Inactive;
 
             RegisterCallbacks();
             return;
@@ -851,7 +851,7 @@
 
             void OnTrackerPointerUp(PointerUpEvent evt)
             {
-                scrollBarCaptureState = ScrollBarCaptureState.None;
+                scrollBarCaptureState = ScrollBarCaptureState.Inactive;
                 draggerElement.RemoveFromClassList("tracker-active");
             }
 
@@ -865,7 +865,7 @@
 
             void OnDraggerPointerCaptureOut(PointerCaptureOutEvent evt)
             {
-                scrollBarCaptureState = ScrollBarCaptureState.None;
+                scrollBarCaptureState = ScrollBarCaptureState.Inactive;
                 trackerElement.RemoveFromClassList("dragger-active");
                 draggerElement.RemoveFromClassList("tracker-active");
                 draggerElement.RemoveFromClassList("dragger-active");
@@ -873,7 +873,7 @@
 
             void OnTrackerMouseEnter(MouseEnterEvent evt)
             {
-                if (scrollBarCaptureState == ScrollBarCaptureState.None)
+                if (scrollBarCaptureState == ScrollBarCaptureState.Inactive)
                 {
                     draggerElement.AddToClassList("tracker-hovered");
                 }
@@ -881,7 +881,7 @@
 
             void OnTrackerMouseLeave(MouseLeaveEvent evt)
             {
-                if (scrollBarCaptureState == ScrollBarCaptureState.None)
+                if (scrollBarCaptureState == ScrollBarCaptureState.Inactive)
                 {
                     draggerElement.RemoveFromClassList("tracker-hovered");
                 }
@@ -889,7 +889,7 @@
 
             void OnDraggerMouseEnter(MouseEnterEvent evt)
             {
-                if (scrollBarCaptureState == ScrollBarCaptureState.None)
+                if (scrollBarCaptureState == ScrollBarCaptureState.Inactive)
                 {
                     trackerElement.AddToClassList("dragger-hovered");
                 }
@@ -897,7 +897,7 @@
 
             void OnDraggerMouseLeave(MouseLeaveEvent evt)
             {
-                if (scrollBarCaptureState == ScrollBarCaptureState.None)
+                if (scrollBarCaptureState == ScrollBarCaptureState.Inactive)
                 {
                     trackerElement.RemoveFromClassList("dragger-hovered");
                 }
@@ -2879,9 +2879,11 @@
 
         private enum ScrollBarCaptureState
         {
+            [Obsolete("Use a valid value")]
             None = 0,
             DraggerActive = 1,
             TrackerActive = 2,
+            Inactive = 3,
         }
     }
 }

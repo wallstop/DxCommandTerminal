@@ -187,7 +187,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             List<CommandCompletion> results
         )
         {
-            if (text.StartsWith(context.Token, StringComparison.OrdinalIgnoreCase))
+            if (
+                !string.IsNullOrEmpty(text)
+                && text.StartsWith(context.Token, StringComparison.OrdinalIgnoreCase)
+            )
             {
                 results.Add(new CommandCompletion(text, description: description));
             }
@@ -652,10 +655,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             for (int i = 0; i < providedCount; ++i)
             {
                 string text = _choiceFormatter(provided[i]);
-                if (!string.IsNullOrEmpty(text))
-                {
-                    AppendCandidate(text, Description, context, results);
-                }
+                AppendCandidate(text, Description, context, results);
             }
         }
 

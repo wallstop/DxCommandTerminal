@@ -36,6 +36,25 @@ on every commit and fails fast when tools are missing.
   files - that pollutes diffs. Exceptions: `.llm/**` and `tooling~/scripts/**` are UTF-8 no BOM + LF
   (enforced by `.editorconfig` overrides and the LLM linters).
 
+## Enum and Unity object review
+
+- Give every enum member an explicit value. Reserve `Unknown = 0` or `None = 0`
+  with `[Obsolete("Use a valid value")]`; use named valid defaults for optional APIs.
+- Preserve shipped nonzero numeric identities. `TerminalLogType` keeps Unity's
+  serialized `LogType` mapping, including `Error = 0`; never renumber it silently.
+- Flags can still use typed `default` for an empty mask. Obsolete marks source
+  references; it does not reject runtime values. Validate state at its boundary.
+- Whitelist valid execution environments before checking flag membership:
+  `HasFlag(0)` is true and cannot establish a valid execution context.
+- When moving a former valid zero, audit optional builder defaults, serialized
+  fields, and struct defaults. An invalid allocation verdict must not report zero.
+- Prefer `obj == null` / `obj != null` for Unity objects. These include destroyed
+  native objects; `is null` and `ReferenceEquals` only test managed identity.
+- Do not add redundant null guards to fresh synchronous Find results. Keep guards
+  on public inputs and retained objects that may have been destroyed.
+- Verify APIs against each version gate's actual documentation or references;
+  a shim compilation cannot prove an overload exists in older Unity versions.
+
 ## Pre-commit hooks
 
 `.pre-commit-config.yaml` currently runs:
@@ -45,7 +64,8 @@ on every commit and fails fast when tools are missing.
 3. C# style linters (Node, whole-tree scans; each has an `npm --prefix tooling~ run lint:<name>`
    script, a contract-test suite under `tooling~/scripts/tests/`, and a CI step):
    - `comparison-direction` (only `<`, `<=`, `==`; `:fix` swaps operands)
-   - `member-ordering` (one member order; nested types last; `:fix` reorders)
+    - `member-ordering` (member order, nested types last, explicit enum values and obsolete zero sentinels;
+      `:fix` only reorders members, never renumbers enums)
    - `multiline-comments` (stacked `//` become one `/* */` block; `:fix` converts)
    - `linq-production` (no LINQ in `Runtime/`, `Editor/`; no `:fix`)
    - `string-equality` (no `==`/`!=` on string literals or `string.Empty` in shipped code; use

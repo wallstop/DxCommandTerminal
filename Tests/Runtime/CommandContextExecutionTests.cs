@@ -47,12 +47,68 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             }
         }
 
+        [TestCase(0)]
+        [TestCase(-1)]
+        [TestCase(3)]
+        [TestCase(7)]
+        [TestCase(8)]
+        [TestCase(int.MaxValue)]
+        public void InvalidEnvironmentNeverGrantsEligibility(int environment)
+        {
+            CommandExecutionContext context = new((CommandExecutionContexts)environment);
+            Assert.IsFalse(context.IsEligibleFor(CommandExecutionContextSets.All));
+            Assert.IsFalse(context.IsEligibleFor((CommandExecutionContexts)(-1)));
+            Assert.IsFalse(context.IsEligibleFor(default));
+        }
+
+        [TestCase(CommandExecutionContexts.EditorEditMode)]
+        [TestCase(CommandExecutionContexts.EditorPlayMode)]
+        [TestCase(CommandExecutionContexts.Player)]
+        public void EmptyContextMaskDisablesEveryValidEnvironment(
+            CommandExecutionContexts environment
+        )
+        {
+            CommandExecutionContext context = new(environment);
+            Assert.IsFalse(context.IsEligibleFor(default));
+            Assert.IsTrue(context.IsEligibleFor(CommandExecutionContextSets.All));
+            Assert.IsTrue(context.IsEligibleFor(environment));
+        }
+
+        [Test]
+        public void DefaultContextCannotDispatch()
+        {
+            CommandShell shell = new(new CommandHistory(16));
+            int invocations = 0;
+            Assert.IsTrue(
+                shell.AddCommand(
+                    CommandBuilder
+                        .Create("invalid-context")
+                        .Contexts(CommandExecutionContextSets.All)
+                        .Arg<bool>("enabled", spec => spec.BoolChoices())
+                        .Handler((context, arguments) => ++invocations),
+                    out CommandRegistrationHandle handle
+                )
+            );
+            using (handle)
+            {
+                Assert.IsFalse(
+                    shell.RunCommand(
+                        default,
+                        "invalid-context",
+                        new List<CommandArg> { new("true") }
+                    )
+                );
+                Assert.AreEqual(0, invocations);
+                Assert.IsTrue(shell.TryConsumeErrorMessage(out _));
+            }
+        }
+
         [UnityTest]
         public IEnumerator GameplayDefaultRunsInEditorPlayModeAndRejectsEditMode()
         {
             yield return SpawnTerminal();
 
-            CommandExecutionContexts observed = CommandExecutionContexts.None;
+            CommandExecutionContexts observed = default;
             int invocations = 0;
             CommandDefinition definition = new()
             {
@@ -453,7 +509,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             */
             definition.Name = "ctx-renamed";
             definition.Handler = null;
-            definition.Contexts = CommandExecutionContexts.None;
+            definition.Contexts = default;
 
             Assert.IsTrue(
                 Terminal.Shell.RunCommand("ctx-snapshot"),

@@ -57,9 +57,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             TerminalControlTypes[] expected = Enum.GetValues(typeof(TerminalControlTypes))
                 .OfType<TerminalControlTypes>()
-#pragma warning disable CS0612 // Type or member is obsolete
-                .Except(new[] { TerminalControlTypes.None })
-#pragma warning restore CS0612 // Type or member is obsolete
+                .Except(new[] { default(TerminalControlTypes) })
                 .ToArray();
 
             TerminalControlTypes[] actual = GetControlTypes();

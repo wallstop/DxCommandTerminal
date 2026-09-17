@@ -19,10 +19,78 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const linterPath = path.join(repoRoot, "scripts", "lint-member-ordering.mjs");
-const { maskNoise, regionKeys, analyzeFile, applyEdits, ORDER_TIERS } = await import(
+const { maskNoise, regionKeys, analyzeFile, applyEdits, ORDER_TIERS, enumViolations } = await import(
   pathToFileURL(linterPath).href
 );
 
+
+const enumCases = [
+  ["explicit ordinals", "enum E { [Obsolete] Unknown = 0, A = 7, B = -2 }", true],
+  ["flags", "[Flags] enum E { [System.ObsoleteAttribute] None = 0, A = 1 << 0, B = 1UL << 63 }", true],
+  ["qualified attribute list", 'enum E { [Other(new[] { 1, 2 }), global::System.Obsolete("x,y")] @None = 0x0, A = 0b10 }', true],
+  ["multiple attributes", "class C { enum E : ulong { [Other][Obsolete] Unknown = 0UL, A = 18_446_744_073_709_551_615UL } }", true],
+  ["implicit first", "enum E { Unknown, A = 1 }", false],
+  ["implicit later", "enum E { [Obsolete] Unknown = 0, A }", false],
+  ["no sentinel", "enum E { A = 1 }", false],
+  ["empty enum", "enum E { }", false],
+  ["live zero", "enum E { [Obsolete] Unknown = 0, A = 0 }", false],
+  ["nonzero sentinel", "enum E { [Obsolete] Unknown = 1 }", false],
+  ["missing obsolete", "enum E { None = 0, A = 1 }", false],
+  ["enum attribute is not member attribute", "[Obsolete] enum E { None = 0 }", false],
+  ["attribute argument is not obsolete", "enum E { [Other(typeof(Obsolete))] None = 0 }", false],
+  ["wrong attribute namespace", "enum E { [Other.Obsolete] None = 0 }", false],
+  ["alias fails closed", "enum E { [Obsolete] Unknown = 0, A = Unknown }", false],
+  ["expression fails closed", "enum E { [Obsolete] Unknown = 1 - 1 }", false],
+  ["conditional implicit member", "enum E { [Obsolete] Unknown = 0,\n#if FEATURE\n A,\n#else\n B = 2,\n#endif\n}", false],
+  ["conditional obsolete fails closed", "enum E {\n#if FEATURE\n[Obsolete]\n#endif\nUnknown = 0 }", false],
+  ["conditional sentinel fails closed", "enum E {\n#if FEATURE\n[Obsolete] Unknown = 0,\n#endif\nA = 1 }", false],
+  ["conditional whole enum", "#if FEATURE\nenum E { [Obsolete] None = 0, A = 1 }\n#endif", true],
+  ["noise", 'class C { string s = "enum E { A }"; string r = """enum F { B }"""; }', true],
+  ["comment noise", "/* enum E { A } */ enum F { [Obsolete] Unknown = 0 }", true],
+];
+for (const [name, source, valid] of enumCases) {
+  test(`enum contract: ${name}`, () => {
+    assert.strictEqual(enumViolations(source).length === 0, valid);
+    const result = analyzeFile(source);
+    assert.strictEqual(applyEdits(source, result.edits), source);
+  });
+}
+
+const logPath = "Runtime/CommandTerminal/Backend/TerminalLogType.cs";
+const logSource = fs.readFileSync(path.resolve(repoRoot, "..", logPath), "utf8");
+for (const [name, source, file, valid] of [
+  ["exact Unity mapping", logSource, logPath, true],
+  ["Windows path", logSource, logPath.replaceAll("/", "\\"), true],
+  ["wrong path", logSource, "Tests/TerminalLogType.cs", false],
+  ["wrong namespace", logSource.replace(".Backend", ".Other"), logPath, false],
+  ["wrong type", logSource.replace("enum TerminalLogType", "enum Other"), logPath, false],
+  ["implicit legacy member", logSource.replace("Input = 5", "Input"), logPath, false],
+  ["shifted legacy ordinal", logSource.replace("Input = 5", "Input = 6"), logPath, false],
+  ["second enum in exempt file", logSource + "\nenum Other { A = 0 }", logPath, false],
+]) {
+  test(`enum exemption: ${name}`, () => {
+    assert.strictEqual(enumViolations(source, file).length === 0, valid);
+  });
+}
+
+test("enum CLI reports lines and never fixes ordinals", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "enum-contract-"));
+  const file = path.join(root, "E.cs");
+  const source = "enum E {\n [Obsolete] Unknown = 0,\n A\n}";
+  try {
+    fs.writeFileSync(file, source);
+    for (const args of [[], ["--fix"]]) {
+      const result = spawnSync(process.execPath, [linterPath, ...args], {
+        encoding: "utf8", env: { ...process.env, NESTED_TYPE_PLACEMENT_ROOTS: root }
+      });
+      assert.strictEqual(result.status, 1);
+      assert.match(result.stderr, /E\.cs:3: E: Every enum member needs an explicit assigned value/);
+      assert.strictEqual(fs.readFileSync(file, "utf8"), source);
+    }
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
 
 function violationsIn(source) {
   return analyzeFile(source).violations;
@@ -63,7 +131,7 @@ const SILENT = [
   ],
   ["the word class inside a comment", "class A { // class B is elsewhere\n int _x; }"],
   ["the word class inside a string", 'class A { string _s = "class B { }"; int _x; }'],
-  ["an enum body, whose members are not types", "enum E { A = 1, B = 2 }"],
+  ["an enum body, whose members are not types", "enum E { [Obsolete] Unknown = 0, A = 1, B = 2 }"],
   ["a top-level type after another top-level type", "namespace N { class A { } class B { } }"],
   // --- member ordering, accepted shapes ----------------------------------------------
   [
@@ -172,7 +240,7 @@ for (const [name, source] of SILENT) {
 /** Shapes that MUST be reported. If any of these goes quiet, the rule stops being enforced. */
 const REPORTED = [
   ["a nested class before a field", "class A { class B { } int _x; }", "B"],
-  ["a nested enum before a constant", "class A { enum E { X = 0 } const int C = 1; }", "E"],
+  ["a nested enum before a constant", "class A { enum E { [Obsolete] Unknown = 0, X = 1 } const int C = 1; }", "E"],
   ["a nested struct before a method", "class A { struct S { } void M() { } }", "S"],
   ["a nested interface before a field", "class A { interface I { } int _x; }", "I"],
   ["a nested record before a field", "class A { record R(int X); int _x; }", "R"],

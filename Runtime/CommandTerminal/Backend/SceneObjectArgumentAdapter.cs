@@ -36,7 +36,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         public bool TryParse(string input, out T value)
         {
-            if (string.IsNullOrEmpty(input))
+            if (string.IsNullOrWhiteSpace(input))
             {
                 value = null;
                 return false;
@@ -46,10 +46,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             T[] candidates = Query();
             foreach (T candidate in candidates)
             {
-                if (
-                    !candidate
-                    || !string.Equals(candidate.name, input, StringComparison.OrdinalIgnoreCase)
-                )
+                if (!string.Equals(candidate.name, input, StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
                 }
@@ -60,7 +57,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                     return true;
                 }
 
-                if (match)
+                if (match != null)
                 {
                     value = null;
                     return false;
@@ -75,7 +72,13 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         public string FormatChoice(T value)
         {
-            return value != null ? value.name : string.Empty;
+            if (value == null)
+            {
+                return string.Empty;
+            }
+
+            string name = value.name;
+            return string.IsNullOrWhiteSpace(name) ? string.Empty : name;
         }
 
         public IReadOnlyList<T> GetChoices(CommandCompletionContext context)

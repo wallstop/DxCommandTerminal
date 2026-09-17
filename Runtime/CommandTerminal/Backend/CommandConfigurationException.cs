@@ -44,7 +44,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         public Type ArgumentType { get; }
 
         public CommandConfigurationException(string message, string commandName = null)
-            : this(CommandConfigurationFailure.None, message, commandName) { }
+            : this(default, message, commandName) { }
 
         public CommandConfigurationException(
             CommandConfigurationFailure failure,

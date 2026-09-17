@@ -94,6 +94,31 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             }
         }
 
+        [TestCase(LogType.Error, TerminalLogType.Error, 0)]
+        [TestCase(LogType.Assert, TerminalLogType.Assert, 1)]
+        [TestCase(LogType.Warning, TerminalLogType.Warning, 2)]
+        [TestCase(LogType.Log, TerminalLogType.Message, 3)]
+        [TestCase(LogType.Exception, TerminalLogType.Exception, 4)]
+        public void UnityLogOrdinalsRemainCompatible(
+            LogType unityType,
+            TerminalLogType terminalType,
+            int ordinal
+        )
+        {
+            Assert.AreEqual(ordinal, (int)terminalType);
+            Assert.AreEqual(terminalType, (TerminalLogType)unityType);
+            CommandLog log = new(4, new[] { terminalType });
+            Assert.IsFalse(log.HandleLog("ignored", string.Empty, (TerminalLogType)unityType));
+            Assert.IsEmpty(log.Logs);
+        }
+
+        [TestCase(TerminalLogType.Input, 5)]
+        [TestCase(TerminalLogType.ShellMessage, 6)]
+        public void TerminalOnlyLogOrdinalsRemainCompatible(TerminalLogType type, int ordinal)
+        {
+            Assert.AreEqual(ordinal, (int)type);
+        }
+
         [UnityTest]
         public IEnumerator ToggleResetsState()
         {
