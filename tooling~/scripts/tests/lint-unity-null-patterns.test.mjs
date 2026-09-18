@@ -151,6 +151,28 @@ test("fix handles several calls in one pass", () => {
   );
 });
 
+test("fix splices at the token offset when trivia separates the call tokens", () => {
+  /*
+      Whitespace, comments, and line breaks between `Assert`, `.`, the method
+      name, and `(` are all legal C#. The splice point must come from the
+      token walk's open-paren offset, or the cut lands inside a token and the
+      rewrite emits invalid C# (Bugbot, PR #102).
+   */
+  assert.strictEqual(fixed("Assert . IsNull (x);"), "Assert.That(x == null);");
+  assert.strictEqual(
+    fixed("Assert./*c*/IsNull(x);"),
+    "Assert.That(x == null);"
+  );
+  assert.strictEqual(
+    fixed("Assert.\n  IsNotNull(x);"),
+    "Assert.That(x != null);"
+  );
+  assert.strictEqual(
+    fixed('Assert . IsNull ( x , "msg" );'),
+    'Assert.That( x == null , "msg" );'
+  );
+});
+
 test("fix handles CRLF sources without mixing line endings", () => {
   const source = 'Assert.IsNull(\r\n    shell.X,\r\n    "message"\r\n);';
   const fixedText = fixed(source);

@@ -100,6 +100,7 @@ export function violations(text) {
         kind: kindToken.text,
         start: assertToken.start,
         end: assertToken.start,
+        subjectStart: openParen.end,
         subject: "",
       });
       continue;
@@ -111,6 +112,7 @@ export function violations(text) {
       kind: kindToken.text,
       start: assertToken.start,
       end: closeParen.end,
+      subjectStart: openParen.end,
       subject: text.slice(openParen.end, subjectEnd),
     });
   }
@@ -131,7 +133,11 @@ export function planFix(text, violation) {
   }
   const subject = violation.subject;
   const trimmedSubject = subject.trimEnd();
-  const insertAt = violation.start + "Assert".length + 1 + violation.kind.length + 1 + trimmedSubject.length;
+  // Splice at the token-walk's open-paren offset, never at an offset recomputed from
+  // token text widths: trivia (spaces, comments, line breaks) between `Assert`, `.`,
+  // the method name, and `(` shifts any width-derived cut into the middle of a token
+  // and the rewrite emits invalid C# (Bugbot, PR #102).
+  const insertAt = violation.subjectStart + trimmedSubject.length;
   const operator = violation.kind === "IsNull" ? " == null" : " != null";
   return {
     start: violation.start,
