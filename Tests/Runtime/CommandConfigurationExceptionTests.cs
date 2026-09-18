@@ -395,10 +395,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 unnamed.Failure,
                 "The message-only constructor predates the kinds"
             );
-            Assert.IsNull(unnamed.CommandName);
-            Assert.IsNull(unnamed.ArgumentName);
-            Assert.IsNull(unnamed.SubcommandName);
-            Assert.IsNull(unnamed.ArgumentType);
+            Assert.That(unnamed.CommandName == null);
+            Assert.That(unnamed.ArgumentName == null);
+            Assert.That(unnamed.SubcommandName == null);
+            Assert.That(unnamed.ArgumentType == null);
 
             CommandConfigurationException named = new("Bad", "heal");
             Assert.AreEqual(default(CommandConfigurationFailure), named.Failure);
@@ -434,9 +434,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 inner.Failure,
                 "The inner exception keeps its kind"
             );
-            Assert.IsNull(inner.CommandName, "The spec-level throw reports no command of its own");
-            Assert.IsNull(
-                inner.InnerException,
+            Assert.That(
+                inner.CommandName == null,
+                "The spec-level throw reports no command of its own"
+            );
+            Assert.That(
+                inner.InnerException == null,
                 "Spec-level throws originate at the spec; there is nothing deeper"
             );
         }
@@ -471,7 +474,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreEqual("add", exception.SubcommandName);
             Assert.AreEqual("value", exception.ArgumentName);
             Assert.AreEqual(typeof(UnparsedType), exception.ArgumentType);
-            Assert.IsNotNull(exception.InnerException);
+            Assert.That(exception.InnerException != null);
         }
 
         private sealed class UnparsedType { }

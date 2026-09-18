@@ -245,7 +245,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 nameof(InvalidSignatureMethod),
                 BindingFlags.Static | BindingFlags.NonPublic
             );
-            Assert.IsNotNull(invalidMethod, "Sanity: expected the invalid-signature method");
+            Assert.That(invalidMethod != null, "Sanity: expected the invalid-signature method");
             RegisterCommandAttribute attribute = new RegisterCommandAttribute();
             attribute.NormalizeName(invalidMethod);
 

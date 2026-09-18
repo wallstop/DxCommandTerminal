@@ -270,7 +270,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 Assert.IsTrue(shell.RunCommand(input));
                 Assert.IsFalse(shell.TryConsumeErrorMessage(out string error), error);
                 Assert.AreEqual(1, calls);
-                Assert.IsNotNull(resolved);
+                Assert.That(resolved != null);
                 Assert.AreEqual(remaining ? 3 : 1, resolved.Length);
                 Assert.AreSame(target, resolved[0]);
                 Assert.AreNotSame(decoy, resolved[0]);

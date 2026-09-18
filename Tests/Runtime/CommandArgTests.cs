@@ -3649,7 +3649,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             bool registered = CommandArg.RegisterParser<int>(CustomIntParser1);
             Assert.IsTrue(registered);
             Assert.IsTrue(CommandArg.TryGetParser(out registeredParser));
-            Assert.IsNotNull(registeredParser);
+            Assert.That(registeredParser != null);
 
             deregistered = CommandArg.UnregisterParser<int>();
             Assert.IsTrue(deregistered);

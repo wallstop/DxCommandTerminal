@@ -182,7 +182,8 @@ frontmatter validity, index freshness, and pointer-file delegation; see
 25. UnityEngine.Object null checks use the Unity `==`/`!=` operators explicitly. Banned on Unity
     objects: `?.`, `??`/`??=`, `is null`/`is not null`/`ReferenceEquals` (all bypass the fake-null
     operator), `Assert.IsNull`/`Assert.IsNotNull` in tests, and implicit truthiness - write
-    `component != null` / `Assert.That(x == null)` (issue #98). Delegate `?.`/plain C# `??` stay legal.
+    `component != null` / `Assert.That(x == null)` (issue #98; `lint:unity-null-patterns` enforces,
+    `:fix` converts, issue #100). Delegate `?.`/plain C# `??` stay legal.
 
 ### Unity Package Rules
 

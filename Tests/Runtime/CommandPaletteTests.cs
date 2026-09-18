@@ -553,8 +553,8 @@
             yield return SendKeyDown(KeyCode.Escape);
 
             Assert.IsFalse(_palette.IsOpen, "Escape closes the palette");
-            Assert.IsNull(
-                _palette._paletteRoot.parent,
+            Assert.That(
+                _palette._paletteRoot.parent == null,
                 "A closed palette must be detached from the panel"
             );
 
@@ -567,8 +567,8 @@
                 yield return null;
             }
 
-            Assert.IsNull(
-                _palette._uiDocument.rootVisualElement.focusController.focusedElement,
+            Assert.That(
+                _palette._uiDocument.rootVisualElement.focusController.focusedElement == null,
                 "Closing without other focusable UI must release panel focus, "
                     + "or the hidden palette keeps consuming game keys"
             );
@@ -586,7 +586,7 @@
             yield return null;
             AssertResultsExpanded("Typing before close expands the results");
             _palette.Close();
-            Assert.IsNull(_palette._paletteRoot.parent, "Close detaches the palette tree");
+            Assert.That(_palette._paletteRoot.parent == null, "Close detaches the palette tree");
 
             _palette.Open();
             yield return null;
@@ -889,16 +889,16 @@
                 yield return null;
             }
 
-            Assert.IsNotNull(
-                _palette._results.verticalScroller,
+            Assert.That(
+                _palette._results.verticalScroller != null,
                 "The overflowing results create a scroller"
             );
             Assert.IsFalse(
                 _palette._results.verticalScroller.focusable,
                 "Clicking the scrollbar must not steal panel focus from the input"
             );
-            Assert.IsNotNull(
-                _palette._results.verticalScroller.slider,
+            Assert.That(
+                _palette._results.verticalScroller.slider != null,
                 "The scroller hosts the slider UITK focuses on click"
             );
             Assert.IsFalse(
@@ -1213,7 +1213,10 @@
             );
 
             _palette.ApplyPendingCaret();
-            Assert.IsNull(_palette._pendingCaretIndex, "Two stable passes consume the marker");
+            Assert.That(
+                _palette._pendingCaretIndex == null,
+                "Two stable passes consume the marker"
+            );
             Assert.AreEqual(
                 target,
                 _palette._input.cursorIndex,
@@ -1249,8 +1252,8 @@
             _palette._input.value = "pickitem torchx";
             int caret = _palette._input.cursorIndex;
             _palette.ApplyPendingCaret();
-            Assert.IsNull(
-                _palette._pendingCaretIndex,
+            Assert.That(
+                _palette._pendingCaretIndex == null,
                 "A field change is a user edit and cancels the queued caret"
             );
             Assert.AreEqual(
@@ -1434,8 +1437,8 @@
                 yield return null;
             }
 
-            Assert.IsNull(
-                _palette._pendingCaretIndex,
+            Assert.That(
+                _palette._pendingCaretIndex == null,
                 "The queued caret drains once the position holds"
             );
         }

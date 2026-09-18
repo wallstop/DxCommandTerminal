@@ -143,7 +143,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 observed,
                 "The handler should observe the resolved Editor Play Mode environment"
             );
-            Assert.IsNull(ConsumeError(), "Running an eligible command queues no error");
+            Assert.That(ConsumeError() == null, "Running an eligible command queues no error");
 
             CommandExecutionContext.AmbientContextProvider = () =>
                 new CommandExecutionContext(CommandExecutionContexts.EditorEditMode);
@@ -177,7 +177,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 "Commands registered without context metadata keep running in every environment"
             );
             Assert.AreEqual(1, invocations);
-            Assert.IsNull(ConsumeError());
+            Assert.That(ConsumeError() == null);
 
             CommandExecutionContext.AmbientContextProvider = () =>
                 new CommandExecutionContext(CommandExecutionContexts.Player);
@@ -265,7 +265,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Assert.IsTrue(Terminal.Shell.RunCommand("ctx-args one \"two words\" three"));
             Assert.AreEqual(CommandExecutionContexts.EditorPlayMode, observedContext.Environment);
-            Assert.IsNull(observedContext.UserContext, "No user context was supplied");
+            Assert.That(observedContext.UserContext == null, "No user context was supplied");
             CollectionAssert.AreEqual(
                 new[] { "one", "two words", "three" },
                 observedArguments,

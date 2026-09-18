@@ -230,7 +230,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 withoutOverride.HasReplacementOverride,
                 "No replacement means the context range applies"
             );
-            Assert.IsNull(withoutOverride.Replacement);
+            Assert.That(withoutOverride.Replacement == null);
 
             CommandCompletion withOverride = new(
                 "alpha",

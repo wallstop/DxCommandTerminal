@@ -18,8 +18,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void GeneratedCatalogIsPresentInTestAssembly()
         {
             Type catalogType = typeof(CommandCatalogTests).Assembly.GetType(CatalogTypeName, false);
-            Assert.IsNotNull(
-                catalogType,
+            Assert.That(
+                catalogType != null,
                 "The source generator did not emit a command catalog for the test "
                     + "assembly; shell discovery fell back to reflection for it."
             );
@@ -29,8 +29,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void GeneratedCatalogIsPresentInRuntimeAssembly()
         {
             Type catalogType = typeof(BuiltInCommands).Assembly.GetType(CatalogTypeName, false);
-            Assert.IsNotNull(
-                catalogType,
+            Assert.That(
+                catalogType != null,
                 "The source generator did not emit a command catalog for the runtime "
                     + "assembly; built-in commands fell back to reflection discovery."
             );

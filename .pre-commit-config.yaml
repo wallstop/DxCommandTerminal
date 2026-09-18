@@ -102,6 +102,19 @@ repos:
           block in Styles/Themes/*.uss must define the full required-variable list, and
           every var() inside a .palette-* rule in BaseStyles.uss must name a required
           token and carry a fallback so an unthemed palette still renders.
+      - id: unity-null-patterns-lint
+        name: Lint Unity-object null assertions (rule 25, issue #98/#100)
+        entry: node tooling~/scripts/lint-unity-null-patterns.mjs
+        language: system
+        always_run: true
+        pass_filenames: false
+        stages:
+          - pre-commit
+          - pre-push
+        description: >
+          Null assertions evaluate Unity's fake-null operator: Assert.IsNull /
+          Assert.IsNotNull bypass it, so tests assert Assert.That(x == null /
+          x != null). Use --fix for the mechanical conversion.
       - id: llm-instructions-lint
         name: Lint .llm instructions (SKILL.md spec, index freshness, pointer delegation)
         entry: pwsh -NoProfile -File tooling~/scripts/lint-llm-instructions.ps1

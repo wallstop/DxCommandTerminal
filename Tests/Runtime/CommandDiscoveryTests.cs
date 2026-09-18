@@ -101,8 +101,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 .FirstOrDefault(attribute =>
                     string.Equals(attribute.Name, "test", StringComparison.OrdinalIgnoreCase)
                 );
-            Assert.IsNotNull(
-                inferred,
+            Assert.That(
+                inferred != null,
                 "Expected the inferred-name command from this test assembly to be discovered"
             );
             Assert.AreEqual(
@@ -114,8 +114,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             RegisterCommandAttribute named = discovered
                 .Select(tuple => tuple.attribute)
                 .FirstOrDefault(attribute => attribute.Name == "discovery-named");
-            Assert.IsNotNull(
-                named,
+            Assert.That(
+                named != null,
                 "Expected the explicit-name command from this test assembly to be discovered"
             );
         }

@@ -310,9 +310,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return TerminalTests.SpawnTerminal(resetStateOnInit: true);
 
             CommandShell shell = Terminal.Shell;
-            Assert.IsNotNull(shell, "Terminal.Shell should not be null after SpawnTerminal");
+            Assert.That(shell != null, "Terminal.Shell should not be null after SpawnTerminal");
             CommandHistory history = Terminal.History;
-            Assert.IsNotNull(history, "Terminal.History should not be null after SpawnTerminal");
+            Assert.That(history != null, "Terminal.History should not be null after SpawnTerminal");
 
             // Run some commands to populate history
             shell.RunCommand("log test1");
@@ -345,9 +345,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return TerminalTests.SpawnTerminal(resetStateOnInit: true);
 
             CommandShell shell = Terminal.Shell;
-            Assert.IsNotNull(shell, "Terminal.Shell should not be null after SpawnTerminal");
+            Assert.That(shell != null, "Terminal.Shell should not be null after SpawnTerminal");
             CommandHistory history = Terminal.History;
-            Assert.IsNotNull(history, "Terminal.History should not be null after SpawnTerminal");
+            Assert.That(history != null, "Terminal.History should not be null after SpawnTerminal");
 
             // Populate, clear, then run more commands
             shell.RunCommand("log before");
@@ -378,9 +378,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return TerminalTests.SpawnTerminal(resetStateOnInit: true);
 
             CommandShell shell = Terminal.Shell;
-            Assert.IsNotNull(shell, "Terminal.Shell should not be null after SpawnTerminal");
+            Assert.That(shell != null, "Terminal.Shell should not be null after SpawnTerminal");
             CommandHistory history = Terminal.History;
-            Assert.IsNotNull(history, "Terminal.History should not be null after SpawnTerminal");
+            Assert.That(history != null, "Terminal.History should not be null after SpawnTerminal");
 
             // Run some commands to populate history
             shell.RunCommand("log test1");
@@ -420,9 +420,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return TerminalTests.SpawnTerminal(resetStateOnInit: true);
 
             CommandShell shell = Terminal.Shell;
-            Assert.IsNotNull(shell, "Terminal.Shell should not be null after SpawnTerminal");
+            Assert.That(shell != null, "Terminal.Shell should not be null after SpawnTerminal");
             CommandHistory history = Terminal.History;
-            Assert.IsNotNull(history, "Terminal.History should not be null after SpawnTerminal");
+            Assert.That(history != null, "Terminal.History should not be null after SpawnTerminal");
 
             // Run set-theme with no arguments (it requires exactly 1)
             shell.RunCommand("set-theme");
