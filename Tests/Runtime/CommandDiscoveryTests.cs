@@ -138,6 +138,18 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             foreach (Assembly assembly in legacyOrder)
             {
+                if (assembly.IsDynamic)
+                {
+                    /*
+                       Dynamic assemblies are a documented exclusion of the
+                       reference filter (pinned by MayContainCommandsFiltersAssemblies
+                       and the inclusion tests): they are not metadata-scannable
+                       the way compiled assemblies are, so the equivalence
+                       contract covers compiled assemblies only.
+                    */
+                    continue;
+                }
+
                 Type[] types;
                 try
                 {

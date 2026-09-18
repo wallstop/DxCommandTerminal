@@ -463,6 +463,15 @@ At `Medium` or higher, commands reached only through reflection can still be str
 
 See [Unity docs on Managed Stripping Level](https://docs.unity3d.com/2022.3/Documentation/ScriptReference/ManagedStrippingLevel.html) for more details.
 
+# Discovery Exclusions
+For performance, automatic command discovery scans only assemblies whose metadata references this package; it also skips dynamic (runtime-emitted) assemblies. An attributed command in an assembly outside that rule is silently skipped by default. Opt the assembly in explicitly before the first command request:
+
+```csharp
+IDisposable handle = CommandShell.IncludeDiscoveryAssembly(myPluginAssembly);
+```
+
+The returned handle removes the assembly from discovery on `Dispose`. A registration made after commands registered applies on the next registration cycle (after `ClearCustomCommands`/`ClearAutoRegisteredCommands` re-runs readiness), the same as discovery providers. The default path never walks every assembly in the domain.
+
 # Hints
 AutoComplete has gotten a major upgrade in this fork. Completion is now not only case-insensitive, but it will now also search (unique) commands that have been executed, ignoring any irrelevant input. Pressing the complete key multiple times now selects available options in a persistent fashion. Completion can be walked both forward and backwards. Results are now presented in a new UI that intelligently adapts to screen space and current selection position. When completion is no longer relevant, the UI is disabled. However, you can opt to always show the available commands by toggling the new `Display Hints` option in the Terminal configuration. There are also several new theming options for hints, with controls over the currently selected hint v unselected hints.
 
