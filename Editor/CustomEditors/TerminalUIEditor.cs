@@ -687,16 +687,23 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
 
         public override void OnInspectorGUI()
         {
-            _impactButtonStyle ??= new GUIStyle(GUI.skin.button)
+            if (_impactButtonStyle == null)
             {
-                normal = { textColor = Color.yellow },
-                fontStyle = FontStyle.Bold,
-            };
-            _impactLabelStyle ??= new GUIStyle(GUI.skin.label)
+                _impactButtonStyle = new GUIStyle(GUI.skin.button)
+                {
+                    normal = { textColor = Color.yellow },
+                    fontStyle = FontStyle.Bold,
+                };
+            }
+
+            if (_impactLabelStyle == null)
             {
-                normal = { textColor = new Color(1f, 0.3f, 0.3f, 1f) },
-                fontStyle = FontStyle.Bold,
-            };
+                _impactLabelStyle = new GUIStyle(GUI.skin.label)
+                {
+                    normal = { textColor = new Color(1f, 0.3f, 0.3f, 1f) },
+                    fontStyle = FontStyle.Bold,
+                };
+            }
 
             if (_allCommands.Count == 0 || _defaultCommands.Count == 0)
             {

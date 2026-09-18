@@ -23,11 +23,14 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
 
         public override void OnInspectorGUI()
         {
-            _impactButtonStyle ??= new GUIStyle(GUI.skin.button)
+            if (_impactButtonStyle == null)
             {
-                normal = { textColor = Color.yellow },
-                fontStyle = FontStyle.Bold,
-            };
+                _impactButtonStyle = new GUIStyle(GUI.skin.button)
+                {
+                    normal = { textColor = Color.yellow },
+                    fontStyle = FontStyle.Bold,
+                };
+            }
 
             serializedObject.Update();
             TerminalThemePack themePack = target as TerminalThemePack;

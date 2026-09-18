@@ -219,8 +219,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return SpawnTerminal(resetStateOnInit: false);
 
             TerminalUI terminal2 = TerminalUI.Instance;
-            Assert.IsNotNull(
-                TerminalUI.Instance,
+            Assert.That(
+                TerminalUI.Instance != null,
                 "TerminalUI.Instance should not be null after second SpawnTerminal"
             );
             Assert.AreNotSame(
@@ -251,8 +251,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             yield return SpawnTerminal(resetStateOnInit: true);
 
-            Assert.IsNotNull(
-                TerminalUI.Instance,
+            Assert.That(
+                TerminalUI.Instance != null,
                 "TerminalUI.Instance should not be null after third SpawnTerminal"
             );
             Assert.AreNotSame(

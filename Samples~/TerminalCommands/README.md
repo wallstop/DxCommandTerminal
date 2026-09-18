@@ -23,6 +23,8 @@ components in a scene with a TerminalUI.
 | `SceneCommands` | `scene-reload`, `scene-info` | Execution contexts and Edit Mode opt-in |
 | `LifecycleCommands` | `ping` | Raw handle lifetime: register, dispose, re-register |
 | `SceneObjectCommands` | `object-info <name>`, `object-position <name>` | Opt-in object/component parsers and fresh name completion |
+| `ComponentCommands` | `list-components <name>`, `find-missing-scripts` | Component inspection and the missing-script scan |
+| `ObjectFilterCommands` | `find-objects <layer>`, `find-tagged <tag>` | Filtering by layer/tag with engine-state completion choices |
 
 ## Try it
 
@@ -37,6 +39,8 @@ Open the terminal (default hotkey: backtick), then:
 - Add `SceneObjectCommands`, create an active object named `Demo Target`, then run `object-info "Demo Target"`.
 - `object-position "Demo Target"` resolves its `Transform`; duplicate names reject execution.
 - Type `object-info ` or `object-position ` and press Tab for current names.
+- Add `ComponentCommands`, then `list-components "Demo Target"` or `find-missing-scripts` to hunt broken components.
+- Add `ObjectFilterCommands`, then `find-objects ` + Tab lists defined layers, and `find-tagged ` + Tab lists tags in use.
 
 `SceneObjectArgumentAdapter<T>` supports `GameObject`, `Component`, and component subclasses.
 Use `.RawParser(adapter.TryParse).Choices(adapter.GetChoices, adapter.FormatChoice)` to opt into name parsing and completion.

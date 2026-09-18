@@ -179,6 +179,11 @@ frontmatter validity, index freshness, and pointer-file delegation; see
     sentinel, and a blacklist silently treats invalid/serialized values (and any future
     enum member) as the non-sentinel branch (PR #82 review). Acronyms in identifiers
     stay all-caps: `TeardownUI`, not `TeardownUi`.
+25. UnityEngine.Object null checks use the Unity `==`/`!=` operators explicitly. Banned on
+    Unity objects: `?.`, `??`/`??=`, implicit truthiness (`if (component)`), and
+    `Assert.IsNull`/`Assert.IsNotNull` in tests - Unity's fake null defeats all four
+    (issue #98); write `component != null` and `Assert.That(x == null)`. `?.` on
+    delegates and `??` on plain C# values (strings, arrays) stay legal.
 
 ### Unity Package Rules
 
@@ -232,7 +237,6 @@ narration, no restated context. Code comments state only what the code cannot sa
 Enforced for PRs by `npm --prefix tooling~ run lint:pr-copy` and the pr-copy CI job
 (`tooling~/scripts/lint-pr-copy.mjs`: disclosure first line, section structure, line
 and bullet budgets; the Cursor Bugbot summary block is stripped before checking).
-Check before opening or editing a PR.
 Details: [simple-writing](./skills/simple-writing/SKILL.md).
 
 ### CHANGELOG (user-facing only)

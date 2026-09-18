@@ -152,7 +152,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             }
 
             Assert.IsFalse(adapter.TryParse(TargetName, out T missing));
-            Assert.IsNull(missing);
+            Assert.That(missing == null);
             foreach (T candidate in adapter.GetChoices(default))
             {
                 Assert.IsFalse(string.Equals(TargetName, candidate.name, StringComparison.Ordinal));
@@ -308,7 +308,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                         .Handler(
                             (context, arguments) =>
                             {
-                                Assert.IsNotNull(arguments.Get<T>("target"));
+                                Assert.That(arguments.Get<T>("target") != null);
                                 ++calls;
                             }
                         ),
@@ -504,7 +504,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                         out _
                     )
                 );
-                Assert.IsNull(resolved);
+                Assert.That(resolved == null);
                 Assert.IsTrue(shell.RunCommand($"inspect-object {target.name}"));
                 Assert.AreSame(decoy, resolved);
                 Assert.AreNotSame(target, resolved);
@@ -561,7 +561,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreSame(collider, result);
             Object.DestroyImmediate(collider);
             Assert.IsFalse(adapter.TryParse(TargetName, out BoxCollider missing));
-            Assert.IsNull(missing);
+            Assert.That(missing == null);
         }
 
         [TestCase(SceneObjectAmbiguityPolicy.FirstMatch, true)]
@@ -606,7 +606,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             target.name = name;
             SceneObjectArgumentAdapter<T> adapter = new();
             Assert.IsFalse(adapter.TryParse(name, out T result));
-            Assert.IsNull(result);
+            Assert.That(result == null);
             Assert.AreEqual(string.Empty, adapter.FormatChoice(target));
         }
 
