@@ -200,8 +200,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return SpawnTerminal(resetStateOnInit: true);
 
             TerminalUI terminal1 = TerminalUI.Instance;
-            Assert.IsNotNull(
-                terminal1,
+            Assert.That(
+                terminal1 != null,
                 "TerminalUI.Instance should not be null after SpawnTerminal"
             );
             CommandShell shell = Terminal.Shell;

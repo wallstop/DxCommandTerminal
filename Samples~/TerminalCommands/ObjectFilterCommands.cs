@@ -16,6 +16,8 @@ namespace WallstopStudios.DxCommandTerminal.Samples
      */
     public sealed class ObjectFilterCommands : TerminalCommandSample
     {
+        private const int LayerCount = 32;
+
         private static GameObject[] QuerySceneObjects()
         {
 #if UNITY_6000_4_OR_NEWER
@@ -42,7 +44,7 @@ namespace WallstopStudios.DxCommandTerminal.Samples
                                 .Choices(context =>
                                 {
                                     List<string> names = new();
-                                    for (int layer = 0; layer < 32; ++layer)
+                                    for (int layer = 0; layer < LayerCount; ++layer)
                                     {
                                         string name = LayerMask.LayerToName(layer);
                                         if (!string.IsNullOrEmpty(name))
@@ -99,7 +101,7 @@ namespace WallstopStudios.DxCommandTerminal.Samples
                             spec.Required()
                                 .Choices(context =>
                                 {
-                                    HashSet<string> tags = new(OrdinalComparer.Instance);
+                                    HashSet<string> tags = new(StringComparer.Ordinal);
                                     GameObject[] objects = QuerySceneObjects();
                                     foreach (GameObject candidate in objects)
                                     {
@@ -136,26 +138,6 @@ namespace WallstopStudios.DxCommandTerminal.Samples
                         }
                     )
             );
-        }
-
-        /*
-            Tag matching must agree with the engine's case sensitivity, so
-            the completion set dedupes with an ordinal comparison instead of
-            the default culture-aware one.
-         */
-        private sealed class OrdinalComparer : IEqualityComparer<string>
-        {
-            internal static readonly OrdinalComparer Instance = new();
-
-            public bool Equals(string left, string right)
-            {
-                return string.Equals(left, right, StringComparison.Ordinal);
-            }
-
-            public int GetHashCode(string value)
-            {
-                return value?.GetHashCode(StringComparison.Ordinal) ?? 0;
-            }
         }
     }
 }

@@ -421,7 +421,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             where T : UnityEngine.Object
         {
             T asset = AssetDatabase.LoadAssetAtPath<T>($"{PackageRoot}/{relativePath}");
-            Assert.IsNotNull(asset, $"Expected the test asset at {PackageRoot}/{relativePath}");
+            Assert.That(asset != null, $"Expected the test asset at {PackageRoot}/{relativePath}");
             return asset;
         }
 
