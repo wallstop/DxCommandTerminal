@@ -1,0 +1,324 @@
+namespace WallstopStudios.DxCommandTerminal.SourceGenerators.Tests
+{
+    using System;
+    using System.Collections.Generic;
+    using System.Collections.Immutable;
+    using System.Linq;
+    using System.Threading;
+    using Microsoft.CodeAnalysis;
+    using Microsoft.CodeAnalysis.CSharp;
+    using Microsoft.CodeAnalysis.Diagnostics;
+    using WallstopStudios.DxCommandTerminal.SourceGenerators;
+    using Xunit;
+
+    /*
+        Contract tests for the shipped Unity-null-pattern analyzer (context rule 25).
+        Fixtures compile against the shim's Object and GUIStyle, the two fake-null
+        types. Violation cases pin the diagnostic id and how many times it fires;
+        compliant cases pin that the correct Unity forms (== null / != null) and
+        every plain-C# construct never fire anything.
+    */
+    public sealed class UnityObjectNullPatternAnalyzerTests
+    {
+        private const string DiagnosticIdPrefix = "DxCmd";
+
+        private static readonly ImmutableArray<DiagnosticAnalyzer> Analyzer =
+            ImmutableArray.Create<DiagnosticAnalyzer>(new UnityObjectNullPatternAnalyzer());
+
+        public static IEnumerable<object[]> ViolationCases()
+        {
+            yield return new object[]
+            {
+                "UnityEngine.Object conditional access",
+                Fixture("        _target?.ToString();"),
+                "DxCmd0001",
+                1,
+            };
+            yield return new object[]
+            {
+                "GUIStyle conditional access",
+                Fixture("        _style?.ToString();"),
+                "DxCmd0001",
+                1,
+            };
+            yield return new object[]
+            {
+                "Derived receiver chain flags every fake-null hop",
+                Fixture("        _widget?.Style?.ToString();"),
+                "DxCmd0001",
+                2,
+            };
+            yield return new object[]
+            {
+                "UnityEngine.Object coalesce",
+                Fixture("        UnityEngine.Object merged = _target ?? new UnityEngine.Object();"),
+                "DxCmd0002",
+                1,
+            };
+            yield return new object[]
+            {
+                "GUIStyle coalesce",
+                Fixture("        GUIStyle merged = _style ?? new GUIStyle();"),
+                "DxCmd0002",
+                1,
+            };
+            yield return new object[]
+            {
+                "UnityEngine.Object coalesce assignment",
+                Fixture("        _target ??= new UnityEngine.Object();"),
+                "DxCmd0002",
+                1,
+            };
+            yield return new object[]
+            {
+                "GUIStyle coalesce assignment",
+                Fixture("        _style ??= new GUIStyle();"),
+                "DxCmd0002",
+                1,
+            };
+            yield return new object[]
+            {
+                "if truthiness",
+                Fixture("        if (_target) { }"),
+                "DxCmd0003",
+                1,
+            };
+            yield return new object[]
+            {
+                "negated truthiness",
+                Fixture("        if (!_target) { }"),
+                "DxCmd0003",
+                1,
+            };
+            yield return new object[]
+            {
+                "GUIStyle while truthiness",
+                Fixture("        while (_style) { break; }"),
+                "DxCmd0003",
+                1,
+            };
+            yield return new object[]
+            {
+                "ternary condition truthiness",
+                Fixture("        int picked = _target ? 1 : 0;"),
+                "DxCmd0003",
+                1,
+            };
+            yield return new object[]
+            {
+                "both operands of && convert",
+                Fixture("        bool both = _target && _style;"),
+                "DxCmd0003",
+                2,
+            };
+            yield return new object[]
+            {
+                "explicit cast to bool",
+                Fixture("        bool direct = (bool)_target;"),
+                "DxCmd0003",
+                1,
+            };
+            yield return new object[]
+            {
+                "is null pattern",
+                Fixture("        bool absent = _target is null;"),
+                "DxCmd0004",
+                1,
+            };
+            yield return new object[]
+            {
+                "is not null pattern",
+                Fixture("        bool present = _target is not null;"),
+                "DxCmd0004",
+                1,
+            };
+            yield return new object[]
+            {
+                "GUIStyle is not null pattern",
+                Fixture("        bool present = _style is not null;"),
+                "DxCmd0004",
+                1,
+            };
+            yield return new object[]
+            {
+                "ReferenceEquals on UnityEngine.Object",
+                Fixture("        bool same = object.ReferenceEquals(_target, null);"),
+                "DxCmd0005",
+                1,
+            };
+            yield return new object[]
+            {
+                "ReferenceEquals on GUIStyle",
+                Fixture("        bool same = object.ReferenceEquals(null, _style);"),
+                "DxCmd0005",
+                1,
+            };
+        }
+
+        public static IEnumerable<object[]> CompliantCases()
+        {
+            yield return new object[]
+            {
+                "plain class conditional access",
+                Fixture("        _holder?.Name.ToString();"),
+            };
+            yield return new object[]
+            {
+                "List coalesce",
+                Fixture("        List<int> merged = _list ?? new List<int>();"),
+            };
+            yield return new object[]
+            {
+                "array receiver coalesce is not a Unity receiver",
+                Fixture(
+                    "        UnityEngine.Object[] merged = _targets ?? new UnityEngine.Object[0];"
+                ),
+            };
+            yield return new object[]
+            {
+                "delegate coalesce",
+                Fixture("        System.Action action = _action ?? delegate { };"),
+            };
+            yield return new object[]
+            {
+                "nullable int coalesce",
+                Fixture("        int value = _maybeInt ?? 0;"),
+            };
+            yield return new object[]
+            {
+                "string coalesce",
+                Fixture("        string text = _text ?? string.Empty;"),
+            };
+            yield return new object[]
+            {
+                "explicit Unity == null / != null never fire",
+                Fixture("        bool checks = _target == null || _target != null;"),
+            };
+            yield return new object[]
+            {
+                "plain class truthiness",
+                Fixture("        if (_plain) { }"),
+            };
+            yield return new object[]
+            {
+                "declaration pattern on UnityEngine.Object",
+                Fixture(
+                    "        string label = _target is UnityEngine.Object live ? live.name : string.Empty;"
+                ),
+            };
+            yield return new object[]
+            {
+                "ReferenceEquals on plain types",
+                Fixture("        bool same = object.ReferenceEquals(_list, _text);"),
+            };
+            yield return new object[]
+            {
+                "error-type receiver does not crash the analyzer",
+                Fixture("        _unknown?.ToString();"),
+            };
+        }
+
+        private static ImmutableArray<Diagnostic> Analyze(string source)
+        {
+            CSharpCompilation compilation = TestCompilationFactory.CreateCompilation(
+                "UnityNullPatternAnalyzerFixtures",
+                source
+            );
+            CompilationWithAnalyzers analysis = compilation.WithAnalyzers(Analyzer);
+            return analysis.GetAllDiagnosticsAsync(CancellationToken.None).GetAwaiter().GetResult();
+        }
+
+        private static string Fixture(string body)
+        {
+            return @"
+namespace Fixtures
+{
+    using System.Collections.Generic;
+    using UnityEngine;
+
+    public static class UnityNullPatternCases
+    {
+        private static UnityEngine.Object _target;
+        private static GUIStyle _style;
+        private static Widget _widget;
+        private static Holder _holder;
+        private static Plain _plain;
+        private static List<int> _list;
+        private static UnityEngine.Object[] _targets;
+        private static System.Action _action;
+        private static int? _maybeInt;
+        private static string _text;
+        private static UnknownThing _unknown;
+
+        private sealed class Widget : UnityEngine.Object
+        {
+            public GUIStyle Style;
+        }
+
+        private sealed class Holder
+        {
+            public string Name;
+        }
+
+        private sealed class Plain
+        {
+            public static implicit operator bool(Plain exists)
+            {
+                return exists != null;
+            }
+        }
+
+        public static void Run()
+        {
+"
+                + body
+                + @"
+        }
+    }
+}";
+        }
+
+        private static string Describe(ImmutableArray<Diagnostic> diagnostics)
+        {
+            if (diagnostics.IsEmpty)
+            {
+                return "(none)";
+            }
+
+            return string.Join("; ", diagnostics.Select(diagnostic => diagnostic.ToString()));
+        }
+
+        [Theory]
+        [MemberData(nameof(ViolationCases))]
+        public void FlagsBannedPatterns(
+            string caseName,
+            string source,
+            string diagnosticId,
+            int expectedCount
+        )
+        {
+            ImmutableArray<Diagnostic> diagnostics = Analyze(source);
+            int actual = diagnostics.Count(diagnostic => diagnostic.Id == diagnosticId);
+            Assert.True(
+                expectedCount == actual,
+                $"{caseName}: expected {expectedCount} {diagnosticId}, found {actual}. All: {Describe(diagnostics)}"
+            );
+        }
+
+        [Theory]
+        [MemberData(nameof(CompliantCases))]
+        public void AllowsCompliantPatterns(string caseName, string source)
+        {
+            ImmutableArray<Diagnostic> diagnostics = Analyze(source);
+            List<Diagnostic> banned = diagnostics
+                .Where(diagnostic =>
+                    diagnostic.Id.StartsWith(DiagnosticIdPrefix, StringComparison.Ordinal)
+                )
+                .ToList();
+            Assert.True(
+                0 == banned.Count,
+                $"{caseName}: expected no diagnostics, found: {Describe(banned.ToImmutableArray())}"
+            );
+        }
+    }
+}

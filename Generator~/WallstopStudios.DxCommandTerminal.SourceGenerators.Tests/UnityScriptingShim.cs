@@ -2,10 +2,29 @@
    Minimal Unity scripting shim so Unity-free generator test compilations can include the
    real Runtime sources that reference UnityEngine types (pattern adapted from unity-helpers,
    MIT, Ambiguous-Interactive). Only the members CommandArg.cs and CommandArgParsers.cs
-   actually touch are provided.
+   actually touch are provided, plus the two fake-null types (Object, GUIStyle) the
+   Unity-null-pattern analyzer fixtures need.
 */
 namespace UnityEngine
 {
+    public class Object
+    {
+        public string name;
+
+        public static implicit operator bool(Object exists)
+        {
+            return exists != null;
+        }
+    }
+
+    public sealed class GUIStyle
+    {
+        public static implicit operator bool(GUIStyle exists)
+        {
+            return exists != null;
+        }
+    }
+
     public struct Vector2
     {
         public float x;

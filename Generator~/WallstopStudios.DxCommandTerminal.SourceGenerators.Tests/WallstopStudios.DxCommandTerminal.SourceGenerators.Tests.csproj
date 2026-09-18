@@ -29,8 +29,10 @@
       - CA2211: fixture invocation counters are mutable statics by necessity (the generated
         binders are static).
       - CA1720: CommandArgParsers deliberately names each parser after the type it parses
-        (CommandArgParsers.Int, .Float, ...); that naming IS the API. -->
-        <NoWarn>$(NoWarn);CA1002;CA1051;CA1515;CA1815;CA2225;CA1019;CA1510;CA2211;CA1720</NoWarn>
+        (CommandArgParsers.Int, .Float, ...); that naming IS the API.
+      - CA1716: the shim must carry UnityEngine's own type name (Object) so analyzer
+        fixtures bind against the exact metadata name the real engine ships. -->
+        <NoWarn>$(NoWarn);CA1002;CA1051;CA1515;CA1815;CA2225;CA1019;CA1510;CA2211;CA1720;CA1716</NoWarn>
     </PropertyGroup>
     <ItemGroup>
         <!-- The real runtime sources, compiled Unity-free. CommandArg.cs is the one file that
