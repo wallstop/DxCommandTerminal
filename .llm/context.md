@@ -182,8 +182,9 @@ frontmatter validity, index freshness, and pointer-file delegation; see
 25. UnityEngine.Object null checks use the Unity `==`/`!=` operators explicitly. Banned on Unity
     objects: `?.`, `??`/`??=`, `is null`/`is not null`/`ReferenceEquals` (all bypass the fake-null
     operator), `Assert.IsNull`/`Assert.IsNotNull` in tests, and implicit truthiness - write
-    `component != null` / `Assert.That(x == null)` (issue #98; `lint:unity-null-patterns` enforces,
-    `:fix` converts, issue #100). Delegate `?.`/plain C# `??` stay legal.
+    `component != null` / `Assert.That(x == null)`. `lint:unity-null-patterns` enforces the Assert
+    half (`:fix` converts); the shipped `UnityObjectNullPatternAnalyzer` DxCmd0001-0005 type-checks
+    the rest, warnaserror fails the compile (issues #98/#100); delegate `?.`/plain C# `??` stay legal.
 
 ### Unity Package Rules
 
@@ -206,8 +207,7 @@ frontmatter validity, index freshness, and pointer-file delegation; see
    dereference in public methods (CA1062). When converting a `?.` chain to an IndexOf
    guard, carry the null check over - dropping it turns a typed definition error into a
    NullReferenceException (Bugbot finding on PR #67; pinned by a null-name test).
-   Reproduce with
-   `dotnet test Generator~/WallstopStudios.DxCommandTerminal.SourceGenerators.Tests`.
+   Reproduce with `dotnet test Generator~/WallstopStudios.DxCommandTerminal.SourceGenerators.Tests`.
 
 ### Command Registration (Quick Reference)
 
