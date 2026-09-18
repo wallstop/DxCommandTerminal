@@ -94,16 +94,22 @@ The implemented rehearsal path runs only `verify`, `validate`, and `unitypackage
 It writes Actions artifacts, not npm packages, attestations, or GitHub Releases.
 Existing draft and published Releases are not queried or changed.
 
-**Blocked pending hosted acceptance (#93). No operational rehearsal recipe is approved.**
-Acceptance evidence must include candidate and existing-published-version runs, all
-write jobs skipped, both artifact hashes, and unchanged public asset IDs/hashes.
-Local structural and mocked-boundary tests do not prove hosted behavior. Restore the
-recipe only after a maintainer records that evidence and run URLs.
+**Hosted acceptance recorded (2026-09-17, #93), master `8b4b080`:**
 
-#### Candidate contract (awaiting approval; do not dispatch yet)
+- Release Publish dispatch (`candidate_ref=master`, `dry_run=true`),
+  run [35286189817](https://github.com/wallstop/DxCommandTerminal/actions/runs/35286189817):
+  verify, validate, and unitypackage green; attest, publish-npm, and
+  github-release skipped; Actions artifacts npm-tarball 6,733,112 bytes and
+  unitypackage 6,884,682 bytes; the local export of the same tree reproduces the
+  unitypackage byte-identically (sha256 `39ddeef6d0d3475112b1c2e5a10b1f4fa1ba93a0bfe766355d784f5109cdb1e1`).
+  No tag, Release, npm version, or environment changed.
+- Release Prepare dry-run (`bump=patch`),
+  run [35286977879](https://github.com/wallstop/DxCommandTerminal/actions/runs/35286977879):
+  printed the exact prepared diff (`1.0.0-rc25.0` -> `1.0.1` plus the Unreleased
+  rotation) and ran the Node tooling suite (334/334) on the prepared tree;
+  nothing written, nothing pushed.
 
-The tag-only path could not rehearse current tooling: all existing tags were historical,
-unprefixed releases. Creating a new release tag is not needed for artifact acceptance.
+#### Candidate contract
 
 - Select workflow ref `master`, keep `dry_run: true`, and leave `tag` blank.
 - `candidate_ref` accepts a branch name, `refs/heads/...`, or a full lowercase commit SHA.
@@ -124,10 +130,11 @@ node tooling~/scripts/release/release.mjs verify-candidate --dry-run \
   --version "$(node -p "require('./package.json').version")" --changelog CHANGELOG.md
 ```
 
-After approval and merge, record the selected ref, resolved build SHA, workflow event SHA,
+A rehearsal record lists: the selected ref, resolved build SHA, workflow event SHA,
 run URL, skipped write jobs, both artifact hashes, and unchanged public asset IDs/hashes.
 Do not enable publishing or create tags to gather this evidence. Tag-mode verification
 still requires exact `v<package-version>` agreement; `v*-candidate` labels do not bypass it.
+Publishing stays disabled until the maintainer opts in.
 
 ### Re-running after a partial failure
 
@@ -211,11 +218,22 @@ npm run package:import-drill --prefix tooling~ -- \
 ```
 
 The tool probes `<unity> -version`, scaffolds a scratch project under
-`.artifacts/import-drill/`, imports the artifact with the non-interactive
-`AssetDatabase.ImportPackage(artifact, false)` via
-`-batchmode -nographics -executeMethod`, waits out the triggered compilation
-(the driver exits only after `isCompiling`/`isUpdating` clear), then
+`.artifacts/import-drill/`, imports the artifact in phase 1 through Unity's
+documented CLI argument (`-batchmode -nographics -quit -importPackage`), then
+waits out the triggered compilation in phase 2 (a generated settle driver via
+`-executeMethod` exits only after `isCompiling`/`isUpdating` clear), then
 validates the result on disk:
+
+**Why the CLI argument, not `AssetDatabase.ImportPackage`?** Measured on Unity
+6000.4.6f1 (session-034): in batch mode the API silently no-ops the ENTIRE
+package - no error, no log, exit 0 - whenever any entry's `pathname` targets
+`Packages/`, which every entry of the release artifact does. The CLI argument
+imports the same artifact completely (all entries land, UPM registers the
+embedded package, all three assemblies compile). If a future import regresses
+to importing nothing with exit 0 and an empty final refresh, suspect this
+behavior first.
+
+Validation then checks, on disk:
 
 - every artifact entry exists at `<project>/<pathname>` with a `.meta` whose
   GUID matches the artifact's GUID directory;
@@ -229,6 +247,19 @@ The drill proves the generator payload imports with its label and that the
 package compiles with it present; it does not execute the generator.
 Generator behavior stays gated by the Unity-free generator suite and the
 payload byte-compare in CI.
+
+**Hosted acceptance recorded (2026-09-17, #85), master `8b4b080`:** the drill
+imported the exact hosted-rehearsal unitypackage bytes (sha256
+`39ddeef6d0d3475112b1c2e5a10b1f4fa1ba93a0bfe766355d784f5109cdb1e1`) into a
+scratch project on Unity 6000.4.6f1: all 472 entries landed at
+`Packages/com.wallstop-studios.dxcommandterminal`, UPM registered the embedded
+package, all three shipped assemblies compiled to `Library/ScriptAssemblies`,
+validation passed 1427/1427 checks, both Unity runs exited 0, and the logs
+carried no compiler or analyzer diagnostics. The two-phase CLI import is the
+first drill flow verified against a live editor; the scratch project was
+removed on success and the manifest (with the analyzer-label and compile
+checks) stayed under `.artifacts/import-drill/20260917T234821847/` on the
+drill host.
 
 A clean run deletes the scratch project and writes a manifest (environment,
 SHA-256, per-check results) under `.artifacts/import-drill/`. Any failure
