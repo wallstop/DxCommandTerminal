@@ -41,10 +41,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             try
             {
                 CommandShell shell = Terminal.Shell;
-                Assert.IsNotNull(shell, "Terminal.Shell should not be null after SpawnTerminal");
+                Assert.That(shell != null, "Terminal.Shell should not be null after SpawnTerminal");
                 CommandHistory history = Terminal.History;
-                Assert.IsNotNull(
-                    history,
+                Assert.That(
+                    history != null,
                     "Terminal.History should not be null after SpawnTerminal"
                 );
 
@@ -62,7 +62,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     logCount,
                     $"Log count mismatch after running: {command}"
                 );
-                Assert.IsNull(exception, $"Error running {command}: {exception}");
+                Assert.That(exception == null, $"Error running {command}: {exception}");
                 string[] logs = history.GetHistory(true, true).ToArray();
                 Assert.AreEqual(
                     expectedLogCount,
@@ -88,7 +88,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     logCount,
                     $"Log count mismatch after running: {command}"
                 );
-                Assert.IsNull(exception, $"Error running {command}: {exception}");
+                Assert.That(exception == null, $"Error running {command}: {exception}");
                 logs = history.GetHistory(true, true).ToArray();
                 Assert.AreEqual(
                     expectedLogCount,
@@ -141,15 +141,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             try
             {
                 CommandShell shell = Terminal.Shell;
-                Assert.IsNotNull(shell);
+                Assert.That(shell != null);
                 CommandHistory history = Terminal.History;
-                Assert.IsNotNull(history);
+                Assert.That(history != null);
 
                 int expectedLogCount = 0;
                 assertion = message => Assert.AreEqual(string.Empty, message);
                 string command = "log";
                 shell.RunCommand(command);
-                Assert.IsNull(exception, $"Error running {command}: {exception}");
+                Assert.That(exception == null, $"Error running {command}: {exception}");
                 Assert.AreEqual(++expectedLogCount, logCount);
                 string[] logs = history.GetHistory(true, true).ToArray();
                 Assert.AreEqual(
@@ -166,7 +166,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 command = "log test";
                 shell.RunCommand(command);
                 Assert.AreEqual(++expectedLogCount, logCount);
-                Assert.IsNull(exception, $"Error running {command}: {exception}");
+                Assert.That(exception == null, $"Error running {command}: {exception}");
                 logs = history.GetHistory(true, true).ToArray();
                 Assert.AreEqual(
                     expectedLogCount,
@@ -186,7 +186,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 command = "log \"quoted argument\"";
                 shell.RunCommand(command);
                 Assert.AreEqual(++expectedLogCount, logCount);
-                Assert.IsNull(exception, $"Error running {command}: {exception}");
+                Assert.That(exception == null, $"Error running {command}: {exception}");
                 logs = history.GetHistory(true, true).ToArray();
                 Assert.AreEqual(
                     expectedLogCount,
@@ -210,7 +210,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 command = "log multi argument";
                 shell.RunCommand("log multi argument");
                 Assert.AreEqual(++expectedLogCount, logCount);
-                Assert.IsNull(exception, $"Error running {command}: {exception}");
+                Assert.That(exception == null, $"Error running {command}: {exception}");
                 logs = history.GetHistory(true, true).ToArray();
                 Assert.AreEqual(
                     expectedLogCount,
@@ -238,7 +238,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 command = "log a a a a a a aaaa aa aaa d";
                 shell.RunCommand(command);
                 Assert.AreEqual(++expectedLogCount, logCount);
-                Assert.IsNull(exception, $"Error running {command}: {exception}");
+                Assert.That(exception == null, $"Error running {command}: {exception}");
                 logs = history.GetHistory(true, true).ToArray();
                 Assert.AreEqual(
                     expectedLogCount,
@@ -287,7 +287,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                         command = "log " + expected;
                         shell.RunCommand(command);
                         Assert.AreEqual(++expectedLogCount, logCount);
-                        Assert.IsNull(exception, $"Error running {command}: {exception}");
+                        Assert.That(exception == null, $"Error running {command}: {exception}");
                         logs = history.GetHistory(true, true).ToArray();
                         Assert.AreEqual(
                             expectedLogCount,
@@ -308,7 +308,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                         command = "log " + expected;
                         shell.RunCommand(command);
                         Assert.AreEqual(++expectedLogCount, logCount);
-                        Assert.IsNull(exception, $"Error running {command}: {exception}");
+                        Assert.That(exception == null, $"Error running {command}: {exception}");
                         logs = history.GetHistory(true, true).ToArray();
                         Assert.AreEqual(
                             expectedLogCount,
@@ -325,7 +325,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                         command = "log " + expected;
                         shell.RunCommand(command);
                         Assert.AreEqual(++expectedLogCount, logCount);
-                        Assert.IsNull(exception, $"Error running {command}: {exception}");
+                        Assert.That(exception == null, $"Error running {command}: {exception}");
                         logs = history.GetHistory(true, true).ToArray();
                         Assert.AreEqual(
                             expectedLogCount,

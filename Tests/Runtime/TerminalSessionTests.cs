@@ -62,10 +62,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             TerminalSession session = new();
             session.Apply(Config(), force: false);
 
-            Assert.IsNotNull(session.Buffer, "Buffer should be created when null");
-            Assert.IsNotNull(session.History, "History should be created when null");
-            Assert.IsNotNull(session.Shell, "Shell should be created when null");
-            Assert.IsNotNull(session.AutoComplete, "AutoComplete should be created when null");
+            Assert.That(session.Buffer != null, "Buffer should be created when null");
+            Assert.That(session.History != null, "History should be created when null");
+            Assert.That(session.Shell != null, "Shell should be created when null");
+            Assert.That(session.AutoComplete != null, "AutoComplete should be created when null");
             Assert.AreEqual(
                 64,
                 session.Buffer.Capacity,
@@ -435,10 +435,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             TerminalSession session = new();
             session.EnsureReady(Config(), force: false);
 
-            Assert.IsNotNull(session.Buffer, "EnsureReady must create the buffer");
-            Assert.IsNotNull(session.History, "EnsureReady must create the history");
-            Assert.IsNotNull(session.Shell, "EnsureReady must create the shell");
-            Assert.IsNotNull(session.AutoComplete, "EnsureReady must create the auto-complete");
+            Assert.That(session.Buffer != null, "EnsureReady must create the buffer");
+            Assert.That(session.History != null, "EnsureReady must create the history");
+            Assert.That(session.Shell != null, "EnsureReady must create the shell");
+            Assert.That(session.AutoComplete != null, "EnsureReady must create the auto-complete");
             Assert.IsTrue(
                 session.Shell.AutoCommandsRegistered,
                 "EnsureReady must complete deferred registration synchronously"

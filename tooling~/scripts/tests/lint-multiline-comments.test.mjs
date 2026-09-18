@@ -201,13 +201,11 @@ test("cli: a dirty fixture tree fails, --fix converts, a second scan passes", ()
     });
     assert.strictEqual(red.status, 1);
     assert.match(red.stderr, /2 stacked \/\/ comment lines/);
-    console.log("REDBG", red.status, JSON.stringify(red.stderr), JSON.stringify(red.stdout));
 
     const fixedRun = spawnSync(process.execPath, [linterPath, "--fix"], {
       env: environment,
       encoding: "utf8",
     });
-    console.log("FIXDBG", fixedRun.status, JSON.stringify(fixedRun.stderr), JSON.stringify(fixedRun.stdout));
     assert.strictEqual(fixedRun.status, 0);
     assert.match(fixedRun.stdout, /converted 1 comment run/);
 

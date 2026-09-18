@@ -67,12 +67,22 @@ on every commit and fails fast when tools are missing.
     - `member-ordering` (member order, nested types last, explicit enum values and obsolete zero sentinels;
       `:fix` only reorders members, never renumbers enums)
    - `multiline-comments` (stacked `//` become one `/* */` block; `:fix` converts)
+   - `unity-null-patterns` (bans `Assert.IsNull`/`Assert.IsNotNull`; `:fix` converts to
+     `Assert.That(x == null / x != null)`; issue #100)
    - `linq-production` (no LINQ in `Runtime/`, `Editor/`; no `:fix`)
    - `string-equality` (no `==`/`!=` on string literals or `string.Empty` in shipped code; use
      `string.Equals` with an explicit `StringComparison`; no `:fix`)
    - `theme-palette-tokens` (USS theme tokens + palette fallbacks)
 4. LLM-context linters: `lint-llm-instructions.ps1`, `lint-skill-sizes.ps1` (see
    [manage-skills](../manage-skills/SKILL.md))
+
+Fixer rule: every `:fix` rewriter splices at offsets its own scan recorded (token
+`.start`/`.end`, scan-walk indices), never at offsets recomputed from token text widths.
+Trivia between tokens (spaces, comments, line breaks) is legal C# the tokenizer skips
+silently, so a width-derived cut lands inside a token and the rewrite emits invalid C#
+(Bugbot on PR #102; pinned by the trivia-splice contract test in
+`lint-unity-null-patterns.test.mjs`). When adding a fixer, contract-test at least one
+shape with trivia between every token the fixer consumes.
 
 Run everything manually with `pre-commit run --all-files`. If a hook rewrites files, re-stage and
 retry the commit.

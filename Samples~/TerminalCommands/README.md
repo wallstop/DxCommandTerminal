@@ -39,7 +39,7 @@ Open the terminal (default hotkey: backtick), then:
 - Add `SceneObjectCommands`, create an active object named `Demo Target`, then run `object-info "Demo Target"`.
 - `object-position "Demo Target"` resolves its `Transform`; duplicate names reject execution.
 - Type `object-info ` or `object-position ` and press Tab for current names.
-- Add `ComponentCommands`, then `list-components "Demo Target"` or `find-missing-scripts` to hunt broken components (the scan covers inactive objects too).
+- Add `ComponentCommands`, then `find-missing-scripts` to hunt broken components (the scan covers inactive objects too), then `list-components "<name>"` on any reported object - inactive names resolve too.
 - Add `ObjectFilterCommands`, then `find-objects ` + Tab lists defined layers, and `find-tagged ` + Tab lists tags in use.
 
 `SceneObjectArgumentAdapter<T>` supports `GameObject`, `Component`, and component subclasses.

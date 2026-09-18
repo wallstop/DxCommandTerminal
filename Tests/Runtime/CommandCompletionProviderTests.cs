@@ -195,7 +195,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreEqual(18, recorded.ReplacementStart);
             Assert.AreEqual(0, recorded.ReplacementLength);
             Assert.IsFalse(recorded.IsQuoted);
-            Assert.IsNull(recorded.QuoteCharacter);
+            Assert.That(recorded.QuoteCharacter == null);
             CollectionAssert.AreEqual(
                 new[] { "pick" },
                 recorded.PrecedingArguments.Select(argument => argument.contents).ToArray()
@@ -238,7 +238,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
             Assert.AreEqual(2, results.Count, "Duplicate insertion texts are deduplicated");
             Assert.AreEqual("alpha", results[0].InsertionText, "First occurrence wins");
-            Assert.IsNull(results[0].Description);
+            Assert.That(results[0].Description == null);
             Assert.AreEqual("beta", results[1].InsertionText);
             Assert.AreEqual("second", results[1].Description);
             Assert.AreEqual("beta", results[1].EffectiveDisplayLabel);

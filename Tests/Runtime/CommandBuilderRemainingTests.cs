@@ -58,8 +58,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 ),
                 "The builder should register cleanly"
             );
-            Assert.IsNull(
-                shell.Commands["say"].maxArgCount,
+            Assert.That(
+                shell.Commands["say"].maxArgCount == null,
                 "A remaining argument leaves the command unbounded"
             );
 
@@ -70,8 +70,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 observed,
                 "Trailing tokens collect in order; an invocation without them reads empty"
             );
-            Assert.IsNull(ConsumeError(shell));
-            Assert.IsNull(ConsumeError(shell));
+            Assert.That(ConsumeError(shell) == null);
+            Assert.That(ConsumeError(shell) == null);
         }
 
         [Test]
@@ -96,7 +96,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 "A required remaining argument with no tokens must not dispatch"
             );
             string error = ConsumeError(shell);
-            Assert.IsNotNull(error, "The bounds violation queues an error");
+            Assert.That(error != null, "The bounds violation queues an error");
             Assert.That(error, Does.Contain("at least 1 argument"));
             Assert.That(
                 error,
@@ -111,7 +111,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 observed,
                 "One token satisfies a required remaining argument"
             );
-            Assert.IsNull(ConsumeError(shell));
+            Assert.That(ConsumeError(shell) == null);
         }
 
         [Test]
@@ -153,8 +153,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreEqual(9, amount);
             Assert.AreEqual("self", target, "An omitted optional argument keeps its default");
             Assert.IsEmpty(tags, "No trailing tokens read as an empty array");
-            Assert.IsNull(ConsumeError(shell));
-            Assert.IsNull(ConsumeError(shell));
+            Assert.That(ConsumeError(shell) == null);
+            Assert.That(ConsumeError(shell) == null);
         }
 
         [TestCase("1 x 3")]
@@ -175,7 +175,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Assert.IsTrue(shell.RunCommand($"add {input}"));
             string error = ConsumeError(shell);
-            Assert.IsNotNull(error, "A parse failure must queue a controlled error");
+            Assert.That(error != null, "A parse failure must queue a controlled error");
             Assert.That(error, Does.Contain("values"));
             Assert.AreEqual(0, invocations, "The handler must not run when parsing fails");
         }
@@ -206,7 +206,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Assert.IsTrue(shell.RunCommand("buff 5 0 7"));
             string error = ConsumeError(shell);
-            Assert.IsNotNull(error, "An out-of-range element rejects the invocation");
+            Assert.That(error != null, "An out-of-range element rejects the invocation");
             Assert.That(error, Does.Contain("out of range"));
             Assert.AreEqual(1, observed.Count, "The rejected invocation skips the handler");
         }
@@ -246,8 +246,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Assert.IsTrue(shell.RunCommand("say hi"));
             CollectionAssert.AreEqual(new[] { "hi" }, message);
-            Assert.IsNotNull(
-                mismatch,
+            Assert.That(
+                mismatch != null,
                 "Reading a remaining argument as its element type is a programming error"
             );
             Assert.IsTrue(
@@ -410,7 +410,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 "A sibling route without a remaining argument still overflows its bounds"
             );
             string error = ConsumeError(shell);
-            Assert.IsNotNull(error, "The fixed sibling route rejects surplus arguments");
+            Assert.That(error != null, "The fixed sibling route rejects surplus arguments");
             Assert.That(error, Does.Contain("at most 1 argument"));
         }
 

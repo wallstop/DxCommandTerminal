@@ -79,8 +79,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 _terminal._uiDocument.rootVisualElement.childCount,
                 "A terminal that starts closed must not build its visual tree on enable"
             );
-            Assert.IsNull(
-                _terminal._commandInput,
+            Assert.That(
+                _terminal._commandInput == null,
                 "The command input must not exist before the first open"
             );
 
@@ -124,7 +124,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             ScrollView logView = _terminal._uiDocument.rootVisualElement.Q<ScrollView>(
                 "LogScrollView"
             );
-            Assert.IsNotNull(logView, "Sanity: the log view exists after the open/close cycle");
+            Assert.That(logView != null, "Sanity: the log view exists after the open/close cycle");
             Assert.AreEqual(
                 0,
                 logView.contentContainer.childCount,
@@ -174,8 +174,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
 
             _terminal.enabled = true;
-            Assert.IsNull(
-                _terminal._commandInput,
+            Assert.That(
+                _terminal._commandInput == null,
                 "Re-enabling must not rebuild the visual tree while the terminal stays closed"
             );
 
@@ -249,8 +249,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 _terminal._uiDocument.rootVisualElement.childCount,
                 "The showGUIButtons mode builds its tree on enable"
             );
-            Assert.IsNotNull(
-                stateButtons,
+            Assert.That(
+                stateButtons != null,
                 "The state button container exists while the terminal is closed"
             );
             Assert.AreEqual(
@@ -377,8 +377,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 yield return null;
             }
 
-            Assert.IsNotNull(
-                _terminal._commandInput,
+            Assert.That(
+                _terminal._commandInput != null,
                 "The next open after activation builds and shows the input"
             );
             Assert.AreEqual(
@@ -814,8 +814,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             CommandAutoComplete originalAutoComplete = Terminal.AutoComplete;
             try
             {
-                Assert.IsNotNull(
-                    originalBuffer,
+                Assert.That(
+                    originalBuffer != null,
                     "Sanity: the shared session has backends before the reset"
                 );
 
@@ -824,26 +824,26 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     TerminalUI.Instance == null,
                     "The play-session reset must clear the stale static Instance"
                 );
-                Assert.IsNull(
-                    Terminal.Buffer,
+                Assert.That(
+                    Terminal.Buffer == null,
                     "The play-session reset must drop the session's backends"
                 );
-                Assert.IsNull(Terminal.History, "The history must drop with the session");
-                Assert.IsNull(Terminal.Shell, "The shell must drop with the session");
-                Assert.IsNull(
-                    Terminal.AutoComplete,
+                Assert.That(Terminal.History == null, "The history must drop with the session");
+                Assert.That(Terminal.Shell == null, "The shell must drop with the session");
+                Assert.That(
+                    Terminal.AutoComplete == null,
                     "The auto-complete must drop with the session"
                 );
 
                 TerminalUI.ResetForNextPlaySession();
-                Assert.IsNull(Terminal.Buffer, "A repeated play-session reset stays cleared");
+                Assert.That(Terminal.Buffer == null, "A repeated play-session reset stays cleared");
 
                 TerminalSession.Current.Apply(
                     new TerminalSession.Config(64, 64, null, null, false),
                     force: false
                 );
-                Assert.IsNotNull(
-                    Terminal.Buffer,
+                Assert.That(
+                    Terminal.Buffer != null,
                     "The next Apply recreates the session from the cleared state"
                 );
             }
@@ -907,7 +907,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 yield return null;
             }
 
-            Assert.IsNotNull(_terminal._commandInput, $"{message}: the command input must exist");
+            Assert.That(
+                _terminal._commandInput != null,
+                $"{message}: the command input must exist"
+            );
             Assert.AreEqual(
                 DisplayStyle.Flex,
                 _terminal._commandInput.resolvedStyle.display,

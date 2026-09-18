@@ -18,6 +18,8 @@
     "lint:member-ordering:fix": "node scripts/lint-member-ordering.mjs --fix",
     "lint:multiline-comments": "node scripts/lint-multiline-comments.mjs",
     "lint:multiline-comments:fix": "node scripts/lint-multiline-comments.mjs --fix",
+    "lint:unity-null-patterns": "node scripts/lint-unity-null-patterns.mjs",
+    "lint:unity-null-patterns:fix": "node scripts/lint-unity-null-patterns.mjs --fix",
     "lint:linq-production": "node scripts/lint-linq-production.mjs",
     "lint:string-equality": "node scripts/lint-string-equality.mjs",
     "lint:theme-palette-tokens": "node scripts/lint-theme-palette-tokens.mjs",

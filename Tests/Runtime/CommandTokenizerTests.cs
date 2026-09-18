@@ -96,7 +96,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreEqual(value, tokens[0].Contents);
             if (value.StartsWith('$'))
             {
-                Assert.IsNotNull(tokens[0].EndQuote);
+                Assert.That(tokens[0].EndQuote != null);
             }
         }
 
@@ -146,7 +146,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreEqual(value, after[1].Contents);
             if (value.StartsWith('$'))
             {
-                Assert.IsNotNull(after[1].EndQuote);
+                Assert.That(after[1].EndQuote != null);
             }
             for (int i = 2; i < before.Count; ++i)
             {
@@ -234,7 +234,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 );
                 Assert.AreEqual(2, tokens.Count);
                 Assert.AreEqual(value, tokens[1].Contents);
-                Assert.IsNotNull(tokens[1].EndQuote);
+                Assert.That(tokens[1].EndQuote != null);
             }
             finally
             {

@@ -323,8 +323,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 yield return null;
             }
 
-            Assert.IsNotNull(
-                _terminal._commandInput,
+            Assert.That(
+                _terminal._commandInput != null,
                 "The terminal input field should exist after the terminal opens"
             );
             Assert.AreEqual(

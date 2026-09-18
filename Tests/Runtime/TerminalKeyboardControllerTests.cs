@@ -61,7 +61,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 .ToArray();
 
             TerminalControlTypes[] actual = GetControlTypes();
-            Assert.IsNotNull(actual, "ControlTypes should not be null");
+            Assert.That(actual != null, "ControlTypes should not be null");
             Assert.AreEqual(
                 expected.Length,
                 actual.Length,
@@ -109,8 +109,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             // Now modify _controlOrder to have duplicates but still include all types, then invoke VerifyControlOrderIntegrity.
             FieldInfo controlOrderField = GetControlOrderField();
-            Assert.IsNotNull(
-                controlOrderField,
+            Assert.That(
+                controlOrderField != null,
                 "_controlOrder field should exist on TerminalKeyboardController"
             );
 
@@ -121,8 +121,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             controlOrderField.SetValue(controller, orderWithDuplicates);
 
             MethodInfo verifyMethod = GetVerifyMethod();
-            Assert.IsNotNull(
-                verifyMethod,
+            Assert.That(
+                verifyMethod != null,
                 "VerifyControlOrderIntegrity method should exist on TerminalKeyboardController"
             );
 
@@ -143,8 +143,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return null;
 
             FieldInfo controlOrderField = GetControlOrderField();
-            Assert.IsNotNull(
-                controlOrderField,
+            Assert.That(
+                controlOrderField != null,
                 "_controlOrder field should exist on TerminalKeyboardController"
             );
 
@@ -157,8 +157,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             controlOrderField.SetValue(controller, incompleteOrder);
 
             MethodInfo verifyMethod = GetVerifyMethod();
-            Assert.IsNotNull(
-                verifyMethod,
+            Assert.That(
+                verifyMethod != null,
                 "VerifyControlOrderIntegrity method should exist on TerminalKeyboardController"
             );
 
@@ -187,15 +187,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return null;
 
             FieldInfo controlOrderField = GetControlOrderField();
-            Assert.IsNotNull(
-                controlOrderField,
+            Assert.That(
+                controlOrderField != null,
                 "_controlOrder field should exist on TerminalKeyboardController"
             );
             controlOrderField.SetValue(controller, new List<TerminalControlTypes>());
 
             MethodInfo verifyMethod = GetVerifyMethod();
-            Assert.IsNotNull(
-                verifyMethod,
+            Assert.That(
+                verifyMethod != null,
                 "VerifyControlOrderIntegrity method should exist on TerminalKeyboardController"
             );
 

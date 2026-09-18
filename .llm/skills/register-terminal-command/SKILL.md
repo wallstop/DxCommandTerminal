@@ -83,6 +83,9 @@ component; the custom editor lists discoverable commands). Register your own con
   `tag` getter (return `false` / the raw string for undefined tags - probed on Unity
   6000.4.6f1, non-throwing docs back to 2021.3) and `LayerMask.NameToLayer` (`-1` for unknown
   layers). Validate before calling the throwing ones (PR #101 review).
+- Sibling commands reading the same scene state must share one query scope: if one
+  covers inactive objects, the companion name lookup needs `SceneObjectArgumentAdapter`
+  with `includeInactive: true`, or the help text says "active object" (PR #101 review).
 
 ## Extending the typed builder and argument specs
 

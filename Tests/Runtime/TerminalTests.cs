@@ -80,7 +80,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 go.GetComponent<UIDocument>().rootVisualElement.childCount,
                 "SetupUI must recover via TryGetComponent and build the terminal tree"
             );
-            Assert.IsNotNull(terminal._commandInput, "The command input must exist after recovery");
+            Assert.That(
+                terminal._commandInput != null,
+                "The command input must exist after recovery"
+            );
 
             UnityEngine.Object.Destroy(settings);
         }
@@ -205,14 +208,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 "TerminalUI.Instance should not be null after SpawnTerminal"
             );
             CommandShell shell = Terminal.Shell;
-            Assert.IsNotNull(shell, "Terminal.Shell should not be null after SpawnTerminal");
+            Assert.That(shell != null, "Terminal.Shell should not be null after SpawnTerminal");
             CommandHistory history = Terminal.History;
-            Assert.IsNotNull(history, "Terminal.History should not be null after SpawnTerminal");
+            Assert.That(history != null, "Terminal.History should not be null after SpawnTerminal");
             CommandLog buffer = Terminal.Buffer;
-            Assert.IsNotNull(buffer, "Terminal.Buffer should not be null after SpawnTerminal");
+            Assert.That(buffer != null, "Terminal.Buffer should not be null after SpawnTerminal");
             CommandAutoComplete autoComplete = Terminal.AutoComplete;
-            Assert.IsNotNull(
-                autoComplete,
+            Assert.That(
+                autoComplete != null,
                 "Terminal.AutoComplete should not be null after SpawnTerminal"
             );
 
@@ -270,26 +273,29 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 Terminal.Shell,
                 "Shell should be recreated when resetStateOnInit is true"
             );
-            Assert.IsNotNull(Terminal.Shell, "Terminal.Shell should not be null after reset");
+            Assert.That(Terminal.Shell != null, "Terminal.Shell should not be null after reset");
             Assert.AreNotSame(
                 history,
                 Terminal.History,
                 "History should be recreated when resetStateOnInit is true"
             );
-            Assert.IsNotNull(Terminal.History, "Terminal.History should not be null after reset");
+            Assert.That(
+                Terminal.History != null,
+                "Terminal.History should not be null after reset"
+            );
             Assert.AreNotSame(
                 buffer,
                 Terminal.Buffer,
                 "Buffer should be recreated when resetStateOnInit is true"
             );
-            Assert.IsNotNull(Terminal.Buffer, "Terminal.Buffer should not be null after reset");
+            Assert.That(Terminal.Buffer != null, "Terminal.Buffer should not be null after reset");
             Assert.AreNotSame(
                 autoComplete,
                 Terminal.AutoComplete,
                 "AutoComplete should be recreated when resetStateOnInit is true"
             );
-            Assert.IsNotNull(
-                Terminal.AutoComplete,
+            Assert.That(
+                Terminal.AutoComplete != null,
                 "Terminal.AutoComplete should not be null after reset"
             );
         }
@@ -346,7 +352,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return SpawnTerminal(resetStateOnInit: true);
 
             CommandShell shell = Terminal.Shell;
-            Assert.IsNotNull(shell, "Terminal.Shell should not be null after SpawnTerminal");
+            Assert.That(shell != null, "Terminal.Shell should not be null after SpawnTerminal");
             Assert.IsFalse(
                 shell.AutoCommandsRegistered,
                 "Terminal enabling must not register auto commands; registration is "

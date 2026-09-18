@@ -11,13 +11,15 @@ namespace WallstopStudios.DxCommandTerminal.Samples
         scan the whole scene - inactive objects included, where missing
         scripts usually hide - for broken components (a destroyed or
         unresolvable component shows up as a null entry in
-        GetComponents<Component>()). Uses the same opt-in name adapter as
-        SceneObjectCommands, so both parse object names and Tab-complete
-        the live scene state.
+        GetComponents<Component>()). Both commands share one scene scope:
+        the name adapter includes inactive objects so a name printed by
+        find-missing-scripts resolves in list-components.
      */
     public sealed class ComponentCommands : TerminalCommandSample
     {
-        private readonly SceneObjectArgumentAdapter<GameObject> _objects = new();
+        private readonly SceneObjectArgumentAdapter<GameObject> _objects = new(
+            includeInactive: true
+        );
 
         private static bool HasMissingScript(GameObject target)
         {

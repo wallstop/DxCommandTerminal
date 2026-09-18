@@ -72,9 +72,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private static FieldInfo InvokedField()
         {
             Type holder = DynamicAssembly.GetType(ProbeHolderTypeName);
-            Assert.IsNotNull(holder, "Sanity: expected the emitted command holder type");
+            Assert.That(holder != null, "Sanity: expected the emitted command holder type");
             FieldInfo field = holder.GetField("Invoked", BindingFlags.Public | BindingFlags.Static);
-            Assert.IsNotNull(field, "Sanity: expected the emitted invoked field");
+            Assert.That(field != null, "Sanity: expected the emitted invoked field");
             return field;
         }
 

@@ -108,7 +108,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreEqual(requiresBase, original.IsRequired);
             Assert.IsFalse(original.HasChoices);
             Assert.IsFalse(original.HasExplicitDefault);
-            Assert.IsNull(original.Description);
+            Assert.That(original.Description == null);
             Assert.IsTrue(original.TryParse(new CommandArg(input), out object originalValue));
             Assert.AreEqual(4, originalValue);
             observed.Clear();
@@ -138,7 +138,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                         remaining ? $"raw-copy \"{input}\" \"{input}\"" : $"raw-copy \"{input}\""
                     )
                 );
-                Assert.IsNull(ConsumeError(shell));
+                Assert.That(ConsumeError(shell) == null);
                 CollectionAssert.AreEqual(remaining ? new[] { 4, 4 } : new[] { 4 }, values);
                 CollectionAssert.AreEqual(
                     remaining ? new[] { input, input } : new[] { input },
@@ -237,7 +237,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.IsTrue(shell.RunCommand("heal 5 ally"));
             Assert.AreEqual(5, amount, "The int argument should parse");
             Assert.AreEqual("ally", target, "The string argument should pass through");
-            Assert.IsNull(ConsumeError(shell), "A valid invocation queues no error");
+            Assert.That(ConsumeError(shell) == null, "A valid invocation queues no error");
         }
 
         [Test]
@@ -260,7 +260,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 "A missing required argument must not dispatch"
             );
             string error = ConsumeError(shell);
-            Assert.IsNotNull(error, "A bounds violation queues an error");
+            Assert.That(error != null, "A bounds violation queues an error");
             Assert.That(
                 error,
                 Does.Contain("exactly 1 argument"),
@@ -291,7 +291,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Assert.IsFalse(shell.RunCommand("heal 5 extra"));
             string error = ConsumeError(shell);
-            Assert.IsNotNull(error);
+            Assert.That(error != null);
             Assert.That(error, Does.Contain("exactly 1 argument"));
             Assert.AreEqual(0, invocations);
         }
@@ -320,8 +320,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 observedTargets,
                 "An omitted optional argument uses its default; a provided one parses"
             );
-            Assert.IsNull(ConsumeError(shell));
-            Assert.IsNull(ConsumeError(shell));
+            Assert.That(ConsumeError(shell) == null);
+            Assert.That(ConsumeError(shell) == null);
         }
 
         [Test]
@@ -350,7 +350,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
 
             Assert.IsTrue(shell.RunCommand("annotate"));
-            Assert.IsNull(note, "An optional string without an explicit default reads as null");
+            Assert.That(
+                note == null,
+                "An optional string without an explicit default reads as null"
+            );
             Assert.IsTrue(
                 notePresent,
                 "A correctly-typed null default is a successful read, not a mismatch"
@@ -405,9 +408,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
 
             Assert.IsTrue(shell.RunCommand("probe 1"));
-            Assert.IsNotNull(negativeGet, "A negative index throws ArgumentOutOfRangeException");
-            Assert.IsNotNull(
-                overflowGet,
+            Assert.That(negativeGet != null, "A negative index throws ArgumentOutOfRangeException");
+            Assert.That(
+                overflowGet != null,
                 "An out-of-range index throws ArgumentOutOfRangeException"
             );
             Assert.IsFalse(negativeTryGet, "TryGet reports false for a negative index");
@@ -439,7 +442,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
              */
             bool dispatched = shell.RunCommand($"heal {input}");
             string error = ConsumeError(shell);
-            Assert.IsNotNull(error, "A parse failure must queue a controlled error");
+            Assert.That(error != null, "A parse failure must queue a controlled error");
             Assert.That(error, Does.Contain("amount"));
             Assert.AreEqual(0, invocations, "The handler must not run when parsing fails");
             return dispatched;
@@ -467,7 +470,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
              */
             Assert.IsTrue(shell.RunCommand("pickup hammer"));
             string error = ConsumeError(shell);
-            Assert.IsNotNull(error, "A value outside the choices must be rejected");
+            Assert.That(error != null, "A value outside the choices must be rejected");
             Assert.That(error, Does.Contain("pickaxe, torch"));
             Assert.AreEqual(0, picked.Count);
 
@@ -476,7 +479,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 "String choices match case-insensitively like command names"
             );
             Assert.AreEqual("PICKAXE", picked[0]);
-            Assert.IsNull(ConsumeError(shell));
+            Assert.That(ConsumeError(shell) == null);
 
             List<CommandCompletion> results = new();
             Assert.IsTrue(
@@ -515,9 +518,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 "Boundary values are inclusive"
             );
             string below = ConsumeError(shell);
-            Assert.IsNotNull(below, "An out-of-range value queues a controlled error");
+            Assert.That(below != null, "An out-of-range value queues a controlled error");
             Assert.That(below, Does.Contain("out of range"));
-            Assert.IsNotNull(ConsumeError(shell), "The above-range case also queues an error");
+            Assert.That(ConsumeError(shell) != null, "The above-range case also queues an error");
             Assert.AreEqual(2, observed.Count, "Out-of-range invocations skip the handler");
         }
 
@@ -549,7 +552,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreEqual(1, observed.Count);
             Assert.IsTrue(shell.RunCommand("port 0"));
             string error = ConsumeError(shell);
-            Assert.IsNotNull(error);
+            Assert.That(error != null);
             Assert.That(error, Does.Contain("must be a valid port number"));
             Assert.AreEqual(1, observed.Count, "The handler must not run when validation fails");
         }
@@ -575,7 +578,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreEqual(WeaponType.Bow, observed[0]);
             Assert.IsTrue(shell.RunCommand("equip axe"));
             string error = ConsumeError(shell);
-            Assert.IsNotNull(error, "Unknown enum names are rejected");
+            Assert.That(error != null, "Unknown enum names are rejected");
             Assert.That(error, Does.Contain("weapon"));
             Assert.AreEqual(1, observed.Count);
 
@@ -615,10 +618,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             using (handle)
             {
                 Assert.IsTrue(shell.RunCommand($"equip {input}"));
-                Assert.IsNotNull(ConsumeError(shell));
+                Assert.That(ConsumeError(shell) != null);
                 Assert.AreEqual(0, invocations);
                 Assert.IsTrue(shell.RunCommand("equip Sword"));
-                Assert.IsNull(ConsumeError(shell));
+                Assert.That(ConsumeError(shell) == null);
                 Assert.AreEqual(1, invocations);
             }
         }
@@ -653,7 +656,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             ).EnumChoices();
             Assert.IsTrue(spec.TryParse(new CommandArg("0"), out object parsed));
             Assert.AreEqual(TerminalLogType.Error, parsed);
-            Assert.IsNull(spec.ValidateParsed(parsed));
+            Assert.That(spec.ValidateParsed(parsed) == null);
         }
 
         [Test]
@@ -816,8 +819,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 )
             );
 
-            Assert.IsNull(
-                shell.Commands["noop-args"].completionProvider,
+            Assert.That(
+                shell.Commands["noop-args"].completionProvider == null,
                 "Commands without choices keep the history-based completion path"
             );
             Assert.IsFalse(
@@ -905,8 +908,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.IsTrue(shell.RunCommand("report 42 hero"));
             Assert.AreEqual("hero", byName);
             Assert.AreEqual(42, byIndex);
-            Assert.IsNotNull(
-                mismatch,
+            Assert.That(
+                mismatch != null,
                 "Reading an argument with the wrong type fails with a descriptive error"
             );
             Assert.IsTrue(
@@ -1034,7 +1037,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Assert.IsTrue(shell.RunCommand("order-omitted"));
             Assert.AreEqual(1, runs, "An explicit Default makes the argument optional");
-            Assert.IsNull(ConsumeError(shell));
+            Assert.That(ConsumeError(shell) == null);
         }
 
         [Test]
@@ -1167,7 +1170,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 ),
                 "Registration should return a handle"
             );
-            Assert.IsNotNull(handle);
+            Assert.That(handle != null);
             Assert.IsTrue(shell.Commands.ContainsKey("borrowed"));
 
             handle.Dispose();
@@ -1248,13 +1251,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 new CommandExecutionContext(CommandExecutionContexts.Player);
             Assert.IsTrue(shell.RunCommand("player-only"));
             Assert.AreEqual(1, invocations);
-            Assert.IsNull(ConsumeError(shell));
+            Assert.That(ConsumeError(shell) == null);
 
             CommandExecutionContext.AmbientContextProvider = () =>
                 new CommandExecutionContext(CommandExecutionContexts.EditorEditMode);
             Assert.IsFalse(shell.RunCommand("player-only"));
             Assert.AreEqual(1, invocations, "The handler must not run when ineligible");
-            Assert.IsNotNull(ConsumeError(shell));
+            Assert.That(ConsumeError(shell) != null);
         }
 
         [UnityTest]

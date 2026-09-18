@@ -107,8 +107,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 "The subcommand handler should receive its arguments"
             );
             Assert.AreEqual(3, addedCount, "Input should override the declared default");
-            Assert.IsNull(removedItem, "Only the routed subcommand runs");
-            Assert.IsNull(ConsumeAllErrors(shell), "A valid route queues no error");
+            Assert.That(removedItem == null, "Only the routed subcommand runs");
+            Assert.That(ConsumeAllErrors(shell) == null, "A valid route queues no error");
 
             Assert.IsTrue(shell.RunCommand("inventory remove sword"));
             Assert.AreEqual(
@@ -116,7 +116,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 removedItem,
                 "The other subcommand routes through the same command"
             );
-            Assert.IsNull(ConsumeAllErrors(shell), "The second route queues no error");
+            Assert.That(ConsumeAllErrors(shell) == null, "The second route queues no error");
         }
 
         [Test]
@@ -136,7 +136,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Assert.IsTrue(shell.RunCommand("inventory ADD"));
             Assert.AreEqual(1, invocations, "Routing matches command-name case rules");
-            Assert.IsNull(ConsumeAllErrors(shell));
+            Assert.That(ConsumeAllErrors(shell) == null);
 
             Assert.IsTrue(shell.RunCommand("inventory \"add\""));
             Assert.AreEqual(
@@ -144,7 +144,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 invocations,
                 "Quoted subcommand tokens route on their stripped contents"
             );
-            Assert.IsNull(ConsumeAllErrors(shell));
+            Assert.That(ConsumeAllErrors(shell) == null);
         }
 
         [Test]
@@ -173,7 +173,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 "The router handles the invocation; the mistake becomes a queued error"
             );
             string error = ConsumeError(shell);
-            Assert.IsNotNull(error, "An unknown subcommand queues an error");
+            Assert.That(error != null, "An unknown subcommand queues an error");
             Assert.That(error, Does.Contain("unknown subcommand 'forge'"));
             Assert.That(
                 error,
@@ -201,7 +201,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Assert.IsTrue(shell.RunCommand("inventory"));
             string error = ConsumeError(shell);
-            Assert.IsNotNull(error, "A bare invocation without a fallback queues an error");
+            Assert.That(error != null, "A bare invocation without a fallback queues an error");
             Assert.That(error, Does.Contain("'inventory': expected a subcommand"));
             Assert.That(error, Does.Contain("add"));
             Assert.AreEqual(0, invocations);
@@ -237,7 +237,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 "The parent handler acts as the bare-invocation fallback"
             );
             Assert.AreEqual(0, rawCount, "The fallback receives no arguments");
-            Assert.IsNull(ConsumeAllErrors(shell));
+            Assert.That(ConsumeAllErrors(shell) == null);
         }
 
         [Test]
@@ -262,7 +262,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Assert.IsTrue(shell.RunCommand("inventory add"));
             string error = ConsumeError(shell);
-            Assert.IsNotNull(error);
+            Assert.That(error != null);
             Assert.That(
                 error,
                 Does.Contain("'inventory add': requires at least 1 argument"),
@@ -311,14 +311,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
              */
             Assert.IsTrue(shell.RunCommand("inventory add pickaxe spare"));
             string error = ConsumeError(shell);
-            Assert.IsNotNull(error);
+            Assert.That(error != null);
             Assert.That(error, Does.Contain("'inventory add': expects at most 1 argument"));
             Assert.That(error, Does.Contain("Usage: inventory add <item:string>"));
             Assert.AreEqual(0, invocations);
 
             Assert.IsTrue(shell.RunCommand("inventory add pickaxe spare third fourth"));
             error = ConsumeError(shell);
-            Assert.IsNotNull(error);
+            Assert.That(error != null);
             Assert.That(
                 error,
                 Does.Contain("'inventory add': expects at most 1 argument"),
@@ -349,7 +349,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Assert.IsTrue(shell.RunCommand("inventory add abc"));
             string error = ConsumeError(shell);
-            Assert.IsNotNull(error);
+            Assert.That(error != null);
             Assert.That(
                 error,
                 Does.Contain("'inventory add':"),
@@ -360,7 +360,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Assert.IsTrue(shell.RunCommand("inventory add 42"));
             error = ConsumeError(shell);
-            Assert.IsNotNull(error);
+            Assert.That(error != null);
             Assert.That(error, Does.Contain("'inventory add':"));
             Assert.That(error, Does.Contain("out of range"));
             Assert.AreEqual(0, invocations);
@@ -398,7 +398,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Assert.IsTrue(shell.RunCommand("inv group add pickaxe"));
             Assert.AreEqual("pickaxe", deepItem, "Two routing levels reach the deep handler");
-            Assert.IsNull(ConsumeAllErrors(shell));
+            Assert.That(ConsumeAllErrors(shell) == null);
 
             Assert.IsTrue(shell.RunCommand("inv group"));
             Assert.AreEqual(
@@ -406,7 +406,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 groupFallbackRuns,
                 "A nested router's own handler is its bare-invocation fallback"
             );
-            Assert.IsNull(ConsumeAllErrors(shell));
+            Assert.That(ConsumeAllErrors(shell) == null);
         }
 
         [Test]
@@ -428,7 +428,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Assert.IsTrue(shell.RunCommand("inv group forge"));
             string error = ConsumeError(shell);
-            Assert.IsNotNull(error);
+            Assert.That(error != null);
             Assert.That(
                 error,
                 Does.Contain("'inv group': unknown subcommand 'forge'"),
@@ -437,7 +437,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Assert.IsTrue(shell.RunCommand("inv group"));
             error = ConsumeError(shell);
-            Assert.IsNotNull(error);
+            Assert.That(error != null);
             Assert.That(
                 error,
                 Does.Contain("'inv group': expected a subcommand"),
@@ -909,8 +909,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 info.minArgCount,
                 "Bare invocations must reach the router, so the minimum is zero"
             );
-            Assert.IsNull(
-                info.maxArgCount,
+            Assert.That(
+                info.maxArgCount == null,
                 "The router owns bounds after routing, so the shell leaves the maximum open"
             );
         }
