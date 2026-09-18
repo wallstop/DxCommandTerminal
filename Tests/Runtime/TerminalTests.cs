@@ -252,7 +252,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return SpawnTerminal(resetStateOnInit: true);
 
             Assert.That(
-                TerminalUI.Instance != null,
+                terminal2 != null,
                 "TerminalUI.Instance should not be null after third SpawnTerminal"
             );
             Assert.AreNotSame(
