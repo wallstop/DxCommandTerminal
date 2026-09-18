@@ -62,6 +62,7 @@ const LOG_ERROR_PATTERNS = [
   /^Aborting batchmode/u,
   /Scripts have compiler errors/u
 ];
+export const SETTLE_PHASE_ENV = { DX_IMPORT_DRILL_SETTLE: "1" };
 
 /*
     UPM packages the scratch project needs so every shipped asmdef compiles.
@@ -331,11 +332,14 @@ function scratchDependencies(artifact) {
 /*
     Builds the batch-mode settle driver written into the scratch project.
     Deterministic content with no artifact path: the artifact travels as the
-    CLI -importPackage argument in phase 1. This driver only runs in phase 2
-    and waits out the import-triggered compilation (domain reload included -
-    [InitializeOnLoad] re-subscribes after the reload), then exits: 0 settled,
-    3 gave up waiting. The settle floor keeps a fast exit from racing a
-    compile that starts shortly after phase 2 begins.
+    CLI -importPackage argument in phase 1. This driver runs in both phases
+    (the script exists in the project from the start), but it only subscribes
+    when the settle-phase environment is present, so it can never quit during
+    or before the import. Phase 2 waits out the import-triggered compilation
+    (domain reload included - [InitializeOnLoad] re-subscribes after the
+    reload), then exits: 0 settled, 3 idle past the deadline. The deadline is
+    checked only while the pipeline is idle, so a long compile is never
+    aborted by it; the drill's outer process timeout bounds that wait.
 */
 export function buildImportDriver() {
   return `/*
@@ -343,7 +347,8 @@ export function buildImportDriver() {
     Batch-mode settle driver: waits for the import-triggered compilation to
     finish, then exits with a code the drill gates on (0 settled, 3 gave up).
     Runs in a scratch project under -batchmode, so no dialog can block an
-    editor main thread.
+    editor main thread. Inert unless DX_IMPORT_DRILL_SETTLE is set, so the
+    import phase can never be quit by this driver.
 */
 using System;
 using UnityEditor;
@@ -354,7 +359,10 @@ public static class DxTerminalImportDrill
 {
     static DxTerminalImportDrill()
     {
-        EditorApplication.update += WaitForImportAndCompile;
+        if (Environment.GetEnvironmentVariable("DX_IMPORT_DRILL_SETTLE") == "1")
+        {
+            EditorApplication.update += WaitForImportAndCompile;
+        }
     }
 
     private static void WaitForImportAndCompile()
@@ -363,15 +371,15 @@ public static class DxTerminalImportDrill
         {
             _start = DateTime.UtcNow;
         }
+        if (EditorApplication.isCompiling || EditorApplication.isUpdating)
+        {
+            return;
+        }
         double elapsedSeconds = (DateTime.UtcNow - _start).TotalSeconds;
         if (elapsedSeconds > 120.0)
         {
-            Debug.Log("[import-drill] settle timeout, exiting");
+            Debug.Log("[import-drill] idle past the settle deadline, exiting");
             EditorApplication.Exit(3);
-            return;
-        }
-        if (EditorApplication.isCompiling || EditorApplication.isUpdating)
-        {
             return;
         }
         if (elapsedSeconds < 3.0)
@@ -565,10 +573,10 @@ export function probeEditorVersion(unityPath, versionArgs = ["-version"]) {
   throw new Error(`<unity> -version printed no plausible version for ${unityPath}: ${stdout.trim().slice(0, 200)}`);
 }
 
-function runUnityProcess(unityPath, args, logPath, timeoutMs) {
+function runUnityProcess(unityPath, args, logPath, timeoutMs, extraEnv = {}) {
   return new Promise((resolve) => {
     const child = spawn(unityPath, args, {
-      env: process.env,
+      env: { ...process.env, ...extraEnv },
       stdio: ["ignore", "ignore", "ignore"]
     });
     let settled = false;
@@ -715,7 +723,13 @@ export async function runImportDrill(options, probes = {}) {
   if (outcome === null) {
     console.log("[import-drill] phase 2: waiting for compilation to settle");
     const remainingMs = Math.max(60_000, totalBudgetMs - (Date.now() - started));
-    settleRun = await runUnity(options.unity, settleUnityArgs(projectDir, settleLog), settleLog, remainingMs);
+    settleRun = await runUnity(
+      options.unity,
+      settleUnityArgs(projectDir, settleLog),
+      settleLog,
+      remainingMs,
+      SETTLE_PHASE_ENV
+    );
     outcome = phaseOutcome(settleRun, "unity settle phase");
   }
   const elapsedSeconds = Math.round((Date.now() - started) / 1000);

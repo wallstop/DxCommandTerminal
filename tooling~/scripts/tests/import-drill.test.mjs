@@ -27,6 +27,7 @@ const {
   probeEditorVersion,
   readTar,
   runImportDrill,
+  SETTLE_PHASE_ENV,
   scaffoldProject,
   settleUnityArgs,
   validateImportedProject
@@ -340,16 +341,27 @@ test("metaLabels reads inline and list label blocks in any order", () => {
   assert.deepStrictEqual(metaLabels("guid: aabb\n"), new Set());
 });
 
-test("buildImportDriver is deterministic, holds no import logic, and waits out compilation", () => {
+test("buildImportDriver is deterministic, phase-guarded, and waits out compilation", () => {
   const first = buildImportDriver();
   assert.strictEqual(first, buildImportDriver());
   assert.match(first, /InitializeOnLoad/);
+  assert.match(first, /DX_IMPORT_DRILL_SETTLE/);
   assert.match(first, /isCompiling \|\| EditorApplication\.isUpdating/);
   assert.match(first, /EditorApplication\.Exit\(0\)/);
-  assert.match(first, /settle timeout/);
+  assert.match(first, /idle past the settle deadline/);
+  assert.ok(
+    first.indexOf("isCompiling") < first.indexOf("idle past the settle deadline"),
+    "the settle deadline is only enforced while the pipeline is idle"
+  );
   assert.doesNotMatch(first, /ImportPackage/);
   assert.doesNotMatch(first, /SessionState/);
   assert.doesNotMatch(first, /"[A-Za-z]:[\\/]|\/workspaces\//u);
+});
+
+test("the settle phase environment arms the generated driver", () => {
+  assert.deepStrictEqual(SETTLE_PHASE_ENV, { DX_IMPORT_DRILL_SETTLE: "1" });
+  const driver = buildImportDriver();
+  assert.match(driver, /GetEnvironmentVariable\("DX_IMPORT_DRILL_SETTLE"\) == "1"/);
 });
 
 test("importUnityArgs and settleUnityArgs shape the two Unity invocations", () => {
