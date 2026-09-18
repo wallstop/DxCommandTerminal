@@ -106,6 +106,12 @@ field write is frame-coupled and flakes under session sequences
 
 ## Debugging failures
 
+- Assert post-mutation state through the live reference: after a respawn, reset,
+  destroy, or disable, read `TerminalUI.Instance` (or re-query the facade) at the
+  assert itself, not a local captured before the mutation. A stale capture makes
+  the null-check vacuous and lets the following `AreNotSame` pass against a dead
+  object (PR #101 Bugbot). Capture-then-assert is only sound when nothing mutates
+  between the capture and the assert.
 - A test failing ISOLATED that passed isolated earlier in the same session
   is the poisoned-panel state below, not a code change - but verify with a
   real domain reload first: Assets > Refresh (or any script edit that

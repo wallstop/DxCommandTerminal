@@ -722,7 +722,13 @@
 
         private void ApplyFont()
         {
-            Font font = _font != null ? _font : TerminalUI.Instance?.CurrentFont;
+            Font font = _font;
+            if (font == null)
+            {
+                TerminalUI terminal = TerminalUI.Instance;
+                font = terminal != null ? terminal.CurrentFont : null;
+            }
+
             if (font == null)
             {
                 return;

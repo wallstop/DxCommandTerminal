@@ -820,8 +820,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 );
 
                 TerminalUI.ResetForNextPlaySession();
-                Assert.IsNull(
-                    TerminalUI.Instance,
+                Assert.That(
+                    TerminalUI.Instance == null,
                     "The play-session reset must clear the stale static Instance"
                 );
                 Assert.IsNull(

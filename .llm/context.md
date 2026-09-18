@@ -179,6 +179,10 @@ frontmatter validity, index freshness, and pointer-file delegation; see
     sentinel, and a blacklist silently treats invalid/serialized values (and any future
     enum member) as the non-sentinel branch (PR #82 review). Acronyms in identifiers
     stay all-caps: `TeardownUI`, not `TeardownUi`.
+25. UnityEngine.Object null checks use the Unity `==`/`!=` operators explicitly. Banned on Unity
+    objects: `?.`, `??`/`??=`, `is null`/`is not null`/`ReferenceEquals` (all bypass the fake-null
+    operator), `Assert.IsNull`/`Assert.IsNotNull` in tests, and implicit truthiness - write
+    `component != null` / `Assert.That(x == null)` (issue #98). Delegate `?.`/plain C# `??` stay legal.
 
 ### Unity Package Rules
 
