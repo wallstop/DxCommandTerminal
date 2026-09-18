@@ -165,6 +165,34 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         [Test]
+        public void ChoicesPreserveDeterministicInstanceOrder()
+        {
+            CreateTarget();
+            CreateTarget();
+            CreateTarget();
+            SceneObjectArgumentAdapter<T> adapter = new();
+            List<T> choices = new(adapter.GetChoices(CompletionContext()));
+            Assert.GreaterOrEqual(
+                choices.Count,
+                3,
+                "Sanity: expected the fixture objects among the choices"
+            );
+            List<T> sorted = new(choices);
+            sorted.Sort((left, right) =>
+#if UNITY_6000_4_OR_NEWER
+                    left.GetEntityId().CompareTo(right.GetEntityId())
+#else
+                    left.GetInstanceID().CompareTo(right.GetInstanceID())
+#endif
+            );
+            CollectionAssert.AreEqual(
+                sorted,
+                choices,
+                "Choices must keep the engine's deterministic instance-id order"
+            );
+        }
+
+        [Test]
         public void ExplicitParserDoesNotRegisterGlobally()
         {
             T target = CreateTarget();

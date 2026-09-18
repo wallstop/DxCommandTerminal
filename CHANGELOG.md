@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Opt-in assembly discovery: `CommandShell.IncludeDiscoveryAssembly(Assembly)` scans an assembly the default discovery filter would skip (a runtime-emitted assembly, or a precompiled DLL without a package reference) through the normal catalog, provider, and reflection stages. The returned handle removes the assembly again; registering before the first command request applies immediately, later registrations apply on the next registration cycle. The readiness log counts explicitly included assemblies.
 - `CommandArg.TryGetRaw` and builder `.RawParser(...)` pass uncleaned token contents to explicit parsers. Scene-object samples use this path so CR/LF names do not resolve to a different object; existing parsers keep their cleanup behavior.
 - Opt-in `SceneObjectArgumentAdapter<T>` resolves GameObject and Component arguments by name, with fresh completion choices and configurable duplicate-name handling. New sample commands show object lookup and component access.
 - Dynamic builder choices accept an explicit text formatter, so custom parsers can complete identifiers without changing existing choice formatting.
@@ -35,6 +36,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Scene-object commands resolve and complete faster on large scenes: name resolution finds the lowest entity id among matching names directly instead of sorting the full query, and choice ordering sorts pre-extracted entity ids instead of comparing through a delegate on every comparison. Results and their deterministic order are unchanged.
 - `CommandExecutionContexts.None` and `CommandConfigurationFailure.None` are obsolete source names; typed `default` still represents an empty mask or an unclassified failure. Existing numeric values are unchanged.
 - Multiple `TerminalUI` components now follow defined ownership rules. The newest enabled component owns the shared session configuration, and `TerminalUI.Instance` tracks the newest enabled component. Disabling or destroying the owner hands both to a remaining enabled terminal: the shared log buffer, history, and command configuration revert to the remaining terminal's settings, and built-in UI commands (`list-themes`, `set-theme`, and similar) keep working after the owner is destroyed instead of reporting "No Terminal UI found" while a live terminal remains.
 - Each Play Mode session now starts with a fresh terminal session when domain reload is disabled: commands registered by gameplay code during a previous play session no longer survive into the next one, matching the default domain-reload behavior. Stale log-callback subscriptions from an abnormal exit are also detached once per session.

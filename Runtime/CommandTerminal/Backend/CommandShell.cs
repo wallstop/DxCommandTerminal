@@ -71,6 +71,17 @@
         private static readonly List<ICommandDiscoveryProvider> DiscoveryProviders = new();
 
         /*
+            Assemblies opted into discovery despite failing the assembly-
+            reference filter: dynamic assemblies, precompiled DLLs without a
+            metadata reference, or otherwise exceptional carriers of
+            [RegisterCommand] methods. Never populated by the default path.
+            Read on whatever thread reaches readiness (the readiness handoff
+            is Interlocked-guarded, like the discovery caches); mutate only
+            through IncludeDiscoveryAssembly handles.
+         */
+        private static readonly List<Assembly> IncludedScanAssemblies = new();
+
+        /*
             Readiness boundary: the first observation of command state applies
             any deferred auto registration before returning, so a single-
             threaded caller never sees a half-initialized catalog. Concurrent
@@ -168,6 +179,51 @@
         public CommandShell(CommandHistory history)
         {
             _history = history ?? throw new ArgumentNullException(nameof(history));
+        }
+
+        /// <summary>
+        ///     Opts an assembly into auto command discovery even when the
+        ///     default assembly-reference filter would skip it. The default
+        ///     path scans only assemblies whose metadata references this
+        ///     package and skips dynamic assemblies, so commands in a runtime-
+        ///     emitted assembly or a precompiled DLL without that reference
+        ///     would be silently dropped. Include the assembly explicitly to
+        ///     scan it through the normal catalog, provider, and reflection
+        ///     stages.
+        /// </summary>
+        /// <remarks>
+        ///     Register before the first command request (readiness); a
+        ///     registration made after registration was applied takes effect on
+        ///     the next registration cycle, the same as discovery providers.
+        ///     Duplicate registration of the same assembly is a no-op returning
+        ///     a fresh handle. Disposing removes exactly that assembly; a
+        ///     second dispose is a no-op.
+        /// </remarks>
+        /// <param name="assembly">The assembly to scan. Null is rejected.</param>
+        /// <returns>A handle removing the assembly from discovery on dispose.</returns>
+        public static IDisposable IncludeDiscoveryAssembly(Assembly assembly)
+        {
+            if (assembly == null)
+            {
+                throw new ArgumentNullException(nameof(assembly));
+            }
+
+            bool alreadyIncluded = false;
+            foreach (Assembly included in IncludedScanAssemblies)
+            {
+                if (ReferenceEquals(included, assembly))
+                {
+                    alreadyIncluded = true;
+                    break;
+                }
+            }
+
+            if (!alreadyIncluded)
+            {
+                IncludedScanAssemblies.Add(assembly);
+            }
+
+            return new DiscoveryAssemblyRegistration(assembly);
         }
 
         /*
@@ -427,12 +483,26 @@
             return false;
         }
 
+        private static bool IsIncludedScanAssembly(Assembly assembly)
+        {
+            foreach (Assembly included in IncludedScanAssemblies)
+            {
+                if (ReferenceEquals(included, assembly))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         /*
             Only assemblies that reference this one can contain
             RegisterCommandAttribute, so everything else is skipped without
-            loading a single type. Our assembly is processed last so user
-            commands, if they conflict with in-built ones, are always
-            registered first.
+            loading a single type. Assemblies included through
+            IncludeDiscoveryAssembly are scanned regardless. Our assembly is
+            processed last so user commands, if they conflict with in-built
+            ones, are always registered first.
          */
         private static List<Assembly> CollectScanCandidates(
             Assembly[] loadedAssemblies,
@@ -450,7 +520,12 @@
                         continue;
                     }
 
-                    if (MayContainCommands(assembly, self))
+                    /*
+                        Included assemblies skip the metadata read entirely: a
+                        dynamic assembly cannot answer it cheaply, and a
+                        precompiled DLL without the reference would fail it.
+                    */
+                    if (IsIncludedScanAssembly(assembly) || MayContainCommands(assembly, self))
                     {
                         scanCandidates.Add(assembly);
                     }
@@ -1273,6 +1348,7 @@
             int catalogAssemblies = 0;
             int providerAssemblies = 0;
             int reflectedAssemblies = 0;
+            int includedAssemblies = 0;
 
             Assembly[] loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies();
             List<Assembly> scanCandidates = CollectScanCandidates(
@@ -1283,6 +1359,11 @@
             List<AutoCommand> autoCommands = new();
             foreach (Assembly assembly in scanCandidates)
             {
+                if (IsIncludedScanAssembly(assembly))
+                {
+                    includedAssemblies++;
+                }
+
                 switch (CollectAutoCommands(assembly, autoCommands))
                 {
                     case AutoCommandSource.Catalog:
@@ -1411,7 +1492,8 @@
                     + $"{stopwatch.Elapsed.TotalMilliseconds:F2} ms "
                     + $"({catalogAssemblies} generated catalog(s), {providerAssemblies} "
                     + $"provider-served assembly(ies), {reflectedAssemblies} "
-                    + $"reflection-scanned assembly(ies))"
+                    + $"reflection-scanned assembly(ies), {includedAssemblies} "
+                    + $"explicitly included assembly(ies))"
             );
 #endif
         }
@@ -1831,6 +1913,41 @@
                     if (ReferenceEquals(DiscoveryProviders[i], provider))
                     {
                         DiscoveryProviders.RemoveAt(i);
+                        return;
+                    }
+                }
+            }
+        }
+
+        /*
+            Removes its assembly from discovery on the first dispose; a second
+            dispose is a no-op. Duplicate registrations of the same assembly
+            produce independent handles, so a later registrant's dispose
+            removes the assembly the first registrant still holds.
+         */
+        private sealed class DiscoveryAssemblyRegistration : IDisposable
+        {
+            private Assembly _assembly;
+
+            public DiscoveryAssemblyRegistration(Assembly assembly)
+            {
+                _assembly = assembly;
+            }
+
+            public void Dispose()
+            {
+                Assembly assembly = _assembly;
+                if (assembly == null)
+                {
+                    return;
+                }
+
+                _assembly = null;
+                for (int i = 0; i < IncludedScanAssemblies.Count; ++i)
+                {
+                    if (ReferenceEquals(IncludedScanAssemblies[i], assembly))
+                    {
+                        IncludedScanAssemblies.RemoveAt(i);
                         return;
                     }
                 }
