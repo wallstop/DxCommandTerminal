@@ -39,7 +39,7 @@ Open the terminal (default hotkey: backtick), then:
 - Add `SceneObjectCommands`, create an active object named `Demo Target`, then run `object-info "Demo Target"`.
 - `object-position "Demo Target"` resolves its `Transform`; duplicate names reject execution.
 - Type `object-info ` or `object-position ` and press Tab for current names.
-- Add `ComponentCommands`, then `list-components "Demo Target"` or `find-missing-scripts` to hunt broken components.
+- Add `ComponentCommands`, then `list-components "Demo Target"` or `find-missing-scripts` to hunt broken components (the scan covers inactive objects too).
 - Add `ObjectFilterCommands`, then `find-objects ` + Tab lists defined layers, and `find-tagged ` + Tab lists tags in use.
 
 `SceneObjectArgumentAdapter<T>` supports `GameObject`, `Component`, and component subclasses.
@@ -50,6 +50,10 @@ Names match exactly, ignoring case. Paths and instance IDs have no special synta
 The default `FirstMatch` selects the first result in Unity's instance-ID order, not hierarchy order.
 Use `SceneObjectAmbiguityPolicy.RequireUnique` to reject duplicate matches, including multiple components on one object.
 Completions remain suggestions; execution checks the name again and reports the standard parser error on failure.
+That includes string arguments backed by engine state: validate before calling APIs that throw on
+unknown values (`FindGameObjectsWithTag`, `FindWithTag`, the `GameObject.tag` setter). `CompareTag`
+and the `tag` getter are safe for undefined tags, and `LayerMask.NameToLayer` reports unknown
+layers as `-1` - the filter samples rely on those contracts.
 Queries run on Unity's main thread for every parse and completion request, without caching.
 They search loaded objects, exclude assets and `HideFlags.DontSave`, and allocate Unity's result array each time.
 Inactive objects are excluded unless `includeInactive: true` is passed to the adapter constructor.

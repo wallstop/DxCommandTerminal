@@ -8,10 +8,12 @@ namespace WallstopStudios.DxCommandTerminal.Samples
 
     /*
         Component inspection commands: list the components on one object and
-        scan the scene for missing scripts (a destroyed or unresolvable
-        component shows up as a null entry in GetComponents<Component>()).
-        Uses the same opt-in name adapter as SceneObjectCommands, so both
-        parse object names and Tab-complete the live scene state.
+        scan the whole scene - inactive objects included, where missing
+        scripts usually hide - for broken components (a destroyed or
+        unresolvable component shows up as a null entry in
+        GetComponents<Component>()). Uses the same opt-in name adapter as
+        SceneObjectCommands, so both parse object names and Tab-complete
+        the live scene state.
      */
     public sealed class ComponentCommands : TerminalCommandSample
     {
@@ -34,14 +36,14 @@ namespace WallstopStudios.DxCommandTerminal.Samples
         private static GameObject[] QuerySceneObjects()
         {
 #if UNITY_6000_4_OR_NEWER
-            return Object.FindObjectsByType<GameObject>(FindObjectsInactive.Exclude);
+            return Object.FindObjectsByType<GameObject>(FindObjectsInactive.Include);
 #elif UNITY_2022_2_OR_NEWER
             return Object.FindObjectsByType<GameObject>(
-                FindObjectsInactive.Exclude,
+                FindObjectsInactive.Include,
                 FindObjectsSortMode.InstanceID
             );
 #else
-            return Object.FindObjectsOfType<GameObject>(false);
+            return Object.FindObjectsOfType<GameObject>(true);
 #endif
         }
 

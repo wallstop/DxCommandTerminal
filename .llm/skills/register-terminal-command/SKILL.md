@@ -77,6 +77,12 @@ component; the custom editor lists discoverable commands). Register your own con
   [webgl-command-registration](../webgl-command-registration/SKILL.md).
 - Handler exceptions are not caught for you; validate inputs (`args[i].TryGet<T>`) and let the
   shell's error channel (`Terminal.IssuedError`) do the reporting.
+- Handler arguments are arbitrary strings at run time - completion choices are suggestions only.
+  Engine APIs that throw on unknown values (`FindGameObjectsWithTag`, `FindWithTag`, the
+  `GameObject.tag` setter) need an existence check first. Safe by contract: `CompareTag` and the
+  `tag` getter (return `false` / the raw string for undefined tags - probed on Unity
+  6000.4.6f1, non-throwing docs back to 2021.3) and `LayerMask.NameToLayer` (`-1` for unknown
+  layers). Validate before calling the throwing ones (PR #101 review).
 
 ## Extending the typed builder and argument specs
 
