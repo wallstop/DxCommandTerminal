@@ -18,6 +18,12 @@ namespace WallstopStudios.DxCommandTerminal.Editor
         name is preserved with a warning instead. The generated sheet is a
         plain StyleSheet: drop it into a TerminalThemePack's Themes list and
         it behaves like any hand-written theme sheet.
+
+        Known limitation: Unity's undo system and VCS operations (reverts,
+        branch switches) do not move files through this postprocessor, so a
+        reverted/undone rename can leave its generated sheet behind under the
+        old name; deleting that sheet (or renaming an asset over the stray
+        name) cleans it up on the next import.
      */
     internal sealed class TerminalThemeAssetPostProcessor : AssetPostprocessor
     {
@@ -66,15 +72,23 @@ namespace WallstopStudios.DxCommandTerminal.Editor
                     the old asset name; remove it once the new-name sheet
                     exists so no stale theme class survives the rename. Only
                     generated sheets are deleted - a hand-written file is kept.
+                    On case-insensitive filesystems a case-only rename
+                    resolves both paths to the same asset, so it is skipped;
+                    on case-sensitive filesystems the stale-sheet path is
+                    cleaned up (File.Delete fallback for a never-imported
+                    leftover).
                  */
                 string oldSheetPath = SheetPathFor(movedFromAssetPaths[i]);
                 string newSheetPath = SheetPathFor(movedAssets[i]);
-                if (
-                    !string.Equals(oldSheetPath, newSheetPath, StringComparison.OrdinalIgnoreCase)
-                    && IsGeneratedSheet(oldSheetPath)
-                )
+                if (!ResolvesToSameAsset(oldSheetPath, newSheetPath))
                 {
-                    AssetDatabase.DeleteAsset(oldSheetPath);
+                    if (IsGeneratedSheet(oldSheetPath))
+                    {
+                        if (!AssetDatabase.DeleteAsset(oldSheetPath))
+                        {
+                            File.Delete(oldSheetPath);
+                        }
+                    }
                 }
             }
 
@@ -95,6 +109,25 @@ namespace WallstopStudios.DxCommandTerminal.Editor
                     AssetDatabase.DeleteAsset(sheetPath);
                 }
             }
+        }
+
+        /*
+            True when both paths resolve to the same imported asset (a
+            case-only rename on a case-insensitive filesystem), so the
+            "stale" path is the sheet just written and must be kept.
+         */
+        private static bool ResolvesToSameAsset(string oldSheetPath, string newSheetPath)
+        {
+            if (string.Equals(oldSheetPath, newSheetPath, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            UnityEngine.Object oldSheet = AssetDatabase.LoadMainAssetAtPath(oldSheetPath);
+            UnityEngine.Object newSheet = AssetDatabase.LoadMainAssetAtPath(newSheetPath);
+            return oldSheet != null
+                && newSheet != null
+                && oldSheet.GetEntityId() == newSheet.GetEntityId();
         }
 
         private static void WriteSiblingSheet(TerminalThemeAsset themeAsset, string assetPath)
@@ -134,7 +167,14 @@ namespace WallstopStudios.DxCommandTerminal.Editor
 
         private static bool IsGeneratedSheet(string path)
         {
-            return File.Exists(path) && IsGeneratedSheetContent(File.ReadAllText(path));
+            try
+            {
+                return File.Exists(path) && IsGeneratedSheetContent(File.ReadAllText(path));
+            }
+            catch (IOException)
+            {
+                return false;
+            }
         }
 
         private static bool IsGeneratedSheetContent(string contents)

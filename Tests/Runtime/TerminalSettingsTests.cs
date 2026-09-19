@@ -18,9 +18,32 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private readonly List<GameObject> _spawned = new();
         private readonly List<ScriptableObject> _createdAssets = new();
 
+        /*
+            The wake pass feeds the settings asset into the shared session;
+            restore the original backends so this suite leaks no state.
+         */
+        private CommandLog _originalBuffer;
+        private CommandShell _originalShell;
+        private CommandHistory _originalHistory;
+        private CommandAutoComplete _originalAutoComplete;
+
+        [SetUp]
+        public void SetUp()
+        {
+            _originalBuffer = Terminal.Buffer;
+            _originalShell = Terminal.Shell;
+            _originalHistory = Terminal.History;
+            _originalAutoComplete = Terminal.AutoComplete;
+        }
+
         [TearDown]
         public void TearDown()
         {
+            Terminal.Buffer = _originalBuffer;
+            Terminal.Shell = _originalShell;
+            Terminal.History = _originalHistory;
+            Terminal.AutoComplete = _originalAutoComplete;
+
             foreach (GameObject spawned in _spawned)
             {
                 if (spawned != null)

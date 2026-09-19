@@ -54,7 +54,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     Persisted assets are removed with the temp folder below;
                     destroying them mid-play throws the data-loss guard.
                  */
+#if UNITY_EDITOR
                 if (created != null && !EditorUtility.IsPersistent(created))
+#else
+                if (created != null)
+#endif
                 {
                     UnityEngine.Object.Destroy(created);
                 }
