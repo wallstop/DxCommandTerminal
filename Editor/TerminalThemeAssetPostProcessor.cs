@@ -24,6 +24,13 @@ namespace WallstopStudios.DxCommandTerminal.Editor
         into a TerminalThemePack's Themes list and it behaves like any
         hand-written theme sheet.
 
+        Filesystem discipline: every read and delete is attempted directly
+        and failures are caught - no File.Exists guard before an act on the
+        same path (the file can disappear between the check and the act,
+        and the guard itself is an extra stat per import). Unreadable or
+        missing files read as null/false; deletions no-op for missing files;
+        genuine IO errors log and keep the import batch alive.
+
         Known limitation: Unity's undo system and VCS operations (reverts,
         branch switches) do not move files through this postprocessor, so a
         reverted/undone rename can leave its generated sheet behind under the
@@ -32,6 +39,15 @@ namespace WallstopStudios.DxCommandTerminal.Editor
      */
     internal sealed class TerminalThemeAssetPostProcessor : AssetPostprocessor
     {
+        /*
+            Shared instance: File.WriteAllText writes the encoding's preamble
+            (none here) and takes bytes from the encoding, so one stateless
+            UTF8Encoding serves every write instead of allocating per write.
+         */
+        private static readonly UTF8Encoding Utf8NoBom = new(
+            encoderShouldEmitUTF8Identifier: false
+        );
+
         private static void OnPostprocessAllAssets(
             string[] importedAssets,
             string[] deletedAssets,
@@ -41,31 +57,22 @@ namespace WallstopStudios.DxCommandTerminal.Editor
         {
             foreach (string assetPath in importedAssets)
             {
-                if (!assetPath.EndsWith(".asset", StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                TerminalThemeAsset themeAsset = AssetDatabase.LoadAssetAtPath<TerminalThemeAsset>(
-                    assetPath
-                );
-                if (themeAsset != null)
+                if (TryLoadThemeAsset(assetPath, out TerminalThemeAsset themeAsset))
                 {
                     WriteSiblingSheet(themeAsset, assetPath);
                 }
             }
 
-            for (int i = 0; i < movedAssets.Length; ++i)
+            /*
+                Parallel arrays (Unity's callback signature) need the index
+                for both sides - rule 11's sanctioned counting-loop case.
+             */
+            for (int movedIndex = 0; movedIndex < movedAssets.Length; ++movedIndex)
             {
-                if (!movedAssets[i].EndsWith(".asset", StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
+                string movedPath = movedAssets[movedIndex];
+                string movedFromPath = movedFromAssetPaths[movedIndex];
 
-                TerminalThemeAsset themeAsset = AssetDatabase.LoadAssetAtPath<TerminalThemeAsset>(
-                    movedAssets[i]
-                );
-                if (themeAsset == null)
+                if (!TryLoadThemeAsset(movedPath, out TerminalThemeAsset themeAsset))
                 {
                     continue;
                 }
@@ -80,18 +87,18 @@ namespace WallstopStudios.DxCommandTerminal.Editor
                     case-insensitive filesystem rewrites the same file in
                     place.
                  */
-                string oldSheetPath = SheetPathFor(movedFromAssetPaths[i]);
-                string newSheetPath = SheetPathFor(movedAssets[i]);
+                string oldSheetPath = SheetPathFor(movedFromPath);
+                string newSheetPath = SheetPathFor(movedPath);
                 if (
                     !string.Equals(oldSheetPath, newSheetPath, StringComparison.Ordinal)
-                    && IsGeneratedSheet(oldSheetPath)
+                    && TerminalThemeAsset.IsGeneratedSheet(oldSheetPath)
                     && !ResolvesToSameAsset(oldSheetPath, newSheetPath)
                 )
                 {
                     DeleteGeneratedSheet(oldSheetPath);
                 }
 
-                WriteSiblingSheet(themeAsset, movedAssets[i]);
+                WriteSiblingSheet(themeAsset, movedPath);
             }
 
             /*
@@ -106,18 +113,42 @@ namespace WallstopStudios.DxCommandTerminal.Editor
                 }
 
                 string sheetPath = SheetPathFor(deletedPath);
-                if (IsGeneratedSheet(sheetPath))
+                if (TerminalThemeAsset.IsGeneratedSheet(sheetPath))
                 {
                     DeleteGeneratedSheet(sheetPath);
                 }
             }
         }
 
+        private static bool TryLoadThemeAsset(string assetPath, out TerminalThemeAsset themeAsset)
+        {
+            if (
+                string.IsNullOrEmpty(assetPath)
+                || !assetPath.EndsWith(".asset", StringComparison.OrdinalIgnoreCase)
+            )
+            {
+                themeAsset = null;
+                return false;
+            }
+
+            /*
+                Metadata-only type lookup before load: bulk imports of
+                unrelated .assets skip object deserialization entirely.
+             */
+            if (AssetDatabase.GetMainAssetTypeAtPath(assetPath) != typeof(TerminalThemeAsset))
+            {
+                themeAsset = null;
+                return false;
+            }
+
+            themeAsset = AssetDatabase.LoadAssetAtPath<TerminalThemeAsset>(assetPath);
+            return themeAsset != null;
+        }
+
         /*
-            Deletes a generated sheet, falling back to a direct file delete
-            (plus its meta, if one was written) for a never-imported leftover
-            the asset database has no entry for, so no broken import or
-            orphaned meta survives.
+            Deletes a generated sheet, falling back to direct file deletes
+            for a never-imported leftover the asset database has no entry
+            for, so no broken import or orphaned meta survives.
          */
         private static void DeleteGeneratedSheet(string sheetPath)
         {
@@ -126,10 +157,26 @@ namespace WallstopStudios.DxCommandTerminal.Editor
                 return;
             }
 
-            File.Delete(sheetPath);
-            if (File.Exists(sheetPath + ".meta"))
+            /*
+                File.Delete no-ops for a missing file, so both deletes run
+                unconditionally - an exists-check here would only add a
+                check-then-act race.
+             */
+            TryDeleteFile(sheetPath);
+            TryDeleteFile(sheetPath + ".meta");
+        }
+
+        private static void TryDeleteFile(string path)
+        {
+            try
             {
-                File.Delete(sheetPath + ".meta");
+                File.Delete(path);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                Debug.LogWarning(
+                    $"Could not delete generated theme sheet leftover '{path}': {e.Message}"
+                );
             }
         }
 
@@ -162,21 +209,15 @@ namespace WallstopStudios.DxCommandTerminal.Editor
             string sheetPath = SheetPathFor(assetPath);
             string contents = themeAsset.BuildUss();
 
-            if (File.Exists(sheetPath))
+            string existing = TerminalThemeAsset.TryReadText(sheetPath);
+            if (existing != null)
             {
-                string existing = File.ReadAllText(sheetPath);
-                if (
-                    string.Equals(
-                        NormalizeEndings(existing),
-                        NormalizeEndings(contents),
-                        StringComparison.Ordinal
-                    )
-                )
+                if (MatchesGeneratedContent(existing, contents))
                 {
                     return;
                 }
 
-                if (!IsGeneratedSheetContent(existing))
+                if (!TerminalThemeAsset.IsGeneratedSheetContent(existing))
                 {
                     Debug.LogWarning(
                         $"Skipping generated theme sheet for '{assetPath}': '{sheetPath}' exists "
@@ -188,34 +229,41 @@ namespace WallstopStudios.DxCommandTerminal.Editor
                 }
             }
 
-            File.WriteAllText(sheetPath, contents, new UTF8Encoding(false));
+            try
+            {
+                File.WriteAllText(sheetPath, contents, Utf8NoBom);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                Debug.LogError(
+                    $"Could not write generated theme sheet '{sheetPath}' for "
+                        + $"'{themeAsset.name}': {e.Message}",
+                    themeAsset
+                );
+                return;
+            }
+
             AssetDatabase.ImportAsset(sheetPath);
             Debug.Log($"Generated theme sheet '{sheetPath}' for '{themeAsset.name}'.", themeAsset);
+        }
+
+        /*
+            The generated output contains no '\r'; the normalize copy only
+            runs for foreign files that use CRLF endings.
+         */
+        private static bool MatchesGeneratedContent(string existing, string contents)
+        {
+            if (0 <= existing.IndexOf('\r', StringComparison.Ordinal))
+            {
+                existing = NormalizeEndings(existing);
+            }
+
+            return string.Equals(existing, contents, StringComparison.Ordinal);
         }
 
         private static string NormalizeEndings(string contents)
         {
             return contents.Replace("\r\n", "\n", StringComparison.Ordinal);
-        }
-
-        private static bool IsGeneratedSheet(string path)
-        {
-            try
-            {
-                return File.Exists(path) && IsGeneratedSheetContent(File.ReadAllText(path));
-            }
-            catch (IOException)
-            {
-                return false;
-            }
-        }
-
-        private static bool IsGeneratedSheetContent(string contents)
-        {
-            return contents.StartsWith(
-                TerminalThemeAsset.GeneratedMarkerPrefix,
-                StringComparison.Ordinal
-            );
         }
 
         private static string SheetPathFor(string assetPath)

@@ -2,6 +2,7 @@ namespace WallstopStudios.DxCommandTerminal.Themes
 {
     using System;
     using System.Globalization;
+    using System.IO;
     using System.Text;
     using Helper;
     using UnityEngine;
@@ -125,6 +126,36 @@ namespace WallstopStudios.DxCommandTerminal.Themes
         [SerializeField]
         [Tooltip("Input caret color")]
         private Color _caretColor = new(0.949f, 0.949f, 0.9686f, 1f);
+
+        /*
+            Reads without an exists-check: the file can vanish between a
+            check and the read, so the read is the check. Expected failures
+            (missing file, unreadable path, deleted mid-read) read as null;
+            callers treat null as "nothing readable" instead of crashing the
+            import batch (PR #106 review).
+         */
+        internal static string TryReadText(string path)
+        {
+            try
+            {
+                return File.ReadAllText(path);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                return null;
+            }
+        }
+
+        internal static bool IsGeneratedSheet(string path)
+        {
+            string contents = TryReadText(path);
+            return contents != null && IsGeneratedSheetContent(contents);
+        }
+
+        internal static bool IsGeneratedSheetContent(string contents)
+        {
+            return contents.StartsWith(GeneratedMarkerPrefix, StringComparison.Ordinal);
+        }
 
         internal static string KebabCase(string value)
         {

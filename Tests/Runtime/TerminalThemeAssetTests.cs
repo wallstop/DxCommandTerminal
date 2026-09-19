@@ -101,6 +101,37 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         [Test]
+        public void GeneratedSheetCheckTreatsMissingAndUnreadablePathsAsNotGenerated()
+        {
+            string missingPath = Path.Combine(
+                Path.GetTempPath(),
+                $"no-such-theme-sheet-{Guid.NewGuid():N}.uss"
+            );
+            Assert.IsFalse(
+                TerminalThemeAsset.IsGeneratedSheet(missingPath),
+                "A missing file is not a generated sheet (and must not throw)"
+            );
+            Assert.That(
+                TerminalThemeAsset.TryReadText(missingPath),
+                Is.Null,
+                "A missing file reads as null (and must not throw)"
+            );
+
+            /*
+                A directory read fails with a filesystem error, not a missing
+                file; the check must classify it as not-generated either way.
+             */
+            string directoryPath = Path.Combine(
+                Path.GetTempPath(),
+                $"no-such-theme-dir-{Guid.NewGuid():N}"
+            );
+            Assert.IsFalse(
+                TerminalThemeAsset.IsGeneratedSheet(directoryPath),
+                "An unreadable path is not a generated sheet (and must not throw)"
+            );
+        }
+
+        [Test]
         public void GeneratedSheetTargetsTheAssetDerivedClass()
         {
             foreach (
