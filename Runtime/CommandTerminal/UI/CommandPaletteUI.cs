@@ -91,6 +91,9 @@
         internal UIDocument _uiDocument;
 
         [SerializeField]
+        internal TerminalSettings _settings;
+
+        [SerializeField]
         internal TerminalThemePack _themePack;
 
         internal VisualElement _paletteRoot;
@@ -496,6 +499,20 @@
             }
 
             ClearFeedback();
+        }
+
+        private void Awake()
+        {
+            /*
+                Shared settings asset wins over the serialized component
+                value (issue #72 option B): the palette hotkey follows the
+                asset when one is assigned. Same wake semantics as
+                TerminalUI.
+             */
+            if (_settings != null)
+            {
+                toggleHotkey = _settings.paletteToggleHotkey;
+            }
         }
 
         private void OnEnable()
