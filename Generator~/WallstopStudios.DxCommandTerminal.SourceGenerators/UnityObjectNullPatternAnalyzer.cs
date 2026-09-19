@@ -10,14 +10,18 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
 
     /*
         Type-checked enforcement for context rule 25: Unity fake null defeats ?., ??,
-        ??=, truthiness, `is null` / `is not null`, and object.ReferenceEquals, so all of
-        them are banned on UnityEngine.Object receivers. GUIStyle is the other
-        IntPtr-backed fake-null type and is covered by the same rules. The analyzer ships
-        inside the generator payload scoped through the Runtime assembly, so every
-        compilation that references the package - including consumers' - gets these
-        diagnostics, and the package's own -warnaserror csc.rsp turns any violation into
-        a compile failure. Syntax and semantic-model APIs only, so the same binary runs
-        on every Roslyn host from Unity 2021.3 (3.9) through current.
+        ??=, truthiness, `is null` / `is not null` / `is { }`, null case labels and
+        switch arms, and object.ReferenceEquals, so all of them are banned on
+        UnityEngine.Object receivers. GUIStyle is the other IntPtr-backed fake-null
+        type and is covered by the same rules, as are type parameters constrained to
+        UnityEngine.Object. Type patterns (`is UnityEngine.Object o`) and property
+        patterns stay allowed: they type-test or test members, not receiver nullness.
+        The analyzer ships inside the generator payload scoped through the Runtime
+        assembly, so every compilation that references the package - including
+        consumers' - gets these diagnostics, and the package's own -warnaserror
+        csc.rsp turns any violation into a compile failure. Syntax and
+        semantic-model APIs only, except IConversionOperation for truthiness (stable
+        member surface across Roslyn 3.8 through current hosts).
     */
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public sealed class UnityObjectNullPatternAnalyzer : DiagnosticAnalyzer
@@ -64,8 +68,8 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             new DiagnosticDescriptor(
                 "DxCmd0004",
                 "Null pattern on a Unity fake-null receiver",
-                "'is null' / 'is not null' uses reference equality and bypasses Unity fake-null "
-                    + "checks; use == null / != null",
+                "'is null' / 'is not null' / 'is { }', null case labels, and null switch arms use "
+                    + "reference equality and bypass Unity fake-null checks; use == null / != null",
                 Category,
                 DiagnosticSeverity.Warning,
                 isEnabledByDefault: true
@@ -159,6 +163,11 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
         private static void AnalyzeReferenceEquals(SyntaxNodeAnalysisContext context)
         {
             InvocationExpressionSyntax invocation = (InvocationExpressionSyntax)context.Node;
+            if (!IsReferenceEqualsName(invocation.Expression))
+            {
+                return;
+            }
+
             SymbolInfo symbolInfo = context.SemanticModel.GetSymbolInfo(
                 invocation.Expression,
                 context.CancellationToken
@@ -188,33 +197,159 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
         private static void AnalyzeNullPattern(SyntaxNodeAnalysisContext context)
         {
             IsPatternExpressionSyntax expression = (IsPatternExpressionSyntax)context.Node;
-            if (!ContainsNullLiteral(expression.Pattern))
+            if (!IsNullCheckPattern(expression.Pattern))
             {
                 return;
             }
 
-            ITypeSymbol operandType = GetTypeOfTypeExpression(context, expression.Expression);
+            ReportNullPattern(context, expression, expression.Expression);
+        }
+
+        private static void AnalyzeNullCaseLabel(SyntaxNodeAnalysisContext context)
+        {
+            /*
+               CaseSwitchLabelSyntax names its pattern member differently across Roslyn
+               versions (Value pre-3.x, Pattern after); the pattern is structurally the
+               first child node of the label, so read it that way on every host.
+            */
+            CaseSwitchLabelSyntax label = (CaseSwitchLabelSyntax)context.Node;
+            SyntaxNode pattern = FirstChild(label);
+            if (pattern == null || !IsNullCheckPattern(pattern))
+            {
+                return;
+            }
+
+            ReportNullPattern(context, label, GoverningExpression(label));
+        }
+
+        private static SyntaxNode FirstChild(SyntaxNode node)
+        {
+            foreach (SyntaxNode child in node.ChildNodes())
+            {
+                return child;
+            }
+
+            return null;
+        }
+
+        private static void AnalyzeNullSwitchArm(SyntaxNodeAnalysisContext context)
+        {
+            SwitchExpressionArmSyntax arm = (SwitchExpressionArmSyntax)context.Node;
+            if (!IsNullCheckPattern(arm.Pattern))
+            {
+                return;
+            }
+
+            ReportNullPattern(context, arm, GoverningExpression(arm));
+        }
+
+        private static void ReportNullPattern(
+            SyntaxNodeAnalysisContext context,
+            SyntaxNode node,
+            ExpressionSyntax governingExpression
+        )
+        {
+            if (governingExpression == null)
+            {
+                return;
+            }
+
+            ITypeSymbol operandType = GetTypeOfTypeExpression(context, governingExpression);
             if (!IsFakeNullType(operandType))
             {
                 return;
             }
 
-            context.ReportDiagnostic(
-                Diagnostic.Create(NullPatternDescriptor, expression.GetLocation())
-            );
+            context.ReportDiagnostic(Diagnostic.Create(NullPatternDescriptor, node.GetLocation()));
         }
 
-        private static bool ContainsNullLiteral(SyntaxNode node)
+        private static ExpressionSyntax GoverningExpression(SyntaxNode node)
         {
-            foreach (SyntaxToken token in node.DescendantTokens())
+            SyntaxNode current = node.Parent;
+            while (current != null)
             {
-                if (token.IsKind(SyntaxKind.NullKeyword))
+                if (current is SwitchStatementSyntax switchStatement)
+                {
+                    return switchStatement.Expression;
+                }
+
+                if (current is SwitchExpressionSyntax switchExpression)
+                {
+                    return switchExpression.GoverningExpression;
+                }
+
+                current = current.Parent;
+            }
+
+            return null;
+        }
+
+        private static bool IsReferenceEqualsName(ExpressionSyntax expression)
+        {
+            if (expression is MemberAccessExpressionSyntax memberAccess)
+            {
+                expression = memberAccess.Name;
+            }
+
+            return expression is IdentifierNameSyntax identifier
+                && string.Equals(
+                    identifier.Identifier.ValueText,
+                    ReferenceEqualsName,
+                    StringComparison.Ordinal
+                );
+        }
+
+        /*
+           A pattern null-checks the receiver when it holds a constant null pattern at
+           its top structural level (is null, is not null, or-chains) or is an empty
+           property pattern with no type (is { } / is not { }). Null constants nested
+           inside property or positional subpatterns test members, not the receiver, so
+           they stay allowed, as do declaration and type patterns.
+        */
+        private static bool IsNullCheckPattern(SyntaxNode pattern)
+        {
+            /*
+               Shape-agnostic on purpose: a case label surfaces its null constant as a
+               bare literal on some Roslyn versions and as a ConstantPattern wrapper on
+               others, so both shapes are recognized here.
+            */
+            if (pattern.IsKind(SyntaxKind.NullLiteralExpression))
+            {
+                return true;
+            }
+
+            if (pattern is ConstantPatternSyntax constantPattern)
+            {
+                return constantPattern.Expression.IsKind(SyntaxKind.NullLiteralExpression);
+            }
+
+            if (pattern is RecursivePatternSyntax recursivePattern)
+            {
+                return IsEmptyPropertyPattern(recursivePattern);
+            }
+
+            if (pattern is DeclarationPatternSyntax || pattern is VarPatternSyntax)
+            {
+                return false;
+            }
+
+            foreach (SyntaxNode child in pattern.ChildNodes())
+            {
+                if (IsNullCheckPattern(child))
                 {
                     return true;
                 }
             }
 
             return false;
+        }
+
+        private static bool IsEmptyPropertyPattern(RecursivePatternSyntax recursivePattern)
+        {
+            return recursivePattern.Type == null
+                && recursivePattern.PositionalPatternClause == null
+                && recursivePattern.PropertyPatternClause != null
+                && 0 == recursivePattern.PropertyPatternClause.Subpatterns.Count;
         }
 
         private static ITypeSymbol GetTypeOfTypeExpression(
@@ -229,6 +364,19 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
         {
             if (type == null || type.TypeKind == TypeKind.Error)
             {
+                return false;
+            }
+
+            if (type.TypeKind == TypeKind.TypeParameter)
+            {
+                foreach (ITypeSymbol constraint in ((ITypeParameterSymbol)type).ConstraintTypes)
+                {
+                    if (IsFakeNullType(constraint))
+                    {
+                        return true;
+                    }
+                }
+
                 return false;
             }
 
@@ -291,6 +439,8 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                 SyntaxKind.InvocationExpression
             );
             context.RegisterSyntaxNodeAction(AnalyzeNullPattern, SyntaxKind.IsPatternExpression);
+            context.RegisterSyntaxNodeAction(AnalyzeNullCaseLabel, SyntaxKind.CaseSwitchLabel);
+            context.RegisterSyntaxNodeAction(AnalyzeNullSwitchArm, SyntaxKind.SwitchExpressionArm);
         }
     }
 }

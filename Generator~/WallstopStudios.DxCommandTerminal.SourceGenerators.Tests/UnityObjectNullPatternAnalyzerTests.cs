@@ -153,6 +153,84 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators.Tests
                 "DxCmd0005",
                 1,
             };
+            yield return new object[]
+            {
+                "unqualified ReferenceEquals on UnityEngine.Object",
+                Fixture("        bool same = ReferenceEquals(_target, null);"),
+                "DxCmd0005",
+                1,
+            };
+            yield return new object[]
+            {
+                "coalesce inside a lambda",
+                Fixture(
+                    "        System.Func<UnityEngine.Object> make = () => _target ?? new UnityEngine.Object();"
+                ),
+                "DxCmd0002",
+                1,
+            };
+            yield return new object[]
+            {
+                "parenthesized truthiness",
+                Fixture("        if ((_target)) { }"),
+                "DxCmd0003",
+                1,
+            };
+            yield return new object[]
+            {
+                "do/while truthiness",
+                Fixture("        do { } while (_style);"),
+                "DxCmd0003",
+                1,
+            };
+            yield return new object[]
+            {
+                "switch statement null case",
+                Fixture(
+                    "        switch (_target)\n        {\n            case null:\n                break;\n        }"
+                ),
+                "DxCmd0004",
+                1,
+            };
+            yield return new object[]
+            {
+                "switch expression null arm",
+                Fixture("        int picked = _target switch { null => 1, _ => 0 };"),
+                "DxCmd0004",
+                1,
+            };
+            yield return new object[]
+            {
+                "is { } property pattern",
+                Fixture("        bool present = _target is { };"),
+                "DxCmd0004",
+                1,
+            };
+            yield return new object[]
+            {
+                "is not { } property pattern",
+                Fixture("        bool present = _target is not { };"),
+                "DxCmd0004",
+                1,
+            };
+            yield return new object[]
+            {
+                "generic constrained to UnityEngine.Object coalesce",
+                Fixture(
+                    "        T Merge<T>(T value) where T : UnityEngine.Object => value ?? new UnityEngine.Object();\n        UnityEngine.Object merged = Merge(_widget);"
+                ),
+                "DxCmd0002",
+                1,
+            };
+            yield return new object[]
+            {
+                "generic constrained to UnityEngine.Object is null",
+                Fixture(
+                    "        static bool GenericIsAbsent<T>(T value) where T : UnityEngine.Object\n        {\n            return value is null;\n        }\n\n        bool absent = GenericIsAbsent(_widget);"
+                ),
+                "DxCmd0004",
+                1,
+            };
         }
 
         public static IEnumerable<object[]> CompliantCases()
@@ -215,6 +293,18 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators.Tests
             {
                 "error-type receiver does not crash the analyzer",
                 Fixture("        _unknown?.ToString();"),
+            };
+            yield return new object[]
+            {
+                "string switch null case is not a Unity receiver",
+                Fixture(
+                    "        switch (_text)\n        {\n            case null:\n                break;\n        }"
+                ),
+            };
+            yield return new object[]
+            {
+                "typed property pattern is a type test, not a null check",
+                Fixture("        bool typed = _target is UnityEngine.Object { };"),
             };
         }
 
@@ -299,9 +389,13 @@ namespace Fixtures
         {
             ImmutableArray<Diagnostic> diagnostics = Analyze(source);
             int actual = diagnostics.Count(diagnostic => diagnostic.Id == diagnosticId);
+            int total = diagnostics.Count(diagnostic =>
+                diagnostic.Id.StartsWith(DiagnosticIdPrefix, StringComparison.Ordinal)
+            );
             Assert.True(
-                expectedCount == actual,
-                $"{caseName}: expected {expectedCount} {diagnosticId}, found {actual}. All: {Describe(diagnostics)}"
+                expectedCount == actual && total == expectedCount,
+                $"{caseName}: expected {expectedCount} {diagnosticId}, found {actual} (all DxCmd: "
+                    + $"{total}). All: {Describe(diagnostics)}"
             );
         }
 
