@@ -4,7 +4,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     using System.Collections.Generic;
     using System.Text;
     using DataStructures;
-    using Helper;
     using UnityEngine;
 
     public sealed class CommandLog
@@ -21,6 +20,14 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         private readonly CyclicBuffer<LogItem> _logs;
 
+        /*
+            Member buffer for stack-trace reduction: one per log, reused per
+            write, grown to the longest trace seen, and reclaimed with this
+            instance. HandleLog runs on the caller's thread, so no shared
+            pool or lease is needed here.
+         */
+        private StringBuilder _traceBuilder;
+
         private long _version;
 
         public CommandLog(int maxItems, IEnumerable<TerminalLogType> ignoredLogTypes = null)
@@ -31,23 +38,62 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             );
         }
 
+        public bool HandleLog(string message, TerminalLogType type, bool includeStackTrace = true)
+        {
+            string stackTrace = includeStackTrace
+                ? ReduceStackTrace(StackTraceUtility.ExtractStackTrace())
+                : string.Empty;
+            return HandleLog(message, stackTrace, type);
+        }
+
+        public bool HandleLog(string message, string stackTrace, TerminalLogType type)
+        {
+            if (ignoredLogTypes.Contains(type))
+            {
+                return false;
+            }
+
+            _version++;
+            LogItem log = new(type, message, stackTrace);
+            _logs.Add(log);
+            return true;
+        }
+
+        public int Clear()
+        {
+            int logCount = _logs.Count;
+            _logs.Clear();
+            _version++;
+            return logCount;
+        }
+
+        public void Resize(int newCapacity)
+        {
+            if (newCapacity < _logs.Count)
+            {
+                _version++;
+            }
+            _logs.Resize(newCapacity);
+        }
+
         /*
             Reduces a full Unity stack trace to the caller's frames: drops
             line 0 (this call site) and every following line naming this
             package, joining the kept lines with Environment.NewLine. One
-            index walk into a rented builder instead of Split + Join, so a
-            log write allocates no lines array and no per-line substrings.
-            Null, empty, and whitespace inputs pass through unchanged.
+            index walk into the member builder instead of Split + Join, so
+            a log write allocates only the result string. Null, empty, and
+            whitespace inputs pass through unchanged.
          */
-        internal static string ReduceStackTrace(string fullStackTrace)
+        internal string ReduceStackTrace(string fullStackTrace)
         {
             if (string.IsNullOrWhiteSpace(fullStackTrace))
             {
                 return fullStackTrace;
             }
 
-            using CachedStringBuilder.Scope scope = new(fullStackTrace.Length + 16);
-            StringBuilder builder = scope.Builder;
+            _traceBuilder ??= new StringBuilder(fullStackTrace.Length + 16);
+            _traceBuilder.Clear();
+            StringBuilder builder = _traceBuilder;
 
             int length = fullStackTrace.Length;
             int lineStart = 0;
@@ -108,44 +154,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
 
             return builder.ToString();
-        }
-
-        public bool HandleLog(string message, TerminalLogType type, bool includeStackTrace = true)
-        {
-            string stackTrace = includeStackTrace
-                ? ReduceStackTrace(StackTraceUtility.ExtractStackTrace())
-                : string.Empty;
-            return HandleLog(message, stackTrace, type);
-        }
-
-        public bool HandleLog(string message, string stackTrace, TerminalLogType type)
-        {
-            if (ignoredLogTypes.Contains(type))
-            {
-                return false;
-            }
-
-            _version++;
-            LogItem log = new(type, message, stackTrace);
-            _logs.Add(log);
-            return true;
-        }
-
-        public int Clear()
-        {
-            int logCount = _logs.Count;
-            _logs.Clear();
-            _version++;
-            return logCount;
-        }
-
-        public void Resize(int newCapacity)
-        {
-            if (newCapacity < _logs.Count)
-            {
-                _version++;
-            }
-            _logs.Resize(newCapacity);
         }
     }
 }

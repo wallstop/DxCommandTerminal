@@ -3,14 +3,14 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     using System;
     using System.Collections.Generic;
     using Extensions;
-    using Helper;
 
     public sealed class CommandAutoComplete
     {
         /*
-            The caller-supplied known words in sorted order. Unity's Mono
-            runtime allocates a fresh enumerator for every SortedSet pass,
-            even when the set is empty, so sweeps iterate this list instead.
+            The caller-supplied known words in sorted order, case-variant
+            duplicates collapsed. Unity's Mono runtime allocates a fresh
+            enumerator for every SortedSet pass, even when the set is empty,
+            so sweeps iterate this member list instead of a sorted set.
          */
         private readonly List<string> _knownWords = new();
 
@@ -45,13 +45,12 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             _shell = shell ?? throw new ArgumentNullException(nameof(shell));
 
             /*
-                Bulk add, then one sort: insertion-time binary searches would
-                make construction quadratic. The seen set keeps the first
-                casing of case-variant duplicates, matching the ordered-set
-                semantics this list replaces.
+                Dedupe on the member list itself: bulk add, one sort, then
+                collapse adjacent case-insensitive duplicates in place. No
+                rented buffer, no static pool. Case-variant duplicates keep
+                the ordinal-smallest casing of their run, which is stable
+                regardless of the sort's instability.
              */
-            using CachedStringSets.StringSetScope seenScope = CachedStringSets.RentIgnoreCase();
-            HashSet<string> seen = seenScope.Set;
             foreach (string known in commands ?? Array.Empty<string>())
             {
                 if (known == null)
@@ -59,13 +58,55 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                     throw new ArgumentNullException(nameof(commands));
                 }
 
-                if (seen.Add(known))
-                {
-                    _knownWords.Add(known);
-                }
+                _knownWords.Add(known);
             }
 
             _knownWords.Sort(StringComparer.OrdinalIgnoreCase);
+            CollapseCaseInsensitiveDuplicates(_knownWords);
+        }
+
+        /*
+            In a list sorted with the OrdinalIgnoreCase comparer, duplicates
+            that differ only by case sit adjacent. Each run collapses to one
+            entry; the run's ordinal-smallest casing wins so the result is
+            deterministic even though string sorts are unstable.
+         */
+        private static void CollapseCaseInsensitiveDuplicates(List<string> words)
+        {
+            int writeIndex = 0;
+            int readIndex = 0;
+            while (readIndex < words.Count)
+            {
+                string representative = words[readIndex];
+                int runEnd = readIndex + 1;
+                while (runEnd < words.Count)
+                {
+                    string candidate = words[runEnd];
+                    if (
+                        !string.Equals(
+                            candidate,
+                            representative,
+                            StringComparison.OrdinalIgnoreCase
+                        )
+                    )
+                    {
+                        break;
+                    }
+
+                    if (string.CompareOrdinal(candidate, representative) < 0)
+                    {
+                        representative = candidate;
+                    }
+
+                    ++runEnd;
+                }
+
+                words[writeIndex] = representative;
+                ++writeIndex;
+                readIndex = runEnd;
+            }
+
+            words.RemoveRange(writeIndex, words.Count - writeIndex);
         }
 
         public string[] Complete(string text)

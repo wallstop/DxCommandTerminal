@@ -20,6 +20,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         private static readonly string JoinSeparator = Environment.NewLine;
 
+        private CommandLog _log;
+
         private static IEnumerable<TestCaseData> Corpus()
         {
             yield return new TestCaseData(null).SetName("Corpus.Null");
@@ -96,10 +98,16 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 : string.Join(JoinSeparator, lines, startIndex, lines.Length - startIndex);
         }
 
+        [SetUp]
+        public void SetUp()
+        {
+            _log = new CommandLog(16);
+        }
+
         [TestCaseSource(nameof(Corpus))]
         public void ReduceMatchesSplitJoinReference(string fullStackTrace)
         {
-            string actual = CommandLog.ReduceStackTrace(fullStackTrace);
+            string actual = _log.ReduceStackTrace(fullStackTrace);
             string expected = ReduceReference(fullStackTrace);
             Assert.AreEqual(expected, actual, $"Input: {fullStackTrace ?? "<null>"}");
         }
@@ -107,9 +115,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void ReducePassesThroughNullLikeInputs()
         {
-            Assert.AreEqual(null, CommandLog.ReduceStackTrace(null));
-            Assert.AreEqual(string.Empty, CommandLog.ReduceStackTrace(string.Empty));
-            Assert.AreEqual(" ", CommandLog.ReduceStackTrace(" "));
+            Assert.AreEqual(null, _log.ReduceStackTrace(null));
+            Assert.AreEqual(string.Empty, _log.ReduceStackTrace(string.Empty));
+            Assert.AreEqual(" ", _log.ReduceStackTrace(" "));
         }
     }
 }

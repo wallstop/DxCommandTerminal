@@ -23,15 +23,43 @@ them on a new runtime.
   output is derivable in one index walk, build it into a rented `CachedStringBuilder`
   instead (see `CommandLog.ReduceStackTrace` - cut log-write median 0.40 -> 0.25 ms, and
   pin the rewrite against the old algorithm kept as a test-side reference).
-- Function-local transient collections (constructor, cold, or hot paths): rent from a pool
-  through a value-based scope and `using`, never hand-rolled try/finally - the repo rule is
-  value-based `IDisposable` scopes (pattern adapted from unity-helpers'
-  `SetBuffers<T>`/`PooledResource<T>`, MIT): see `CachedStringSets` /
-  `CachedStringBuilder.Scope` in `Runtime/Helper/`. The pool gives every concurrent or
-  nested rent its own buffer; a single shared ThreadStatic slot does not nest safely.
-  Scope structs are values: use one only as the direct subject of a `using` - a copy
-  shares the buffer, so each copy's Dispose would run. Sweep with
-  `rg "= new (HashSet|List|Dictionary)" Runtime/` and classify each hit cold vs per-call.
+- Prefer a **member collection** over any shared pool: a buffer owned by
+  the instance that does the work needs no lease, no copy-safety proof,
+  no re-entrancy analysis, and is reclaimed with its owner. Examples:
+  `CommandAutoComplete._knownWords` (construction dedupe = bulk add, one
+  sort, collapse adjacent case-insensitive duplicates in place - keep the
+  ordinal-smallest casing of each run so the result stays deterministic
+  despite unstable sorts) and `CommandLog._traceBuilder` (one builder per
+  log instance, reused per write). Reach for a shared pool only when no
+  single instance owns the work (heterogeneous static/instance call
+  sites), as with `CachedStringBuilder`.
+- Shared pools MUST reclaim - growth-only retention is a leak
+  (issue #108 review). Evict on return: `CachedStringBuilder` drops a
+  builder whose capacity exceeds `MaxRetainedBuilderCapacity` (8192), so
+  one-off spikes reclaim instead of pinning; retained memory is bounded
+  by slots x bound. Recheck eviction in tests by renting oversized,
+  returning, and re-renting (the replacement must be small).
+- For shared rented buffers, the scope must be copy-safe and the pool
+  re-entrant (review round 4): a per-copy `_returned` flag is not
+  copy-safe (two copies each run Dispose), and a single
+  `[ThreadStatic]` slot is not re-entrant. Use the lease-guarded slot
+  pool: `CachedLease`/`CachedLeases` (adapted from unity-helpers'
+  `DisposalLease`, MIT) - the generation lives outside the struct, so
+  exactly one copy of a scope wins the claim even if a stale copy is
+  disposed after the slot was re-rented - plus `CachedSlotStorage<T>`
+  (slot-indexed buffer storage) and a per-thread free list. Every rent
+  leases a distinct slot, so nested rents never share a buffer.
+- On Unity's Mono, `ConcurrentStack.Push` allocates a node on every call,
+  so `ConcurrentStack`-backed pools allocate on every buffer RETURN. The
+  lease free list is plain int fields - the whole rent-use-return cycle
+  allocates nothing. Verify with a pin over the whole cycle, not just the
+  rent.
+- Scope structs are values: use one only as the direct subject of a
+  `using` - a copy shares the same lease slot (that is safe), but a copy
+  disposed after the buffer was re-rented must lose its claim, which the
+  generation check guarantees. Sweep with
+  `rg "= new (HashSet|List|Dictionary)" Runtime/` and classify each hit
+  cold vs per-call.
 - `Terminal.Log` pays stack-trace extraction per call (~0.25 ms median on the pinned
   editor after the reduction pass); that is deliberate caller attribution, not a defect.
 
@@ -74,10 +102,9 @@ first-inserted-wins for case-variant duplicates.
 
 ## Sweep checklist for a new hot path
 
+- A member collection can own it? Prefer that over any shared pool.
 - Enumerating a sorted collection per call? Snapshot + version (above).
 - Building strings per call? `CachedStringBuilder.Rent` (context.md rule 23).
-- Transient collection per call, even in a constructor? `using` a pooled scope
-  (`CachedStringSets`, or add a sibling pool to `Runtime/Helper/`). Never try/finally for
-  buffer returns; never a single shared slot.
+- Shared rented buffer? Lease-guarded slots + evict oversized on return.
 - New mutation site on a snapshotted collection? Bump the version.
 - New allocation test? Warm first; pin through `AllocationAssertions`.
