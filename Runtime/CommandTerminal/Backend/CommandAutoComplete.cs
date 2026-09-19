@@ -7,6 +7,15 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     public sealed class CommandAutoComplete
     {
         /*
+            Rented per construction for the known-word dedupe pass, mirroring
+            CachedStringBuilder: a shared static set would race between
+            threads, so ThreadStatic keeps each thread's buffer private and
+            construction allocates only the first time per thread.
+         */
+        [ThreadStatic]
+        private static HashSet<string> _seenBuffer;
+
+        /*
             The caller-supplied known words in sorted order. Unity's Mono
             runtime allocates a fresh enumerator for every SortedSet pass,
             even when the set is empty, so sweeps iterate this list instead.
@@ -49,18 +58,32 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 casing of case-variant duplicates, matching the ordered-set
                 semantics this list replaces.
              */
-            HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
-            foreach (string known in commands ?? Array.Empty<string>())
+            HashSet<string> seen = _seenBuffer;
+            _seenBuffer = null;
+            if (seen == null)
             {
-                if (known == null)
-                {
-                    throw new ArgumentNullException(nameof(commands));
-                }
+                seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            }
 
-                if (seen.Add(known))
+            try
+            {
+                foreach (string known in commands ?? Array.Empty<string>())
                 {
-                    _knownWords.Add(known);
+                    if (known == null)
+                    {
+                        throw new ArgumentNullException(nameof(commands));
+                    }
+
+                    if (seen.Add(known))
+                    {
+                        _knownWords.Add(known);
+                    }
                 }
+            }
+            finally
+            {
+                seen.Clear();
+                _seenBuffer = seen;
             }
 
             _knownWords.Sort(StringComparer.OrdinalIgnoreCase);

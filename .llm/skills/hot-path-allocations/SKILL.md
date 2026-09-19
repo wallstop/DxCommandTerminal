@@ -19,8 +19,17 @@ them on a new runtime.
 - `char.ToLowerInvariant`, `string` comparisons (`StartsWith`, `Equals`, ordinal and
   OrdinalIgnoreCase), and `HashSet`/`Dictionary` adds (default or `OrdinalIgnoreCase`)
   are allocation-free once warmed. Do not "optimize" them preemptively.
-- `Terminal.Log` pays stack-trace extraction per call (~0.4 ms median on the pinned
-  editor); that is deliberate caller attribution, not a defect.
+- Splitting + joining strings allocates an array plus one substring per line; when the
+  output is derivable in one index walk, build it into a rented `CachedStringBuilder`
+  instead (see `CommandLog.ReduceStackTrace` - cut log-write median 0.40 -> 0.25 ms, and
+  pin the rewrite against the old algorithm kept as a test-side reference).
+- Function-local transient collections in constructors and cold paths: rent a
+  `[ThreadStatic]` buffer (rent, null the field, try/finally Clear + return) instead of
+  `new` per call - see the known-word dedupe in `CommandAutoComplete`. Reserve plain
+  locals for genuinely one-time setup; sweep with
+  `rg "= new (HashSet|List|Dictionary)" Runtime/` and classify each hit cold vs per-call.
+- `Terminal.Log` pays stack-trace extraction per call (~0.25 ms median on the pinned
+  editor after the reduction pass); that is deliberate caller attribution, not a defect.
 
 ## Version-gated snapshots
 
