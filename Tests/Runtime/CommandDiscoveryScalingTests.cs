@@ -26,9 +26,18 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         Filler assemblies are dynamic, so classification exercises the
         IsDynamic skip rather than metadata reads; the live editor domain
         (its own non-dynamic assemblies) carries the metadata-read cost in
-        every measured window, and the 0-command tier pins the true
-        cold-domain number. Later tiers' cold numbers cover first-touch of
-        their tier assembly only - domain caches warm across the session.
+        every measured window. The first registration cycle this suite runs
+        carries the true cold-domain number (NUnit runs these fixtures
+        alphabetically, so the inflated-domain test usually runs first);
+        later tiers' cold numbers cover first-touch of their tier assembly
+        only - domain caches warm across the session, and the 0-command
+        tier separates whole-domain scan cost from per-command cost. The
+        10,000-command tier is a documented scaling stress tier whose warm
+        tail is allocator/GC dominated. Filler assemblies persist for the
+        whole play session (dynamic assemblies are non-collectible); other
+        fixtures must not assert absolute domain assembly counts. Measured
+        windows exclude the shell's readiness log line (the editor logger
+        is disabled around them and restored in finally).
      */
     public sealed class CommandDiscoveryScalingTests
     {
@@ -41,6 +50,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private const int WarmupShellCount = 3;
 
         private const int WarmShellCount = 30;
+
+        private const float ClassificationTripwireMilliseconds = 25f;
 
         private static readonly Assembly[] FillerAssemblies = CreateFillerAssemblies();
 
@@ -145,29 +156,43 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         private static ReadinessReport MeasureReadiness()
         {
-            CommandShell coldShell = CreateDeferredShell();
-            Stopwatch stopwatch = Stopwatch.StartNew();
-            coldShell.EnsureAutoCommandsRegistered();
-            stopwatch.Stop();
-            double coldMilliseconds = stopwatch.Elapsed.TotalMilliseconds;
-
-            for (int i = 0; i < WarmupShellCount; ++i)
+            /*
+                The shell logs every registration cycle in the editor; that
+                log I/O would sit inside every measured window (and dominate
+                the small tiers), so it is silenced around the measurement.
+             */
+            bool logsEnabled = Debug.unityLogger.logEnabled;
+            Debug.unityLogger.logEnabled = false;
+            try
             {
-                CreateDeferredShell().EnsureAutoCommandsRegistered();
-            }
-
-            double[] samples = new double[WarmShellCount];
-            for (int i = 0; i < WarmShellCount; ++i)
-            {
-                CommandShell shell = CreateDeferredShell();
-                stopwatch.Restart();
-                shell.EnsureAutoCommandsRegistered();
+                CommandShell coldShell = CreateDeferredShell();
+                Stopwatch stopwatch = Stopwatch.StartNew();
+                coldShell.EnsureAutoCommandsRegistered();
                 stopwatch.Stop();
-                samples[i] = stopwatch.Elapsed.TotalMilliseconds;
-            }
+                double coldMilliseconds = stopwatch.Elapsed.TotalMilliseconds;
 
-            Array.Sort(samples);
-            return new ReadinessReport(coldShell, coldMilliseconds, samples);
+                for (int i = 0; i < WarmupShellCount; ++i)
+                {
+                    CreateDeferredShell().EnsureAutoCommandsRegistered();
+                }
+
+                double[] samples = new double[WarmShellCount];
+                for (int i = 0; i < WarmShellCount; ++i)
+                {
+                    CommandShell shell = CreateDeferredShell();
+                    stopwatch.Restart();
+                    shell.EnsureAutoCommandsRegistered();
+                    stopwatch.Stop();
+                    samples[i] = stopwatch.Elapsed.TotalMilliseconds;
+                }
+
+                Array.Sort(samples);
+                return new ReadinessReport(coldShell, coldMilliseconds, samples);
+            }
+            finally
+            {
+                Debug.unityLogger.logEnabled = logsEnabled;
+            }
         }
 
         private static double Percentile(double[] sortedMilliseconds, double fraction)
@@ -308,17 +333,25 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void InflatedDomainKeepsClassificationAndReadinessBounded()
         {
             AssemblyName runtimeAssembly = typeof(BuiltInCommands).Assembly.GetName();
+            int leakingFillers = 0;
             Stopwatch stopwatch = Stopwatch.StartNew();
             foreach (Assembly filler in FillerAssemblies)
             {
-                Assert.IsFalse(
-                    CommandShell.MayContainCommands(filler, runtimeAssembly),
-                    $"Filler assembly {filler.GetName().Name} must fail the reference filter"
-                );
+                if (CommandShell.MayContainCommands(filler, runtimeAssembly))
+                {
+                    leakingFillers++;
+                }
             }
 
             stopwatch.Stop();
             double classificationMilliseconds = stopwatch.Elapsed.TotalMilliseconds;
+            Assert.AreEqual(0, leakingFillers, "No filler assembly may pass the reference filter");
+            Assert.Less(
+                classificationMilliseconds,
+                ClassificationTripwireMilliseconds,
+                $"Classifying {FillerAssemblyCount} filler assemblies took "
+                    + $"{classificationMilliseconds:F3} ms >= {ClassificationTripwireMilliseconds} ms"
+            );
 
             Assembly volumeAssembly = CreateVolumeAssembly(GateTierCommandCount);
             _handles.Add(CommandShell.IncludeDiscoveryAssembly(volumeAssembly));
@@ -343,6 +376,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
         }
 
+        /*
+            Serves the tier assembly through the provider stage. Deliberately
+            uncached: the shell never caches provider results (providers own
+            their caching), so its warm numbers measure the uncached walk
+            and are not directly comparable to the shell-cached reflected
+            path.
+         */
         private sealed class VolumeProvider : ICommandDiscoveryProvider
         {
             private readonly Assembly _claimedAssembly;
