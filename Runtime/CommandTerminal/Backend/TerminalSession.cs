@@ -47,13 +47,21 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             int logBufferSize = Mathf.Max(0, config.LogBufferSize);
             if (force || Buffer == null)
             {
-                Buffer = new CommandLog(logBufferSize, config.IgnoredLogTypes);
+                Buffer = new CommandLog(logBufferSize, config.IgnoredLogTypes)
+                {
+                    stackTraceMode = config.StackTraceMode,
+                };
             }
             else
             {
                 if (Buffer.Capacity != logBufferSize)
                 {
                     Buffer.Resize(logBufferSize);
+                }
+
+                if (Buffer.stackTraceMode != config.StackTraceMode)
+                {
+                    Buffer.stackTraceMode = config.StackTraceMode;
                 }
 
                 if (!Buffer.ignoredLogTypes.SetEquals(config.IgnoredLogTypes ?? EmptyLogTypes))
@@ -145,12 +153,15 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
             public bool IgnoreDefaultCommands { get; }
 
+            public TerminalStackTraceMode StackTraceMode { get; }
+
             public Config(
                 int logBufferSize,
                 int historyBufferSize,
                 IReadOnlyList<TerminalLogType> ignoredLogTypes,
                 IReadOnlyList<string> disabledCommands,
-                bool ignoreDefaultCommands
+                bool ignoreDefaultCommands,
+                TerminalStackTraceMode stackTraceMode = TerminalStackTraceMode.All
             )
             {
                 LogBufferSize = logBufferSize;
@@ -158,6 +169,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 IgnoredLogTypes = ignoredLogTypes;
                 DisabledCommands = disabledCommands;
                 IgnoreDefaultCommands = ignoreDefaultCommands;
+                StackTraceMode = stackTraceMode;
             }
         }
     }

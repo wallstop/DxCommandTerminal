@@ -18,6 +18,13 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         public readonly HashSet<TerminalLogType> ignoredLogTypes;
 
+        /*
+            Which entries capture a caller stack trace. All keeps the
+            pre-existing behavior; ErrorsAndWarnings and Disabled skip Unity's
+            ExtractStackTrace for routine entries, the dominant per-log cost.
+         */
+        public TerminalStackTraceMode stackTraceMode = TerminalStackTraceMode.All;
+
         private readonly CyclicBuffer<LogItem> _logs;
 
         /*
@@ -40,9 +47,12 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         public bool HandleLog(string message, TerminalLogType type, bool includeStackTrace = true)
         {
-            string stackTrace = includeStackTrace
-                ? ReduceStackTrace(StackTraceUtility.ExtractStackTrace())
-                : string.Empty;
+            if (!includeStackTrace || !CapturesStackTrace(type))
+            {
+                return HandleLog(message, string.Empty, type);
+            }
+
+            string stackTrace = ReduceStackTrace(StackTraceUtility.ExtractStackTrace());
             return HandleLog(message, stackTrace, type);
         }
 
@@ -51,6 +61,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             if (ignoredLogTypes.Contains(type))
             {
                 return false;
+            }
+
+            if (!CapturesStackTrace(type))
+            {
+                stackTrace = string.Empty;
             }
 
             _version++;
@@ -154,6 +169,29 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
 
             return builder.ToString();
+        }
+
+        /*
+            The only modes that filter or skip capture. Everything else (the
+            obsolete zero sentinel a stale serialized asset can hold, and any
+            future member) keeps the legacy capture-all behavior, so unknown
+            values never silently drop diagnostics.
+         */
+        private bool CapturesStackTrace(TerminalLogType type)
+        {
+            switch (stackTraceMode)
+            {
+                case TerminalStackTraceMode.Disabled:
+                    return false;
+                case TerminalStackTraceMode.ErrorsAndWarnings:
+                    return type
+                        is TerminalLogType.Error
+                            or TerminalLogType.Assert
+                            or TerminalLogType.Exception
+                            or TerminalLogType.Warning;
+                default:
+                    return true;
+            }
         }
     }
 }

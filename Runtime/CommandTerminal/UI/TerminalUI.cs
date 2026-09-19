@@ -162,6 +162,12 @@
 
         [SerializeField]
         [Tooltip(
+            "Which entries capture a caller stack trace. ErrorsAndWarnings and Disabled skip the per-log extraction cost for routine messages."
+        )]
+        internal TerminalStackTraceMode _stackTraceMode = TerminalStackTraceMode.All;
+
+        [SerializeField]
+        [Tooltip(
             "Shared settings asset applied when this component wakes; its values win over the serialized component values. Empty = component values."
         )]
         internal TerminalSettings _settings;
@@ -372,6 +378,7 @@
                 nameof(_disabledCommands),
                 nameof(ignoreDefaultCommands),
                 nameof(_fontPack),
+                nameof(_stackTraceMode),
             };
             TrackProperties(staticStaticPropertiesTracked, _staticStateProperties);
 
@@ -631,6 +638,7 @@
             _ignoredLogTypes = CopyList(_settings.ignoredLogTypes);
             _disabledCommands = CopyList(_settings.disabledCommands);
             _logUnityMessages = _settings.logUnityMessages;
+            _stackTraceMode = _settings.stackTraceMode;
         }
 
         private void RefreshStaticState(bool force)
@@ -641,7 +649,8 @@
                     historyBufferSize: _historyBufferSize,
                     ignoredLogTypes: _ignoredLogTypes,
                     disabledCommands: _disabledCommands,
-                    ignoreDefaultCommands: ignoreDefaultCommands
+                    ignoreDefaultCommands: ignoreDefaultCommands,
+                    stackTraceMode: _stackTraceMode
                 ),
                 force
             );

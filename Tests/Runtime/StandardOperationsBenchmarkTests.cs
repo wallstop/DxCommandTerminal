@@ -75,6 +75,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return new TestCaseData(1000, TypedSelectivePrefix, DefaultSampleCount).SetName(
                 "Tier.Thousand.Selective"
             );
+            yield return new TestCaseData(10000, TypedAllMatchPrefix, StressSampleCount).SetName(
+                "Tier.TenThousand.AllMatch"
+            );
+            yield return new TestCaseData(10000, TypedSelectivePrefix, StressSampleCount).SetName(
+                "Tier.TenThousand.Selective"
+            );
         }
 
         private static IEnumerable<TestCaseData> ExecutionCases()
@@ -192,107 +198,17 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
             LogScale("log-write", "stackTrace=true", withStack);
             LogScale("log-write", "stackTrace=false", withoutStack);
-        }
-
-        [TestCaseSource(nameof(ExecutionCases))]
-        public void MeasuresCommandExecution(bool addToHistory, int sampleCount)
-        {
-            CreateBackends(10);
-            string line = addToHistory ? "bench-cmd-0007 5" : $"{NoHistoryCommandName} 5";
-            int historyBaseline = _history.Count;
-
-            OperationReport report = Measure(() => _shell.RunCommand(line), sampleCount);
-
-            Assert.IsTrue(
-                _shell.Commands.ContainsKey("bench-cmd-0007"),
-                "Sanity: the executed command must be registered"
-            );
-            if (addToHistory)
-            {
-                Assert.Less(
-                    historyBaseline,
-                    _history.Count,
-                    "Sanity: history-on execution must push an entry"
-                );
-            }
-            else
-            {
-                Assert.AreEqual(
-                    historyBaseline,
-                    _history.Count,
-                    "Sanity: history-off execution must not push"
-                );
-            }
-
-            LogScale("command-execution", $"history={addToHistory}", report);
-        }
-
-        [TestCaseSource(nameof(TraversalCases))]
-        public void MeasuresHistoryTraversal(int entryCount, int sampleCount)
-        {
-            _history = new CommandHistory(entryCount);
-            for (int i = 0; i < entryCount; ++i)
-            {
-                Assert.IsTrue(
-                    _history.Push($"bench-entry-{i:D5}", true, true),
-                    $"History should accept entry {i}"
-                );
-            }
-
-            Assert.AreEqual(
-                $"bench-entry-{entryCount - 1:D5}",
-                _history.Previous(true),
-                "Sanity: traversal must start at the newest entry"
-            );
 
             /*
-                The first sweep normalizes the traversal position; every later
-                Previous x N / Next x N cycle returns to the same state, so
-                the warmed samples measure one steady state.
+                Per-mode rows for issue #108: the extraction-path write under
+                each capture mode, same workload as the stackTrace=true row.
              */
-            Action sweep = () =>
-            {
-                for (int i = 0; i < entryCount; ++i)
-                {
-                    _history.Previous(true);
-                }
-
-                for (int i = 0; i < entryCount; ++i)
-                {
-                    _history.Next(true);
-                }
-            };
-
-            OperationReport report = Measure(sweep, sampleCount);
-            LogScale(
-                "history-traversal",
-                $"entries={entryCount} calls={entryCount * 2} "
-                    + $"perCallUs={report.MedianMilliseconds * 1000.0 / (entryCount * 2):F3}",
-                report
+            OperationReport errorsAndWarnings = MeasureWithMode(
+                TerminalStackTraceMode.ErrorsAndWarnings
             );
-        }
-
-        [TestCaseSource(nameof(TypingCases))]
-        public void MeasuresTypingCompletion(int commandCount, string token, int sampleCount)
-        {
-            CreateBackends(commandCount);
-
-            OperationReport report = Measure(
-                () => _autoComplete.Complete(token, _completionBuffer),
-                sampleCount
-            );
-
-            int minimumMatches = Math.Min(commandCount, SelectiveMatchCount);
-            Assert.LessOrEqual(
-                minimumMatches,
-                _completionBuffer.Count,
-                $"Sanity: typed prefix '{token}' should match its tier commands"
-            );
-            LogScale(
-                "typing-completion",
-                $"commands={commandCount} token='{token}' matches={_completionBuffer.Count}",
-                report
-            );
+            OperationReport none = MeasureWithMode(TerminalStackTraceMode.Disabled);
+            LogScale("log-write", "mode=ErrorsAndWarnings type=ShellMessage", errorsAndWarnings);
+            LogScale("log-write", "mode=Disabled type=ShellMessage", none);
         }
 
         [Test]
@@ -432,6 +348,124 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 $"Backend reuse p95 exceeded the tripwire "
                     + $"({report.Percentile95Milliseconds:F3} ms >= {StartupReuseTripwireMilliseconds} ms)"
             );
+        }
+
+        [TestCaseSource(nameof(ExecutionCases))]
+        public void MeasuresCommandExecution(bool addToHistory, int sampleCount)
+        {
+            CreateBackends(10);
+            string line = addToHistory ? "bench-cmd-0007 5" : $"{NoHistoryCommandName} 5";
+            int historyBaseline = _history.Count;
+
+            OperationReport report = Measure(() => _shell.RunCommand(line), sampleCount);
+
+            Assert.IsTrue(
+                _shell.Commands.ContainsKey("bench-cmd-0007"),
+                "Sanity: the executed command must be registered"
+            );
+            if (addToHistory)
+            {
+                Assert.Less(
+                    historyBaseline,
+                    _history.Count,
+                    "Sanity: history-on execution must push an entry"
+                );
+            }
+            else
+            {
+                Assert.AreEqual(
+                    historyBaseline,
+                    _history.Count,
+                    "Sanity: history-off execution must not push"
+                );
+            }
+
+            LogScale("command-execution", $"history={addToHistory}", report);
+        }
+
+        [TestCaseSource(nameof(TraversalCases))]
+        public void MeasuresHistoryTraversal(int entryCount, int sampleCount)
+        {
+            _history = new CommandHistory(entryCount);
+            for (int i = 0; i < entryCount; ++i)
+            {
+                Assert.IsTrue(
+                    _history.Push($"bench-entry-{i:D5}", true, true),
+                    $"History should accept entry {i}"
+                );
+            }
+
+            Assert.AreEqual(
+                $"bench-entry-{entryCount - 1:D5}",
+                _history.Previous(true),
+                "Sanity: traversal must start at the newest entry"
+            );
+
+            /*
+                The first sweep normalizes the traversal position; every later
+                Previous x N / Next x N cycle returns to the same state, so
+                the warmed samples measure one steady state.
+             */
+            Action sweep = () =>
+            {
+                for (int i = 0; i < entryCount; ++i)
+                {
+                    _history.Previous(true);
+                }
+
+                for (int i = 0; i < entryCount; ++i)
+                {
+                    _history.Next(true);
+                }
+            };
+
+            OperationReport report = Measure(sweep, sampleCount);
+            LogScale(
+                "history-traversal",
+                $"entries={entryCount} calls={entryCount * 2} "
+                    + $"perCallUs={report.MedianMilliseconds * 1000.0 / (entryCount * 2):F3}",
+                report
+            );
+        }
+
+        [TestCaseSource(nameof(TypingCases))]
+        public void MeasuresTypingCompletion(int commandCount, string token, int sampleCount)
+        {
+            CreateBackends(commandCount);
+
+            OperationReport report = Measure(
+                () => _autoComplete.Complete(token, _completionBuffer),
+                sampleCount
+            );
+
+            int minimumMatches = Math.Min(commandCount, SelectiveMatchCount);
+            Assert.LessOrEqual(
+                minimumMatches,
+                _completionBuffer.Count,
+                $"Sanity: typed prefix '{token}' should match its tier commands"
+            );
+            LogScale(
+                "typing-completion",
+                $"commands={commandCount} token='{token}' matches={_completionBuffer.Count}",
+                report
+            );
+        }
+
+        private OperationReport MeasureWithMode(TerminalStackTraceMode mode)
+        {
+            _log.stackTraceMode = mode;
+            try
+            {
+                FillLogToCapacity();
+                return Measure(
+                    () => _log.HandleLog("bench message", TerminalLogType.ShellMessage),
+                    DefaultSampleCount
+                );
+            }
+            finally
+            {
+                _log.stackTraceMode = TerminalStackTraceMode.All;
+            }
         }
 
         private void CreateBackends(int commandCount)

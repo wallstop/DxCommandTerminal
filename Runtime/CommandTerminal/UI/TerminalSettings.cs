@@ -86,6 +86,12 @@ namespace WallstopStudios.DxCommandTerminal.UI
         [Tooltip("Forward Unity's own log messages into the terminal")]
         public bool logUnityMessages;
 
+        [Tooltip(
+            "Which entries capture a caller stack trace. ErrorsAndWarnings and Disabled skip the "
+                + "per-log extraction cost for routine messages."
+        )]
+        public TerminalStackTraceMode stackTraceMode = TerminalStackTraceMode.All;
+
         [Header("Command Palette")]
         [Tooltip(
             "Hotkey that opens/closes the command palette (supports ctrl+ and shift+ modifiers)"

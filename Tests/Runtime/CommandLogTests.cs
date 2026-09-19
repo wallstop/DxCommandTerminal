@@ -98,6 +98,81 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 : string.Join(JoinSeparator, lines, startIndex, lines.Length - startIndex);
         }
 
+        private static IEnumerable<TestCaseData> StackTraceModeCases()
+        {
+            /*
+                Rows: (mode, type, expected trace capture). Diagnostic types
+                capture in every mode except Disabled; routine types capture only
+                under All. Both entry points (extraction and caller-supplied
+                traces) enforce the same rule.
+             */
+            yield return new TestCaseData(
+                TerminalStackTraceMode.All,
+                TerminalLogType.ShellMessage,
+                true
+            ).SetName("Mode.All.CapturesRoutine");
+            yield return new TestCaseData(
+                TerminalStackTraceMode.All,
+                TerminalLogType.Error,
+                true
+            ).SetName("Mode.All.CapturesError");
+            yield return new TestCaseData(
+                (TerminalStackTraceMode)0,
+                TerminalLogType.ShellMessage,
+                true
+            ).SetName("Mode.StaleZero.CapturesLikeAll.Routine");
+            yield return new TestCaseData(
+                (TerminalStackTraceMode)0,
+                TerminalLogType.Error,
+                true
+            ).SetName("Mode.StaleZero.CapturesLikeAll.Error");
+            yield return new TestCaseData(
+                TerminalStackTraceMode.ErrorsAndWarnings,
+                TerminalLogType.ShellMessage,
+                false
+            ).SetName("Mode.ErrorsAndWarnings.SkipsRoutine");
+            yield return new TestCaseData(
+                TerminalStackTraceMode.ErrorsAndWarnings,
+                TerminalLogType.Input,
+                false
+            ).SetName("Mode.ErrorsAndWarnings.SkipsInput");
+            yield return new TestCaseData(
+                TerminalStackTraceMode.ErrorsAndWarnings,
+                TerminalLogType.Message,
+                false
+            ).SetName("Mode.ErrorsAndWarnings.SkipsMessage");
+            yield return new TestCaseData(
+                TerminalStackTraceMode.ErrorsAndWarnings,
+                TerminalLogType.Error,
+                true
+            ).SetName("Mode.ErrorsAndWarnings.CapturesError");
+            yield return new TestCaseData(
+                TerminalStackTraceMode.ErrorsAndWarnings,
+                TerminalLogType.Warning,
+                true
+            ).SetName("Mode.ErrorsAndWarnings.CapturesWarning");
+            yield return new TestCaseData(
+                TerminalStackTraceMode.ErrorsAndWarnings,
+                TerminalLogType.Assert,
+                true
+            ).SetName("Mode.ErrorsAndWarnings.CapturesAssert");
+            yield return new TestCaseData(
+                TerminalStackTraceMode.ErrorsAndWarnings,
+                TerminalLogType.Exception,
+                true
+            ).SetName("Mode.ErrorsAndWarnings.CapturesException");
+            yield return new TestCaseData(
+                TerminalStackTraceMode.Disabled,
+                TerminalLogType.Error,
+                false
+            ).SetName("Mode.Disabled.SkipsError");
+            yield return new TestCaseData(
+                TerminalStackTraceMode.Disabled,
+                TerminalLogType.ShellMessage,
+                false
+            ).SetName("Mode.Disabled.SkipsRoutine");
+        }
+
         [SetUp]
         public void SetUp()
         {
@@ -118,6 +193,51 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreEqual(null, _log.ReduceStackTrace(null));
             Assert.AreEqual(string.Empty, _log.ReduceStackTrace(string.Empty));
             Assert.AreEqual(" ", _log.ReduceStackTrace(" "));
+        }
+
+        [TestCaseSource(nameof(StackTraceModeCases))]
+        public void CaptureModeRulesByType(
+            TerminalStackTraceMode mode,
+            TerminalLogType type,
+            bool expectedCapture
+        )
+        {
+            CommandLog log = new(16) { stackTraceMode = mode };
+
+            Assert.IsTrue(
+                log.HandleLog("extraction", type),
+                "Sanity: the extraction write must land"
+            );
+            LogItem extracted = log.Logs[log.Logs.Count - 1];
+            Assert.AreEqual(
+                expectedCapture,
+                !string.IsNullOrEmpty(extracted.stackTrace),
+                "Extraction-path capture must follow the mode rules"
+            );
+
+            log.HandleLog("supplied", "frame-at-call-site", type);
+            LogItem supplied = log.Logs[log.Logs.Count - 1];
+            Assert.AreEqual(
+                expectedCapture ? "frame-at-call-site" : string.Empty,
+                supplied.stackTrace,
+                "Caller-supplied traces must follow the same mode rules"
+            );
+        }
+
+        [Test]
+        public void DefaultStackTraceModeIsAll()
+        {
+            Assert.AreEqual(
+                TerminalStackTraceMode.All,
+                _log.stackTraceMode,
+                "Buffers created without an explicit mode must keep the capture-all behavior"
+            );
+            _log.HandleLog("traced", TerminalLogType.ShellMessage);
+            Assert.AreNotEqual(
+                string.Empty,
+                _log.Logs[_log.Logs.Count - 1].stackTrace,
+                "Default buffers must capture traces exactly as before"
+            );
         }
     }
 }
