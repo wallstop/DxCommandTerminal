@@ -23,10 +23,14 @@ them on a new runtime.
   output is derivable in one index walk, build it into a rented `CachedStringBuilder`
   instead (see `CommandLog.ReduceStackTrace` - cut log-write median 0.40 -> 0.25 ms, and
   pin the rewrite against the old algorithm kept as a test-side reference).
-- Function-local transient collections in constructors and cold paths: rent a
-  `[ThreadStatic]` buffer (rent, null the field, try/finally Clear + return) instead of
-  `new` per call - see the known-word dedupe in `CommandAutoComplete`. Reserve plain
-  locals for genuinely one-time setup; sweep with
+- Function-local transient collections (constructor, cold, or hot paths): rent from a pool
+  through a value-based scope and `using`, never hand-rolled try/finally - the repo rule is
+  value-based `IDisposable` scopes (pattern adapted from unity-helpers'
+  `SetBuffers<T>`/`PooledResource<T>`, MIT): see `CachedStringSets` /
+  `CachedStringBuilder.Scope` in `Runtime/Helper/`. The pool gives every concurrent or
+  nested rent its own buffer; a single shared ThreadStatic slot does not nest safely.
+  Scope structs are values: use one only as the direct subject of a `using` - a copy
+  shares the buffer, so each copy's Dispose would run. Sweep with
   `rg "= new (HashSet|List|Dictionary)" Runtime/` and classify each hit cold vs per-call.
 - `Terminal.Log` pays stack-trace extraction per call (~0.25 ms median on the pinned
   editor after the reduction pass); that is deliberate caller attribution, not a defect.
@@ -72,5 +76,8 @@ first-inserted-wins for case-variant duplicates.
 
 - Enumerating a sorted collection per call? Snapshot + version (above).
 - Building strings per call? `CachedStringBuilder.Rent` (context.md rule 23).
+- Transient collection per call, even in a constructor? `using` a pooled scope
+  (`CachedStringSets`, or add a sibling pool to `Runtime/Helper/`). Never try/finally for
+  buffer returns; never a single shared slot.
 - New mutation site on a snapshotted collection? Bump the version.
 - New allocation test? Warm first; pin through `AllocationAssertions`.
