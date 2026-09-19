@@ -10,7 +10,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- Shipped analyzer diagnostics for Unity fake-null mistakes: new warnings (`DxCmd0001`-`DxCmd0005`) flag `?.`, `??`/`??=`, bool conversions (truthiness), `is null`/`is not null`, and `object.ReferenceEquals` on `UnityEngine.Object`-derived receivers and `GUIStyle`, in every assembly that references the package. A destroyed Unity object is fake null, so these constructs silently misbehave; explicit `== null` / `!= null` is the safe form.
 - Opt-in assembly discovery: `CommandShell.IncludeDiscoveryAssembly(Assembly)` scans an assembly the default discovery filter would skip (a runtime-emitted assembly, or a precompiled DLL without a package reference) through the normal catalog, provider, and reflection stages. The returned handle removes the assembly again; registering before the first command request applies immediately, later registrations apply on the next registration cycle. The readiness log counts explicitly included assemblies.
 - `CommandArg.TryGetRaw` and builder `.RawParser(...)` pass uncleaned token contents to explicit parsers. Scene-object samples use this path so CR/LF names do not resolve to a different object; existing parsers keep their cleanup behavior.
 - Opt-in `SceneObjectArgumentAdapter<T>` resolves GameObject and Component arguments by name, with fresh completion choices and configurable duplicate-name handling. New sample commands show object lookup and component access.

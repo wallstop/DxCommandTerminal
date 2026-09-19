@@ -35,6 +35,8 @@
   "main": "README.md",
   "files": [
     "Runtime",
+    "!Runtime/Analyzers/WallstopStudios.DxCommandTerminal.Analyzers.dll",
+    "!Runtime/Analyzers/WallstopStudios.DxCommandTerminal.Analyzers.dll.meta",
     "Runtime.meta",
     "Editor",
     "Editor.meta",

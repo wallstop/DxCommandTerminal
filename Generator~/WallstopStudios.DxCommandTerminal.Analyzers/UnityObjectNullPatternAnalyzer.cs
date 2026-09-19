@@ -1,4 +1,4 @@
-namespace WallstopStudios.DxCommandTerminal.SourceGenerators
+namespace WallstopStudios.DxCommandTerminal.Analyzers
 {
     using System;
     using System.Collections.Immutable;
@@ -22,11 +22,20 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
         csc.rsp turns any violation into a compile failure. Syntax and
         semantic-model APIs only, except IConversionOperation for truthiness (stable
         member surface across Roslyn 3.8 through current hosts).
+
+        Internal-only, enforced in two layers: this assembly is excluded from the npm
+        files allowlist, so no distributed artifact (UPM tarball or release
+        unitypackage) ever carries it to consumers; and the gate below makes every
+        diagnostic a no-op unless the analyzed compilation is one of this repository's
+        own assemblies (name prefix WallstopStudios.DxCommandTerminal), so the analyzer
+        stays inert even if some distribution path ever carries the binary.
     */
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public sealed class UnityObjectNullPatternAnalyzer : DiagnosticAnalyzer
     {
         private const string Category = "Usage";
+
+        private const string RepoAssemblyNamePrefix = "WallstopStudios.DxCommandTerminal";
 
         private const string UnityObjectDisplayFullName = "global::UnityEngine.Object";
 
@@ -96,6 +105,11 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
 
         private static void AnalyzeConditionalAccess(SyntaxNodeAnalysisContext context)
         {
+            if (!IsRepoCompilation(context.Compilation))
+            {
+                return;
+            }
+
             ConditionalAccessExpressionSyntax expression = (ConditionalAccessExpressionSyntax)
                 context.Node;
             ITypeSymbol receiverType = GetTypeOfTypeExpression(context, expression.Expression);
@@ -109,6 +123,11 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
 
         private static void AnalyzeCoalesce(SyntaxNodeAnalysisContext context)
         {
+            if (!IsRepoCompilation(context.Compilation))
+            {
+                return;
+            }
+
             BinaryExpressionSyntax expression = (BinaryExpressionSyntax)context.Node;
             ITypeSymbol operandType = GetTypeOfTypeExpression(context, expression.Left);
             if (!IsFakeNullType(operandType))
@@ -121,6 +140,11 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
 
         private static void AnalyzeCoalesceAssignment(SyntaxNodeAnalysisContext context)
         {
+            if (!IsRepoCompilation(context.Compilation))
+            {
+                return;
+            }
+
             AssignmentExpressionSyntax expression = (AssignmentExpressionSyntax)context.Node;
             ITypeSymbol targetType = GetTypeOfTypeExpression(context, expression.Left);
             if (!IsFakeNullType(targetType))
@@ -133,6 +157,11 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
 
         private static void AnalyzeConversion(OperationAnalysisContext context)
         {
+            if (!IsRepoCompilation(context.Compilation))
+            {
+                return;
+            }
+
             IConversionOperation operation = (IConversionOperation)context.Operation;
             CommonConversion conversion = operation.Conversion;
             if (!conversion.IsUserDefined || conversion.MethodSymbol == null)
@@ -162,6 +191,11 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
 
         private static void AnalyzeReferenceEquals(SyntaxNodeAnalysisContext context)
         {
+            if (!IsRepoCompilation(context.Compilation))
+            {
+                return;
+            }
+
             InvocationExpressionSyntax invocation = (InvocationExpressionSyntax)context.Node;
             if (!IsReferenceEqualsName(invocation.Expression))
             {
@@ -196,6 +230,11 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
 
         private static void AnalyzeNullPattern(SyntaxNodeAnalysisContext context)
         {
+            if (!IsRepoCompilation(context.Compilation))
+            {
+                return;
+            }
+
             IsPatternExpressionSyntax expression = (IsPatternExpressionSyntax)context.Node;
             if (!IsNullCheckPattern(expression.Pattern))
             {
@@ -215,6 +254,11 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
         */
         private static void AnalyzeNullCaseLabel(SyntaxNodeAnalysisContext context)
         {
+            if (!IsRepoCompilation(context.Compilation))
+            {
+                return;
+            }
+
             CaseSwitchLabelSyntax label = (CaseSwitchLabelSyntax)context.Node;
             SyntaxNode payload = FirstChild(label);
             if (payload == null || !payload.IsKind(SyntaxKind.NullLiteralExpression))
@@ -227,6 +271,11 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
 
         private static void AnalyzePatternCaseLabel(SyntaxNodeAnalysisContext context)
         {
+            if (!IsRepoCompilation(context.Compilation))
+            {
+                return;
+            }
+
             CasePatternSwitchLabelSyntax label = (CasePatternSwitchLabelSyntax)context.Node;
             SyntaxNode payload = FirstChild(label);
             if (payload == null || !IsNullCheckPattern(payload))
@@ -249,6 +298,11 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
 
         private static void AnalyzeNullSwitchArm(SyntaxNodeAnalysisContext context)
         {
+            if (!IsRepoCompilation(context.Compilation))
+            {
+                return;
+            }
+
             SwitchExpressionArmSyntax arm = (SwitchExpressionArmSyntax)context.Node;
             if (!IsNullCheckPattern(arm.Pattern))
             {
@@ -373,6 +427,13 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
         )
         {
             return context.SemanticModel.GetTypeInfo(expression, context.CancellationToken).Type;
+        }
+
+        private static bool IsRepoCompilation(Compilation compilation)
+        {
+            string assemblyName = compilation.Assembly?.Name;
+            return assemblyName != null
+                && assemblyName.StartsWith(RepoAssemblyNamePrefix, StringComparison.Ordinal);
         }
 
         private static bool IsFakeNullType(ITypeSymbol type)

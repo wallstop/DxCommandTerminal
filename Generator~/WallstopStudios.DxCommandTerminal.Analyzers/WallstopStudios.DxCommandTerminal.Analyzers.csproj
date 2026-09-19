@@ -1,0 +1,54 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <!-- Repo-internal diagnostics only: the built DLL is copied beside the generator
+         payload so Unity loads it for this repository's own assemblies, but it is
+         excluded from the npm files allowlist, so no distributed artifact (UPM tarball
+         or release unitypackage) ever carries it to consumers. -->
+        <TargetFramework>netstandard2.0</TargetFramework>
+        <LangVersion>9.0</LangVersion>
+        <Nullable>disable</Nullable>
+        <IncludeBuildOutput>false</IncludeBuildOutput>
+        <IsPackable>false</IsPackable>
+        <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+        <AssemblyName>WallstopStudios.DxCommandTerminal.Analyzers</AssemblyName>
+        <RootNamespace>WallstopStudios.DxCommandTerminal.Analyzers</RootNamespace>
+        <GenerateDocumentationFile>false</GenerateDocumentationFile>
+        <Deterministic>true</Deterministic>
+        <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+        <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+        <DebugType>none</DebugType>
+        <CopyAnalyzerPayload Condition="'$(CopyAnalyzerPayload)' == ''">true</CopyAnalyzerPayload>
+        <AnalyzerPayloadOutputDir Condition="'$(AnalyzerPayloadOutputDir)' == ''"
+            >$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/../../Runtime/Analyzers'))</AnalyzerPayloadOutputDir
+        >
+        <NoWarn>$(NoWarn);RS2008</NoWarn>
+    </PropertyGroup>
+    <ItemGroup>
+        <PackageReference
+            Include="Microsoft.CodeAnalysis.CSharp"
+            Version="3.8.0"
+            PrivateAssets="all"
+        />
+        <PackageReference
+            Include="Microsoft.CodeAnalysis.Analyzers"
+            Version="3.3.4"
+            PrivateAssets="all"
+        />
+    </ItemGroup>
+    <Target
+        Name="CopyAnalyzerToPackage"
+        AfterTargets="Build"
+        Condition="'$(CopyAnalyzerPayload)' == 'true'"
+    >
+        <MakeDir
+            Directories="$(AnalyzerPayloadOutputDir)"
+            Condition="!Exists('$(AnalyzerPayloadOutputDir)')"
+        />
+        <Copy
+            SourceFiles="$(TargetPath)"
+            DestinationFolder="$(AnalyzerPayloadOutputDir)"
+            SkipUnchangedFiles="true"
+        />
+        <Message Importance="high" Text="Analyzer payload -&gt; $(AnalyzerPayloadOutputDir)" />
+    </Target>
+</Project>

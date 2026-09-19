@@ -106,8 +106,7 @@ frontmatter validity, index freshness, and pointer-file delegation; see
    string-typed `IndexOf`/`StartsWith`/`EndsWith`/`Contains`/`Replace` take an explicit `StringComparison` - never
    culture-sensitive defaults, never `==`/`!=` on string values (`== null`, enums, and Unity references stay legal).
    Name-shaped identifiers (font/theme/command names) are `OrdinalIgnoreCase`. Enforced by
-   `npm --prefix tooling~ run lint:string-equality` (pre-commit + CI; catches string-literal and `string.Empty`
-   operands; identifier-vs-identifier string equality stays a review convention the tokenizer cannot type-check).
+   `npm --prefix tooling~ run lint:string-equality` (pre-commit + CI; identifier-vs-identifier equality is a review convention).
 8. Use `nameof()` instead of magic strings.
 9. Internal APIs over reflection on our own code; `InternalsVisibleTo` is already granted to the
    Editor and Tests.Runtime assemblies (`Runtime/AssemblyInfo.cs`).
@@ -183,8 +182,9 @@ frontmatter validity, index freshness, and pointer-file delegation; see
     objects: `?.`, `??`/`??=`, `is null`/`is not null`/`ReferenceEquals` (all bypass the fake-null
     operator), `Assert.IsNull`/`Assert.IsNotNull` in tests, and implicit truthiness - write
     `component != null` / `Assert.That(x == null)`. `lint:unity-null-patterns` enforces the Assert
-    half (`:fix` converts); the shipped `UnityObjectNullPatternAnalyzer` DxCmd0001-0005 type-checks
-    the rest, warnaserror fails the compile (issues #98/#100); delegate `?.`/plain C# `??` stay legal.
+    half (`:fix` converts); the repo-internal `UnityObjectNullPatternAnalyzer` DxCmd0001-0005
+    type-checks the rest, warnaserror fails the compile; it never ships and no-ops outside the
+    repo's assemblies - keep both layers (issues #98/#100). Delegate `?.`/plain C# `??` stay legal.
 
 ### Unity Package Rules
 
@@ -235,8 +235,8 @@ how (plus why/what): `Why` 1-2 sentences, `What` 3-6 one-line bullets, optional 
 evidence lines, ~12 lines total. Commit bodies ~8 lines. No per-file tours, no process
 narration, no restated context. Code comments state only what the code cannot say.
 Enforced for PRs by `npm --prefix tooling~ run lint:pr-copy` and the pr-copy CI job
-(`tooling~/scripts/lint-pr-copy.mjs`: disclosure first line, section structure, line
-and bullet budgets; the Cursor Bugbot summary block is stripped before checking).
+(`tooling~/scripts/lint-pr-copy.mjs`: disclosure first line, section structure, line and
+bullet budgets; the Cursor Bugbot summary block is stripped before checking).
 Check before opening or editing a PR.
 Details: [simple-writing](./skills/simple-writing/SKILL.md).
 

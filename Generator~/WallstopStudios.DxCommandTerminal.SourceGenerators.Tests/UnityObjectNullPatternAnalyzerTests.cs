@@ -8,7 +8,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators.Tests
     using Microsoft.CodeAnalysis;
     using Microsoft.CodeAnalysis.CSharp;
     using Microsoft.CodeAnalysis.Diagnostics;
-    using WallstopStudios.DxCommandTerminal.SourceGenerators;
+    using WallstopStudios.DxCommandTerminal.Analyzers;
     using Xunit;
 
     /*
@@ -21,6 +21,16 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators.Tests
     public sealed class UnityObjectNullPatternAnalyzerTests
     {
         private const string DiagnosticIdPrefix = "DxCmd";
+
+        private const string RepoAssemblyName = "WallstopStudios.DxCommandTerminal";
+
+        private static readonly string[] RepoAssemblyNames =
+        {
+            "WallstopStudios.DxCommandTerminal",
+            "WallstopStudios.DxCommandTerminal.Editor",
+            "WallstopStudios.DxCommandTerminal.Tests.Runtime",
+            "WallstopStudios.DxCommandTerminal.Samples.TerminalCommands",
+        };
 
         private static readonly ImmutableArray<DiagnosticAnalyzer> Analyzer =
             ImmutableArray.Create<DiagnosticAnalyzer>(new UnityObjectNullPatternAnalyzer());
@@ -353,8 +363,13 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators.Tests
 
         private static ImmutableArray<Diagnostic> Analyze(string source)
         {
+            return AnalyzeAs(RepoAssemblyName, source);
+        }
+
+        private static ImmutableArray<Diagnostic> AnalyzeAs(string assemblyName, string source)
+        {
             CSharpCompilation compilation = TestCompilationFactory.CreateCompilation(
-                "UnityNullPatternAnalyzerFixtures",
+                assemblyName,
                 source
             );
             CompilationWithAnalyzers analysis = compilation.WithAnalyzers(Analyzer);
@@ -456,6 +471,46 @@ namespace Fixtures
                 0 == banned.Count,
                 $"{caseName}: expected no diagnostics, found: {Describe(banned.ToImmutableArray())}"
             );
+        }
+
+        /*
+           Internal-only contract: outside the repository's own assembly names the
+           analyzer is inert, so a consumer assembly never sees these diagnostics even
+           if some distribution path ever carries the binary.
+        */
+        [Fact]
+        public void ConsumerAssembliesAreNotAnalyzed()
+        {
+            ImmutableArray<Diagnostic> diagnostics = AnalyzeAs(
+                "Consumer.Game.Code",
+                Fixture("        _target?.ToString();\n        if (_target) { }")
+            );
+            List<Diagnostic> banned = diagnostics
+                .Where(diagnostic =>
+                    diagnostic.Id.StartsWith(DiagnosticIdPrefix, StringComparison.Ordinal)
+                )
+                .ToList();
+            Assert.True(
+                0 == banned.Count,
+                $"consumer assembly must not be analyzed, found: {Describe(banned.ToImmutableArray())}"
+            );
+        }
+
+        [Fact]
+        public void RepoAssembliesAreAnalyzed()
+        {
+            foreach (string name in RepoAssemblyNames)
+            {
+                ImmutableArray<Diagnostic> diagnostics = AnalyzeAs(
+                    name,
+                    Fixture("        _target?.ToString();")
+                );
+                int actual = diagnostics.Count(diagnostic => diagnostic.Id == "DxCmd0001");
+                Assert.True(
+                    1 == actual,
+                    $"{name}: expected 1 DxCmd0001, found {actual}. All: {Describe(diagnostics)}"
+                );
+            }
         }
     }
 }
