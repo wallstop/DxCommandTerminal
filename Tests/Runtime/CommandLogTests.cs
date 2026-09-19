@@ -117,6 +117,16 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 true
             ).SetName("Mode.All.CapturesError");
             yield return new TestCaseData(
+                (TerminalStackTraceMode)0,
+                TerminalLogType.ShellMessage,
+                true
+            ).SetName("Mode.StaleZero.CapturesLikeAll.Routine");
+            yield return new TestCaseData(
+                (TerminalStackTraceMode)0,
+                TerminalLogType.Error,
+                true
+            ).SetName("Mode.StaleZero.CapturesLikeAll.Error");
+            yield return new TestCaseData(
                 TerminalStackTraceMode.ErrorsAndWarnings,
                 TerminalLogType.ShellMessage,
                 false

@@ -171,6 +171,12 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             return builder.ToString();
         }
 
+        /*
+            The only modes that filter or skip capture. Everything else (the
+            obsolete zero sentinel a stale serialized asset can hold, and any
+            future member) keeps the legacy capture-all behavior, so unknown
+            values never silently drop diagnostics.
+         */
         private bool CapturesStackTrace(TerminalLogType type)
         {
             switch (stackTraceMode)
