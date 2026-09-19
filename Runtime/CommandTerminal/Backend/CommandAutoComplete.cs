@@ -31,7 +31,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         private readonly CommandHistory _history;
         private readonly CommandShell _shell;
 
-        private uint _commandNamesVersion;
+        private long _commandNamesVersion;
         private bool _commandNamesDirty = true;
 
         public CommandAutoComplete(
@@ -42,6 +42,14 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         {
             _history = history ?? throw new ArgumentNullException(nameof(history));
             _shell = shell ?? throw new ArgumentNullException(nameof(shell));
+
+            /*
+                Bulk add, then one sort: insertion-time binary searches would
+                make construction quadratic. The seen set keeps the first
+                casing of case-variant duplicates, matching the ordered-set
+                semantics this list replaces.
+             */
+            HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
             foreach (string known in commands ?? Array.Empty<string>())
             {
                 if (known == null)
@@ -49,12 +57,13 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                     throw new ArgumentNullException(nameof(commands));
                 }
 
-                int insertIndex = _knownWords.BinarySearch(known, StringComparer.OrdinalIgnoreCase);
-                if (insertIndex < 0)
+                if (seen.Add(known))
                 {
-                    _knownWords.Insert(~insertIndex, known);
+                    _knownWords.Add(known);
                 }
             }
+
+            _knownWords.Sort(StringComparer.OrdinalIgnoreCase);
         }
 
         public string[] Complete(string text)

@@ -133,7 +133,7 @@
          */
         internal SortedDictionary<string, CommandInfo> CommandsSorted => _commands;
 
-        internal uint CommandsVersion => _commandVersion;
+        internal long CommandsVersion => _commandVersion;
 
         private readonly HashSet<string> _autoRegisteredCommands = new(
             StringComparer.OrdinalIgnoreCase
@@ -158,8 +158,10 @@
             auto-complete's name cache) key off it, so per-keystroke sweeps
             never re-enumerate the sorted dictionary: Unity's Mono runtime
             allocates a fresh enumerator for every SortedDictionary pass.
+            A long, like CommandLog.Version, so wraparound stays out of
+            reach.
          */
-        private uint _commandVersion;
+        private long _commandVersion;
 
         private readonly Queue<string> _errorMessages = new();
 
