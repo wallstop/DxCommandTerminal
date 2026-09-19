@@ -138,7 +138,9 @@ try {
                     }
 
                     $checkoutBuildDirectory = Join-Path $checkoutDirectory "build"
-                    New-Item -ItemType Directory -Path $checkoutBuildDirectory | Out-Null
+                    if (-not (Test-Path $checkoutBuildDirectory)) {
+                        New-Item -ItemType Directory -Path $checkoutBuildDirectory | Out-Null
+                    }
                     $checkoutPayload = Build-PayloadInto $checkoutProject $checkoutBuildDirectory
                     $key = "$($checkoutName)|$($payload.Dll)"
                     $checkoutHashes[$key] = Get-PayloadHash $checkoutPayload
