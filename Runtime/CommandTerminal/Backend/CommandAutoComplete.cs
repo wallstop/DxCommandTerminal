@@ -6,13 +6,32 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
     public sealed class CommandAutoComplete
     {
-        private readonly SortedSet<string> _knownWords = new(StringComparer.OrdinalIgnoreCase);
+        /*
+            The caller-supplied known words in sorted order. Unity's Mono
+            runtime allocates a fresh enumerator for every SortedSet pass,
+            even when the set is empty, so sweeps iterate this list instead.
+         */
+        private readonly List<string> _knownWords = new();
+
         private readonly HashSet<string> _duplicateBuffer = new(StringComparer.OrdinalIgnoreCase);
+
+        /*
+            The shell's command names in the dictionary's sorted order, in
+            their completion form (lowercased), rebuilt only when the shell
+            reports a new command version. Unity's Mono runtime allocates a
+            fresh enumerator for every SortedDictionary pass and a fresh
+            lowercased string for every cased name conversion, so sweeping
+            the live table on every keystroke would allocate per keystroke.
+         */
+        private readonly List<string> _commandNames = new();
+
         private readonly List<string> _buffer = new();
         private readonly List<string> _historyBuffer = new();
 
         private readonly CommandHistory _history;
         private readonly CommandShell _shell;
+
+        private uint _commandNamesVersion = uint.MaxValue;
 
         public CommandAutoComplete(
             CommandHistory history,
@@ -22,7 +41,14 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         {
             _history = history ?? throw new ArgumentNullException(nameof(history));
             _shell = shell ?? throw new ArgumentNullException(nameof(shell));
-            _knownWords.UnionWith(commands ?? Array.Empty<string>());
+            foreach (string known in commands ?? Array.Empty<string>())
+            {
+                int insertIndex = _knownWords.BinarySearch(known, StringComparer.OrdinalIgnoreCase);
+                if (insertIndex < 0)
+                {
+                    _knownWords.Insert(~insertIndex, known);
+                }
+            }
         }
 
         public string[] Complete(string text)
@@ -53,13 +79,16 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             _duplicateBuffer.Clear();
             buffer.Clear();
 
-            foreach (string command in _shell.Commands.Keys)
+            _shell.EnsureAutoCommandsRegistered();
+            if (_commandNamesVersion != _shell.CommandsVersion)
             {
-                TryAddCompletion(
-                    command.NeedsLowerInvariantConversion() ? command.ToLowerInvariant() : command,
-                    input,
-                    buffer
-                );
+                RebuildCommandNames();
+                _commandNamesVersion = _shell.CommandsVersion;
+            }
+
+            foreach (string command in _commandNames)
+            {
+                TryAddCompletion(command, input, buffer);
             }
 
             foreach (string known in _knownWords)
@@ -71,6 +100,18 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             foreach (string entry in _historyBuffer)
             {
                 TryAddCompletion(entry, input, buffer);
+            }
+        }
+
+        private void RebuildCommandNames()
+        {
+            _commandNames.Clear();
+            foreach (KeyValuePair<string, CommandInfo> command in _shell.CommandsSorted)
+            {
+                string name = command.Key;
+                _commandNames.Add(
+                    name.NeedsLowerInvariantConversion() ? name.ToLowerInvariant() : name
+                );
             }
         }
 

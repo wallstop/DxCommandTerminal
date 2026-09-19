@@ -123,6 +123,17 @@
 
         public bool HasErrors => 0 < _errorMessages.Count;
 
+        /*
+            Sorted iteration for in-assembly callers (auto-complete walks it
+            when the version changes). Reading through the public Commands
+            property's IReadOnlyDictionary allocates a Keys collection and a
+            boxed enumerator per pass; the concrete type enumerates without
+            the Keys copy.
+         */
+        internal SortedDictionary<string, CommandInfo> CommandsSorted => _commands;
+
+        internal uint CommandsVersion => _commandVersion;
+
         private readonly HashSet<string> _autoRegisteredCommands = new(
             StringComparer.OrdinalIgnoreCase
         );
@@ -140,6 +151,14 @@
         private readonly SortedDictionary<string, CommandInfo> _commands = new(
             StringComparer.OrdinalIgnoreCase
         );
+
+        /*
+            Bumped on every command-table mutation. In-assembly consumers (the
+            auto-complete's name cache) key off it, so per-keystroke sweeps
+            never re-enumerate the sorted dictionary: Unity's Mono runtime
+            allocates a fresh enumerator for every SortedDictionary pass.
+         */
+        private uint _commandVersion;
 
         private readonly Queue<string> _errorMessages = new();
 
@@ -763,6 +782,7 @@
             */
             int count = ClearAutoRegisteredCommands() + _commands.Count;
             _commands.Clear();
+            ++_commandVersion;
             return count;
         }
 
@@ -786,6 +806,11 @@
             foreach (string command in _autoRegisteredCommands)
             {
                 _commands.Remove(command);
+            }
+
+            if (0 < count)
+            {
+                ++_commandVersion;
             }
 
             _autoRegisteredCommands.Clear();
@@ -814,6 +839,11 @@
             foreach (string ignoredCommand in _ignoredCommands)
             {
                 _commands.Remove(ignoredCommand);
+            }
+
+            if (0 < _ignoredCommands.Count)
+            {
+                ++_commandVersion;
             }
 
             IgnoredCommands = _ignoredCommands.ToReadOnlyHashSet(StringComparer.OrdinalIgnoreCase);
@@ -1133,6 +1163,7 @@
                 return false;
             }
 
+            ++_commandVersion;
             return true;
         }
 
@@ -1336,7 +1367,13 @@
                 return false;
             }
 
-            return _commands.Remove(name);
+            if (_commands.Remove(name))
+            {
+                ++_commandVersion;
+                return true;
+            }
+
+            return false;
         }
 
         private void RegisterAutoCommands()
@@ -1477,6 +1514,7 @@
                 if (_commands.TryAdd(commandName, info))
                 {
                     _autoRegisteredCommands.Add(commandName);
+                    ++_commandVersion;
                     registeredCount++;
                 }
                 else
