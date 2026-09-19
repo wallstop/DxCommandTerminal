@@ -14,11 +14,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         execution, logging, history traversal, and provider completion. The
         Measures... methods log evidence under [DxCommandTerminal][Scale]
         and pin no budgets. The ...StaysUnderTripwire methods are generous
-        regression tripwires sized from the measured numbers recorded in the
-        header of StandardOperationsAllocationTests' companion suite; they
-        are environment-specific (Unity 6000.4.6f1, this editor domain) and
-        are not the plan's numeric gates. All windows are warmed steady
-        state. Allocation claims live in the allocation suite, never here.
+        regression tripwires sized from this suite's own [DxCommandTerminal]
+        [Scale] evidence on the pinned local editor (Unity 6000.4.6f1); they
+        are environment-specific and are not the plan's numeric gates. All
+        windows are warmed steady state. Allocation claims live in the
+        allocation suite, never here.
     */
     public sealed class StandardOperationsBenchmarkTests
     {
@@ -33,9 +33,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         /*
             Tripwires sized from the first recorded run (Unity 6000.4.6f1,
-            maintainer editor, 2026-09-19). Each carries roughly 3-5x
-            headroom over its measured p95. See the progress session log
-            for the raw series.
+            maintainer editor, 2026-09-19). Measured p95s land one to three
+            orders of magnitude below each budget (see the progress session
+            log for the raw series), so the gates guard against order-of-
+            magnitude regressions, not noise.
         */
         private const float TypingTripwireMilliseconds = 2f;
         private const float ExecutionTripwireMilliseconds = 1f;
@@ -244,6 +245,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 "Sanity: traversal must start at the newest entry"
             );
 
+            /*
+                The first sweep normalizes the traversal position; every later
+                Previous x N / Next x N cycle returns to the same state, so
+                the warmed samples measure one steady state.
+             */
             Action sweep = () =>
             {
                 for (int i = 0; i < entryCount; ++i)

@@ -31,7 +31,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         private readonly CommandHistory _history;
         private readonly CommandShell _shell;
 
-        private uint _commandNamesVersion = uint.MaxValue;
+        private uint _commandNamesVersion;
+        private bool _commandNamesDirty = true;
 
         public CommandAutoComplete(
             CommandHistory history,
@@ -43,6 +44,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             _shell = shell ?? throw new ArgumentNullException(nameof(shell));
             foreach (string known in commands ?? Array.Empty<string>())
             {
+                if (known == null)
+                {
+                    throw new ArgumentNullException(nameof(commands));
+                }
+
                 int insertIndex = _knownWords.BinarySearch(known, StringComparer.OrdinalIgnoreCase);
                 if (insertIndex < 0)
                 {
@@ -80,10 +86,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             buffer.Clear();
 
             _shell.EnsureAutoCommandsRegistered();
-            if (_commandNamesVersion != _shell.CommandsVersion)
+            if (_commandNamesDirty || _commandNamesVersion != _shell.CommandsVersion)
             {
                 RebuildCommandNames();
                 _commandNamesVersion = _shell.CommandsVersion;
+                _commandNamesDirty = false;
             }
 
             foreach (string command in _commandNames)

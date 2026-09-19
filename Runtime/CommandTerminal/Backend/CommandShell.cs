@@ -128,7 +128,8 @@
             when the version changes). Reading through the public Commands
             property's IReadOnlyDictionary allocates a Keys collection and a
             boxed enumerator per pass; the concrete type enumerates without
-            the Keys copy.
+            the Keys copy. Invariant: every mutation of the returned table
+            must bump _commandVersion, or name caches go stale.
          */
         internal SortedDictionary<string, CommandInfo> CommandsSorted => _commands;
 
