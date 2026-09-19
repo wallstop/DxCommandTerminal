@@ -1413,45 +1413,55 @@
                     continue;
                 }
 
+                /*
+                    Reflection-discovered commands register without binding:
+                    the first invocation pays their one-time
+                    Delegate.CreateDelegate, so readiness cost no longer scales
+                    with the number of declared commands.
+                 */
                 Action<CommandArg[]> proc;
-                try
+                if (command.DeferredProc != null)
                 {
-                    proc = command.Binder();
+                    proc = command.DeferredProc;
                 }
-                catch (Exception e)
+                else
                 {
-                    Debug.LogError(
-                        $"[DxCommandTerminal] Failed to bind command {commandName} "
-                            + $"(method {command.MethodName}): {e.Message}"
-                    );
-                    continue;
-                }
+                    try
+                    {
+                        proc = command.Binder();
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.LogError(
+                            $"[DxCommandTerminal] Failed to bind command {commandName} "
+                                + $"(method {command.MethodName}): {e.Message}"
+                        );
+                        continue;
+                    }
 
-                if (proc == null)
-                {
-                    Debug.LogError(
-                        $"[DxCommandTerminal] Failed to bind command {commandName} "
-                            + $"(method {command.MethodName}): no handler was produced"
-                    );
-                    continue;
+                    if (proc == null)
+                    {
+                        Debug.LogError(
+                            $"[DxCommandTerminal] Failed to bind command {commandName} "
+                                + $"(method {command.MethodName}): no handler was produced"
+                        );
+                        continue;
+                    }
                 }
 
                 /*
                     User commands win over auto ones (built-ins included). The
                     collision is a console warning, not a queued terminal
-                    error, so readiness never surfaces it mid-session.
+                    error, so readiness never surfaces it mid-session. The
+                    insert attempt doubles as the collision check, so a
+                    colliding name is detected without a separate probe.
                  */
-                if (_commands.ContainsKey(commandName))
+                if (string.IsNullOrWhiteSpace(commandName))
                 {
-                    Debug.LogWarning(
-                        $"[DxCommandTerminal] Auto command {commandName} "
-                            + $"(method {command.MethodName}) skipped: a command with "
-                            + $"that name is already registered"
-                    );
+                    IssueErrorMessage($"Invalid Command Name: {commandName}");
                     continue;
                 }
 
-                // Perf boost, much cheaper than running reflection on invoking the method
                 CommandInfo info = new(
                     proc,
                     null,
@@ -1463,11 +1473,19 @@
                     command.Hint,
                     command.AddToHistory
                 );
-                bool success = AddCommand(commandName, info);
-                if (success)
+
+                if (_commands.TryAdd(commandName, info))
                 {
                     _autoRegisteredCommands.Add(commandName);
                     registeredCount++;
+                }
+                else
+                {
+                    Debug.LogWarning(
+                        $"[DxCommandTerminal] Auto command {commandName} "
+                            + $"(method {command.MethodName}) skipped: a command with "
+                            + $"that name is already registered"
+                    );
                 }
             }
 
@@ -1526,7 +1544,18 @@
             }
 
             using CachedStringBuilder.Scope found = new(64);
-            found.Builder.Append(method.Name).Append('(');
+            found.Builder.Append(method.Name);
+            if (method.IsGenericMethodDefinition)
+            {
+                /*
+                    A generic definition renders like the valid shape, which
+                    would contradict the invalid-signature message; reflection
+                    arity spelling keeps the diagnostic self-explanatory.
+                 */
+                found.Builder.Append('`').Append(method.GetGenericArguments().Length);
+            }
+
+            found.Builder.Append('(');
             bool first = true;
             foreach (ParameterInfo parameter in method.GetParameters())
             {
@@ -1767,6 +1796,16 @@
 
             public readonly Func<MethodInfo> MethodAccessor;
 
+            /*
+               Ready-to-register handler for reflection-discovered commands: it
+               binds on its first invocation, so readiness never pays one
+               Delegate.CreateDelegate per declared command. Null for catalog
+               commands (their binders are static-field reads) and rejected
+               commands. Shared across shells; the first invocation anywhere in
+               the domain performs the one-time bind.
+            */
+            public readonly Action<CommandArg[]> DeferredProc;
+
             private AutoCommand(
                 string name,
                 string methodName,
@@ -1780,7 +1819,8 @@
                 bool isDefault,
                 CommandExecutionContexts contexts,
                 Func<Action<CommandArg[]>> binder,
-                Func<MethodInfo> methodAccessor
+                Func<MethodInfo> methodAccessor,
+                Action<CommandArg[]> deferredProc
             )
             {
                 Name = name;
@@ -1796,6 +1836,7 @@
                 Contexts = contexts;
                 Binder = binder;
                 MethodAccessor = methodAccessor;
+                DeferredProc = deferredProc;
             }
 
             public static AutoCommand FromCatalog(CommandCatalogEntry entry)
@@ -1813,7 +1854,8 @@
                     entry.IsDefault,
                     entry.Contexts,
                     entry.Binder,
-                    entry.MethodAccessor
+                    entry.MethodAccessor,
+                    null
                 );
             }
 
@@ -1823,6 +1865,11 @@
             )
             {
                 bool valid = IsValidSignature(method);
+                Func<Action<CommandArg[]>> binder = valid
+                    ? () =>
+                        (Action<CommandArg[]>)
+                            Delegate.CreateDelegate(typeof(Action<CommandArg[]>), method)
+                    : null;
                 return new AutoCommand(
                     attribute.Name,
                     method.Name,
@@ -1835,20 +1882,30 @@
                     attribute.DevelopmentOnly,
                     attribute.Default,
                     attribute.Contexts,
+                    binder,
+                    () => method,
                     valid
-                        ? () =>
-                            (Action<CommandArg[]>)
-                                Delegate.CreateDelegate(typeof(Action<CommandArg[]>), method)
-                        : null,
-                    () => method
+                        ? new DeferredCommandHandler(attribute.Name, method.Name, binder).Invoke
+                        : null
                 );
             }
 
             private static bool IsValidSignature(MethodInfo method)
             {
+                /*
+                    Generic method definitions can never bind - the measured,
+                    deterministic Delegate.CreateDelegate failure on every
+                    scripting backend - so they are rejected commands with the
+                    shared invalid-signature diagnostics. Signatures the
+                    current backend happens to bind anyway (methods of open
+                    generic types, abstract statics) stay registered: the
+                    deferred binder preserves whatever the eager binder did,
+                    including its contained error when a platform cannot bind.
+                 */
                 ParameterInfo[] methodParams = method.GetParameters();
                 return methodParams.Length == 1
-                    && methodParams[0].ParameterType == typeof(CommandArg[]);
+                    && methodParams[0].ParameterType == typeof(CommandArg[])
+                    && !method.IsGenericMethodDefinition;
             }
         }
 
@@ -1951,6 +2008,88 @@
                         return;
                     }
                 }
+            }
+        }
+
+        /*
+            First-invocation binder for reflection-discovered commands. One
+            instance lives per AutoCommand (shared across shells); its first
+            invocation performs the Delegate.CreateDelegate bind and caches
+            the delegate, and every later invocation dispatches through the
+            cached reference. A failed bind keeps the contained-error
+            contract: the error logs once and the command becomes a no-op
+            instead of aborting dispatch or retrying a deterministic failure
+            (CreateDelegate failures are platform-deterministic; the latch is
+            unreachable from supported factories on backends that bind every
+            valid signature). Bound on whatever thread first invokes the
+            command, like all shell command state.
+         */
+        private sealed class DeferredCommandHandler
+        {
+            private readonly Func<Action<CommandArg[]>> _binder;
+            private readonly string _commandName;
+            private readonly string _methodName;
+
+            private Action<CommandArg[]> _bound;
+            private bool _failed;
+
+            public DeferredCommandHandler(
+                string commandName,
+                string methodName,
+                Func<Action<CommandArg[]>> binder
+            )
+            {
+                _binder = binder;
+                _commandName = commandName;
+                _methodName = methodName;
+            }
+
+            public void Invoke(CommandArg[] arguments)
+            {
+                if (_failed)
+                {
+                    return;
+                }
+
+                Action<CommandArg[]> bound = _bound;
+                if (bound == null)
+                {
+                    bound = Bind();
+                    if (bound == null)
+                    {
+                        return;
+                    }
+                }
+
+                bound(arguments);
+            }
+
+            private Action<CommandArg[]> Bind()
+            {
+                try
+                {
+                    Action<CommandArg[]> bound = _binder();
+                    if (bound != null)
+                    {
+                        _bound = bound;
+                        return bound;
+                    }
+
+                    Debug.LogError(
+                        $"[DxCommandTerminal] Failed to bind command {_commandName} "
+                            + $"(method {_methodName}): no handler was produced"
+                    );
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError(
+                        $"[DxCommandTerminal] Failed to bind command {_commandName} "
+                            + $"(method {_methodName}): {e.Message}"
+                    );
+                }
+
+                _failed = true;
+                return null;
             }
         }
     }
