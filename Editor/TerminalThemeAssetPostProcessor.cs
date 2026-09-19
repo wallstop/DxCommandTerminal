@@ -11,13 +11,18 @@ namespace WallstopStudios.DxCommandTerminal.Editor
         Auto-wires TerminalThemeAsset authoring (issue #72 option A, owner
         decision "auto wire"): every time a theme asset is created or edited,
         the sibling .uss file named after the asset is (re)written with the
-        sheet the asset's colors describe. Writes are content-compared first,
-        so unchanged imports never dirty the project or re-trigger imports.
-        Only files carrying the generated marker are overwritten or deleted
-        on rename/asset deletion - a hand-written sheet sharing the asset's
-        name is preserved with a warning instead. The generated sheet is a
-        plain StyleSheet: drop it into a TerminalThemePack's Themes list and
-        it behaves like any hand-written theme sheet.
+        sheet the asset's colors describe. Writes are content-compared first
+        (line-ending normalized), so unchanged imports never dirty the
+        project or re-trigger imports. Renames clean up the old generated
+        sheet and write the new-name one; note Unity 6000.4 derives asset
+        GUIDs from paths, so a rename mints a fresh stylesheet identity and
+        packs referencing the previous file need reassignment - the same as
+        renaming any hand-authored stylesheet. Only files carrying the
+        generated marker are overwritten or deleted on rename/asset deletion
+        - a hand-written sheet sharing the asset's name is preserved with a
+        warning instead. The generated sheet is a plain StyleSheet: drop it
+        into a TerminalThemePack's Themes list and it behaves like any
+        hand-written theme sheet.
 
         Known limitation: Unity's undo system and VCS operations (reverts,
         branch switches) do not move files through this postprocessor, so a
@@ -65,31 +70,28 @@ namespace WallstopStudios.DxCommandTerminal.Editor
                     continue;
                 }
 
-                WriteSiblingSheet(themeAsset, movedAssets[i]);
-
                 /*
-                    A rename leaves the previously generated sheet behind under
-                    the old asset name; remove it once the new-name sheet
-                    exists so no stale theme class survives the rename. Only
-                    generated sheets are deleted - a hand-written file is kept.
-                    On case-insensitive filesystems a case-only rename
-                    resolves both paths to the same asset, so it is skipped;
-                    on case-sensitive filesystems the stale-sheet path is
-                    cleaned up (File.Delete fallback for a never-imported
-                    leftover).
+                    Clean up the old generated sheet, then write the new-name
+                    one. (Unity 6000.4 derives asset GUIDs from paths, so a
+                    rename necessarily mints a new stylesheet identity; packs
+                    referencing the previous file need reassignment, exactly
+                    like renaming any hand-authored stylesheet.) A hand-written
+                    old sheet is left alone, and a case-only rename on a
+                    case-insensitive filesystem rewrites the same file in
+                    place.
                  */
                 string oldSheetPath = SheetPathFor(movedFromAssetPaths[i]);
                 string newSheetPath = SheetPathFor(movedAssets[i]);
-                if (!ResolvesToSameAsset(oldSheetPath, newSheetPath))
+                if (
+                    !string.Equals(oldSheetPath, newSheetPath, StringComparison.Ordinal)
+                    && IsGeneratedSheet(oldSheetPath)
+                    && !ResolvesToSameAsset(oldSheetPath, newSheetPath)
+                )
                 {
-                    if (IsGeneratedSheet(oldSheetPath))
-                    {
-                        if (!AssetDatabase.DeleteAsset(oldSheetPath))
-                        {
-                            File.Delete(oldSheetPath);
-                        }
-                    }
+                    DeleteGeneratedSheet(oldSheetPath);
                 }
+
+                WriteSiblingSheet(themeAsset, movedAssets[i]);
             }
 
             /*
@@ -106,8 +108,28 @@ namespace WallstopStudios.DxCommandTerminal.Editor
                 string sheetPath = SheetPathFor(deletedPath);
                 if (IsGeneratedSheet(sheetPath))
                 {
-                    AssetDatabase.DeleteAsset(sheetPath);
+                    DeleteGeneratedSheet(sheetPath);
                 }
+            }
+        }
+
+        /*
+            Deletes a generated sheet, falling back to a direct file delete
+            (plus its meta, if one was written) for a never-imported leftover
+            the asset database has no entry for, so no broken import or
+            orphaned meta survives.
+         */
+        private static void DeleteGeneratedSheet(string sheetPath)
+        {
+            if (AssetDatabase.DeleteAsset(sheetPath))
+            {
+                return;
+            }
+
+            File.Delete(sheetPath);
+            if (File.Exists(sheetPath + ".meta"))
+            {
+                File.Delete(sheetPath + ".meta");
             }
         }
 
@@ -143,7 +165,13 @@ namespace WallstopStudios.DxCommandTerminal.Editor
             if (File.Exists(sheetPath))
             {
                 string existing = File.ReadAllText(sheetPath);
-                if (string.Equals(existing, contents, StringComparison.Ordinal))
+                if (
+                    string.Equals(
+                        NormalizeEndings(existing),
+                        NormalizeEndings(contents),
+                        StringComparison.Ordinal
+                    )
+                )
                 {
                     return;
                 }
@@ -163,6 +191,11 @@ namespace WallstopStudios.DxCommandTerminal.Editor
             File.WriteAllText(sheetPath, contents, new UTF8Encoding(false));
             AssetDatabase.ImportAsset(sheetPath);
             Debug.Log($"Generated theme sheet '{sheetPath}' for '{themeAsset.name}'.", themeAsset);
+        }
+
+        private static string NormalizeEndings(string contents)
+        {
+            return contents.Replace("\r\n", "\n", StringComparison.Ordinal);
         }
 
         private static bool IsGeneratedSheet(string path)

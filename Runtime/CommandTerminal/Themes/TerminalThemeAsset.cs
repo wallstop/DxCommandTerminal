@@ -16,7 +16,7 @@ namespace WallstopStudios.DxCommandTerminal.Themes
      */
     [CreateAssetMenu(
         menuName = "Wallstop Studios/DxCommandTerminal/Theme Asset",
-        fileName = "NewTerminalThemeAsset",
+        fileName = "NewTerminalTheme",
         order = 1_111_124
     )]
     public sealed class TerminalThemeAsset : ScriptableObject
@@ -199,7 +199,7 @@ namespace WallstopStudios.DxCommandTerminal.Themes
                 .Append(Channel(color.b))
                 .Append(", ")
                 .Append(Alpha(color.a))
-                .AppendLine(");");
+                .Append(");\n");
         }
 
         private static string Channel(float value)
@@ -222,13 +222,18 @@ namespace WallstopStudios.DxCommandTerminal.Themes
             string cssClass = CssClassName;
             using CachedStringBuilder.Scope scope = new(1024);
             StringBuilder builder = scope.Builder;
+            /*
+                '\n' endings keep the output byte-identical across OSes (and
+                across git checkout configs), so the Editor writer's
+                content-compare never sees phantom EOL churn.
+             */
             builder
                 .Append(GeneratedMarkerPrefix)
                 .Append(" from '")
                 .Append(SafeDisplayName())
-                .AppendLine(".asset' - hand edits are overwritten on the next change. */");
-            builder.Append('.').Append(cssClass).AppendLine(" {");
-            builder.AppendLine("    /* Backgrounds */");
+                .Append(".asset' - hand edits are overwritten on the next change. */\n");
+            builder.Append('.').Append(cssClass).Append(" {\n");
+            builder.Append("    /* Backgrounds */\n");
             AppendToken(builder, "--terminal-bg", _terminalBg);
             AppendToken(builder, "--button-bg", _buttonBg);
             AppendToken(builder, "--input-field-bg", _inputFieldBg);
@@ -237,8 +242,8 @@ namespace WallstopStudios.DxCommandTerminal.Themes
             AppendToken(builder, "--scroll-bg", _scrollBg);
             AppendToken(builder, "--scroll-inverse-bg", _scrollInverseBg);
             AppendToken(builder, "--scroll-active-bg", _scrollActiveBg);
-            builder.AppendLine();
-            builder.AppendLine("    /* Text & Foreground */");
+            builder.Append('\n');
+            builder.Append("    /* Text & Foreground */\n");
             AppendToken(builder, "--button-text", _buttonText);
             AppendToken(builder, "--button-selected-text", _buttonSelectedText);
             AppendToken(builder, "--button-hover-text", _buttonHoverText);
@@ -248,11 +253,11 @@ namespace WallstopStudios.DxCommandTerminal.Themes
             AppendToken(builder, "--text-input-echo", _textInputEcho);
             AppendToken(builder, "--text-shell", _textShell);
             AppendToken(builder, "--text-error", _textError);
-            builder.AppendLine();
-            builder.AppendLine("    /* Other UI Elements */");
+            builder.Append('\n');
+            builder.Append("    /* Other UI Elements */\n");
             AppendToken(builder, "--scroll-color", _scrollColor);
             AppendToken(builder, "--caret-color", _caretColor);
-            builder.Append('}').AppendLine();
+            builder.Append("}\n");
             return builder.ToString();
         }
 

@@ -8,6 +8,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     using Themes;
     using UnityEngine;
     using UnityEngine.TestTools;
+    using UnityEngine.UIElements;
 #if UNITY_EDITOR
     using UnityEditor;
 #endif
@@ -109,6 +110,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     ("Neon Nights", "neon-nights-theme"),
                     ("solarized-dark-theme", "solarized-dark-theme"),
                     ("space theme", "space-theme"),
+                    ("NewTerminalTheme", "new-terminal-theme"),
                     ("My Cool_Theme 2", "my-cool-theme-2-theme"),
                     ("3D Theme", "theme-3-d-theme"),
                 }
@@ -201,6 +203,34 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 File.Exists(sheetPath),
                 "Deleting the asset removes the generated sheet with it"
             );
+        }
+
+        [Test]
+        public void RenamingTheAssetRegeneratesTheSheetUnderTheNewName()
+        {
+            CreateTempFolder();
+
+            const string assetPath = TempFolder + "/ProbeTheme.asset";
+            const string movedAssetPath = TempFolder + "/RenamedProbe.asset";
+            const string oldSheetPath = TempFolder + "/ProbeTheme.uss";
+            const string newSheetPath = TempFolder + "/RenamedProbe.uss";
+            AssetDatabase.CreateAsset(CreateAsset("ProbeTheme"), assetPath);
+            Assert.IsTrue(File.Exists(oldSheetPath), "Sanity: the sheet exists after create");
+
+            Assert.IsTrue(
+                string.IsNullOrEmpty(AssetDatabase.MoveAsset(assetPath, movedAssetPath)),
+                "Sanity: the asset rename succeeds"
+            );
+
+            Assert.IsFalse(File.Exists(oldSheetPath), "The stale old-name sheet is cleaned up");
+            Assert.IsTrue(File.Exists(newSheetPath), "The sheet follows the rename");
+            Assert.AreEqual(
+                AssetDatabase.LoadAssetAtPath<TerminalThemeAsset>(movedAssetPath).BuildUss(),
+                File.ReadAllText(newSheetPath),
+                "The new-name sheet targets the new asset name"
+            );
+            StyleSheet movedSheet = AssetDatabase.LoadAssetAtPath<StyleSheet>(newSheetPath);
+            Assert.IsTrue(movedSheet != null, "The new-name sheet imports as a StyleSheet");
         }
 
         [Test]
