@@ -205,16 +205,31 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             ReportNullPattern(context, expression, expression.Expression);
         }
 
+        /*
+           Roslyn splits case labels across two node types: constant labels
+           (CaseSwitchLabelSyntax, e.g. `case null:`) hold the constant expression
+           directly, while pattern labels (CasePatternSwitchLabelSyntax, e.g.
+           `case not null:`, `case { }:`) hold a pattern. Both get the null check;
+           the label's payload is structurally its first child node on every Roslyn
+           version, so neither typed member is read.
+        */
         private static void AnalyzeNullCaseLabel(SyntaxNodeAnalysisContext context)
         {
-            /*
-               CaseSwitchLabelSyntax names its pattern member differently across Roslyn
-               versions (Value pre-3.x, Pattern after); the pattern is structurally the
-               first child node of the label, so read it that way on every host.
-            */
             CaseSwitchLabelSyntax label = (CaseSwitchLabelSyntax)context.Node;
-            SyntaxNode pattern = FirstChild(label);
-            if (pattern == null || !IsNullCheckPattern(pattern))
+            SyntaxNode payload = FirstChild(label);
+            if (payload == null || !payload.IsKind(SyntaxKind.NullLiteralExpression))
+            {
+                return;
+            }
+
+            ReportNullPattern(context, label, GoverningExpression(label));
+        }
+
+        private static void AnalyzePatternCaseLabel(SyntaxNodeAnalysisContext context)
+        {
+            CasePatternSwitchLabelSyntax label = (CasePatternSwitchLabelSyntax)context.Node;
+            SyntaxNode payload = FirstChild(label);
+            if (payload == null || !IsNullCheckPattern(payload))
             {
                 return;
             }
@@ -440,6 +455,10 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             );
             context.RegisterSyntaxNodeAction(AnalyzeNullPattern, SyntaxKind.IsPatternExpression);
             context.RegisterSyntaxNodeAction(AnalyzeNullCaseLabel, SyntaxKind.CaseSwitchLabel);
+            context.RegisterSyntaxNodeAction(
+                AnalyzePatternCaseLabel,
+                SyntaxKind.CasePatternSwitchLabel
+            );
             context.RegisterSyntaxNodeAction(AnalyzeNullSwitchArm, SyntaxKind.SwitchExpressionArm);
         }
     }

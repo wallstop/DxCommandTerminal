@@ -194,6 +194,42 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators.Tests
             };
             yield return new object[]
             {
+                "switch statement 'case not null' pattern label",
+                Fixture(
+                    "        switch (_target)\n        {\n            case not null:\n                break;\n        }"
+                ),
+                "DxCmd0004",
+                1,
+            };
+            yield return new object[]
+            {
+                "switch statement 'case { }' pattern label",
+                Fixture(
+                    "        switch (_target)\n        {\n            case { }:\n                break;\n        }"
+                ),
+                "DxCmd0004",
+                1,
+            };
+            yield return new object[]
+            {
+                "switch statement 'case not { }' pattern label",
+                Fixture(
+                    "        switch (_target)\n        {\n            case not { }:\n                break;\n        }"
+                ),
+                "DxCmd0004",
+                1,
+            };
+            yield return new object[]
+            {
+                "switch statement null case with when clause",
+                Fixture(
+                    "        switch (_target)\n        {\n            case null when true:\n                break;\n        }"
+                ),
+                "DxCmd0004",
+                1,
+            };
+            yield return new object[]
+            {
                 "switch expression null arm",
                 Fixture("        int picked = _target switch { null => 1, _ => 0 };"),
                 "DxCmd0004",
@@ -305,6 +341,13 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators.Tests
             {
                 "typed property pattern is a type test, not a null check",
                 Fixture("        bool typed = _target is UnityEngine.Object { };"),
+            };
+            yield return new object[]
+            {
+                "declaration pattern case label is a type test",
+                Fixture(
+                    "        switch (_target)\n        {\n            case UnityEngine.Object live:\n                break;\n        }"
+                ),
             };
         }
 
