@@ -20,6 +20,7 @@ Agent Skills ([SKILL.md format](https://agentskills.io)) for specific tasks. Inv
 
 | Skill | When to Use |
 | --- | --- |
+| [hot-path-allocations](./hot-path-allocations/SKILL.md) | Keep DxCommandTerminal hot paths (per-keystroke sweeps, per-frame updates, per-log writes) allocation-free on Unity's Mono - measured allocation facts, version-gated collection snapshots, long version counters, and warmed AllocatingGCMemory probe methodology. Use when optimizing a hot path, adding a sweep over a live collection, adding a version/generation counter, or writing or debugging allocation tests. |
 | [webgl-command-registration](./webgl-command-registration/SKILL.md) | Handle WebGL and IL2CPP managed stripping constraints for RegisterCommandAttribute reflection-based command discovery in DxCommandTerminal (Managed Stripping Level settings, trims, link.xml). Use when commands vanish in WebGL/player builds, when configuring build settings, or when touching the reflection path in CommandShell/attribute scanning. |
 
 ## Feature Skills

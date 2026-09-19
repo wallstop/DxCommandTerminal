@@ -165,7 +165,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 The shell logs every registration cycle in the editor; that
                 log I/O would sit inside every measured window (and dominate
                 the small tiers), so it is silenced around the measurement.
+                A full collection first keeps cross-fixture heap pressure
+                out of the warm tail: in full-suite runs the p95 at the
+                1,000-command tier otherwise rides gen0 pauses past the
+                tripwire even though isolated runs sit well under it.
              */
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
+            GC.WaitForPendingFinalizers();
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
             bool logsEnabled = Debug.unityLogger.logEnabled;
             Debug.unityLogger.logEnabled = false;
             try
