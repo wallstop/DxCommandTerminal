@@ -1,10 +1,13 @@
 namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 {
     using System;
+    using System.Collections.Generic;
     using System.IO;
+    using System.Text.RegularExpressions;
     using NUnit.Framework;
     using Themes;
     using UnityEngine;
+    using UnityEngine.TestTools;
 #if UNITY_EDITOR
     using UnityEditor;
 #endif
@@ -40,9 +43,25 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             "--caret-color",
         };
 
+        private readonly List<ScriptableObject> _createdAssets = new();
+
         [TearDown]
         public void TearDown()
         {
+            foreach (ScriptableObject created in _createdAssets)
+            {
+                /*
+                    Persisted assets are removed with the temp folder below;
+                    destroying them mid-play throws the data-loss guard.
+                 */
+                if (created != null && !EditorUtility.IsPersistent(created))
+                {
+                    UnityEngine.Object.Destroy(created);
+                }
+            }
+
+            _createdAssets.Clear();
+
 #if UNITY_EDITOR
             if (AssetDatabase.IsValidFolder(TempFolder))
             {
@@ -66,6 +85,17 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         [Test]
+        public void GeneratedSheetCarriesTheOwnershipMarker()
+        {
+            TerminalThemeAsset asset = CreateAsset("Marked");
+            StringAssert.StartsWith(
+                TerminalThemeAsset.GeneratedMarkerPrefix,
+                asset.BuildUss(),
+                "Generated sheets must identify themselves as generated"
+            );
+        }
+
+        [Test]
         public void GeneratedSheetTargetsTheAssetDerivedClass()
         {
             foreach (
@@ -76,6 +106,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     ("solarized-dark-theme", "solarized-dark-theme"),
                     ("space theme", "space-theme"),
                     ("My Cool_Theme 2", "my-cool-theme-2-theme"),
+                    ("3D Theme", "theme-3-d-theme"),
                 }
             )
             {
@@ -107,14 +138,19 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             StringAssert.Contains("--text-error: rgba(255, 69, 58, 1);", uss);
         }
 
+        private TerminalThemeAsset CreateAsset(string name)
+        {
+            TerminalThemeAsset asset = ScriptableObject.CreateInstance<TerminalThemeAsset>();
+            asset.name = name;
+            _createdAssets.Add(asset);
+            return asset;
+        }
+
 #if UNITY_EDITOR
         [Test]
         public void CreatingTheAssetAutoWritesTheSiblingSheet()
         {
-            if (!AssetDatabase.IsValidFolder(TempFolder))
-            {
-                AssetDatabase.CreateFolder("Assets", "TempTerminalThemeAssetTests");
-            }
+            CreateTempFolder();
 
             const string assetPath = TempFolder + "/ProbeTheme.asset";
             const string sheetPath = TempFolder + "/ProbeTheme.uss";
@@ -144,13 +180,52 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 "Editing the asset rewrites the sheet"
             );
         }
+
+        [Test]
+        public void DeletingTheAssetRemovesItsGeneratedSheet()
+        {
+            CreateTempFolder();
+
+            const string assetPath = TempFolder + "/ProbeTheme.asset";
+            const string sheetPath = TempFolder + "/ProbeTheme.uss";
+            AssetDatabase.CreateAsset(CreateAsset("ProbeTheme"), assetPath);
+            Assert.IsTrue(File.Exists(sheetPath), "Sanity: the sheet exists after create");
+
+            AssetDatabase.DeleteAsset(assetPath);
+
+            Assert.IsFalse(
+                File.Exists(sheetPath),
+                "Deleting the asset removes the generated sheet with it"
+            );
+        }
+
+        [Test]
+        public void HandWrittenSheetsSharingTheAssetNameArePreserved()
+        {
+            CreateTempFolder();
+
+            const string assetPath = TempFolder + "/ProbeTheme.asset";
+            const string sheetPath = TempFolder + "/ProbeTheme.uss";
+            const string handWritten = ".probe-theme {\n    --terminal-bg: rgba(1, 2, 3, 1);\n}";
+            File.WriteAllText(sheetPath, handWritten);
+
+            LogAssert.Expect(LogType.Warning, new Regex("Skipping generated theme sheet"));
+            AssetDatabase.CreateAsset(CreateAsset("ProbeTheme"), assetPath);
+
+            Assert.AreEqual(
+                handWritten,
+                File.ReadAllText(sheetPath),
+                "A hand-written sheet sharing the asset name must not be clobbered"
+            );
+        }
 #endif
 
-        private static TerminalThemeAsset CreateAsset(string name)
+        private static void CreateTempFolder()
         {
-            TerminalThemeAsset asset = ScriptableObject.CreateInstance<TerminalThemeAsset>();
-            asset.name = name;
-            return asset;
+            if (!AssetDatabase.IsValidFolder(TempFolder))
+            {
+                AssetDatabase.CreateFolder("Assets", "TempTerminalThemeAssetTests");
+            }
         }
 
 #if UNITY_EDITOR

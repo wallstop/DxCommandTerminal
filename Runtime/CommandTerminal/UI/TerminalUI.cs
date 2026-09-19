@@ -277,6 +277,11 @@
 #endif
         }
 
+        private static List<T> CopyList<T>(List<T> source)
+        {
+            return source == null ? new List<T>() : new List<T>(source);
+        }
+
         private void Awake()
         {
             /*
@@ -285,26 +290,7 @@
                 a misconfigured asset surfaces the same buffer-size warnings
                 the component fields would.
              */
-            if (_settings != null)
-            {
-                _logBufferSize = _settings.logBufferSize;
-                _historyBufferSize = _settings.historyBufferSize;
-                _inputCaret = _settings.inputCaret;
-                _cursorBlinkRateMilliseconds = _settings.cursorBlinkRateMilliseconds;
-                showGUIButtons = _settings.showGUIButtons;
-                runButtonText = _settings.runButtonText;
-                closeButtonText = _settings.closeButtonText;
-                smallButtonText = _settings.smallButtonText;
-                fullButtonText = _settings.fullButtonText;
-                hintDisplayMode = _settings.hintDisplayMode;
-                makeHintsClickable = _settings.makeHintsClickable;
-                resetStateOnInit = _settings.resetStateOnInit;
-                skipSameCommandsInHistory = _settings.skipSameCommandsInHistory;
-                ignoreDefaultCommands = _settings.ignoreDefaultCommands;
-                _ignoredLogTypes = _settings.ignoredLogTypes ?? new List<TerminalLogType>();
-                _disabledCommands = _settings.disabledCommands ?? new List<string>();
-                _logUnityMessages = _settings.logUnityMessages;
-            }
+            ApplySharedSettings();
 
             /*
                 The serialized field is assigned by the editor when the
@@ -613,6 +599,38 @@
             }
 
             _commandIssuedThisFrame = false;
+        }
+
+        /*
+            Shared settings asset wins over the serialized component values
+            (issue #72 option B). Runs at wake and before every UI build;
+            idempotent. Lists are copied so a scripted mutation of the
+            component fields can never edit the shared asset.
+         */
+        private void ApplySharedSettings()
+        {
+            if (_settings == null)
+            {
+                return;
+            }
+
+            _logBufferSize = _settings.logBufferSize;
+            _historyBufferSize = _settings.historyBufferSize;
+            _inputCaret = _settings.inputCaret;
+            _cursorBlinkRateMilliseconds = _settings.cursorBlinkRateMilliseconds;
+            showGUIButtons = _settings.showGUIButtons;
+            runButtonText = _settings.runButtonText;
+            closeButtonText = _settings.closeButtonText;
+            smallButtonText = _settings.smallButtonText;
+            fullButtonText = _settings.fullButtonText;
+            hintDisplayMode = _settings.hintDisplayMode;
+            makeHintsClickable = _settings.makeHintsClickable;
+            resetStateOnInit = _settings.resetStateOnInit;
+            skipSameCommandsInHistory = _settings.skipSameCommandsInHistory;
+            ignoreDefaultCommands = _settings.ignoreDefaultCommands;
+            _ignoredLogTypes = CopyList(_settings.ignoredLogTypes);
+            _disabledCommands = CopyList(_settings.disabledCommands);
+            _logUnityMessages = _settings.logUnityMessages;
         }
 
         private void RefreshStaticState(bool force)
@@ -1878,6 +1896,13 @@
 
         private void SetupUI()
         {
+            /*
+                Apply the shared settings asset before any element reads a
+                config field: the rare external SetState on a disabled
+                component can reach here before Awake runs.
+             */
+            ApplySharedSettings();
+
             if (_uiDocument == null)
             {
                 Debug.LogError("No UIDocument assigned, cannot setup UI.", this);

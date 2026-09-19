@@ -16,31 +16,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     public sealed class TerminalSettingsTests
     {
         private readonly List<GameObject> _spawned = new();
-
-        private static TerminalSettings CreateSettings()
-        {
-            TerminalSettings settings = ScriptableObject.CreateInstance<TerminalSettings>();
-            settings.logBufferSize = 77;
-            settings.historyBufferSize = 88;
-            settings.inputCaret = "$";
-            settings.cursorBlinkRateMilliseconds = 123;
-            settings.runButtonText = "go";
-            settings.closeButtonText = "bye";
-            settings.smallButtonText = "shrink";
-            settings.fullButtonText = "grow";
-            settings.hintDisplayMode = HintDisplayMode.Never;
-            settings.makeHintsClickable = false;
-            settings.skipSameCommandsInHistory = false;
-            settings.ignoreDefaultCommands = true;
-            settings.ignoredLogTypes = new List<TerminalLogType>
-            {
-                TerminalLogType.Warning,
-                TerminalLogType.Error,
-            };
-            settings.disabledCommands = new List<string> { "help", "clear" };
-            settings.paletteToggleHotkey = "ctrl+p";
-            return settings;
-        }
+        private readonly List<ScriptableObject> _createdAssets = new();
 
         [TearDown]
         public void TearDown()
@@ -54,6 +30,16 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             }
 
             _spawned.Clear();
+
+            foreach (ScriptableObject created in _createdAssets)
+            {
+                if (created != null)
+                {
+                    Object.Destroy(created);
+                }
+            }
+
+            _createdAssets.Clear();
         }
 
         [Test]
@@ -113,7 +99,20 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 terminal._disabledCommands,
                 "Disabled commands follow the asset"
             );
+            Assert.IsFalse(
+                ReferenceEquals(settings.ignoredLogTypes, terminal._ignoredLogTypes),
+                "Ignored log types must be copied, not aliased from the asset"
+            );
+            Assert.IsFalse(
+                ReferenceEquals(settings.disabledCommands, terminal._disabledCommands),
+                "Disabled commands must be copied, not aliased from the asset"
+            );
             Assert.IsTrue(terminal._logUnityMessages, "logUnityMessages follows the asset");
+            Assert.AreEqual(
+                77,
+                Terminal.Buffer.Capacity,
+                "The asset's log buffer size reaches the shared session buffer"
+            );
         }
 
         [Test]
@@ -167,6 +166,32 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 palette.toggleHotkey,
                 "Palette hotkey follows the asset on wake"
             );
+        }
+
+        private TerminalSettings CreateSettings()
+        {
+            TerminalSettings settings = ScriptableObject.CreateInstance<TerminalSettings>();
+            _createdAssets.Add(settings);
+            settings.logBufferSize = 77;
+            settings.historyBufferSize = 88;
+            settings.inputCaret = "$";
+            settings.cursorBlinkRateMilliseconds = 123;
+            settings.runButtonText = "go";
+            settings.closeButtonText = "bye";
+            settings.smallButtonText = "shrink";
+            settings.fullButtonText = "grow";
+            settings.hintDisplayMode = HintDisplayMode.Never;
+            settings.makeHintsClickable = false;
+            settings.skipSameCommandsInHistory = false;
+            settings.ignoreDefaultCommands = true;
+            settings.ignoredLogTypes = new List<TerminalLogType>
+            {
+                TerminalLogType.Warning,
+                TerminalLogType.Error,
+            };
+            settings.disabledCommands = new List<string> { "help", "clear" };
+            settings.paletteToggleHotkey = "ctrl+p";
+            return settings;
         }
 
         private TerminalUI SpawnTerminal(TerminalSettings settings)

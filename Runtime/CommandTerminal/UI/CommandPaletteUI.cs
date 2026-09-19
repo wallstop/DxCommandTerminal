@@ -501,18 +501,22 @@
             ClearFeedback();
         }
 
-        private void OnEnable()
+        private void Awake()
         {
             /*
                 Shared settings asset wins over the serialized component
                 value (issue #72 option B): the palette hotkey follows the
-                asset when one is assigned.
+                asset when one is assigned. Same wake semantics as
+                TerminalUI.
              */
             if (_settings != null)
             {
                 toggleHotkey = _settings.paletteToggleHotkey;
             }
+        }
 
+        private void OnEnable()
+        {
             /*
                 First enabled component owns the static instance so two
                 palettes in a scene cannot both react to CloseActive.
