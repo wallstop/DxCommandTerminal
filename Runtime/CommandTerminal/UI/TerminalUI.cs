@@ -114,15 +114,23 @@
         [SerializeField]
         internal int _logBufferSize = 256;
 
+        /*
+            Internal for test coverage of the shared settings asset (see
+            WallstopStudios.DxCommandTerminal.Tests.Runtime).
+         */
         [SerializeField]
-        private int _historyBufferSize = 512;
+        internal int _historyBufferSize = 512;
 
+        /*
+            Internal for test coverage of the shared settings asset (see
+            WallstopStudios.DxCommandTerminal.Tests.Runtime).
+         */
         [SerializeField]
-        private string _inputCaret = ">";
+        internal string _inputCaret = ">";
 
         [Header("System")]
         [SerializeField]
-        private int _cursorBlinkRateMilliseconds = 666;
+        internal int _cursorBlinkRateMilliseconds = 666;
 
 #if UNITY_EDITOR
         [SerializeField]
@@ -151,6 +159,12 @@
 
         [SerializeField]
         internal bool _logUnityMessages;
+
+        [SerializeField]
+        [Tooltip(
+            "Shared settings asset applied when this component wakes; its values win over the serialized component values. Empty = component values."
+        )]
+        internal TerminalSettings _settings;
 
         private IInputHandler[] _inputHandlers;
 
@@ -265,6 +279,33 @@
 
         private void Awake()
         {
+            /*
+                Shared settings asset wins over the serialized component
+                values (issue #72 option B). Applied before any validation so
+                a misconfigured asset surfaces the same buffer-size warnings
+                the component fields would.
+             */
+            if (_settings != null)
+            {
+                _logBufferSize = _settings.logBufferSize;
+                _historyBufferSize = _settings.historyBufferSize;
+                _inputCaret = _settings.inputCaret;
+                _cursorBlinkRateMilliseconds = _settings.cursorBlinkRateMilliseconds;
+                showGUIButtons = _settings.showGUIButtons;
+                runButtonText = _settings.runButtonText;
+                closeButtonText = _settings.closeButtonText;
+                smallButtonText = _settings.smallButtonText;
+                fullButtonText = _settings.fullButtonText;
+                hintDisplayMode = _settings.hintDisplayMode;
+                makeHintsClickable = _settings.makeHintsClickable;
+                resetStateOnInit = _settings.resetStateOnInit;
+                skipSameCommandsInHistory = _settings.skipSameCommandsInHistory;
+                ignoreDefaultCommands = _settings.ignoreDefaultCommands;
+                _ignoredLogTypes = _settings.ignoredLogTypes ?? new List<TerminalLogType>();
+                _disabledCommands = _settings.disabledCommands ?? new List<string>();
+                _logUnityMessages = _settings.logUnityMessages;
+            }
+
             /*
                 The serialized field is assigned by the editor when the
                 component is added through the inspector; adds that bypass

@@ -91,6 +91,9 @@
         internal UIDocument _uiDocument;
 
         [SerializeField]
+        internal TerminalSettings _settings;
+
+        [SerializeField]
         internal TerminalThemePack _themePack;
 
         internal VisualElement _paletteRoot;
@@ -500,6 +503,16 @@
 
         private void OnEnable()
         {
+            /*
+                Shared settings asset wins over the serialized component
+                value (issue #72 option B): the palette hotkey follows the
+                asset when one is assigned.
+             */
+            if (_settings != null)
+            {
+                toggleHotkey = _settings.paletteToggleHotkey;
+            }
+
             /*
                 First enabled component owns the static instance so two
                 palettes in a scene cannot both react to CloseActive.
