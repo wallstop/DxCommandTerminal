@@ -161,10 +161,33 @@ function main() {
   );
   if (Array.isArray(allowlist)) {
     const tracked = trackedFiles();
+    /*
+       Interpret the allowlist the way npm does: entries starting with "!"
+       exclude (repo-internal payloads that Unity loads from the checkout but
+       no distributed artifact may carry, e.g. the internal analyzers DLL),
+       the rest include. The expected tarball is tracked files that are
+       included and not excluded.
+    */
+    const includes = allowlist.filter((root) => !root.startsWith("!"));
+    const excludes = allowlist
+      .filter((root) => root.startsWith("!"))
+      .map((root) => root.slice(1));
+    check(0 < includes.length, "npm files allowlist has no include patterns");
+    const matched = (entry, roots) =>
+      roots.some((root) => entry === root || entry.startsWith(`${root}/`));
     const expected = new Set(["package.json"]);
     for (const entry of tracked) {
-      if (allowlist.some((root) => entry === root || entry.startsWith(`${root}/`))) {
+      if (matched(entry, includes) && !matched(entry, excludes)) {
         expected.add(entry);
+      }
+    }
+    const notShipped = [...tracked].filter(
+      (entry) => matched(entry, includes) && matched(entry, excludes)
+    );
+    for (const entry of notShipped) {
+      if (!entry.endsWith(".dll") && !entry.endsWith(".dll.meta")) {
+        fail(`internal-only exclusion covers a non-payload file: ${entry}`);
+        problems += 1;
       }
     }
     for (const missing of expected) {
