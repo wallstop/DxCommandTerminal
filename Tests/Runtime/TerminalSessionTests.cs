@@ -26,7 +26,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             int historyBufferSize = 64,
             IReadOnlyList<TerminalLogType> ignoredLogTypes = null,
             IReadOnlyList<string> disabledCommands = null,
-            bool ignoreDefaultCommands = false
+            bool ignoreDefaultCommands = false,
+            TerminalStackTraceMode stackTraceMode = TerminalStackTraceMode.All
         )
         {
             return new TerminalSession.Config(
@@ -34,7 +35,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 historyBufferSize,
                 ignoredLogTypes,
                 disabledCommands,
-                ignoreDefaultCommands
+                ignoreDefaultCommands,
+                stackTraceMode
             );
         }
 
@@ -171,6 +173,44 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 buffer.HandleLog("dropped", TerminalLogType.Warning),
                 "A newly ignored type must be dropped after resync"
             );
+        }
+
+        [Test]
+        public void ApplySyncsStackTraceModeOnSameBuffer()
+        {
+            TerminalSession session = new();
+            session.Apply(Config(stackTraceMode: TerminalStackTraceMode.All), force: true);
+            CommandLog buffer = session.Buffer;
+            Assert.IsTrue(
+                buffer.HandleLog("traced", TerminalLogType.ShellMessage),
+                "Sanity: the traced write must land"
+            );
+            Assert.AreNotEqual(
+                string.Empty,
+                buffer.Logs[buffer.Logs.Count - 1].stackTrace,
+                "Sanity: mode All must capture a trace"
+            );
+
+            session.Apply(Config(stackTraceMode: TerminalStackTraceMode.Disabled), force: false);
+
+            Assert.AreSame(buffer, session.Buffer, "Buffer should be reused when syncing mode");
+            Assert.AreEqual(TerminalStackTraceMode.Disabled, buffer.stackTraceMode);
+            Assert.IsTrue(
+                buffer.HandleLog("untraced", TerminalLogType.ShellMessage),
+                "Sanity: the untraced write must land"
+            );
+            Assert.AreEqual(
+                string.Empty,
+                buffer.Logs[buffer.Logs.Count - 1].stackTrace,
+                "Mode Disabled applied through resync must store no trace"
+            );
+
+            session.Apply(
+                Config(stackTraceMode: TerminalStackTraceMode.ErrorsAndWarnings),
+                force: false
+            );
+
+            Assert.AreEqual(TerminalStackTraceMode.ErrorsAndWarnings, buffer.stackTraceMode);
         }
 
         [Test]

@@ -110,6 +110,40 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
         }
 
         [Test]
+        public void LogWriteInDisabledModeIsAllocationFree()
+        {
+            _log.stackTraceMode = TerminalStackTraceMode.Disabled;
+            FillLogToCapacity();
+
+            AllocationAssertions.AssertZeroAllocations(
+                "log write (stack-trace mode Disabled)",
+                () => _log.HandleLog("bench message", TerminalLogType.ShellMessage)
+            );
+            Assert.AreEqual(
+                string.Empty,
+                _log.Logs[_log.Logs.Count - 1].stackTrace,
+                "Sanity: mode Disabled must store no trace"
+            );
+        }
+
+        [Test]
+        public void RoutineLogWriteInErrorsAndWarningsModeIsAllocationFree()
+        {
+            _log.stackTraceMode = TerminalStackTraceMode.ErrorsAndWarnings;
+            FillLogToCapacity();
+
+            AllocationAssertions.AssertZeroAllocations(
+                "routine log write (stack-trace mode ErrorsAndWarnings)",
+                () => _log.HandleLog("bench message", TerminalLogType.ShellMessage)
+            );
+
+            AllocationAssertions.AssertDetectsAllocation(
+                "error log write (stack-trace mode ErrorsAndWarnings still extracts)",
+                () => _log.HandleLog("bench error", TerminalLogType.Error)
+            );
+        }
+
+        [Test]
         public void TextCommandExecutionAllocatesByDesign()
         {
             _shell.AddCommand("bench-cmd", HandleNoop, 1);

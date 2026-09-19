@@ -26,6 +26,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private CommandShell _originalShell;
         private CommandHistory _originalHistory;
         private CommandAutoComplete _originalAutoComplete;
+        private TerminalStackTraceMode _originalStackTraceMode;
 
         [SetUp]
         public void SetUp()
@@ -34,6 +35,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             _originalShell = Terminal.Shell;
             _originalHistory = Terminal.History;
             _originalAutoComplete = Terminal.AutoComplete;
+            _originalStackTraceMode =
+                Terminal.Buffer != null
+                    ? Terminal.Buffer.stackTraceMode
+                    : TerminalStackTraceMode.All;
         }
 
         [TearDown]
@@ -43,6 +48,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Terminal.Shell = _originalShell;
             Terminal.History = _originalHistory;
             Terminal.AutoComplete = _originalAutoComplete;
+            if (Terminal.Buffer != null)
+            {
+                Terminal.Buffer.stackTraceMode = _originalStackTraceMode;
+            }
 
             foreach (GameObject spawned in _spawned)
             {
@@ -132,6 +141,16 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
             Assert.IsTrue(terminal._logUnityMessages, "logUnityMessages follows the asset");
             Assert.AreEqual(
+                TerminalStackTraceMode.Disabled,
+                terminal._stackTraceMode,
+                "Stack-trace mode follows the asset"
+            );
+            Assert.AreEqual(
+                TerminalStackTraceMode.Disabled,
+                Terminal.Buffer.stackTraceMode,
+                "The asset's stack-trace mode reaches the shared session buffer"
+            );
+            Assert.AreEqual(
                 77,
                 Terminal.Buffer.Capacity,
                 "The asset's log buffer size reaches the shared session buffer"
@@ -165,6 +184,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
             Assert.IsEmpty(terminal._ignoredLogTypes, "Default ignored log types preserved");
             Assert.IsEmpty(terminal._disabledCommands, "Default disabled commands preserved");
+            Assert.AreEqual(
+                TerminalStackTraceMode.All,
+                terminal._stackTraceMode,
+                "Default stack-trace capture preserved"
+            );
         }
 
         [Test]
@@ -213,6 +237,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 TerminalLogType.Error,
             };
             settings.disabledCommands = new List<string> { "help", "clear" };
+            settings.logUnityMessages = true;
+            settings.stackTraceMode = TerminalStackTraceMode.Disabled;
             settings.paletteToggleHotkey = "ctrl+p";
             return settings;
         }
