@@ -58,20 +58,25 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private readonly List<IDisposable> _handles = new();
 
         /*
-            Budgets are tripwires, set from measured Unity 6000.4.6f1 numbers
-            and sized to catch the #36-class broad-scan regressions and gross
-            per-command binding slowdowns, not ordinary scheduler jitter.
-            Measured at the 1,000-command gate tier: warm median ~12 ms,
-            p95 ~19 ms; the 10,000-command stress tier: cold ~88 ms, warm
-            p95 ~112 ms.
+            Budgets are absolute tripwires for the pinned local editor
+            environment (Unity 6000.4.6f1, ~750-assembly domain), sized to
+            catch the #36-class broad-scan regressions and the return of
+            eager per-command Delegate.CreateDelegate binding at readiness
+            (measured warm p95 ~19 ms at the 1,000-command tier, over the
+            15 ms tripwire) - not ordinary scheduler jitter, and not
+            portable across machines. Measured deferred-binding numbers the
+            budgets are set from: reflected tiers 0-1,000 warm p95 ~2.6-10.6 ms
+            (cold 2.5-11.5 ms), 10,000 tier warm p95 ~55 ms (cold ~87-112 ms),
+            provider gate tier warm p95 ~9.1-11.5 ms (cold ~14-16 ms),
+            inflated-domain gate tier warm p95 ~6.5-7.8 ms (cold ~18-20 ms).
          */
         private static IEnumerable<TestCaseData> VolumeCases()
         {
-            yield return new TestCaseData(0, 250f, 100f).SetName("Volume.Empty");
-            yield return new TestCaseData(10, 250f, 100f).SetName("Volume.TenCommands");
-            yield return new TestCaseData(100, 250f, 100f).SetName("Volume.HundredCommands");
-            yield return new TestCaseData(1000, 250f, 100f).SetName("Volume.ThousandCommands");
-            yield return new TestCaseData(10000, 500f, 250f).SetName("Volume.TenThousandCommands");
+            yield return new TestCaseData(0, 40f, 15f).SetName("Volume.Empty");
+            yield return new TestCaseData(10, 40f, 15f).SetName("Volume.TenCommands");
+            yield return new TestCaseData(100, 40f, 15f).SetName("Volume.HundredCommands");
+            yield return new TestCaseData(1000, 40f, 15f).SetName("Volume.ThousandCommands");
+            yield return new TestCaseData(10000, 200f, 150f).SetName("Volume.TenThousandCommands");
         }
 
         private static Assembly[] CreateFillerAssemblies()
@@ -317,7 +322,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 GateTierCommandCount,
                 "Every provider-served command should register"
             );
-            AssertReadinessUnderTripwires(readiness, GateTierCommandCount, 250f, 100f);
+            AssertReadinessUnderTripwires(readiness, GateTierCommandCount, 60f, 40f);
 
             Debug.Log(
                 $"[DxCommandTerminal][Scale] readiness path=provider commands={GateTierCommandCount} "
@@ -362,7 +367,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 GateTierCommandCount,
                 "Every volume command should register in the inflated domain"
             );
-            AssertReadinessUnderTripwires(readiness, GateTierCommandCount, 250f, 100f);
+            AssertReadinessUnderTripwires(readiness, GateTierCommandCount, 60f, 40f);
 
             Debug.Log(
                 $"[DxCommandTerminal][Scale] domain fillers={FillerAssemblyCount} "
