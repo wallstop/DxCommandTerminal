@@ -530,6 +530,49 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         [Test]
+        public void NestedTypeNamesUseTheLinkerSeparator()
+        {
+            Assert.AreEqual(
+                "Ns.Outer/Inner",
+                CommandCompatibilityBake.ToLinkerTypeName("Ns.Outer+Inner"),
+                "Linker descriptors name nested types with the IL separator, not "
+                    + "the reflection + separator; a + entry never matches"
+            );
+            Assert.AreEqual(
+                "TopLevel",
+                CommandCompatibilityBake.ToLinkerTypeName("TopLevel"),
+                "Top-level names pass through unchanged"
+            );
+        }
+
+        [Test]
+        public void ManifestWritesNestedTypesWithTheLinkerSeparator()
+        {
+            Assert.IsTrue(
+                CommandCompatibilityBake.TryBuildManifest(
+                    new[]
+                    {
+                        new CommandCompatibilityBake.PreservationEntry(
+                            "Assembly-A",
+                            "Ns.Outer+Inner",
+                            "Handler"
+                        ),
+                    },
+                    out string manifest
+                ),
+                "The preservation set produces a manifest"
+            );
+
+            StringAssert.Contains(
+                "    <type fullname=\"Ns.Outer/Inner\" preserve=\"nothing\">",
+                manifest,
+                "The nested type is written with the IL separator so the linker "
+                    + "entry actually matches"
+            );
+            StringAssert.DoesNotContain("+", manifest);
+        }
+
+        [Test]
         public void ManifestIsDeterministicOrderedDeduplicatedAndEscaped()
         {
             Assert.IsTrue(

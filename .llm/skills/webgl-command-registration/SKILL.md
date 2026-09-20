@@ -41,7 +41,9 @@ parameter, no generic method, no open-generic declaring chain) AND it is accessi
 carries the partial companion; everything else static and attributed (minus `EditorOnly`)
 is preserved, and whole catalog-less assemblies' handlers are preserved. Assembly entries
 carry `ignoreIfMissing="1"`, so entries for assemblies a given build does not contain are
-inert. Manual mitigation below remains for workflows that never run the editor build hook.
+inert. Nested types are named with the IL separator `/` (e.g. `Ns.Outer/Inner`), never the
+reflection `+` from `Type.FullName` - a `+` entry silently matches nothing, in the bake's
+manifest and in hand-written link.xml alike. Manual mitigation below remains for workflows that never run the editor build hook.
 **Required setting**: any Managed Stripping Level works for generated catalogs of
 accessible handlers; with the bake, the reflection-bound paths also survive `Medium`/`High`
 in player builds.

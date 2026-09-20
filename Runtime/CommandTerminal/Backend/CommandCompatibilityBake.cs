@@ -112,6 +112,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             non-shipping assemblies. Entries for assemblies a given build
             does not contain are inert through ignoreIfMissing="1".
          */
+
         internal static List<PreservationEntry> CollectPreservations(
             IReadOnlyList<AttributedCommand> commands
         )
@@ -168,6 +169,23 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             return entries;
         }
 
+        /*
+            Linker descriptors name nested types with the IL separator `/`,
+            not the reflection separator `+` that Type.FullName produces. A
+            `+` entry never matches a nested type, and its handlers would
+            stay strippable despite being listed.
+         */
+
+        internal static string ToLinkerTypeName(string typeFullName)
+        {
+            if (typeFullName == null)
+            {
+                return null;
+            }
+
+            return typeFullName.Replace('+', '/');
+        }
+
         internal static bool TryBuildManifest(
             IReadOnlyList<PreservationEntry> entries,
             out string manifest
@@ -182,52 +200,39 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             List<PreservationEntry> ordered = new(entries);
             ordered.Sort(CompareEntries);
 
-            StringBuilder builder = new();
-            builder.Append("<!-- ").Append(OwnershipMarker).Append(": preserves ");
-            builder.Append("[RegisterCommand] handlers that are bound by name through ");
-            builder.Append("reflection, which managed stripping cannot see. Written under ");
-            builder.Append("Temp per player build; safe to delete. -->\n");
-            builder.Append("<linker>\n");
+            List<string> lines = new()
+            {
+                "<!-- "
+                    + OwnershipMarker
+                    + ": preserves [RegisterCommand] handlers that are bound by name "
+                    + "through reflection, which managed stripping cannot see. Written "
+                    + "under Temp per player build; safe to delete. -->",
+                "<linker>",
+            };
 
             for (int i = 0; i < ordered.Count; )
             {
                 PreservationEntry entry = ordered[i];
-                builder
-                    .Append("  <assembly fullname=\"")
-                    .Append(SecurityElement.Escape(entry.AssemblyName))
-                    .AppendLine("\" ignoreIfMissing=\"1\">");
+                lines.Add(
+                    $"  <assembly fullname=\"{SecurityElement.Escape(entry.AssemblyName)}\" ignoreIfMissing=\"1\">"
+                );
                 for (; i < ordered.Count; )
                 {
-                    if (
-                        !string.Equals(
-                            ordered[i].AssemblyName,
-                            entry.AssemblyName,
-                            StringComparison.Ordinal
-                        )
-                    )
+                    if (!IsSameAssembly(ordered[i], entry.AssemblyName))
                     {
                         break;
                     }
 
                     PreservationEntry typeEntry = ordered[i];
-                    builder
-                        .Append("    <type fullname=\"")
-                        .Append(SecurityElement.Escape(typeEntry.TypeFullName))
-                        .AppendLine("\" preserve=\"nothing\">");
+                    lines.Add(
+                        $"    <type fullname=\"{SecurityElement.Escape(ToLinkerTypeName(typeEntry.TypeFullName))}\" preserve=\"nothing\">"
+                    );
                     string lastMethodName = null;
                     for (; i < ordered.Count; ++i)
                     {
                         if (
-                            !string.Equals(
-                                ordered[i].AssemblyName,
-                                entry.AssemblyName,
-                                StringComparison.Ordinal
-                            )
-                            || !string.Equals(
-                                ordered[i].TypeFullName,
-                                typeEntry.TypeFullName,
-                                StringComparison.Ordinal
-                            )
+                            !IsSameAssembly(ordered[i], entry.AssemblyName)
+                            || !IsSameType(ordered[i], typeEntry.TypeFullName)
                         )
                         {
                             break;
@@ -240,20 +245,19 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                         }
 
                         lastMethodName = methodName;
-                        builder
-                            .Append("      <method name=\"")
-                            .Append(SecurityElement.Escape(methodName))
-                            .AppendLine("\" />");
+                        lines.Add(
+                            $"      <method name=\"{SecurityElement.Escape(methodName)}\" />"
+                        );
                     }
 
-                    builder.AppendLine("    </type>");
+                    lines.Add("    </type>");
                 }
 
-                builder.AppendLine("  </assembly>");
+                lines.Add("  </assembly>");
             }
 
-            builder.AppendLine("</linker>");
-            manifest = builder.ToString();
+            lines.Add("</linker>");
+            manifest = string.Join("\n", lines) + "\n";
             return true;
         }
 
@@ -314,11 +318,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             return parameters.Length == 1 && parameters[0].ParameterType == typeof(CommandArg[]);
         }
 
-        /*
-            The generator's accessible-from-catalog set (public, internal,
-            protected internal); private, protected, and private protected
-            handlers need the partial companion to be rooted.
-         */
         internal static bool IsRootedByGeneratedCode(
             Assembly assembly,
             Type declaringType,
@@ -357,6 +356,22 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             return HasCompanionBinder(declaringType);
         }
 
+        private static bool IsSameAssembly(PreservationEntry entry, string assemblyName)
+        {
+            return string.Equals(entry.AssemblyName, assemblyName, StringComparison.Ordinal);
+        }
+
+        private static bool IsSameType(PreservationEntry entry, string typeFullName)
+        {
+            return string.Equals(entry.TypeFullName, typeFullName, StringComparison.Ordinal);
+        }
+
+        /*
+            The generator's accessible-from-catalog set (public, internal,
+            protected internal); private, protected, and private protected
+            handlers need the partial companion to be rooted.
+         */
+
         /*
             A partial companion is the generator-emitted nested holder whose
             members are zero-argument static methods returning
@@ -365,6 +380,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             DxCommandTerminalBinder without colliding, and rooting on the
             name would silently leave its cached-binder handlers strippable.
          */
+
         private static bool HasCompanionBinder(Type declaringType)
         {
             Type companion = declaringType.GetNestedType(
@@ -459,6 +475,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             (their managed type is a by-ref of the array). Everything else
             binds by reflection-by-name, whatever its accessibility.
          */
+
         private static bool IsDirectlyAccessible(MethodInfo method)
         {
             return method.IsPublic || method.IsAssembly || method.IsFamilyOrAssembly;
@@ -488,6 +505,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             which Unity purges, following the same convention as the engine's
             own generated linker files.
          */
+
         public void OnBeforeRun(BuildReport report, UnityLinkerBuildPipelineData data) { }
 
         /*
@@ -495,6 +513,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             editor's TypeCache is still available and the manifest can name
             the exact handler set the player domain will hold.
          */
+
         public string GenerateAdditionalLinkXmlFile(
             BuildReport report,
             UnityLinkerBuildPipelineData data
