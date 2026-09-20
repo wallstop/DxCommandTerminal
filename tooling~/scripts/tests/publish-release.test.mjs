@@ -166,6 +166,20 @@ test("workflow structure: remote checks precede npm and all Release mutations", 
   assert.strictEqual(ci.match(/"\.github\/workflows\/release\*\.yml"/g)?.length, 2);
 });
 
+test("workflow structure: an existing Release is reused on re-run, never re-created", () => {
+  const script = shellScript(job(publishWorkflow, "github-release"), "Create the draft release");
+  const view = script.indexOf("gh release view");
+  const create = script.indexOf("gh release create");
+  assert.ok(view !== -1, "the create step must probe for an existing release first");
+  assert.ok(create !== -1, "the create step must be able to create a missing release");
+  assert.ok(view < create, "the reuse probe must precede creation");
+  assert.match(script, /gh release view "\$TAG".*\|\|[\s\S]*gh release create "\$TAG"/);
+  // Issue #93: a re-run over an already-published release must not fail on
+  // create, and the clobber upload is the only asset-mutating step.
+  assert.doesNotMatch(script, /--clobber/);
+  assert.match(job(publishWorkflow, "github-release"), /gh release upload "\$TAG" --clobber/);
+});
+
 test("workflow shell prerequisite fails closed without opt-in or matching provenance SHA", { skip: process.platform === "win32" }, () => {
   const verify = job(publishWorkflow, "verify");
   assert.match(verify, /RELEASE_ENABLED: \$\{\{ vars.RELEASE_PUBLISH_ENABLED \}\}/);
