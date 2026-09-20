@@ -1598,7 +1598,12 @@
             _commandInput.selectIndex = index;
         }
 
-        private void ResetAutoComplete()
+        /*
+            Internal for test coverage of the TerminalUI-level standard
+            operations benchmarks (see
+            WallstopStudios.DxCommandTerminal.Tests.Runtime).
+         */
+        internal void ResetAutoComplete()
         {
             if (_input == null)
             {
@@ -1651,6 +1656,140 @@
                 _previousLastCompletionIndex = null;
                 _lastCompletionBuffer.Clear();
             }
+        }
+
+        /*
+            Internal for test coverage of the first-open tree build
+            measurement (see WallstopStudios.DxCommandTerminal.Tests.Runtime).
+         */
+        internal void EnsureUI()
+        {
+            if (_terminalContainer != null)
+            {
+                return;
+            }
+
+            SetupUI();
+        }
+
+        /*
+            Internal for test coverage of the first-open tree build
+            measurement (see WallstopStudios.DxCommandTerminal.Tests.Runtime):
+            the benchmark rebuilds through the same teardown the disable path
+            pays.
+         */
+        internal void TeardownUI()
+        {
+            _terminalContainer = null;
+            _logScrollView = null;
+            _autoCompleteContainer = null;
+            _inputContainer = null;
+            _runButton = null;
+            _inputCaretLabel = null;
+            _commandInput = null;
+            _textInput = null;
+            _stateButtonContainer = null;
+            _lastCodeSyncedValue = null;
+        }
+
+        /*
+            Internal for test coverage of the steady-state refresh
+            measurement (see WallstopStudios.DxCommandTerminal.Tests.Runtime).
+         */
+        internal void RefreshUI()
+        {
+            if (_terminalContainer == null)
+            {
+                return;
+            }
+
+            /*
+                The palette shares this document when both surfaces live on one
+                GameObject. While it is open it owns the root: RefreshUI would
+                force the root height to the terminal's (zero when closed), so
+                the palette panel's percent position collapses to the top, and
+                its focus/caret writes steal keys from the palette input.
+             */
+            if (IsPaletteSurfaceOpen())
+            {
+                return;
+            }
+
+            /*
+                Heights and the input display are written on every pass,
+                including state-transition frames: the idle gate can skip the
+                very next pass, and a zero-duration close snaps its height on
+                the same frame SetState flags the transition, so this is the
+                only pass that can land the final closed height.
+             */
+            _uiDocument.rootVisualElement.style.height = _currentWindowHeight;
+            _terminalContainer.style.height = _currentWindowHeight;
+            _terminalContainer.style.width = Screen.width;
+            DisplayStyle commandInputStyle =
+                _currentWindowHeight <= 30 ? DisplayStyle.None : DisplayStyle.Flex;
+
+            _needsFocus |=
+                _inputContainer.resolvedStyle.display != commandInputStyle
+                && commandInputStyle == DisplayStyle.Flex;
+            _inputContainer.style.display = commandInputStyle;
+
+            if (_commandIssuedThisFrame)
+            {
+                return;
+            }
+
+            RefreshLogs();
+            RefreshAutoCompleteHints();
+            string commandInput = _input.CommandText;
+            if (!string.Equals(_commandInput.value, commandInput))
+            {
+                _isCommandFromCode = true;
+                _lastCodeSyncedValue = commandInput;
+                _commandInput.value = commandInput;
+            }
+            else if (
+                _needsFocus
+                && _textInput != null
+                && _textInput.focusController != null
+                && _textInput.focusable
+                && _textInput.resolvedStyle.display != DisplayStyle.None
+                && _commandInput.resolvedStyle.display != DisplayStyle.None
+            )
+            {
+                if (_textInput.focusController.focusedElement != _textInput)
+                {
+                    /*
+                        Retry focus only: the scheduled pass must not re-run
+                        the caret-to-end behavior of a fresh focus, which
+                        would clobber a caret the user or a completion placed
+                        in the meantime. The gate keeps a retry scheduled
+                        before the palette took over from stealing focus
+                        after it opens.
+                     */
+                    _textInput.schedule.Execute(RetryInputFocus).ExecuteLater(0);
+                    FocusInput();
+                }
+
+                _needsFocus = false;
+            }
+            else if (
+                _needsScrollToEnd
+                && _logScrollView != null
+                && _logScrollView.style.display != DisplayStyle.None
+            )
+            {
+                ScrollToEnd();
+                _needsScrollToEnd = false;
+            }
+
+            /*
+               Pending carets are applied on every pass: an accepted
+               completion can be a text no-op that must still move the
+               caret. The marker is consumed once the write sticks on a
+               focused pass.
+            */
+            ApplyPendingCaret();
+            RefreshStateButtons();
         }
 
         private int NormalizeCaret(int caret)
@@ -1873,36 +2012,12 @@
             tree is not constructed while the terminal is closed, so a
             component that never opens pays no UI-construction cost.
          */
-        private void EnsureUI()
-        {
-            if (_terminalContainer != null)
-            {
-                return;
-            }
-
-            SetupUI();
-        }
-
         /*
             Drops the built visual tree references so the next open rebuilds
             from scratch. Called from OnDisable after the document root has
             been cleared; the stale detached elements must not be mistaken
             for a built tree by EnsureUI.
          */
-        private void TeardownUI()
-        {
-            _terminalContainer = null;
-            _logScrollView = null;
-            _autoCompleteContainer = null;
-            _inputContainer = null;
-            _runButton = null;
-            _inputCaretLabel = null;
-            _commandInput = null;
-            _textInput = null;
-            _stateButtonContainer = null;
-            _lastCodeSyncedValue = null;
-        }
-
         private void SetupUI()
         {
             /*
@@ -1925,7 +2040,13 @@
                 return;
             }
 
-            SetFont(_persistedFont);
+            /*
+                A null persisted font means "derive from the pack" (the
+                InitializeFont contract below), not a misconfiguration:
+                route the resolved font through so rebuilds reapply the
+                definition without tripping SetFont's null guard.
+             */
+            SetFont(_persistedFont != null ? _persistedFont : CurrentFont);
             uiRoot.Clear();
             VisualElement root = new();
             uiRoot.Add(root);
@@ -2238,102 +2359,6 @@
                     shouldRenderCursor = !shouldRenderCursor;
                 })
                 .Every(_cursorBlinkRateMilliseconds);
-        }
-
-        private void RefreshUI()
-        {
-            if (_terminalContainer == null)
-            {
-                return;
-            }
-
-            /*
-                The palette shares this document when both surfaces live on one
-                GameObject. While it is open it owns the root: RefreshUI would
-                force the root height to the terminal's (zero when closed), so
-                the palette panel's percent position collapses to the top, and
-                its focus/caret writes steal keys from the palette input.
-             */
-            if (IsPaletteSurfaceOpen())
-            {
-                return;
-            }
-
-            /*
-                Heights and the input display are written on every pass,
-                including state-transition frames: the idle gate can skip the
-                very next pass, and a zero-duration close snaps its height on
-                the same frame SetState flags the transition, so this is the
-                only pass that can land the final closed height.
-             */
-            _uiDocument.rootVisualElement.style.height = _currentWindowHeight;
-            _terminalContainer.style.height = _currentWindowHeight;
-            _terminalContainer.style.width = Screen.width;
-            DisplayStyle commandInputStyle =
-                _currentWindowHeight <= 30 ? DisplayStyle.None : DisplayStyle.Flex;
-
-            _needsFocus |=
-                _inputContainer.resolvedStyle.display != commandInputStyle
-                && commandInputStyle == DisplayStyle.Flex;
-            _inputContainer.style.display = commandInputStyle;
-
-            if (_commandIssuedThisFrame)
-            {
-                return;
-            }
-
-            RefreshLogs();
-            RefreshAutoCompleteHints();
-            string commandInput = _input.CommandText;
-            if (!string.Equals(_commandInput.value, commandInput))
-            {
-                _isCommandFromCode = true;
-                _lastCodeSyncedValue = commandInput;
-                _commandInput.value = commandInput;
-            }
-            else if (
-                _needsFocus
-                && _textInput != null
-                && _textInput.focusController != null
-                && _textInput.focusable
-                && _textInput.resolvedStyle.display != DisplayStyle.None
-                && _commandInput.resolvedStyle.display != DisplayStyle.None
-            )
-            {
-                if (_textInput.focusController.focusedElement != _textInput)
-                {
-                    /*
-                        Retry focus only: the scheduled pass must not re-run
-                        the caret-to-end behavior of a fresh focus, which
-                        would clobber a caret the user or a completion placed
-                        in the meantime. The gate keeps a retry scheduled
-                        before the palette took over from stealing focus
-                        after it opens.
-                     */
-                    _textInput.schedule.Execute(RetryInputFocus).ExecuteLater(0);
-                    FocusInput();
-                }
-
-                _needsFocus = false;
-            }
-            else if (
-                _needsScrollToEnd
-                && _logScrollView != null
-                && _logScrollView.style.display != DisplayStyle.None
-            )
-            {
-                ScrollToEnd();
-                _needsScrollToEnd = false;
-            }
-
-            /*
-               Pending carets are applied on every pass: an accepted
-               completion can be a text no-op that must still move the
-               caret. The marker is consumed once the write sticks on a
-               focused pass.
-            */
-            ApplyPendingCaret();
-            RefreshStateButtons();
         }
 
         private void FocusInput()

@@ -68,27 +68,33 @@ field write is frame-coupled and flakes under session sequences
   (`ApplyPendingCaret`) depends on real focus landing, which synthetic panels
   may never do. Pin that logic synchronously by calling `ApplyPendingCaret`
   directly (see `PendingCaretWritesAndKeepsMarkerWhileUnfocused`).
-- One failure mode survives everything: long agent sessions can leave the
-  editor in a state where panel events stop processing entirely (writes
-  re-clamp or never land, for 30+ frames). See the first Debugging failures
-  bullet for the verify-then-refresh recipe.
+- Caret assertions are deterministic (session-045): the palette and
+  token-completion polls accept the queued marker (`_pendingCaretIndex`) or the
+  live cursor, and value polls accept the input abstraction or the field mirror.
+  The live cursor is UITK's layout-coupled echo and can sit clamped below the
+  value length for whole polls; never assert on it alone. A poll loop's
+  condition must accept every surface its final assert does - a poll narrower
+  than the assert burns the whole budget waiting on a surface that cannot
+  converge (Bugbot catch on PR #114; sweep: compare each `while` budget loop
+  against its trailing assert). A caret rule that needs the marker to drain is
+  pinned synchronously by driving `ApplyPendingCaret` against a position the
+  field holds (see `PendingCaretConsumesOnlyAfterStablePasses`).
+- One failure mode survives the deterministic polls: long agent sessions can
+  leave the editor in a state where panel events stop processing entirely
+  (writes re-clamp or never land, for 30+ frames). See the first Debugging
+  failures bullet for the verify-then-refresh recipe.
 - Palette caret flakes: `CommandPaletteUI._logCaretPasses = true` (editor
   eval or a test) logs every pending-caret pass with frame, pending,
   cursor/select, and focus owner, so a #74-class re-clamp shows which pass
   moved the caret. The caret is parked only after it holds for two passes
   (`CaretStickPasses`), and a field change cancels the queued caret
   (`_pendingCaretIndex` is `int?`; null = none).
-- Known order-dependent flakes on unmodified master (observed 2026-09-14):
-  `TerminalUITokenCompletionTests.QuotedTokensAcceptUnquotedInsertions` and
-  `CommandPaletteTests.TabAppliesArgumentCompletionWithQuoting` can fail inside full-suite
-  runs (stale autocomplete candidate applied, or a stale caret read - e.g. `"pickup "pickaxe"`
-  instead of `"pickup "torch"`, caret 13/9 vs 21) while passing in isolation both before and
-  after a code change. Before hunting a regression, re-run the failing test isolated; an
-  isolated PASS after a full-run FAIL is suite-order flake, and a domain reload clears the
-  stale panel state between attempts. Root cause class: readiness polls too short for
-  throttled panels (session-023 raised the token-completion and palette poll budgets to 600
-  frames, and `TerminalUITokenCompletionTests.SetInput` now readiness-polls the caret park,
-  which cleared this class from full-suite runs).
+- Historical palette/token caret flakes (QuotedTokensAcceptUnquotedInsertions,
+  TabAppliesArgumentCompletionWithQuoting, NavigateAutoLoads, the re-clamp pair)
+  were root-caused to tests asserting the live cursorIndex without the queued
+  marker; the polls now accept both surfaces and the failures stopped
+  recurring. A failure there today means the marker itself moved or drained -
+  a real regression, not a poll budget problem.
 - UITK clamps `cursorIndex` writes to the last LAID-OUT text length, not
   the value length. The cap converges with layout and its convergence is
   nondeterministic under session sequences: a fresh field can sit capped

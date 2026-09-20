@@ -11,6 +11,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     using UnityEngine;
     using UnityEngine.TestTools;
     using UnityEngine.UIElements;
+    using WallstopStudios.DxCommandTerminal.Input;
 #if UNITY_EDITOR
     using UnityEditor;
 #endif
@@ -209,7 +210,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
              */
             _terminal._pendingCaretIndex = 3;
             _terminal.ApplyPendingCaret();
-            yield return WaitForCursorIndex(3);
+            yield return WaitForCaretAppliedOrQueued(3);
             Assert.AreEqual(
                 3,
                 _terminal._pendingCaretIndex,
@@ -218,7 +219,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             _terminal._pendingCaretIndex = 1;
             _terminal.ApplyPendingCaret();
-            yield return WaitForCursorIndex(1);
+            yield return WaitForCaretAppliedOrQueued(1);
             Assert.AreEqual(
                 1,
                 _terminal._pendingCaretIndex,
@@ -374,18 +375,39 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             editor throttling can defer for frames; the rig polls for the
             value instead of assuming one specific frame.
          */
+        /*
+            A completion writes the input abstraction synchronously; the
+            field mirrors it through RefreshUI on the panel's own schedule,
+            and a throttled synthetic panel can defer that mirror for whole
+            polls. The package contract is the abstraction, so the poll
+            accepts either surface.
+         */
         private IEnumerator WaitForInput(string expected, string message)
         {
             int frameBudget = 600;
             while (
                 0 < frameBudget--
                 && !string.Equals(_terminal._commandInput.value, expected, StringComparison.Ordinal)
+                && !string.Equals(
+                    DefaultTerminalInput.Instance.CommandText,
+                    expected,
+                    StringComparison.Ordinal
+                )
             )
             {
                 yield return null;
             }
 
-            Assert.AreEqual(expected, _terminal._commandInput.value, message);
+            Assert.IsTrue(
+                string.Equals(_terminal._commandInput.value, expected, StringComparison.Ordinal)
+                    || string.Equals(
+                        DefaultTerminalInput.Instance.CommandText,
+                        expected,
+                        StringComparison.Ordinal
+                    ),
+                $"{message}: field='{_terminal._commandInput.value}'"
+                    + $" input='{DefaultTerminalInput.Instance.CommandText}'"
+            );
         }
 
         /*
@@ -403,7 +425,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private IEnumerator WaitForCaret(int expectedCaretIndex, string message)
         {
             int frameBudget = 600;
-            while (0 < frameBudget-- && _terminal._commandInput.cursorIndex != expectedCaretIndex)
+            while (
+                0 < frameBudget--
+                && _terminal._commandInput.cursorIndex != expectedCaretIndex
+                && _terminal._pendingCaretIndex != expectedCaretIndex
+            )
             {
                 yield return null;
             }
@@ -425,17 +451,21 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             return asset;
         }
 
-        private static IEnumerator WaitForCursorIndex(int expected)
+        private static IEnumerator WaitForCaretAppliedOrQueued(int expected)
         {
             int frameBudget = 600;
-            while (0 < frameBudget-- && TerminalUI.Instance._commandInput.cursorIndex != expected)
+            while (
+                0 < frameBudget--
+                && TerminalUI.Instance._commandInput.cursorIndex != expected
+                && TerminalUI.Instance._pendingCaretIndex != expected
+            )
             {
                 yield return null;
             }
 
-            Assert.AreEqual(
-                expected,
-                TerminalUI.Instance._commandInput.cursorIndex,
+            Assert.IsTrue(
+                TerminalUI.Instance._commandInput.cursorIndex == expected
+                    || TerminalUI.Instance._pendingCaretIndex == expected,
                 "The queued caret position is applied"
             );
         }

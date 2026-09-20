@@ -159,13 +159,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             _terminal.SetState(TerminalState.OpenFull);
             yield return WaitForInputVisible("Sanity: the terminal builds on the first open");
 
-            /*
-                Freeze the resolved font as the persisted one so the
-                re-enable below re-runs SetupUI without new font setup logs
-                (a stale null persisted font re-logs the pack resolution).
-             */
-            _terminal._persistedFont = _terminal.CurrentFont;
-
             _terminal.enabled = false;
             Assert.AreEqual(
                 0,
@@ -186,6 +179,48 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 1,
                 _terminal._uiDocument.rootVisualElement.childCount,
                 "The rebuilt terminal root is attached after reopening"
+            );
+        }
+
+        /*
+            A null persisted font is the default component state ("derive
+            from the pack" per InitializeFont), not a misconfiguration:
+            reopening must not route it through SetFont's null guard. The
+            unhandled "[Error] Cannot set null font." on the rebuild fails
+            this test; before the fix every reopen after a disable logged it.
+         */
+        [UnityTest]
+        public IEnumerator ReopenWithNullPersistedFontLogsNoError()
+        {
+            yield return SpawnTerminalWithDocument();
+
+            Assert.That(
+                _terminal._persistedFont == null,
+                "Sanity: the rig must run with the default null persisted font"
+            );
+
+            _terminal.SetState(TerminalState.OpenFull);
+            yield return WaitForInputVisible("Sanity: the first open builds the tree");
+
+            _terminal.enabled = false;
+            _terminal.enabled = true;
+
+            _terminal.SetState(TerminalState.OpenFull);
+            yield return WaitForInputVisible(
+                "Reopening with a null persisted font must not log an error"
+            );
+
+            Font appliedFont = _terminal
+                ._uiDocument
+                .rootVisualElement
+                .style
+                .unityFontDefinition
+                .value
+                .font;
+            Assert.AreEqual(
+                _terminal.CurrentFont,
+                appliedFont,
+                "The rebuild must reapply the resolved font definition to the new tree"
             );
         }
 
