@@ -15,7 +15,9 @@
 
     public sealed class CommandShell
     {
-        private const string CatalogTypeName =
+        /* Internal for the player compatibility bake, which probes candidate
+           assemblies for the same generated catalog the discovery scan binds. */
+        internal const string CatalogTypeName =
             "WallstopStudios.DxCommandTerminal.Generated.CommandCatalog";
 
         private const string CatalogCollectMethodName = "Collect";

@@ -16,6 +16,12 @@ permissions:
   contents: read
   pull-requests: read
 
+# Superseded runs (rapid pushes to the same PR) are cancelled; the latest
+# commit's copy check still gates the PR, so no coverage is lost.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   pr-copy:
     name: pr-copy
