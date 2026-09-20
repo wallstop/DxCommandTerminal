@@ -29,7 +29,7 @@
         public static readonly Lazy<(
             MethodInfo method,
             RegisterCommandAttribute attribute
-        )[]> RegisteredCommands = new(() =>
+        )[]> RegisteredCommands = new(static () =>
         {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             Stopwatch stopwatch = Stopwatch.StartNew();
@@ -603,9 +603,15 @@
 
         private static AssemblyClassification GetClassification(Assembly assembly)
         {
+            /*
+                The factory is an explicitly static lambda: captureless, so the
+                compiler caches it as a singleton delegate (no per-call
+                allocation), and an accidental future capture becomes a
+                compile error instead of a silent per-read closure.
+             */
             return AssemblyClassifications.GetValue(
                 assembly,
-                loadedAssembly =>
+                static loadedAssembly =>
                 {
                     AssemblyName[] referencedAssemblies;
                     try
@@ -2044,7 +2050,10 @@
             or a null referenced-assembly list marks an unqueryable assembly:
             the scan treats it as a potential command carrier rather than
             silently dropping it. Instances are created once per assembly and
-            shared through the weak table.
+            shared through the weak table. This must stay a class:
+            ConditionalWeakTable's value parameter only accepts reference
+            types, and the alternatives (a dictionary keyed by Assembly)
+            would root every assembly for the domain's lifetime.
          */
         private sealed class AssemblyClassification
         {

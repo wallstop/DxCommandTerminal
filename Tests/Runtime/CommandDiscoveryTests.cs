@@ -5,6 +5,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     using System.Linq;
     using System.Reflection;
     using System.Reflection.Emit;
+    using Allocation;
     using Attributes;
     using Backend;
     using NUnit.Framework;
@@ -82,6 +83,32 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 expected,
                 CommandShell.MayContainCommands(assembly, self),
                 $"Unexpected filter decision for assembly '{assembly.FullName}'"
+            );
+        }
+
+        [Test]
+        public void ClassificationMemoReadsAreAllocationFreeOnceWarm()
+        {
+            /*
+                Pins the classification memo's steady-state cost: once an
+                assembly is classified, its cached metadata answers filter
+                reads through a weak-table lookup and name comparisons, which
+                must not allocate. The GetValue factory lambda is explicitly
+                static, so a re-introduced capture becomes a compile error;
+                this pin catches any other allocation that appears on the
+                memo path. The instrument's positive control runs inside the
+                assertion helper.
+            */
+            Assembly testAssembly = typeof(CommandDiscoveryTests).Assembly;
+            Assembly coreAssembly = typeof(int).Assembly;
+            AssemblyName self = typeof(BuiltInCommands).Assembly.GetName();
+            AllocationAssertions.AssertZeroAllocations(
+                "Classified-assembly filter reads",
+                () =>
+                {
+                    CommandShell.MayContainCommands(testAssembly, self);
+                    CommandShell.MayContainCommands(coreAssembly, self);
+                }
             );
         }
 
