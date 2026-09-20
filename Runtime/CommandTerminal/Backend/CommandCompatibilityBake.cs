@@ -158,7 +158,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
                 string assemblyName = command.Assembly.GetName().Name;
                 string typeFullName = declaringType.FullName;
-                if (assemblyName == null || typeFullName == null)
+                if (
+                    string.IsNullOrWhiteSpace(assemblyName)
+                    || string.IsNullOrWhiteSpace(typeFullName)
+                )
                 {
                     continue;
                 }
@@ -191,9 +194,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             out string manifest
         )
         {
-            manifest = null;
             if (entries == null || entries.Count == 0)
             {
+                manifest = null;
                 return false;
             }
 
@@ -257,15 +260,20 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
 
             lines.Add("</linker>");
+            /*
+                LF terminators, never Environment.NewLine: the manifest must
+                be byte-identical whichever OS runs the build, and every XML
+                parser (the linker's included) accepts LF on every platform.
+            */
             manifest = string.Join("\n", lines) + "\n";
             return true;
         }
 
         internal static bool TryWriteManifestFile(string manifest, out string path)
         {
-            path = null;
-            if (string.IsNullOrEmpty(manifest))
+            if (string.IsNullOrWhiteSpace(manifest))
             {
+                path = null;
                 return false;
             }
 
@@ -274,10 +282,13 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 string directory = Path.Combine(Directory.GetCurrentDirectory(), "Temp");
                 Directory.CreateDirectory(directory);
                 /*
-                    Unity's own generated linker files use a per-write unique
-                    Temp name; a stale file from an earlier build can never be
-                    mistaken for this build's manifest and Temp is purged by
-                    the editor, so no cleanup lifecycle is needed.
+                    Written under a per-write unique Temp name, following
+                    Unity's own generated linker files: a stale file from an
+                    earlier build can never be mistaken for this build's
+                    manifest, Temp is purged by the editor, and the caller
+                    receives the path only after the write has closed - no
+                    reader can observe a partial file, so an atomic swap
+                    would protect nothing.
                 */
                 string fileName = $"UnityTempFile-{Guid.NewGuid():N}-{ManifestFileName}";
                 path = Path.Combine(directory, fileName);
@@ -367,12 +378,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         }
 
         /*
-            The generator's accessible-from-catalog set (public, internal,
-            protected internal); private, protected, and private protected
-            handlers need the partial companion to be rooted.
-         */
-
-        /*
             A partial companion is the generator-emitted nested holder whose
             members are zero-argument static methods returning
             Action<CommandArg[]>. The name alone is not proof: a non-partial
@@ -417,37 +422,44 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return false;
             }
 
+            /*
+                Only the metadata read can throw; keep the catch on that one
+                call so a corrupt-assembly failure is distinguishable from a
+                matched reference.
+            */
+            AssemblyName[] references;
             try
             {
-                AssemblyName[] references = assembly.GetReferencedAssemblies();
-                if (references == null)
-                {
-                    return false;
-                }
-
-                foreach (AssemblyName reference in references)
-                {
-                    string name = reference.Name;
-                    if (name == null)
-                    {
-                        continue;
-                    }
-
-                    if (
-                        string.Equals(name, "UnityEngine.TestRunner", StringComparison.Ordinal)
-                        || 0 <= name.IndexOf("nunit", StringComparison.OrdinalIgnoreCase)
-                    )
-                    {
-                        return true;
-                    }
-                }
-
-                return false;
+                references = assembly.GetReferencedAssemblies();
             }
             catch (Exception)
             {
                 return false;
             }
+
+            if (references == null)
+            {
+                return false;
+            }
+
+            foreach (AssemblyName reference in references)
+            {
+                string name = reference.Name;
+                if (name == null)
+                {
+                    continue;
+                }
+
+                if (
+                    string.Equals(name, "UnityEngine.TestRunner", StringComparison.Ordinal)
+                    || 0 <= name.IndexOf("nunit", StringComparison.OrdinalIgnoreCase)
+                )
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static bool ProbeGeneratedCatalog(Assembly assembly)
@@ -476,6 +488,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             binds by reflection-by-name, whatever its accessibility.
          */
 
+        /*
+            The generator's accessible-from-catalog set (public, internal,
+            protected internal); private, protected, and private protected
+            handlers need the partial companion to be rooted.
+         */
         private static bool IsDirectlyAccessible(MethodInfo method)
         {
             return method.IsPublic || method.IsAssembly || method.IsFamilyOrAssembly;
