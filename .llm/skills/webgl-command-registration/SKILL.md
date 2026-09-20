@@ -78,7 +78,9 @@ in player builds.
   `DevelopmentOnly` handlers because dev builds register them, and skips `EditorOnly`).
 - After touching the registration path, the generator, or the bake, validate on an IL2CPP
   player build with a private attributed command before merging (the IL2CPP/WebGL strip
-  matrix on issue #38 tracks the drill evidence).
+  matrix on issue #38 tracks the drill evidence). Strip drills must use **release** builds:
+  `BuildOptions.Development` clamps IL2CPP stripping to Minimal, so a stripped-method
+  negative control survives and the drill proves nothing (session-048).
 
 ## Diagnosing "commands missing in build"
 
