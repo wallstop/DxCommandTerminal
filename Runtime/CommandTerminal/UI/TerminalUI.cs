@@ -180,6 +180,7 @@
         private readonly List<SerializedProperty> _themeProperties = new();
         private readonly List<SerializedProperty> _cursorBlinkProperties = new();
         private readonly List<SerializedProperty> _fontProperties = new();
+        private readonly List<SerializedProperty> _fontPackProperties = new();
         private readonly List<SerializedProperty> _staticStateProperties = new();
         private readonly List<SerializedProperty> _windowProperties = new();
         private readonly List<SerializedProperty> _logUnityMessageProperties = new();
@@ -370,6 +371,9 @@
             string[] fontPropertiesTracked = { nameof(_persistedFont) };
             TrackProperties(fontPropertiesTracked, _fontProperties);
 
+            string[] fontPackPropertiesTracked = { nameof(_fontPack) };
+            TrackProperties(fontPackPropertiesTracked, _fontPackProperties);
+
             string[] staticStaticPropertiesTracked =
             {
                 nameof(_logBufferSize),
@@ -377,7 +381,6 @@
                 nameof(_ignoredLogTypes),
                 nameof(_disabledCommands),
                 nameof(ignoreDefaultCommands),
-                nameof(_fontPack),
                 nameof(_stackTraceMode),
             };
             TrackProperties(staticStaticPropertiesTracked, _staticStateProperties);
@@ -703,6 +706,21 @@
             if (CheckForRefresh(_fontProperties))
             {
                 SetFont(_persistedFont);
+            }
+
+            /*
+                A pack swap must re-resolve and rewrite the applied font the
+                way a theme swap re-runs InitializeTheme; the static-state
+                refresh never touches fonts. Guarded on a built tree: a
+                closed terminal re-resolves on the next open.
+             */
+            if (CheckForRefresh(_fontPackProperties))
+            {
+                if (_uiDocument != null && _terminalContainer != null)
+                {
+                    InitializeFont();
+                    WriteFontDefinition(_runtimeFont);
+                }
             }
 
             if (CheckForRefresh(_staticStateProperties))

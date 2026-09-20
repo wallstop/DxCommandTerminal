@@ -264,6 +264,76 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         /*
+            A runtime pack swap must re-resolve and rewrite the applied font
+            without a rebuild: the pack property previously lived in the
+            static-state group, whose change handler never touched fonts, so
+            the old pack kept rendering until some other rebuild path ran.
+         */
+        [UnityTest]
+        public IEnumerator FontPackSwapReappliesResolvedFontWithoutRebuild()
+        {
+            yield return SpawnTerminalWithDocument();
+
+            _terminal.SetState(TerminalState.OpenFull);
+            yield return WaitForInputVisible("Sanity: the first open builds the tree");
+
+            Font firstFont = _terminal.CurrentFont;
+            Assert.That(
+                firstFont != null,
+                "Sanity: the initial pack must resolve a font, or the swap assert passes vacuously"
+            );
+            TextField inputBefore = _terminal._commandInput;
+
+            TerminalFontPack nextPack = LoadAsset<TerminalFontPack>("Packs/Fonts/Minimal.asset");
+            Assert.That(
+                nextPack != null,
+                "Sanity: Minimal.asset must load, or the swap exercises a null pack"
+            );
+            SwapFontPackInInspector(nextPack);
+
+            Font swappedFont = null;
+            Font appliedFont = null;
+            int frameBudget = FrameBudget;
+            while (0 < frameBudget--)
+            {
+                swappedFont = _terminal.CurrentFont;
+                appliedFont = _terminal
+                    ._uiDocument
+                    .rootVisualElement
+                    .style
+                    .unityFontDefinition
+                    .value
+                    .font;
+                if (swappedFont != null && swappedFont != firstFont && appliedFont == swappedFont)
+                {
+                    break;
+                }
+
+                yield return null;
+            }
+
+            Assert.That(
+                swappedFont != null,
+                "Sanity: the swapped pack must resolve a font, or the asserts below pass vacuously"
+            );
+            Assert.AreNotEqual(
+                firstFont,
+                swappedFont,
+                "Sanity: the swapped pack must resolve a different font, or the assert passes vacuously"
+            );
+            Assert.AreEqual(
+                swappedFont,
+                appliedFont,
+                "The pack swap must rewrite the document root's font definition"
+            );
+            Assert.AreSame(
+                inputBefore,
+                _terminal._commandInput,
+                "The pack swap must not rebuild the visual tree"
+            );
+        }
+
+        /*
             The frame the close animation snaps to the closed target is the
             frame the final height (0) and the hidden input display are
             written; a gate evaluated after the snap would skip that write
@@ -996,6 +1066,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             SerializedObject serializedObject = new(_terminal);
             serializedObject.FindProperty(nameof(TerminalUI.showGUIButtons)).boolValue = value;
+            serializedObject.ApplyModifiedProperties();
+        }
+
+        private void SwapFontPackInInspector(TerminalFontPack pack)
+        {
+            SerializedObject serializedObject = new(_terminal);
+            serializedObject.FindProperty(nameof(TerminalUI._fontPack)).objectReferenceValue = pack;
             serializedObject.ApplyModifiedProperties();
         }
 
