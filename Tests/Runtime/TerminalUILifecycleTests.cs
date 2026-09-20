@@ -225,6 +225,45 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         /*
+            The first build must render the pack-resolved font, not Unity's
+            default OS font: SetupUI's SetFont call runs before
+            InitializeFont resolves a pack font and a null write is skipped,
+            so the fresh document root carried no font definition until a
+            rebuild reapplied it.
+         */
+        [UnityTest]
+        public IEnumerator FirstOpenWithNullPersistedFontAppliesResolvedFont()
+        {
+            yield return SpawnTerminalWithDocument();
+
+            Assert.That(
+                _terminal._persistedFont == null,
+                "Sanity: the rig must run with the default null persisted font"
+            );
+
+            _terminal.SetState(TerminalState.OpenFull);
+            yield return WaitForInputVisible("Sanity: the first open builds the tree");
+
+            Assert.That(
+                _terminal.CurrentFont != null,
+                "Sanity: the pack font must resolve, or the assertion below passes vacuously"
+            );
+
+            Font appliedFont = _terminal
+                ._uiDocument
+                .rootVisualElement
+                .style
+                .unityFontDefinition
+                .value
+                .font;
+            Assert.AreEqual(
+                _terminal.CurrentFont,
+                appliedFont,
+                "The first build must apply the pack-resolved font to the document root"
+            );
+        }
+
+        /*
             The frame the close animation snaps to the closed target is the
             frame the final height (0) and the hidden input display are
             written; a gate evaluated after the snap would skip that write

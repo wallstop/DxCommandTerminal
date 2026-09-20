@@ -1175,7 +1175,7 @@
 
         public void SetFont(Font font, bool persist = false)
         {
-            SetRuntimeFont(font);
+            WriteFontDefinition(font);
             if (!persist && CurrentFont == font)
             {
                 return;
@@ -1208,34 +1208,6 @@
             if (persist)
             {
                 _persistedFont = font;
-            }
-
-            return;
-
-            void SetRuntimeFont(Font toSet)
-            {
-                if (toSet == null)
-                {
-                    return;
-                }
-
-                if (!Application.isPlaying)
-                {
-                    return;
-                }
-
-                if (_uiDocument == null)
-                {
-                    return;
-                }
-
-                VisualElement root = _uiDocument.rootVisualElement;
-                if (root == null)
-                {
-                    return;
-                }
-
-                root.style.unityFontDefinition = new StyleFontDefinition(toSet);
             }
         }
 
@@ -1792,6 +1764,40 @@
             RefreshStateButtons();
         }
 
+        /*
+            Single font-application path for every surface: SetFont, and the
+            first UI build in SetupUI (whose SetFont call runs before
+            InitializeFont has resolved a pack font, so the build must write
+            the resolved definition itself). The definition lives on the
+            document root and inherits into the terminal tree, covering
+            single- and shared-document surfaces alike.
+         */
+        private void WriteFontDefinition(Font font)
+        {
+            if (font == null)
+            {
+                return;
+            }
+
+            if (!Application.isPlaying)
+            {
+                return;
+            }
+
+            if (_uiDocument == null)
+            {
+                return;
+            }
+
+            VisualElement root = _uiDocument.rootVisualElement;
+            if (root == null)
+            {
+                return;
+            }
+
+            root.style.unityFontDefinition = new StyleFontDefinition(font);
+        }
+
         private int NormalizeCaret(int caret)
         {
             string input = _input.CommandText ?? string.Empty;
@@ -2044,7 +2050,9 @@
                 A null persisted font means "derive from the pack" (the
                 InitializeFont contract below), not a misconfiguration:
                 route the resolved font through so rebuilds reapply the
-                definition without tripping SetFont's null guard.
+                definition without tripping SetFont's null guard. On the
+                first build CurrentFont is still null here; the resolved
+                definition is written after InitializeFont below.
              */
             SetFont(_persistedFont != null ? _persistedFont : CurrentFont);
             uiRoot.Clear();
@@ -2055,6 +2063,7 @@
 
             InitializeTheme(root);
             InitializeFont();
+            WriteFontDefinition(_runtimeFont);
 
             if (!string.IsNullOrWhiteSpace(_runtimeTheme))
             {
