@@ -51,10 +51,9 @@ jobs:
       - name: Run generator tests
         run: dotnet test "Generator~/WallstopStudios.DxCommandTerminal.SourceGenerators.Tests/WallstopStudios.DxCommandTerminal.SourceGenerators.Tests.csproj" -c Release
 
-      - name: Verify shipped analyzer payload
-        shell: pwsh
-        run: ./tooling~/scripts/verify-analyzer-payload.ps1
-
-      - name: Verify payload from two checkout directories
+      # -TwoCheckout subsumes the plain payload check (the script always
+      # byte-compares shipped payloads to a fresh rebuild before the
+      # two-checkout reproducibility pass), so one invocation covers both.
+      - name: Verify shipped analyzer payload and two-checkout reproducibility
         shell: pwsh
         run: ./tooling~/scripts/verify-analyzer-payload.ps1 -TwoCheckout
