@@ -63,19 +63,32 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             catch the #36-class broad-scan regressions and the return of
             eager per-command Delegate.CreateDelegate binding at readiness
             (measured warm p95 ~19 ms at the 1,000-command tier, over the
-            15 ms tripwire) - not ordinary scheduler jitter, and not
-            portable across machines. Measured deferred-binding numbers the
+            then-15 ms tripwire - still 2x over the tightened 8 ms budget) -
+            not ordinary scheduler jitter, and not portable across machines.
+            Measured deferred-binding numbers the
             budgets are set from: reflected tiers 0-1,000 warm p95 ~2.6-10.6 ms
             (cold 2.5-11.5 ms), 10,000 tier warm p95 ~55 ms (cold ~87-112 ms),
             provider gate tier warm p95 ~9.1-11.5 ms (cold ~14-16 ms),
             inflated-domain gate tier warm p95 ~6.5-7.8 ms (cold ~18-20 ms).
+            Session-044 (assembly-classification memo in CommandShell: the
+            immutable per-assembly metadata reads no longer repeat on every
+            warm cycle): 0-100 tiers warm p95 ~0.3-0.9 ms (were ~2.6-3,
+            classification-dominated), gate tier median 4.357 / p95 4.498 ms
+            (cold 9.0) - the plan's 5 ms readiness gate is met at the 1,000-
+            command reference, and the 1,000-tier warm budget tightened
+            15 -> 8 ms from that series; 10,000 tier median 49.5 / p95 52.1 ms
+            (cold 86.8); provider gate tier median 7.2 / p95 7.6 ms; 500-
+            filler classification 0.082 ms. A fold-equivalent comparer
+            replacement for the BCL OrdinalIgnoreCase comparer was measured
+            in the same session (live A/B: 10,000-tree inserts 65.6 ms vs
+            BCL 40.2 ms) and rejected - the BCL comparer is faster on Mono.
          */
         private static IEnumerable<TestCaseData> VolumeCases()
         {
             yield return new TestCaseData(0, 40f, 15f).SetName("Volume.Empty");
             yield return new TestCaseData(10, 40f, 15f).SetName("Volume.TenCommands");
             yield return new TestCaseData(100, 40f, 15f).SetName("Volume.HundredCommands");
-            yield return new TestCaseData(1000, 40f, 15f).SetName("Volume.ThousandCommands");
+            yield return new TestCaseData(1000, 40f, 8f).SetName("Volume.ThousandCommands");
             yield return new TestCaseData(10000, 200f, 150f).SetName("Volume.TenThousandCommands");
         }
 

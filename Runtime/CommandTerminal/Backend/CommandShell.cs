@@ -59,6 +59,22 @@
             new ConditionalWeakTable<Assembly, DiscoveryCache>();
 
         /*
+            Classification memo for the discovery scan. Assembly metadata
+            (its name and its referenced-assembly list) is immutable for the
+            lifetime of the Assembly instance, so the read is cached per
+            assembly: a warm registration cycle over a large editor domain
+            otherwise re-reads every assembly's metadata on every pass
+            (measured ~10 ms per cycle over ~780 assemblies on Unity
+            6000.4.6f1 - the dominant warm readiness cost at the 1,000-
+            command scaling tier). Entries die with their assembly, so
+            unloads cannot serve stale data.
+         */
+        private static readonly ConditionalWeakTable<
+            Assembly,
+            AssemblyClassification
+        > AssemblyClassifications = new ConditionalWeakTable<Assembly, AssemblyClassification>();
+
+        /*
             Ordered discovery providers consulted between the generated-catalog
             probe and the reflection compatibility walk while auto registration
             applies. Editor services register from Unity initialization hooks,
@@ -482,24 +498,23 @@
                 return false;
             }
 
-            try
+            /*
+               A null referenced-assembly list means the metadata read failed
+               for this assembly: scanning it is cheaper than silently
+               dropping commands it might carry.
+            */
+            AssemblyName[] referencedAssemblies = GetClassification(assembly).ReferencedAssemblies;
+            if (referencedAssemblies == null)
             {
-                AssemblyName[] referencedAssemblies = assembly.GetReferencedAssemblies();
-                foreach (AssemblyName referencedAssembly in referencedAssemblies)
-                {
-                    if (AssemblyName.ReferenceMatchesDefinition(referencedAssembly, self))
-                    {
-                        return true;
-                    }
-                }
-            }
-            catch (Exception)
-            {
-                /*
-                   Metadata reads can fail for exotic assemblies; scanning them
-                   is cheaper than silently dropping commands they might carry.
-                */
                 return true;
+            }
+
+            foreach (AssemblyName referencedAssembly in referencedAssemblies)
+            {
+                if (AssemblyName.ReferenceMatchesDefinition(referencedAssembly, self))
+                {
+                    return true;
+                }
             }
 
             return false;
@@ -537,17 +552,37 @@
             {
                 try
                 {
-                    if (AssemblyName.ReferenceMatchesDefinition(assembly.GetName(), self))
+                    /*
+                        Included assemblies skip the classification entirely
+                        (they are scanned regardless of what their metadata
+                        would say); the self-assembly guard keeps the old
+                        name-match skip authoritative even for an included
+                        runtime assembly, so it is appended last exactly once.
+                    */
+                    if (!ReferenceEquals(assembly, ourAssembly) && IsIncludedScanAssembly(assembly))
+                    {
+                        scanCandidates.Add(assembly);
+                        continue;
+                    }
+
+                    AssemblyClassification classification = GetClassification(assembly);
+                    if (classification.Name == null)
+                    {
+                        /*
+                            An unqueryable assembly name is the exotic-assembly
+                            case the outer catch used to cover: scan it rather
+                            than silently dropping commands it might carry.
+                        */
+                        scanCandidates.Add(assembly);
+                        continue;
+                    }
+
+                    if (AssemblyName.ReferenceMatchesDefinition(classification.Name, self))
                     {
                         continue;
                     }
 
-                    /*
-                        Included assemblies skip the metadata read entirely: a
-                        dynamic assembly cannot answer it cheaply, and a
-                        precompiled DLL without the reference would fail it.
-                    */
-                    if (IsIncludedScanAssembly(assembly) || MayContainCommands(assembly, self))
+                    if (MayContainCommands(assembly, self))
                     {
                         scanCandidates.Add(assembly);
                     }
@@ -555,8 +590,8 @@
                 catch (Exception)
                 {
                     /*
-                       Classification must never be able to fail discovery; if
-                       an assembly cannot be classified, scan it.
+                        Classification must never be able to fail discovery; if
+                        an assembly cannot be classified, scan it.
                     */
                     scanCandidates.Add(assembly);
                 }
@@ -564,6 +599,41 @@
 
             scanCandidates.Add(ourAssembly);
             return scanCandidates;
+        }
+
+        private static AssemblyClassification GetClassification(Assembly assembly)
+        {
+            return AssemblyClassifications.GetValue(
+                assembly,
+                loadedAssembly =>
+                {
+                    AssemblyName[] referencedAssemblies;
+                    try
+                    {
+                        referencedAssemblies = loadedAssembly.GetReferencedAssemblies();
+                    }
+                    catch (Exception)
+                    {
+                        /*
+                            Metadata reads can fail for exotic assemblies; a null
+                            list marks them for unconditional scanning.
+                        */
+                        referencedAssemblies = null;
+                    }
+
+                    AssemblyName name;
+                    try
+                    {
+                        name = loadedAssembly.GetName();
+                    }
+                    catch (Exception)
+                    {
+                        name = null;
+                    }
+
+                    return new AssemblyClassification(name, referencedAssemblies);
+                }
+            );
         }
 
         private static void CollectReflectedCommands(
@@ -1967,6 +2037,25 @@
             public Action<List<CommandCatalogEntry>> Collector;
             public bool CollectorProbed;
             public List<AutoCommand> ReflectedCommands;
+        }
+
+        /*
+            Immutable assembly metadata for the discovery scan. A null name
+            or a null referenced-assembly list marks an unqueryable assembly:
+            the scan treats it as a potential command carrier rather than
+            silently dropping it. Instances are created once per assembly and
+            shared through the weak table.
+         */
+        private sealed class AssemblyClassification
+        {
+            public readonly AssemblyName Name;
+            public readonly AssemblyName[] ReferencedAssemblies;
+
+            public AssemblyClassification(AssemblyName name, AssemblyName[] referencedAssemblies)
+            {
+                Name = name;
+                ReferencedAssemblies = referencedAssemblies;
+            }
         }
 
         /*
