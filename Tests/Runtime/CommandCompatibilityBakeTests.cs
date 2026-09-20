@@ -218,6 +218,28 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         [Test]
+        public void CompanionProbeVerifiesBinderShapeNotTheName()
+        {
+            MethodInfo method = typeof(BakeFixtureInaccessible).GetMethod(
+                "PrivateCommand",
+                BindingFlags.NonPublic | BindingFlags.Static
+            );
+            Assert.That(method != null, "Sanity: expected the private cached-binder probe");
+
+            Assert.IsFalse(
+                CommandCompatibilityBake.IsRootedByGeneratedCode(
+                    typeof(BakeFixtureInaccessible).Assembly,
+                    typeof(BakeFixtureInaccessible),
+                    method,
+                    new Dictionary<Assembly, bool>()
+                ),
+                "A nested type that only borrows the companion name is not a "
+                    + "companion: the handler still binds through a cached "
+                    + "reflection-by-name binder and must be preserved"
+            );
+        }
+
+        [Test]
         public void PartialCompanionHandlerIsNotPreserved()
         {
             MethodInfo method = typeof(BakePartialFixtureCommands).GetMethod(
@@ -452,15 +474,19 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void ManifestFileWritesUnderTemp()
         {
-            string manifest = CommandCompatibilityBake.WriteManifest(
-                new[]
-                {
-                    new CommandCompatibilityBake.PreservationEntry(
-                        "Assembly-A",
-                        "Ns.Type",
-                        "Handler"
-                    ),
-                }
+            Assert.IsTrue(
+                CommandCompatibilityBake.TryBuildManifest(
+                    new[]
+                    {
+                        new CommandCompatibilityBake.PreservationEntry(
+                            "Assembly-A",
+                            "Ns.Type",
+                            "Handler"
+                        ),
+                    },
+                    out string manifest
+                ),
+                "The preservation set produces a manifest"
             );
 
             Assert.IsTrue(
@@ -490,26 +516,35 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void EmptyCommandListWritesNoManifest()
         {
-            Assert.That(
-                CommandCompatibilityBake.WriteManifest(
-                    new List<CommandCompatibilityBake.PreservationEntry>()
-                ) == null,
+            Assert.IsFalse(
+                CommandCompatibilityBake.TryBuildManifest(
+                    new List<CommandCompatibilityBake.PreservationEntry>(),
+                    out string manifest
+                ),
                 "A build with nothing to preserve must not write a linker file"
+            );
+            Assert.That(
+                manifest == null,
+                "No manifest text is produced for an empty preservation set"
             );
         }
 
         [Test]
         public void ManifestIsDeterministicOrderedDeduplicatedAndEscaped()
         {
-            string manifest = CommandCompatibilityBake.WriteManifest(
-                new[]
-                {
-                    new CommandCompatibilityBake.PreservationEntry("B", "T", "M"),
-                    new CommandCompatibilityBake.PreservationEntry("A", "T2", "M2"),
-                    new CommandCompatibilityBake.PreservationEntry("A", "T1", "M1"),
-                    new CommandCompatibilityBake.PreservationEntry("A", "T1", "M1"),
-                    new CommandCompatibilityBake.PreservationEntry("A", "T1", "Handler<1>&"),
-                }
+            Assert.IsTrue(
+                CommandCompatibilityBake.TryBuildManifest(
+                    new[]
+                    {
+                        new CommandCompatibilityBake.PreservationEntry("B", "T", "M"),
+                        new CommandCompatibilityBake.PreservationEntry("A", "T2", "M2"),
+                        new CommandCompatibilityBake.PreservationEntry("A", "T1", "M1"),
+                        new CommandCompatibilityBake.PreservationEntry("A", "T1", "M1"),
+                        new CommandCompatibilityBake.PreservationEntry("A", "T1", "Handler<1>&"),
+                    },
+                    out string manifest
+                ),
+                "The preservation set produces a manifest"
             );
 
             string expected =

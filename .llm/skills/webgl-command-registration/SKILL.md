@@ -67,7 +67,7 @@ in player builds.
   stripping protection in the same change and pin it in the generator driver tests (see
   `GeneratedCatalogCarriesStrippingPreservation`); the payload byte-compare lane fails on
   a stale shipped analyzer DLL.
-- The bake's rooting rules (`IsDirectlyBindable`, the partial-companion probe,
+- The bake's rooting rules (`HasDirectBindableShape`, the companion-binder probe,
   `CommandShell.CatalogTypeName`) mirror the emitter's binding forms. Change them together:
   a new binder form in `CatalogEmitter` must update the bake in the same change, and the
   bake tests pin the public / companion / inaccessible cases against the real generator.

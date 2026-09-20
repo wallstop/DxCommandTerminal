@@ -168,11 +168,15 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             return entries;
         }
 
-        internal static string WriteManifest(IReadOnlyList<PreservationEntry> entries)
+        internal static bool TryBuildManifest(
+            IReadOnlyList<PreservationEntry> entries,
+            out string manifest
+        )
         {
+            manifest = null;
             if (entries == null || entries.Count == 0)
             {
-                return null;
+                return false;
             }
 
             List<PreservationEntry> ordered = new(entries);
@@ -249,7 +253,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
 
             builder.AppendLine("</linker>");
-            return builder.ToString();
+            manifest = builder.ToString();
+            return true;
         }
 
         internal static bool TryWriteManifestFile(string manifest, out string path)
@@ -349,10 +354,44 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return true;
             }
 
-            return declaringType.GetNestedType(
-                    PartialCompanionTypeName,
-                    BindingFlags.Public | BindingFlags.NonPublic
-                ) != null;
+            return HasCompanionBinder(declaringType);
+        }
+
+        /*
+            A partial companion is the generator-emitted nested holder whose
+            members are zero-argument static methods returning
+            Action<CommandArg[]>. The name alone is not proof: a non-partial
+            holder can declare its own unrelated nested
+            DxCommandTerminalBinder without colliding, and rooting on the
+            name would silently leave its cached-binder handlers strippable.
+         */
+        private static bool HasCompanionBinder(Type declaringType)
+        {
+            Type companion = declaringType.GetNestedType(
+                PartialCompanionTypeName,
+                BindingFlags.Public | BindingFlags.NonPublic
+            );
+            if (companion == null)
+            {
+                return false;
+            }
+
+            foreach (
+                MethodInfo binder in companion.GetMethods(
+                    BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic
+                )
+            )
+            {
+                if (
+                    binder.ReturnType == typeof(Action<CommandArg[]>)
+                    && 0 == binder.GetParameters().Length
+                )
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static bool IsTestAssembly(Assembly assembly)
@@ -462,7 +501,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         )
         {
             List<PreservationEntry> entries = CollectPreservations(CollectAttributedCommands());
-            if (entries.Count == 0)
+            if (!TryBuildManifest(entries, out string manifest))
             {
                 Debug.Log(
                     "[DxCommandTerminal] Player compatibility bake: every discovered "
@@ -471,7 +510,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return null;
             }
 
-            if (!TryWriteManifestFile(WriteManifest(entries), out string path))
+            if (!TryWriteManifestFile(manifest, out string path))
             {
                 Debug.LogWarning(
                     "[DxCommandTerminal] Player compatibility bake could not write its "
