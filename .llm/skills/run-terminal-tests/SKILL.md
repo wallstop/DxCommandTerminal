@@ -49,6 +49,45 @@ content before trusting a run: the host sync can lag, and stale assemblies
 produce misleading failures. Check a canary (a log line, an assert message, or
 a shifted line number in the failure stack) against the current file.
 
+## Host editor hygiene (eval drills)
+
+A modal dialog blocks the editor's main thread; while it is up, every bridge
+request times out and the outage reads as a hang (session-048: a scratch scene
+was deleted while it was the open scene, and the next play-mode entry raised
+the "save modified scene?" prompt). The techniques here are adapted from
+IshoBoy's shared-editor etiquette (`Ambiguous-Interactive/IshoBoy`,
+`.llm/references/unity-mcp-shared-editor-etiquette.md` and the capture
+runner's refusal gate).
+
+- **Open with a refusal preflight, not a state guess.** Before anything that
+  swaps, saves, reimports, compiles, or enters play mode, run one read-only
+  eval: `EditorApplication.isPlaying(OrWillChangePlaymode)`, `isCompiling`,
+  and every open scene's `path` + `isDirty`. Dirty or playing -> **refuse and
+  say so** (name the scenes) instead of stepping into a prompt only the human
+  can dismiss. Editor status endpoints cannot see scene dirtiness.
+- **Never write or `DeleteAsset` anything under `Assets/` the editor has
+  open** - reimporting a loaded file raises "Reload/Ignore" and deleting the
+  file under the open scene dirties it. Re-read the open-scene list
+  immediately before the write rather than trusting an earlier probe.
+- **Single-mode scene swaps are the modal source** (`NewScene`/`OpenScene`
+  with `NewSceneMode.Single` prompt over a dirty scene). Prefer no swap; for
+  isolated edit-mode work use `EditorSceneManager.NewPreviewScene()` /
+  `ClosePreviewScene(scene)`, which touch no open scene.
+- **`new GameObject` lands in the active scene and dirties it**; destroying
+  it does not clear the flag. In eval probes use
+  `EditorUtility.CreateGameObjectWithHideFlags(name, HideFlags.HideAndDontSave, ...)`
+  - it belongs to no scene. (Its `scene.IsValid()` is false, so bodies added
+  with it never register with a physics world.)
+- **Restore order**: record the open scenes first; open the originals back
+  with `OpenScene(path)` BEFORE deleting drill assets; end with zero dirty
+  scenes, no drill asset open, not playing. Unity 6 has no
+  `ClearSceneDirtiness`; once a prompt is dismissed, opening a clean scene is
+  the reset. Verify via eval after every drill.
+- **Play mode is a one-way door over MCP** (entering it stops the bridge
+  answering; only a human at the machine can leave). Only start
+  play-mode runs with the human present, and never as the session's last
+  operation.
+
 ## UI test timing (frame-coupled reads)
 
 `TerminalUI` applies programmatic value and caret writes through `RefreshUI` on

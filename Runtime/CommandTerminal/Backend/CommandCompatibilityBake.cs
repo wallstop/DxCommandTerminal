@@ -1,0 +1,601 @@
+namespace WallstopStudios.DxCommandTerminal.Backend
+{
+#if UNITY_EDITOR
+    using System;
+    using System.Collections.Generic;
+    using System.IO;
+    using System.Reflection;
+    using System.Security;
+    using System.Text;
+    using Attributes;
+    using UnityEditor;
+    using UnityEditor.Build;
+    using UnityEditor.Build.Reporting;
+    using UnityEditor.UnityLinker;
+    using Debug = UnityEngine.Debug;
+    using IUnityLinkerProcessor = UnityEditor.Build.IUnityLinkerProcessor;
+
+    /*
+        Player compatibility bake (PLAN.md T05): at player build time,
+        preserves every [RegisterCommand] handler whose bind path is
+        reflection-by-name - the sites managed stripping cannot see. Three
+        classes of handler bind that way:
+
+        1. Private (or protected) handlers in generated assemblies that are
+           not in a partial chain: the catalog binds them through a cached
+           GetMethod binder.
+        2. Handlers whose shape the catalog cannot bind directly even when
+           accessible - non-void returns, generic methods, open generic
+           declaring types, and invalid signatures: the catalog reaches them
+           by string name too (cached binder or rejected-command accessor).
+        3. Every attributed static handler in an assembly without a generated
+           catalog (precompiled DLLs), where players fall back to the
+           reflection walk.
+
+        Only handlers a partial companion names directly, and handlers the
+        catalog binds as direct delegates (valid shape AND public, internal,
+        or protected internal), are rooted by generated code; they stay
+        unpreserved, so the manifest stays surgical instead of
+        preserve-everything.
+
+        The manifest is fed to the linker as an additional link.xml file
+        (Unity only auto-loads Assets files named exactly "link.xml") and is
+        written under Temp for the duration of the linker run, so nothing
+        under Assets is ever touched. Assembly entries carry
+        ignoreIfMissing="1": the editor domain can name an assembly that a
+        particular player build does not contain (test or editor assemblies),
+        and the linker skips those silently instead of warning.
+     */
+    internal sealed class CommandCompatibilityBake : IUnityLinkerProcessor
+    {
+        internal const string PartialCompanionTypeName = "DxCommandTerminalBinder";
+
+        internal const string OwnershipMarker = "DxCommandTerminal player compatibility bake";
+
+        private const string ManifestFileName = "DxCommandTerminalCompatibilityBake.link.xml";
+
+        private static readonly UTF8Encoding Utf8NoBom = new(false);
+
+        public int callbackOrder => 0;
+
+        internal static List<AttributedCommand> CollectAttributedCommands()
+        {
+            List<AttributedCommand> commands = new();
+            Dictionary<Assembly, bool> shippingAssemblies = new();
+            foreach (
+                MethodInfo method in TypeCache.GetMethodsWithAttribute<RegisterCommandAttribute>()
+            )
+            {
+                if (method == null || !method.IsStatic)
+                {
+                    continue;
+                }
+
+                Type declaringType = method.DeclaringType;
+                if (declaringType == null)
+                {
+                    continue;
+                }
+
+                Assembly assembly = declaringType.Assembly;
+                if (!shippingAssemblies.TryGetValue(assembly, out bool shippingAssembly))
+                {
+                    shippingAssembly = IsTestAssembly(assembly);
+                    shippingAssemblies.Add(assembly, shippingAssembly);
+                }
+
+                if (shippingAssembly)
+                {
+                    continue;
+                }
+
+                RegisterCommandAttribute attribute =
+                    method.GetCustomAttribute<RegisterCommandAttribute>(false);
+                if (attribute == null)
+                {
+                    continue;
+                }
+
+                commands.Add(new AttributedCommand(assembly, method, attribute));
+            }
+
+            return commands;
+        }
+
+        /*
+            Test assemblies never ship in players, and their commands never
+            belong in a preservation manifest; they are identifiable by their
+            framework references. Nothing else is excluded: an assembly that
+            references UnityEditor in the editor may still ship a player
+            variant under the same name (runtime sources with `#if
+            UNITY_EDITOR` blocks do), so editor references cannot mark
+            non-shipping assemblies. Entries for assemblies a given build
+            does not contain are inert through ignoreIfMissing="1".
+         */
+
+        internal static List<PreservationEntry> CollectPreservations(
+            IReadOnlyList<AttributedCommand> commands
+        )
+        {
+            List<PreservationEntry> entries = new();
+            if (commands == null || commands.Count == 0)
+            {
+                return entries;
+            }
+
+            Dictionary<Assembly, bool> catalogAssemblies = new();
+            foreach (AttributedCommand command in commands)
+            {
+                MethodInfo method = command.Method;
+                if (method == null || !method.IsStatic)
+                {
+                    continue;
+                }
+
+                Type declaringType = method.DeclaringType;
+                if (declaringType == null)
+                {
+                    continue;
+                }
+
+                RegisterCommandAttribute attribute = command.Attribute;
+                if (attribute == null || attribute.EditorOnly)
+                {
+                    continue;
+                }
+
+                if (
+                    IsRootedByGeneratedCode(
+                        command.Assembly,
+                        declaringType,
+                        method,
+                        catalogAssemblies
+                    )
+                )
+                {
+                    continue;
+                }
+
+                string assemblyName = command.Assembly.GetName().Name;
+                string typeFullName = declaringType.FullName;
+                if (
+                    string.IsNullOrWhiteSpace(assemblyName)
+                    || string.IsNullOrWhiteSpace(typeFullName)
+                )
+                {
+                    continue;
+                }
+
+                entries.Add(new PreservationEntry(assemblyName, typeFullName, method.Name));
+            }
+
+            return entries;
+        }
+
+        /*
+            Linker descriptors name nested types with the IL separator `/`,
+            not the reflection separator `+` that Type.FullName produces. A
+            `+` entry never matches a nested type, and its handlers would
+            stay strippable despite being listed.
+         */
+
+        internal static string ToLinkerTypeName(string typeFullName)
+        {
+            if (typeFullName == null)
+            {
+                return null;
+            }
+
+            return typeFullName.Replace('+', '/');
+        }
+
+        internal static bool TryBuildManifest(
+            IReadOnlyList<PreservationEntry> entries,
+            out string manifest
+        )
+        {
+            if (entries == null || entries.Count == 0)
+            {
+                manifest = null;
+                return false;
+            }
+
+            List<PreservationEntry> ordered = new(entries);
+            ordered.Sort(CompareEntries);
+
+            List<string> lines = new()
+            {
+                "<!-- "
+                    + OwnershipMarker
+                    + ": preserves [RegisterCommand] handlers that are bound by name "
+                    + "through reflection, which managed stripping cannot see. Written "
+                    + "under Temp per player build; safe to delete. -->",
+                "<linker>",
+            };
+
+            for (int i = 0; i < ordered.Count; )
+            {
+                PreservationEntry entry = ordered[i];
+                lines.Add(
+                    $"  <assembly fullname=\"{SecurityElement.Escape(entry.AssemblyName)}\" ignoreIfMissing=\"1\">"
+                );
+                for (; i < ordered.Count; )
+                {
+                    if (!IsSameAssembly(ordered[i], entry.AssemblyName))
+                    {
+                        break;
+                    }
+
+                    PreservationEntry typeEntry = ordered[i];
+                    lines.Add(
+                        $"    <type fullname=\"{SecurityElement.Escape(ToLinkerTypeName(typeEntry.TypeFullName))}\" preserve=\"nothing\">"
+                    );
+                    string lastMethodName = null;
+                    for (; i < ordered.Count; ++i)
+                    {
+                        if (
+                            !IsSameAssembly(ordered[i], entry.AssemblyName)
+                            || !IsSameType(ordered[i], typeEntry.TypeFullName)
+                        )
+                        {
+                            break;
+                        }
+
+                        string methodName = ordered[i].MethodName;
+                        if (string.Equals(lastMethodName, methodName, StringComparison.Ordinal))
+                        {
+                            continue;
+                        }
+
+                        lastMethodName = methodName;
+                        lines.Add(
+                            $"      <method name=\"{SecurityElement.Escape(methodName)}\" />"
+                        );
+                    }
+
+                    lines.Add("    </type>");
+                }
+
+                lines.Add("  </assembly>");
+            }
+
+            lines.Add("</linker>");
+            /*
+                LF terminators, never Environment.NewLine: the manifest must
+                be byte-identical whichever OS runs the build, and every XML
+                parser (the linker's included) accepts LF on every platform.
+            */
+            manifest = string.Join("\n", lines) + "\n";
+            return true;
+        }
+
+        internal static bool TryWriteManifestFile(string manifest, out string path)
+        {
+            if (string.IsNullOrWhiteSpace(manifest))
+            {
+                path = null;
+                return false;
+            }
+
+            try
+            {
+                string directory = Path.Combine(Directory.GetCurrentDirectory(), "Temp");
+                Directory.CreateDirectory(directory);
+                /*
+                    Written under a per-write unique Temp name, following
+                    Unity's own generated linker files: a stale file from an
+                    earlier build can never be mistaken for this build's
+                    manifest, Temp is purged by the editor, and the caller
+                    receives the path only after the write has closed - no
+                    reader can observe a partial file, so an atomic swap
+                    would protect nothing.
+                */
+                string fileName = $"UnityTempFile-{Guid.NewGuid():N}-{ManifestFileName}";
+                path = Path.Combine(directory, fileName);
+                File.WriteAllText(path, manifest, Utf8NoBom);
+                return true;
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning(
+                    $"[DxCommandTerminal] Player compatibility bake manifest write failed: "
+                        + $"{e.Message}"
+                );
+                path = null;
+                return false;
+            }
+        }
+
+        internal static bool HasDirectBindableShape(MethodInfo method)
+        {
+            if (method.ReturnType != typeof(void) || method.IsGenericMethod)
+            {
+                return false;
+            }
+
+            for (
+                Type containing = method.DeclaringType;
+                containing != null;
+                containing = containing.DeclaringType
+            )
+            {
+                if (containing.IsGenericTypeDefinition)
+                {
+                    return false;
+                }
+            }
+
+            ParameterInfo[] parameters = method.GetParameters();
+            return parameters.Length == 1 && parameters[0].ParameterType == typeof(CommandArg[]);
+        }
+
+        internal static bool IsRootedByGeneratedCode(
+            Assembly assembly,
+            Type declaringType,
+            MethodInfo method,
+            Dictionary<Assembly, bool> catalogAssemblies
+        )
+        {
+            if (!catalogAssemblies.TryGetValue(assembly, out bool hasCatalog))
+            {
+                hasCatalog = ProbeGeneratedCatalog(assembly);
+                catalogAssemblies.Add(assembly, hasCatalog);
+            }
+
+            if (!hasCatalog)
+            {
+                return false;
+            }
+
+            /*
+                Mirrors the generator's per-method binding decision, not a
+                type-wide one: a companion emitted for one method roots only
+                the methods it names, and an accessible method with a shape
+                the catalog cannot bind directly (non-void, generic, invalid
+                signature) still binds through a reflection-by-name binder.
+            */
+            if (!HasDirectBindableShape(method))
+            {
+                return false;
+            }
+
+            if (IsDirectlyAccessible(method))
+            {
+                return true;
+            }
+
+            return HasCompanionBinder(declaringType);
+        }
+
+        private static bool IsSameAssembly(PreservationEntry entry, string assemblyName)
+        {
+            return string.Equals(entry.AssemblyName, assemblyName, StringComparison.Ordinal);
+        }
+
+        private static bool IsSameType(PreservationEntry entry, string typeFullName)
+        {
+            return string.Equals(entry.TypeFullName, typeFullName, StringComparison.Ordinal);
+        }
+
+        /*
+            A partial companion is the generator-emitted nested holder whose
+            members are zero-argument static methods returning
+            Action<CommandArg[]>. The name alone is not proof: a non-partial
+            holder can declare its own unrelated nested
+            DxCommandTerminalBinder without colliding, and rooting on the
+            name would silently leave its cached-binder handlers strippable.
+         */
+
+        private static bool HasCompanionBinder(Type declaringType)
+        {
+            Type companion = declaringType.GetNestedType(
+                PartialCompanionTypeName,
+                BindingFlags.Public | BindingFlags.NonPublic
+            );
+            if (companion == null)
+            {
+                return false;
+            }
+
+            foreach (
+                MethodInfo binder in companion.GetMethods(
+                    BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic
+                )
+            )
+            {
+                if (
+                    binder.ReturnType == typeof(Action<CommandArg[]>)
+                    && 0 == binder.GetParameters().Length
+                )
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool IsTestAssembly(Assembly assembly)
+        {
+            if (assembly.IsDynamic)
+            {
+                return false;
+            }
+
+            /*
+                Only the metadata read can throw; keep the catch on that one
+                call so a corrupt-assembly failure is distinguishable from a
+                matched reference.
+            */
+            AssemblyName[] references;
+            try
+            {
+                references = assembly.GetReferencedAssemblies();
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+
+            if (references == null)
+            {
+                return false;
+            }
+
+            foreach (AssemblyName reference in references)
+            {
+                string name = reference.Name;
+                if (name == null)
+                {
+                    continue;
+                }
+
+                if (
+                    string.Equals(name, "UnityEngine.TestRunner", StringComparison.Ordinal)
+                    || 0 <= name.IndexOf("nunit", StringComparison.OrdinalIgnoreCase)
+                )
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool ProbeGeneratedCatalog(Assembly assembly)
+        {
+            try
+            {
+                return assembly.GetType(CommandShell.CatalogTypeName, false) != null;
+            }
+            catch (Exception)
+            {
+                /*
+                    A probe failure must never drop preservation: treat the
+                    assembly as catalog-less so every handler it declares is
+                    preserved (over-preservation is the safe direction).
+                */
+                return false;
+            }
+        }
+
+        /*
+            The shape the generator binds as a direct delegate: void return,
+            exactly one CommandArg[] parameter by value, no generic method,
+            and no open generic declaration in the containing chain. Ref/out
+            parameters fail the parameter-type comparison automatically
+            (their managed type is a by-ref of the array). Everything else
+            binds by reflection-by-name, whatever its accessibility.
+         */
+
+        /*
+            The generator's accessible-from-catalog set (public, internal,
+            protected internal); private, protected, and private protected
+            handlers need the partial companion to be rooted.
+         */
+        private static bool IsDirectlyAccessible(MethodInfo method)
+        {
+            return method.IsPublic || method.IsAssembly || method.IsFamilyOrAssembly;
+        }
+
+        private static int CompareEntries(PreservationEntry left, PreservationEntry right)
+        {
+            int assembly = string.CompareOrdinal(left.AssemblyName, right.AssemblyName);
+            if (assembly != 0)
+            {
+                return assembly;
+            }
+
+            int type = string.CompareOrdinal(left.TypeFullName, right.TypeFullName);
+            if (type != 0)
+            {
+                return type;
+            }
+
+            return string.CompareOrdinal(left.MethodName, right.MethodName);
+        }
+
+        /*
+            Empty bodies: Unity 6 warns on non-empty OnBeforeRun/OnAfterRun
+            implementations (both hooks no longer run), and the manifest needs
+            no lifecycle around the linker run - it is written under Temp,
+            which Unity purges, following the same convention as the engine's
+            own generated linker files.
+         */
+
+        public void OnBeforeRun(BuildReport report, UnityLinkerBuildPipelineData data) { }
+
+        /*
+            Runs at the stripping stage of every player build, where the
+            editor's TypeCache is still available and the manifest can name
+            the exact handler set the player domain will hold.
+         */
+
+        public string GenerateAdditionalLinkXmlFile(
+            BuildReport report,
+            UnityLinkerBuildPipelineData data
+        )
+        {
+            List<PreservationEntry> entries = CollectPreservations(CollectAttributedCommands());
+            if (!TryBuildManifest(entries, out string manifest))
+            {
+                Debug.Log(
+                    "[DxCommandTerminal] Player compatibility bake: every discovered "
+                        + "command handler is rooted by generated code; nothing to preserve"
+                );
+                return null;
+            }
+
+            if (!TryWriteManifestFile(manifest, out string path))
+            {
+                Debug.LogWarning(
+                    "[DxCommandTerminal] Player compatibility bake could not write its "
+                        + "preservation manifest; managed stripping may remove "
+                        + "reflection-bound command handlers from this build"
+                );
+                return null;
+            }
+
+            Debug.Log(
+                $"[DxCommandTerminal] Player compatibility bake preserved {entries.Count} "
+                    + $"reflection-bound command handler(s) -> {path}"
+            );
+            return path;
+        }
+
+        public void OnAfterRun(BuildReport report, string outputFolder) { }
+
+        internal readonly struct AttributedCommand
+        {
+            public readonly Assembly Assembly;
+            public readonly MethodInfo Method;
+            public readonly RegisterCommandAttribute Attribute;
+
+            public AttributedCommand(
+                Assembly assembly,
+                MethodInfo method,
+                RegisterCommandAttribute attribute
+            )
+            {
+                Assembly = assembly;
+                Method = method;
+                Attribute = attribute;
+            }
+        }
+
+        internal readonly struct PreservationEntry
+        {
+            public readonly string AssemblyName;
+            public readonly string TypeFullName;
+            public readonly string MethodName;
+
+            public PreservationEntry(string assemblyName, string typeFullName, string methodName)
+            {
+                AssemblyName = assemblyName;
+                TypeFullName = typeFullName;
+                MethodName = methodName;
+            }
+        }
+    }
+#endif
+}

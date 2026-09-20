@@ -23,15 +23,30 @@ method's reachable dependency graph - so the attribute on `Collect` is what keep
 the binder factories, and every directly created handler delegate alive at any Managed
 Stripping Level, on IL2CPP and WebGL alike.
 
-Two paths stay reflection-bound and can still be stripped at `Medium` or `High`:
+Two paths stay reflection-bound and are strippable at `Medium` or `High`:
 
 1. Handlers in private, non-partial types: the catalog binds them by exact reflection
    identity (string-addressed, invisible to the linker).
 2. Assemblies without a catalog (precompiled DLLs): discovered by the reflection scan.
 
-**Required setting**: any Managed Stripping Level works for generated catalogs of accessible
-handlers. For the two paths above, `Low`, `Minimal`, or `None` is still required unless the
-mitigations below apply.
+**Player builds cover both automatically**: the player compatibility bake
+(`Runtime/CommandTerminal/Backend/CommandCompatibilityBake.cs`, editor-only) implements
+`IUnityLinkerProcessor.GenerateAdditionalLinkXmlFile`, feeding the stripping stage an
+additional link.xml (written under `Temp`) that preserves exactly those handlers. Assets
+files are not used - Unity only auto-loads Assets files named exactly `link.xml`. Its
+rooting rule mirrors the emitter per method: in a generated assembly, a handler is rooted
+only when its shape is directly bindable (void return, one by-value `CommandArg[]`
+parameter, no generic method, no open-generic declaring chain) AND it is accessible
+(public / internal / protected internal) AND - when inaccessible - its declaring type
+carries the partial companion; everything else static and attributed (minus `EditorOnly`)
+is preserved, and whole catalog-less assemblies' handlers are preserved. Assembly entries
+carry `ignoreIfMissing="1"`, so entries for assemblies a given build does not contain are
+inert. Nested types are named with the IL separator `/` (e.g. `Ns.Outer/Inner`), never the
+reflection `+` from `Type.FullName` - a `+` entry silently matches nothing, in the bake's
+manifest and in hand-written link.xml alike. Manual mitigation below remains for workflows that never run the editor build hook.
+**Required setting**: any Managed Stripping Level works for generated catalogs of
+accessible handlers; with the bake, the reflection-bound paths also survive `Medium`/`High`
+in player builds.
 
 ## When the stripping level cannot be lowered
 
@@ -54,10 +69,18 @@ mitigations below apply.
   stripping protection in the same change and pin it in the generator driver tests (see
   `GeneratedCatalogCarriesStrippingPreservation`); the payload byte-compare lane fails on
   a stale shipped analyzer DLL.
+- The bake's rooting rules (`HasDirectBindableShape`, the companion-binder probe,
+  `CommandShell.CatalogTypeName`) mirror the emitter's binding forms. Change them together:
+  a new binder form in `CatalogEmitter` must update the bake in the same change, and the
+  bake tests pin the public / companion / inaccessible cases against the real generator.
 - `EditorOnly`/`DevelopmentOnly` commands are filtered by build target, not by stripping;
-  generated catalogs carry the same `[Preserve]` regardless.
-- After touching the registration path or the generator, validate on a WebGL build with an
-  attribute-registered command before merging.
+  generated catalogs carry the same `[Preserve]` regardless (the bake preserves
+  `DevelopmentOnly` handlers because dev builds register them, and skips `EditorOnly`).
+- After touching the registration path, the generator, or the bake, validate on an IL2CPP
+  player build with a private attributed command before merging (the IL2CPP/WebGL strip
+  matrix on issue #38 tracks the drill evidence). Strip drills must use **release** builds:
+  `BuildOptions.Development` clamps IL2CPP stripping to Minimal, so a stripped-method
+  negative control survives and the drill proves nothing (session-048).
 
 ## Diagnosing "commands missing in build"
 
