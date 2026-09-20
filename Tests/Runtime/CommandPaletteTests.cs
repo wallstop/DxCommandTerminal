@@ -7,6 +7,7 @@
     using Components;
     using Input;
     using NUnit.Framework;
+    using Themes;
     using UI;
     using UnityEngine;
     using UnityEngine.TestTools;
@@ -14,6 +15,8 @@
 
     public sealed class CommandPaletteTests
     {
+        private const string PackageRoot = "Packages/com.wallstop-studios.dxcommandterminal";
+
         /*
             Readiness-poll headroom, not a fixed expectation: under editor
             throttling (unfocused/agent-driven panels) caret parks and focus
@@ -32,6 +35,16 @@
         private PanelSettings _panelSettings;
         private TerminalUI _sharedTerminal;
         private GameObject _extraPaletteObject;
+
+        private static T LoadPack<T>(string relativePath)
+            where T : ScriptableObject
+        {
+#if UNITY_EDITOR
+            return UnityEditor.AssetDatabase.LoadAssetAtPath<T>($"{PackageRoot}/{relativePath}");
+#else
+            return null;
+#endif
+        }
 
         private static void RegisterPair()
         {
@@ -307,6 +320,65 @@
             );
             AssertResultsCollapsed("Opening without a query shows only the bar");
             yield return WaitForFocusedInput("The palette input should be focused after open");
+        }
+
+        /*
+            A palette that builds before the terminal's first UI build reads
+            a null CurrentFont (the pack font resolves during that first
+            build); each open re-applies the font so the bar renders the
+            pack font without waiting for its own rebuild.
+         */
+        [UnityTest]
+        public IEnumerator ReopeningAfterTerminalBuildAppliesResolvedFont()
+        {
+            yield return SpawnPalette();
+            _palette.Open();
+            yield return null;
+
+            Assert.That(
+                _palette._paletteRoot.style.unityFontDefinition.value.font == null,
+                "Sanity: the palette built before the terminal resolved a pack font"
+            );
+
+            _terminalObject = new GameObject("PaletteFontTerminal");
+            _terminalObject.SetActive(false);
+            UIDocument terminalDocument = _terminalObject.AddComponent<UIDocument>();
+            terminalDocument.panelSettings = _panelSettings;
+            TerminalUI terminal = _terminalObject.AddComponent<TerminalUI>();
+            terminal._uiDocument = terminalDocument;
+            terminal.resetStateOnInit = true;
+            terminal.easeOutTime = 0f;
+            terminal.easeInTime = 0f;
+            terminal._themePack = LoadPack<TerminalThemePack>("Packs/Themes/Medium.asset");
+            terminal._fontPack = LoadPack<TerminalFontPack>("Packs/Fonts/Medium.asset");
+            _terminalObject.SetActive(true);
+            terminal.SetState(TerminalState.OpenFull);
+
+            int frameBudget = FrameBudget;
+            while (0 < frameBudget-- && terminal._commandInput == null)
+            {
+                yield return null;
+            }
+
+            Assert.That(
+                terminal._commandInput != null,
+                "Sanity: the terminal's first open builds the tree"
+            );
+            Assert.That(
+                terminal.CurrentFont != null,
+                "Sanity: the first build resolved the pack font"
+            );
+
+            _palette.Close();
+            _palette.Open();
+            yield return null;
+
+            Font appliedFont = _palette._paletteRoot.style.unityFontDefinition.value.font;
+            Assert.AreEqual(
+                terminal.CurrentFont,
+                appliedFont,
+                "A palette opened after the terminal's first build renders the pack font"
+            );
         }
 
         [UnityTest]

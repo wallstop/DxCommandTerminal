@@ -244,6 +244,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             _terminal.SetState(TerminalState.OpenFull);
             yield return WaitForInputVisible("Sanity: the first open builds the tree");
 
+            Assert.That(
+                _terminal.CurrentFont != null,
+                "Sanity: the pack font must resolve, or the assertion below passes vacuously"
+            );
+
             Font appliedFont = _terminal
                 ._uiDocument
                 .rootVisualElement

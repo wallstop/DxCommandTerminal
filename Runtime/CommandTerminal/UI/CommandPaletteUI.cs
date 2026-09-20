@@ -202,6 +202,12 @@
                 return;
             }
 
+            /*
+                The build-time font application can predate the terminal's
+                first UI build, where the pack font resolves; a fresh read
+                per open picks the resolved font up without a rebuild.
+             */
+            ApplyFont();
             Attach();
             CloseTerminalSurface();
             CapturePreviousFocus();
