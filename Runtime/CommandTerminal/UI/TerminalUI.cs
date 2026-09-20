@@ -1998,8 +1998,15 @@
              */
             _lastCodeSyncedValue = _input != null ? _input.CommandText : string.Empty;
             _commandInput.value = _lastCodeSyncedValue;
+            /*
+                The callback is explicitly static and receives the terminal
+                through userArgs: it stays captureless, so registering it
+                cannot allocate a closure or root this component through the
+                element's callback registry, and any future capture fails the
+                compile instead of silently leaking both.
+             */
             _commandInput.RegisterCallback<ChangeEvent<string>, TerminalUI>(
-                (evt, context) =>
+                static (evt, context) =>
                 {
                     if (context._input == null)
                     {

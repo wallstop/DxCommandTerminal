@@ -62,6 +62,20 @@ them on a new runtime.
   cold vs per-call.
 - `Terminal.Log` pays stack-trace extraction per call (~0.25 ms median on the pinned
   editor after the reduction pass); that is deliberate caller attribution, not a defect.
+- A captureless lambda is cached by the compiler as a singleton delegate (zero per-call
+  allocation), but adding ONE capture silently converts it to a per-call closure plus
+  a retained object. Declare captureless lambda arguments `static` (C# 9; PR #112
+  review): `ConditionalWeakTable.GetValue` factories, `Lazy<T>` factories, and
+  long-lived `RegisterCallback` registrations - the compiler then turns an accidental
+  capture into a compile error. Long-lived UI callbacks also root whatever they capture
+  through the element's callback registry, so `static` + explicit user-args state (the
+  `TerminalUI` input callback pattern) is the default there. Verify with a warmed
+  `AssertZeroAllocations` pin over the memo/registration read path.
+- `ConditionalWeakTable<TKey, TValue>` only accepts REFERENCE-TYPE values
+  (`TValue : class`; it cannot hold a struct). The correct memo payload is one small
+  immutable class instance per weak key (see `AssemblyClassification`); do not replace
+  the table with a `Dictionary<Assembly, T>` to get struct values - a strong-keyed
+  dictionary roots every key (assembly) for the domain's lifetime, a growth-only leak.
 
 ## Version-gated snapshots
 
@@ -108,3 +122,4 @@ first-inserted-wins for case-variant duplicates.
 - Shared rented buffer? Lease-guarded slots + evict oversized on return.
 - New mutation site on a snapshotted collection? Bump the version.
 - New allocation test? Warm first; pin through `AllocationAssertions`.
+- New lambda argument on a memoization/registration path? Captureless means `static`.
