@@ -178,6 +178,11 @@ test("workflow structure: an existing Release is reused on re-run, never re-crea
   // create, and the clobber upload is the only asset-mutating step.
   assert.doesNotMatch(script, /--clobber/);
   assert.match(job(publishWorkflow, "github-release"), /gh release upload "\$TAG" --clobber/);
+  assert.strictEqual(
+    job(publishWorkflow, "github-release").match(/--clobber/g)?.length,
+    1,
+    "--clobber must stay exclusive to the upload step"
+  );
 });
 
 test("workflow shell prerequisite fails closed without opt-in or matching provenance SHA", { skip: process.platform === "win32" }, () => {

@@ -284,7 +284,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
             TextField inputBefore = _terminal._commandInput;
 
-            SwapFontPackInInspector(LoadAsset<TerminalFontPack>("Packs/Fonts/Minimal.asset"));
+            TerminalFontPack nextPack = LoadAsset<TerminalFontPack>("Packs/Fonts/Minimal.asset");
+            Assert.That(
+                nextPack != null,
+                "Sanity: Minimal.asset must load, or the swap exercises a null pack"
+            );
+            SwapFontPackInInspector(nextPack);
 
             Font swappedFont = null;
             Font appliedFont = null;
@@ -307,6 +312,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 yield return null;
             }
 
+            Assert.That(
+                swappedFont != null,
+                "Sanity: the swapped pack must resolve a font, or the asserts below pass vacuously"
+            );
             Assert.AreNotEqual(
                 firstFont,
                 swappedFont,
