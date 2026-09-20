@@ -65,6 +65,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Swapping the `TerminalFontPack` on a live `TerminalUI` now re-resolves and reapplies the font immediately. Previously the pack change only took effect after a rebuild (`set-font`, a persisted font assignment, or a disable/re-enable), so the old pack's font kept rendering.
 - The first time a terminal opens, it now renders the resolved `TerminalFontPack` font. Previously the first UI build never wrote the font definition to the fresh document root (the resolved font applied only after a rebuild, `set-font`, a persisted font assignment, or a palette open), so a fresh terminal drew Unity's default OS font even with a font pack assigned. The quick-launch bar now also re-resolves the font each time it opens, so a bar opened before the terminal's first build picks the pack font up too.
 - Reopening a terminal whose component was disabled and re-enabled no longer logs a spurious `Cannot set null font.` error. The rebuild now reapplies the resolved font to the fresh visual tree instead of dropping the font definition silently.
 - Terminal and quick-launch completions preserve literal `$` names, close open quotes, and switch conflicting quote delimiters. Values that cannot form one literal token are not applied. Manually typed variables keep their existing behavior.
