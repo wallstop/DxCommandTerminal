@@ -65,6 +65,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Reopening a terminal whose component was disabled and re-enabled no longer logs a spurious `Cannot set null font.` error. The rebuild now reapplies the resolved font to the fresh visual tree instead of dropping the font definition silently.
 - Terminal and quick-launch completions preserve literal `$` names, close open quotes, and switch conflicting quote delimiters. Values that cannot form one literal token are not applied. Manually typed variables keep their existing behavior.
 - Attributed commands with multidimensional `CommandArg` arrays no longer cause generated-code compilation errors. They remain rejected commands, matching reflection-based registration.
 - Quick-launch bar caret parking under panel resets: the caret for an applied completion or auto-loaded command name could land away from its target when the text field's own deferred caret reset ran after the first parking pass, leaving the caret mid-token (visible with quoted insertions). The queued caret is now retried until it holds across two panel passes, a user edit cancels any still-queued write, and the caret is not written to positions the field does not hold yet.
