@@ -71,7 +71,6 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             out CommandAttributeData attribute
         )
         {
-            attribute = null;
             foreach (AttributeData attributeData in method.GetAttributes())
             {
                 if (!IsRegisterCommand(attributeData.AttributeClass))
@@ -119,6 +118,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                 return true;
             }
 
+            attribute = null;
             return false;
         }
 
@@ -582,7 +582,6 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             out PartialChainLevel[] chain
         )
         {
-            chain = null;
             List<PartialChainLevel> levels = null;
             for (
                 SyntaxNode current = methodDeclaration.Parent;
@@ -592,11 +591,13 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             {
                 if (typeDeclaration is not (ClassDeclarationSyntax or StructDeclarationSyntax))
                 {
+                    chain = null;
                     return false;
                 }
 
                 if (typeDeclaration.TypeParameterList != null)
                 {
+                    chain = null;
                     return false;
                 }
 
@@ -609,12 +610,14 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                     }
                     else if (string.Equals(modifier.Text, "file", StringComparison.Ordinal))
                     {
+                        chain = null;
                         return false;
                     }
                 }
 
                 if (!partial)
                 {
+                    chain = null;
                     return false;
                 }
 
@@ -628,6 +631,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
 
             if (levels == null)
             {
+                chain = null;
                 return false;
             }
 

@@ -165,14 +165,15 @@ namespace WallstopStudios.DxCommandTerminal.Extensions
             out FieldInfo fieldInfo
         )
         {
-            fieldInfo = null;
             object obj = property.serializedObject.targetObject;
             if (obj == null)
             {
+                fieldInfo = null;
                 return null;
             }
             Type type = obj.GetType();
             string[] pathParts = property.propertyPath.Split('.');
+            FieldInfo enclosingField = null;
 
             // Traverse the path but stop at the second-to-last field
             for (int i = 0; i < pathParts.Length - 1; ++i)
@@ -194,23 +195,25 @@ namespace WallstopStudios.DxCommandTerminal.Extensions
                     continue;
                 }
 
-                fieldInfo = type?.GetField(
+                enclosingField = type?.GetField(
                     fieldName,
                     BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance
                 );
-                if (fieldInfo == null)
+                if (enclosingField == null)
                 {
+                    fieldInfo = null;
                     return null;
                 }
 
                 // Move deeper but stop before the last property in the path
                 if (i < pathParts.Length - 2)
                 {
-                    obj = fieldInfo.GetValue(obj);
-                    type = fieldInfo.FieldType;
+                    obj = enclosingField.GetValue(obj);
+                    type = enclosingField.FieldType;
                 }
             }
 
+            fieldInfo = enclosingField;
             return obj;
         }
 

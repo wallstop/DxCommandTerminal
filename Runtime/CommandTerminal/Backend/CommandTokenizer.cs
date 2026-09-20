@@ -187,14 +187,14 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return false;
             }
 
-            replacementStart = start;
-            replacementLength = length;
             if (!wholeToken)
             {
                 insertion =
                     tokenQuoted ? value
                     : TrySerializeValue(value, out string serialized, out bool _) ? serialized
                     : value;
+                replacementStart = start;
+                replacementLength = length;
                 return true;
             }
 
@@ -203,6 +203,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 if (start == 0 || !CommandArg.Quotes.Contains(input[start - 1]))
                 {
                     insertion = string.Empty;
+                    replacementStart = start;
+                    replacementLength = length;
                     return false;
                 }
 
@@ -212,6 +214,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 if (closing != end && !(closing < 0 && end == input.Length))
                 {
                     insertion = string.Empty;
+                    replacementStart = start;
+                    replacementLength = length;
                     return false;
                 }
 
@@ -221,11 +225,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 {
                     ++length;
                 }
-                replacementStart = start;
-                replacementLength = length;
                 if (value.IndexOf(quote) < 0)
                 {
                     insertion = $"{quote}{value}{quote}";
+                    replacementStart = start;
+                    replacementLength = length;
                     return true;
                 }
             }
@@ -233,12 +237,16 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             if (!TrySerializeValue(value, out insertion, out bool quotedInsertion))
             {
                 insertion = string.Empty;
+                replacementStart = start;
+                replacementLength = length;
                 return false;
             }
 
             if (!quotedInsertion && start + length < input.Length && input[start + length] != ' ')
             {
                 insertion = string.Empty;
+                replacementStart = start;
+                replacementLength = length;
                 return false;
             }
 

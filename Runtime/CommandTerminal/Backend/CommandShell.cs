@@ -1096,7 +1096,6 @@
             // The buffer is caller-owned and reusable; clear stale results.
 
             results.Clear();
-            completionContext = default;
 
             EnsureAutoCommandsRegistered();
 
@@ -1327,10 +1326,10 @@
                 throw new ArgumentNullException(nameof(builder));
             }
 
-            handle = null;
             CommandDefinition definition = builder.Build(this);
             if (!AddCommand(definition))
             {
+                handle = null;
                 return false;
             }
 
