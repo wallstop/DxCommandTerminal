@@ -51,25 +51,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Lint LLM instructions
+      # One pwsh process per phase instead of one per script: pwsh startup
+      # dominates these <1s scripts, worst on Windows. Same scripts, flags,
+      # and order as one step each; LASTEXITCODE is checked explicitly because
+      # native exit codes do not stop a pwsh script.
+      - name: Lint LLM instructions (contract + sizes)
         shell: pwsh
-        run: ./tooling~/scripts/lint-llm-instructions.ps1 -VerboseOutput
+        run: |
+          ./tooling~/scripts/lint-llm-instructions.ps1 -VerboseOutput
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          ./tooling~/scripts/lint-skill-sizes.ps1 -VerboseOutput
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
-      - name: Check skill file sizes
+      - name: Test LLM lint, sizes, and index generator
         shell: pwsh
-        run: ./tooling~/scripts/lint-skill-sizes.ps1 -VerboseOutput
-
-      - name: Test LLM instructions lint
-        shell: pwsh
-        run: ./tooling~/scripts/tests/test-llm-instructions-lint.ps1 -VerboseOutput
-
-      - name: Test skill size linter
-        shell: pwsh
-        run: ./tooling~/scripts/tests/test-lint-skill-sizes.ps1 -VerboseOutput
-
-      - name: Test skills index generator
-        shell: pwsh
-        run: ./tooling~/scripts/tests/test-generate-skills-index.ps1 -VerboseOutput
+        run: |
+          ./tooling~/scripts/tests/test-llm-instructions-lint.ps1 -VerboseOutput
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          ./tooling~/scripts/tests/test-lint-skill-sizes.ps1 -VerboseOutput
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          ./tooling~/scripts/tests/test-generate-skills-index.ps1 -VerboseOutput
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
       - name: Validate skills index is up-to-date
         # Regenerate the file and fail if it differs from the committed bytes.
