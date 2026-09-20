@@ -116,8 +116,8 @@ frontmatter validity, index freshness, and pointer-file delegation; see
     Counting `for` only when the index is used, the collection is `IReadonlyList`, or the
     count direction/skip matters. Convert last-element separator logic to a first/last flag.
 12. One top-level type (class/struct/enum/delegate) per file. Nested helper types are fine.
-13. Assign `out` parameters immediately before each `return`, per path. Never blanket-assign
-    them at method entry; that defeats the compiler's definite-assignment bugcheck.
+13. Assign `out` parameters immediately before each `return`, per path; never blanket-assign at method entry - that
+    defeats the compiler's definite-assignment bugcheck. Enforced by `npm --prefix tooling~ run lint:out-param-discipline` (pre-commit + CI, #119).
 14. Flags enums hold single-bit members only. Named composites (`Gameplay`, `All`) live in a
     static presets class; never compose members inside the enum.
 15. No raw bitwise flag math at call sites; use the allocation-free

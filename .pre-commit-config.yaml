@@ -88,6 +88,20 @@ repos:
           (context.md rule 7): the linter flags ==/!= whose operand is a string literal or
           string.Empty. No --fix by design; Ordinal vs OrdinalIgnoreCase is a semantic
           choice per site, and name-shaped comparisons are OrdinalIgnoreCase by convention.
+      - id: out-param-discipline-lint
+        name: Lint out-parameter discipline (assign per path, before return; rule 13, issue #119)
+        entry: node tooling~/scripts/lint-out-param-discipline.mjs
+        language: system
+        always_run: true
+        pass_filenames: false
+        stages:
+          - pre-commit
+          - pre-push
+        description: >
+          An out parameter assigned again on a path that can follow an earlier
+          assignment is a blanket fallback that defeats the compiler's
+          definite-assignment bugcheck (context.md rule 13, PR #118 review). No
+          --fix by design; restoring one-assignment-per-path is a code change.
       - id: theme-palette-tokens-lint
         name: Lint palette theme tokens (Themes/ coverage, .palette-* var() fallbacks)
         entry: node tooling~/scripts/lint-theme-palette-tokens.mjs
