@@ -425,7 +425,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private IEnumerator WaitForCaret(int expectedCaretIndex, string message)
         {
             int frameBudget = 600;
-            while (0 < frameBudget-- && _terminal._commandInput.cursorIndex != expectedCaretIndex)
+            while (
+                0 < frameBudget--
+                && _terminal._commandInput.cursorIndex != expectedCaretIndex
+                && _terminal._pendingCaretIndex != expectedCaretIndex
+            )
             {
                 yield return null;
             }
@@ -450,7 +454,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private static IEnumerator WaitForCaretAppliedOrQueued(int expected)
         {
             int frameBudget = 600;
-            while (0 < frameBudget-- && TerminalUI.Instance._commandInput.cursorIndex != expected)
+            while (
+                0 < frameBudget--
+                && TerminalUI.Instance._commandInput.cursorIndex != expected
+                && TerminalUI.Instance._pendingCaretIndex != expected
+            )
             {
                 yield return null;
             }

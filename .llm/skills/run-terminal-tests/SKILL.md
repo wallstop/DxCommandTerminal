@@ -72,10 +72,13 @@ field write is frame-coupled and flakes under session sequences
   token-completion polls accept the queued marker (`_pendingCaretIndex`) or the
   live cursor, and value polls accept the input abstraction or the field mirror.
   The live cursor is UITK's layout-coupled echo and can sit clamped below the
-  value length for whole polls; never assert on it alone. A caret rule that
-  needs the marker to drain is pinned synchronously by driving
-  `ApplyPendingCaret` against a position the field holds (see
-  `PendingCaretConsumesOnlyAfterStablePasses`).
+  value length for whole polls; never assert on it alone. A poll loop's
+  condition must accept every surface its final assert does - a poll narrower
+  than the assert burns the whole budget waiting on a surface that cannot
+  converge (Bugbot catch on PR #114; sweep: compare each `while` budget loop
+  against its trailing assert). A caret rule that needs the marker to drain is
+  pinned synchronously by driving `ApplyPendingCaret` against a position the
+  field holds (see `PendingCaretConsumesOnlyAfterStablePasses`).
 - One failure mode survives the deterministic polls: long agent sessions can
   leave the editor in a state where panel events stop processing entirely
   (writes re-clamp or never land, for 30+ frames). See the first Debugging
