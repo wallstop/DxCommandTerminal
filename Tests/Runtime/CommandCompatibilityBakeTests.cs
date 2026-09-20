@@ -15,7 +15,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         Pins the player-compatibility bake: which [RegisterCommand] handlers
         are rooted by generated code (never preserved) and which are bound by
         reflection by name (preserved at player build time), plus the manifest
-        and staging contracts the build hook leans on.
+        and Temp-file contracts the linker processor leans on.
      */
     public sealed class CommandCompatibilityBakeTests
     {
@@ -26,8 +26,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         /*
             Defined once: dynamic assemblies are non-collectible, and IL2CPP
             players do not support Reflection.Emit, so this case is
-            editor-only. The emitted holder carries the only attributed
-            commands in the domain that no generated catalog serves.
+            editor-only. The emitted holder carries attributed commands that
+            no generated catalog serves, plus unattributed probes for the
+            direct-bindable shape gate.
          */
         private static readonly Assembly CatalogLessAssembly = CreateCatalogLessAssembly();
 
@@ -43,6 +44,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 CatalogLessHolderTypeName,
                 TypeAttributes.Public | TypeAttributes.Sealed
             );
+            ConstructorInfo attributeConstructor = typeof(RegisterCommandAttribute).GetConstructor(
+                new[] { typeof(string) }
+            );
+
             MethodBuilder preserved = type.DefineMethod(
                 "ProbePreservedCommand",
                 MethodAttributes.Public | MethodAttributes.Static,
@@ -51,15 +56,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
             preserved.DefineParameter(1, ParameterAttributes.None, "args");
             preserved.GetILGenerator().Emit(OpCodes.Ret);
-            ConstructorInfo attributeConstructor = typeof(RegisterCommandAttribute).GetConstructor(
-                new[] { typeof(string) }
-            );
             preserved.SetCustomAttribute(
                 new CustomAttributeBuilder(
                     attributeConstructor,
                     new object[] { "bake-probe-preserved" }
                 )
             );
+
             MethodBuilder instance = type.DefineMethod(
                 "ProbeInstanceCommand",
                 MethodAttributes.Public,
@@ -74,48 +77,35 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     new object[] { "bake-probe-instance" }
                 )
             );
+
+            /*
+                Unattributed shape probes: the exact signatures the shape
+                gate must classify, without the registration side effects a
+                compiled attributed fixture would bring.
+            */
+            MethodBuilder nonVoid = type.DefineMethod(
+                "ProbeNonVoid",
+                MethodAttributes.Public | MethodAttributes.Static,
+                typeof(int),
+                new[] { typeof(CommandArg[]) }
+            );
+            nonVoid.DefineParameter(1, ParameterAttributes.None, "args");
+            nonVoid.GetILGenerator().Emit(OpCodes.Ldc_I4_0);
+            nonVoid.GetILGenerator().Emit(OpCodes.Ret);
+
+            MethodBuilder byRefParameter = type.DefineMethod(
+                "ProbeByRefParameter",
+                MethodAttributes.Public | MethodAttributes.Static,
+                typeof(void),
+                new[] { typeof(CommandArg[]).MakeByRefType() }
+            );
+            byRefParameter.DefineParameter(1, ParameterAttributes.Out, "args");
+            byRefParameter.GetILGenerator().Emit(OpCodes.Ret);
+
             type.CreateType();
             return assembly;
         }
 #endif
-
-        private string _stagingRoot;
-
-        private static string SampleManifest()
-        {
-            return CommandCompatibilityBake.WriteManifest(
-                new[]
-                {
-                    new CommandCompatibilityBake.PreservationEntry(
-                        "Assembly-A",
-                        "Ns.Type",
-                        "Handler"
-                    ),
-                }
-            );
-        }
-
-        private static bool ContainsEntry(
-            List<CommandCompatibilityBake.PreservationEntry> entries,
-            string assemblyName,
-            string typeFullName,
-            string methodName
-        )
-        {
-            foreach (CommandCompatibilityBake.PreservationEntry entry in entries)
-            {
-                if (
-                    string.Equals(entry.AssemblyName, assemblyName, StringComparison.Ordinal)
-                    && string.Equals(entry.TypeFullName, typeFullName, StringComparison.Ordinal)
-                    && string.Equals(entry.MethodName, methodName, StringComparison.Ordinal)
-                )
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
 
         private static List<CommandCompatibilityBake.PreservationEntry> Collect(
             params MethodInfo[] methods
@@ -142,23 +132,26 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             return CommandCompatibilityBake.CollectPreservations(commands);
         }
 
-        [SetUp]
-        public void SetUp()
+        private static bool ContainsEntry(
+            List<CommandCompatibilityBake.PreservationEntry> entries,
+            string assemblyName,
+            string typeFullName,
+            string methodName
+        )
         {
-            _stagingRoot = Path.Combine(
-                Application.temporaryCachePath,
-                "CompatibilityBakeTests-" + Guid.NewGuid().ToString("N")
-            );
-            Directory.CreateDirectory(_stagingRoot);
-        }
-
-        [TearDown]
-        public void TearDown()
-        {
-            if (Directory.Exists(_stagingRoot))
+            foreach (CommandCompatibilityBake.PreservationEntry entry in entries)
             {
-                Directory.Delete(_stagingRoot, true);
+                if (
+                    string.Equals(entry.AssemblyName, assemblyName, StringComparison.Ordinal)
+                    && string.Equals(entry.TypeFullName, typeFullName, StringComparison.Ordinal)
+                    && string.Equals(entry.MethodName, methodName, StringComparison.Ordinal)
+                )
+                {
+                    return true;
+                }
             }
+
+            return false;
         }
 
         [TestCase("TestCommand")]
@@ -201,8 +194,26 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Assert.IsEmpty(
                 entries,
-                "A public handler is named directly by generated catalog code, "
-                    + "which roots it for the linker; preserving it is over-preservation"
+                "A public handler the catalog binds as a direct delegate is rooted "
+                    + "by generated code; preserving it is over-preservation"
+            );
+        }
+
+        [Test]
+        public void ProtectedInternalHandlerBoundByGeneratedCodeIsNotPreserved()
+        {
+            MethodInfo method = typeof(BakeFixtureInaccessible).GetMethod(
+                nameof(BakeFixtureInaccessible.ProtectedInternalCommand),
+                BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static
+            );
+            Assert.That(method != null, "Sanity: expected the protected internal fixture");
+
+            List<CommandCompatibilityBake.PreservationEntry> entries = Collect(method);
+
+            Assert.IsEmpty(
+                entries,
+                "Protected internal is inside the generator's accessible-from-catalog "
+                    + "set; a valid-shape handler there binds as a direct delegate"
             );
         }
 
@@ -266,6 +277,73 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
         }
 
+        [Test]
+        public void AccessibleInvalidSignatureHandlerIsNotRooted()
+        {
+            /*
+                Accessibility alone does not root a handler: the catalog binds
+                an invalid-signature one through the rejected-command accessor
+                (string GetMethod), so stripping would take it and its
+                diagnostics. The fixture is unattributed because a live
+                rejected command queues readiness diagnostics on every shell;
+                the rooting seam is the contract under test.
+            */
+            MethodInfo method = typeof(BakeFixtureInaccessible).GetMethod(
+                nameof(BakeFixtureInaccessible.WrongParamCommand),
+                BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static
+            );
+            Assert.That(method != null, "Sanity: expected the wrong-param probe");
+
+            Assert.IsFalse(
+                CommandCompatibilityBake.IsRootedByGeneratedCode(
+                    typeof(BakeFixtureInaccessible).Assembly,
+                    typeof(BakeFixtureInaccessible),
+                    method,
+                    new Dictionary<Assembly, bool>()
+                ),
+                "A handler the catalog cannot bind directly is reached by "
+                    + "reflection-by-name and must be preserved, whatever its "
+                    + "accessibility"
+            );
+        }
+
+        [Test]
+        public void GenericMethodInPartialTypeIsNotRootedDespiteCompanion()
+        {
+            MethodInfo method = typeof(BakePartialFixtureCommands).GetMethod(
+                "PartialGenericCommand",
+                BindingFlags.NonPublic | BindingFlags.Static
+            );
+            Assert.That(method != null, "Sanity: expected the partial generic probe");
+
+            Assert.IsFalse(
+                CommandCompatibilityBake.IsRootedByGeneratedCode(
+                    typeof(BakePartialFixtureCommands).Assembly,
+                    typeof(BakePartialFixtureCommands),
+                    method,
+                    new Dictionary<Assembly, bool>()
+                ),
+                "Companions are per-method: a generic handler in a partial type "
+                    + "binds by reflection-by-name and must be preserved even though "
+                    + "the companion type exists for a sibling"
+            );
+
+            MethodInfo rooted = typeof(BakePartialFixtureCommands).GetMethod(
+                "PartialPrivateCommand",
+                BindingFlags.NonPublic | BindingFlags.Static
+            );
+            Assert.That(rooted != null, "Sanity: expected the companion-rooted probe");
+            Assert.IsTrue(
+                CommandCompatibilityBake.IsRootedByGeneratedCode(
+                    typeof(BakePartialFixtureCommands).Assembly,
+                    typeof(BakePartialFixtureCommands),
+                    rooted,
+                    new Dictionary<Assembly, bool>()
+                ),
+                "The valid private handler is the one the companion roots"
+            );
+        }
+
 #if UNITY_EDITOR
         [Test]
         public void HandlersInAssembliesWithoutGeneratedCatalogsArePreserved()
@@ -280,7 +358,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 )
             )
             {
-                if (ReferenceEquals(method.DeclaringType, holder))
+                if (
+                    ReferenceEquals(method.DeclaringType, holder)
+                    && method.IsStatic
+                    && method.IsDefined(typeof(RegisterCommandAttribute), false)
+                )
                 {
                     declared.Add(method);
                 }
@@ -291,7 +373,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreEqual(
                 1,
                 entries.Count,
-                "Exactly the static handler in the catalog-less assembly is preserved"
+                "Exactly the attributed static handler in the catalog-less assembly is preserved"
             );
             Assert.AreEqual(
                 "ProbePreservedCommand",
@@ -301,16 +383,50 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         [Test]
-        public void AttributedCommandCollectionExcludesNonPlayerAssemblies()
+        public void DirectBindableShapeMirrorsTheGenerator()
+        {
+            Type holder = CatalogLessAssembly.GetType(CatalogLessHolderTypeName);
+            Assert.That(holder != null, "Sanity: expected the emitted command holder type");
+
+            MethodInfo valid = holder.GetMethod("ProbePreservedCommand");
+            MethodInfo nonVoid = holder.GetMethod("ProbeNonVoid");
+            MethodInfo byRefParameter = holder.GetMethod("ProbeByRefParameter");
+            MethodInfo generic = typeof(BakePartialFixtureCommands).GetMethod(
+                "PartialGenericCommand",
+                BindingFlags.NonPublic | BindingFlags.Static
+            );
+            Assert.That(
+                valid != null && nonVoid != null && byRefParameter != null && generic != null,
+                "Sanity: expected the shape probes"
+            );
+
+            Assert.IsTrue(
+                CommandCompatibilityBake.HasDirectBindableShape(valid),
+                "Void + one by-value CommandArg[] parameter is the directly bindable shape"
+            );
+            Assert.IsFalse(
+                CommandCompatibilityBake.HasDirectBindableShape(nonVoid),
+                "A non-void return forces the cached reflection-by-name binder"
+            );
+            Assert.IsFalse(
+                CommandCompatibilityBake.HasDirectBindableShape(byRefParameter),
+                "A by-ref parameter type is not CommandArg[] by value"
+            );
+            Assert.IsFalse(
+                CommandCompatibilityBake.HasDirectBindableShape(generic),
+                "A generic method definition can never bind a closed delegate"
+            );
+        }
+
+        [Test]
+        public void AttributedCommandCollectionExcludesTestAssemblies()
         {
             List<CommandCompatibilityBake.AttributedCommand> commands =
                 CommandCompatibilityBake.CollectAttributedCommands();
 
             foreach (CommandCompatibilityBake.AttributedCommand command in commands)
             {
-                Assembly assembly = command.Assembly;
-                Assert.IsFalse(assembly.IsDynamic, "Dynamic assemblies never ship in players");
-                foreach (AssemblyName reference in assembly.GetReferencedAssemblies())
+                foreach (AssemblyName reference in command.Assembly.GetReferencedAssemblies())
                 {
                     string name = reference.Name;
                     if (name == null)
@@ -319,15 +435,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     }
 
                     Assert.IsFalse(
-                        string.Equals(name, "UnityEditor", StringComparison.Ordinal)
-                            || string.Equals(
-                                name,
-                                "UnityEngine.TestRunner",
-                                StringComparison.Ordinal
-                            )
+                        string.Equals(name, "UnityEngine.TestRunner", StringComparison.Ordinal)
                             || 0 <= name.IndexOf("nunit", StringComparison.OrdinalIgnoreCase),
-                        $"{assembly.GetName().Name} references {name}, so it never "
-                            + "ships in players and must not enter the bake"
+                        $"{command.Assembly.GetName().Name} references {name}, so it "
+                            + "never ships in players and must not enter the bake"
                     );
                 }
 
@@ -336,6 +447,43 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     "Only static handlers are discovered and preserved"
                 );
             }
+        }
+
+        [Test]
+        public void ManifestFileWritesUnderTemp()
+        {
+            string manifest = CommandCompatibilityBake.WriteManifest(
+                new[]
+                {
+                    new CommandCompatibilityBake.PreservationEntry(
+                        "Assembly-A",
+                        "Ns.Type",
+                        "Handler"
+                    ),
+                }
+            );
+
+            Assert.IsTrue(
+                CommandCompatibilityBake.TryWriteManifestFile(manifest, out string path),
+                "The Temp manifest write succeeds"
+            );
+            Assert.IsTrue(File.Exists(path), "The manifest file exists at the returned Temp path");
+            Assert.AreEqual(
+                manifest,
+                File.ReadAllText(path),
+                "The written file carries the manifest byte-for-byte"
+            );
+            Assert.That(
+                path.EndsWith(".link.xml", StringComparison.Ordinal),
+                "The manifest file is named as a linker payload"
+            );
+            Assert.That(
+                path.StartsWith(
+                    Path.Combine(Directory.GetCurrentDirectory(), "Temp"),
+                    StringComparison.Ordinal
+                ),
+                "The manifest is written under Temp, never under Assets"
+            );
         }
 #endif
 
@@ -368,10 +516,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 "<!-- "
                 + CommandCompatibilityBake.OwnershipMarker
                 + ": preserves [RegisterCommand] handlers that are bound by name "
-                + "through reflection, which managed stripping cannot see. "
-                + "Rewritten on every player build; safe to delete. -->\n"
+                + "through reflection, which managed stripping cannot see. Written "
+                + "under Temp per player build; safe to delete. -->\n"
                 + "<linker>\n"
-                + "  <assembly fullname=\"A\">\n"
+                + "  <assembly fullname=\"A\" ignoreIfMissing=\"1\">\n"
                 + "    <type fullname=\"T1\" preserve=\"nothing\">\n"
                 + "      <method name=\"Handler&lt;1&gt;&amp;\" />\n"
                 + "      <method name=\"M1\" />\n"
@@ -380,7 +528,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 + "      <method name=\"M2\" />\n"
                 + "    </type>\n"
                 + "  </assembly>\n"
-                + "  <assembly fullname=\"B\">\n"
+                + "  <assembly fullname=\"B\" ignoreIfMissing=\"1\">\n"
                 + "    <type fullname=\"T\" preserve=\"nothing\">\n"
                 + "      <method name=\"M\" />\n"
                 + "    </type>\n"
@@ -388,61 +536,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 + "</linker>\n";
 
             Assert.AreEqual(expected, manifest);
-        }
-
-        [Test]
-        public void StagingClaimsOnlyOwnedFiles()
-        {
-            string ownedPath = Path.Combine(_stagingRoot, "owned.link.xml");
-            string foreignPath = Path.Combine(_stagingRoot, "foreign.link.xml");
-            File.WriteAllText(foreignPath, "consumer-owned linker rules");
-
-            Assert.IsTrue(
-                CommandCompatibilityBake.TryStage(ownedPath, SampleManifest()),
-                "A fresh staging path accepts the manifest"
-            );
-            Assert.IsTrue(
-                CommandCompatibilityBake.TryStage(ownedPath, SampleManifest()),
-                "A re-run over a file the bake owns rewrites it"
-            );
-            Assert.IsFalse(
-                CommandCompatibilityBake.TryStage(foreignPath, "<linker></linker>\n"),
-                "A same-named file the bake does not own is never overwritten"
-            );
-            Assert.AreEqual(
-                "consumer-owned linker rules",
-                File.ReadAllText(foreignPath),
-                "The foreign file's content stays untouched"
-            );
-            Assert.IsFalse(
-                CommandCompatibilityBake.IsOwnedStaging(foreignPath),
-                "A file without the ownership marker is foreign"
-            );
-            Assert.IsTrue(
-                CommandCompatibilityBake.IsOwnedStaging(ownedPath),
-                "A staged manifest carries the ownership marker"
-            );
-        }
-
-        [Test]
-        public void StagingCleanupRemovesOnlyOwnedFiles()
-        {
-            string ownedPath = Path.Combine(_stagingRoot, "owned.link.xml");
-            string foreignPath = Path.Combine(_stagingRoot, "foreign.link.xml");
-            File.WriteAllText(foreignPath, "consumer-owned linker rules");
-            CommandCompatibilityBake.TryStage(ownedPath, SampleManifest());
-
-            CommandCompatibilityBake.CleanupStaging(foreignPath);
-            Assert.IsTrue(
-                File.Exists(foreignPath),
-                "Cleanup never deletes a file the bake does not own"
-            );
-
-            CommandCompatibilityBake.CleanupStaging(ownedPath);
-            Assert.IsFalse(File.Exists(ownedPath), "Cleanup removes the staged manifest");
-
-            CommandCompatibilityBake.CleanupStaging(ownedPath);
-            Assert.IsTrue(File.Exists(foreignPath), "A repeated cleanup pass stays a no-op");
         }
 
         internal static class BakeFixtureRooted
@@ -466,6 +559,19 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         internal class BakeFixtureInaccessible
         {
+            /*
+                Unattributed on purpose: an attributed invalid signature is a
+                rejected command whose readiness diagnostics queue on every
+                shell. The rooting seam test drives it directly instead.
+            */
+            public static void WrongParamCommand(string args) { }
+
+            [RegisterCommand(
+                Help = "Bake fixture rooted by a direct generated delegate.",
+                Name = "bake-protected-internal"
+            )]
+            protected internal static void ProtectedInternalCommand(CommandArg[] args) { }
+
             [RegisterCommand(
                 Help = "Bake fixture bound through a cached binder.",
                 Name = "bake-protected"

@@ -11,42 +11,48 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     using UnityEditor;
     using UnityEditor.Build;
     using UnityEditor.Build.Reporting;
+    using UnityEditor.UnityLinker;
     using Debug = UnityEngine.Debug;
+    using IUnityLinkerProcessor = UnityEditor.Build.IUnityLinkerProcessor;
 
     /*
         Player compatibility bake (PLAN.md T05): at player build time,
         preserves every [RegisterCommand] handler whose bind path is
-        reflection-by-name - the sites managed stripping cannot see. Two
+        reflection-by-name - the sites managed stripping cannot see. Three
         classes of handler bind that way:
 
-        1. Private (or protected) non-partial handlers in assemblies whose
-           generated catalog binds them through a cached GetMethod binder.
-        2. Every attributed static handler in an assembly without a generated
+        1. Private (or protected) handlers in generated assemblies that are
+           not in a partial chain: the catalog binds them through a cached
+           GetMethod binder.
+        2. Handlers whose shape the catalog cannot bind directly even when
+           accessible - non-void returns, generic methods, open generic
+           declaring types, and invalid signatures: the catalog reaches them
+           by string name too (cached binder or rejected-command accessor).
+        3. Every attributed static handler in an assembly without a generated
            catalog (precompiled DLLs), where players fall back to the
            reflection walk.
 
-        Public, internal, and protected-internal handlers in generated
-        assemblies, and every handler a partial companion names directly, are
-        rooted by generated code already and stay unpreserved, so the manifest
-        stays surgical instead of preserve-everything.
+        Only handlers a partial companion names directly, and handlers the
+        catalog binds as direct delegates (valid shape AND public, internal,
+        or protected internal), are rooted by generated code; they stay
+        unpreserved, so the manifest stays surgical instead of
+        preserve-everything.
 
-        The manifest stages as a temporary link.xml under Assets for the
-        duration of the build and is deleted afterwards; a failed build can
-        leave it behind, and the next build's preprocess pass removes it. A
-        consumer-owned file at the staging path is never touched, so staging
-        failures degrade to today's behavior with a warning.
+        The manifest is fed to the linker as an additional link.xml file
+        (Unity only auto-loads Assets files named exactly "link.xml") and is
+        written under Temp for the duration of the linker run, so nothing
+        under Assets is ever touched. Assembly entries carry
+        ignoreIfMissing="1": the editor domain can name an assembly that a
+        particular player build does not contain (test or editor assemblies),
+        and the linker skips those silently instead of warning.
      */
-    internal sealed class CommandCompatibilityBake
-        : IPreprocessBuildWithReport,
-            IPostprocessBuildWithReport
+    internal sealed class CommandCompatibilityBake : IUnityLinkerProcessor
     {
         internal const string PartialCompanionTypeName = "DxCommandTerminalBinder";
 
         internal const string OwnershipMarker = "DxCommandTerminal player compatibility bake";
 
-        internal const string StagingFileName = "DxCommandTerminalCommandCompatibility.link.xml";
-
-        internal static string StagingAssetPath => "Assets/" + StagingFileName;
+        private const string ManifestFileName = "DxCommandTerminalCompatibilityBake.link.xml";
 
         private static readonly UTF8Encoding Utf8NoBom = new(false);
 
@@ -55,7 +61,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         internal static List<AttributedCommand> CollectAttributedCommands()
         {
             List<AttributedCommand> commands = new();
-            Dictionary<Assembly, bool> playerAssemblies = new();
+            Dictionary<Assembly, bool> shippingAssemblies = new();
             foreach (
                 MethodInfo method in TypeCache.GetMethodsWithAttribute<RegisterCommandAttribute>()
             )
@@ -72,13 +78,13 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 }
 
                 Assembly assembly = declaringType.Assembly;
-                if (!playerAssemblies.TryGetValue(assembly, out bool playerAssembly))
+                if (!shippingAssemblies.TryGetValue(assembly, out bool shippingAssembly))
                 {
-                    playerAssembly = IsPlayerAssembly(assembly);
-                    playerAssemblies.Add(assembly, playerAssembly);
+                    shippingAssembly = IsTestAssembly(assembly);
+                    shippingAssemblies.Add(assembly, shippingAssembly);
                 }
 
-                if (!playerAssembly)
+                if (shippingAssembly)
                 {
                     continue;
                 }
@@ -96,6 +102,16 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             return commands;
         }
 
+        /*
+            Test assemblies never ship in players, and their commands never
+            belong in a preservation manifest; they are identifiable by their
+            framework references. Nothing else is excluded: an assembly that
+            references UnityEditor in the editor may still ship a player
+            variant under the same name (runtime sources with `#if
+            UNITY_EDITOR` blocks do), so editor references cannot mark
+            non-shipping assemblies. Entries for assemblies a given build
+            does not contain are inert through ignoreIfMissing="1".
+         */
         internal static List<PreservationEntry> CollectPreservations(
             IReadOnlyList<AttributedCommand> commands
         )
@@ -165,8 +181,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             StringBuilder builder = new();
             builder.Append("<!-- ").Append(OwnershipMarker).Append(": preserves ");
             builder.Append("[RegisterCommand] handlers that are bound by name through ");
-            builder.Append("reflection, which managed stripping cannot see. Rewritten on ");
-            builder.Append("every player build; safe to delete. -->\n");
+            builder.Append("reflection, which managed stripping cannot see. Written under ");
+            builder.Append("Temp per player build; safe to delete. -->\n");
             builder.Append("<linker>\n");
 
             for (int i = 0; i < ordered.Count; )
@@ -175,7 +191,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 builder
                     .Append("  <assembly fullname=\"")
                     .Append(SecurityElement.Escape(entry.AssemblyName))
-                    .AppendLine("\">");
+                    .AppendLine("\" ignoreIfMissing=\"1\">");
                 for (; i < ordered.Count; )
                 {
                     if (
@@ -236,117 +252,69 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             return builder.ToString();
         }
 
-        internal static bool TryStage(string path, string manifest)
+        internal static bool TryWriteManifestFile(string manifest, out string path)
         {
-            if (string.IsNullOrWhiteSpace(path) || manifest == null)
-            {
-                return false;
-            }
-
-            if (File.Exists(path) && !IsOwnedStaging(path))
-            {
-                return false;
-            }
-
-            File.WriteAllText(path, manifest, Utf8NoBom);
-            return true;
-        }
-
-        internal static bool IsOwnedStaging(string path)
-        {
-            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+            path = null;
+            if (string.IsNullOrEmpty(manifest))
             {
                 return false;
             }
 
             try
             {
-                string content = File.ReadAllText(path);
-                return 0 <= content.IndexOf(OwnershipMarker, StringComparison.Ordinal);
-            }
-            catch (Exception)
-            {
-                return false;
-            }
-        }
-
-        internal static void CleanupStaging(string path)
-        {
-            if (!IsOwnedStaging(path))
-            {
-                return;
-            }
-
-            try
-            {
-                File.Delete(path);
-                string metaPath = path + ".meta";
-                if (File.Exists(metaPath))
-                {
-                    File.Delete(metaPath);
-                }
+                string directory = Path.Combine(Directory.GetCurrentDirectory(), "Temp");
+                Directory.CreateDirectory(directory);
+                /*
+                    Unity's own generated linker files use a per-write unique
+                    Temp name; a stale file from an earlier build can never be
+                    mistaken for this build's manifest and Temp is purged by
+                    the editor, so no cleanup lifecycle is needed.
+                */
+                string fileName = $"UnityTempFile-{Guid.NewGuid():N}-{ManifestFileName}";
+                path = Path.Combine(directory, fileName);
+                File.WriteAllText(path, manifest, Utf8NoBom);
+                return true;
             }
             catch (Exception e)
             {
                 Debug.LogWarning(
-                    $"[DxCommandTerminal] Failed to remove player compatibility bake "
-                        + $"staging at {path}: {e.Message}"
+                    $"[DxCommandTerminal] Player compatibility bake manifest write failed: "
+                        + $"{e.Message}"
                 );
+                path = null;
+                return false;
             }
         }
 
-        /*
-            A player build cannot contain an assembly that hard-references an
-            editor or test-framework assembly (it would fail to load), so
-            those references identify exactly the assemblies whose commands
-            never ship: editor tooling and test fixtures. Editor-compiled
-            player-assembly lists cannot make this call - while test
-            assemblies are compiled, they name test and user assemblies alike
-            with the include-tests define. A failed reference read keeps the
-            assembly (fail-open toward preservation).
-         */
-        private static bool IsPlayerAssembly(Assembly assembly)
+        internal static bool HasDirectBindableShape(MethodInfo method)
         {
-            if (assembly.IsDynamic)
+            if (method.ReturnType != typeof(void) || method.IsGenericMethod)
             {
                 return false;
             }
 
-            try
+            for (
+                Type containing = method.DeclaringType;
+                containing != null;
+                containing = containing.DeclaringType
+            )
             {
-                AssemblyName[] references = assembly.GetReferencedAssemblies();
-                if (references == null)
+                if (containing.IsGenericTypeDefinition)
                 {
-                    return true;
+                    return false;
                 }
-
-                foreach (AssemblyName reference in references)
-                {
-                    string name = reference.Name;
-                    if (name == null)
-                    {
-                        continue;
-                    }
-
-                    if (
-                        string.Equals(name, "UnityEditor", StringComparison.Ordinal)
-                        || string.Equals(name, "UnityEngine.TestRunner", StringComparison.Ordinal)
-                        || 0 <= name.IndexOf("nunit", StringComparison.OrdinalIgnoreCase)
-                    )
-                    {
-                        return false;
-                    }
-                }
-
-                return true;
             }
-            catch (Exception)
-            {
-                return true;
-            }
+
+            ParameterInfo[] parameters = method.GetParameters();
+            return parameters.Length == 1 && parameters[0].ParameterType == typeof(CommandArg[]);
         }
 
-        private static bool IsRootedByGeneratedCode(
+        /*
+            The generator's accessible-from-catalog set (public, internal,
+            protected internal); private, protected, and private protected
+            handlers need the partial companion to be rooted.
+         */
+        internal static bool IsRootedByGeneratedCode(
             Assembly assembly,
             Type declaringType,
             MethodInfo method,
@@ -364,7 +332,19 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return false;
             }
 
-            if (IsDirectlyBindable(method))
+            /*
+                Mirrors the generator's per-method binding decision, not a
+                type-wide one: a companion emitted for one method roots only
+                the methods it names, and an accessible method with a shape
+                the catalog cannot bind directly (non-void, generic, invalid
+                signature) still binds through a reflection-by-name binder.
+            */
+            if (!HasDirectBindableShape(method))
+            {
+                return false;
+            }
+
+            if (IsDirectlyAccessible(method))
             {
                 return true;
             }
@@ -373,6 +353,46 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                     PartialCompanionTypeName,
                     BindingFlags.Public | BindingFlags.NonPublic
                 ) != null;
+        }
+
+        private static bool IsTestAssembly(Assembly assembly)
+        {
+            if (assembly.IsDynamic)
+            {
+                return false;
+            }
+
+            try
+            {
+                AssemblyName[] references = assembly.GetReferencedAssemblies();
+                if (references == null)
+                {
+                    return false;
+                }
+
+                foreach (AssemblyName reference in references)
+                {
+                    string name = reference.Name;
+                    if (name == null)
+                    {
+                        continue;
+                    }
+
+                    if (
+                        string.Equals(name, "UnityEngine.TestRunner", StringComparison.Ordinal)
+                        || 0 <= name.IndexOf("nunit", StringComparison.OrdinalIgnoreCase)
+                    )
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
         }
 
         private static bool ProbeGeneratedCatalog(Assembly assembly)
@@ -393,12 +413,14 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         }
 
         /*
-            The generated catalog names these handlers directly
-            (public / internal / protected internal), which roots them for the
-            linker; everything else in a generated assembly binds through a
-            cached reflection-by-name binder.
+            The shape the generator binds as a direct delegate: void return,
+            exactly one CommandArg[] parameter by value, no generic method,
+            and no open generic declaration in the containing chain. Ref/out
+            parameters fail the parameter-type comparison automatically
+            (their managed type is a by-ref of the array). Everything else
+            binds by reflection-by-name, whatever its accessibility.
          */
-        private static bool IsDirectlyBindable(MethodInfo method)
+        private static bool IsDirectlyAccessible(MethodInfo method)
         {
             return method.IsPublic || method.IsAssembly || method.IsFamilyOrAssembly;
         }
@@ -420,65 +442,53 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             return string.CompareOrdinal(left.MethodName, right.MethodName);
         }
 
-        public void OnPreprocessBuild(BuildReport report)
-        {
-            if (IsOwnedStaging(StagingAssetPath))
-            {
-                CleanupStaging(StagingAssetPath);
-                Debug.Log(
-                    "[DxCommandTerminal] Removed stale player compatibility bake staging "
-                        + "left behind by an earlier build"
-                );
-            }
+        /*
+            Empty bodies: Unity 6 warns on non-empty OnBeforeRun/OnAfterRun
+            implementations (both hooks no longer run), and the manifest needs
+            no lifecycle around the linker run - it is written under Temp,
+            which Unity purges, following the same convention as the engine's
+            own generated linker files.
+         */
+        public void OnBeforeRun(BuildReport report, UnityLinkerBuildPipelineData data) { }
 
-            List<AttributedCommand> commands = CollectAttributedCommands();
-            List<PreservationEntry> entries = CollectPreservations(commands);
+        /*
+            Runs at the stripping stage of every player build, where the
+            editor's TypeCache is still available and the manifest can name
+            the exact handler set the player domain will hold.
+         */
+        public string GenerateAdditionalLinkXmlFile(
+            BuildReport report,
+            UnityLinkerBuildPipelineData data
+        )
+        {
+            List<PreservationEntry> entries = CollectPreservations(CollectAttributedCommands());
             if (entries.Count == 0)
             {
                 Debug.Log(
                     "[DxCommandTerminal] Player compatibility bake: every discovered "
                         + "command handler is rooted by generated code; nothing to preserve"
                 );
-                return;
+                return null;
             }
 
-            string manifest = WriteManifest(entries);
-            if (!TryStage(StagingAssetPath, manifest))
+            if (!TryWriteManifestFile(WriteManifest(entries), out string path))
             {
                 Debug.LogWarning(
-                    $"[DxCommandTerminal] Player compatibility bake could not stage "
-                        + $"{StagingFileName} under Assets (a file it does not own is in the "
-                        + "way). Managed stripping may remove reflection-bound command "
-                        + "handlers from this build"
+                    "[DxCommandTerminal] Player compatibility bake could not write its "
+                        + "preservation manifest; managed stripping may remove "
+                        + "reflection-bound command handlers from this build"
                 );
-                return;
+                return null;
             }
 
-            AssetDatabase.ImportAsset(StagingAssetPath, ImportAssetOptions.ForceSynchronousImport);
             Debug.Log(
                 $"[DxCommandTerminal] Player compatibility bake preserved {entries.Count} "
-                    + $"reflection-bound command handler(s) -> {StagingAssetPath}"
+                    + $"reflection-bound command handler(s) -> {path}"
             );
+            return path;
         }
 
-        public void OnPostprocessBuild(BuildReport report)
-        {
-            if (!IsOwnedStaging(StagingAssetPath))
-            {
-                return;
-            }
-
-            CleanupStaging(StagingAssetPath);
-            AssetDatabase.Refresh();
-        }
-
-        /*
-            Gathers the bake's input from Unity's project-wide attributed-method
-            index, restricted to assemblies that actually ship in a player:
-            the index also covers editor and test assemblies, whose commands
-            never reach a build, and a link.xml entry naming a missing assembly
-            risks linker warnings.
-         */
+        public void OnAfterRun(BuildReport report, string outputFolder) { }
 
         internal readonly struct AttributedCommand
         {

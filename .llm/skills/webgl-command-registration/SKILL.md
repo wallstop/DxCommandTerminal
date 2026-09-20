@@ -30,16 +30,21 @@ Two paths stay reflection-bound and are strippable at `Medium` or `High`:
 2. Assemblies without a catalog (precompiled DLLs): discovered by the reflection scan.
 
 **Player builds cover both automatically**: the player compatibility bake
-(`Runtime/CommandTerminal/Backend/CommandCompatibilityBake.cs`, editor-only) stages a
-temporary `link.xml` in `IPreprocessBuildWithReport` preserving exactly those handlers and
-deletes it in `IPostprocessBuildWithReport`. Its rooting rule mirrors the emitter: in a
-generated assembly, public / internal / protected-internal handlers and any handler whose
-declaring type carries the partial companion are rooted and skipped; everything else static
-and attributed (minus `EditorOnly`) is preserved, and whole catalog-less assemblies'
-handlers are preserved. Manual mitigation below remains for workflows that never run the
-editor build hook. **Required setting**: any Managed Stripping Level works for generated
-catalogs of accessible handlers; with the bake, the two reflection-bound paths also survive
-`Medium`/`High` in player builds.
+(`Runtime/CommandTerminal/Backend/CommandCompatibilityBake.cs`, editor-only) implements
+`IUnityLinkerProcessor.GenerateAdditionalLinkXmlFile`, feeding the stripping stage an
+additional link.xml (written under `Temp`) that preserves exactly those handlers. Assets
+files are not used - Unity only auto-loads Assets files named exactly `link.xml`. Its
+rooting rule mirrors the emitter per method: in a generated assembly, a handler is rooted
+only when its shape is directly bindable (void return, one by-value `CommandArg[]`
+parameter, no generic method, no open-generic declaring chain) AND it is accessible
+(public / internal / protected internal) AND - when inaccessible - its declaring type
+carries the partial companion; everything else static and attributed (minus `EditorOnly`)
+is preserved, and whole catalog-less assemblies' handlers are preserved. Assembly entries
+carry `ignoreIfMissing="1"`, so entries for assemblies a given build does not contain are
+inert. Manual mitigation below remains for workflows that never run the editor build hook.
+**Required setting**: any Managed Stripping Level works for generated catalogs of
+accessible handlers; with the bake, the reflection-bound paths also survive `Medium`/`High`
+in player builds.
 
 ## When the stripping level cannot be lowered
 
