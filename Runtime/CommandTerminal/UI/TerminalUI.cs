@@ -2446,7 +2446,14 @@
 
         private void RefreshLogs()
         {
-            IReadOnlyList<LogItem> logs = Terminal.Buffer?.Logs;
+            /*
+                Capture the buffer once: the facade getter legitimately reads
+                null before the session exists (and after a play-session
+                reset), so every read in this method goes through the same
+                guarded local instead of re-deriving nullability per access.
+             */
+            CommandLog buffer = Terminal.Buffer;
+            IReadOnlyList<LogItem> logs = buffer?.Logs;
             if (logs == null)
             {
                 return;
@@ -2458,7 +2465,7 @@
             }
 
             VisualElement content = _logScrollView.contentContainer;
-            bool dirty = _lastSeenBufferVersion != Terminal.Buffer.Version;
+            bool dirty = _lastSeenBufferVersion != buffer.Version;
             if (content.childCount != logs.Count)
             {
                 dirty = true;
@@ -2518,7 +2525,7 @@
 
                 if (logs.Count == content.childCount)
                 {
-                    _lastSeenBufferVersion = Terminal.Buffer.Version;
+                    _lastSeenBufferVersion = buffer.Version;
                 }
             }
             return;

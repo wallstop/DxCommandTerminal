@@ -14,7 +14,16 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     internal sealed class TerminalSession
     {
         /// <summary>
-        ///     The process-wide session backing the <see cref="Terminal"/> facade.
+        ///     The process-wide session backing the <see cref="Terminal"/>
+        ///     facade. Never null: initialized once per domain and the
+        ///     property is immutable. <see cref="ResetState"/> clears the
+        ///     session's backend objects, not the session itself, so call
+        ///     sites never need to guard <see cref="Current"/> - the
+        ///     nullability boundary is the facade getters
+        ///     (<see cref="Terminal.Buffer"/>, <see cref="Terminal.Shell"/>,
+        ///     <see cref="Terminal.History"/>, and
+        ///     <see cref="Terminal.AutoComplete"/>), which read null until
+        ///     the first <see cref="Apply"/> and after a play-session reset.
         /// </summary>
         public static TerminalSession Current { get; } = new();
 
