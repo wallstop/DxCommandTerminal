@@ -94,5 +94,9 @@ files or CLI arguments.
 - `unauthorized` on probe: token mismatch between host and container `.env.local`.
 - Empty tools list from the cli backend: Pipeline is not loaded in that editor;
   check compilation conflicts, or fall back to `--backend relay`.
-- Agent cannot see Z.AI servers: no key in `.env.local`, or configs not rewritten
+- Agent cannot see Z.AI servers: no key in `.env.local`; configs not rewritten
   since the key was added (re-run offline configure).
+- `eval` compiles C# STATEMENTS from a `code` parameter: terminate expressions
+  (`return (...);`), never rely on an `expression` parameter or direct references
+  into host assemblies (resolve those via `Type.GetType`), and expect the client
+  call variants in `unity-mcp.mjs` to try `code` first.
