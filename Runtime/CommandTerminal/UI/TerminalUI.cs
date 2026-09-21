@@ -1361,6 +1361,24 @@
             }
         }
 
+        /*
+            Freezes or resumes the caret blink schedule. Capture and test rigs
+            pin the caret visible so rendered pixels never depend on elapsed
+            wall time; resume re-arms the normal blink schedule.
+         */
+        public void SetCursorBlinkPaused(bool paused)
+        {
+            if (!paused)
+            {
+                ScheduleBlinkingCursor();
+                return;
+            }
+
+            _cursorBlinkSchedule?.Pause();
+            _commandInput?.EnableInClassList("transparent-cursor", false);
+            _commandInput?.EnableInClassList("styled-cursor", true);
+        }
+
         public void HandlePrevious()
         {
             if (!IsOpenState(_state))
