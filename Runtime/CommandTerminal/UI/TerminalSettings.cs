@@ -26,11 +26,11 @@ namespace WallstopStudios.DxCommandTerminal.UI
         [Header("Buffers")]
         [Min(1)]
         [Tooltip("Maximum number of log entries kept in the shared terminal buffer")]
-        public int logBufferSize = 256;
+        public int logBufferSize = TerminalSession.Config.DefaultLogBufferSize;
 
         [Min(1)]
         [Tooltip("Maximum number of commands kept in the shared history buffer")]
-        public int historyBufferSize = 512;
+        public int historyBufferSize = TerminalSession.Config.DefaultHistoryBufferSize;
 
         [Header("Input")]
         [Tooltip("Caret character drawn before the input line")]

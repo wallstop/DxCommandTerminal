@@ -14,7 +14,16 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     internal sealed class TerminalSession
     {
         /// <summary>
-        ///     The process-wide session backing the <see cref="Terminal"/> facade.
+        ///     The process-wide session backing the <see cref="Terminal"/>
+        ///     facade. Never null: initialized once per domain and the
+        ///     property is immutable. <see cref="ResetState"/> clears the
+        ///     session's backend objects, not the session itself, so call
+        ///     sites never need to guard <see cref="Current"/> - the
+        ///     nullability boundary is the facade getters
+        ///     (<see cref="Terminal.Buffer"/>, <see cref="Terminal.Shell"/>,
+        ///     <see cref="Terminal.History"/>, and
+        ///     <see cref="Terminal.AutoComplete"/>), which read null until
+        ///     the first <see cref="Apply"/> and after a play-session reset.
         /// </summary>
         public static TerminalSession Current { get; } = new();
 
@@ -110,11 +119,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         /// <summary>
         ///     Explicit readiness boundary for callers without a TerminalUI
-        ///     component: applies <paramref name="config"/> to the backend
-        ///     objects and completes deferred auto-command registration
-        ///     synchronously, so the first command request and logging work
-        ///     before any UI enables. Idempotent: repeated calls reuse the
-        ///     existing objects.
+        ///     component (custom bootstrap code): applies
+        ///     <paramref name="config"/> to the backend objects and completes
+        ///     deferred auto-command registration synchronously, so the first
+        ///     command request and logging work before any UI enables.
+        ///     Idempotent: repeated calls reuse the existing objects.
         /// </summary>
         public void EnsureReady(Config config, bool force)
         {
@@ -143,6 +152,26 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         /// </summary>
         public readonly struct Config
         {
+            /// <summary>
+            ///     The default buffer capacities, shared by every component
+            ///     that owns serialized defaults so the defaults cannot drift
+            ///     apart (<see cref="UI.TerminalUI"/>, <see cref="UI.TerminalSettings"/>).
+            /// </summary>
+            public const int DefaultLogBufferSize = 256;
+
+            /// <summary>
+            ///     The default history capacity. See <see cref="DefaultLogBufferSize"/>.
+            /// </summary>
+            public const int DefaultHistoryBufferSize = 512;
+
+            /// <summary>
+            ///     The default configuration. Used when a component without
+            ///     serialized configuration of its own (a palette with no
+            ///     settings asset assigned) bootstraps the session.
+            /// </summary>
+            public static Config Default { get; } =
+                new(DefaultLogBufferSize, DefaultHistoryBufferSize, null, null, false);
+
             public int LogBufferSize { get; }
 
             public int HistoryBufferSize { get; }
