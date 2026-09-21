@@ -62,6 +62,7 @@ public static class T7IterDriver
         Directory.CreateDirectory(editorDir);
         File.WriteAllText(Path.Combine(editorDir, "T7IterProbe.cs"), ProbeSource);
 
+        AssetDatabase.Refresh();
         double t0 = EditorApplication.timeSinceStartup;
         File.WriteAllText(
             Path.Combine(artDir, "iter-cycle.tsv"),
@@ -119,6 +120,7 @@ public static class T7IterDriver
             }
         }
 
+        AssetDatabase.Refresh();
         CompilationPipeline.RequestScriptCompilation();
         return "T7 probe removed, cleanup compilation requested";
     }
