@@ -486,3 +486,27 @@ AutoComplete has gotten a major upgrade in this fork. Completion is now not only
 ![png](https://raw.githubusercontent.com/wallstop/DxCommandTerminal/master/Media/AutoComplete.png)
 
 **Note**: Currently, if `Make Hints Clickable` is checked, there is a minor bug where, occasionally, for ~1 frame after auto-completing or deleting a character from a completed word, the text is selected and then unselected. I think it's something to do with the Layout v Repaint events, but I've tried a lot of solutions and none of them worked. Marking this as "won't fix" for now. Open to PRs!
+
+# Measured Performance
+
+Performance claims here are measured, not asserted. Every claim is pinned by a test in
+the package's PlayMode suite. Numbers come from the maintainer's pinned editor
+(macOS, Unity 6000.4.6f1, Mono); editor numbers never stand in for player numbers, and
+player stripping behavior is validated by local IL2CPP/WebGL build drills instead.
+
+| Claim | Pinning test |
+| --- | --- |
+| Designated hot paths allocate nothing when warmed: typing completion, history traversal + copy + wrap push, borrowed-view dispatch, log writes without stack traces, steady refresh passes, per-keystroke hint sweeps | `StandardOperationsAllocationTests`, `DispatchAllocationTests`, `TerminalUIAllocationTests` |
+| Text command execution allocates by design (tokenizing) and is asserted as such, never claimed zero | `StandardOperationsAllocationTests.TextCommandExecutionAllocatesByDesign` |
+| First command readiness in a 1,000-command domain: p95 4.498 ms warm (gate < 5 ms) | `CommandDiscoveryScalingTests.MeasuresReadinessAcrossCommandVolume` |
+| Typing completion with 1,000 candidates: p95 0.105 ms (gate < 1 ms) | `StandardOperationsBenchmarkTests`, `TerminalUIStandardOperationsBenchmarkTests` |
+| Unused startup contribution: p95 0.001 ms (gate < 1 ms) | `StandardOperationsBenchmarkTests.MeasuresBackendStartupCost` |
+| Source generator execution: p95 5.99 ms per assembly (gate p95 < 25 ms) | `Generator~` test harness (Unity-free CI) |
+| Generated catalogs + bake-preserved reflection-bound commands survive IL2CPP/WebGL stripping at Medium and High | `CommandCompatibilityBakeTests` + local IL2CPP/WebGL strip drills |
+
+Every zero-allocation claim first proves its instrument: a positive control must detect
+a forced allocation before a zero claim can pass, a window on an unvalidated instrument
+can never map to zero, and byte-level counters stay inert on Unity's Mono (reported as
+`Unavailable`) so zero claims there rest on the validated instrument alone. Timing
+tripwires in the benchmark suites guard against order-of-magnitude regressions; they
+are not substitute measurements.
