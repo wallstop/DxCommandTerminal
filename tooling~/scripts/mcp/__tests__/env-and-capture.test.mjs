@@ -8,6 +8,9 @@ import {
   captureOutputDir,
   captureInvocationExpression,
   evalResultText,
+  evalFailure,
+  evalAnswerIsTrue,
+  evalAnswerIsFalse,
   CAPTURE_PACKAGE_NAME
 } from "../unity-mcp.mjs";
 import fs from "node:fs";
@@ -92,6 +95,11 @@ test("capture invocation resolves the editor type through qualified reflection",
   assert.match(expression, /GetMethod\("CaptureAll"/);
   assert.match(expression, /BindingFlags\.Public \| System\.Reflection\.BindingFlags\.Static/);
   assert.match(expression, /@"C:\/host\/out dir"/);
+  // C# verbatim strings escape quotes by doubling; backslashes never survive.
+  assert.match(
+    captureInvocationExpression("CaptureAll", '/tmp/say "hi"'),
+    /@"\/tmp\/say ""hi"""/
+  );
   for (const line of expression.split("\n")) {
     assert.match(line, /;$/, `statement must end in ';': ${line}`);
   }
@@ -107,6 +115,9 @@ test("eval result decoding never mistakes the envelope for the answer", () => {
     // A false result must never match /true/ via the envelope's success flag.
     ['{"success":true,"result":false}', "false"],
     ['{"success":true,"result":null}', ""],
+    // Non-string results decode as JSON.
+    ['{"success":true,"result":3}', "3"],
+    ['{"success":true,"result":{"a":1}}', '{"a":1}'],
     // Envelopes without a result field (run_tests answers) stay untouched.
     ['{"Summary":{"total":5,"passed":5}}', '{"Summary":{"total":5,"passed":5}}'],
     // Raw-text backends stay untouched.
@@ -115,4 +126,35 @@ test("eval result decoding never mistakes the envelope for the answer", () => {
   for (const [text, expected] of cases) {
     assert.equal(evalResultText(text), expected, `input: ${text}`);
   }
+});
+
+test("eval failure envelopes surface the backend error instead of timing out", () => {
+  // Observed live (issue #127 follow-up): a runtime exception inside the
+  // invoked capture method answers success:false with no result field.
+  const runtimeError = '{"output":null,"diagnostics":[],"success":false,"error":"Runtime Error","errorDetails":"Exception has been thrown by the target of an invocation."}';
+  assert.equal(evalFailure(runtimeError), "Exception has been thrown by the target of an invocation.");
+  assert.equal(evalFailure('{"success":false,"error":"Runtime Error"}'), "Runtime Error");
+  // Empty-string details must not shadow the error field; non-strings are skipped.
+  assert.equal(evalFailure('{"success":false,"error":"Runtime Error","errorDetails":""}'), "Runtime Error");
+  assert.equal(evalFailure('{"success":false,"errorDetails":{"code":-1}}'), "eval failed");
+  assert.equal(
+    evalFailure('{"success":false,"diagnostics":[{"message":"CS0246: type not found"}]}'),
+    "CS0246: type not found"
+  );
+  // Success envelopes, run_tests answers, and raw text are not failures.
+  assert.equal(evalFailure('{"success":true,"result":null}'), null);
+  assert.equal(evalFailure('{"Summary":{"total":5}}'), null);
+  assert.equal(evalFailure("Assets/Refresh executed"), null);
+});
+
+test("decoded-answer predicates read the result, never the envelope flags", () => {
+  // The #127 false positive: /true/i over the whole envelope matched
+  // "success": true. The predicates must read only the decoded result.
+  assert.equal(evalAnswerIsTrue('{"success":true,"result":false}'), false);
+  assert.equal(evalAnswerIsTrue('{"success":true,"result":true}'), true);
+  assert.equal(evalAnswerIsTrue('{"success":false,"result":false}'), false);
+  assert.equal(evalAnswerIsTrue("True"), true);
+  assert.equal(evalAnswerIsFalse('{"success":true,"result":true}'), false);
+  assert.equal(evalAnswerIsFalse('{"success":false,"error":"Runtime Error"}'), false);
+  assert.equal(evalAnswerIsFalse("false"), true);
 });
