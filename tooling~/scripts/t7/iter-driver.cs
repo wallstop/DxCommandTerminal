@@ -16,10 +16,10 @@
     delta[/extra]): cycle_start, compile_start, asm_done (extra=assembly name +
     error count), compile_finish, reload_end, ready, cycle_end (extra carries
     lead=/compile=/reload=/ready=/e2e= seconds), sample (S1 no-op refresh),
-    stale, expired, done. The install scenario marks the forced first compile.
-    The install DELETES the log, so copy it out before re-running. Scenario
-    files are restored with `git checkout -- Editor/ Runtime/` in the package
-    repo after a run.
+    stale, expired, skip, done. The install scenario marks the forced first
+    compile. The install DELETES the log, so copy it out before re-running.
+    Scenario files are restored with `git checkout -- Editor/ Runtime/` in the
+    package repo after a run.
  */
 using System;
 using System.Globalization;
@@ -204,6 +204,14 @@ namespace T7
             }
 
             CycleState cycle = ReadCycle();
+            double wallAge = WallAgeSeconds();
+            if (wallAge >= 0.0 && wallAge > StaleCycleSeconds)
+            {
+                Log(""stale"", cycle.Scenario, _reloadEnd, wallAge);
+                ClearCycle();
+                cycle = default;
+            }
+
             if (cycle.T0 > 0.0 && cycle.CompileFinish > 0.0)
             {
                 Log(""reload_end"", cycle.Scenario, _reloadEnd, _reloadEnd - cycle.CompileFinish);
@@ -336,6 +344,7 @@ namespace T7
                 {
                     _doneLogged = true;
                     Log(""done"", ""-"", now, 0.0);
+                    ForgetState();
                     CompilationPipeline.compilationStarted -= OnCompilationStarted;
                     CompilationPipeline.compilationFinished -= OnCompilationFinished;
                     CompilationPipeline.assemblyCompilationFinished -=
@@ -449,7 +458,35 @@ namespace T7
         {
             File.WriteAllText(
                 CyclePath,
-                scenario + ""\t"" + t0.ToString(""F3"", Inv) + ""\n"");
+                scenario
+                    + ""\t"" + t0.ToString(""F3"", Inv)
+                    + ""\nwall\t"" + DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+                    + ""\n"");
+        }
+
+        private static double WallAgeSeconds()
+        {
+            if (!File.Exists(CyclePath))
+            {
+                return -1.0;
+            }
+
+            string[] lines = File.ReadAllLines(CyclePath);
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string[] parts = lines[i].Split('\t');
+                double epoch;
+                if (
+                    parts.Length == 2
+                    && parts[0] == ""wall""
+                    && double.TryParse(parts[1], NumberStyles.Float, Inv, out epoch)
+                )
+                {
+                    return (double)(DateTimeOffset.UtcNow.ToUnixTimeSeconds()) - epoch;
+                }
+            }
+
+            return -1.0;
         }
 
         private static void ClearCycle()
@@ -473,8 +510,9 @@ namespace T7
 
         private static void DeleteSelf()
         {
-            string probe = Path.GetFullPath(
-                Path.Combine(Application.dataPath, ""Editor"", ""T7IterProbe.cs""));
+            string editorDir = Path.GetFullPath(
+                Path.Combine(Application.dataPath, ""Editor""));
+            string probe = Path.Combine(editorDir, ""T7IterProbe.cs"");
             if (File.Exists(probe))
             {
                 File.Delete(probe);
@@ -483,6 +521,19 @@ namespace T7
             if (File.Exists(probe + "".meta""))
             {
                 File.Delete(probe + "".meta"");
+            }
+
+            if (
+                Directory.Exists(editorDir)
+                && Directory.GetFiles(editorDir).Length == 0
+                && Directory.GetDirectories(editorDir).Length == 0
+            )
+            {
+                Directory.Delete(editorDir, false);
+                if (File.Exists(editorDir + "".meta""))
+                {
+                    File.Delete(editorDir + "".meta"");
+                }
             }
         }
 
