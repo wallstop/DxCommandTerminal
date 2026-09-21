@@ -45,6 +45,10 @@ jobs:
     # and setup-node's npm cache cannot be keyed. The npm project lives under
     # `tooling~/` (Unity-hidden via the tilde suffix, so editors never import
     # node_modules); root package.json scripts delegate with `npm --prefix`.
+    #
+    # package.json pins exact dependency versions, so the runner-side npm
+    # cache (tarballs + packuments, keyed on package.json) keeps repeat
+    # installs off the registry without committing a lockfile.
     name: node-tests (${{ matrix.os }})
     strategy:
       fail-fast: false
@@ -59,6 +63,18 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
+
+      - name: Resolve npm cache directory
+        id: npm-cache
+        shell: bash
+        run: echo "dir=$(npm config get cache)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache npm packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.npm-cache.outputs.dir }}
+          key: ${{ runner.os }}-npm-${{ hashFiles('tooling~/package.json') }}
+          restore-keys: ${{ runner.os }}-npm-
 
       - name: Install dependencies
         run: npm --prefix tooling~ install --no-audit --no-fund
