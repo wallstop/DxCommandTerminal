@@ -288,7 +288,8 @@ public static class T7IterDriver
         }
     }
 
-    private const string FloorAsmdef = "{\n    \"name\": \"T7Floor\"\n}\n";
+    private const string FloorAsmdef =
+        "{\n    \"name\": \"T7Floor\",\n    \"autoReferenced\": false\n}\n";
 
     private const string FloorSource = "internal static class FloorProbe { }\n";
 
