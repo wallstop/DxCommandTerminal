@@ -100,6 +100,9 @@ jobs:
       - name: Lint explicit string comparisons
         run: node tooling~/scripts/lint-string-equality.mjs
 
+      - name: Lint out-parameter discipline
+        run: node tooling~/scripts/lint-out-param-discipline.mjs
+
       - name: Lint Unity-object null assertions
         run: node tooling~/scripts/lint-unity-null-patterns.mjs
 
