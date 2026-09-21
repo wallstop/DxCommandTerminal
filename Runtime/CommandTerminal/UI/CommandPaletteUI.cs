@@ -523,6 +523,8 @@
 
         private void OnEnable()
         {
+            EnsureBackendSession();
+
             /*
                 First enabled component owns the static instance so two
                 palettes in a scene cannot both react to CloseActive.
@@ -533,6 +535,35 @@
             }
 
             _livePalettes.Add(this);
+        }
+
+        /*
+            A palette owns no session configuration and never reconfigures a
+            session another component created: it only bootstraps the shared
+            session when nothing has, so logging and commands work without
+            any terminal visual tree. Registration stays deferred to first
+            use, matching the terminal's enable-frame cost. A later terminal
+            still applies its own configuration as the owner.
+         */
+        private void EnsureBackendSession()
+        {
+            if (TerminalSession.Current.Buffer != null)
+            {
+                return;
+            }
+
+            TerminalSession.Config config =
+                _settings != null
+                    ? new TerminalSession.Config(
+                        logBufferSize: _settings.logBufferSize,
+                        historyBufferSize: _settings.historyBufferSize,
+                        ignoredLogTypes: _settings.ignoredLogTypes,
+                        disabledCommands: _settings.disabledCommands,
+                        ignoreDefaultCommands: _settings.ignoreDefaultCommands,
+                        stackTraceMode: _settings.stackTraceMode
+                    )
+                    : TerminalSession.Config.Default;
+            TerminalSession.Current.Apply(config, force: false);
         }
 
         private void OnDisable()

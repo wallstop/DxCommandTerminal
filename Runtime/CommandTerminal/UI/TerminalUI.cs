@@ -112,14 +112,14 @@
 
         [Header("System")]
         [SerializeField]
-        internal int _logBufferSize = 256;
+        internal int _logBufferSize = TerminalSession.Config.DefaultLogBufferSize;
 
         /*
             Internal for test coverage of the shared settings asset (see
             WallstopStudios.DxCommandTerminal.Tests.Runtime).
          */
         [SerializeField]
-        internal int _historyBufferSize = 512;
+        internal int _historyBufferSize = TerminalSession.Config.DefaultHistoryBufferSize;
 
         /*
             Internal for test coverage of the shared settings asset (see

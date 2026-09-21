@@ -35,6 +35,7 @@
         private PanelSettings _panelSettings;
         private TerminalUI _sharedTerminal;
         private GameObject _extraPaletteObject;
+        private readonly List<ScriptableObject> _spawnedAssets = new();
 
         private static T LoadPack<T>(string relativePath)
             where T : ScriptableObject
@@ -200,6 +201,26 @@
             {
                 UnityEngine.Object.Destroy(_panelSettings);
             }
+
+            for (int index = _spawnedAssets.Count - 1; 0 <= index; --index)
+            {
+                if (_spawnedAssets[index] != null)
+                {
+                    UnityEngine.Object.Destroy(_spawnedAssets[index]);
+                }
+            }
+
+            _spawnedAssets.Clear();
+
+            /*
+                Re-seed the shared session so the post-fixture state is
+                deterministic even when a test replaced it with a bootstrap
+                or nulled the backends.
+             */
+            Terminal.Buffer = new CommandLog(64, null);
+            Terminal.History = new CommandHistory(64);
+            Terminal.Shell = new CommandShell(Terminal.History);
+            Terminal.AutoComplete = new CommandAutoComplete(Terminal.History, Terminal.Shell);
         }
 
         [Test]
@@ -1500,6 +1521,192 @@
                 "pickitem torch",
                 _palette._input.value,
                 "The activation applies the selected candidate to the active token"
+            );
+        }
+
+        /*
+            A palette enabled without any TerminalUI bootstraps the shared
+            session with the default configuration: logging and auto
+            commands work with no terminal visual tree anywhere.
+         */
+        [Test]
+        public void PaletteEnableBootstrapsSessionWhenNoComponentCreatedOne()
+        {
+            Terminal.Buffer = null;
+            Terminal.History = null;
+            Terminal.Shell = null;
+            Terminal.AutoComplete = null;
+
+            _panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
+            _paletteObject = new GameObject("PaletteBootstrap");
+            _paletteObject.SetActive(false);
+            CommandPaletteUI palette = _paletteObject.AddComponent<CommandPaletteUI>();
+            palette._uiDocument = _paletteObject.AddComponent<UIDocument>();
+            palette._uiDocument.panelSettings = _panelSettings;
+            _paletteObject.SetActive(true);
+
+            Assert.That(
+                Terminal.Buffer != null,
+                "Enabling a palette must create the shared session's backends"
+            );
+            Assert.AreEqual(
+                TerminalSession.Config.Default.LogBufferSize,
+                Terminal.Buffer.Capacity,
+                "The bootstrapped buffer uses the default capacity"
+            );
+            Assert.AreEqual(
+                TerminalSession.Config.Default.HistoryBufferSize,
+                Terminal.History.Capacity,
+                "The bootstrapped history uses the default capacity"
+            );
+            Assert.IsTrue(
+                Terminal.Log("palette-only"),
+                "Logging is available with no terminal UI in the scene"
+            );
+            Assert.IsTrue(
+                Terminal.Shell.RunCommand("help"),
+                "Auto commands register on first use on the bootstrapped shell"
+            );
+        }
+
+        /*
+            An assigned settings asset configures the bootstrapped session
+            the way it configures a terminal's wake.
+         */
+        [Test]
+        public void PaletteEnableAppliesAssignedSettingsToTheBootstrappedSession()
+        {
+            Terminal.Buffer = null;
+            Terminal.History = null;
+            Terminal.Shell = null;
+            Terminal.AutoComplete = null;
+
+            TerminalSettings settings = ScriptableObject.CreateInstance<TerminalSettings>();
+            settings.logBufferSize = 32;
+            settings.historyBufferSize = 24;
+            _spawnedAssets.Add(settings);
+
+            _panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
+            _paletteObject = new GameObject("PaletteBootstrapSettings");
+            _paletteObject.SetActive(false);
+            CommandPaletteUI palette = _paletteObject.AddComponent<CommandPaletteUI>();
+            palette._settings = settings;
+            palette._uiDocument = _paletteObject.AddComponent<UIDocument>();
+            palette._uiDocument.panelSettings = _panelSettings;
+            _paletteObject.SetActive(true);
+
+            Assert.AreEqual(
+                32,
+                Terminal.Buffer.Capacity,
+                "The bootstrapped buffer follows the settings asset"
+            );
+            Assert.AreEqual(
+                24,
+                Terminal.History.Capacity,
+                "The bootstrapped history follows the settings asset"
+            );
+        }
+
+        /*
+            A palette never reconfigures a session another component owns:
+            enabling one next to a live terminal leaves buffer capacities,
+            filter sets, and backend instances untouched.
+         */
+        [Test]
+        public void PaletteEnableNeverReconfiguresAnExistingSession()
+        {
+            Terminal.Buffer = new CommandLog(128, new[] { TerminalLogType.Warning });
+            Terminal.History = new CommandHistory(128);
+            Terminal.Shell = new CommandShell(Terminal.History);
+            Terminal.AutoComplete = new CommandAutoComplete(Terminal.History, Terminal.Shell);
+            CommandLog bufferBefore = Terminal.Buffer;
+            CommandShell shellBefore = Terminal.Shell;
+
+            TerminalSettings settings = ScriptableObject.CreateInstance<TerminalSettings>();
+            settings.logBufferSize = 32;
+            settings.disabledCommands = new List<string> { "help" };
+            _spawnedAssets.Add(settings);
+
+            _panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
+            _paletteObject = new GameObject("PaletteBootstrapNoTakeover");
+            _paletteObject.SetActive(false);
+            CommandPaletteUI palette = _paletteObject.AddComponent<CommandPaletteUI>();
+            palette._settings = settings;
+            palette._uiDocument = _paletteObject.AddComponent<UIDocument>();
+            palette._uiDocument.panelSettings = _panelSettings;
+            _paletteObject.SetActive(true);
+
+            Assert.AreSame(
+                bufferBefore,
+                Terminal.Buffer,
+                "Enabling a palette must not recreate the existing buffer"
+            );
+            Assert.AreSame(
+                shellBefore,
+                Terminal.Shell,
+                "Enabling a palette must not recreate the existing shell"
+            );
+            Assert.AreEqual(
+                128,
+                Terminal.Buffer.Capacity,
+                "The palette must not resize a session it does not own"
+            );
+            Assert.IsTrue(
+                Terminal.Buffer.ignoredLogTypes.Contains(TerminalLogType.Warning),
+                "The palette must not touch the configured log filters"
+            );
+            Assert.IsFalse(
+                Terminal.Shell.IgnoredCommands.Contains("help"),
+                "The palette must not touch the configured disabled commands"
+            );
+        }
+
+        /*
+             Two palettes with different settings assets: whichever enables
+             first bootstraps the session, and the second enable must not
+             reconfigure it.
+         */
+        [Test]
+        public void SecondPaletteEnableKeepsTheFirstBootstrap()
+        {
+            Terminal.Buffer = null;
+            Terminal.History = null;
+            Terminal.Shell = null;
+            Terminal.AutoComplete = null;
+
+            TerminalSettings firstSettings = ScriptableObject.CreateInstance<TerminalSettings>();
+            firstSettings.logBufferSize = 48;
+            _spawnedAssets.Add(firstSettings);
+            TerminalSettings secondSettings = ScriptableObject.CreateInstance<TerminalSettings>();
+            secondSettings.logBufferSize = 32;
+            _spawnedAssets.Add(secondSettings);
+
+            _panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
+
+            _paletteObject = new GameObject("PaletteFirst");
+            _paletteObject.SetActive(false);
+            CommandPaletteUI first = _paletteObject.AddComponent<CommandPaletteUI>();
+            first._settings = firstSettings;
+            first._uiDocument = _paletteObject.AddComponent<UIDocument>();
+            first._uiDocument.panelSettings = _panelSettings;
+            _paletteObject.SetActive(true);
+
+            _extraPaletteObject = new GameObject("PaletteSecond");
+            _extraPaletteObject.SetActive(false);
+            CommandPaletteUI second = _extraPaletteObject.AddComponent<CommandPaletteUI>();
+            second._settings = secondSettings;
+            second._uiDocument = _extraPaletteObject.AddComponent<UIDocument>();
+            second._uiDocument.panelSettings = _panelSettings;
+            _extraPaletteObject.SetActive(true);
+
+            Assert.AreEqual(
+                48,
+                Terminal.Buffer.Capacity,
+                "The first enabled palette owns the bootstrap configuration"
+            );
+            Assert.IsTrue(
+                Terminal.Buffer.ignoredLogTypes.Count == 0,
+                "The second palette's settings must not leak into the session"
             );
         }
 

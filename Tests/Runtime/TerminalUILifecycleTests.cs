@@ -10,6 +10,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     using Themes;
     using UI;
     using UnityEngine;
+    using UnityEngine.SceneManagement;
     using UnityEngine.TestTools;
     using UnityEngine.UIElements;
 #if UNITY_EDITOR
@@ -43,6 +44,47 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 #else
             return null;
 #endif
+        }
+
+        /*
+             Real scene changes through the runtime API: a fresh additive
+             scene becomes active and the previous one unloads, destroying
+             every component that lived in it. The test runner's own scene
+             stays loaded but inactive, and every scene created here is
+             unloaded again before the test ends.
+         */
+        private static Scene CreateActiveScene(List<Scene> createdScenes, string sceneName)
+        {
+            Scene scene = SceneManager.CreateScene(sceneName);
+            SceneManager.SetActiveScene(scene);
+            createdScenes.Add(scene);
+            return scene;
+        }
+
+        private static IEnumerator UnloadScene(Scene scene)
+        {
+            yield return SceneManager.UnloadSceneAsync(scene);
+        }
+
+        /*
+            Failure-safe cleanup: the runner's scene becomes active again
+            immediately and every scene this test created unloads
+            fire-and-forget (a finally may not yield).
+         */
+        private static void RestoreScenes(Scene originalScene, List<Scene> createdScenes)
+        {
+            if (originalScene.IsValid() && originalScene.isLoaded)
+            {
+                SceneManager.SetActiveScene(originalScene);
+            }
+
+            foreach (Scene scene in createdScenes)
+            {
+                if (scene.IsValid() && scene.isLoaded)
+                {
+                    SceneManager.UnloadSceneAsync(scene);
+                }
+            }
         }
 
         [TearDown]
@@ -331,6 +373,272 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 _terminal._commandInput,
                 "The pack swap must not rebuild the visual tree"
             );
+        }
+
+        /*
+            A scene change unloads the owning component entirely (not just a
+            disable): the shared session must survive with its buffer
+            contents, sizes, filters, and manual registrations, logging
+            must stay available while no terminal exists at all, and a
+            terminal in the next scene reuses the session without reset.
+         */
+        [UnityTest]
+        public IEnumerator SceneChangeWithoutResetPreservesSessionState()
+        {
+#if !UNITY_EDITOR
+            Assert.Ignore("Terminal UI lifecycle coverage runs in the editor Play Mode suite.");
+            yield break;
+#endif
+            Scene originalScene = SceneManager.GetActiveScene();
+            List<Scene> createdScenes = new();
+            try
+            {
+                Scene firstScene = CreateActiveScene(createdScenes, "DxCmdLifecycleKeepA");
+                yield return SpawnTerminalInActiveScene(
+                    "TerminalSceneKeep",
+                    resetState: false,
+                    logBufferSize: 128,
+                    historyBufferSize: 64,
+                    ignoredLogTypes: new[] { TerminalLogType.Warning },
+                    disabledCommands: new[] { "help" }
+                );
+
+                Assert.IsTrue(
+                    Terminal.Shell.RunCommand("log"),
+                    "Sanity: the default 'log' command runs"
+                );
+                Assert.IsTrue(
+                    Terminal.Shell.AddCommand(
+                        "scene-kept-cmd",
+                        _ => Terminal.Log("scene kept ran"),
+                        minArgs: 0,
+                        maxArgs: 0,
+                        help: "test"
+                    ),
+                    "Sanity: the manual command registers"
+                );
+
+                CommandLog buffer = Terminal.Buffer;
+                CommandHistory history = Terminal.History;
+                CommandShell shell = Terminal.Shell;
+                CommandAutoComplete autoComplete = Terminal.AutoComplete;
+
+                Scene secondScene = CreateActiveScene(createdScenes, "DxCmdLifecycleKeepB");
+                yield return UnloadScene(firstScene);
+
+                Assert.That(
+                    TerminalUI.Instance == null,
+                    "The unloaded terminal hands Instance to no live peer"
+                );
+                Assert.AreSame(buffer, Terminal.Buffer, "The buffer survives the scene change");
+                Assert.AreSame(history, Terminal.History, "The history survives the scene change");
+                Assert.AreSame(shell, Terminal.Shell, "The shell survives the scene change");
+                Assert.AreSame(
+                    autoComplete,
+                    Terminal.AutoComplete,
+                    "The auto-complete survives the scene change"
+                );
+                Assert.AreEqual(
+                    128,
+                    Terminal.Buffer.Capacity,
+                    "The buffer keeps its configured size with no terminal alive"
+                );
+                Assert.AreEqual(
+                    64,
+                    Terminal.History.Capacity,
+                    "The history keeps its configured size with no terminal alive"
+                );
+                Assert.IsTrue(
+                    Terminal.Buffer.ignoredLogTypes.Contains(TerminalLogType.Warning),
+                    "The ignored log types survive the scene change"
+                );
+                Assert.IsFalse(
+                    Terminal.Shell.RunCommand("help"),
+                    "The disabled-command filter survives the scene change"
+                );
+                Assert.IsTrue(
+                    Terminal.Shell.RunCommand("scene-kept-cmd"),
+                    "Manual registrations survive the scene change"
+                );
+                Assert.IsTrue(
+                    Terminal.Log("after-scene-change"),
+                    "Logging is available while no terminal visual tree exists"
+                );
+
+                yield return SpawnTerminalInActiveScene(
+                    "TerminalSceneRejoin",
+                    resetState: false,
+                    logBufferSize: 128,
+                    historyBufferSize: 64,
+                    ignoredLogTypes: new[] { TerminalLogType.Warning },
+                    disabledCommands: new[] { "help" }
+                );
+
+                Assert.AreSame(
+                    buffer,
+                    Terminal.Buffer,
+                    "A terminal in the next scene reuses the session's buffer"
+                );
+                Assert.AreSame(
+                    history,
+                    Terminal.History,
+                    "A terminal in the next scene reuses the session's history"
+                );
+                Assert.AreSame(
+                    shell,
+                    Terminal.Shell,
+                    "A terminal in the next scene reuses the session's shell"
+                );
+                Assert.AreSame(
+                    autoComplete,
+                    Terminal.AutoComplete,
+                    "A terminal in the next scene reuses the session's auto-complete"
+                );
+                Assert.AreEqual(
+                    128,
+                    Terminal.Buffer.Capacity,
+                    "Reusing the buffer must not resize it"
+                );
+                Assert.IsTrue(
+                    Terminal.Shell.RunCommand("scene-kept-cmd"),
+                    "Manual registrations survive into the next scene's terminal"
+                );
+                bool carried = false;
+                foreach (LogItem entry in Terminal.Buffer.Logs)
+                {
+                    if (
+                        string.Equals(entry.message, "after-scene-change", StringComparison.Ordinal)
+                    )
+                    {
+                        carried = true;
+                        break;
+                    }
+                }
+
+                Assert.IsTrue(carried, "Buffer contents survive the scene change");
+                Assert.AreSame(
+                    _terminal,
+                    TerminalUI.Instance,
+                    "The next scene's terminal owns Instance"
+                );
+            }
+            finally
+            {
+                RestoreScenes(originalScene, createdScenes);
+            }
+        }
+
+        /*
+            With resetStateOnInit, a scene change recreates the backends
+            through the reset semantics: the previous scene's buffer
+            contents and manual registrations are gone, the auto command
+            set re-registers identically, and repeated scene changes do not
+            drift.
+         */
+        [UnityTest]
+        public IEnumerator SceneChangeWithResetRecreatesBackendsIdempotently()
+        {
+#if !UNITY_EDITOR
+            Assert.Ignore("Terminal UI lifecycle coverage runs in the editor Play Mode suite.");
+            yield break;
+#endif
+            Scene originalScene = SceneManager.GetActiveScene();
+            List<Scene> createdScenes = new();
+            try
+            {
+                Scene firstScene = CreateActiveScene(createdScenes, "DxCmdLifecycleResetA");
+                yield return SpawnTerminalInActiveScene(
+                    "TerminalSceneResetA",
+                    resetState: true,
+                    logBufferSize: 128,
+                    historyBufferSize: 64,
+                    ignoredLogTypes: null,
+                    disabledCommands: null
+                );
+
+                Assert.IsTrue(Terminal.Shell.RunCommand("log"), "Sanity: 'log' runs");
+                CommandShell shellA = Terminal.Shell;
+                shellA.EnsureAutoCommandsRegistered();
+                int commandCount = shellA.Commands.Count;
+                Assert.AreNotEqual(0, commandCount, "Sanity: default commands register");
+                Assert.IsTrue(
+                    Terminal.Shell.AddCommand(
+                        "scene-reset-cmd",
+                        _ => Terminal.Log("scene reset ran"),
+                        minArgs: 0,
+                        maxArgs: 0,
+                        help: "test"
+                    ),
+                    "Sanity: the manual command registers"
+                );
+                CommandLog bufferA = Terminal.Buffer;
+
+                Scene secondScene = CreateActiveScene(createdScenes, "DxCmdLifecycleResetB");
+                yield return UnloadScene(firstScene);
+
+                yield return SpawnTerminalInActiveScene(
+                    "TerminalSceneResetB",
+                    resetState: true,
+                    logBufferSize: 128,
+                    historyBufferSize: 64,
+                    ignoredLogTypes: null,
+                    disabledCommands: null
+                );
+
+                CommandShell shellB = Terminal.Shell;
+                Assert.AreNotSame(shellA, shellB, "The reset recreates the shell");
+                Assert.AreNotSame(bufferA, Terminal.Buffer, "The reset recreates the buffer");
+                Assert.AreEqual(
+                    0,
+                    Terminal.Buffer.Logs.Count,
+                    "The reset wipes the previous scene's buffer contents"
+                );
+                Assert.AreEqual(
+                    128,
+                    Terminal.Buffer.Capacity,
+                    "The recreated buffer uses the new terminal's configuration"
+                );
+                Assert.IsFalse(
+                    Terminal.Shell.RunCommand("scene-reset-cmd"),
+                    "Manual registrations do not survive a reset scene change"
+                );
+                shellB.EnsureAutoCommandsRegistered();
+                Assert.AreEqual(
+                    commandCount,
+                    shellB.Commands.Count,
+                    "The recreated shell registers the same command set"
+                );
+                Assert.IsTrue(shellB.RunCommand("help"), "The recreated shell runs commands");
+
+                Scene thirdScene = CreateActiveScene(createdScenes, "DxCmdLifecycleResetC");
+                yield return UnloadScene(secondScene);
+
+                yield return SpawnTerminalInActiveScene(
+                    "TerminalSceneResetC",
+                    resetState: true,
+                    logBufferSize: 128,
+                    historyBufferSize: 64,
+                    ignoredLogTypes: null,
+                    disabledCommands: null
+                );
+
+                CommandShell shellC = Terminal.Shell;
+                Assert.AreNotSame(shellB, shellC, "A second reset scene change recreates again");
+                shellC.EnsureAutoCommandsRegistered();
+                Assert.AreEqual(
+                    commandCount,
+                    shellC.Commands.Count,
+                    "Repeated reset scene changes do not drift the command set"
+                );
+                Assert.IsTrue(
+                    shellC.RunCommand("help"),
+                    "Repeated reset scene changes stay functional"
+                );
+            }
+            finally
+            {
+                RestoreScenes(originalScene, createdScenes);
+            }
         }
 
         /*
@@ -1025,6 +1333,43 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
 
             yield return new WaitUntil(() => tracker.Started);
+        }
+
+        private IEnumerator SpawnTerminalInActiveScene(
+            string name,
+            bool resetState,
+            int logBufferSize,
+            int historyBufferSize,
+            IReadOnlyList<TerminalLogType> ignoredLogTypes,
+            IReadOnlyList<string> disabledCommands
+        )
+        {
+#if !UNITY_EDITOR
+            Assert.Ignore("Terminal UI lifecycle coverage runs in the editor Play Mode suite.");
+            yield break;
+#else
+            _panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
+            _terminalObject = new GameObject(name);
+            _terminalObject.SetActive(false);
+            UIDocument document = _terminalObject.AddComponent<UIDocument>();
+            document.panelSettings = _panelSettings;
+            _terminal = _terminalObject.AddComponent<TerminalUI>();
+            _terminal._uiDocument = document;
+            _terminal.resetStateOnInit = resetState;
+            _terminal.easeOutTime = 0f;
+            _terminal.easeInTime = 0f;
+            _terminal._logBufferSize = logBufferSize;
+            _terminal._historyBufferSize = historyBufferSize;
+            _terminal._ignoredLogTypes = new List<TerminalLogType>(
+                ignoredLogTypes ?? Array.Empty<TerminalLogType>()
+            );
+            _terminal._disabledCommands = new List<string>(
+                disabledCommands ?? Array.Empty<string>()
+            );
+            StartTracker tracker = _terminalObject.AddComponent<StartTracker>();
+            _terminalObject.SetActive(true);
+            yield return new WaitUntil(() => tracker.Started);
+#endif
         }
 
         private GameObject SpawnPeerTerminal(string name, int logBufferSize = 256)
