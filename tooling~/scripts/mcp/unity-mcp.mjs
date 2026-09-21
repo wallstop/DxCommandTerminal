@@ -1474,8 +1474,11 @@ export async function runBridge(options) {
 export const CAPTURE_PACKAGE_NAME = "com.wallstop-studios.dxcommandterminal";
 const CAPTURE_SOURCE_NAME = "DxTerminalStateCapture.cs.txt";
 const CAPTURE_TARGET_NAME = "DxTerminalStateCapture.cs";
-const CAPTURE_TYPE_PROBE =
-  'return (System.Type.GetType("DxTerminalStateCapture, Assembly-CSharp-Editor") != null);';
+// The eval compiler does not reference Assembly-CSharp-Editor, so the capture
+// type is unreachable by name; only assembly-qualified reflection resolves it
+// (issue #127). The simple name does not resolve: the namespace is required.
+const CAPTURE_TYPE_NAME = "DxTerminalDevTools.DxTerminalStateCapture, Assembly-CSharp-Editor";
+const CAPTURE_TYPE_PROBE = `return (System.Type.GetType("${CAPTURE_TYPE_NAME}") != null);`;
 const CAPTURE_REFRESH_EXPRESSION = "UnityEditor.AssetDatabase.Refresh();";
 
 export function captureScriptSourcePath(repoRoot = REPO_ROOT) {
@@ -1500,6 +1503,45 @@ export function captureOutputDir(projectPath, utcStamp) {
 
 function captureStamp(date = new Date()) {
   return date.toISOString().replace(/[:.]/g, "-");
+}
+
+/**
+ * Statement-form eval expression that invokes a public static
+ * DxTerminalStateCapture method through assembly-qualified reflection. The
+ * eval compiler cannot name the host's Assembly-CSharp-Editor types directly.
+ */
+export function captureInvocationExpression(methodName, outputDirectory) {
+  const directory = outputDirectory.replace(/\\/g, "/");
+  return [
+    `var captureType = System.Type.GetType("${CAPTURE_TYPE_NAME}");`,
+    "if (captureType == null) return null;",
+    `var captureMethod = captureType.GetMethod("${methodName}", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);`,
+    "if (captureMethod == null) return null;",
+    `return (string)captureMethod.Invoke(null, new object[] { @"${directory}" });`
+  ].join("\n");
+}
+
+/**
+ * Decode an eval tool answer. The current backend wraps results in a JSON
+ * envelope ({output, diagnostics, success, result}); matching the raw text
+ * false-positives on `"success": true`. Returns the decoded result when the
+ * envelope carries one, else the untouched text.
+ */
+export function evalResultText(text) {
+  try {
+    const parsed = JSON.parse(text);
+    if (
+      parsed !== null &&
+      typeof parsed === "object" &&
+      !Array.isArray(parsed) &&
+      Object.hasOwn(parsed, "result")
+    ) {
+      const result = parsed.result;
+      if (result === null || result === undefined) return "";
+      return typeof result === "string" ? result : JSON.stringify(result);
+    }
+  } catch {}
+  return text;
 }
 
 /**
@@ -1636,7 +1678,7 @@ export async function runCapture(options, runtime = {}) {
 
     const typePresent = async () => {
       const { call } = await evalCall(CAPTURE_TYPE_PROBE);
-      return /true/i.test(extractText(call));
+      return /^true$/i.test(evalResultText(extractText(call)).trim());
     };
     if (!(await typePresent())) {
       if (!installed && projectPath && fs.existsSync(projectPath)) {
@@ -1663,6 +1705,7 @@ export async function runCapture(options, runtime = {}) {
         { name: "menu", arguments: { menuPath: "Assets/Refresh" } },
         { name: "menu", arguments: { path: "Assets/Refresh" } },
         { name: "Unity_ManageMenuItem", arguments: { MenuPath: "Assets/Refresh" } },
+        { name: "eval", arguments: { code: CAPTURE_REFRESH_EXPRESSION } },
         { name: "eval", arguments: { expression: CAPTURE_REFRESH_EXPRESSION } }
       ],
       signal
@@ -1673,9 +1716,12 @@ export async function runCapture(options, runtime = {}) {
     const outputDirectory =
       options.out ?? captureOutputDir(projectPath ?? ".", captureStamp());
     const summary = await evalCall(
-      `DxTerminalStateCapture.CaptureAll(@"${outputDirectory.replace(/\\/g, "/")}");`
+      captureInvocationExpression("CaptureAll", outputDirectory)
     );
-    const manifest = parseCaptureSummary(extractText(summary.call), outputDirectory);
+    const manifest = parseCaptureSummary(
+      evalResultText(extractText(summary.call)),
+      outputDirectory
+    );
 
     // Game-view pixels are written a few frames later; poll the manifest to completion.
     const complete = await pollCaptureCompletion(
@@ -1701,10 +1747,13 @@ function parseCaptureSummary(text, fallbackDirectory) {
 }
 
 async function pollCaptureCompletion(client, evalCall, outputDirectory, deadline) {
-  const expression = `DxTerminalStateCapture.CaptureStatus(@"${outputDirectory.replace(/\\/g, "/")}");`
+  const expression = captureInvocationExpression("CaptureStatus", outputDirectory);
   while (Date.now() < deadline) {
     const { call } = await evalCall(expression);
-    const status = parseCaptureSummary(extractText(call), outputDirectory);
+    const status = parseCaptureSummary(
+      evalResultText(extractText(call)),
+      outputDirectory
+    );
     if (status.complete) return status;
     if (status.gameViewError) fail(`Game view capture failed: ${status.gameViewError}`);
     await new Promise((resolve) => setTimeout(resolve, 500));
@@ -1717,7 +1766,7 @@ async function waitForEditorIdle(client, evalCall, deadline) {
     "return (UnityEditor.EditorApplication.isCompiling || UnityEditor.EditorApplication.isUpdating);";
   while (Date.now() < deadline) {
     const { call } = await evalCall(expression);
-    if (/false/i.test(extractText(call))) return;
+    if (/false/i.test(evalResultText(extractText(call)))) return;
     await new Promise((resolve) => setTimeout(resolve, 1_000));
   }
   fail("The editor did not reach an idle (non-compiling) state before the deadline.");

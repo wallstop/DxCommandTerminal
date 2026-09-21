@@ -6,6 +6,8 @@ import {
   captureInstallTarget,
   captureArtifactRoot,
   captureOutputDir,
+  captureInvocationExpression,
+  evalResultText,
   CAPTURE_PACKAGE_NAME
 } from "../unity-mcp.mjs";
 import fs from "node:fs";
@@ -78,5 +80,39 @@ test("capture artifacts prefer the package tree and fall back to Library", () =>
     );
   } finally {
     fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test("capture invocation resolves the editor type through qualified reflection", () => {
+  const expression = captureInvocationExpression("CaptureAll", "C:\\host\\out dir");
+  // Eval compiles statements: every line must end in ; and the type must be
+  // resolved via assembly-qualified reflection, never by direct name (the
+  // eval compiler does not reference Assembly-CSharp-Editor, issue #127).
+  assert.match(expression, /System\.Type\.GetType\("DxTerminalDevTools\.DxTerminalStateCapture, Assembly-CSharp-Editor"\)/);
+  assert.match(expression, /GetMethod\("CaptureAll"/);
+  assert.match(expression, /BindingFlags\.Public \| System\.Reflection\.BindingFlags\.Static/);
+  assert.match(expression, /@"C:\/host\/out dir"/);
+  for (const line of expression.split("\n")) {
+    assert.match(line, /;$/, `statement must end in ';': ${line}`);
+  }
+  assert.match(expression, /captureType == null/);
+  assert.match(expression, /captureMethod == null/);
+});
+
+test("eval result decoding never mistakes the envelope for the answer", () => {
+  const cases = [
+    // [envelope/text, expected decoded text]
+    ['{"output":null,"diagnostics":[],"success":true,"result":"{\\"complete\\":true}"}', '{"complete":true}'],
+    ['{"success":true,"result":true}', "true"],
+    // A false result must never match /true/ via the envelope's success flag.
+    ['{"success":true,"result":false}', "false"],
+    ['{"success":true,"result":null}', ""],
+    // Envelopes without a result field (run_tests answers) stay untouched.
+    ['{"Summary":{"total":5,"passed":5}}', '{"Summary":{"total":5,"passed":5}}'],
+    // Raw-text backends stay untouched.
+    ["Assets/Refresh executed", "Assets/Refresh executed"]
+  ];
+  for (const [text, expected] of cases) {
+    assert.equal(evalResultText(text), expected, `input: ${text}`);
   }
 });
