@@ -108,7 +108,8 @@ const OPTION_NAMES = new Set([
   "token",
   "no-discover",
   "offline",
-  "out"
+  "out",
+  "scenarios"
 ]);
 const FLAG_NAMES = new Set(["no-discover", "offline", "no-install"]);
 const ENV_KEYS = Object.freeze({
@@ -1474,8 +1475,8 @@ export const CAPTURE_PACKAGE_NAME = "com.wallstop-studios.dxcommandterminal";
 const CAPTURE_SOURCE_NAME = "DxTerminalStateCapture.cs.txt";
 const CAPTURE_TARGET_NAME = "DxTerminalStateCapture.cs";
 const CAPTURE_TYPE_PROBE =
-  '(System.Type.GetType("DxTerminalStateCapture, Assembly-CSharp-Editor") != null)';
-const CAPTURE_REFRESH_EXPRESSION = "UnityEditor.AssetDatabase.Refresh()";
+  'return (System.Type.GetType("DxTerminalStateCapture, Assembly-CSharp-Editor") != null);';
+const CAPTURE_REFRESH_EXPRESSION = "UnityEditor.AssetDatabase.Refresh();";
 
 export function captureScriptSourcePath(repoRoot = REPO_ROOT) {
   return path.join(repoRoot, "tooling~", "scripts", "mcp", CAPTURE_SOURCE_NAME);
@@ -1616,8 +1617,8 @@ export async function runCapture(options, runtime = {}) {
       callFirstWorking(
         client,
         [
-          { name: "eval", arguments: { expression } },
           { name: "eval", arguments: { code: expression } },
+          { name: "eval", arguments: { expression } },
           { name: "Unity_RunCommand", arguments: { Command: expression } },
           { name: "Unity_RunCommand", arguments: { command: expression } }
         ],
@@ -1672,7 +1673,7 @@ export async function runCapture(options, runtime = {}) {
     const outputDirectory =
       options.out ?? captureOutputDir(projectPath ?? ".", captureStamp());
     const summary = await evalCall(
-      `DxTerminalStateCapture.CaptureAll(@"${outputDirectory.replace(/\\/g, "/")}")`
+      `DxTerminalStateCapture.CaptureAll(@"${outputDirectory.replace(/\\/g, "/")}");`
     );
     const manifest = parseCaptureSummary(extractText(summary.call), outputDirectory);
 
@@ -1700,7 +1701,7 @@ function parseCaptureSummary(text, fallbackDirectory) {
 }
 
 async function pollCaptureCompletion(client, evalCall, outputDirectory, deadline) {
-  const expression = `DxTerminalStateCapture.CaptureStatus(@"${outputDirectory.replace(/\\/g, "/")}")`;
+  const expression = `DxTerminalStateCapture.CaptureStatus(@"${outputDirectory.replace(/\\/g, "/")}");`
   while (Date.now() < deadline) {
     const { call } = await evalCall(expression);
     const status = parseCaptureSummary(extractText(call), outputDirectory);
@@ -1713,7 +1714,7 @@ async function pollCaptureCompletion(client, evalCall, outputDirectory, deadline
 
 async function waitForEditorIdle(client, evalCall, deadline) {
   const expression =
-    "(UnityEditor.EditorApplication.isCompiling || UnityEditor.EditorApplication.isUpdating)";
+    "return (UnityEditor.EditorApplication.isCompiling || UnityEditor.EditorApplication.isUpdating);";
   while (Date.now() < deadline) {
     const { call } = await evalCall(expression);
     if (/false/i.test(extractText(call))) return;
@@ -1722,15 +1723,222 @@ async function waitForEditorIdle(client, evalCall, deadline) {
   fail("The editor did not reach an idle (non-compiling) state before the deadline.");
 }
 
+// ---------------------------------------------------------------------------
+// T04 fixture capture: run the capture tests over the bridge and validate the
+// manifests they write under .artifacts/t4/.
+// ---------------------------------------------------------------------------
+
+export const T4_DEFAULT_SCENARIOS = Object.freeze([
+  "CapturesTerminalSmallSurface",
+  "CapturesTerminalFullSurfaceWithErrors",
+  "CapturesCompletionHintsSurface",
+  "CapturesCommandPaletteSurface"
+]);
+// The negative control proves the bounds can fail, so its manifest must
+// record an incomplete capture.
+export const T4_EXPECTED_INCOMPLETE = Object.freeze(["BlankRenderFailsBounds"]);
+export const T4_TEST_FILTER = "TerminalSurfaceCapture";
+
+export function parseT4Scenarios(raw) {
+  if (raw === undefined || raw === null) return [...T4_DEFAULT_SCENARIOS];
+  // Idempotent: callers may pass the comma-separated CLI string or an
+  // already-parsed array (main parses once; runT4Capture re-validates).
+  const names = (Array.isArray(raw) ? raw : String(raw).split(","))
+    .map((name) => String(name).trim())
+    .filter((name) => name.length > 0);
+  if (names.length === 0) fail("--scenarios lists at least one scenario name");
+  const invalid = names.filter((name) => !/^[A-Za-z][A-Za-z0-9]*$/.test(name));
+  if (invalid.length > 0) fail(`Invalid scenario name(s): ${invalid.join(", ")}`);
+  return names;
+}
+
+/** Schema + completeness check for one capture manifest object. */
+export function validateT4Manifest(manifest, expectComplete) {
+  const problems = [];
+  if (manifest === null || typeof manifest !== "object" || Array.isArray(manifest)) {
+    return ["manifest is not a JSON object"];
+  }
+  for (const field of ["scenario", "capturedUtc", "unityVersion", "graphicsApi", "png"]) {
+    if (typeof manifest[field] !== "string" || manifest[field].length === 0) {
+      problems.push(`missing ${field}`);
+    }
+  }
+  const resolution = manifest.resolution;
+  if (
+    resolution === null ||
+    typeof resolution !== "object" ||
+    !Number.isInteger(resolution.width) ||
+    !Number.isInteger(resolution.height) ||
+    resolution.width < 1 ||
+    resolution.height < 1
+  ) {
+    problems.push("resolution must record positive integer width/height");
+  }
+  const metrics = manifest.metrics;
+  if (
+    metrics === null ||
+    typeof metrics !== "object" ||
+    !Number.isInteger(metrics.distinctColors) ||
+    typeof metrics.backgroundFraction !== "number" ||
+    !Number.isInteger(metrics.pngBytes) ||
+    metrics.pngBytes < 1
+  ) {
+    problems.push("metrics must record distinctColors, backgroundFraction, and pngBytes");
+  }
+  if (!Array.isArray(manifest.violations)) problems.push("violations must be an array");
+  if (manifest.complete === true && manifest.violations?.length > 0) {
+    problems.push("complete manifest must have no violations");
+  }
+  if (expectComplete && manifest.complete !== true) {
+    problems.push(`capture incomplete: ${(manifest.violations ?? []).join("; ") || "unknown"}`);
+  }
+  if (!expectComplete && manifest.complete === true) {
+    problems.push("expected an incomplete manifest (negative control must fail bounds)");
+  }
+  return problems;
+}
+
+/** Manifest files written at or after sinceEpochMs, oldest first. */
+export function collectT4ManifestPaths(artifactRoot, sinceEpochMs) {
+  const root = path.resolve(artifactRoot);
+  if (!fs.existsSync(root)) return [];
+  const manifests = [];
+  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const directory = path.join(root, entry.name);
+    for (const file of fs.readdirSync(directory)) {
+      if (!file.endsWith(".manifest.json")) continue;
+      const filePath = path.join(directory, file);
+      const stats = fs.statSync(filePath);
+      if (stats.mtimeMs >= sinceEpochMs) manifests.push({ filePath, mtimeMs: stats.mtimeMs });
+    }
+  }
+  manifests.sort((a, b) => a.mtimeMs - b.mtimeMs);
+  return manifests.map((entry) => entry.filePath);
+}
+
+/**
+ * T04 fixture capture through the bridge: wait for an idle editor, run the
+ * capture PlayMode tests, then validate every manifest they wrote. Fails the
+ * command when a capture is missing, incomplete, or schema-invalid, so
+ * blank or broken renders can never pass silently.
+ */
+export async function runT4Capture(options, runtime = {}) {
+  const fetchImpl = runtime.fetchImpl ?? fetch;
+  const captureTimeout = Math.max(options.timeout, 240_000);
+  const startedAt = Date.now();
+  const deadline = startedAt + captureTimeout;
+  const scenarios = parseT4Scenarios(runtime.scenarios);
+  const { found } = await discoverEndpoint(options, { ...runtime, readiness: "tools" });
+  if (!found) fail("No Unity MCP endpoint with tools found; run npm run unity:mcp:probe for detail.");
+  console.log(`T04 capture via ${found.url} (scenarios: ${scenarios.join(", ")})`);
+
+  return withMcpSession(options, found, async (client) => {
+    const signal = AbortSignal.timeout(captureTimeout);
+    const evalCall = (expression) =>
+      callFirstWorking(
+        client,
+        [
+          { name: "eval", arguments: { code: expression } },
+          { name: "eval", arguments: { expression } }
+        ],
+        signal
+      );
+
+    await waitForEditorIdle(client, evalCall, deadline);
+
+    const runTests = await callFirstWorking(
+      client,
+      [
+        {
+          name: "run_tests",
+          arguments: {
+            mode: "playmode",
+            filter: T4_TEST_FILTER,
+            async_tests: true
+          }
+        },
+        {
+          name: "run_tests",
+          arguments: { mode: "playmode", filter: T4_TEST_FILTER }
+        }
+      ],
+      signal
+    );
+    log(options, "debug", `run_tests via ${runTests.candidate.name}`);
+
+    let status = parseCaptureSummary(extractText(runTests.call), "");
+    while (!(status.Summary ?? status.summary ?? {}).total && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 2_000));
+      const poll = await callFirstWorking(
+        client,
+        [{ name: "test_status", arguments: {} }],
+        signal
+      );
+      status = parseCaptureSummary(extractText(poll.call), "");
+    }
+
+    const summary = status.Summary ?? status.summary;
+    if (!summary) fail("The test run produced no summary; inspect the editor.");
+    console.log(
+      `Tests: ${summary.total} total, ${summary.passed} passed, ${summary.failed} failed, ` +
+        `${summary.skipped} skipped.`
+    );
+
+    const artifactRoot = path.join(options.repoRoot, ".artifacts", "t4");
+    const manifestPaths = collectT4ManifestPaths(artifactRoot, startedAt - 5_000);
+    const problems = [];
+    const validated = new Set();
+    for (const manifestPath of manifestPaths) {
+      let manifest;
+      try {
+        manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+      } catch (error) {
+        problems.push(`${manifestPath}: unreadable (${error.message})`);
+        continue;
+      }
+
+      const scenario = manifest.scenario;
+      // The negative control is expected incomplete regardless of what the
+      // manifest claims; a complete:true blank capture is itself a failure
+      // (it would mean the harness approved a blank render).
+      const expectComplete = !T4_EXPECTED_INCOMPLETE.includes(scenario);
+      const scenarioProblems = validateT4Manifest(manifest, expectComplete);
+      if (scenarioProblems.length > 0) {
+        problems.push(`${manifestPath}: ${scenarioProblems.join("; ")}`);
+        continue;
+      }
+      validated.add(scenario);
+      console.log(`  ok ${scenario} (${manifest.resolution.width}x${manifest.resolution.height})`);
+    }
+
+    for (const scenario of scenarios) {
+      if (!validated.has(scenario)) {
+        problems.push(`no valid manifest captured for ${scenario}`);
+      }
+    }
+
+    if (summary.failed > 0) {
+      problems.push(`${summary.failed} capture test(s) failed in the editor`);
+    }
+    if (problems.length > 0) {
+      fail(`T04 capture rejected:\n  - ${problems.join("\n  - ")}`);
+    }
+    console.log(`T04 capture approved: ${validated.size} manifest(s) validated.`);
+    return { validated: [...validated], summary };
+  }, fetchImpl);
+}
+
 function usage() {
   return [
-    "Usage: node tooling~/scripts/mcp/unity-mcp.mjs <probe|configure|bridge|install-capture|capture> [options]",
+    "Usage: node tooling~/scripts/mcp/unity-mcp.mjs <probe|configure|bridge|install-capture|capture|t4-capture> [options]",
     "",
     "  probe           Discover Unity tools and check editor readiness.",
     "  configure       Configure agent MCP servers, discovering Unity unless --offline is set.",
     "  bridge          Serve Unity CLI or the legacy relay over authenticated HTTP on the host.",
     "  install-capture Install DxTerminalStateCapture.cs into the host project (host side).",
     "  capture         Capture editor/game state into .artifacts through the bridge.",
+    "  t4-capture      Run the T04 fixture-capture tests and validate their manifests.",
     "",
     "Options:",
     "  --host HOST                 Endpoint host; the only host discovery probes",
@@ -1741,6 +1949,7 @@ function usage() {
     "  --bind HOST                 Bridge bind interface (default: 0.0.0.0)",
     "  --project PATH              Unity project directory (bridge, install-capture, capture)",
     "  --out DIR                   Capture output directory (capture only)",
+    "  --scenarios LIST            Comma-separated scenario names (t4-capture only)",
     "  --no-install                Skip local capture-script installation (capture only)",
     "  --backend cli|relay         Host backend (default: cli; relay supports Assistant)",
     "  --cli PATH                  Unity CLI executable (default: unity on host PATH)",
@@ -1762,7 +1971,8 @@ export async function main(argv = process.argv.slice(2)) {
     configure: runConfigure,
     bridge: runBridge,
     "install-capture": runInstallCapture,
-    capture: runCapture
+    capture: runCapture,
+    "t4-capture": runT4Capture
   };
   const [command, ...rest] = argv;
   if (!command || command === "--help" || command === "-h") {
@@ -1782,6 +1992,10 @@ export async function main(argv = process.argv.slice(2)) {
   }
   const options = resolveOptions(args);
   if (options.offline && command !== "configure") fail("--offline is only valid for configure");
+  if (command === "t4-capture") {
+    await commands[command](options, { scenarios: parseT4Scenarios(args.scenarios) });
+    return;
+  }
   await commands[command](options);
 }
 
