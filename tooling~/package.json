@@ -30,6 +30,7 @@
     "unity:mcp:bridge": "node scripts/mcp/unity-mcp.mjs bridge",
     "unity:mcp:install-capture": "node scripts/mcp/unity-mcp.mjs install-capture",
     "unity:capture": "node scripts/mcp/unity-mcp.mjs capture",
+    "t4:capture": "node scripts/mcp/unity-mcp.mjs t4-capture",
     "ai:backends": "bash ../.devcontainer/ai-backends.sh"
   },
   "devDependencies": {

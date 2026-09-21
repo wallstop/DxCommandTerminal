@@ -68,6 +68,7 @@
     "unity:mcp:bridge": "npm --prefix tooling~ run unity:mcp:bridge --",
     "unity:mcp:install-capture": "npm --prefix tooling~ run unity:mcp:install-capture --",
     "unity:capture": "npm --prefix tooling~ run unity:capture --",
+    "t4:capture": "npm --prefix tooling~ run t4:capture --",
     "ai:backends": "npm --prefix tooling~ run ai:backends --"
   }
 }

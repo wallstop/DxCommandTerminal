@@ -62,3 +62,36 @@ manifest to complete. Artifacts land inside this package's `.artifacts/unity-sta
   comparing artifacts from different stamps.
 - Manual trigger without npm: menu `Tools > Dx Terminal State > Capture Now` in
   the editor; `DxTerminalStateCapture.CaptureStatus()` returns the latest manifest.
+
+## Fixture capture (T04, `npm run t4:capture`)
+
+Pixel fixtures of the real package surfaces (terminal small/full, completion
+hints, command palette) are PlayMode tests under `Tests/Runtime/Capture/`, run
+through the bridge:
+
+```
+npm run t4:capture                      # runs the suite + validates manifests
+npm run t4:capture -- --scenarios CapturesTerminalSmallSurface
+```
+
+The command runs the `TerminalSurfaceCapture` tests, then validates every
+`.manifest.json` written under `.artifacts/t4/` since the run started: schema,
+positive dimensions, non-empty PNG, bounds-clean pixels for the four surface
+scenarios, and a deliberately failing (blank) negative control. It exits
+non-zero on any missing, incomplete, or schema-invalid manifest - blank or
+broken renders can never pass silently. Each capture writes `<scenario>.png` +
+`<scenario>.manifest.json` (resolution, logical scale, color space, Unity
+version, graphics API, theme/font, git revision, pixel metrics, bounds,
+violations, tree diagnostics).
+
+Rules the harness enforces on itself:
+
+- Read-only for the surfaces: it redirects `PanelSettings.targetTexture`,
+  forces one synchronous panel render per capture, and restores render state.
+- Deterministic: the terminal caret is frozen via
+  `TerminalUI.SetCursorBlinkPaused(true)`; ease times are zeroed; the palette's
+  native caret blink is the one accepted variance until T11's golden baselines.
+- Leak-checked: RenderTexture counts are asserted back to baseline in teardown.
+
+Baseline updates (replacing golden images) stay out of this command; they land
+with T11's comparator as an explicit, reviewed step.
