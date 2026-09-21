@@ -91,7 +91,26 @@ Rules the harness enforces on itself:
 - Deterministic: the terminal caret is frozen via
   `TerminalUI.SetCursorBlinkPaused(true)`; ease times are zeroed; the palette's
   native caret blink is the one accepted variance until T11's golden baselines.
-- Leak-checked: RenderTexture counts are asserted back to baseline in teardown.
+- Leak-checked: RenderTexture counts are asserted back to baseline in teardown
+  (guarded when setup skipped, so -nographics ignores cannot fail teardown).
+
+Panel-scale constraints learned the hard way (PR #126 science runs) - any new
+capture scenario must respect them:
+
+- A runtime `CreateInstance<PanelSettings>()` has no theme style sheet and
+  renders nothing (layout still works - silently wrong pixels). Assign the
+  package's `Styles/TerminalThemeSettings-Base.tss`.
+- The panel freezes its scale at creation and the game view's zoom x Retina
+  backing decides how many capture pixels one panel point is (2.656x on the
+  pinned host). Screen-pixel designs wider/taller than the panel's point
+  extent are stretched-and-clipped in the offscreen render; the terminal in
+  the small state (161.5 points tall) fits, the full state does not.
+  Post-creation `referenceResolution` changes are ignored; only a respawn or a
+  lowered game-view zoom floor (`ZoomableArea` hScaleMin/vScaleMin, min is the
+  backing scale on Retina) changes the ratio.
+- The game view must be open for the zoom pin to find it; harness reflection
+  on Unity's GameView/ZoomableArea fails explicitly when Unity's internal
+  shape changes.
 
 Baseline updates (replacing golden images) stay out of this command; they land
 with T11's comparator as an explicit, reviewed step.

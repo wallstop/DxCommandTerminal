@@ -59,7 +59,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private CommandPaletteUI _palette;
         private StartTracker _tracker;
         private string _runDirectory;
-        private int _renderTexturesBefore;
+        private int? _renderTexturesBefore;
         private CaptureOutcome _lastOutcome;
 
         private static string FormatBound(VisualElement element)
@@ -148,11 +148,18 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             yield return null;
 
-            Assert.AreEqual(
-                _renderTexturesBefore,
-                TerminalSurfaceCapture.CountRenderTextures(),
-                "Capture left RenderTexture leaks behind"
-            );
+            /*
+                The baseline only exists when SetUp ran past its skip check;
+                an ignored (-nographics) run must not fail teardown.
+             */
+            if (_renderTexturesBefore.HasValue)
+            {
+                Assert.AreEqual(
+                    _renderTexturesBefore.Value,
+                    TerminalSurfaceCapture.CountRenderTextures(),
+                    "Capture left RenderTexture leaks behind"
+                );
+            }
         }
 
         [UnityTest]

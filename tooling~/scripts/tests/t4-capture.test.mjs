@@ -46,10 +46,17 @@ describe("parseT4Scenarios", () => {
     assert.deepEqual(parseT4Scenarios(" A , b ,C"), ["A", "b", "C"]);
   });
 
+  it("is idempotent: accepts an already-parsed array", () => {
+    const once = parseT4Scenarios("A,B");
+    assert.deepEqual(parseT4Scenarios(once), ["A", "B"]);
+    assert.deepEqual(parseT4Scenarios([" A ", "b"]), ["A", "b"]);
+  });
+
   it("rejects empty lists and malformed names", () => {
     assert.throws(() => parseT4Scenarios("  "), /at least one scenario/);
     assert.throws(() => parseT4Scenarios("ok,9bad"), /Invalid scenario name/);
     assert.throws(() => parseT4Scenarios("has space"), /Invalid scenario name/);
+    assert.throws(() => parseT4Scenarios(["ok", "9bad"]), /Invalid scenario name/);
   });
 });
 
