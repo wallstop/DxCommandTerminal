@@ -1475,8 +1475,8 @@ export const CAPTURE_PACKAGE_NAME = "com.wallstop-studios.dxcommandterminal";
 const CAPTURE_SOURCE_NAME = "DxTerminalStateCapture.cs.txt";
 const CAPTURE_TARGET_NAME = "DxTerminalStateCapture.cs";
 const CAPTURE_TYPE_PROBE =
-  '(System.Type.GetType("DxTerminalStateCapture, Assembly-CSharp-Editor") != null)';
-const CAPTURE_REFRESH_EXPRESSION = "UnityEditor.AssetDatabase.Refresh()";
+  'return (System.Type.GetType("DxTerminalStateCapture, Assembly-CSharp-Editor") != null);';
+const CAPTURE_REFRESH_EXPRESSION = "UnityEditor.AssetDatabase.Refresh();";
 
 export function captureScriptSourcePath(repoRoot = REPO_ROOT) {
   return path.join(repoRoot, "tooling~", "scripts", "mcp", CAPTURE_SOURCE_NAME);
@@ -1617,8 +1617,8 @@ export async function runCapture(options, runtime = {}) {
       callFirstWorking(
         client,
         [
-          { name: "eval", arguments: { expression } },
           { name: "eval", arguments: { code: expression } },
+          { name: "eval", arguments: { expression } },
           { name: "Unity_RunCommand", arguments: { Command: expression } },
           { name: "Unity_RunCommand", arguments: { command: expression } }
         ],
@@ -1673,7 +1673,7 @@ export async function runCapture(options, runtime = {}) {
     const outputDirectory =
       options.out ?? captureOutputDir(projectPath ?? ".", captureStamp());
     const summary = await evalCall(
-      `DxTerminalStateCapture.CaptureAll(@"${outputDirectory.replace(/\\/g, "/")}")`
+      `DxTerminalStateCapture.CaptureAll(@"${outputDirectory.replace(/\\/g, "/")}");`
     );
     const manifest = parseCaptureSummary(extractText(summary.call), outputDirectory);
 
@@ -1701,7 +1701,7 @@ function parseCaptureSummary(text, fallbackDirectory) {
 }
 
 async function pollCaptureCompletion(client, evalCall, outputDirectory, deadline) {
-  const expression = `DxTerminalStateCapture.CaptureStatus(@"${outputDirectory.replace(/\\/g, "/")}")`;
+  const expression = `DxTerminalStateCapture.CaptureStatus(@"${outputDirectory.replace(/\\/g, "/")}");`
   while (Date.now() < deadline) {
     const { call } = await evalCall(expression);
     const status = parseCaptureSummary(extractText(call), outputDirectory);
@@ -1714,7 +1714,7 @@ async function pollCaptureCompletion(client, evalCall, outputDirectory, deadline
 
 async function waitForEditorIdle(client, evalCall, deadline) {
   const expression =
-    "(UnityEditor.EditorApplication.isCompiling || UnityEditor.EditorApplication.isUpdating)";
+    "return (UnityEditor.EditorApplication.isCompiling || UnityEditor.EditorApplication.isUpdating);";
   while (Date.now() < deadline) {
     const { call } = await evalCall(expression);
     if (/false/i.test(extractText(call))) return;
@@ -1839,8 +1839,8 @@ export async function runT4Capture(options, runtime = {}) {
       callFirstWorking(
         client,
         [
-          { name: "eval", arguments: { expression } },
-          { name: "eval", arguments: { code: expression } }
+          { name: "eval", arguments: { code: expression } },
+          { name: "eval", arguments: { expression } }
         ],
         signal
       );
