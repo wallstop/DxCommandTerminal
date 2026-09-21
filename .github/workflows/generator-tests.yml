@@ -43,13 +43,29 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # The test run + payload verification build the generator payload seven
+      # times; NuGet restore is the shared cold cost across them. Keyed on the
+      # projects, so a PackageReference change invalidates the cache.
+      - name: Cache NuGet packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('Generator~/**/*.csproj') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
       - name: Setup DotNet
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: 9.0.306
+        env:
+          DOTNET_NOLOGO: true
+          DOTNET_CLI_TELEMETRY_OPTOUT: true
 
       - name: Run generator tests
         run: dotnet test "Generator~/WallstopStudios.DxCommandTerminal.SourceGenerators.Tests/WallstopStudios.DxCommandTerminal.SourceGenerators.Tests.csproj" -c Release
+        env:
+          DOTNET_NOLOGO: true
+          DOTNET_CLI_TELEMETRY_OPTOUT: true
 
       # -TwoCheckout subsumes the plain payload check (the script always
       # byte-compares shipped payloads to a fresh rebuild before the
