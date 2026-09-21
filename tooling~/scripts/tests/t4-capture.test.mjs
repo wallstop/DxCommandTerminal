@@ -52,6 +52,11 @@ describe("parseT4Scenarios", () => {
     assert.deepEqual(parseT4Scenarios([" A ", "b"]), ["A", "b"]);
   });
 
+  it("treats null as the default and rejects non-string scalars cleanly", () => {
+    assert.deepEqual(parseT4Scenarios(null), [...T4_DEFAULT_SCENARIOS]);
+    assert.throws(() => parseT4Scenarios(42), /Invalid scenario name/);
+  });
+
   it("rejects empty lists and malformed names", () => {
     assert.throws(() => parseT4Scenarios("  "), /at least one scenario/);
     assert.throws(() => parseT4Scenarios("ok,9bad"), /Invalid scenario name/);

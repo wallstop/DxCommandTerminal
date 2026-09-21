@@ -1740,10 +1740,10 @@ export const T4_EXPECTED_INCOMPLETE = Object.freeze(["BlankRenderFailsBounds"]);
 export const T4_TEST_FILTER = "TerminalSurfaceCapture";
 
 export function parseT4Scenarios(raw) {
-  if (raw === undefined) return [...T4_DEFAULT_SCENARIOS];
+  if (raw === undefined || raw === null) return [...T4_DEFAULT_SCENARIOS];
   // Idempotent: callers may pass the comma-separated CLI string or an
   // already-parsed array (main parses once; runT4Capture re-validates).
-  const names = (Array.isArray(raw) ? raw : raw.split(","))
+  const names = (Array.isArray(raw) ? raw : String(raw).split(","))
     .map((name) => String(name).trim())
     .filter((name) => name.length > 0);
   if (names.length === 0) fail("--scenarios lists at least one scenario name");
