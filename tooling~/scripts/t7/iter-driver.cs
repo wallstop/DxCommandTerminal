@@ -2,24 +2,37 @@
     T07 edit->ready measurement harness (PLAN.md), driven via Unity MCP:
 
       run_script  file=Packages/com.wallstop-studios.dxcommandterminal/tooling~/scripts/t7/iter-driver.cs
-                  entry=T7IterDriver.Main      // install probe + run the queue
-                  entry=T7IterDriver.Cleanup   // remove probe + state, then recompile
+                  entry=T7IterDriver.Main  args=["AB0"]   // install probe + run the queue
+                  entry=T7IterDriver.Cleanup              // remove probe + state, then recompile
 
-    Main installs a temporary [InitializeOnLoad] probe into host Assets/Editor/
-    that survives domain reloads and self-drives a scenario queue (one no-op
-    content change per cycle): S1 unchanged refresh, S2 runtime edit, S3 editor
-    edit, S4 command-declaration edit. The probe self-expires 24h after install
-    (deletes itself and its state), so an interrupted session cannot keep
-    editing tracked sources on later editor opens.
+    Main(config) installs a temporary [InitializeOnLoad] probe into host
+    Assets/Editor/ that survives domain reloads and self-drives a scenario queue
+    (one no-op content change per cycle). Config selects the queue and the
+    pre-queue compile configuration:
 
-    Log rows (.artifacts/session-052/iter-log.tsv, TSV event/scenario/time/
-    delta[/extra]): cycle_start, compile_start, asm_done (extra=assembly name +
-    error count), compile_finish, reload_end, ready, cycle_end (extra carries
-    lead=/compile=/reload=/ready=/e2e= seconds), sample (S1 no-op refresh),
-    stale, expired, skip, done. The install scenario marks the forced first
-    compile. The install DELETES the log, so copy it out before re-running.
-    Scenario files are restored with `git checkout -- Editor/ Runtime/` in the
-    package repo after a run.
+      AB0    stock package (both RoslynAnalyzer DLLs labeled) - S2 x30 (gate run)
+      AB1    both analyzer DLLs unlabeled (no generator, no analyzers) - S2 x12
+      AB2    generator labeled, analyzers unlabeled - S2 x12
+      AB3    analyzers labeled, generator unlabeled - S2 x12
+      FLOOR  stock package + a trivial Assets/T7Floor assembly - S5 x24
+             (per-assembly compile floor + ready-growth control)
+
+    Scenarios: S2 runtime edit, S3 editor edit, S4 command-declaration edit,
+    S5 floor-assembly edit. The probe self-expires 24h after install (deletes
+    itself and its state), so an interrupted session cannot keep editing tracked
+    sources on later editor opens.
+
+    Log rows (.artifacts/session-053/iter-log.tsv, TSV event/scenario/time/
+    delta[/extra]): config (install-time analyzer-label readback, extra=gen=/ana=),
+    cycle_start, compile_start, asm_done (delta = compile_start -> asm_done, the true
+    per-assembly compile window; extra = assembly name + error count), compile_finish,
+    reload_end, ready, cycle_end (extra carries lead=/compile=/reload=/ready=/e2e=
+    seconds), sample (S1 no-op refresh), warm_compile (a compilation with no queue
+    scenario), stale, expired, restore_failed, skip, done. The install compile (after
+    config changes) is the config's warm-up cycle and carries no queue scenario. The
+    install DELETES the log, so copy it out before re-running. Scenario files are
+    restored with `git checkout -- Editor/ Runtime/` in the package repo after
+    a run; Cleanup restores stock analyzer labels and removes the floor assets.
  */
 using System;
 using System.Globalization;
@@ -31,15 +44,31 @@ using UnityEngine;
 
 public static class T7IterDriver
 {
-    public static string Main()
+    private const string PackageAsset = "Packages/com.wallstop-studios.dxcommandterminal";
+
+    private const string GeneratorDll =
+        PackageAsset + "/Runtime/Analyzers/WallstopStudios.DxCommandTerminal.SourceGenerators.dll";
+
+    private const string AnalyzerDll =
+        PackageAsset + "/Runtime/Analyzers/WallstopStudios.DxCommandTerminal.Analyzers.dll";
+
+    public static string Main(string config)
     {
+        int samples = SampleCount(config);
+        if (samples < 0)
+        {
+            return "Unknown T7 config: " + config + " (expected AB0/AB1/AB2/AB3/FLOOR)";
+        }
+
+        string scenario = config == "FLOOR" ? "S5" : "S2";
         string projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
-        string packageRoot = Path.Combine(
+        string artDir = Path.Combine(
             projectRoot,
             "Packages",
-            "com.wallstop-studios.dxcommandterminal"
+            "com.wallstop-studios.dxcommandterminal",
+            ".artifacts",
+            "session-053"
         );
-        string artDir = Path.Combine(packageRoot, ".artifacts", "session-052");
         Directory.CreateDirectory(artDir);
         string logPath = Path.Combine(artDir, "iter-log.tsv");
         if (File.Exists(logPath))
@@ -47,11 +76,23 @@ public static class T7IterDriver
             File.Delete(logPath);
         }
 
+        if (config == "FLOOR")
+        {
+            ProvisionFloor();
+        }
+        else
+        {
+            ApplyAnalyzerConfig(config);
+        }
+
+        File.WriteAllText(logPath, ConfigRow(config));
+
         StringBuilder queue = new StringBuilder();
-        Append(queue, "S1", 3);
-        Append(queue, "S2", 8);
-        Append(queue, "S3", 8);
-        Append(queue, "S4", 8);
+        for (int i = 0; i < samples; i++)
+        {
+            queue.Append(scenario).Append('\n');
+        }
+
         File.WriteAllText(Path.Combine(artDir, "iter-queue.tsv"), queue.ToString());
         File.WriteAllText(
             Path.Combine(artDir, "iter-install.tsv"),
@@ -66,11 +107,21 @@ public static class T7IterDriver
         double t0 = EditorApplication.timeSinceStartup;
         File.WriteAllText(
             Path.Combine(artDir, "iter-cycle.tsv"),
-            "install\t" + t0.ToString(CultureInfo.InvariantCulture) + "\n"
+            "install\t"
+                + t0.ToString(CultureInfo.InvariantCulture)
+                + "\nwall\t"
+                + DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+                + "\n"
         );
 
         CompilationPipeline.RequestScriptCompilation();
-        return "T7 probe installed, compilation requested at "
+        return "T7 probe installed, config="
+            + config
+            + " queue="
+            + scenario
+            + "x"
+            + samples
+            + ", compilation requested at "
             + t0.ToString(CultureInfo.InvariantCulture);
     }
 
@@ -104,12 +155,15 @@ public static class T7IterDriver
             }
         }
 
+        RemoveFloor();
+        ApplyAnalyzerConfig("AB0");
+
         string artDir = Path.Combine(
             projectRoot,
             "Packages",
             "com.wallstop-studios.dxcommandterminal",
             ".artifacts",
-            "session-052"
+            "session-053"
         );
         foreach (string name in new[] { "iter-queue.tsv", "iter-cycle.tsv", "iter-install.tsv" })
         {
@@ -125,13 +179,118 @@ public static class T7IterDriver
         return "T7 probe removed, cleanup compilation requested";
     }
 
-    private static void Append(StringBuilder sb, string scenario, int count)
+    private static int SampleCount(string config)
     {
-        for (int i = 0; i < count; i++)
+        if (config == "AB0")
         {
-            sb.Append(scenario).Append('\n');
+            return 30;
+        }
+
+        if (config == "AB1" || config == "AB2" || config == "AB3")
+        {
+            return 12;
+        }
+
+        if (config == "FLOOR")
+        {
+            return 24;
+        }
+
+        return -1;
+    }
+
+    private static string ConfigRow(string config)
+    {
+        return "config\t"
+            + config
+            + "\t0.000\t-1.000\tgen="
+            + HasAnalyzerLabel(GeneratorDll)
+            + " ana="
+            + HasAnalyzerLabel(AnalyzerDll)
+            + "\n";
+    }
+
+    private static bool HasAnalyzerLabel(string assetPath)
+    {
+        PluginImporter importer = AssetImporter.GetAtPath(assetPath) as PluginImporter;
+        return importer != null
+            && Array.IndexOf(AssetDatabase.GetLabels(importer), "RoslynAnalyzer") >= 0;
+    }
+
+    private static void ApplyAnalyzerConfig(string config)
+    {
+        bool generator = config == "AB0" || config == "AB2";
+        bool analyzers = config == "AB0" || config == "AB3";
+        SetAnalyzerLabel(GeneratorDll, generator);
+        SetAnalyzerLabel(AnalyzerDll, analyzers);
+    }
+
+    private static void SetAnalyzerLabel(string assetPath, bool labeled)
+    {
+        PluginImporter importer = AssetImporter.GetAtPath(assetPath) as PluginImporter;
+        if (importer == null)
+        {
+            return;
+        }
+
+        string[] current = AssetDatabase.GetLabels(importer);
+        bool has = Array.IndexOf(current, "RoslynAnalyzer") >= 0;
+        if (has == labeled)
+        {
+            return;
+        }
+
+        if (labeled)
+        {
+            string[] grown = new string[current.Length + 1];
+            Array.Copy(current, grown, current.Length);
+            grown[current.Length] = "RoslynAnalyzer";
+            AssetDatabase.SetLabels(importer, grown);
+        }
+        else
+        {
+            string[] trimmed = new string[current.Length - 1];
+            int at = 0;
+            for (int i = 0; i < current.Length; i++)
+            {
+                if (current[i] != "RoslynAnalyzer")
+                {
+                    trimmed[at] = current[i];
+                    at++;
+                }
+            }
+
+            AssetDatabase.SetLabels(importer, trimmed);
+        }
+
+        importer.SaveAndReimport();
+    }
+
+    private static void ProvisionFloor()
+    {
+        string dir = Path.Combine(Application.dataPath, "T7Floor");
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "T7Floor.asmdef"), FloorAsmdef);
+        File.WriteAllText(Path.Combine(dir, "T7Floor.cs"), FloorSource);
+    }
+
+    private static void RemoveFloor()
+    {
+        string dir = Path.Combine(Application.dataPath, "T7Floor");
+        if (Directory.Exists(dir))
+        {
+            Directory.Delete(dir, true);
+            string dirMeta = Path.Combine(Application.dataPath, "T7Floor.meta");
+            if (File.Exists(dirMeta))
+            {
+                File.Delete(dirMeta);
+            }
         }
     }
+
+    private const string FloorAsmdef = "{\n    \"name\": \"T7Floor\"\n}\n";
+
+    private const string FloorSource = "internal static class FloorProbe { }\n";
 
     private const string ProbeSource =
         @"using System.Collections.Generic;
@@ -148,7 +307,7 @@ namespace T7
     internal static class IterProbe
     {
         private const string PackageRoot = ""Packages/com.wallstop-studios.dxcommandterminal"";
-        private const string ArtDir = PackageRoot + ""/.artifacts/session-052"";
+        private const string ArtDir = PackageRoot + ""/.artifacts/session-053"";
         private const string QueuePath = ArtDir + ""/iter-queue.tsv"";
         private const string LogPath = ArtDir + ""/iter-log.tsv"";
         private const string CyclePath = ArtDir + ""/iter-cycle.tsv"";
@@ -163,9 +322,12 @@ namespace T7
             Resolve(""Editor/CustomEditors/TerminalUIEditor.cs"");
         private static readonly string DeclarationFile =
             Resolve(""Runtime/CommandTerminal/Backend/BuiltinCommands.cs"");
+        private static readonly string FloorFile =
+            Path.GetFullPath(Path.Combine(Application.dataPath, ""T7Floor"", ""T7Floor.cs""));
         private static readonly Queue<string> Queue = new Queue<string>();
 
         private static double _reloadEnd;
+        private static double _compileStart;
         private static bool _readyLogged;
         private static bool _doneLogged;
 
@@ -200,8 +362,18 @@ namespace T7
             if (age > MaxInstallAgeSeconds)
             {
                 Log(""expired"", ""-"", _reloadEnd, age);
+                try
+                {
+                    RestoreHostOnExpiry();
+                }
+                catch (Exception ex)
+                {
+                    Log(""restore_failed"", ""-"", _reloadEnd, -1.0, ex.Message);
+                }
+
                 ForgetState();
                 DeleteSelf();
+                AssetDatabase.Refresh();
                 return;
             }
 
@@ -228,6 +400,7 @@ namespace T7
 
         private static void OnCompilationStarted(object _)
         {
+            _compileStart = EditorApplication.timeSinceStartup;
             CycleState cycle = ReadCycle();
             if (cycle.T0 <= 0.0)
             {
@@ -243,13 +416,20 @@ namespace T7
 
         private static void OnCompilationFinished(object _)
         {
+            double now = EditorApplication.timeSinceStartup;
+            double started = _compileStart;
+            _compileStart = 0.0;
             CycleState cycle = ReadCycle();
             if (cycle.T0 <= 0.0)
             {
+                if (started > 0.0)
+                {
+                    Log(""warm_compile"", ""-"", now, now - started);
+                }
+
                 return;
             }
 
-            double now = EditorApplication.timeSinceStartup;
             Log(""compile_finish"", cycle.Scenario, now, now - cycle.T0);
             File.AppendAllText(
                 CyclePath,
@@ -259,12 +439,6 @@ namespace T7
         private static void OnAssemblyCompilationFinished(
             string assembly, CompilerMessage[] messages)
         {
-            CycleState cycle = ReadCycle();
-            if (cycle.T0 <= 0.0)
-            {
-                return;
-            }
-
             double now = EditorApplication.timeSinceStartup;
             string name = assembly;
             int slash = name.LastIndexOf('/');
@@ -282,11 +456,14 @@ namespace T7
                 }
             }
 
+            double window = _compileStart > 0.0 ? now - _compileStart : -1.0;
+            CycleState cycle = ReadCycle();
+            string scenario = cycle.T0 > 0.0 ? cycle.Scenario : ""-"";
             Log(
                 ""asm_done"",
-                cycle.Scenario,
+                scenario,
                 now,
-                now - cycle.T0,
+                window,
                 name + "" errors="" + errors.ToString(Inv));
         }
 
@@ -340,6 +517,11 @@ namespace T7
                 return;
             }
 
+            if (_compileStart > 0.0)
+            {
+                return;
+            }
+
             if (Queue.Count == 0)
             {
                 if (!_doneLogged)
@@ -372,6 +554,7 @@ namespace T7
             if (scenario == ""S2"") { target = RuntimeFile; }
             else if (scenario == ""S3"") { target = EditorFile; }
             else if (scenario == ""S4"") { target = DeclarationFile; }
+            else if (scenario == ""S5"") { target = FloorFile; }
             else
             {
                 Log(""skip"", scenario, now, 0.0);
@@ -489,6 +672,70 @@ namespace T7
             }
 
             return -1.0;
+        }
+
+        private static void RestoreHostOnExpiry()
+        {
+            string floorDir = Path.Combine(Application.dataPath, ""T7Floor"");
+            if (Directory.Exists(floorDir))
+            {
+                Directory.Delete(floorDir, true);
+            }
+
+            string floorMeta = Path.Combine(Application.dataPath, ""T7Floor.meta"");
+            if (File.Exists(floorMeta))
+            {
+                File.Delete(floorMeta);
+            }
+
+            SetLabel(
+                AssetImporter.GetAtPath(
+                    PackageRoot + ""/Runtime/Analyzers/WallstopStudios.DxCommandTerminal.SourceGenerators.dll""),
+                true);
+            SetLabel(
+                AssetImporter.GetAtPath(
+                    PackageRoot + ""/Runtime/Analyzers/WallstopStudios.DxCommandTerminal.Analyzers.dll""),
+                true);
+        }
+
+        private static void SetLabel(AssetImporter importer, bool labeled)
+        {
+            if (importer == null)
+            {
+                return;
+            }
+
+            string[] current = AssetDatabase.GetLabels(importer);
+            bool has = Array.IndexOf(current, ""RoslynAnalyzer"") >= 0;
+            if (has == labeled)
+            {
+                return;
+            }
+
+            if (labeled)
+            {
+                string[] grown = new string[current.Length + 1];
+                Array.Copy(current, grown, current.Length);
+                grown[current.Length] = ""RoslynAnalyzer"";
+                AssetDatabase.SetLabels(importer, grown);
+            }
+            else
+            {
+                string[] trimmed = new string[current.Length - 1];
+                int at = 0;
+                for (int i = 0; i < current.Length; i++)
+                {
+                    if (current[i] != ""RoslynAnalyzer"")
+                    {
+                        trimmed[at] = current[i];
+                        at++;
+                    }
+                }
+
+                AssetDatabase.SetLabels(importer, trimmed);
+            }
+
+            ((PluginImporter)importer).SaveAndReimport();
         }
 
         private static void ClearCycle()
