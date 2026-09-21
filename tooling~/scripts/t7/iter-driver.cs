@@ -8,11 +8,20 @@
     Main installs a temporary [InitializeOnLoad] probe into host Assets/Editor/
     that survives domain reloads and self-drives a scenario queue (one no-op
     content change per cycle): S1 unchanged refresh, S2 runtime edit, S3 editor
-    edit, S4 command-declaration edit. Phase timings (lead/compile/reload/ready/
-    e2e) land in .artifacts/session-052/iter-log.tsv; the install DELETES that
-    log, so copy it out before re-running. Scenario files are restored with
-    `git checkout -- Editor/ Runtime/` in the package repo after a run.
+    edit, S4 command-declaration edit. The probe self-expires 24h after install
+    (deletes itself and its state), so an interrupted session cannot keep
+    editing tracked sources on later editor opens.
+
+    Log rows (.artifacts/session-052/iter-log.tsv, TSV event/scenario/time/
+    delta[/extra]): cycle_start, compile_start, asm_done (extra=assembly name +
+    error count), compile_finish, reload_end, ready, cycle_end (extra carries
+    lead=/compile=/reload=/ready=/e2e= seconds), sample (S1 no-op refresh),
+    stale, expired, done. The install scenario marks the forced first compile.
+    The install DELETES the log, so copy it out before re-running. Scenario
+    files are restored with `git checkout -- Editor/ Runtime/` in the package
+    repo after a run.
  */
+using System;
 using System.Globalization;
 using System.IO;
 using System.Text;
@@ -44,6 +53,10 @@ public static class T7IterDriver
         Append(queue, "S3", 8);
         Append(queue, "S4", 8);
         File.WriteAllText(Path.Combine(artDir, "iter-queue.tsv"), queue.ToString());
+        File.WriteAllText(
+            Path.Combine(artDir, "iter-install.tsv"),
+            DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture)
+        );
 
         string editorDir = Path.Combine(projectRoot, "Assets", "Editor");
         Directory.CreateDirectory(editorDir);
@@ -52,20 +65,12 @@ public static class T7IterDriver
         double t0 = EditorApplication.timeSinceStartup;
         File.WriteAllText(
             Path.Combine(artDir, "iter-cycle.tsv"),
-            "install\t0\t" + t0.ToString("F3", CultureInfo.InvariantCulture) + "\n"
+            "install\t" + t0.ToString(CultureInfo.InvariantCulture) + "\n"
         );
 
         CompilationPipeline.RequestScriptCompilation();
         return "T7 probe installed, compilation requested at "
-            + t0.ToString("F3", CultureInfo.InvariantCulture);
-    }
-
-    private static void Append(StringBuilder sb, string scenario, int count)
-    {
-        for (int i = 0; i < count; i++)
-        {
-            sb.Append(scenario).Append('\n');
-        }
+            + t0.ToString(CultureInfo.InvariantCulture);
     }
 
     public static string Cleanup()
@@ -105,7 +110,7 @@ public static class T7IterDriver
             ".artifacts",
             "session-052"
         );
-        foreach (string name in new[] { "iter-queue.tsv", "iter-cycle.tsv" })
+        foreach (string name in new[] { "iter-queue.tsv", "iter-cycle.tsv", "iter-install.tsv" })
         {
             string path = Path.Combine(artDir, name);
             if (File.Exists(path))
@@ -114,12 +119,21 @@ public static class T7IterDriver
             }
         }
 
-        UnityEditor.Compilation.CompilationPipeline.RequestScriptCompilation();
+        CompilationPipeline.RequestScriptCompilation();
         return "T7 probe removed, cleanup compilation requested";
+    }
+
+    private static void Append(StringBuilder sb, string scenario, int count)
+    {
+        for (int i = 0; i < count; i++)
+        {
+            sb.Append(scenario).Append('\n');
+        }
     }
 
     private const string ProbeSource =
         @"using System.Collections.Generic;
+using System;
 using System.Globalization;
 using System.IO;
 using UnityEditor;
@@ -136,6 +150,9 @@ namespace T7
         private const string QueuePath = ArtDir + ""/iter-queue.tsv"";
         private const string LogPath = ArtDir + ""/iter-log.tsv"";
         private const string CyclePath = ArtDir + ""/iter-cycle.tsv"";
+        private const string InstallPath = ArtDir + ""/iter-install.tsv"";
+        private const double MaxInstallAgeSeconds = 86400.0;
+        private const double StaleCycleSeconds = 120.0;
 
         private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
         private static readonly string RuntimeFile =
@@ -153,9 +170,45 @@ namespace T7
         static IterProbe()
         {
             _reloadEnd = EditorApplication.timeSinceStartup;
+            if (!File.Exists(InstallPath))
+            {
+                return;
+            }
+
+            if (!File.Exists(QueuePath))
+            {
+                return;
+            }
+
+            string[] installLines = File.ReadAllLines(InstallPath);
+            double installed;
+            if (
+                installLines.Length == 0
+                || !double.TryParse(
+                    installLines[0],
+                    NumberStyles.Float,
+                    Inv,
+                    out installed)
+            )
+            {
+                return;
+            }
+
+            double age = (double)(DateTimeOffset.UtcNow.ToUnixTimeSeconds()) - installed;
+            if (age > MaxInstallAgeSeconds)
+            {
+                Log(""expired"", ""-"", _reloadEnd, age);
+                ForgetState();
+                DeleteSelf();
+                return;
+            }
+
             CycleState cycle = ReadCycle();
-            double span = cycle.CompileFinish > 0.0 ? _reloadEnd - cycle.CompileFinish : -1.0;
-            Log(""reload_end"", cycle.Scenario, _reloadEnd, span);
+            if (cycle.T0 > 0.0 && cycle.CompileFinish > 0.0)
+            {
+                Log(""reload_end"", cycle.Scenario, _reloadEnd, _reloadEnd - cycle.CompileFinish);
+            }
+
             RestoreQueue();
             CompilationPipeline.compilationStarted += OnCompilationStarted;
             CompilationPipeline.compilationFinished += OnCompilationFinished;
@@ -166,6 +219,11 @@ namespace T7
         private static void OnCompilationStarted(object _)
         {
             CycleState cycle = ReadCycle();
+            if (cycle.T0 <= 0.0)
+            {
+                return;
+            }
+
             double now = EditorApplication.timeSinceStartup;
             Log(""compile_start"", cycle.Scenario, now, now - cycle.T0);
             File.AppendAllText(
@@ -176,6 +234,11 @@ namespace T7
         private static void OnCompilationFinished(object _)
         {
             CycleState cycle = ReadCycle();
+            if (cycle.T0 <= 0.0)
+            {
+                return;
+            }
+
             double now = EditorApplication.timeSinceStartup;
             Log(""compile_finish"", cycle.Scenario, now, now - cycle.T0);
             File.AppendAllText(
@@ -187,6 +250,11 @@ namespace T7
             string assembly, CompilerMessage[] messages)
         {
             CycleState cycle = ReadCycle();
+            if (cycle.T0 <= 0.0)
+            {
+                return;
+            }
+
             double now = EditorApplication.timeSinceStartup;
             string name = assembly;
             int slash = name.LastIndexOf('/');
@@ -219,7 +287,10 @@ namespace T7
             {
                 _readyLogged = true;
                 CycleState pending = ReadCycle();
-                Log(""ready"", pending.Scenario, now, now - _reloadEnd);
+                if (pending.T0 > 0.0)
+                {
+                    Log(""ready"", pending.Scenario, now, now - _reloadEnd);
+                }
             }
 
             CycleState cycle = ReadCycle();
@@ -249,6 +320,11 @@ namespace T7
             {
                 ClearCycle();
             }
+            else if (cycle.T0 > 0.0 && now - cycle.T0 > StaleCycleSeconds)
+            {
+                Log(""stale"", cycle.Scenario, now, now - cycle.T0);
+                ClearCycle();
+            }
             else if (cycle.T0 > 0.0)
             {
                 return;
@@ -260,6 +336,11 @@ namespace T7
                 {
                     _doneLogged = true;
                     Log(""done"", ""-"", now, 0.0);
+                    CompilationPipeline.compilationStarted -= OnCompilationStarted;
+                    CompilationPipeline.compilationFinished -= OnCompilationFinished;
+                    CompilationPipeline.assemblyCompilationFinished -=
+                        OnAssemblyCompilationFinished;
+                    EditorApplication.update -= Pump;
                 }
 
                 return;
@@ -327,26 +408,38 @@ namespace T7
 
             string[] lines = File.ReadAllLines(CyclePath);
             CycleState state = default;
-            if (lines.Length > 0)
+            bool headParsed = false;
+            for (int i = 0; i < lines.Length; i++)
             {
-                string[] head = lines[0].Split('\t');
-                if (head.Length == 3)
+                if (string.IsNullOrEmpty(lines[i]))
                 {
-                    state.Scenario = head[0];
-                    double.TryParse(head[2], NumberStyles.Float, Inv, out state.T0);
+                    continue;
                 }
-            }
 
-            if (lines.Length > 1)
-            {
-                string[] parts = lines[1].Split('\t');
-                double.TryParse(parts[1], NumberStyles.Float, Inv, out state.CompileStart);
-            }
+                string[] parts = lines[i].Split('\t');
+                double value;
+                if (
+                    parts.Length != 2
+                    || !double.TryParse(parts[1], NumberStyles.Float, Inv, out value)
+                )
+                {
+                    continue;
+                }
 
-            if (lines.Length > 2)
-            {
-                string[] parts = lines[2].Split('\t');
-                double.TryParse(parts[1], NumberStyles.Float, Inv, out state.CompileFinish);
+                if (!headParsed)
+                {
+                    headParsed = true;
+                    state.Scenario = parts[0];
+                    state.T0 = value;
+                }
+                else if (parts[0] == ""compile_start"")
+                {
+                    state.CompileStart = value;
+                }
+                else if (parts[0] == ""compile_finish"")
+                {
+                    state.CompileFinish = value;
+                }
             }
 
             return state;
@@ -356,7 +449,7 @@ namespace T7
         {
             File.WriteAllText(
                 CyclePath,
-                scenario + ""\t0\t"" + t0.ToString(""F3"", Inv) + ""\n"");
+                scenario + ""\t"" + t0.ToString(""F3"", Inv) + ""\n"");
         }
 
         private static void ClearCycle()
@@ -364,6 +457,32 @@ namespace T7
             if (File.Exists(CyclePath))
             {
                 File.Delete(CyclePath);
+            }
+        }
+
+        private static void ForgetState()
+        {
+            foreach (string path in new[] { QueuePath, CyclePath, InstallPath })
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+            }
+        }
+
+        private static void DeleteSelf()
+        {
+            string probe = Path.GetFullPath(
+                Path.Combine(Application.dataPath, ""Editor"", ""T7IterProbe.cs""));
+            if (File.Exists(probe))
+            {
+                File.Delete(probe);
+            }
+
+            if (File.Exists(probe + "".meta""))
+            {
+                File.Delete(probe + "".meta"");
             }
         }
 
