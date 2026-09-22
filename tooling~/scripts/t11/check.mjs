@@ -143,8 +143,9 @@ export function checkBaselineEnvironment(
       problems.push(`${name}: png must be the bare filename ${name}.png`);
     }
     // Theme and font are provenance, not content: they must be comparable
-    // (non-empty string), but a closed terminal legitimately captures with
-    // a null font, so null is a legal, recorded value.
+    // (non-empty string), but a control that renders no panel content (the
+    // blank negative control) legitimately records null for both, so null is
+    // a legal, recorded value.
     for (const field of ["theme", "font"]) {
       const value = entry[field];
       if (value !== null && (typeof value !== "string" || value.length === 0)) {

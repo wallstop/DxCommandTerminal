@@ -47,6 +47,15 @@ describe("T4 scenario registries", () => {
     }
     assert.deepEqual(T4_ALL_SCENARIOS, [...T4_DEFAULT_SCENARIOS, ...T4_VARIANT_SCENARIOS]);
   });
+
+  it("never baselines an expected-incomplete scenario", () => {
+    for (const name of T4_EXPECTED_INCOMPLETE) {
+      assert.ok(
+        !T4_ALL_SCENARIOS.includes(name),
+        `${name} fails its bounds by design and must stay out of the baseline registries`
+      );
+    }
+  });
 });
 
 describe("parseT4Scenarios", () => {

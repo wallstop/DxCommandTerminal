@@ -17,13 +17,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
     /*
         T04 fixture captures of the real package surfaces (terminal small and
-        full states, completion hints, the command palette) plus the blank
-        negative control that proves the bounds can fail, the light and dark
-        theme surfaces, and the IMGUI inspector surfaces of the package's
-        custom editors. Each capture writes a PNG and a manifest under
-        .artifacts/t4/ and asserts the pixel bounds; teardown asserts zero
-        RenderTexture leaks. Requires a graphics device, so a -nographics
-        editor skips the suite.
+        full states, completion hints, the command palette, the closed state)
+        plus the blank negative control that proves the bounds can fail - the
+        closed-state capture shares that expected-incomplete contract - and
+        the light and dark theme surfaces, and the IMGUI inspector surfaces
+        of the package's custom editors. Each capture writes a PNG and a
+        manifest under .artifacts/t4/ and asserts the pixel bounds; teardown
+        asserts zero RenderTexture leaks. Requires a graphics device, so a
+        -nographics editor skips the suite.
 
         Scenarios open the terminal in the small state wherever possible:
         the host game view's zoom and Retina backing decide how many panel
@@ -87,11 +88,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             the pinned host - a narrow screen, a wide screen that exercises
             the palette window width clamp and the help label's first-line
             wrap point, a 2x panel scale (Retina-style pixel density over the
-            pinned point layout, 794x978 = 2x 397x489), and a representative
-            alternate font pack. Resolution and scale derive the environment
-            key; theme and font ride per-scenario in each entry's provenance,
-            so a font change fails provenance in place instead of minting a
-            new environment.
+            pinned point layout, 794x978 = 2x 397x489), a representative
+            alternate font pack, a tall phone-shaped screen, and a
+            mid-session viewport resize. Resolution and scale derive the
+            environment key; theme and font ride per-scenario in each entry's
+            provenance, so a font change fails provenance in place instead of
+            minting a new environment.
          */
         private const string AltFontPackPath = "Packs/Fonts/Large.asset";
         private const float VariantPanelScale = 2f;
@@ -101,6 +103,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private const int WideCaptureHeight = 360;
         private const int ScaleTwoCaptureWidth = 794;
         private const int ScaleTwoCaptureHeight = 978;
+        private const int TallCaptureWidth = 397;
+        private const int TallCaptureHeight = 852;
+        private const int ResizedCaptureWidth = 560;
+        private const int ResizedCaptureHeight = 489;
         private const int PinnedCaptureWidth = 397;
         private const int PinnedCaptureHeight = 489;
         private const string WrappedLine =
@@ -485,6 +491,122 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 PinnedCaptureHeight
             );
             AssertAcceptable(_lastOutcome);
+        }
+
+        /*
+            Tall screen with the full state (397x852, phone-shaped): the
+            full-state window height derives from the game view (Screen), so
+            the band keeps the game-view-derived height on a taller viewport
+            instead of stretching. Pins that derivation and the blank
+            remainder it leaves below the top-anchored band.
+         */
+        [UnityTest]
+        public IEnumerator CapturesTallScreenTerminalFull()
+        {
+            yield return SpawnCalibratedTerminal(TerminalState.OpenFull);
+            Terminal.Log("capture-tall ready");
+            Terminal.Log(TerminalLogType.Warning, "capture-tall warning line");
+            Terminal.Log(TerminalLogType.Error, "capture-tall error line");
+            Terminal.Log(WrappedLine);
+            _terminal.SetCursorBlinkPaused(true);
+            yield return CaptureSurface(
+                nameof(CapturesTallScreenTerminalFull),
+                CaptureBounds.Default(),
+                TallCaptureWidth,
+                TallCaptureHeight
+            );
+            AssertAcceptable(_lastOutcome);
+        }
+
+        /*
+            Mid-session viewport widening: the panel lays out at the pinned
+            frame first, then the render target swaps to a wider frame and
+            the capture runs after the re-layout settles. The terminal sizes
+            from Screen, so the resize must re-layout the panel viewport
+            without stretching or repositioning the terminal band. The
+            re-layout poll, the settle, and the committed-baseline pixel
+            compare together keep a half-migrated frame out of the store.
+         */
+        [UnityTest]
+        public IEnumerator CapturesResizedViewportTerminalSmall()
+        {
+            yield return SpawnCalibratedTerminal(TerminalState.OpenSmall);
+            Terminal.Log("capture-resize ready");
+            Terminal.Log(WrappedLine);
+            _terminal.SetCursorBlinkPaused(true);
+
+            RenderTexture preResize = AttachRenderTarget(
+                nameof(CapturesResizedViewportTerminalSmall),
+                PinnedCaptureWidth,
+                PinnedCaptureHeight
+            );
+            yield return SettleRenders();
+            VisualElement uiRoot = _terminal._uiDocument.rootVisualElement;
+            float pinnedLayoutWidth = uiRoot.layout.width;
+            DetachRenderTarget(preResize);
+
+            RenderTexture resized = AttachRenderTarget(
+                nameof(CapturesResizedViewportTerminalSmall),
+                ResizedCaptureWidth,
+                ResizedCaptureHeight
+            );
+            try
+            {
+                int frameBudget = FrameBudget;
+                while (0 < frameBudget-- && uiRoot.layout.width <= pinnedLayoutWidth)
+                {
+                    yield return null;
+                }
+
+                Assert.Greater(
+                    uiRoot.layout.width,
+                    pinnedLayoutWidth,
+                    "The panel re-laid out for the widened viewport before the capture"
+                );
+                yield return SettleRenders();
+                _lastOutcome = FinishCapture(
+                    nameof(CapturesResizedViewportTerminalSmall),
+                    resized,
+                    CaptureBounds.Default(),
+                    uiRoot
+                );
+            }
+            finally
+            {
+                DetachRenderTarget(resized);
+            }
+
+            AssertAcceptable(_lastOutcome);
+        }
+
+        /*
+            Closed state: after a close the terminal paints nothing - the
+            shared document root collapses to zero height with the input
+            hidden. The capture must fail the bounds exactly like the blank
+            negative control (a visible frame would mean close leaks
+            pixels), so it is expected-incomplete in t4:capture and never
+            baselined: the store refuses blank pixels by design.
+         */
+        [UnityTest]
+        public IEnumerator CapturesClosedTerminalRendersNothing()
+        {
+            yield return SpawnCalibratedTerminal(TerminalState.OpenSmall);
+            Terminal.Log("capture-close ready");
+            _terminal.SetState(TerminalState.Closed);
+            yield return WaitForTerminalClosed();
+            yield return CaptureSurface(
+                nameof(CapturesClosedTerminalRendersNothing),
+                CaptureBounds.Default()
+            );
+            Assert.That(
+                _lastOutcome.Violations,
+                Is.Not.Empty,
+                "A closed terminal must fail the capture bounds like the blank control"
+            );
+            Assert.IsFalse(
+                _lastOutcome.Manifest.Complete,
+                "A closed terminal must record an incomplete manifest"
+            );
         }
 
         /*
@@ -900,6 +1022,45 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 $"Palette matched commands for query '{query}'"
             );
             Assert.That(0 < _palette._rows.Count, "Palette built result rows for the query");
+        }
+
+        /*
+            Closed readiness: IsClosed also requires the window height to
+            converge, so polling it (plus the hidden input container) lands
+            the capture after the final closed layout, not the transition
+            frame.
+         */
+        private IEnumerator WaitForTerminalClosed()
+        {
+            VisualElement inputContainer()
+            {
+                return _terminal._uiDocument.rootVisualElement.Q("InputContainer");
+            }
+
+            int frameBudget = FrameBudget;
+            while (
+                0 < frameBudget--
+                && (
+                    !_terminal.IsClosed
+                    || inputContainer() == null
+                    || inputContainer().resolvedStyle.display != DisplayStyle.None
+                )
+            )
+            {
+                yield return null;
+            }
+
+            Assert.IsTrue(_terminal.IsClosed, "The terminal reached the closed state");
+            VisualElement closedInputContainer = inputContainer();
+            Assert.That(
+                closedInputContainer != null,
+                "The input container exists after the terminal closes"
+            );
+            Assert.AreEqual(
+                DisplayStyle.None,
+                closedInputContainer.resolvedStyle.display,
+                "The terminal input is hidden after the terminal closes"
+            );
         }
 
         private IEnumerator CaptureSurface(string scenario, CaptureBounds bounds)
