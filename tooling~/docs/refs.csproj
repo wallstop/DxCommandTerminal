@@ -1,0 +1,16 @@
+<!--
+    Reference-assembly restore for the docs API build. Compiling nothing:
+    the restore only downloads the pinned UnityEngine reference assemblies
+    so build.mjs can copy them next to docfx.json (its reference globs
+    cannot cross out of the docfx project directory). 2021.3.33 matches the
+    package's minimum Unity version, so the generated API pages bind against
+    the oldest supported engine surface.
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="UnityEngine.Modules" Version="2021.3.33" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,12 @@
+- name: DxCommandTerminal
+  href: index.md
+- name: Guides
+  items:
+    - name: Install
+      href: install.md
+    - name: First command
+      href: first-command.md
+    - name: Quick-launch bar
+      href: palette.md
+- name: API Reference
+  href: ../api/toc.yml

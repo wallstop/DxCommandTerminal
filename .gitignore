@@ -38,3 +38,6 @@ progress.meta
 # DotNet build outputs under the Unity-hidden generator directory
 Generator~/**/bin/
 Generator~/**/obj/
+
+# Docs site build state (docfx project under tooling~/docs; rebuilt by npm run docs:build)
+tooling~/docs/obj/
