@@ -1818,7 +1818,12 @@ export const T4_DEFAULT_SCENARIOS = Object.freeze([
   "CapturesTerminalSmallSurface",
   "CapturesTerminalFullSurfaceWithErrors",
   "CapturesCompletionHintsSurface",
-  "CapturesCommandPaletteSurface"
+  "CapturesCommandPaletteSurface",
+  "CapturesLightThemeSurface",
+  "CapturesDarkThemeSurface",
+  "CapturesTerminalUIInspectorSurface",
+  "CapturesThemePackInspectorSurface",
+  "CapturesFontPackInspectorSurface"
 ]);
 // The negative control proves the bounds can fail, so its manifest must
 // record an incomplete capture.

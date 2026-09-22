@@ -18,10 +18,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     /*
         T04 fixture captures of the real package surfaces (terminal small and
         full states, completion hints, the command palette) plus the blank
-        negative control that proves the bounds can fail. Each capture writes
-        a PNG and a manifest under .artifacts/t4/ and asserts the pixel
-        bounds; teardown asserts zero RenderTexture leaks. Requires a graphics
-        device, so a -nographics editor skips the suite.
+        negative control that proves the bounds can fail, the light and dark
+        theme surfaces, and the IMGUI inspector surfaces of the package's
+        custom editors. Each capture writes a PNG and a manifest under
+        .artifacts/t4/ and asserts the pixel bounds; teardown asserts zero
+        RenderTexture leaks. Requires a graphics device, so a -nographics
+        editor skips the suite.
 
         Scenarios open the terminal in the small state wherever possible:
         the host game view's zoom and Retina backing decide how many panel
@@ -35,6 +37,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private const string PackageRoot = "Packages/com.wallstop-studios.dxcommandterminal";
         private const string ThemePackPath = "Packs/Themes/Medium.asset";
         private const string FontPackPath = "Packs/Fonts/Medium.asset";
+        private const string LightThemeName = "light";
+        private const string DarkThemeName = "dark";
 
         /*
             Readiness-poll headroom, not a fixed expectation: panels under
@@ -43,6 +47,16 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
          */
         private const int FrameBudget = 600;
         private const int SettleFrames = 3;
+
+        /*
+            The palette caret freeze must outlast the native UITK blink
+            interval (~0.5 s) so the repeat capture cannot land inside the
+            same blink phase as the first.
+         */
+        private const int BlinkSettleFrames = 40;
+        private const float InspectorWidth = 520f;
+        private const float InspectorHeight = 780f;
+        private const int InspectorRepaintFloor = 3;
 
         private const string CompletionQuery = "capture-a";
         private const string PaletteQuery = "capture";
@@ -61,6 +75,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private string _runDirectory;
         private int? _renderTexturesBefore;
         private CaptureOutcome _lastOutcome;
+        private string _diagnosticsSuffix;
 
         private static string FormatBound(VisualElement element)
         {
@@ -215,6 +230,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             AssertAcceptable(_lastOutcome);
         }
 
+        /*
+            The palette's native TextField caret is frozen through its
+            cursorColor for the capture; a repeat readback past the native
+            blink interval must be byte-identical, proving the pixels no
+            longer move with the blink phase.
+         */
         [UnityTest]
         public IEnumerator CapturesCommandPaletteSurface()
         {
@@ -225,9 +246,124 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             _palette._input.value = PaletteQuery;
             yield return WaitForPaletteRows();
             _terminal.SetCursorBlinkPaused(true);
-            yield return CaptureSurface(
-                nameof(CapturesCommandPaletteSurface),
-                CaptureBounds.Default()
+
+            string scenario = nameof(CapturesCommandPaletteSurface);
+            RenderTexture target = AttachRenderTarget(scenario);
+            TerminalSurfaceCapture.CursorFreezeScope cursorFreeze =
+                TerminalSurfaceCapture.FreezeCursor(_palette._input);
+            try
+            {
+                _diagnosticsSuffix = "cursorFreeze=" + cursorFreeze.Describe();
+                yield return SettleRenders();
+                _lastOutcome = FinishCapture(
+                    scenario,
+                    target,
+                    CaptureBounds.Default(),
+                    _terminal._uiDocument.rootVisualElement
+                );
+                AssertAcceptable(_lastOutcome);
+
+                yield return WaitFrames(BlinkSettleFrames);
+                VisualElement contentRoot = _terminal._uiDocument.rootVisualElement;
+                string repeatPath = Path.Combine(_runDirectory, scenario + "-repeat.png");
+                TerminalSurfaceCapture.CaptureToPng(target, contentRoot, repeatPath);
+                byte[] expected = File.ReadAllBytes(_lastOutcome.PngPath);
+                byte[] actual = File.ReadAllBytes(repeatPath);
+                Assert.That(
+                    actual,
+                    Is.EqualTo(expected),
+                    "The palette render must be blink-invariant with the caret frozen"
+                );
+            }
+            finally
+            {
+                cursorFreeze.Dispose();
+                DetachRenderTarget(target);
+            }
+        }
+
+        /*
+            Light/dark scenario coverage: one run per theme from the shipped
+            Medium pack, and both captures must render distinct backgrounds so
+            a theme sheet that silently fails to apply cannot pass.
+         */
+        [UnityTest]
+        public IEnumerator CapturesLightAndDarkThemeSurfaces()
+        {
+            yield return SpawnCalibratedTerminal(TerminalState.OpenSmall);
+            Terminal.Log("capture-themes ready");
+            Terminal.Log(WrappedLine);
+            _terminal.SetCursorBlinkPaused(true);
+            List<CaptureOutcome> themed = new List<CaptureOutcome>(2);
+            yield return CaptureThemedSurface(LightThemeName, "CapturesLightThemeSurface", themed);
+            yield return CaptureThemedSurface(DarkThemeName, "CapturesDarkThemeSurface", themed);
+            AssertAcceptable(themed[0]);
+            AssertAcceptable(themed[1]);
+
+            CapturePixelMetrics light = themed[0].Metrics;
+            CapturePixelMetrics dark = themed[1].Metrics;
+            bool distinctBackground =
+                light.BackgroundRed != dark.BackgroundRed
+                || light.BackgroundGreen != dark.BackgroundGreen
+                || light.BackgroundBlue != dark.BackgroundBlue;
+            Assert.IsTrue(
+                distinctBackground,
+                "The light and dark themes must render distinct backgrounds: "
+                    + $"light #{light.BackgroundRed:X2}{light.BackgroundGreen:X2}{light.BackgroundBlue:X2} vs "
+                    + $"dark #{dark.BackgroundRed:X2}{dark.BackgroundGreen:X2}{dark.BackgroundBlue:X2}"
+            );
+        }
+
+        /*
+            IMGUI inspector surfaces of the package's custom editors, drawn
+            through an IMGUIContainer on the capture panel. The closed
+            terminal contributes no pixels, so each capture shows only the
+            inspector surface under test.
+         */
+        [UnityTest]
+        public IEnumerator CapturesTerminalUIInspectorSurface()
+        {
+            if (!EditorInspectorCapture.IsSupported)
+            {
+                Assert.Ignore(EditorInspectorCapture.UnsupportedReason);
+            }
+
+            yield return SpawnTerminal();
+            yield return CaptureInspectorSurface(
+                nameof(CapturesTerminalUIInspectorSurface),
+                _terminal
+            );
+            AssertAcceptable(_lastOutcome);
+        }
+
+        [UnityTest]
+        public IEnumerator CapturesThemePackInspectorSurface()
+        {
+            if (!EditorInspectorCapture.IsSupported)
+            {
+                Assert.Ignore(EditorInspectorCapture.UnsupportedReason);
+            }
+
+            yield return SpawnTerminal();
+            yield return CaptureInspectorSurface(
+                nameof(CapturesThemePackInspectorSurface),
+                LoadPack<TerminalThemePack>(ThemePackPath)
+            );
+            AssertAcceptable(_lastOutcome);
+        }
+
+        [UnityTest]
+        public IEnumerator CapturesFontPackInspectorSurface()
+        {
+            if (!EditorInspectorCapture.IsSupported)
+            {
+                Assert.Ignore(EditorInspectorCapture.UnsupportedReason);
+            }
+
+            yield return SpawnTerminal();
+            yield return CaptureInspectorSurface(
+                nameof(CapturesFontPackInspectorSurface),
+                LoadPack<TerminalFontPack>(FontPackPath)
             );
             AssertAcceptable(_lastOutcome);
         }
@@ -265,7 +401,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 _lastOutcome = FinishCapture(
                     nameof(BlankRenderFailsBounds),
                     target,
-                    CaptureBounds.Default()
+                    CaptureBounds.Default(),
+                    null
                 );
             }
             finally
@@ -286,6 +423,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         private IEnumerator SpawnTerminal()
         {
+            _diagnosticsSuffix = string.Empty;
             _panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
 
             /*
@@ -427,7 +565,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             try
             {
                 yield return SettleRenders();
-                _lastOutcome = FinishCapture(scenario, target, bounds);
+                _lastOutcome = FinishCapture(
+                    scenario,
+                    target,
+                    bounds,
+                    _terminal._uiDocument.rootVisualElement
+                );
             }
             finally
             {
@@ -435,23 +578,102 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             }
         }
 
+        /*
+            Inspector captures bypass the panel entirely: the draw surface
+            paints the inspector into a standalone target during game view
+            repaints, so the wait floors on real repaint passes instead of
+            frame counts.
+         */
+        private IEnumerator CaptureInspectorSurface(string scenario, UnityEngine.Object target)
+        {
+            RenderTexture renderTarget = CreateRenderTarget(scenario);
+            EditorInspectorCapture.InspectorScope inspector = EditorInspectorCapture.Attach(
+                _surfaceObject,
+                target,
+                renderTarget,
+                InspectorWidth,
+                InspectorHeight
+            );
+            try
+            {
+                InspectorDrawSurface surface = _surfaceObject.GetComponent<InspectorDrawSurface>();
+                Assert.That(surface != null, "Sanity: the inspector draw surface attached");
+                int frameBudget = FrameBudget;
+                while (0 < frameBudget-- && surface.RepaintCount < InspectorRepaintFloor)
+                {
+                    yield return null;
+                }
+
+                Assert.GreaterOrEqual(
+                    surface.RepaintCount,
+                    InspectorRepaintFloor,
+                    "The game view painted the inspector into the capture target"
+                );
+                yield return WaitFrames(SettleFrames);
+                _lastOutcome = FinishCapture(scenario, renderTarget, CaptureBounds.Default(), null);
+            }
+            finally
+            {
+                inspector.Dispose();
+                DetachRenderTarget(renderTarget);
+            }
+        }
+
         private IEnumerator SettleRenders()
         {
-            for (int frame = 0; frame < SettleFrames; ++frame)
+            yield return WaitFrames(SettleFrames);
+        }
+
+        private IEnumerator WaitFrames(int frameCount)
+        {
+            for (int frame = 0; frame < frameCount; ++frame)
             {
                 yield return null;
             }
         }
 
+        private IEnumerator CaptureThemedSurface(
+            string friendlyTheme,
+            string scenario,
+            List<CaptureOutcome> outcomes
+        )
+        {
+            _terminal.SetTheme(friendlyTheme);
+            yield return WaitForTheme(friendlyTheme);
+            yield return CaptureSurface(scenario, CaptureBounds.Default());
+            outcomes.Add(_lastOutcome);
+        }
+
+        private IEnumerator WaitForTheme(string friendlyTheme)
+        {
+            int frameBudget = FrameBudget;
+            while (
+                0 < frameBudget--
+                && !string.Equals(
+                    _terminal.CurrentFriendlyTheme,
+                    friendlyTheme,
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
+            {
+                yield return null;
+            }
+
+            Assert.AreEqual(
+                friendlyTheme,
+                _terminal.CurrentFriendlyTheme,
+                $"Theme '{friendlyTheme}' applied before capture"
+            );
+        }
+
         private CaptureOutcome FinishCapture(
             string scenario,
             RenderTexture target,
-            CaptureBounds bounds
+            CaptureBounds bounds,
+            VisualElement contentRoot
         )
         {
             string pngPath = Path.Combine(_runDirectory, scenario + ".png");
-            VisualElement contentRoot =
-                _terminal != null ? _terminal._uiDocument.rootVisualElement : null;
             CapturePixelMetrics metrics = TerminalSurfaceCapture.CaptureToPng(
                 target,
                 contentRoot,
@@ -473,6 +695,17 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         private RenderTexture AttachRenderTarget(string scenario)
         {
+            RenderTexture target = CreateRenderTarget(scenario);
+            _panelSettings.targetTexture = target;
+            return target;
+        }
+
+        /*
+            Creates the capture target and clears it, so an inspector capture
+            paints onto a known background instead of stale target contents.
+         */
+        private RenderTexture CreateRenderTarget(string scenario)
+        {
             RenderTexture target = new RenderTexture(
                 Screen.width,
                 Screen.height,
@@ -486,7 +719,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 target.Create(),
                 $"Sanity: the {Screen.width}x{Screen.height} capture target created"
             );
-            _panelSettings.targetTexture = target;
+            RenderTexture previousTarget = RenderTexture.active;
+            RenderTexture.active = target;
+            GL.Clear(true, true, Color.clear);
+            RenderTexture.active = previousTarget;
             return target;
         }
 
@@ -526,7 +762,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 Metrics = outcome.Metrics,
                 Bounds = bounds,
                 Violations = outcome.Violations,
-                Diagnostics = DescribeSurface(),
+                Diagnostics = DescribeSurface() + _diagnosticsSuffix,
             };
         }
 
