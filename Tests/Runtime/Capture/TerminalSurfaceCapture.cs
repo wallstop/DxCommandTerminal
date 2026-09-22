@@ -26,11 +26,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         npm run unity:capture; baseline updates are a separate, explicit
         command that lands with T11's comparator.
 
-        Known variance accepted in milestone 1: the command palette's native
-        TextField caret blinks on UITK's own schedule (the terminal's styled
-        caret is frozen through TerminalUI.SetCursorBlinkPaused). The metric
-        bounds tolerate a one-pixel caret column; golden baselines that pin it
-        exactly arrive with T11.
+        Nondeterminism is frozen at the source: the terminal's styled caret
+        through TerminalUI.SetCursorBlinkPaused, and the command palette's
+        native TextField caret through FreezeCursor (the caret paints with
+        the text input's cursorColor; hosts without that property make the
+        palette scenario skip its blink-invariance proof, recorded in the
+        manifest diagnostics).
      */
     public static class TerminalSurfaceCapture
     {
@@ -248,6 +249,20 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 Debug.LogWarning($"Fixture capture revision probe failed: {exception.Message}");
                 return null;
             }
+        }
+
+        /*
+            Freezes the native UITK caret of a focused TextField while the
+            scope is alive: the caret paints with the text input's
+            cursorColor, so a fully transparent color takes the blink phase
+            out of the captured pixels. On hosts whose UITK exposes no
+            cursorColor property the scope stays inert and reports it; the
+            palette scenario then skips its blink-invariance proof instead
+            of asserting against an unfrozen caret.
+         */
+        public static CursorFreezeScope FreezeCursor(TextField field)
+        {
+            return new CursorFreezeScope(field);
         }
 
         /*
@@ -623,5 +638,66 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             }
         }
 #endif
+
+        public sealed class CursorFreezeScope : IDisposable
+        {
+            private const string TextInputName = "unity-text-input";
+            private const string CursorColorProperty = "cursorColor";
+
+            public bool Engaged => _cursorColor != null;
+
+            private readonly VisualElement _textInput;
+            private readonly PropertyInfo _cursorColor;
+            private readonly Color _previousColor;
+            private readonly string _reason;
+
+            internal CursorFreezeScope(TextField field)
+            {
+                if (field == null)
+                {
+                    throw new ArgumentNullException(nameof(field));
+                }
+
+                _textInput = field.Q(TextInputName);
+                if (_textInput == null)
+                {
+                    _reason = $"no {TextInputName} child";
+                    return;
+                }
+
+                _cursorColor = _textInput.GetType().GetProperty(CursorColorProperty);
+                if (_cursorColor == null || !_cursorColor.CanRead || !_cursorColor.CanWrite)
+                {
+                    _reason = $"no {CursorColorProperty} property on {_textInput.GetType().Name}";
+                    return;
+                }
+
+                try
+                {
+                    _previousColor = (Color)_cursorColor.GetValue(_textInput);
+                    _cursorColor.SetValue(_textInput, Color.clear);
+                }
+                catch (Exception exception)
+                {
+                    _cursorColor = null;
+                    _reason = (exception.InnerException ?? exception).Message;
+                }
+            }
+
+            public string Describe()
+            {
+                return Engaged ? CursorColorProperty : $"unavailable ({_reason})";
+            }
+
+            public void Dispose()
+            {
+                if (!Engaged)
+                {
+                    return;
+                }
+
+                _cursorColor.SetValue(_textInput, _previousColor);
+            }
+        }
     }
 }

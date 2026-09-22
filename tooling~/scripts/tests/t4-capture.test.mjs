@@ -38,7 +38,7 @@ const validManifest = (overrides = {}) => ({
 });
 
 describe("parseT4Scenarios", () => {
-  it("defaults to the four terminal surface scenarios", () => {
+  it("defaults to the pinned terminal surface scenarios", () => {
     assert.deepEqual(parseT4Scenarios(undefined), [...T4_DEFAULT_SCENARIOS]);
   });
 
