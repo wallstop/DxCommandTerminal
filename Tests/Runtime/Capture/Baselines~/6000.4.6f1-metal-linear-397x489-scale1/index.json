@@ -1,0 +1,123 @@
+{
+  "version": 1,
+  "environment": {
+    "unityVersion": "6000.4.6f1",
+    "graphicsApi": "Metal",
+    "colorSpace": "Linear",
+    "resolution": {
+      "width": 397,
+      "height": 489
+    },
+    "logicalScale": 1
+  },
+  "scenarios": {
+    "CapturesCommandPaletteSurface": {
+      "png": "CapturesCommandPaletteSurface.png",
+      "theme": "dark-theme",
+      "font": "FiraMono-Regular",
+      "capturedUtc": "2026-09-22T03:58:33.3412190Z",
+      "metrics": {
+        "distinctColors": 760,
+        "backgroundFraction": 0.5755,
+        "backgroundRgb": "#1B1B1E",
+        "pngBytes": 20384
+      }
+    },
+    "CapturesCompletionHintsSurface": {
+      "png": "CapturesCompletionHintsSurface.png",
+      "theme": "dark-theme",
+      "font": "FiraMono-Regular",
+      "capturedUtc": "2026-09-22T03:58:34.0834310Z",
+      "metrics": {
+        "distinctColors": 590,
+        "backgroundFraction": 0.6871,
+        "backgroundRgb": "#1B1B1E",
+        "pngBytes": 15015
+      }
+    },
+    "CapturesDarkThemeSurface": {
+      "png": "CapturesDarkThemeSurface.png",
+      "theme": "dark-theme",
+      "font": "FiraMono-Regular",
+      "capturedUtc": "2026-09-22T03:58:34.2086380Z",
+      "metrics": {
+        "distinctColors": 270,
+        "backgroundFraction": 0.6573,
+        "backgroundRgb": "#1B1B1E",
+        "pngBytes": 39683
+      }
+    },
+    "CapturesFontPackInspectorSurface": {
+      "png": "CapturesFontPackInspectorSurface.png",
+      "theme": "dark-theme",
+      "font": null,
+      "capturedUtc": "2026-09-22T03:58:34.1485530Z",
+      "metrics": {
+        "distinctColors": 531,
+        "backgroundFraction": 0.8623,
+        "backgroundRgb": "#000000",
+        "pngBytes": 13392
+      }
+    },
+    "CapturesLightThemeSurface": {
+      "png": "CapturesLightThemeSurface.png",
+      "theme": "light-theme",
+      "font": "FiraMono-Regular",
+      "capturedUtc": "2026-09-22T03:58:34.1889710Z",
+      "metrics": {
+        "distinctColors": 143,
+        "backgroundFraction": 0.6579,
+        "backgroundRgb": "#F4F4F4",
+        "pngBytes": 33967
+      }
+    },
+    "CapturesTerminalFullSurfaceWithErrors": {
+      "png": "CapturesTerminalFullSurfaceWithErrors.png",
+      "theme": "dark-theme",
+      "font": "FiraMono-Regular",
+      "capturedUtc": "2026-09-22T03:58:34.2395230Z",
+      "metrics": {
+        "distinctColors": 738,
+        "backgroundFraction": 0.8692,
+        "backgroundRgb": "#1B1B1E",
+        "pngBytes": 49934
+      }
+    },
+    "CapturesTerminalSmallSurface": {
+      "png": "CapturesTerminalSmallSurface.png",
+      "theme": "dark-theme",
+      "font": "FiraMono-Regular",
+      "capturedUtc": "2026-09-22T03:58:34.2685450Z",
+      "metrics": {
+        "distinctColors": 271,
+        "backgroundFraction": 0.6578,
+        "backgroundRgb": "#1B1B1E",
+        "pngBytes": 39998
+      }
+    },
+    "CapturesTerminalUIInspectorSurface": {
+      "png": "CapturesTerminalUIInspectorSurface.png",
+      "theme": "dark-theme",
+      "font": null,
+      "capturedUtc": "2026-09-22T03:58:34.3903750Z",
+      "metrics": {
+        "distinctColors": 349,
+        "backgroundFraction": 0.6524,
+        "backgroundRgb": "#000000",
+        "pngBytes": 28831
+      }
+    },
+    "CapturesThemePackInspectorSurface": {
+      "png": "CapturesThemePackInspectorSurface.png",
+      "theme": "dark-theme",
+      "font": null,
+      "capturedUtc": "2026-09-22T03:58:34.8394480Z",
+      "metrics": {
+        "distinctColors": 156,
+        "backgroundFraction": 0.8825,
+        "backgroundRgb": "#000000",
+        "pngBytes": 10321
+      }
+    }
+  }
+}

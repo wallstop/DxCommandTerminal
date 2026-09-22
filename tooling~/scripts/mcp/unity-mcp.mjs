@@ -42,6 +42,15 @@ const [
     "jsonc-parser"
   ].map(dependency)
 );
+// T11 baseline compare: pure stdlib, no dynamic dependencies.
+import {
+  compareScenario,
+  emitComparisonArtifacts,
+  environmentKey,
+  environmentProvenance,
+  provenanceOf,
+  readBaselineIndex
+} from "../t11/comparator.mjs";
 export const REPO_ROOT = path.resolve(fileURLToPath(new URL("../../..", import.meta.url)));
 export const GITHUB_MCP_URL = "https://api.githubcopilot.com/mcp/";
 export const DEFAULTS = Object.freeze({
@@ -1980,6 +1989,7 @@ export async function runT4Capture(options, runtime = {}) {
     const manifestPaths = collectT4ManifestPaths(artifactRoot, startedAt - 5_000);
     const problems = [];
     const validated = new Set();
+    const validManifests = [];
     for (const manifestPath of manifestPaths) {
       let manifest;
       try {
@@ -2000,6 +2010,9 @@ export async function runT4Capture(options, runtime = {}) {
         continue;
       }
       validated.add(scenario);
+      if (T4_DEFAULT_SCENARIOS.includes(scenario)) {
+        validManifests.push({ scenario, manifest, manifestPath });
+      }
       console.log(`  ok ${scenario} (${manifest.resolution.width}x${manifest.resolution.height})`);
     }
 
@@ -2008,6 +2021,8 @@ export async function runT4Capture(options, runtime = {}) {
         problems.push(`no valid manifest captured for ${scenario}`);
       }
     }
+
+    compareT4Baselines(options, validManifests, problems);
 
     if (summary.failed > 0) {
       problems.push(`${summary.failed} capture test(s) failed in the editor`);
@@ -2020,6 +2035,95 @@ export async function runT4Capture(options, runtime = {}) {
   }, fetchImpl);
 }
 
+/**
+ * T11 gate on top of the T04 harness: compare every validated capture
+ * against its committed baseline (never across environments - provenance
+ * must match exactly). A missing store or missing baseline is reported as
+ * pending, not failed (first capture on a new environment); a mismatching
+ * baseline fails the command and emits review artifacts.
+ */
+export function compareT4Baselines(options, validManifests, problems) {
+  if (validManifests.length === 0) return;
+  const storeDir = path.join(
+    options.repoRoot,
+    "Tests",
+    "Runtime",
+    "Capture",
+    "Baselines~"
+  );
+  if (!fs.existsSync(storeDir)) {
+    console.log("No T11 baseline store yet; run npm run t11:update to seed one.");
+    return;
+  }
+
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const artifactsRoot = path.join(options.repoRoot, ".artifacts", "t11", `t4-${stamp}`);
+  let compared = 0;
+  let pending = 0;
+  for (const { scenario, manifest, manifestPath } of validManifests) {
+    let envKey = "unknown-environment";
+    let index;
+    let baselinePng;
+    let actualPng;
+    let outcome;
+    try {
+      envKey = environmentKey(provenanceOf(manifest));
+      index = readBaselineIndex(storeDir, envKey);
+      if (index !== null) {
+        const entry = index.scenarios[scenario];
+        if (entry === null || typeof entry !== "object") {
+          throw new Error(`baseline index has no usable entry for ${scenario}`);
+        }
+        if (entry.png !== `${scenario}.png`) {
+          throw new Error(`baseline index png must be the bare filename ${scenario}.png`);
+        }
+        baselinePng = fs.readFileSync(path.join(storeDir, envKey, entry.png));
+        actualPng = fs.readFileSync(path.join(path.dirname(manifestPath), manifest.png));
+        outcome = compareScenario(
+          baselinePng,
+          actualPng,
+          environmentProvenance(index.environment, entry.theme, entry.font),
+          provenanceOf(manifest)
+        );
+      }
+    } catch (error) {
+      problems.push(`${scenario}: baseline compare failed (${error.message})`);
+      continue;
+    }
+    if (index === null || outcome === undefined) {
+      ++pending;
+      console.log(`  pending baseline ${scenario} (${envKey}); run npm run t11:update`);
+      continue;
+    }
+
+    ++compared;
+    if (outcome.pass) {
+      console.log(
+        `  baseline ok ${scenario}`
+          + (outcome.result?.identical ? " (byte-identical)" : " (within tolerance)")
+      );
+      continue;
+    }
+    const artifactsDir = emitComparisonArtifacts(
+      path.join(artifactsRoot, scenario),
+      baselinePng,
+      actualPng,
+      outcome
+    );
+    const problemText = outcome.problems.join("; ");
+    problems.push(
+      `${scenario}: `
+        + (outcome.result === null
+          ? `baseline provenance mismatch (${problemText})`
+          : `pixels differ from the baseline (${problemText})`)
+        + `; review artifacts at ${artifactsDir}`
+    );
+  }
+  if (compared > 0 || pending > 0) {
+    console.log(`T11 baseline compare: ${compared} compared, ${pending} pending.`);
+  }
+}
+
 function usage() {
   return [
     "Usage: node tooling~/scripts/mcp/unity-mcp.mjs <probe|configure|bridge|install-capture|capture|t4-capture> [options]",
@@ -2029,7 +2133,8 @@ function usage() {
     "  bridge          Serve Unity CLI or the legacy relay over authenticated HTTP on the host.",
     "  install-capture Install DxTerminalStateCapture.cs into the host project (host side).",
     "  capture         Capture editor/game state into .artifacts through the bridge.",
-    "  t4-capture      Run the T04 fixture-capture tests and validate their manifests.",
+    "  t4-capture      Run the T04 fixture-capture tests, validate their manifests,\n" +
+    "                  and compare pixels against the T11 baseline store.",
     "",
     "Options:",
     "  --host HOST                 Endpoint host; the only host discovery probes",

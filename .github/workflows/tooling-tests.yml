@@ -82,6 +82,11 @@ jobs:
       - name: Test tooling
         run: npm --prefix tooling~ test
 
+      - name: Check capture baselines
+        # T11 Unity-free integrity gate: baseline schema, scenario coverage,
+        # decodability, and provenance (never Unity rendering).
+        run: npm --prefix tooling~ run t11:check
+
   csharp-style:
     # C# style gates that are pure Node stdlib, so they run Unity-free on both OSes the
     # repo's other Node lanes already matrix (issues #50/#51). Each linter exits non-zero

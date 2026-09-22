@@ -90,9 +90,35 @@ Rules the harness enforces on itself:
   forces one synchronous panel render per capture, and restores render state.
 - Deterministic: the terminal caret is frozen via
   `TerminalUI.SetCursorBlinkPaused(true)`; ease times are zeroed; the palette's
-  native caret blink is the one accepted variance until T11's golden baselines.
+  native caret is frozen through its `cursorColor` (blink-invariance is proven
+  by a byte-identical repeat readback).
 - Leak-checked: RenderTexture counts are asserted back to baseline in teardown
   (guarded when setup skipped, so -nographics ignores cannot fail teardown).
+
+## Golden baselines (T11, `npm run t11:check` / `npm run t11:update`)
+
+`t4:capture` also compares every capture against the committed baseline store
+under `Tests/Runtime/Capture/Baselines~/` (one directory per environment,
+e.g. `6000.4.6f1-metal-linear-397x489-scale1/`, holding the scenario PNGs plus
+an `index.json` with provenance). Gate: per-channel tolerance of 1 byte,
+failing when more than 0.1% of pixels exceed it; provenance (Unity version,
+graphics API, color space, resolution, theme, font) must match exactly.
+Missing baselines are reported as pending, not failed; a mismatch fails the
+command and writes diff/overlay/report artifacts under `.artifacts/t11/`.
+
+```
+npm run t11:check                       # Unity-free store integrity gate (runs in CI)
+npm run t11:update -- --run .artifacts/t4   # promote a capture run into the store
+```
+
+Rules:
+
+- `t11:update` is the only regeneration path. It refuses incomplete or
+  schema-invalid captures and cross-environment promotions; replacing a
+  baseline whose pixels differ prints the verdict plus a gate PASS/FAIL and
+  writes review artifacts - the operator reviews and commits.
+- Never edit baselines by hand; never loosen tolerances to pass a compare.
+- Capture before visual changes (run `t4:capture`, review, then `t11:update`).
 
 Panel-scale constraints learned the hard way (PR #126 science runs) - any new
 capture scenario must respect them:
