@@ -1862,7 +1862,7 @@ export const T4_ALL_SCENARIOS = Object.freeze([
 export const T4_TEST_FILTER = "TerminalSurfaceCapture";
 
 export function parseT4Scenarios(raw) {
-  if (raw === undefined || raw === null) return [...T4_DEFAULT_SCENARIOS];
+  if (raw === undefined || raw === null) return [...T4_ALL_SCENARIOS];
   // Idempotent: callers may pass the comma-separated CLI string or an
   // already-parsed array (main parses once; runT4Capture re-validates).
   const names = (Array.isArray(raw) ? raw : String(raw).split(","))

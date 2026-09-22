@@ -50,8 +50,12 @@ describe("T4 scenario registries", () => {
 });
 
 describe("parseT4Scenarios", () => {
-  it("defaults to the pinned terminal surface scenarios", () => {
-    assert.deepEqual(parseT4Scenarios(undefined), [...T4_DEFAULT_SCENARIOS]);
+  it("defaults to every capture scenario (canon plus env variants)", () => {
+    assert.deepEqual(parseT4Scenarios(undefined), [...T4_ALL_SCENARIOS]);
+  });
+
+  it("treats null as the default too", () => {
+    assert.deepEqual(parseT4Scenarios(null), [...T4_ALL_SCENARIOS]);
   });
 
   it("splits and trims a comma-separated list", () => {
@@ -64,8 +68,7 @@ describe("parseT4Scenarios", () => {
     assert.deepEqual(parseT4Scenarios([" A ", "b"]), ["A", "b"]);
   });
 
-  it("treats null as the default and rejects non-string scalars cleanly", () => {
-    assert.deepEqual(parseT4Scenarios(null), [...T4_DEFAULT_SCENARIOS]);
+  it("rejects non-string scalars cleanly", () => {
     assert.throws(() => parseT4Scenarios(42), /Invalid scenario name/);
   });
 

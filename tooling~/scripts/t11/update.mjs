@@ -314,7 +314,9 @@ function main(argv) {
   let runDir;
   let storeDir = DEFAULT_STORE;
   let artifactsRoot = DEFAULT_ARTIFACTS;
-  let scenarios = T4_DEFAULT_SCENARIOS;
+  // Default to the full registry (canon plus variants): a default promotion
+  // must never leave variant captures pending while the canon lands.
+  let scenarios = T4_ALL_SCENARIOS;
   const readValue = (token) => {
     const value = argv[++index];
     if (value === undefined) {
