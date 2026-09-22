@@ -194,9 +194,15 @@ namespace WallstopStudios.DxCommandTerminal.Editor
 
             UnityEngine.Object oldSheet = AssetDatabase.LoadMainAssetAtPath(oldSheetPath);
             UnityEngine.Object newSheet = AssetDatabase.LoadMainAssetAtPath(newSheetPath);
+#if UNITY_6000_4_OR_NEWER
             return oldSheet != null
                 && newSheet != null
                 && oldSheet.GetEntityId() == newSheet.GetEntityId();
+#else
+            return oldSheet != null
+                && newSheet != null
+                && oldSheet.GetInstanceID() == newSheet.GetInstanceID();
+#endif
         }
 
         private static void WriteSiblingSheet(TerminalThemeAsset themeAsset, string assetPath)

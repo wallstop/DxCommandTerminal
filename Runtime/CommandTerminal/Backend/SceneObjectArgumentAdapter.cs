@@ -11,6 +11,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         private readonly SceneObjectAmbiguityPolicy _ambiguityPolicy;
         private readonly bool _includeInactive;
 
+#if UNITY_6000_4_OR_NEWER
         /*
             Reusable sort-key buffer for GetChoices, grown to the query size
             and reused across queries (completion queries run on one thread,
@@ -19,6 +20,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             pays; the key values and the resulting order are unchanged.
          */
         private EntityId[] _sortKeys = Array.Empty<EntityId>();
+#endif
 
         public SceneObjectArgumentAdapter(
             SceneObjectAmbiguityPolicy ambiguityPolicy = SceneObjectAmbiguityPolicy.FirstMatch,
