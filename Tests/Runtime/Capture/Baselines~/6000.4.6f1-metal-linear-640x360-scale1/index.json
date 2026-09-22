@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "environment": {
+    "unityVersion": "6000.4.6f1",
+    "graphicsApi": "Metal",
+    "colorSpace": "Linear",
+    "resolution": {
+      "width": 640,
+      "height": 360
+    },
+    "logicalScale": 1,
+    "pinned": false
+  },
+  "scenarios": {
+    "CapturesWideScreenPaletteLongHelp": {
+      "png": "CapturesWideScreenPaletteLongHelp.png",
+      "theme": "dark-theme",
+      "font": "FiraMono-Regular",
+      "capturedUtc": "2026-09-22T18:30:21.3067900Z",
+      "metrics": {
+        "distinctColors": 708,
+        "backgroundFraction": 0.5598,
+        "backgroundRgb": "#1B1B1E",
+        "pngBytes": 22835
+      }
+    }
+  }
+}

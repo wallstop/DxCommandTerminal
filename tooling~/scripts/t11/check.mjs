@@ -4,7 +4,11 @@
     "CI gates only Unity-free integrity checks"). Validates every
     environment under Tests/Runtime/Capture/Baselines~/:
     - index schema and provenance fields,
-    - scenario coverage (exactly the pinned T04 scenarios, no gaps, no strays),
+    - scenario coverage: pinned environments (environment.pinned !== false)
+      must cover the full pinned canon; variant environments declare their
+      own coverage; every entry must be a known pinned or variant scenario,
+    - store-level coverage: some pinned environment must cover the canon,
+      and every known scenario must be baselined by some environment,
     - PNG decodability and dimensions,
     - index-to-file agreement (recorded pngBytes equals the file on disk).
 
@@ -14,7 +18,7 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import { T4_DEFAULT_SCENARIOS } from "../mcp/unity-mcp.mjs";
+import { T4_DEFAULT_SCENARIOS, T4_VARIANT_SCENARIOS } from "../mcp/unity-mcp.mjs";
 import {
   BASELINE_STORE_VERSION,
   decodePng,
@@ -28,19 +32,34 @@ const DEFAULT_STORE = path.resolve(
 );
 
 /**
- * Validates one environment directory. Returns { scenarios, problems }.
- * `expectedScenarios` defaults to the pinned T04 capture scenarios.
+ * Validates one environment directory. Returns { scenarios, problems, pinned }.
+ * `expectedScenarios` defaults to the pinned T04 capture scenarios and gates
+ * PINNED environments only (environment.pinned !== false); a variant
+ * environment (resolution/scale/font extension) declares its own coverage:
+ * every baseline scenario it holds must be a known pinned or variant
+ * scenario, and it must hold at least one. `variantScenarios` defaults to
+ * the shipped env-variant registry.
  */
-export function checkBaselineEnvironment(storeDir, envKey, expectedScenarios) {
+export function checkBaselineEnvironment(
+  storeDir,
+  envKey,
+  expectedScenarios,
+  variantScenarios
+) {
   const problems = [];
   const expected = expectedScenarios ?? T4_DEFAULT_SCENARIOS;
+  const variants = variantScenarios ?? T4_VARIANT_SCENARIOS;
   let index;
   try {
     index = readBaselineIndex(storeDir, envKey);
   } catch (error) {
-    return { scenarios: [], problems: [`index.json is unreadable (${error.message})`] };
+    return {
+      scenarios: [],
+      problems: [`index.json is unreadable (${error.message})`],
+      pinned: true
+    };
   }
-  if (index === null) return { scenarios: [], problems: ["missing index.json"] };
+  if (index === null) return { scenarios: [], problems: ["missing index.json"], pinned: true };
   if (index.version !== BASELINE_STORE_VERSION) {
     problems.push(`unsupported index version ${JSON.stringify(index.version)}`);
   }
@@ -82,22 +101,32 @@ export function checkBaselineEnvironment(storeDir, envKey, expectedScenarios) {
     }
   }
 
+  const pinned = environment === null || typeof environment !== "object" || environment.pinned !== false;
+
   const scenarios = index.scenarios;
   if (scenarios === null || typeof scenarios !== "object" || Array.isArray(scenarios)) {
     problems.push("missing scenarios block");
-    return { scenarios: [], problems };
+    return { scenarios: [], problems, pinned };
   }
 
-  for (const name of expected) {
-    if (!Object.hasOwn(scenarios, name)) problems.push(`missing baseline scenario ${name}`);
+  const known = [...expected, ...variants];
+  if (pinned) {
+    for (const name of expected) {
+      if (!Object.hasOwn(scenarios, name)) problems.push(`missing baseline scenario ${name}`);
+    }
+  } else if (Object.keys(scenarios).length === 0) {
+    problems.push("variant environment holds no baseline scenarios");
   }
   for (const name of Object.keys(scenarios)) {
-    if (!expected.includes(name)) problems.push(`unexpected baseline scenario ${name}`);
+    if (!known.includes(name)) problems.push(`unexpected baseline scenario ${name}`);
   }
 
   const checked = [];
   for (const name of Object.keys(scenarios).sort()) {
-    if (!expected.includes(name)) continue;
+    // Strays are already reported above; every known entry - pinned canon,
+    // variant extras hosted by a pinned environment, and variant coverage -
+    // gets the full integrity check.
+    if (!known.includes(name)) continue;
     const entry = scenarios[name];
     if (entry === null || typeof entry !== "object") {
       problems.push(`${name}: entry is not an object`);
@@ -166,14 +195,16 @@ export function checkBaselineEnvironment(storeDir, envKey, expectedScenarios) {
     checked.push(name);
   }
 
-  return { scenarios: checked, problems };
+  return { scenarios: checked, problems, pinned };
 }
 
 /** Validates the whole store; returns the list of problems (empty = green). */
-export function checkBaselineStore(storeDir, expectedScenarios) {
+export function checkBaselineStore(storeDir, expectedScenarios, variantScenarios) {
   const problems = [];
   if (!fs.existsSync(storeDir)) return [`baseline store is missing at ${storeDir}`];
 
+  const expected = expectedScenarios ?? T4_DEFAULT_SCENARIOS;
+  const variants = variantScenarios ?? T4_VARIANT_SCENARIOS;
   const environments = fs
     .readdirSync(storeDir, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
@@ -185,11 +216,31 @@ export function checkBaselineStore(storeDir, expectedScenarios) {
   if (environments.length === 0) return ["baseline store holds no environment directories"];
 
   let checkedScenarios = 0;
+  const baselined = new Set();
+  let pinnedCanonCoverage = false;
   for (const envKey of environments) {
-    const result = checkBaselineEnvironment(storeDir, envKey, expectedScenarios);
+    const result = checkBaselineEnvironment(storeDir, envKey, expected, variants);
     for (const problem of result.problems) problems.push(`${envKey}: ${problem}`);
     checkedScenarios += result.scenarios.length;
+    for (const name of result.scenarios) baselined.add(name);
+    if (result.pinned && expected.every((name) => result.scenarios.includes(name))) {
+      pinnedCanonCoverage = true;
+    }
   }
+
+  // A store without a pinned environment covering the full canon has lost
+  // its pixel gate for the pinned scenarios; deleting the pinned directory
+  // (or corrupting its baselines) must fail here, not read as "all pending".
+  if (!pinnedCanonCoverage) {
+    problems.push("no pinned environment covers the pinned scenario canon");
+  }
+  // Symmetrically, every known scenario must stay baselined somewhere:
+  // a variant baseline deleted from its environment would otherwise vanish
+  // silently (captures would read it as pending, never as a failure).
+  for (const name of [...expected, ...variants]) {
+    if (!baselined.has(name)) problems.push(`no environment baselines scenario ${name}`);
+  }
+
   console.log(
     `T11 store: ${environments.length} environment(s), ${checkedScenarios} baseline PNG(s) checked.`
   );

@@ -11,6 +11,18 @@
     "logicalScale": 1
   },
   "scenarios": {
+    "CapturesAlternateFontTerminalSmall": {
+      "png": "CapturesAlternateFontTerminalSmall.png",
+      "theme": "dark-theme",
+      "font": "AtkinsonHyperlegibleMono-Regular",
+      "capturedUtc": "2026-09-22T18:30:19.6309820Z",
+      "metrics": {
+        "distinctColors": 278,
+        "backgroundFraction": 0.6597,
+        "backgroundRgb": "#1B1B1E",
+        "pngBytes": 41763
+      }
+    },
     "CapturesCommandPaletteSurface": {
       "png": "CapturesCommandPaletteSurface.png",
       "theme": "dark-theme",

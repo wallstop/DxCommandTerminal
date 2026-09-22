@@ -4,8 +4,10 @@ import os from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
 import {
+  T4_ALL_SCENARIOS,
   T4_DEFAULT_SCENARIOS,
   T4_EXPECTED_INCOMPLETE,
+  T4_VARIANT_SCENARIOS,
   parseT4Scenarios,
   validateT4Manifest,
   collectT4ManifestPaths
@@ -35,6 +37,16 @@ const validManifest = (overrides = {}) => ({
   bounds: { minDistinctColors: 8, minBackgroundFraction: 0.3, maxBackgroundFraction: 0.995 },
   violations: [],
   ...overrides
+});
+
+describe("T4 scenario registries", () => {
+  it("keeps the env-variant registry disjoint from the pinned canon", () => {
+    assert.ok(T4_VARIANT_SCENARIOS.length > 0);
+    for (const name of T4_VARIANT_SCENARIOS) {
+      assert.ok(!T4_DEFAULT_SCENARIOS.includes(name), `${name} must stay out of the canon`);
+    }
+    assert.deepEqual(T4_ALL_SCENARIOS, [...T4_DEFAULT_SCENARIOS, ...T4_VARIANT_SCENARIOS]);
+  });
 });
 
 describe("parseT4Scenarios", () => {

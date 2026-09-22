@@ -78,17 +78,41 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private const string LongNameQuery = "capture-long-command";
         private const string PaletteQuery = "capture";
         private const string PaletteEmptyQuery = "zzz-matches-nothing";
-        private const string PaletteLongHelpQuery = "capture-described";
+        private const string LongHelpCommandName = "capture-described";
+        private const string PaletteLongHelpQuery = LongHelpCommandName;
         private const int ScrollLineCount = 40;
+
+        /*
+            Env-variant capture environments (T11): deliberate extensions of
+            the pinned host - a narrow screen, a wide screen that exercises
+            the palette window width clamp and the help label's first-line
+            wrap point, a 2x panel scale (Retina-style pixel density over the
+            pinned point layout, 794x978 = 2x 397x489), and a representative
+            alternate font pack. Resolution and scale derive the environment
+            key; theme and font ride per-scenario in each entry's provenance,
+            so a font change fails provenance in place instead of minting a
+            new environment.
+         */
+        private const string AltFontPackPath = "Packs/Fonts/Large.asset";
+        private const float VariantPanelScale = 2f;
+        private const int NarrowCaptureWidth = 300;
+        private const int NarrowCaptureHeight = 489;
+        private const int WideCaptureWidth = 640;
+        private const int WideCaptureHeight = 360;
+        private const int ScaleTwoCaptureWidth = 794;
+        private const int ScaleTwoCaptureHeight = 978;
+        private const int PinnedCaptureWidth = 397;
+        private const int PinnedCaptureHeight = 489;
         private const string WrappedLine =
             "capture-wrap long line that must wrap across several visual rows: "
             + "0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ the quick brown fox jumps over the lazy dog "
             + "and keeps going so the log view has to break it into multiple rendered rows";
         private const string LongHelpLine =
-            "capture-described help: a deliberately long description that must wrap across "
-            + "several rendered rows inside the palette result list, exercising row growth, "
-            + "help-label wrapping, and the scrolled result layout without truncation or "
-            + "clipping at the pinned host resolution";
+            LongHelpCommandName
+            + " help: a deliberately long description that must wrap across several rendered "
+            + "rows inside the palette result list, exercising row growth, help-label wrapping, "
+            + "and the scrolled result layout without truncation or clipping at the pinned host "
+            + "resolution";
 
         private static readonly string[] CaptureCommandNames = { "capture-alpha", "capture-bravo" };
 
@@ -108,6 +132,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private int? _renderTexturesBefore;
         private CaptureOutcome _lastOutcome;
         private string _diagnosticsSuffix;
+        private int _captureWidth;
+        private int _captureHeight;
 
         private static string FormatBound(VisualElement element)
         {
@@ -351,12 +377,113 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public IEnumerator CapturesPaletteLongDescriptionSurface()
         {
             yield return SpawnCalibratedTerminal(TerminalState.OpenSmall, withPalette: true);
-            Terminal.Shell.AddCommand("capture-described", _ => { }, help: LongHelpLine);
+            Terminal.Shell.AddCommand(LongHelpCommandName, _ => { }, help: LongHelpLine);
             _palette.Open();
             yield return null;
             _palette._input.value = PaletteLongHelpQuery;
             yield return WaitForPaletteRows(PaletteLongHelpQuery);
             yield return CapturePaletteSurface(nameof(CapturesPaletteLongDescriptionSurface));
+            AssertAcceptable(_lastOutcome);
+        }
+
+        /*
+            Env-variant captures (T11): each pins a real package surface under
+            a deliberate environment extension of the pinned host - narrow and
+            wide screens, 2x panel pixel density, an alternate representative
+            font. Layout decisions tuned to the pinned resolution can regress
+            without moving the pinned baselines, so these variants pin them
+            separately; the manifest's resolution/scale/font provenance
+            derives each environment key, and baselines never compare across
+            environments.
+         */
+        [UnityTest]
+        public IEnumerator CapturesNarrowScreenTerminalSmall()
+        {
+            yield return SpawnCalibratedTerminal(TerminalState.OpenSmall);
+            Terminal.Log("capture-narrow ready");
+            Terminal.Log(WrappedLine);
+            _terminal.SetCursorBlinkPaused(true);
+            yield return CaptureSurface(
+                nameof(CapturesNarrowScreenTerminalSmall),
+                CaptureBounds.Default(),
+                NarrowCaptureWidth,
+                NarrowCaptureHeight
+            );
+            AssertAcceptable(_lastOutcome);
+        }
+
+        /*
+            Wide screen with the long-help palette row: the palette window is
+            a serialized point width clamped by the frame, so the pinned
+            397pt frame hides the clamp while this one exercises it (640pt
+            window in a 640pt frame), and the wider row gives the help label
+            enough space to expose its first-line wrap point. Multi-line row
+            growth stays invisible at any width: rows pin a fixed serialized
+            rowHeight, so wrapping clips inside the row by design.
+         */
+        [UnityTest]
+        public IEnumerator CapturesWideScreenPaletteLongHelp()
+        {
+            yield return SpawnCalibratedTerminal(TerminalState.OpenSmall, withPalette: true);
+            Terminal.Shell.AddCommand(LongHelpCommandName, _ => { }, help: LongHelpLine);
+            _palette.Open();
+            yield return null;
+            _palette._input.value = PaletteLongHelpQuery;
+            yield return WaitForPaletteRows(PaletteLongHelpQuery);
+            yield return CapturePaletteSurface(
+                nameof(CapturesWideScreenPaletteLongHelp),
+                WideCaptureWidth,
+                WideCaptureHeight
+            );
+            AssertAcceptable(_lastOutcome);
+        }
+
+        /*
+            2x panel scale over the doubled pinned frame (794x978 = 2x
+            397x489): the point layout matches the pinned host exactly, so
+            any pixel regression here is a density-handling bug, not a
+            re-layout.
+         */
+        [UnityTest]
+        public IEnumerator CapturesScaleTwoTerminalSmall()
+        {
+            yield return SpawnCalibratedTerminal(
+                TerminalState.OpenSmall,
+                panelScale: VariantPanelScale
+            );
+            Terminal.Log("capture-scale-two ready");
+            Terminal.Log(WrappedLine);
+            _terminal.SetCursorBlinkPaused(true);
+            yield return CaptureSurface(
+                nameof(CapturesScaleTwoTerminalSmall),
+                CaptureBounds.Default(),
+                ScaleTwoCaptureWidth,
+                ScaleTwoCaptureHeight
+            );
+            AssertAcceptable(_lastOutcome);
+        }
+
+        /*
+            A representative alternate font pack at the pinned frame: pins
+            that the shipped packs render into the terminal correctly and
+            gives the font provenance a second, distinct value to gate on.
+         */
+        [UnityTest]
+        public IEnumerator CapturesAlternateFontTerminalSmall()
+        {
+            yield return SpawnCalibratedTerminal(
+                TerminalState.OpenSmall,
+                fontPackPath: AltFontPackPath
+            );
+            Terminal.Log("capture-font ready");
+            Terminal.Log(WrappedLine);
+            _terminal.SetCursorBlinkPaused(true);
+            yield return CaptureSurface(
+                nameof(CapturesAlternateFontTerminalSmall),
+                CaptureBounds.Default(),
+                PinnedCaptureWidth,
+                PinnedCaptureHeight
+            );
             AssertAcceptable(_lastOutcome);
         }
 
@@ -535,25 +662,19 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public IEnumerator BlankRenderFailsBounds()
         {
             _panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
-            RenderTexture target = new RenderTexture(
-                Screen.width,
-                Screen.height,
-                24,
-                RenderTextureFormat.ARGB32
-            )
-            {
-                name = "T4Capture-BlankControl",
-            };
-            Assert.IsTrue(target.Create(), "Sanity: the blank-control target created");
+
+            /*
+                The blank control renders no panel content at all, so the
+                cleared target must stay blank through the settle and fail
+                the bounds. It shares the standard target factory so the
+                manifest records the same resolution provenance as every
+                other capture.
+             */
+            RenderTexture target = CreateRenderTarget(nameof(BlankRenderFailsBounds));
             _panelSettings.targetTexture = target;
 
             try
             {
-                RenderTexture previousTarget = RenderTexture.active;
-                RenderTexture.active = target;
-                GL.Clear(true, true, Color.clear);
-                RenderTexture.active = previousTarget;
-
                 yield return SettleRenders();
                 _lastOutcome = FinishCapture(
                     nameof(BlankRenderFailsBounds),
@@ -578,7 +699,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
         }
 
-        private IEnumerator SpawnTerminal()
+        private IEnumerator SpawnTerminal(
+            float? panelScale = null,
+            string fontPackPath = FontPackPath
+        )
         {
             _diagnosticsSuffix = string.Empty;
             _panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
@@ -592,6 +716,16 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             _panelSettings.themeStyleSheet = LoadPack<ThemeStyleSheet>(
                 "Styles/TerminalThemeSettings-Base.tss"
             );
+
+            /*
+                The panel freezes its scale at creation, so a variant scale
+                must land before the document goes live.
+             */
+            if (panelScale.HasValue)
+            {
+                _panelSettings.scale = panelScale.Value;
+            }
+
             _surfaceObject = new GameObject("T4CaptureTerminal");
             _surfaceObject.SetActive(false);
             UIDocument document = _surfaceObject.AddComponent<UIDocument>();
@@ -602,13 +736,18 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             _terminal.easeOutTime = 0f;
             _terminal.easeInTime = 0f;
             _terminal._themePack = LoadPack<TerminalThemePack>(ThemePackPath);
-            _terminal._fontPack = LoadPack<TerminalFontPack>(FontPackPath);
+            _terminal._fontPack = LoadPack<TerminalFontPack>(fontPackPath);
             _tracker = _surfaceObject.AddComponent<StartTracker>();
             _surfaceObject.SetActive(true);
             yield return new WaitUntil(() => _tracker.Started);
         }
 
-        private IEnumerator SpawnCalibratedTerminal(TerminalState state, bool withPalette = false)
+        private IEnumerator SpawnCalibratedTerminal(
+            TerminalState state,
+            bool withPalette = false,
+            float? panelScale = null,
+            string fontPackPath = FontPackPath
+        )
         {
             /*
                 The host game view's zoom and Retina backing decide how many
@@ -617,7 +756,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 the manifest; scenario layouts that stay inside the small
                 state capture cleanly at any stretch factor.
              */
-            yield return SpawnTerminal();
+            yield return SpawnTerminal(panelScale, fontPackPath);
             if (withPalette)
             {
                 AttachPalette();
@@ -765,7 +904,17 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         private IEnumerator CaptureSurface(string scenario, CaptureBounds bounds)
         {
-            RenderTexture target = AttachRenderTarget(scenario);
+            yield return CaptureSurface(scenario, bounds, Screen.width, Screen.height);
+        }
+
+        private IEnumerator CaptureSurface(
+            string scenario,
+            CaptureBounds bounds,
+            int width,
+            int height
+        )
+        {
+            RenderTexture target = AttachRenderTarget(scenario, width, height);
             try
             {
                 yield return SettleRenders();
@@ -791,7 +940,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
          */
         private IEnumerator CapturePaletteSurface(string scenario)
         {
-            RenderTexture target = AttachRenderTarget(scenario);
+            yield return CapturePaletteSurface(scenario, Screen.width, Screen.height);
+        }
+
+        private IEnumerator CapturePaletteSurface(string scenario, int width, int height)
+        {
+            RenderTexture target = AttachRenderTarget(scenario, width, height);
             TerminalSurfaceCapture.CursorFreezeScope cursorFreeze =
                 TerminalSurfaceCapture.FreezeCursor(_palette._input);
             try
@@ -959,7 +1113,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         private RenderTexture AttachRenderTarget(string scenario)
         {
-            RenderTexture target = CreateRenderTarget(scenario);
+            return AttachRenderTarget(scenario, Screen.width, Screen.height);
+        }
+
+        private RenderTexture AttachRenderTarget(string scenario, int width, int height)
+        {
+            RenderTexture target = CreateRenderTarget(scenario, width, height);
             _panelSettings.targetTexture = target;
             return target;
         }
@@ -970,19 +1129,18 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
          */
         private RenderTexture CreateRenderTarget(string scenario)
         {
-            RenderTexture target = new RenderTexture(
-                Screen.width,
-                Screen.height,
-                24,
-                RenderTextureFormat.ARGB32
-            )
+            return CreateRenderTarget(scenario, Screen.width, Screen.height);
+        }
+
+        private RenderTexture CreateRenderTarget(string scenario, int width, int height)
+        {
+            RenderTexture target = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32)
             {
                 name = $"T4Capture-{scenario}",
             };
-            Assert.IsTrue(
-                target.Create(),
-                $"Sanity: the {Screen.width}x{Screen.height} capture target created"
-            );
+            Assert.IsTrue(target.Create(), $"Sanity: the {width}x{height} capture target created");
+            _captureWidth = width;
+            _captureHeight = height;
             RenderTexture previousTarget = RenderTexture.active;
             RenderTexture.active = target;
             GL.Clear(true, true, Color.clear);
@@ -1013,8 +1171,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 Scenario = scenario,
                 CapturedUtc = DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture),
                 Complete = 0 == outcome.Violations.Count,
-                ResolutionWidth = Screen.width,
-                ResolutionHeight = Screen.height,
+                ResolutionWidth = _captureWidth,
+                ResolutionHeight = _captureHeight,
                 LogicalScale = _panelSettings.scale,
                 ColorSpace = QualitySettings.activeColorSpace.ToString(),
                 UnityVersion = Application.unityVersion,

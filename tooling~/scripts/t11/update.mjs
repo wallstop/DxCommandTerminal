@@ -25,6 +25,7 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import {
+  T4_ALL_SCENARIOS,
   T4_DEFAULT_SCENARIOS,
   parseT4Scenarios,
   validateT4Manifest
@@ -97,13 +98,18 @@ function baselineEntryFrom(manifest, pngBytes) {
   };
 }
 
-function indexEnvironmentFrom(provenance) {
+function indexEnvironmentFrom(provenance, pinned) {
   return {
     unityVersion: provenance.unityVersion,
     graphicsApi: provenance.graphicsApi,
     colorSpace: provenance.colorSpace,
     resolution: { width: provenance.width, height: provenance.height },
-    logicalScale: provenance.logicalScale
+    logicalScale: provenance.logicalScale,
+    // Pinned environments must cover the full pinned scenario canon (the
+    // store gate enforces it); a variant environment declares its own
+    // coverage instead. Indexes written before this field existed are
+    // pinned by omission.
+    pinned
   };
 }
 
@@ -116,9 +122,19 @@ function indexEnvironmentFrom(provenance) {
  * replacing a baseline is a deliberate, reviewed act, so pixel drift is
  * reported loudly but never fails the promotion; invalid captures and
  * provenance mismatches do, because they would corrupt the store.
- * Writes are buffered and applied only when the whole run promotes cleanly.
+ * A freshly seeded environment is marked pinned when every `pinnedScenarios`
+ * canon scenario resolved to THAT environment in this run, and variant
+ * otherwise (one run may seed a pinned environment and variant environments
+ * side by side); existing indexes keep whatever they record. Writes are
+ * buffered and applied only when the whole run promotes cleanly.
  */
-export function promoteRun({ runDir, storeDir, artifactsRoot, scenarioNames }) {
+export function promoteRun({
+  runDir,
+  storeDir,
+  artifactsRoot,
+  scenarioNames,
+  pinnedScenarios = T4_DEFAULT_SCENARIOS
+}) {
   const problems = [];
   const written = [];
   const pending = [];
@@ -130,6 +146,10 @@ export function promoteRun({ runDir, storeDir, artifactsRoot, scenarioNames }) {
     return { written, problems: [error.message] };
   }
 
+  // First pass: validate every manifest and resolve its environment, so the
+  // pinned flag for a new environment can be derived from what actually
+  // lands in it rather than from the run's global scenario list.
+  const stagedByEnv = new Map();
   for (let position = 0; position < manifests.length; ++position) {
     const found = manifests[position];
     if (found === null) {
@@ -188,58 +208,73 @@ export function promoteRun({ runDir, storeDir, artifactsRoot, scenarioNames }) {
       problems.push(`${found.scenario}: ${error.message}`);
       continue;
     }
-    let index = indexes.get(envKey);
-    if (index === undefined) {
-      try {
-        index = readBaselineIndex(storeDir, envKey);
-      } catch (error) {
-        problems.push(`${found.scenario}: ${error.message}`);
-        continue;
-      }
-      index ??= {
-        version: BASELINE_STORE_VERSION,
-        environment: indexEnvironmentFrom(provenanceOf(manifest)),
-        scenarios: {}
-      };
-      indexes.set(envKey, index);
-    }
+    if (!stagedByEnv.has(envKey)) stagedByEnv.set(envKey, []);
+    stagedByEnv.get(envKey).push({ found, manifest, actualPng });
+  }
 
-    const verdict = { scenario: found.scenario, envKey, actualPng, index, manifest };
-    const baselinePngPath = path.join(storeDir, envKey, `${found.scenario}.png`);
-    const entry = index.scenarios[found.scenario];
-    if (fs.existsSync(baselinePngPath) && entry !== undefined) {
-      if (entry === null || typeof entry !== "object") {
-        problems.push(
-          `${found.scenario}: baseline index entry is corrupt (${JSON.stringify(entry)})`
-        );
-        continue;
-      }
-      const outcome = compareScenario(
-        fs.readFileSync(baselinePngPath),
-        actualPng,
-        environmentProvenance(index.environment, entry.theme, entry.font),
-        provenanceOf(manifest)
-      );
-      if (outcome.result === null) {
-        // Cross-environment promotion would silently corrupt the store.
-        problems.push(
-          `${found.scenario}: refusing to promote across provenance: `
-            + `${outcome.problems.join("; ")}`
-        );
-        continue;
-      }
-      verdict.verdict = outcome.result.identical ? "identical" : "changed";
-      verdict.gate = outcome.pass;
-      if (!outcome.result.identical) {
-        verdict.artifactsInputs = {
-          baselinePng: fs.readFileSync(baselinePngPath),
-          outcome
-        };
-      }
-    } else {
-      verdict.verdict = "new";
+  // Second pass: seed each environment once (existing indexes keep their
+  // recorded pinned flag; a fresh one is pinned iff every canon scenario
+  // landed in it), then build the per-scenario verdicts.
+  for (const envKey of [...stagedByEnv.keys()].sort()) {
+    const staged = stagedByEnv.get(envKey);
+    let index;
+    try {
+      index = readBaselineIndex(storeDir, envKey);
+    } catch (error) {
+      problems.push(`${envKey}: ${error.message}`);
+      continue;
     }
-    pending.push(verdict);
+    index ??= {
+      version: BASELINE_STORE_VERSION,
+      environment: indexEnvironmentFrom(
+        provenanceOf(staged[0].manifest),
+        pinnedScenarios.length > 0
+          && pinnedScenarios.every((name) =>
+            staged.some((entry) => entry.found.scenario === name)
+          )
+      ),
+      scenarios: {}
+    };
+    indexes.set(envKey, index);
+
+    for (const { found, manifest, actualPng } of staged) {
+      const verdict = { scenario: found.scenario, envKey, actualPng, index, manifest };
+      const baselinePngPath = path.join(storeDir, envKey, `${found.scenario}.png`);
+      const existing = index.scenarios[found.scenario];
+      if (fs.existsSync(baselinePngPath) && existing !== undefined) {
+        if (existing === null || typeof existing !== "object") {
+          problems.push(
+            `${found.scenario}: baseline index entry is corrupt (${JSON.stringify(existing)})`
+          );
+          continue;
+        }
+        const outcome = compareScenario(
+          fs.readFileSync(baselinePngPath),
+          actualPng,
+          environmentProvenance(index.environment, existing.theme, existing.font),
+          provenanceOf(manifest)
+        );
+        if (outcome.result === null) {
+          // Cross-environment promotion would silently corrupt the store.
+          problems.push(
+            `${found.scenario}: refusing to promote across provenance: `
+              + `${outcome.problems.join("; ")}`
+          );
+          continue;
+        }
+        verdict.verdict = outcome.result.identical ? "identical" : "changed";
+        verdict.gate = outcome.pass;
+        if (!outcome.result.identical) {
+          verdict.artifactsInputs = {
+            baselinePng: fs.readFileSync(baselinePngPath),
+            outcome
+          };
+        }
+      } else {
+        verdict.verdict = "new";
+      }
+      pending.push(verdict);
+    }
   }
 
   if (problems.length === 0) {
@@ -261,18 +296,18 @@ export function promoteRun({ runDir, storeDir, artifactsRoot, scenarioNames }) {
           verdict.artifactsInputs.outcome
         );
       }
-      writeBaselineIndex(storeDir, verdict.envKey, verdict.index);
-      written.push({
-        scenario: verdict.scenario,
-        envKey: verdict.envKey,
-        verdict: verdict.verdict,
-        gate: verdict.gate,
-        artifactsDir: verdict.artifactsDir
-      });
-    }
-  }
+     writeBaselineIndex(storeDir, verdict.envKey, verdict.index);
+     written.push({
+       scenario: verdict.scenario,
+       envKey: verdict.envKey,
+       verdict: verdict.verdict,
+       gate: verdict.gate,
+       artifactsDir: verdict.artifactsDir
+     });
+   }
+ }
 
-  return { written, problems };
+ return { written, problems };
 }
 
 function main(argv) {
@@ -298,14 +333,15 @@ function main(argv) {
     } else if (token === "--artifacts") {
       artifactsRoot = path.resolve(readValue(token));
     } else if (token === "--scenarios") {
-      // Only the pinned scenarios may be baselined: anything else would be
-      // promoted cleanly and then fail the store coverage gate in CI.
+      // Only the pinned canon plus its env variants may be baselined:
+      // anything else would be promoted cleanly and then fail the store
+      // coverage gate in CI.
       const requested = parseT4Scenarios(readValue(token));
-      const unknown = requested.filter((name) => !T4_DEFAULT_SCENARIOS.includes(name));
+      const unknown = requested.filter((name) => !T4_ALL_SCENARIOS.includes(name));
       if (unknown.length > 0) {
         console.error(
-          `Unknown pinned scenario(s): ${unknown.join(", ")}. `
-            + `Pinned list: ${T4_DEFAULT_SCENARIOS.join(", ")}`
+          `Unknown baseline scenario(s): ${unknown.join(", ")}. `
+            + `Known list: ${T4_ALL_SCENARIOS.join(", ")}`
         );
         return 2;
       }
@@ -314,7 +350,7 @@ function main(argv) {
       console.log(
         "Usage: node tooling~/scripts/t11/update.mjs --run DIR [--store DIR] "
           + "[--artifacts DIR] [--scenarios LIST]  (LIST must be a subset of the "
-          + "pinned T04 scenarios)"
+          + "pinned scenarios plus their env variants)"
       );
       return 0;
     } else {
