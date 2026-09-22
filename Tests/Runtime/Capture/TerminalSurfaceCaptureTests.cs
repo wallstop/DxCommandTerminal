@@ -75,13 +75,29 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private const string DarkScenarioName = "CapturesDarkThemeSurface";
 
         private const string CompletionQuery = "capture-a";
+        private const string LongNameQuery = "capture-long-command";
         private const string PaletteQuery = "capture";
+        private const string PaletteEmptyQuery = "zzz-matches-nothing";
+        private const string PaletteLongHelpQuery = "capture-described";
+        private const int ScrollLineCount = 40;
         private const string WrappedLine =
             "capture-wrap long line that must wrap across several visual rows: "
             + "0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ the quick brown fox jumps over the lazy dog "
             + "and keeps going so the log view has to break it into multiple rendered rows";
+        private const string LongHelpLine =
+            "capture-described help: a deliberately long description that must wrap across "
+            + "several rendered rows inside the palette result list, exercising row growth, "
+            + "help-label wrapping, and the scrolled result layout without truncation or "
+            + "clipping at the pinned host resolution";
 
         private static readonly string[] CaptureCommandNames = { "capture-alpha", "capture-bravo" };
+
+        private static readonly string[] LongNameCommands =
+        {
+            "capture-long-command-name-alpha-with-many-readable-segments",
+            "capture-long-command-name-bravo-with-many-readable-segments",
+            "capture-long-command-name-charlie-with-many-readable-segments",
+        };
 
         private PanelSettings _panelSettings;
         private GameObject _surfaceObject;
@@ -121,11 +137,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.That(0 < outcome.Metrics.PngBytes, "The PNG encoder produced a non-empty file");
         }
 
-        private static void RegisterCaptureCommands()
+        private static void RegisterFixtureCommands(string[] names)
         {
-            for (int index = 0; index < CaptureCommandNames.Length; ++index)
+            for (int index = 0; index < names.Length; ++index)
             {
-                string commandName = CaptureCommandNames[index];
+                string commandName = names[index];
                 Terminal.Shell.AddCommand(
                     commandName,
                     _ => { },
@@ -227,7 +243,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public IEnumerator CapturesCompletionHintsSurface()
         {
             yield return SpawnCalibratedTerminal(TerminalState.OpenSmall);
-            RegisterCaptureCommands();
+            RegisterFixtureCommands(CaptureCommandNames);
 
             /*
                 Tab completion is the surface players see: CompleteCommand
@@ -237,12 +253,110 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             _terminal._commandInput.value = CompletionQuery;
             yield return null;
             _terminal.CompleteCommand();
-            yield return WaitForCompletionHints();
+            yield return WaitForCompletionHints(CompletionQuery);
             _terminal.SetCursorBlinkPaused(true);
             yield return CaptureSurface(
                 nameof(CapturesCompletionHintsSurface),
                 CaptureBounds.Default()
             );
+            AssertAcceptable(_lastOutcome);
+        }
+
+        /*
+            Scrolling surface: enough log volume to overflow the small-state
+            log view, so the scrollbar engages and the auto scroll-to-end
+            pins the visible window to the newest lines (the wrapped line
+            plus an error line ride along for content variety).
+         */
+        [UnityTest]
+        public IEnumerator CapturesScrollingLogSurface()
+        {
+            yield return SpawnCalibratedTerminal(TerminalState.OpenSmall);
+            for (int line = 1; line <= ScrollLineCount; ++line)
+            {
+                Terminal.Log(
+                    "capture-scroll line "
+                        + line.ToString(CultureInfo.InvariantCulture)
+                        + " of "
+                        + ScrollLineCount.ToString(CultureInfo.InvariantCulture)
+                );
+            }
+
+            Terminal.Log(TerminalLogType.Error, "capture-scroll error line");
+            Terminal.Log(WrappedLine);
+            _terminal.SetCursorBlinkPaused(true);
+            yield return WaitForLogScrollSettled();
+            yield return CaptureSurface(
+                nameof(CapturesScrollingLogSurface),
+                CaptureBounds.Default()
+            );
+            AssertAcceptable(_lastOutcome);
+        }
+
+        /*
+            Long command names through the legacy completion path: the hint
+            popup rows must lay out names far wider than the short fixture
+            names, pinning the popup width behavior at the host resolution.
+         */
+        [UnityTest]
+        public IEnumerator CapturesLongNameCompletionSurface()
+        {
+            yield return SpawnCalibratedTerminal(TerminalState.OpenSmall);
+            RegisterFixtureCommands(LongNameCommands);
+            _terminal._commandInput.value = LongNameQuery;
+            yield return null;
+            _terminal.CompleteCommand();
+            yield return WaitForCompletionHints(LongNameQuery);
+            _terminal.SetCursorBlinkPaused(true);
+            yield return CaptureSurface(
+                nameof(CapturesLongNameCompletionSurface),
+                CaptureBounds.Default()
+            );
+            AssertAcceptable(_lastOutcome);
+        }
+
+        /*
+            Palette empty results: a query that matches nothing leaves the
+            palette open with the input rendered and zero result rows - the
+            no-match feedback surface players see on a typo.
+         */
+        [UnityTest]
+        public IEnumerator CapturesPaletteEmptyResultsSurface()
+        {
+            yield return SpawnCalibratedTerminal(TerminalState.OpenSmall, withPalette: true);
+            RegisterFixtureCommands(CaptureCommandNames);
+            _palette.Open();
+            yield return null;
+            _palette._input.value = PaletteEmptyQuery;
+            yield return SettleRenders();
+            Assert.That(
+                _palette._matchNames,
+                Is.Empty,
+                $"The palette matched nothing for query '{PaletteEmptyQuery}'"
+            );
+            yield return CapturePaletteSurface(nameof(CapturesPaletteEmptyResultsSurface));
+            AssertAcceptable(_lastOutcome);
+        }
+
+        /*
+            Palette long help: a result row whose name and description far
+            exceed the short fixture commands, pinning row, selection, and
+            window layout under a wrapped multi-line help label. The pinned
+            host frame cuts the row at the name column, so glyph-level help
+            wrapping becomes visible only with resolution-variant
+            environments; this capture still fails any regression that
+            shifts row or window layout.
+         */
+        [UnityTest]
+        public IEnumerator CapturesPaletteLongDescriptionSurface()
+        {
+            yield return SpawnCalibratedTerminal(TerminalState.OpenSmall, withPalette: true);
+            Terminal.Shell.AddCommand("capture-described", _ => { }, help: LongHelpLine);
+            _palette.Open();
+            yield return null;
+            _palette._input.value = PaletteLongHelpQuery;
+            yield return WaitForPaletteRows(PaletteLongHelpQuery);
+            yield return CapturePaletteSurface(nameof(CapturesPaletteLongDescriptionSurface));
             AssertAcceptable(_lastOutcome);
         }
 
@@ -258,11 +372,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public IEnumerator CapturesCommandPaletteSurface()
         {
             yield return SpawnCalibratedTerminal(TerminalState.OpenSmall, withPalette: true);
-            RegisterCaptureCommands();
+            RegisterFixtureCommands(CaptureCommandNames);
             _palette.Open();
             yield return null;
             _palette._input.value = PaletteQuery;
-            yield return WaitForPaletteRows();
+            yield return WaitForPaletteRows(PaletteQuery);
             _terminal.SetCursorBlinkPaused(true);
 
             string scenario = nameof(CapturesCommandPaletteSurface);
@@ -545,7 +659,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
         }
 
-        private IEnumerator WaitForCompletionHints()
+        private IEnumerator WaitForCompletionHints(string query)
         {
             /*
                 Hints render into the AutoCompletePopup container; the popup
@@ -573,7 +687,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Assert.That(
                 0 < _terminal._lastCompletionBuffer.Count,
-                $"Completion candidates were computed for '{CompletionQuery}'"
+                $"Completion candidates were computed for '{query}'"
             );
             VisualElement popup = hintPopup();
             Assert.That(popup != null, "Completion hint popup exists for the query");
@@ -585,7 +699,54 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
         }
 
-        private IEnumerator WaitForPaletteRows()
+        private IEnumerator WaitForLogScrollSettled()
+        {
+            ScrollView LogView()
+            {
+                return _terminal._uiDocument.rootVisualElement.Q("LogScrollView") as ScrollView;
+            }
+
+            /*
+                The runtime scroll-to-end pin is one-shot, so require two
+                consecutive stable frames: a late re-layout that grows the
+                scroll extent must not slip through between pin and capture.
+             */
+            int frameBudget = FrameBudget;
+            bool settledOnce = false;
+            while (0 < frameBudget--)
+            {
+                Scroller scroller = LogView()?.verticalScroller;
+                bool settled =
+                    scroller != null
+                    && 0f < scroller.highValue
+                    && scroller.highValue - 0.5f <= scroller.value;
+                if (settled && settledOnce)
+                {
+                    break;
+                }
+
+                settledOnce = settled;
+                yield return null;
+            }
+
+            Scroller verticalScroller = LogView()?.verticalScroller;
+            Assert.That(
+                verticalScroller != null,
+                "The log scroll view exposes a vertical scroller"
+            );
+            Assert.Greater(
+                verticalScroller.highValue,
+                0f,
+                "The log content overflows the log view so the scrollbar engages"
+            );
+            Assert.Less(
+                verticalScroller.highValue - verticalScroller.value,
+                0.5f,
+                "The log view settled at the scrolled-to-end position"
+            );
+        }
+
+        private IEnumerator WaitForPaletteRows(string query)
         {
             int frameBudget = FrameBudget;
             while (
@@ -597,7 +758,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Assert.That(
                 0 < _palette._matchNames.Count,
-                $"Palette matched capture commands for query '{PaletteQuery}'"
+                $"Palette matched commands for query '{query}'"
             );
             Assert.That(0 < _palette._rows.Count, "Palette built result rows for the query");
         }
@@ -618,6 +779,43 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             finally
             {
                 DetachRenderTarget(target);
+            }
+        }
+
+        /*
+            Single-capture variant of the palette freeze sequence: both the
+            palette caret freeze and the terminal caret pause apply before
+            the settle; whether the freeze engaged is recorded in the
+            manifest diagnostics, and the baseline gate only runs on the
+            pinned host where it engages.
+         */
+        private IEnumerator CapturePaletteSurface(string scenario)
+        {
+            RenderTexture target = AttachRenderTarget(scenario);
+            TerminalSurfaceCapture.CursorFreezeScope cursorFreeze =
+                TerminalSurfaceCapture.FreezeCursor(_palette._input);
+            try
+            {
+                _terminal.SetCursorBlinkPaused(true);
+                _diagnosticsSuffix = "cursorFreeze=" + cursorFreeze.Describe();
+                yield return SettleRenders();
+                _lastOutcome = FinishCapture(
+                    scenario,
+                    target,
+                    CaptureBounds.Default(),
+                    _terminal._uiDocument.rootVisualElement
+                );
+            }
+            finally
+            {
+                try
+                {
+                    cursorFreeze.Dispose();
+                }
+                finally
+                {
+                    DetachRenderTarget(target);
+                }
             }
         }
 
