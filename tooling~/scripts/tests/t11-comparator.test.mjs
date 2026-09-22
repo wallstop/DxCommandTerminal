@@ -13,6 +13,7 @@ import {
   diffImage,
   encodePng,
   environmentKey,
+  overlayImage,
   provenanceOf,
   provenanceProblems,
   readBaselineIndex,
@@ -278,6 +279,20 @@ describe("compareImages", () => {
     const diff = decodePng(diffImage(baseline, actual, result));
     assert.equal(diff.width, WIDTH);
     assert.equal(diff.data[0], 255);
+  });
+
+  it("renders an overlay that marks every violation, not just the samples", () => {
+    const baseline = fixtureImage();
+    const actual = fixtureImage();
+    // violations live beyond the 8-pixel sample cap
+    const far = (HEIGHT - 1) * WIDTH + (WIDTH - 1);
+    actual.data[far * 4] = 255 - actual.data[far * 4];
+    const result = compareImages(baseline, actual);
+    assert.ok(0 < result.violationCount);
+    const overlay = decodePng(overlayImage(baseline, actual, result));
+    assert.equal(overlay.data[far * 4], 255);
+    assert.equal(overlay.data[far * 4 + 1], 0);
+    assert.equal(overlay.data[0], Math.floor(fixtureImage().data[0] * 0.12));
   });
 });
 

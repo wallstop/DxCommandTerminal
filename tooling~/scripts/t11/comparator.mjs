@@ -300,9 +300,12 @@ export function diffImage(baseline, actual, result) {
   return encodePng(result.width, result.height, data);
 }
 
-/** Baseline ghost (12% brightness) with violations painted solid red. */
-export function overlayImage(baseline, result) {
+/** Baseline ghost (12% brightness) with every violating pixel painted solid red. */
+export function overlayImage(baseline, actual, result) {
   const data = Buffer.from(baseline.data);
+  if (result.dimensionMismatch !== null) {
+    return encodePng(result.width || 1, result.height || 1, data.subarray(0, 4));
+  }
   for (let pixel = 0; pixel < result.totalPixels; ++pixel) {
     const offset = pixel * 4;
     data[offset] = Math.floor(data[offset] * 0.12);
@@ -310,11 +313,16 @@ export function overlayImage(baseline, result) {
     data[offset + 2] = Math.floor(data[offset + 2] * 0.12);
     data[offset + 3] = 255;
   }
-  for (const sample of result.samples) {
-    const offset = (sample.y * result.width + sample.x) * 4;
-    data[offset] = 255;
-    data[offset + 1] = data[offset + 2] = 0;
-    data[offset + 3] = 255;
+  for (let pixel = 0; pixel < result.totalPixels; ++pixel) {
+    const offset = pixel * 4;
+    for (let channel = 0; channel < 4; ++channel) {
+      if (Math.abs(baseline.data[offset + channel] - actual.data[offset + channel]) > result.tolerance) {
+        data[offset] = 255;
+        data[offset + 1] = data[offset + 2] = 0;
+        data[offset + 3] = 255;
+        break;
+      }
+    }
   }
   return encodePng(result.width, result.height, data);
 }
@@ -483,7 +491,10 @@ export function emitComparisonArtifacts(outDir, baselinePng, actualPng, outcome)
     const baseline = decodePng(baselinePng);
     const actual = decodePng(actualPng);
     fs.writeFileSync(path.join(outDir, "diff.png"), diffImage(baseline, actual, outcome.result));
-    fs.writeFileSync(path.join(outDir, "overlay.png"), overlayImage(baseline, outcome.result));
+    fs.writeFileSync(
+      path.join(outDir, "overlay.png"),
+      overlayImage(baseline, actual, outcome.result)
+    );
   }
   fs.writeFileSync(path.join(outDir, "report.json"), `${JSON.stringify(report, null, 2)}\n`);
   return outDir;
