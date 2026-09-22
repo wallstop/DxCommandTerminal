@@ -185,7 +185,14 @@ function main() {
       (entry) => matched(entry, includes) && matched(entry, excludes)
     );
     for (const entry of notShipped) {
-      if (!entry.endsWith(".dll") && !entry.endsWith(".dll.meta")) {
+      const internalOnly =
+        entry.endsWith(".dll") ||
+        entry.endsWith(".dll.meta") ||
+        // Unity-invisible tilde folders (e.g. the T11 baseline store under
+        // Tests/Runtime/Capture/Baselines~/): consumers never import them,
+        // so excluding them from the artifact is always safe.
+        entry.split("/").some((segment) => segment.endsWith("~"));
+      if (!internalOnly) {
         fail(`internal-only exclusion covers a non-payload file: ${entry}`);
         problems += 1;
       }
