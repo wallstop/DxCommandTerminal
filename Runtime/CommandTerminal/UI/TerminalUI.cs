@@ -206,6 +206,12 @@
          */
         internal readonly List<string> _lastCompletionBuffer = new();
 
+        /*
+            Internal for test coverage of hint selection (see
+            WallstopStudios.DxCommandTerminal.Tests.Runtime).
+         */
+        internal ScrollView _autoCompleteContainer;
+
         private TerminalState _state = TerminalState.Closed;
         private float _currentWindowHeight;
         private float _targetWindowHeight;
@@ -231,7 +237,6 @@
 
         private VisualElement _terminalContainer;
         private ScrollView _logScrollView;
-        private ScrollView _autoCompleteContainer;
         private VisualElement _inputContainer;
         private Button _runButton;
         private VisualElement _stateButtonContainer;

@@ -151,6 +151,18 @@ field write is frame-coupled and flakes under session sequences
 
 ## Debugging failures
 
+- Focus assertions must accept the TextField or anything it contains: the focus
+  controller reports either the field or its inner `unity-text-input` element (the
+  palette suite's `InputOwnsFocus` is the reference helper).
+- `TerminalUI.IsClosed` is state-closed AND window height settled; the height settles
+  in a LateUpdate after `Close`, so poll (`IsClosed` over a frame budget) instead of
+  asserting synchronously right after a close/toggle.
+- Keyboard-controller behavior is testable without real input: subclass it, override
+  the virtual `Is*Pressed` checks (the base constructor's delegate table dispatches
+  virtually), and drive the protected `Update` from a public method. The loop runs
+  checks in `_controlOrder` and breaks after the first hit - that is the hotkey
+  conflict contract.
+
 - Assert post-mutation state through the live reference: after a respawn, reset,
   destroy, or disable, read `TerminalUI.Instance` (or re-query the facade) at the
   assert itself, not a local captured before the mutation. A stale capture makes
