@@ -51,12 +51,28 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         /*
             The palette caret freeze must outlast the native UITK blink
             interval (~0.5 s) so the repeat capture cannot land inside the
-            same blink phase as the first.
+            same blink phase as the first; wall-clock, not frames, because
+            an uncapped editor frame rate would make a frame count vacuous.
          */
-        private const int BlinkSettleFrames = 40;
+        private const float BlinkSettleSeconds = 0.7f;
         private const float InspectorWidth = 520f;
         private const float InspectorHeight = 780f;
         private const int InspectorRepaintFloor = 3;
+
+        /*
+            Repaint-probe headroom: a visible Game View repaints within a few
+            frames; anything longer means the game view is missing or
+            occluded, which the inspector capture needs.
+         */
+        private const int InspectorRepaintProbeFrames = 30;
+
+        /*
+            Keep in sync with T4_DEFAULT_SCENARIOS in
+            tooling~/scripts/mcp/unity-mcp.mjs, which fails t4:capture when
+            any of these manifests is missing.
+         */
+        private const string LightScenarioName = "CapturesLightThemeSurface";
+        private const string DarkScenarioName = "CapturesDarkThemeSurface";
 
         private const string CompletionQuery = "capture-a";
         private const string PaletteQuery = "capture";
@@ -232,9 +248,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         /*
             The palette's native TextField caret is frozen through its
-            cursorColor for the capture; a repeat readback past the native
+            cursorColor for the capture; a repeat capture past the native
             blink interval must be byte-identical, proving the pixels no
-            longer move with the blink phase.
+            longer move with the blink phase. Hosts where the freeze cannot
+            engage skip the invariance proof instead of asserting against an
+            unfrozen caret.
          */
         [UnityTest]
         public IEnumerator CapturesCommandPaletteSurface()
@@ -262,13 +280,24 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     _terminal._uiDocument.rootVisualElement
                 );
                 AssertAcceptable(_lastOutcome);
+                if (!cursorFreeze.Engaged)
+                {
+                    Assert.Ignore(
+                        "The caret freeze could not engage; skipping the blink-invariance "
+                            + $"proof ({cursorFreeze.Describe()})"
+                    );
+                }
 
-                yield return WaitFrames(BlinkSettleFrames);
-                VisualElement contentRoot = _terminal._uiDocument.rootVisualElement;
-                string repeatPath = Path.Combine(_runDirectory, scenario + "-repeat.png");
-                TerminalSurfaceCapture.CaptureToPng(target, contentRoot, repeatPath);
+                yield return WaitSeconds(BlinkSettleSeconds);
+                CaptureOutcome repeat = FinishCapture(
+                    scenario + "-repeat",
+                    target,
+                    CaptureBounds.Default(),
+                    _terminal._uiDocument.rootVisualElement
+                );
+                AssertAcceptable(repeat);
                 byte[] expected = File.ReadAllBytes(_lastOutcome.PngPath);
-                byte[] actual = File.ReadAllBytes(repeatPath);
+                byte[] actual = File.ReadAllBytes(repeat.PngPath);
                 Assert.That(
                     actual,
                     Is.EqualTo(expected),
@@ -277,8 +306,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             }
             finally
             {
-                cursorFreeze.Dispose();
-                DetachRenderTarget(target);
+                try
+                {
+                    cursorFreeze.Dispose();
+                }
+                finally
+                {
+                    DetachRenderTarget(target);
+                }
             }
         }
 
@@ -295,11 +330,18 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Terminal.Log(WrappedLine);
             _terminal.SetCursorBlinkPaused(true);
             List<CaptureOutcome> themed = new List<CaptureOutcome>(2);
-            yield return CaptureThemedSurface(LightThemeName, "CapturesLightThemeSurface", themed);
-            yield return CaptureThemedSurface(DarkThemeName, "CapturesDarkThemeSurface", themed);
+            yield return CaptureThemedSurface(LightThemeName, LightScenarioName, themed);
+            yield return CaptureThemedSurface(DarkThemeName, DarkScenarioName, themed);
             AssertAcceptable(themed[0]);
             AssertAcceptable(themed[1]);
 
+            /*
+                The distinct-background assert reads the modal color of the
+                whole frame and is host-robust because the terminal panel's
+                root paints the active theme's background across the frame
+                (backgroundFraction ~0.66 on the pinned host with the
+                content sharing the rest), not just the small-state band.
+             */
             CapturePixelMetrics light = themed[0].Metrics;
             CapturePixelMetrics dark = themed[1].Metrics;
             bool distinctBackground =
@@ -316,9 +358,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         /*
             IMGUI inspector surfaces of the package's custom editors, drawn
-            through an IMGUIContainer on the capture panel. The closed
-            terminal contributes no pixels, so each capture shows only the
-            inspector surface under test.
+            through an InspectorDrawSurface that redirects the game view's
+            IMGUI pass into the capture target. The closed terminal
+            contributes no pixels, so each capture shows only the inspector
+            surface under test.
          */
         [UnityTest]
         public IEnumerator CapturesTerminalUIInspectorSurface()
@@ -582,7 +625,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Inspector captures bypass the panel entirely: the draw surface
             paints the inspector into a standalone target during game view
             repaints, so the wait floors on real repaint passes instead of
-            frame counts.
+            frame counts, and a missing or occluded Game View fails fast
+            with its own diagnostic.
          */
         private IEnumerator CaptureInspectorSurface(string scenario, UnityEngine.Object target)
         {
@@ -598,6 +642,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             {
                 InspectorDrawSurface surface = _surfaceObject.GetComponent<InspectorDrawSurface>();
                 Assert.That(surface != null, "Sanity: the inspector draw surface attached");
+                yield return WaitFrames(InspectorRepaintProbeFrames);
+                Assert.GreaterOrEqual(
+                    surface.RepaintCount,
+                    1,
+                    "The Game View repainted the inspector; inspector capture needs a "
+                        + "visible Game View"
+                );
                 int frameBudget = FrameBudget;
                 while (0 < frameBudget-- && surface.RepaintCount < InspectorRepaintFloor)
                 {
@@ -614,8 +665,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             }
             finally
             {
-                inspector.Dispose();
-                DetachRenderTarget(renderTarget);
+                try
+                {
+                    inspector.Dispose();
+                }
+                finally
+                {
+                    DetachRenderTarget(renderTarget);
+                }
             }
         }
 
@@ -627,6 +684,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private IEnumerator WaitFrames(int frameCount)
         {
             for (int frame = 0; frame < frameCount; ++frame)
+            {
+                yield return null;
+            }
+        }
+
+        private IEnumerator WaitSeconds(float seconds)
+        {
+            float start = Time.unscaledTime;
+            while (Time.unscaledTime - start < seconds)
             {
                 yield return null;
             }

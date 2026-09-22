@@ -28,9 +28,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         Nondeterminism is frozen at the source: the terminal's styled caret
         through TerminalUI.SetCursorBlinkPaused, and the command palette's
-        native TextField caret through FreezeCursor (Unity 6+ exposes the
-        caret color; hosts without it keep the one-pixel caret column
-        tolerance recorded in the manifest diagnostics).
+        native TextField caret through FreezeCursor (the caret paints with
+        the text input's cursorColor; hosts without that property make the
+        palette scenario skip its blink-invariance proof, recorded in the
+        manifest diagnostics).
      */
     public static class TerminalSurfaceCapture
     {
@@ -255,9 +256,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             scope is alive: the caret paints with the text input's
             cursorColor, so a fully transparent color takes the blink phase
             out of the captured pixels. On hosts whose UITK exposes no
-            cursorColor property the scope stays inert and reports it, keeping
-            the older-editor variance visible in the manifest instead of
-            failing the fixture.
+            cursorColor property the scope stays inert and reports it; the
+            palette scenario then skips its blink-invariance proof instead
+            of asserting against an unfrozen caret.
          */
         public static CursorFreezeScope FreezeCursor(TextField field)
         {
@@ -643,6 +644,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             private const string TextInputName = "unity-text-input";
             private const string CursorColorProperty = "cursorColor";
 
+            public bool Engaged => _cursorColor != null;
+
             private readonly VisualElement _textInput;
             private readonly PropertyInfo _cursorColor;
             private readonly Color _previousColor;
@@ -677,18 +680,18 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 catch (Exception exception)
                 {
                     _cursorColor = null;
-                    _reason = exception.Message;
+                    _reason = (exception.InnerException ?? exception).Message;
                 }
             }
 
             public string Describe()
             {
-                return _cursorColor != null ? CursorColorProperty : $"unavailable ({_reason})";
+                return Engaged ? CursorColorProperty : $"unavailable ({_reason})";
             }
 
             public void Dispose()
             {
-                if (_cursorColor == null)
+                if (!Engaged)
                 {
                     return;
                 }

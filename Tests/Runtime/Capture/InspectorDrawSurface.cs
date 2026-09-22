@@ -10,13 +10,16 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         inspector in the target at view coordinates - the target is
         Screen.width x Screen.height, so pixels map one-to-one. Layout
         events size the controls without drawing; only repaint events
-        redirect. RepaintCount lets the scenario wait for real paint passes
-        instead of guessing frame counts.
+        redirect, and every other event type is dropped so live game-view
+        input can never reach the fixture inspector's controls.
+        RepaintCount lets the scenario wait for real paint passes instead of
+        guessing frame counts.
      */
     public sealed class InspectorDrawSurface : MonoBehaviour
     {
         public int RepaintCount { get; private set; }
 
+#if UNITY_EDITOR
         private UnityEditor.Editor _editor;
         private RenderTexture _target;
         private float _width;
@@ -55,6 +58,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 return;
             }
 
+            if (frame.type is not (EventType.Layout or EventType.Repaint))
+            {
+                return;
+            }
+
             bool repaint = frame.type == EventType.Repaint;
             RenderTexture previous = null;
             if (repaint)
@@ -78,5 +86,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 }
             }
         }
+#else
+        public void Begin(RenderTexture target, float width, float height) { }
+
+        public void End() { }
+#endif
     }
 }
