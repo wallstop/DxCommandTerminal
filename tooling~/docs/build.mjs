@@ -15,8 +15,10 @@
     Extraction limits, by design:
 
     - No defines are set (Unity projects define ENABLE_INPUT_SYSTEM etc.),
-      so input-system-gated public APIs (TerminalPlayerInputController,
-      InputHelpers members) are absent from the API reference. There is no
+      so class-level input-system-gated public APIs (notably
+      TerminalPlayerInputController) are absent from the API reference, and
+      ENABLE_INPUT_SYSTEM code paths inside otherwise-documented types (for
+      example InputHelpers) are compiled out of their pages. There is no
       Unity.InputSystem reference assembly on nuget to bind them against;
       enabling the define without the reference would only add errors.
     - allowCompilationErrors: true in docfx.json absorbs the resulting
@@ -46,8 +48,9 @@ const NUGET_LIB = "netstandard2.0";
 
 /*
     ManagedReference pages are one file per type, named exactly by uid. A
-    missing page here means API extraction degraded silently (the failure
-    mode allowCompilationErrors permits), so the build must fail.
+    missing or degenerate page here means API extraction degraded silently
+    (the failure mode allowCompilationErrors permits), so the build must
+    fail.
 */
 const REQUIRED_API_PAGES = [
   "WallstopStudios.DxCommandTerminal.Backend.Terminal",
@@ -62,6 +65,16 @@ const REQUIRED_API_PAGES = [
   "WallstopStudios.DxCommandTerminal.Themes.TerminalThemePack",
   "WallstopStudios.DxCommandTerminal.Themes.TerminalFontPack",
 ];
+
+function missingRequiredApiPages() {
+  return REQUIRED_API_PAGES.filter((uid) => {
+    const page = path.join(objDir, "api", `${uid}.yml`);
+    if (!fs.existsSync(page)) {
+      return true;
+    }
+    return !fs.readFileSync(page, "utf8").includes("items:");
+  });
+}
 
 function run(command, args, options) {
   execFileSync(command, args, {
@@ -143,9 +156,7 @@ const sampleCount = copySampleSources();
 fs.rmSync(path.join(objDir, "api"), { recursive: true, force: true });
 fs.rmSync(path.join(objDir, "_site"), { recursive: true, force: true });
 run("dotnet", ["docfx", "metadata", "docfx.json"]);
-const missingPages = REQUIRED_API_PAGES.filter(
-  (uid) => !fs.existsSync(path.join(objDir, "api", `${uid}.yml`))
-);
+const missingPages = missingRequiredApiPages();
 if (missingPages.length > 0) {
   throw new Error(
     `API extraction dropped ${missingPages.length} required page(s) ` +
