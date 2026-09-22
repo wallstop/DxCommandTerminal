@@ -6,17 +6,21 @@ with a validated argument, a default value, and Tab-completable choices.
 ## The sample
 
 The typed-builder sample ships with the package (`Package Manager >
-DxCommandTerminal > Samples > Import`). Its simplest component:
+DxCommandTerminal > Samples > Import`). Its simplest component (staged at
+build time from `Samples~/TerminalCommands/SimpleCommands.cs`, so this
+excerpt is always the shipped code):
 
 [!code-csharp[SimpleCommands](samples/SimpleCommands.cs)]
 
 What this registers:
 
-- `heal <amount> [target]` - `amount` is a required `int` clamped to 1-100,
-  `target` defaults to `self` and completes to `self`, `ally`, `enemy`.
-- Registration returns a `CommandRegistrationHandle`. Disposing it removes
-  exactly that command, which is why the sample base class
-  (`TerminalCommandSample`) disposes every handle on disable.
+- `heal <amount> [target]` - `amount` is a required `int` validated to 1-100
+  (out-of-range input is rejected, not clamped), `target` defaults to `self`
+  and completes to `self`, `ally`, `enemy`.
+- Successful registration produces a `CommandRegistrationHandle` via
+  `Terminal.Shell.AddCommand`'s `out` parameter. Disposing it removes exactly
+  that command, which is why the sample base class (`TerminalCommandSample`)
+  disposes every handle on disable.
 - Registration needs a live shell. If the component enables before any
   `TerminalUI` built its shell, it logs an error instead of throwing - keep
   sample components in a scene with a terminal, or register from `Start`.

@@ -12,6 +12,18 @@
     5. docfx build - renders guides (Documentation~) + API YAML into
        obj/_site, a searchable static site.
 
+    Extraction limits, by design:
+
+    - No defines are set (Unity projects define ENABLE_INPUT_SYSTEM etc.),
+      so input-system-gated public APIs (TerminalPlayerInputController,
+      InputHelpers members) are absent from the API reference. There is no
+      Unity.InputSystem reference assembly on nuget to bind them against;
+      enabling the define without the reference would only add errors.
+    - allowCompilationErrors: true in docfx.json absorbs the resulting
+      unresolved types, and docfx prints "0 errors" even when extraction
+      degrades - so `REQUIRED_API_PAGES` below asserts the core public
+      surface actually produced pages before the build may pass.
+
     Output: tooling~/docs/obj/_site. Preview with any static server.
     Stdlib only, cross-OS (GitHub CI runs this on ubuntu).
 */
@@ -31,6 +43,25 @@ const SAMPLES_SOURCE = path.join(repoRoot, "Samples~", "TerminalCommands");
 const NUGET_PACKAGE = "unityengine.modules";
 const NUGET_VERSION = "2021.3.33";
 const NUGET_LIB = "netstandard2.0";
+
+/*
+    ManagedReference pages are one file per type, named exactly by uid. A
+    missing page here means API extraction degraded silently (the failure
+    mode allowCompilationErrors permits), so the build must fail.
+*/
+const REQUIRED_API_PAGES = [
+  "WallstopStudios.DxCommandTerminal.Backend.Terminal",
+  "WallstopStudios.DxCommandTerminal.Backend.CommandShell",
+  "WallstopStudios.DxCommandTerminal.Backend.CommandArg",
+  "WallstopStudios.DxCommandTerminal.Backend.CommandBuilder",
+  "WallstopStudios.DxCommandTerminal.Backend.CommandInfo",
+  "WallstopStudios.DxCommandTerminal.Backend.CommandAutoComplete",
+  "WallstopStudios.DxCommandTerminal.Attributes.RegisterCommandAttribute",
+  "WallstopStudios.DxCommandTerminal.UI.TerminalUI",
+  "WallstopStudios.DxCommandTerminal.UI.CommandPaletteUI",
+  "WallstopStudios.DxCommandTerminal.Themes.TerminalThemePack",
+  "WallstopStudios.DxCommandTerminal.Themes.TerminalFontPack",
+];
 
 function run(command, args, options) {
   execFileSync(command, args, {
@@ -109,7 +140,19 @@ run("dotnet", ["restore", "refs.csproj"]);
 const dllCount = copyReferenceDlls();
 const guideCount = copyGuides();
 const sampleCount = copySampleSources();
+fs.rmSync(path.join(objDir, "api"), { recursive: true, force: true });
+fs.rmSync(path.join(objDir, "_site"), { recursive: true, force: true });
 run("dotnet", ["docfx", "metadata", "docfx.json"]);
+const missingPages = REQUIRED_API_PAGES.filter(
+  (uid) => !fs.existsSync(path.join(objDir, "api", `${uid}.yml`))
+);
+if (missingPages.length > 0) {
+  throw new Error(
+    `API extraction dropped ${missingPages.length} required page(s) ` +
+      `(docfx source mode fails silently; see REQUIRED_API_PAGES):\n` +
+      missingPages.join("\n")
+  );
+}
 run("dotnet", ["docfx", "build", "docfx.json"]);
 
 const siteDir = path.join(objDir, "_site");
