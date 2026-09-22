@@ -1,0 +1,49 @@
+{
+    "metadata": [
+        {
+            "src": [
+                {
+                    "files": [
+                        "Runtime/**/*.cs"
+                    ],
+                    "exclude": [
+                        "Runtime/Analyzers/**"
+                    ],
+                    "src": "../../"
+                }
+            ],
+            "dest": "obj/api",
+            "references": [
+                "obj/unity-refs/*.dll"
+            ],
+            "allowCompilationErrors": true,
+            "disableGitFeatures": true
+        }
+    ],
+    "build": {
+        "content": [
+            {
+                "files": [
+                    "**/*.yml"
+                ],
+                "src": "obj/api",
+                "dest": "api"
+            },
+            {
+                "files": [
+                    "**/*.md",
+                    "toc.yml"
+                ],
+                "src": "obj/guides",
+                "dest": "."
+            }
+        ],
+        "dest": "obj/_site",
+        "globalMetadata": {
+            "_appTitle": "DxCommandTerminal",
+            "_appName": "DxCommandTerminal",
+            "_appFooter": "DxCommandTerminal - Wallstop Studios - MIT",
+            "_disableContribution": true
+        }
+    }
+}

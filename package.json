@@ -60,6 +60,7 @@
   ],
   "scripts": {
     "test": "npm --prefix tooling~ run test --",
+    "docs:build": "npm --prefix tooling~ run docs:build --",
     "package:validate": "npm --prefix tooling~ run package:validate --",
     "package:export": "npm --prefix tooling~ run package:export --",
     "release:prepare": "npm --prefix tooling~ run release:prepare --",
