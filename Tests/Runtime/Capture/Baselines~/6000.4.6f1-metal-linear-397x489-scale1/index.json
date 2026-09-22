@@ -15,7 +15,7 @@
       "png": "CapturesCommandPaletteSurface.png",
       "theme": "dark-theme",
       "font": "FiraMono-Regular",
-      "capturedUtc": "2026-09-22T03:58:33.3412190Z",
+      "capturedUtc": "2026-09-22T15:35:39.2135960Z",
       "metrics": {
         "distinctColors": 760,
         "backgroundFraction": 0.5755,
@@ -27,7 +27,7 @@
       "png": "CapturesCompletionHintsSurface.png",
       "theme": "dark-theme",
       "font": "FiraMono-Regular",
-      "capturedUtc": "2026-09-22T03:58:34.0834310Z",
+      "capturedUtc": "2026-09-22T15:35:39.9530860Z",
       "metrics": {
         "distinctColors": 590,
         "backgroundFraction": 0.6871,
@@ -39,7 +39,7 @@
       "png": "CapturesDarkThemeSurface.png",
       "theme": "dark-theme",
       "font": "FiraMono-Regular",
-      "capturedUtc": "2026-09-22T03:58:34.2086380Z",
+      "capturedUtc": "2026-09-22T15:35:40.0678040Z",
       "metrics": {
         "distinctColors": 270,
         "backgroundFraction": 0.6573,
@@ -51,7 +51,7 @@
       "png": "CapturesFontPackInspectorSurface.png",
       "theme": "dark-theme",
       "font": null,
-      "capturedUtc": "2026-09-22T03:58:34.1485530Z",
+      "capturedUtc": "2026-09-22T15:35:40.0114380Z",
       "metrics": {
         "distinctColors": 531,
         "backgroundFraction": 0.8623,
@@ -63,7 +63,7 @@
       "png": "CapturesLightThemeSurface.png",
       "theme": "light-theme",
       "font": "FiraMono-Regular",
-      "capturedUtc": "2026-09-22T03:58:34.1889710Z",
+      "capturedUtc": "2026-09-22T15:35:40.0473580Z",
       "metrics": {
         "distinctColors": 143,
         "backgroundFraction": 0.6579,
@@ -71,11 +71,59 @@
         "pngBytes": 33967
       }
     },
+    "CapturesLongNameCompletionSurface": {
+      "png": "CapturesLongNameCompletionSurface.png",
+      "theme": "dark-theme",
+      "font": "FiraMono-Regular",
+      "capturedUtc": "2026-09-22T15:35:40.0988640Z",
+      "metrics": {
+        "distinctColors": 608,
+        "backgroundFraction": 0.6693,
+        "backgroundRgb": "#1B1B1E",
+        "pngBytes": 16271
+      }
+    },
+    "CapturesPaletteEmptyResultsSurface": {
+      "png": "CapturesPaletteEmptyResultsSurface.png",
+      "theme": "dark-theme",
+      "font": "FiraMono-Regular",
+      "capturedUtc": "2026-09-22T15:35:40.1321220Z",
+      "metrics": {
+        "distinctColors": 410,
+        "backgroundFraction": 0.6197,
+        "backgroundRgb": "#1B1B1E",
+        "pngBytes": 15352
+      }
+    },
+    "CapturesPaletteLongDescriptionSurface": {
+      "png": "CapturesPaletteLongDescriptionSurface.png",
+      "theme": "dark-theme",
+      "font": "FiraMono-Regular",
+      "capturedUtc": "2026-09-22T15:35:40.1680950Z",
+      "metrics": {
+        "distinctColors": 695,
+        "backgroundFraction": 0.6079,
+        "backgroundRgb": "#1B1B1E",
+        "pngBytes": 21580
+      }
+    },
+    "CapturesScrollingLogSurface": {
+      "png": "CapturesScrollingLogSurface.png",
+      "theme": "dark-theme",
+      "font": "FiraMono-Regular",
+      "capturedUtc": "2026-09-22T15:35:40.2096970Z",
+      "metrics": {
+        "distinctColors": 508,
+        "backgroundFraction": 0.6365,
+        "backgroundRgb": "#1B1B1E",
+        "pngBytes": 47149
+      }
+    },
     "CapturesTerminalFullSurfaceWithErrors": {
       "png": "CapturesTerminalFullSurfaceWithErrors.png",
       "theme": "dark-theme",
       "font": "FiraMono-Regular",
-      "capturedUtc": "2026-09-22T03:58:34.2395230Z",
+      "capturedUtc": "2026-09-22T15:35:40.2386480Z",
       "metrics": {
         "distinctColors": 738,
         "backgroundFraction": 0.8692,
@@ -87,7 +135,7 @@
       "png": "CapturesTerminalSmallSurface.png",
       "theme": "dark-theme",
       "font": "FiraMono-Regular",
-      "capturedUtc": "2026-09-22T03:58:34.2685450Z",
+      "capturedUtc": "2026-09-22T15:35:40.2656070Z",
       "metrics": {
         "distinctColors": 271,
         "backgroundFraction": 0.6578,
@@ -99,7 +147,7 @@
       "png": "CapturesTerminalUIInspectorSurface.png",
       "theme": "dark-theme",
       "font": null,
-      "capturedUtc": "2026-09-22T03:58:34.3903750Z",
+      "capturedUtc": "2026-09-22T15:35:40.3741600Z",
       "metrics": {
         "distinctColors": 349,
         "backgroundFraction": 0.6524,
@@ -111,7 +159,7 @@
       "png": "CapturesThemePackInspectorSurface.png",
       "theme": "dark-theme",
       "font": null,
-      "capturedUtc": "2026-09-22T03:58:34.8394480Z",
+      "capturedUtc": "2026-09-22T15:35:40.8089580Z",
       "metrics": {
         "distinctColors": 156,
         "backgroundFraction": 0.8825,
