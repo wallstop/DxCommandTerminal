@@ -283,6 +283,27 @@ describe("promoteRun", () => {
       );
       assert.ok(identical.written.every((entry) => entry.artifactsDir === undefined));
 
+      // An identical re-promote keeps the original index entry verbatim:
+      // capturedUtc records when the baselined pixels were captured, so a
+      // no-op re-run must not churn it.
+      const envKey = "6000.4.6f1-metal-linear-32x24-scale1";
+      const before = readBaselineIndex(store, envKey).scenarios.CapturesSurfaceA.capturedUtc;
+      const later = writeRun(root, [
+        ["CapturesSurfaceA", fixtureImage(), { capturedUtc: "2027-01-01T00:00:00.0000000Z" }]
+      ]);
+      const reread = promoteRun({
+        runDir: later,
+        storeDir: store,
+        artifactsRoot: path.join(root, "artifacts"),
+        scenarioNames: ["CapturesSurfaceA"]
+      });
+      assert.deepEqual(reread.problems, []);
+      assert.equal(reread.written[0].verdict, "identical");
+      assert.equal(
+        readBaselineIndex(store, envKey).scenarios.CapturesSurfaceA.capturedUtc,
+        before
+      );
+
       // Different pixels: changed with a failing gate verdict, diff
       // artifacts written for review; the promotion itself still lands.
       const stampDir = path.join(runDir, "2026-09-22T04-00-00-000Z");

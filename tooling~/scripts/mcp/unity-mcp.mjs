@@ -1838,9 +1838,14 @@ export const T4_DEFAULT_SCENARIOS = Object.freeze([
   "CapturesThemePackInspectorSurface",
   "CapturesFontPackInspectorSurface"
 ]);
-// The negative control proves the bounds can fail, so its manifest must
-// record an incomplete capture.
-export const T4_EXPECTED_INCOMPLETE = Object.freeze(["BlankRenderFailsBounds"]);
+// The negative control proves the bounds can fail, and the closed-terminal
+// capture proves the closed state actually produces that blank (a visible
+// closed frame would mean close leaks pixels). Both are expected incomplete;
+// neither is ever baselined because the store refuses blank pixels by design.
+export const T4_EXPECTED_INCOMPLETE = Object.freeze([
+  "BlankRenderFailsBounds",
+  "CapturesClosedTerminalRendersNothing"
+]);
 // Env-variant scenarios (T11): each pins one surface under a non-pinned
 // environment (resolution/scale/font). They are captured and validated by
 // every t4:capture run and baseline-compared like the pinned canon, but they
@@ -1852,7 +1857,9 @@ export const T4_VARIANT_SCENARIOS = Object.freeze([
   "CapturesNarrowScreenTerminalSmall",
   "CapturesWideScreenPaletteLongHelp",
   "CapturesScaleTwoTerminalSmall",
-  "CapturesAlternateFontTerminalSmall"
+  "CapturesAlternateFontTerminalSmall",
+  "CapturesTallScreenTerminalFull",
+  "CapturesResizedViewportTerminalSmall"
 ]);
 /** Every scenario a capture may baseline: the pinned canon plus variants. */
 export const T4_ALL_SCENARIOS = Object.freeze([

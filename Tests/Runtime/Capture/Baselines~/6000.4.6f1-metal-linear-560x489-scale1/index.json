@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "environment": {
+    "unityVersion": "6000.4.6f1",
+    "graphicsApi": "Metal",
+    "colorSpace": "Linear",
+    "resolution": {
+      "width": 560,
+      "height": 489
+    },
+    "logicalScale": 1,
+    "pinned": false
+  },
+  "scenarios": {
+    "CapturesResizedViewportTerminalSmall": {
+      "png": "CapturesResizedViewportTerminalSmall.png",
+      "theme": "dark-theme",
+      "font": "FiraMono-Regular",
+      "capturedUtc": "2026-09-22T19:20:33.8280990Z",
+      "metrics": {
+        "distinctColors": 273,
+        "backgroundFraction": 0.6643,
+        "backgroundRgb": "#1B1B1E",
+        "pngBytes": 52545
+      }
+    }
+  }
+}

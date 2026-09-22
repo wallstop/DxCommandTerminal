@@ -264,7 +264,12 @@ export function promoteRun({
         }
         verdict.verdict = outcome.result.identical ? "identical" : "changed";
         verdict.gate = outcome.pass;
-        if (!outcome.result.identical) {
+        if (outcome.result.identical) {
+          // Byte-identical re-promote: the existing entry already describes
+          // exactly these PNG bytes, so it is kept verbatim and the index
+          // never churns (capturedUtc stays the original capture time).
+          verdict.entry = existing;
+        } else {
           verdict.artifactsInputs = {
             baselinePng: fs.readFileSync(baselinePngPath),
             outcome
@@ -284,10 +289,10 @@ export function promoteRun({
       fs.mkdirSync(environmentDir, { recursive: true });
       const baselinePngPath = path.join(environmentDir, `${verdict.scenario}.png`);
       fs.writeFileSync(baselinePngPath, verdict.actualPng);
-      verdict.index.scenarios[verdict.scenario] = baselineEntryFrom(
-        verdict.manifest,
-        fs.statSync(baselinePngPath).size
-      );
+      verdict.index.scenarios[verdict.scenario] =
+        verdict.entry !== undefined
+          ? verdict.entry
+          : baselineEntryFrom(verdict.manifest, fs.statSync(baselinePngPath).size);
       if (verdict.artifactsInputs !== undefined) {
         verdict.artifactsDir = emitComparisonArtifacts(
           path.join(artifactsRoot, `update-${stamp}`, verdict.scenario),
