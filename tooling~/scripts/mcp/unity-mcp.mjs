@@ -1841,10 +1841,28 @@ export const T4_DEFAULT_SCENARIOS = Object.freeze([
 // The negative control proves the bounds can fail, so its manifest must
 // record an incomplete capture.
 export const T4_EXPECTED_INCOMPLETE = Object.freeze(["BlankRenderFailsBounds"]);
+// Env-variant scenarios (T11): each pins one surface under a non-pinned
+// environment (resolution/scale/font). They are captured and validated by
+// every t4:capture run and baseline-compared like the pinned canon, but they
+// never gate a pinned environment's coverage: resolution/scale variants live
+// in their own environment directories, and font variants ride the pinned
+// environment as an extra scenario (font is per-entry provenance, not part
+// of the environment key).
+export const T4_VARIANT_SCENARIOS = Object.freeze([
+  "CapturesNarrowScreenTerminalSmall",
+  "CapturesWideScreenPaletteLongHelp",
+  "CapturesScaleTwoTerminalSmall",
+  "CapturesAlternateFontTerminalSmall"
+]);
+/** Every scenario a capture may baseline: the pinned canon plus variants. */
+export const T4_ALL_SCENARIOS = Object.freeze([
+  ...T4_DEFAULT_SCENARIOS,
+  ...T4_VARIANT_SCENARIOS
+]);
 export const T4_TEST_FILTER = "TerminalSurfaceCapture";
 
 export function parseT4Scenarios(raw) {
-  if (raw === undefined || raw === null) return [...T4_DEFAULT_SCENARIOS];
+  if (raw === undefined || raw === null) return [...T4_ALL_SCENARIOS];
   // Idempotent: callers may pass the comma-separated CLI string or an
   // already-parsed array (main parses once; runT4Capture re-validates).
   const names = (Array.isArray(raw) ? raw : String(raw).split(","))
@@ -2014,7 +2032,7 @@ export async function runT4Capture(options, runtime = {}) {
         continue;
       }
       validated.add(scenario);
-      if (T4_DEFAULT_SCENARIOS.includes(scenario)) {
+      if (T4_ALL_SCENARIOS.includes(scenario)) {
         validManifests.push({ scenario, manifest, manifestPath });
       }
       console.log(`  ok ${scenario} (${manifest.resolution.width}x${manifest.resolution.height})`);
@@ -2075,20 +2093,22 @@ export function compareT4Baselines(options, validManifests, problems) {
       index = readBaselineIndex(storeDir, envKey);
       if (index !== null) {
         const entry = index.scenarios[scenario];
-        if (entry === null || typeof entry !== "object") {
-          throw new Error(`baseline index has no usable entry for ${scenario}`);
+        if (entry === null) {
+          throw new Error(`baseline index entry for ${scenario} is corrupt`);
         }
-        if (entry.png !== `${scenario}.png`) {
-          throw new Error(`baseline index png must be the bare filename ${scenario}.png`);
+        if (entry !== undefined) {
+          if (entry.png !== `${scenario}.png`) {
+            throw new Error(`baseline index png must be the bare filename ${scenario}.png`);
+          }
+          baselinePng = fs.readFileSync(path.join(storeDir, envKey, entry.png));
+          actualPng = fs.readFileSync(path.join(path.dirname(manifestPath), manifest.png));
+          outcome = compareScenario(
+            baselinePng,
+            actualPng,
+            environmentProvenance(index.environment, entry.theme, entry.font),
+            provenanceOf(manifest)
+          );
         }
-        baselinePng = fs.readFileSync(path.join(storeDir, envKey, entry.png));
-        actualPng = fs.readFileSync(path.join(path.dirname(manifestPath), manifest.png));
-        outcome = compareScenario(
-          baselinePng,
-          actualPng,
-          environmentProvenance(index.environment, entry.theme, entry.font),
-          provenanceOf(manifest)
-        );
       }
     } catch (error) {
       problems.push(`${scenario}: baseline compare failed (${error.message})`);

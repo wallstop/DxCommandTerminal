@@ -4,8 +4,10 @@ import os from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
 import {
+  T4_ALL_SCENARIOS,
   T4_DEFAULT_SCENARIOS,
   T4_EXPECTED_INCOMPLETE,
+  T4_VARIANT_SCENARIOS,
   parseT4Scenarios,
   validateT4Manifest,
   collectT4ManifestPaths
@@ -37,9 +39,23 @@ const validManifest = (overrides = {}) => ({
   ...overrides
 });
 
+describe("T4 scenario registries", () => {
+  it("keeps the env-variant registry disjoint from the pinned canon", () => {
+    assert.ok(T4_VARIANT_SCENARIOS.length > 0);
+    for (const name of T4_VARIANT_SCENARIOS) {
+      assert.ok(!T4_DEFAULT_SCENARIOS.includes(name), `${name} must stay out of the canon`);
+    }
+    assert.deepEqual(T4_ALL_SCENARIOS, [...T4_DEFAULT_SCENARIOS, ...T4_VARIANT_SCENARIOS]);
+  });
+});
+
 describe("parseT4Scenarios", () => {
-  it("defaults to the pinned terminal surface scenarios", () => {
-    assert.deepEqual(parseT4Scenarios(undefined), [...T4_DEFAULT_SCENARIOS]);
+  it("defaults to every capture scenario (canon plus env variants)", () => {
+    assert.deepEqual(parseT4Scenarios(undefined), [...T4_ALL_SCENARIOS]);
+  });
+
+  it("treats null as the default too", () => {
+    assert.deepEqual(parseT4Scenarios(null), [...T4_ALL_SCENARIOS]);
   });
 
   it("splits and trims a comma-separated list", () => {
@@ -52,8 +68,7 @@ describe("parseT4Scenarios", () => {
     assert.deepEqual(parseT4Scenarios([" A ", "b"]), ["A", "b"]);
   });
 
-  it("treats null as the default and rejects non-string scalars cleanly", () => {
-    assert.deepEqual(parseT4Scenarios(null), [...T4_DEFAULT_SCENARIOS]);
+  it("rejects non-string scalars cleanly", () => {
     assert.throws(() => parseT4Scenarios(42), /Invalid scenario name/);
   });
 

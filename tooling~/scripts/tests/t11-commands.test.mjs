@@ -23,8 +23,8 @@ const WIDTH = 32;
 const HEIGHT = 24;
 
 /** Deterministic fixture image; `seed` shifts every channel within a byte. */
-function fixtureImage(seed = 0) {
-  const data = Buffer.alloc(WIDTH * HEIGHT * 4);
+function fixtureImage(seed = 0, width = WIDTH, height = HEIGHT) {
+  const data = Buffer.alloc(width * height * 4);
   for (let offset = 0; offset < data.length; offset += 4) {
     data[offset] = (offset / 4) % 256;
     data[offset + 1] = 80 + seed;
@@ -103,7 +103,8 @@ describe("collectRunManifests", () => {
         SCENARIOS
       );
       assert.ok(found[0].entryPath.includes("04-00-00"));
-      assert.equal(collectRunManifests(runDir, ["Missing"])[0], null);    } finally {
+      assert.equal(collectRunManifests(runDir, ["Missing"])[0], null);
+    } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
   });
@@ -141,7 +142,8 @@ describe("promoteRun", () => {
         runDir,
         storeDir: store,
         artifactsRoot: path.join(root, "artifacts"),
-        scenarioNames: [...SCENARIOS]
+        scenarioNames: [...SCENARIOS],
+        pinnedScenarios: [...SCENARIOS]
       });
       assert.deepEqual(problems, []);
       assert.deepEqual(
@@ -150,10 +152,106 @@ describe("promoteRun", () => {
       );
       const index = readBaselineIndex(store, "6000.4.6f1-metal-linear-32x24-scale1");
       assert.deepEqual(Object.keys(index.scenarios), SCENARIOS);
+      assert.equal(index.environment.pinned, true);
       assert.equal(index.scenarios.CapturesSurfaceA.theme, "dark-theme");
       assert.equal(
         fs.statSync(path.join(store, "6000.4.6f1-metal-linear-32x24-scale1", "CapturesSurfaceB.png")).size,
         index.scenarios.CapturesSurfaceB.metrics.pngBytes
+      );
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("marks a subset-promoted environment variant and demands a pinned canon host", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "t11-promote-"));
+    try {
+      const runDir = writeRun(root, [["CapturesSurfaceA", fixtureImage(), {}]]);
+      const store = createStore(root);
+      const envKey = "6000.4.6f1-metal-linear-32x24-scale1";
+      const result = promoteRun({
+        runDir,
+        storeDir: store,
+        artifactsRoot: path.join(root, "artifacts"),
+        scenarioNames: ["CapturesSurfaceA"]
+      });
+      assert.deepEqual(result.problems, []);
+      assert.equal(readBaselineIndex(store, envKey).environment.pinned, false);
+
+      // The variant environment declares its own coverage: a canon gap is
+      // not a per-environment problem, and an unknown scenario still is.
+      const ghostIndex = readBaselineIndex(store, envKey);
+      ghostIndex.scenarios.CapturesSurfaceA.png = "ghost.png";
+      writeBaselineIndex(store, envKey, ghostIndex);
+      const ghost = checkBaselineEnvironment(store, envKey, SCENARIOS, []);
+      assert.ok(ghost.problems.some((problem) => problem.includes("missing PNG ghost.png")));
+
+      // A scenario outside expected plus the allowed variants is rejected.
+      ghostIndex.scenarios.CapturesSurfaceA.png = "CapturesSurfaceA.png";
+      writeBaselineIndex(store, envKey, ghostIndex);
+      const stray = checkBaselineEnvironment(store, envKey, ["CapturesSurfaceB"], []);
+      assert.ok(stray.problems.some((problem) => problem.includes("unexpected baseline scenario")));
+
+      // An empty variant environment is rejected.
+      const emptied = readBaselineIndex(store, envKey);
+      const originalEntry = emptied.scenarios.CapturesSurfaceA;
+      emptied.scenarios = {};
+      writeBaselineIndex(store, envKey, emptied);
+      const empty = checkBaselineEnvironment(store, envKey, SCENARIOS, []);
+      assert.ok(empty.problems.some((problem) => problem.includes("holds no baseline scenarios")));
+      emptied.scenarios.CapturesSurfaceA = originalEntry;
+      writeBaselineIndex(store, envKey, emptied);
+
+      // Store level: a variant-only store has no pinned canon coverage, and
+      // SurfaceB is baselined nowhere - both invariants fire.
+      const storeProblems = checkBaselineStore(store, SCENARIOS, []);
+      assert.ok(
+        storeProblems.some((problem) =>
+          problem.includes("no pinned environment covers the pinned scenario canon")
+        )
+      );
+      assert.ok(
+        storeProblems.some((problem) =>
+          problem.includes("no environment baselines scenario CapturesSurfaceB")
+        )
+      );
+
+      // Mixed promote: the canon scenario and the variant scenario resolve
+      // to different environments in ONE run, and each fresh environment is
+      // pinned by its own coverage, not by the run's global list.
+      const mixedStore = path.join(root, "MixedBaselines~");
+      fs.mkdirSync(mixedStore, { recursive: true });
+      const mixedRun = writeRun(root, [["CapturesSurfaceA", fixtureImage(), {}]]);
+      const mixedStamp = path.join(mixedRun, "2026-09-22T04-00-00-000Z");
+      const variantPng = encodePng(64, 48, fixtureImage(5, 64, 48));
+      fs.writeFileSync(path.join(mixedStamp, "CapturesSurfaceB.png"), variantPng);
+      const variantManifest = manifest("CapturesSurfaceB", {
+        resolution: { width: 64, height: 48 }
+      });
+      variantManifest.metrics.width = 64;
+      variantManifest.metrics.height = 48;
+      variantManifest.metrics.pngBytes = variantPng.length;
+      fs.writeFileSync(
+        path.join(mixedStamp, "CapturesSurfaceB.manifest.json"),
+        JSON.stringify(variantManifest, null, 2)
+      );
+      const mixed = promoteRun({
+        runDir: mixedRun,
+        storeDir: mixedStore,
+        artifactsRoot: path.join(root, "artifacts"),
+        scenarioNames: SCENARIOS,
+        pinnedScenarios: ["CapturesSurfaceA"]
+      });
+      assert.deepEqual(mixed.problems, []);
+      // The environment holding the full canon is pinned; the environment
+      // holding only the variant scenario is variant.
+      assert.equal(
+        readBaselineIndex(mixedStore, "6000.4.6f1-metal-linear-32x24-scale1").environment.pinned,
+        true
+      );
+      assert.equal(
+        readBaselineIndex(mixedStore, "6000.4.6f1-metal-linear-64x48-scale1").environment.pinned,
+        false
       );
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
@@ -557,6 +655,47 @@ describe("compareT4Baselines", () => {
     }
   });
 
+  it("reports pending for a scenario an existing environment has not baselined yet", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "t11-gate-"));
+    try {
+      const { store } = setup(root, fixtureImage());
+
+      // A capture of a different scenario resolving to the same environment
+      // (e.g. a newly added variant hosted by the pinned store) must read
+      // as pending, not as a failed compare.
+      const png = encodePng(WIDTH, HEIGHT, fixtureImage());
+      const base = manifest("CapturesSurfaceB");
+      base.metrics.pngBytes = png.length;
+      const captureDir = path.join(root, "capture-b");
+      fs.mkdirSync(captureDir, { recursive: true });
+      fs.writeFileSync(path.join(captureDir, "CapturesSurfaceB.png"), png);
+      const manifestPath = path.join(captureDir, "CapturesSurfaceB.manifest.json");
+      fs.writeFileSync(manifestPath, JSON.stringify(base));
+      const problems = [];
+      compareT4Baselines(
+        { repoRoot: root },
+        [{ scenario: "CapturesSurfaceB", manifest: base, manifestPath }],
+        problems
+      );
+      assert.deepEqual(problems, []);
+
+      // A corrupt entry (present but null) still fails loudly.
+      const index = readBaselineIndex(store, ENV);
+      index.scenarios.CapturesSurfaceB = null;
+      writeBaselineIndex(store, ENV, index);
+      const corrupt = [];
+      compareT4Baselines(
+        { repoRoot: root },
+        [{ scenario: "CapturesSurfaceB", manifest: base, manifestPath }],
+        corrupt
+      );
+      assert.equal(corrupt.length, 1);
+      assert.ok(corrupt[0].includes("baseline compare failed"));
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it("labels a provenance mismatch as provenance, not pixels", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "t11-gate-"));
     try {
@@ -583,9 +722,10 @@ describe("checkBaselineStore", () => {
         runDir,
         storeDir: store,
         artifactsRoot: path.join(root, "artifacts"),
-        scenarioNames: [...SCENARIOS]
+        scenarioNames: [...SCENARIOS],
+        pinnedScenarios: [...SCENARIOS]
       });
-      assert.deepEqual(checkBaselineStore(store, SCENARIOS), []);
+      assert.deepEqual(checkBaselineStore(store, SCENARIOS, []), []);
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
@@ -595,8 +735,7 @@ describe("checkBaselineStore", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "t11-check-"));
     try {
       assert.equal(checkBaselineStore(path.join(root, "nope"), SCENARIOS).length, 1);
-      const store = createStore(root);
-      assert.equal(checkBaselineStore(store, SCENARIOS).length, 1);
+      assert.equal(checkBaselineStore(createStore(root), SCENARIOS, []).length, 1);
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
@@ -641,20 +780,21 @@ describe("checkBaselineStore", () => {
         runDir,
         storeDir: store,
         artifactsRoot: path.join(root, "artifacts"),
-        scenarioNames: [...SCENARIOS]
+        scenarioNames: [...SCENARIOS],
+        pinnedScenarios: [...SCENARIOS]
       });
 
       // Gap: SurfaceB missing from coverage.
-      const gap = checkBaselineEnvironment(store, envKey, ["CapturesSurfaceA"]);
+      const gap = checkBaselineEnvironment(store, envKey, ["CapturesSurfaceA"], []);
       assert.ok(gap.problems.some((problem) => problem.includes("unexpected baseline scenario")));
-      const gapStore = checkBaselineStore(store, ["CapturesSurfaceA", "CapturesSurfaceC"]);
+      const gapStore = checkBaselineStore(store, ["CapturesSurfaceA", "CapturesSurfaceC"], []);
       assert.ok(gapStore.some((problem) => problem.includes("missing baseline scenario CapturesSurfaceC")));
 
       // Stray PNG referenced by the index but not on disk.
       const index = readBaselineIndex(store, envKey);
       index.scenarios.CapturesSurfaceB.png = "ghost.png";
       writeBaselineIndex(store, envKey, index);
-      const stray = checkBaselineEnvironment(store, envKey, SCENARIOS);
+      const stray = checkBaselineEnvironment(store, envKey, SCENARIOS, []);
       assert.ok(stray.problems.some((problem) => problem.includes("missing PNG ghost.png")));
 
       // Corrupt baseline PNG (index restored first).
@@ -662,7 +802,7 @@ describe("checkBaselineStore", () => {
       index.scenarios.CapturesSurfaceB.png = "CapturesSurfaceB.png";
       writeBaselineIndex(store, envKey, index);
       fs.writeFileSync(path.join(store, envKey, "CapturesSurfaceB.png"), Buffer.from("junk"));
-      const corrupt = checkBaselineEnvironment(store, envKey, SCENARIOS);
+      const corrupt = checkBaselineEnvironment(store, envKey, SCENARIOS, []);
       assert.ok(corrupt.problems.some((problem) => problem.includes("undecodable PNG")));
 
       // Index lying about the byte size.
@@ -670,7 +810,7 @@ describe("checkBaselineStore", () => {
       const restored = readBaselineIndex(store, envKey);
       restored.scenarios.CapturesSurfaceB.metrics.pngBytes = 1;
       writeBaselineIndex(store, envKey, restored);
-      const lie = checkBaselineEnvironment(store, envKey, SCENARIOS);
+      const lie = checkBaselineEnvironment(store, envKey, SCENARIOS, []);
       assert.ok(lie.problems.some((problem) => problem.includes("png bytes")));
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
