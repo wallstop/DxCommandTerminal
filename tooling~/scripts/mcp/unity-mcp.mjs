@@ -118,7 +118,10 @@ const OPTION_NAMES = new Set([
   "no-discover",
   "offline",
   "out",
-  "scenarios"
+  "scenarios",
+  "mode",
+  "filter",
+  "run-timeout"
 ]);
 const FLAG_NAMES = new Set(["no-discover", "offline", "no-install"]);
 const ENV_KEYS = Object.freeze({
@@ -2127,9 +2130,144 @@ export function compareT4Baselines(options, validManifests, problems) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Unity test runner over the bridge: the one-command entry point per test
+// suite category (functional / allocation / performance; graphics is
+// t4-capture, tooling is `npm test`).
+// ---------------------------------------------------------------------------
+
+export const TEST_MODES = Object.freeze(["all", "editmode", "playmode"]);
+export const DEFAULT_TEST_RUN_TIMEOUT = 600_000;
+
+/**
+ * Validate and normalize `tests` subcommand options. Values arrive raw from
+ * argv; a bad mode or non-numeric timeout fails before any endpoint contact.
+ */
+export function resolveTestRunOptions(runtime = {}) {
+  const mode = runtime.mode ?? "all";
+  if (!TEST_MODES.includes(mode)) {
+    fail(`Unknown --mode: ${mode} (expected ${TEST_MODES.join(", ")})`);
+  }
+  const filter = runtime.filter ?? "";
+  const parsedTimeout = Number(runtime.runTimeout ?? DEFAULT_TEST_RUN_TIMEOUT);
+  if (!Number.isFinite(parsedTimeout) || parsedTimeout <= 0) {
+    fail(`--run-timeout must be a positive number of milliseconds, got: ${runtime.runTimeout}`);
+  }
+  if (parsedTimeout < 30_000) {
+    fail(`--run-timeout must be at least 30000ms (got ${runtime.runTimeout}); editor runs need startup room`);
+  }
+  return { mode, filter, runTimeout: parsedTimeout };
+}
+
+/**
+ * Decode run_tests/test_status payloads across bridge generations: the
+ * summary may sit under `Summary` or `summary`, and the run state may be a
+ * bare status string. An `idle` status never finishes the poll before the
+ * run was seen in flight - a stale previous-run summary riding an idle
+ * payload must not read as a green gate. Absent or `completed` statuses may
+ * finish on the summary alone so a blocking run_tests response terminates.
+ */
+export function parseTestStatus(text, seenRunning = false) {
+  let parsed = null;
+  try {
+    parsed = JSON.parse(text);
+  } catch {}
+  if (!parsed || typeof parsed !== "object") {
+    return { finished: false, running: false, summary: null };
+  }
+  const summary = parsed.Summary ?? parsed.summary ?? null;
+  const status = typeof parsed.status === "string" ? parsed.status.toLowerCase() : "";
+  const running = /in_progress|^running$|started/u.test(status);
+  if (status === "idle" && !seenRunning) {
+    return { finished: false, running, summary };
+  }
+  if (summary && Number(summary.total ?? 0) > 0) {
+    return { finished: true, running, summary };
+  }
+  if ((status === "completed" || status === "idle") && summary) {
+    return { finished: true, running, summary };
+  }
+  return { finished: false, running, summary };
+}
+
+export function testSummaryLine(summary) {
+  return (
+    `Tests: ${summary.total} total, ${summary.passed} passed, ` +
+    `${summary.failed} failed, ${summary.skipped} skipped.`
+  );
+}
+
+/**
+ * Run Unity tests over the bridge and report the summary. Exit code 1 when
+ * any test fails or nothing matches; the command never parses test output
+ * beyond the runner's own summary payload.
+ */
+export async function runUnityTests(options, runtime = {}) {
+  const fetchImpl = runtime.fetchImpl ?? fetch;
+  const { mode, filter, runTimeout } = resolveTestRunOptions(runtime);
+  const deadline = Date.now() + runTimeout;
+  const { found } = await discoverEndpoint(options, { ...runtime, readiness: "tools" });
+  if (!found) fail("No Unity MCP endpoint with tools found; run npm run unity:mcp:probe for detail.");
+  console.log(`Unity tests via ${found.url} (mode: ${mode}${filter ? `, filter: ${filter}` : ""})`);
+
+  return withMcpSession(options, found, async (client) => {
+    const signal = AbortSignal.timeout(runTimeout);
+    const evalCall = (expression) =>
+      callFirstWorking(
+        client,
+        [
+          { name: "eval", arguments: { code: expression } },
+          { name: "eval", arguments: { expression } }
+        ],
+        signal
+      );
+
+    await waitForEditorIdle(client, evalCall, deadline);
+
+    const runArguments = { mode, async_tests: true };
+    if (filter !== "") {
+      runArguments.filter = filter;
+    }
+    const run = await callFirstWorking(
+      client,
+      [
+        { name: "run_tests", arguments: runArguments },
+        {
+          name: "run_tests",
+          arguments: filter === "" ? { mode } : { mode, filter }
+        }
+      ],
+      signal
+    );
+
+    let seenRunning = false;
+    let status = parseTestStatus(extractText(run.call), seenRunning);
+    seenRunning ||= status.running;
+    while (!status.finished && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 2_000));
+      const poll = await callFirstWorking(client, [{ name: "test_status", arguments: {} }], signal);
+      status = parseTestStatus(extractText(poll.call), seenRunning);
+      seenRunning ||= status.running;
+    }
+
+    if (!status.finished || !status.summary) {
+      fail(`The test run produced no summary within the deadline; inspect the editor.`);
+    }
+    const summary = status.summary;
+    console.log(testSummaryLine(summary));
+    if (Number(summary.total ?? 0) === 0) {
+      fail(`No tests matched (mode: ${mode}${filter ? `, filter: ${filter}` : ""}).`);
+    }
+    if (Number(summary.failed ?? 0) > 0) {
+      fail(`${summary.failed} test(s) failed.`);
+    }
+    return { summary };
+  }, fetchImpl);
+}
+
 function usage() {
   return [
-    "Usage: node tooling~/scripts/mcp/unity-mcp.mjs <probe|configure|bridge|install-capture|capture|t4-capture> [options]",
+    "Usage: node tooling~/scripts/mcp/unity-mcp.mjs <probe|configure|bridge|install-capture|capture|t4-capture|tests> [options]",
     "",
     "  probe           Discover Unity tools and check editor readiness.",
     "  configure       Configure agent MCP servers, discovering Unity unless --offline is set.",
@@ -2138,8 +2276,12 @@ function usage() {
     "  capture         Capture editor/game state into .artifacts through the bridge.",
     "  t4-capture      Run the T04 fixture-capture tests, validate their manifests,\n" +
     "                  and compare pixels against the T11 baseline store.",
+    "  tests           Run Unity tests over the bridge and report the summary.",
     "",
     "Options:",
+    "  --mode MODE                 Test mode: all, editmode, playmode (tests only; default all)",
+    "  --filter TEXT               Test name filter (tests only)",
+    "  --run-timeout MS            Test run deadline (tests only; default 600000)",
     "  --host HOST                 Endpoint host; the only host discovery probes",
     "  --port PORT                 Endpoint port; the only port discovery probes",
     "  --path PATH                 Streamable HTTP path (default: /mcp)",
@@ -2171,7 +2313,8 @@ export async function main(argv = process.argv.slice(2)) {
     bridge: runBridge,
     "install-capture": runInstallCapture,
     capture: runCapture,
-    "t4-capture": runT4Capture
+    "t4-capture": runT4Capture,
+    tests: runUnityTests
   };
   const [command, ...rest] = argv;
   if (!command || command === "--help" || command === "-h") {
@@ -2193,6 +2336,14 @@ export async function main(argv = process.argv.slice(2)) {
   if (options.offline && command !== "configure") fail("--offline is only valid for configure");
   if (command === "t4-capture") {
     await commands[command](options, { scenarios: parseT4Scenarios(args.scenarios) });
+    return;
+  }
+  if (command === "tests") {
+    await commands[command](options, {
+      mode: args.mode,
+      filter: args.filter,
+      runTimeout: args["run-timeout"]
+    });
     return;
   }
   await commands[command](options);

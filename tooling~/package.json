@@ -35,6 +35,7 @@
     "unity:mcp:bridge": "node scripts/mcp/unity-mcp.mjs bridge",
     "unity:mcp:install-capture": "node scripts/mcp/unity-mcp.mjs install-capture",
     "unity:capture": "node scripts/mcp/unity-mcp.mjs capture",
+    "unity:tests": "node scripts/mcp/unity-mcp.mjs tests",
     "t4:capture": "node scripts/mcp/unity-mcp.mjs t4-capture",
     "t11:check": "node scripts/t11/check.mjs",
     "t11:update": "node scripts/t11/update.mjs",

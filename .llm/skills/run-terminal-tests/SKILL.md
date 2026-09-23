@@ -33,8 +33,22 @@ metadata:
    node suite, the nine C#/asset linters, the T11 baseline gate, the package
    gate, docs guides build, and the compat compile in parallel (~3-4s wall vs
    ~30s serial). `--skip=a,b` narrows a run.
-2. Unity Test Runner: Window > General > Test Runner -> PlayMode tab -> Run All.
-3. Unity CLI (CI-style):
+2. One-command entry point per suite category (through the bridge; host editor
+   up with the bridge running; exit 1 on any failure):
+
+   | Suite category | Command |
+   | --- | --- |
+   | Functional (all EditMode + PlayMode) | `npm run unity:tests` |
+   | Allocation | `npm run unity:tests -- --filter Allocation` |
+   | Performance (standard-op benchmarks) | `npm run unity:tests -- --filter Benchmark` |
+   | Graphics (T04 captures + T11 baselines) | `npm run t4:capture` |
+   | Tooling (node) | `npm test` |
+
+   `unity:tests` wraps `unity-mcp.mjs tests`: `--mode all|editmode|playmode`,
+   `--filter` (the bridge's test-name filter; case-insensitive partial match
+   on the pinned backend), `--run-timeout MS` (minimum 30000).
+3. Unity Test Runner: Window > General > Test Runner -> PlayMode tab -> Run All.
+4. Unity CLI (CI-style):
    `Unity -batchmode -projectPath <proj> -runTests -testPlatform PlayMode -testResults results.xml -quit`
    (requires a valid Unity license; exit code reflects test success).
 
