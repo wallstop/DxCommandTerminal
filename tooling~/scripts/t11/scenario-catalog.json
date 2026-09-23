@@ -1,0 +1,91 @@
+{
+  "version": 1,
+  "scenarios": {
+    "CapturesTerminalSmallSurface": {
+      "group": "terminal",
+      "summary": "Terminal in the small state: input row plus the default log view on the pinned dark theme."
+    },
+    "CapturesTerminalFullSurfaceWithErrors": {
+      "group": "terminal",
+      "summary": "Terminal open-full with an error line in the log, pinning the full-height layout and error styling."
+    },
+    "CapturesCompletionHintsSurface": {
+      "group": "terminal",
+      "summary": "Inline completion hints rendered under the input row while typing."
+    },
+    "CapturesScrollingLogSurface": {
+      "group": "terminal",
+      "summary": "Log volume past the small-state view so the scrollbar engages and auto-scroll settles."
+    },
+    "CapturesLongNameCompletionSurface": {
+      "group": "terminal",
+      "summary": "Completion popup rows laying out command names far wider than the fixture names."
+    },
+    "CapturesCommandPaletteSurface": {
+      "group": "palette",
+      "summary": "Quick-launch palette open with results for the query 'capture'."
+    },
+    "CapturesPaletteEmptyResultsSurface": {
+      "group": "palette",
+      "summary": "Palette open with a no-match query: input rendered, zero result rows."
+    },
+    "CapturesPaletteLongDescriptionSurface": {
+      "group": "palette",
+      "summary": "Palette row whose name and help text wrap and grow the row without clipping."
+    },
+    "CapturesLightThemeSurface": {
+      "group": "theme",
+      "summary": "Light theme applied to the terminal surface."
+    },
+    "CapturesDarkThemeSurface": {
+      "group": "theme",
+      "summary": "Dark theme applied to the terminal surface."
+    },
+    "CapturesTerminalUIInspectorSurface": {
+      "group": "inspector",
+      "summary": "IMGUI inspector of the TerminalUI component."
+    },
+    "CapturesThemePackInspectorSurface": {
+      "group": "inspector",
+      "summary": "IMGUI inspector of a TerminalThemePack asset."
+    },
+    "CapturesFontPackInspectorSurface": {
+      "group": "inspector",
+      "summary": "IMGUI inspector of a TerminalFontPack asset."
+    },
+    "CapturesNarrowScreenTerminalSmall": {
+      "group": "environment-variant",
+      "summary": "Small terminal on a 300x489 narrow viewport."
+    },
+    "CapturesWideScreenPaletteLongHelp": {
+      "group": "environment-variant",
+      "summary": "Palette long-help row on a 640x360 wide viewport: the window width clamp and the help label's first-line wrap point."
+    },
+    "CapturesScaleTwoTerminalSmall": {
+      "group": "environment-variant",
+      "summary": "Small terminal at 2x panel scale (794x978 backing pixels; Retina-style density)."
+    },
+    "CapturesAlternateFontTerminalSmall": {
+      "group": "environment-variant",
+      "summary": "Small terminal rendering the Large font pack (font rides per-entry provenance, not the environment key)."
+    },
+    "CapturesTallScreenTerminalFull": {
+      "group": "environment-variant",
+      "summary": "Open-full terminal on a 397x852 phone-shaped viewport."
+    },
+    "CapturesResizedViewportTerminalSmall": {
+      "group": "environment-variant",
+      "summary": "Small terminal after a mid-session viewport resize to 560x489: re-layout without stretching."
+    },
+    "BlankRenderFailsBounds": {
+      "group": "negative",
+      "baselined": false,
+      "summary": "Negative control: a deliberately blank render must fail the bounds assertion."
+    },
+    "CapturesClosedTerminalRendersNothing": {
+      "group": "negative",
+      "baselined": false,
+      "summary": "Closed terminal must render nothing; expected incomplete and never baselined (the store refuses blank pixels)."
+    }
+  }
+}

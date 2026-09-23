@@ -1,0 +1,86 @@
+name: Docs Build
+
+# T12 docs site (PLAN.md). Split out of tooling-tests so guide/sample/API
+# changes build the site without paying for the code lanes, and code-only
+# changes skip the docs build entirely - same coverage, fewer jobs per run.
+# DocFX (pinned via .config/dotnet-tools.json) extracts the API model from
+# Runtime sources against UnityEngine 2021.3.33 reference assemblies (the
+# package minimum, restored from nuget by tooling~/docs/refs.csproj) - no
+# editor, no license. The rendered site uploads as a PR preview artifact;
+# deployment is a separate, reviewed step (PLAN.md T12).
+on:
+  push:
+    branches:
+      - master
+      - main
+    paths:
+      - "Documentation~/**"
+      - "Samples~/**"
+      - "Runtime/**"
+      - "Tests/Runtime/Capture/Baselines~/**"
+      - "tooling~/docs/**"
+      - "tooling~/scripts/t11/**"
+      - "tooling~/package.json"
+      - "package.json"
+      - ".config/dotnet-tools.json"
+      - ".github/workflows/docs-build.yml"
+  pull_request:
+    paths:
+      - "Documentation~/**"
+      - "Samples~/**"
+      - "Runtime/**"
+      - "Tests/Runtime/Capture/Baselines~/**"
+      - "tooling~/docs/**"
+      - "tooling~/scripts/t11/**"
+      - "tooling~/package.json"
+      - "package.json"
+      - ".config/dotnet-tools.json"
+      - ".github/workflows/docs-build.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  docs-build:
+    name: docs-build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 9.0.306
+
+      - name: Cache NuGet packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-docs-${{ hashFiles('tooling~/docs/refs.csproj', '.config/dotnet-tools.json') }}
+          restore-keys: ${{ runner.os }}-nuget-docs-
+
+      - name: Build the docs site
+        run: npm run docs:build
+
+      - name: Lint docs catalog and guide links
+        # Runs after the build so xref uids resolve against the fresh API model.
+        run: npm --prefix tooling~ run lint:docs-catalog
+
+      - name: Upload the site preview
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: docs-site
+          path: tooling~/docs/obj/_site
+          if-no-files-found: error

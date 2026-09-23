@@ -65,7 +65,21 @@ function parseArgs(argv) {
   return options;
 }
 
+/*
+    `npm pack --dry-run` costs ~1s of npm startup per spawn, and the allowlist
+    is a pure function of package.json + the files field: stable within one
+    process. Results memoize per resolved package root so repeated exports
+    (byte-identical rebuild checks, release flows) spawn npm once; every fresh
+    process - including the CI payload verification - still queries npm itself.
+*/
+const PACKAGED_LIST_CACHE = new Map();
+
 function packagedList(packageRoot) {
+  const cacheKey = path.resolve(packageRoot);
+  const cached = PACKAGED_LIST_CACHE.get(cacheKey);
+  if (cached !== undefined) {
+    return cached;
+  }
   const stdout = execFileSync(NPM, ["pack", "--dry-run", "--json"], {
     cwd: packageRoot,
     encoding: "utf8",
@@ -80,11 +94,13 @@ function packagedList(packageRoot) {
   if (!Array.isArray(report.files)) {
     throw new Error("npm pack report carries no file list");
   }
-  return {
+  const result = {
     name: report.name,
     version: report.version,
-    files: report.files.map((file) => file.path).sort()
+    files: Object.freeze(report.files.map((file) => file.path).sort())
   };
+  PACKAGED_LIST_CACHE.set(cacheKey, Object.freeze(result));
+  return result;
 }
 
 function readMetaText(packageRoot, metaPath) {

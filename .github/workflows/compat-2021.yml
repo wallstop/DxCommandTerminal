@@ -1,0 +1,59 @@
+name: Compat 2021
+
+# Member-level 2021.3 compile tripwire (issue #136). The docs build's
+# docfx extraction only surfaces missing types (CS0246); this lane
+# compiles the real Runtime sources against the same pinned UnityEngine
+# 2021.3.33 reference assemblies, so any member or API absent from the
+# oldest supported editor fails outright (CS1061 and friends). Warnings
+# are errors; the csproj documents the one define it sets and the
+# serialized-field warnings Unity assigns outside C#. Split out of
+# tooling-tests so only Runtime/tooling-compat changes run it - same
+# coverage, fewer jobs per run.
+on:
+  push:
+    branches:
+      - master
+      - main
+    paths:
+      - "Runtime/**"
+      - "tooling~/compat/**"
+      - "tooling~/package.json"
+      - "package.json"
+      - ".github/workflows/compat-2021.yml"
+  pull_request:
+    paths:
+      - "Runtime/**"
+      - "tooling~/compat/**"
+      - "tooling~/package.json"
+      - "package.json"
+      - ".github/workflows/compat-2021.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  compat-2021:
+    name: compat-2021
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 9.0.306
+
+      - name: Cache NuGet packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-compat-${{ hashFiles('tooling~/compat/runtime-2021.3.csproj') }}
+          restore-keys: ${{ runner.os }}-nuget-compat-
+
+      - name: Compile Runtime against 2021.3
+        run: npm run compat:check

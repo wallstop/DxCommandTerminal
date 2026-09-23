@@ -26,6 +26,8 @@
     "lint:string-equality": "node scripts/lint-string-equality.mjs",
     "lint:out-param-discipline": "node scripts/lint-out-param-discipline.mjs",
     "lint:theme-palette-tokens": "node scripts/lint-theme-palette-tokens.mjs",
+    "lint:docs-catalog": "node scripts/lint-docs-catalog.mjs",
+    "docs:guides": "node docs/build.mjs --guides-only",
     "lint:pr-copy": "node scripts/lint-pr-copy.mjs",
     "unity:mcp:probe": "node scripts/mcp/unity-mcp.mjs probe",
     "unity:mcp:configure": "node scripts/mcp/unity-mcp.mjs configure",
