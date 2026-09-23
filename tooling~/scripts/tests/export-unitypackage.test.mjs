@@ -22,7 +22,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const toolingRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const packageRoot = path.resolve(toolingRoot, "..");
 const exporterPath = path.join(toolingRoot, "scripts", "release", "export-unitypackage.mjs");
-const { collectAssets, exportUnityPackage, packagedList } = await import(
+const { collectAssets, exportUnityPackage } = await import(
   pathToFileURL(exporterPath).href
 );
 
@@ -306,8 +306,6 @@ test("an orphan meta without its target fails the export", () => {
 });
 
 test("the real package exports, validates, and rebuilds byte-identically", () => {
-  const first = packagedList(packageRoot);
-  assert.ok(first.files.length > 800, "the real allowlist must ship the full tree");
   const artifact = exportUnityPackage({ packageRoot, out: "" });
   const repeated = exportUnityPackage({ packageRoot, out: "" });
   assert.strictEqual(artifact.buffer.equals(repeated.buffer), true);
@@ -315,5 +313,6 @@ test("the real package exports, validates, and rebuilds byte-identically", () =>
   const names = readArtifact(artifact.buffer).map((entry) => entry.name);
   assert.ok(names.every((name) => !name.includes("Samples~")));
   assert.strictEqual(artifact.rootPrefix, "Packages/com.wallstop-studios.dxcommandterminal");
-  assert.ok(artifact.fileCount > 300 && artifact.folderCount > 50);
+  assert.ok(artifact.fileCount > 350 && artifact.folderCount > 50,
+    "the real allowlist must ship the full tree");
 });
