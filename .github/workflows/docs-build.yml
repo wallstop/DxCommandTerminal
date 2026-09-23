@@ -24,6 +24,8 @@ on:
       - "package.json"
       - ".config/dotnet-tools.json"
       - ".gitattributes"
+      - ".npmrc"
+      - "tooling~/.npmrc"
       - ".github/workflows/docs-build.yml"
   pull_request:
     paths:
@@ -37,6 +39,8 @@ on:
       - "package.json"
       - ".config/dotnet-tools.json"
       - ".gitattributes"
+      - ".npmrc"
+      - "tooling~/.npmrc"
       - ".github/workflows/docs-build.yml"
   workflow_dispatch:
 

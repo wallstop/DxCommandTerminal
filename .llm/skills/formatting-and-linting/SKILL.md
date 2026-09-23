@@ -57,9 +57,12 @@ on every commit and fails fast when tools are missing.
 
 ## Preflight cache inputs
 
-- Treat each preflight `cachePaths` list as a complete input contract. Include command manifests, generated inputs, package ignore files, and the tracked-file index when a check reads Git state.
+- Treat each preflight check as a cache input contract. Inventory its source files, generated files, package ignore files, environment/config, installed dependencies/tools, and Git state.
+- `cachePaths` walks the real filesystem. Include ignored files when the command can read them. Do not derive its contents from `git ls-files`.
 - A change outside a check's declared inputs may reuse its cache. A change inside one must invalidate it.
-- Add a contract test when a cache check starts reading a new file, environment variable, or external directory.
+- Hash installed dependency and tool contents, not only lockfiles or version strings. Disable caching when an opaque external input cannot be fingerprinted.
+- Environment inputs are per check. Key raw values, path contents, and effective config files only when the child command reads them.
+- Add a contract test for every new input category. Cover content changes, ignored files, missing paths, generated symlinks, dependencies, tools, and config.
 
 ## Pre-commit hooks
 
@@ -78,6 +81,7 @@ on every commit and fails fast when tools are missing.
    - `linq-production` (no LINQ in `Runtime/`, `Editor/`; no `:fix`)
    - `string-equality` (no `==`/`!=` on string literals or `string.Empty` in shipped code; use
      `string.Equals` with an explicit `StringComparison`; no `:fix`)
+   - `out-param-discipline` (assign each `out` value on every return path; no `:fix`)
    - `theme-palette-tokens` (USS theme tokens + palette fallbacks)
 4. LLM-context linters: `lint-llm-instructions.ps1`, `lint-skill-sizes.ps1` (see
    [manage-skills](../manage-skills/SKILL.md))

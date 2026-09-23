@@ -24,6 +24,8 @@ on:
       - ".gitignore"
       - ".npmignore"
       - ".gitattributes"
+      - ".npmrc"
+      - "tooling~/.npmrc"
       - ".github/workflows/tooling-tests.yml"
       - ".github/workflows/release*.yml"
   pull_request:
@@ -46,6 +48,8 @@ on:
       - ".gitignore"
       - ".npmignore"
       - ".gitattributes"
+      - ".npmrc"
+      - "tooling~/.npmrc"
       - ".github/workflows/tooling-tests.yml"
       - ".github/workflows/release*.yml"
 

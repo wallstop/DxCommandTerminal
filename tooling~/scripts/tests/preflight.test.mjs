@@ -18,7 +18,16 @@ const preflightPath = path.join(toolingRoot, "scripts", "preflight.mjs");
 const { buildChecks, parseSkip, runChecks, main } = await import(
   pathToFileURL(preflightPath).href
 );
-const { cacheKeyForCheck } = await import(
+const {
+  cacheKeyForCheck,
+  dependencyState,
+  dotnetToolState,
+  isCacheableCheck,
+  npmConfigState,
+  npmExecutableState,
+  pathState,
+  resolvedExecutableState
+} = await import(
   pathToFileURL(path.join(toolingRoot, "scripts", "preflight-cache.mjs")).href
 );
 
@@ -60,9 +69,31 @@ test("buildChecks: unique names, non-empty commands, expected canaries", () => {
   for (const name of expected) {
     assert.ok(names.includes(name), `expected check '${name}' in the default set`);
   }
+  for (const check of checks) {
+    if (check.name !== "compat-check") {
+      assert.equal(check.cacheRuntimeEnvironment, true, `${check.name} must key inherited runtime state`);
+    }
+  }
   const packageCheck = checks.find((check) => check.name === "package-validate");
   assert.equal(packageCheck.cacheGitTracked, true);
+  assert.equal(packageCheck.cacheNpm, true);
+  assert.equal(packageCheck.cacheGzip, true);
+  assert.equal(packageCheck.cacheNpmConfig, true);
+  assert.equal(packageCheck.cacheGitConfig, true);
+  assert.equal(packageCheck.cacheRuntimeEnvironment, true);
   assert.ok(packageCheck.cachePaths.includes(".npmignore"));
+  const nodeCheck = checks.find((check) => check.name === "node-tests");
+  assert.equal(nodeCheck.cacheTrackedFiles, true);
+  assert.equal(nodeCheck.cacheDependencies, true);
+  assert.equal(nodeCheck.cacheGzip, true);
+  assert.equal(nodeCheck.cacheBash, true);
+  assert.deepEqual(nodeCheck.cacheEnvironment, ["BASH_ENV"]);
+  assert.ok(nodeCheck.cacheExcludes.includes("tooling~/scripts/.preflight-cache"));
+  const docsCheck = checks.find((check) => check.name === "docs-guides");
+  assert.equal(docsCheck.cacheDotnetTool, true);
+  assert.equal(docsCheck.cacheDocsApi, true);
+  assert.ok(docsCheck.cachePaths.includes("tooling~/docs/toc.yml"));
+  assert.equal(docsCheck.cacheEnvironment, undefined);
 });
 
 const skipCases = [
@@ -195,6 +226,21 @@ test("cache keys ignore files outside a check's declared inputs", () => {
   assert.equal(cacheKeyForCheck(check, baseContext), cacheKeyForCheck(check, unrelatedContext));
 });
 
+test("cache keys include the cache and check implementation", () => {
+  const context = {
+    node: "node",
+    platform: "linux",
+    arch: "x64",
+    files: [],
+    implementation: "cache-v1"
+  };
+  const check = { name: "self-invalidating", command: "node check.mjs" };
+  assert.notEqual(
+    cacheKeyForCheck(check, context),
+    cacheKeyForCheck(check, { ...context, implementation: "cache-v2" })
+  );
+});
+
 test("package cache keys include git index state", () => {
   const context = {
     node: "node",
@@ -225,7 +271,12 @@ test("cache keys include supported environment overrides", () => {
     docsApi: "api",
     files: ["package.json"]
   };
-  const check = { name: "scoped", command: "node scoped.mjs", cachePaths: ["package.json"] };
+  const check = {
+    name: "scoped",
+    command: "node scoped.mjs",
+    cacheEnvironment: ["THEME_TOKEN_ROOTS", "DOCS_API_DIR"],
+    cachePaths: ["package.json"]
+  };
   const original = process.env.THEME_TOKEN_ROOTS;
   const originalDocsApi = process.env.DOCS_API_DIR;
   try {
@@ -261,7 +312,11 @@ test("cache keys include contents at an overridden path", () => {
     docsApi: "api",
     files: []
   };
-  const check = { name: "override", command: "node override.mjs" };
+  const check = {
+    name: "override",
+    command: "node override.mjs",
+    cacheEnvironment: ["DOCS_API_DIR"]
+  };
   const original = process.env.DOCS_API_DIR;
   try {
     fs.writeFileSync(file, "first");
@@ -273,6 +328,274 @@ test("cache keys include contents at an overridden path", () => {
     if (original === undefined) delete process.env.DOCS_API_DIR;
     else process.env.DOCS_API_DIR = original;
     fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("cache keys hash declared files and ignore unrelated filesystem state", () => {
+  const cacheDirectory = path.join(toolingRoot, "scripts", ".preflight-cache");
+  fs.mkdirSync(cacheDirectory, { recursive: true });
+  const root = fs.mkdtempSync(path.join(cacheDirectory, "contract-"));
+  const input = path.join(root, "input");
+  const unrelated = path.join(root, "unrelated");
+  fs.mkdirSync(input);
+  fs.mkdirSync(unrelated);
+  const file = path.join(input, "ignored.cs");
+  const context = {
+    node: "node",
+    platform: "linux",
+    arch: "x64",
+    files: []
+  };
+  const check = { name: "filesystem", command: "node filesystem.mjs", cachePaths: [input] };
+  try {
+    fs.writeFileSync(file, "first");
+    const first = cacheKeyForCheck(check, context);
+    fs.writeFileSync(path.join(unrelated, "ignored.cs"), "unrelated");
+    assert.equal(first, cacheKeyForCheck(check, context));
+    fs.writeFileSync(file, "second");
+    const changed = cacheKeyForCheck(check, context);
+    assert.notEqual(first, changed);
+    fs.rmSync(input, { recursive: true, force: true });
+    const missing = cacheKeyForCheck(check, context);
+    assert.notEqual(changed, missing);
+    fs.mkdirSync(input);
+    assert.notEqual(missing, cacheKeyForCheck(check, context));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("dependency state includes installed dependency and baked fallback contents", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "preflight-dependencies-"));
+  const nodeModules = path.join(directory, "node_modules");
+  const bakedMcp = path.join(directory, "baked-mcp");
+  const file = path.join(bakedMcp, "dependency.js");
+  try {
+    fs.mkdirSync(bakedMcp, { recursive: true });
+    fs.writeFileSync(file, "first");
+    const first = dependencyState(nodeModules, bakedMcp);
+    fs.writeFileSync(file, "second");
+    assert.notEqual(first, dependencyState(nodeModules, bakedMcp));
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("resolved executable state includes file contents", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "preflight-executable-"));
+  const executable = path.join(directory, "tool");
+  try {
+    fs.writeFileSync(executable, "first");
+    fs.chmodSync(executable, 0o755);
+    const first = resolvedExecutableState(executable);
+    fs.writeFileSync(executable, "second");
+    assert.notEqual(first, resolvedExecutableState(executable));
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("resolved executable state fingerprints only the first relative PATH match", () => {
+  const cacheDirectory = path.join(toolingRoot, "scripts", ".preflight-cache");
+  fs.mkdirSync(cacheDirectory, { recursive: true });
+  const directory = fs.mkdtempSync(path.join(cacheDirectory, "executable-path-"));
+  const firstDirectory = path.join(directory, "first");
+  const secondDirectory = path.join(directory, "second");
+  fs.mkdirSync(firstDirectory);
+  fs.mkdirSync(secondDirectory);
+  const first = path.join(firstDirectory, "preflight-tool");
+  const second = path.join(secondDirectory, "preflight-tool");
+  const originalPath = process.env.PATH;
+  try {
+    fs.writeFileSync(first, "first");
+    fs.writeFileSync(second, "shadowed");
+    fs.chmodSync(first, 0o755);
+    fs.chmodSync(second, 0o755);
+    const repoRoot = path.resolve(toolingRoot, "..");
+    process.env.PATH = [firstDirectory, secondDirectory]
+      .map((entry) => path.relative(repoRoot, entry))
+      .join(path.delimiter);
+    const initial = resolvedExecutableState("preflight-tool");
+    fs.writeFileSync(second, "changed");
+    assert.equal(initial, resolvedExecutableState("preflight-tool"));
+    fs.writeFileSync(first, "changed");
+    assert.notEqual(initial, resolvedExecutableState("preflight-tool"));
+  } finally {
+    if (originalPath === undefined) delete process.env.PATH;
+    else process.env.PATH = originalPath;
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("Windows executable lookup includes the child working directory", { skip: process.platform !== "win32" }, () => {
+  const repoRoot = path.resolve(toolingRoot, "..");
+  const name = `preflight-tool-${process.pid}.cmd`;
+  const executable = path.join(repoRoot, name);
+  const originalPath = process.env.PATH;
+  try {
+    fs.writeFileSync(executable, "first");
+    process.env.PATH = "";
+    assert.notEqual(resolvedExecutableState(name), "missing");
+  } finally {
+    if (originalPath === undefined) delete process.env.PATH;
+    else process.env.PATH = originalPath;
+    fs.rmSync(executable, { force: true });
+  }
+});
+
+test("npm executable state includes the resolved package contents", { skip: process.platform === "win32" }, () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "preflight-npm-package-"));
+  const packageRoot = path.join(directory, "node_modules", "npm");
+  const bin = path.join(packageRoot, "bin");
+  const cli = path.join(bin, "npm-cli.js");
+  const executable = path.join(directory, "npm");
+  const moduleFile = path.join(packageRoot, "lib", "module.js");
+  try {
+    fs.mkdirSync(bin, { recursive: true });
+    fs.mkdirSync(path.dirname(moduleFile), { recursive: true });
+    fs.writeFileSync(path.join(packageRoot, "package.json"), '{"name":"npm"}\n');
+    fs.writeFileSync(cli, "first");
+    fs.chmodSync(cli, 0o755);
+    fs.writeFileSync(moduleFile, "first");
+    fs.symlinkSync(cli, executable);
+    const first = npmExecutableState(executable);
+    fs.writeFileSync(moduleFile, "second");
+    assert.notEqual(first, npmExecutableState(executable));
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("dotnet tool state follows a custom CLI home", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "preflight-dotnet-home-"));
+  const originalCliHome = process.env.DOTNET_CLI_HOME;
+  const originalNugetPackages = process.env.NUGET_PACKAGES;
+  try {
+    process.env.DOTNET_CLI_HOME = directory;
+    delete process.env.NUGET_PACKAGES;
+    const manifest = JSON.parse(
+      fs.readFileSync(path.resolve(toolingRoot, "..", ".config", "dotnet-tools.json"), "utf8")
+    );
+    const version = manifest.tools.docfx.version;
+    const storeFile = path.join(directory, ".dotnet", "tools", ".store", "docfx", "tool.dll");
+    const packageFile = path.join(directory, ".nuget", "packages", "docfx", version, "tool.dll");
+    fs.mkdirSync(path.dirname(storeFile), { recursive: true });
+    fs.mkdirSync(path.dirname(packageFile), { recursive: true });
+    fs.writeFileSync(storeFile, "first");
+    fs.writeFileSync(packageFile, "first");
+    const first = dotnetToolState("docfx");
+    fs.writeFileSync(packageFile, "second");
+    assert.notEqual(first, dotnetToolState("docfx"));
+  } finally {
+    if (originalCliHome === undefined) delete process.env.DOTNET_CLI_HOME;
+    else process.env.DOTNET_CLI_HOME = originalCliHome;
+    if (originalNugetPackages === undefined) delete process.env.NUGET_PACKAGES;
+    else process.env.NUGET_PACKAGES = originalNugetPackages;
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("npm config state includes user config contents", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "preflight-npm-config-"));
+  const config = path.join(directory, "npmrc");
+  const original = process.env.NPM_CONFIG_USERCONFIG;
+  try {
+    process.env.NPM_CONFIG_USERCONFIG = config;
+    fs.writeFileSync(config, "user-agent=first\n");
+    const first = npmConfigState();
+    fs.writeFileSync(config, "user-agent=second\n");
+    assert.notEqual(first.files, npmConfigState().files);
+  } finally {
+    if (original === undefined) delete process.env.NPM_CONFIG_USERCONFIG;
+    else process.env.NPM_CONFIG_USERCONFIG = original;
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("path state follows symlink target changes", { skip: process.platform === "win32" }, () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "preflight-symlink-"));
+  const target = path.join(directory, "target.yml");
+  const link = path.join(directory, "linked.yml");
+  try {
+    fs.writeFileSync(target, "first");
+    fs.symlinkSync(target, link);
+    const first = pathState(link);
+    fs.writeFileSync(target, "second");
+    assert.notEqual(first, pathState(link));
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("environment inputs are scoped to checks that read them", () => {
+  const context = {
+    node: "node",
+    platform: "linux",
+    arch: "x64",
+    files: []
+  };
+  const docs = { name: "docs", command: "node docs.mjs", cacheEnvironment: ["DOCS_API_DIR"] };
+  const theme = { name: "theme", command: "node theme.mjs", cacheEnvironment: ["THEME_TOKEN_ROOTS"] };
+  const original = process.env.THEME_TOKEN_ROOTS;
+  try {
+    delete process.env.THEME_TOKEN_ROOTS;
+    const docsBefore = cacheKeyForCheck(docs, context);
+    const themeBefore = cacheKeyForCheck(theme, context);
+    process.env.THEME_TOKEN_ROOTS = "fixture";
+    assert.equal(docsBefore, cacheKeyForCheck(docs, context));
+    assert.notEqual(themeBefore, cacheKeyForCheck(theme, context));
+  } finally {
+    if (original === undefined) delete process.env.THEME_TOKEN_ROOTS;
+    else process.env.THEME_TOKEN_ROOTS = original;
+  }
+});
+
+test("runtime environment invalidates checks that inherit it", () => {
+  const context = {
+    node: "node",
+    platform: "linux",
+    arch: "x64",
+    files: [],
+    config: { npm: "npm", git: "git" }
+  };
+  const runtime = {
+    name: "runtime",
+    command: "npm test",
+    cacheRuntimeEnvironment: true
+  };
+  const scoped = { name: "scoped", command: "node scoped.mjs" };
+  const original = process.env.NODE_OPTIONS;
+  try {
+    delete process.env.NODE_OPTIONS;
+    const runtimeBefore = cacheKeyForCheck(runtime, context);
+    const scopedBefore = cacheKeyForCheck(scoped, context);
+    process.env.NODE_OPTIONS = "--no-warnings";
+    assert.notEqual(runtimeBefore, cacheKeyForCheck(runtime, context));
+    assert.equal(scopedBefore, cacheKeyForCheck(scoped, context));
+  } finally {
+    if (original === undefined) delete process.env.NODE_OPTIONS;
+    else process.env.NODE_OPTIONS = original;
+  }
+});
+
+test("opaque Node preload state disables caching", () => {
+  const check = { name: "runtime", command: "node runtime.mjs", cacheRuntimeEnvironment: true };
+  const originalOptions = process.env.NODE_OPTIONS;
+  const originalPath = process.env.NODE_PATH;
+  try {
+    delete process.env.NODE_OPTIONS;
+    delete process.env.NODE_PATH;
+    assert.equal(isCacheableCheck(check), true);
+    process.env.NODE_OPTIONS = "--require ./setup.mjs";
+    assert.equal(isCacheableCheck(check), false);
+    delete process.env.NODE_OPTIONS;
+    process.env.NODE_PATH = "./modules";
+    assert.equal(isCacheableCheck(check), false);
+  } finally {
+    if (originalOptions === undefined) delete process.env.NODE_OPTIONS;
+    else process.env.NODE_OPTIONS = originalOptions;
+    if (originalPath === undefined) delete process.env.NODE_PATH;
+    else process.env.NODE_PATH = originalPath;
   }
 });
 
