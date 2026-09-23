@@ -7,7 +7,7 @@ name: Docs Build
 # Runtime sources against UnityEngine 2021.3.33 reference assemblies (the
 # package minimum, restored from nuget by tooling~/docs/refs.csproj) - no
 # editor, no license. The rendered site uploads as a PR preview artifact;
-# deployment is a separate, reviewed step (PLAN.md T12).
+# deployment is a separate, reviewed manual step (PLAN.md T12).
 on:
   push:
     branches:
@@ -36,6 +36,7 @@ on:
       - "package.json"
       - ".config/dotnet-tools.json"
       - ".github/workflows/docs-build.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -84,3 +85,22 @@ jobs:
           name: docs-site
           path: tooling~/docs/obj/_site
           if-no-files-found: error
+
+      - name: Upload Pages artifact
+        if: github.event_name == 'workflow_dispatch' && github.repository == 'wallstop/DxCommandTerminal' && github.ref == 'refs/heads/master'
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: tooling~/docs/obj/_site
+
+  deploy:
+    name: deploy Pages
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'wallstop/DxCommandTerminal' && github.ref == 'refs/heads/master'
+    needs: docs-build
+    environment: github-pages
+    permissions:
+      pages: write
+      id-token: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

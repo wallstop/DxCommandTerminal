@@ -200,6 +200,35 @@ test("main: caches successful checks and --no-cache bypasses the cache", async (
   }
 });
 
+test("main: keeps cache when selected checks are skipped", async () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "preflight-marker-"));
+  const selectedMarker = path.join(directory, "selected");
+  const skippedMarker = path.join(directory, "skipped");
+  const first = writeTempScript(`import fs from "node:fs"; fs.appendFileSync(${JSON.stringify(selectedMarker)}, "x"); process.exit(0);`);
+  const second = writeTempScript(`import fs from "node:fs"; fs.appendFileSync(${JSON.stringify(skippedMarker)}, "y"); process.exit(0);`);
+  const checks = [
+    { name: "cached-selected", command: `node "${first}"` },
+    { name: "skipped", command: `node "${second}"` }
+  ];
+  const originalLog = console.log;
+  const originalCi = process.env.CI;
+  delete process.env.CI;
+  console.log = () => {};
+  try {
+    assert.equal(await main(["--skip=skipped"], checks), 0);
+    assert.equal(fs.readFileSync(selectedMarker, "utf8"), "x");
+    assert.equal(fs.existsSync(skippedMarker), false);
+    assert.equal(await main(["--skip=skipped"], checks), 0);
+    assert.equal(fs.readFileSync(selectedMarker, "utf8"), "x");
+    assert.equal(fs.existsSync(skippedMarker), false);
+  } finally {
+    console.log = originalLog;
+    if (originalCi === undefined) delete process.env.CI;
+    else process.env.CI = originalCi;
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("main: failing check prints its output and exits 1", async () => {
   const pass = writeTempScript("process.exit(0);");
   const fail = writeTempScript("console.error('burst-marker'); process.exit(9);");

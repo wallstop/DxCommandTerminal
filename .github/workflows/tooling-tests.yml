@@ -13,7 +13,6 @@ on:
       - "Samples~/**"
       - "Tests/**"
       - "Generator~/**"
-      - ".config/dotnet-tools.json"
       - ".github/workflows/tooling-tests.yml"
       - ".github/workflows/release*.yml"
   pull_request:
@@ -25,7 +24,6 @@ on:
       - "Samples~/**"
       - "Tests/**"
       - "Generator~/**"
-      - ".config/dotnet-tools.json"
       - ".github/workflows/tooling-tests.yml"
       - ".github/workflows/release*.yml"
 
