@@ -144,7 +144,7 @@ export async function main(argv = process.argv.slice(2), checks = buildChecks())
     return 1;
   }
 
-  const useCache = !process.env.CI && !argv.includes("--no-cache") && skip.length === 0;
+  const useCache = !process.env.CI && !argv.includes("--no-cache");
   const startedAt = Date.now();
   const cachedResults = [];
   const pending = [];

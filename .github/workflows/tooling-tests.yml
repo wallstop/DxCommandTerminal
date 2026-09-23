@@ -13,7 +13,7 @@ on:
       - "Samples~/**"
       - "Tests/**"
       - "Generator~/**"
-      - ".config/dotnet-tools.json"
+      - "Styles/**"
       - ".github/workflows/tooling-tests.yml"
       - ".github/workflows/release*.yml"
   pull_request:
@@ -25,7 +25,7 @@ on:
       - "Samples~/**"
       - "Tests/**"
       - "Generator~/**"
-      - ".config/dotnet-tools.json"
+      - "Styles/**"
       - ".github/workflows/tooling-tests.yml"
       - ".github/workflows/release*.yml"
 
@@ -133,6 +133,10 @@ jobs:
 
       - name: Lint Unity-object null assertions
         run: node tooling~/scripts/lint-unity-null-patterns.mjs
+
+      - name: Lint theme palette tokens
+        if: matrix.os == 'ubuntu-latest'
+        run: node tooling~/scripts/lint-theme-palette-tokens.mjs
 
   package-content:
     # Clean-install guard for the UPM artifact (issue #22, PLAN.md T02
