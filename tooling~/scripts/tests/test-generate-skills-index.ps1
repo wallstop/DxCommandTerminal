@@ -19,13 +19,18 @@ $ErrorActionPreference = 'Stop'
 
 . (Join-Path $PSScriptRoot 'test-helpers.ps1')
 
-$generator = (Get-Item (Join-Path $PSScriptRoot '../generate-skills-index.ps1')).FullName
+# In-process generator: dot-sourcing skips the main guard, avoiding a pwsh
+# spawn per case (~0.5-1s each).
+if (-not (Get-Command New-SkillsIndex -ErrorAction SilentlyContinue)) {
+    . (Join-Path $PSScriptRoot '../generate-skills-index.ps1')
+}
 
 function Invoke-Generator {
     param([Parameter(Mandatory = $true)][string]$Root, [string]$OutputPath)
-    $args = @('-RepoRoot', $Root)
-    if ($OutputPath) { $args += @('-OutputPath', $OutputPath) }
-    return Invoke-PwshScript -Path $generator -Arguments $args
+    return Invoke-InProcessEntry {
+        param($Root, $OutputPath)
+        New-SkillsIndex -RepoRoot $Root -OutputPath $OutputPath
+    } -Parameters @{ Root = $Root; OutputPath = $OutputPath }
 }
 
 function Get-FixtureIndex {

@@ -12,12 +12,20 @@ metadata:
 - `Tests/Runtime/` - PlayMode tests, asmdef `WallstopStudios.DxCommandTerminal.Tests.Runtime`
   (references the Runtime assembly; `InternalsVisibleTo` already grants internal access).
 - `Tests/Editor/` - EditMode tests, asmdef `WallstopStudios.DxCommandTerminal.Tests.Editor`
-  (Editor-only; same nunit pattern). Suites that dispatch builder commands pin
+  (Editor-only; same nunit pattern). EditMode-safe screens:
+  no `[UnityTest]`/scene machinery; no default-context dispatch without pinning
   `CommandExecutionContext.AmbientContextProvider` to a Play Mode context in
-  `[SetUp]` - default-context dispatch is rejected in Edit Mode, and `[UnityTest]`
-  absence alone does not prove a suite is EditMode-safe.
+  `[SetUp]` (`[UnityTest]` absence alone does not prove safety); no PlayMode-only
+  test-infra dependency; and no borrowed fixtures from the PlayMode assembly.
 - `Tests/Runtime/Components/` - harness pieces: `TestCommands.cs` (attribute-registered test
   commands), `TerminalInputHandler.cs` (input simulation), `StartTracker.cs`.
+- Assembly-coupled suites that stay in PlayMode: `CommandDiscoveryTests` (pins the
+  allocation-free classification memo through the PlayMode allocation instrument) and
+  `CommandCompatibilityBakeTests` (drives the bake over `CommandDiscoveryTests` fixtures
+  and `Components/BakePartialFixtureCommands.cs` in the PlayMode assembly).
+- Suites that pin assembly-level discovery contracts (generated catalog, TypeCache claim,
+  catalog-less provider exclusion) need attributed `[RegisterCommand]` fixtures in their
+  own assembly: `Tests/Editor/DiscoveryFixtureCommands.cs` serves Tests.Editor.
 
 ## Running
 
@@ -43,8 +51,9 @@ metadata:
 
 ## Adding tests
 
-1. New command behavior -> extend the matching suite; new command fixtures go in
-   `Components/TestCommands.cs` so registration scanning picks them up.
+1. New command behavior -> extend the matching suite; PlayMode command fixtures go in
+   `Components/TestCommands.cs` so registration scanning picks them up; EditMode-assembly
+   discovery fixtures go in `Tests/Editor/DiscoveryFixtureCommands.cs`.
 2. Input behavior -> simulate through `Components/TerminalInputHandler.cs` rather than injecting
    raw key events.
 3. Terminal lifecycle (open/close, resize, buffer wrap) -> `TerminalTests.cs` covers the
