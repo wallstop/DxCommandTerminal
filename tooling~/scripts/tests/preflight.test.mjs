@@ -403,8 +403,9 @@ test("resolved executable state fingerprints only the first relative PATH match"
   const secondDirectory = path.join(directory, "second");
   fs.mkdirSync(firstDirectory);
   fs.mkdirSync(secondDirectory);
-  const first = path.join(firstDirectory, "preflight-tool");
-  const second = path.join(secondDirectory, "preflight-tool");
+  const command = process.platform === "win32" ? "preflight-tool.cmd" : "preflight-tool";
+  const first = path.join(firstDirectory, command);
+  const second = path.join(secondDirectory, command);
   const originalPath = process.env.PATH;
   try {
     fs.writeFileSync(first, "first");
@@ -415,11 +416,11 @@ test("resolved executable state fingerprints only the first relative PATH match"
     process.env.PATH = [firstDirectory, secondDirectory]
       .map((entry) => path.relative(repoRoot, entry))
       .join(path.delimiter);
-    const initial = resolvedExecutableState("preflight-tool");
+    const initial = resolvedExecutableState(command);
     fs.writeFileSync(second, "changed");
-    assert.equal(initial, resolvedExecutableState("preflight-tool"));
+    assert.equal(initial, resolvedExecutableState(command));
     fs.writeFileSync(first, "changed");
-    assert.notEqual(initial, resolvedExecutableState("preflight-tool"));
+    assert.notEqual(initial, resolvedExecutableState(command));
   } finally {
     if (originalPath === undefined) delete process.env.PATH;
     else process.env.PATH = originalPath;
