@@ -313,6 +313,6 @@ test("the real package exports, validates, and rebuilds byte-identically", () =>
   const names = readArtifact(artifact.buffer).map((entry) => entry.name);
   assert.ok(names.every((name) => !name.includes("Samples~")));
   assert.strictEqual(artifact.rootPrefix, "Packages/com.wallstop-studios.dxcommandterminal");
-  assert.ok(artifact.fileCount > 300 && artifact.folderCount > 50,
+  assert.ok(artifact.fileCount > 350 && artifact.folderCount > 50,
     "the real allowlist must ship the full tree");
 });

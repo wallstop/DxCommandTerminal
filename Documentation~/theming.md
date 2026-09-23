@@ -10,7 +10,7 @@ A `TerminalThemePack` asset lists `Themes` (style sheets) and their
 `ThemeNames`. A `TerminalFontPack` asset lists `Fonts`. The built-in
 packs live under `Packs/`; add your own assets to extend either list.
 
-`list-themes` and `list-fonts` print what the terminal currently has.
+`list-themes` and `list-fonts` print every entry in the active packs.
 
 ## Switching at runtime
 
@@ -18,13 +18,16 @@ packs live under `Packs/`; add your own assets to extend either list.
 for next session:
 
 ```csharp
-terminal.SetTheme("Wallstop", persist: true);
+terminal.SetTheme("Dracula", persist: true);
 terminal.SetFont(myFont, persist: true);
 ```
 
-`SetRandomTheme()` and `SetRandomFont()` pick a different entry from the
-pack and return what they picked. `CurrentTheme`,
-`CurrentFriendlyTheme`, and `CurrentFont` read the current state.
+Theme names come from the pack, so the exact list depends on which
+pack asset the terminal uses.
+
+`SetRandomTheme()` and `SetRandomFont()` pick an entry from the pack
+and return what they picked. `CurrentTheme`, `CurrentFriendlyTheme`,
+and `CurrentFont` read the current state.
 
 Theme names are matched with `ThemeNameHelper`, so case does not matter.
 

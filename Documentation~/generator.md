@@ -11,11 +11,12 @@ by-name binders for the rest.
 - The handler is `static` and the attribute sits on the method.
 - The command name comes from the method name (`COMMAND` infix, suffix,
   or prefix is stripped); `Name = "..."` overrides it.
-- Declare the containing class `partial`: the generator then injects a
-  binder companion into it, so private handlers bind through generated
-  code instead of reflection. A non-`partial` class still works - the
-  catalog falls back to a cached by-name binder - but generated code
-  roots the handler only in the `partial` case.
+- Declare the containing class `partial` when a handler is private (or
+  otherwise inaccessible from the catalog): the generator then injects
+  a binder companion into the class, so the handler binds through
+  generated code instead of a by-name lookup. Accessible handlers bind
+  as direct delegates either way; a non-`partial` class with only
+  accessible handlers needs nothing extra.
 
 Every assembly that compiles with the package gets its own catalog. A
 precompiled DLL without one still works - the shell falls back to a
