@@ -11,6 +11,11 @@ metadata:
 
 - `Tests/Runtime/` - PlayMode tests, asmdef `WallstopStudios.DxCommandTerminal.Tests.Runtime`
   (references the Runtime assembly; `InternalsVisibleTo` already grants internal access).
+- `Tests/Editor/` - EditMode tests, asmdef `WallstopStudios.DxCommandTerminal.Tests.Editor`
+  (Editor-only; same nunit pattern). Suites that dispatch builder commands pin
+  `CommandExecutionContext.AmbientContextProvider` to a Play Mode context in
+  `[SetUp]` - default-context dispatch is rejected in Edit Mode, and `[UnityTest]`
+  absence alone does not prove a suite is EditMode-safe.
 - `Tests/Runtime/Components/` - harness pieces: `TestCommands.cs` (attribute-registered test
   commands), `TerminalInputHandler.cs` (input simulation), `StartTracker.cs`.
 

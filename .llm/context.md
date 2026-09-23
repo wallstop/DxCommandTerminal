@@ -49,7 +49,7 @@ Packs/                                # Built-in asset packs
   Themes/                             # TerminalThemePack assets
 
 Styles/                               # USS/TSS stylesheets consumed by TerminalUI
-Tests/Runtime/                        # PlayMode tests (asmdef: ...Tests.Runtime)
+Tests/Runtime/ Tests/Editor/          # PlayMode + EditMode test assemblies (...Tests.Runtime/.Editor)
   Components/                         # Test harness components (TestCommands, TerminalInputHandler)
 Media/                                # Screenshots and demo GIFs
 tooling~/                             # Unity-hidden tooling (tilde-suffixed; not shipped in the UPM artifact)

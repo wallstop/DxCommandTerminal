@@ -14,6 +14,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
      */
     public sealed class CommandBuilderSubcommandTests
     {
+        private static readonly Func<CommandExecutionContext> GameplayContext = () =>
+            new CommandExecutionContext(CommandExecutionContexts.EditorPlayMode);
+
         private Func<CommandExecutionContext> _previousAmbientProvider;
 
         private static string ConsumeError(CommandShell shell)
@@ -48,7 +51,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             CommandArg.UnregisterParser<UnregisteredType>();
             _previousAmbientProvider = CommandExecutionContext.AmbientContextProvider;
-            CommandExecutionContext.AmbientContextProvider = null;
+            CommandExecutionContext.AmbientContextProvider = GameplayContext;
         }
 
         [TearDown]
@@ -964,5 +967,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.IsTrue(shell.RunCommand("inventory add"));
             Assert.AreEqual(1, invocations, "Subcommand names strip spaces like command names");
         }
+
+        internal readonly struct UnregisteredType { }
     }
 }
