@@ -8,6 +8,28 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 const CACHE_VERSION = 1;
 const CACHE_DIRECTORY = path.join(path.dirname(fileURLToPath(import.meta.url)), ".preflight-cache");
 const CACHE_DISABLED_CHECKS = new Set(["compat-check"]);
+const CACHE_SINGLE_PATH_KEYS = new Set([
+  "DOCS_CATALOG",
+  "DOCS_GUIDES_DIR",
+  "DOCS_SAMPLES_DIR",
+  "DOCS_BASELINES_DIR",
+  "DOCS_API_DIR"
+]);
+const CACHE_ENVIRONMENT_KEYS = [
+  "COMPARISON_DIRECTION_ROOTS",
+  "NESTED_TYPE_PLACEMENT_ROOTS",
+  "MULTILINE_COMMENT_ROOTS",
+  "LINQ_PRODUCTION_ROOTS",
+  "STRING_EQUALITY_ROOTS",
+  "OUT_PARAM_DISCIPLINE_ROOTS",
+  "UNITY_NULL_ROOTS",
+  "THEME_TOKEN_ROOTS",
+  "DOCS_CATALOG",
+  "DOCS_GUIDES_DIR",
+  "DOCS_SAMPLES_DIR",
+  "DOCS_BASELINES_DIR",
+  "DOCS_API_DIR"
+];
 
 function hashText(value) {
   return crypto.createHash("sha256").update(value).digest("hex");
@@ -21,9 +43,9 @@ function repositoryFiles() {
   return output.split("\0").filter(Boolean).sort();
 }
 
-function repositorySnapshot() {
+function repositorySnapshot(files = repositoryFiles()) {
   const hash = crypto.createHash("sha256");
-  for (const relativePath of repositoryFiles()) {
+  for (const relativePath of files) {
     const filePath = path.join(REPO_ROOT, relativePath);
     hash.update(relativePath);
     hash.update("\0");
@@ -32,6 +54,7 @@ function repositorySnapshot() {
       hash.update(`${stat.mode}\0${stat.size}\0`);
       if (stat.isSymbolicLink()) {
         hash.update(fs.readlinkSync(filePath));
+        updatePathHash(hash, filePath);
       } else if (stat.isFile()) {
         hash.update(fs.readFileSync(filePath));
       } else {
@@ -45,6 +68,37 @@ function repositorySnapshot() {
     }
   }
   return hash.digest("hex");
+}
+
+function updatePathHash(hash, target, visited = new Set()) {
+  let realPath;
+  let stat;
+  try {
+    realPath = fs.realpathSync(target);
+    stat = fs.statSync(target);
+  } catch {
+    hash.update("missing");
+    return;
+  }
+  if (visited.has(realPath)) {
+    hash.update("cycle");
+    return;
+  }
+  visited.add(realPath);
+  if (stat.isFile()) {
+    hash.update(fs.readFileSync(target));
+    return;
+  }
+  if (!stat.isDirectory()) {
+    hash.update("other");
+    return;
+  }
+  const entries = fs.readdirSync(target).sort((left, right) => (left < right ? -1 : left > right ? 1 : 0));
+  for (const entry of entries) {
+    hash.update(entry);
+    hash.update("\0");
+    updatePathHash(hash, path.join(target, entry), visited);
+  }
 }
 
 function dependencyState() {
@@ -102,6 +156,12 @@ function commandVersion(command, args) {
   }
 }
 
+function gitTrackedState() {
+  return hashText(
+    execFileSync("git", ["ls-files", "-z"], { cwd: REPO_ROOT, encoding: "utf8" })
+  );
+}
+
 export function createCacheContext() {
   return {
     node: process.version,
@@ -111,8 +171,85 @@ export function createCacheContext() {
     dotnet: commandVersion("dotnet", ["--version"]),
     dependencies: dependencyState(),
     docsApi: generatedState(path.join(REPO_ROOT, "tooling~", "docs", "obj", "api")),
-    repository: repositorySnapshot()
+    files: repositoryFiles(),
+    gitTracked: gitTrackedState()
   };
+}
+
+function pathState(value) {
+  if (value === undefined) {
+    return "unset";
+  }
+  if (value === "" || (Array.isArray(value) && value.length === 1 && value[0] === "")) {
+    return "empty";
+  }
+  const entries = Array.isArray(value) ? value : value.split(path.delimiter);
+  const hash = crypto.createHash("sha256");
+  for (const entry of entries) {
+    const resolved = path.resolve(REPO_ROOT, entry);
+    hash.update(entry);
+    hash.update("\0");
+    const files = [];
+    const visited = new Set();
+    const walk = (target, prefix) => {
+      let realPath;
+      let stat;
+      try {
+        realPath = fs.realpathSync(target);
+        stat = fs.statSync(target);
+      } catch {
+        files.push([prefix, "missing"]);
+        return;
+      }
+      if (visited.has(realPath)) {
+        files.push([prefix, "cycle"]);
+        return;
+      }
+      visited.add(realPath);
+      if (stat.isFile()) {
+        files.push([prefix, fs.readFileSync(target)]);
+        return;
+      }
+      if (!stat.isDirectory()) {
+        files.push([prefix, "other"]);
+        return;
+      }
+      for (const child of fs.readdirSync(target, { withFileTypes: true })) {
+        walk(path.join(target, child.name), path.posix.join(prefix, child.name));
+      }
+    };
+    walk(resolved, entry);
+    files.sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
+    for (const [relativePath, contents] of files) {
+      hash.update(relativePath);
+      hash.update("\0");
+      hash.update(contents);
+    }
+  }
+  return hash.digest("hex");
+}
+
+function environmentState() {
+  return CACHE_ENVIRONMENT_KEYS.map((key) => {
+    const value = process.env[key];
+    if (value === undefined) {
+      return [key, "unset"];
+    }
+    const paths = CACHE_SINGLE_PATH_KEYS.has(key) ? [value] : value;
+    return [key, pathState(paths)];
+  });
+}
+
+function selectedFiles(check, context) {
+  if (check.cachePaths === undefined) {
+    return context.files ?? repositoryFiles();
+  }
+  const files = context.files ?? repositoryFiles();
+  return files.filter((relativePath) =>
+    check.cachePaths.some(
+      (root) => relativePath === root || relativePath.startsWith(`${root}/`)
+    )
+  );
 }
 
 export function cacheKeyForCheck(check, context = createCacheContext()) {
@@ -127,7 +264,10 @@ export function cacheKeyForCheck(check, context = createCacheContext()) {
     `dotnet=${context.dotnet}`,
     `dependencies=${context.dependencies}`,
     `docs-api=${context.docsApi}`,
-    `repo=${context.repository}`
+    `environment=${JSON.stringify(environmentState())}`,
+    `git-tracked=${check.cacheGitTracked === true ? context.gitTracked : ""}`,
+    `cache-paths=${JSON.stringify(check.cachePaths ?? null)}`,
+    `repo=${repositorySnapshot(selectedFiles(check, context))}`
   ].join("\n");
   return hashText(identity);
 }

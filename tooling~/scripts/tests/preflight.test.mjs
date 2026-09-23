@@ -18,6 +18,9 @@ const preflightPath = path.join(toolingRoot, "scripts", "preflight.mjs");
 const { buildChecks, parseSkip, runChecks, main } = await import(
   pathToFileURL(preflightPath).href
 );
+const { cacheKeyForCheck } = await import(
+  pathToFileURL(path.join(toolingRoot, "scripts", "preflight-cache.mjs")).href
+);
 
 function writeTempScript(body) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "preflight-test-"));
@@ -57,6 +60,9 @@ test("buildChecks: unique names, non-empty commands, expected canaries", () => {
   for (const name of expected) {
     assert.ok(names.includes(name), `expected check '${name}' in the default set`);
   }
+  const packageCheck = checks.find((check) => check.name === "package-validate");
+  assert.equal(packageCheck.cacheGitTracked, true);
+  assert.ok(packageCheck.cachePaths.includes(".npmignore"));
 });
 
 const skipCases = [
@@ -170,6 +176,103 @@ test("main: injected checks drive the happy path and exit 0", async () => {
     assert.ok(output.includes("1/1 passed"), `summary must count the checks: ${output}`);
   } finally {
     console.log = originalLog;
+  }
+});
+
+test("cache keys ignore files outside a check's declared inputs", () => {
+  const baseContext = {
+    node: "node",
+    platform: "linux",
+    arch: "x64",
+    npm: "npm",
+    dotnet: "dotnet",
+    dependencies: "deps",
+    docsApi: "api",
+    files: ["package.json"]
+  };
+  const check = { name: "scoped", command: "node scoped.mjs", cachePaths: ["package.json"] };
+  const unrelatedContext = { ...baseContext, files: ["package.json", "README.md"] };
+  assert.equal(cacheKeyForCheck(check, baseContext), cacheKeyForCheck(check, unrelatedContext));
+});
+
+test("package cache keys include git index state", () => {
+  const context = {
+    node: "node",
+    platform: "linux",
+    arch: "x64",
+    npm: "npm",
+    dotnet: "dotnet",
+    dependencies: "deps",
+    docsApi: "api",
+    files: ["package.json"],
+    gitTracked: "index-a"
+  };
+  const check = { name: "package", command: "npm pack", cacheGitTracked: true };
+  assert.notEqual(
+    cacheKeyForCheck(check, context),
+    cacheKeyForCheck(check, { ...context, gitTracked: "index-b" })
+  );
+});
+
+test("cache keys include supported environment overrides", () => {
+  const context = {
+    node: "node",
+    platform: "linux",
+    arch: "x64",
+    npm: "npm",
+    dotnet: "dotnet",
+    dependencies: "deps",
+    docsApi: "api",
+    files: ["package.json"]
+  };
+  const check = { name: "scoped", command: "node scoped.mjs", cachePaths: ["package.json"] };
+  const original = process.env.THEME_TOKEN_ROOTS;
+  const originalDocsApi = process.env.DOCS_API_DIR;
+  try {
+    delete process.env.THEME_TOKEN_ROOTS;
+    const unset = cacheKeyForCheck(check, context);
+    process.env.THEME_TOKEN_ROOTS = "fixture";
+    assert.notEqual(unset, cacheKeyForCheck(check, context));
+    delete process.env.THEME_TOKEN_ROOTS;
+    delete process.env.DOCS_API_DIR;
+    const docsUnset = cacheKeyForCheck(check, context);
+    process.env.DOCS_API_DIR = "";
+    assert.notEqual(docsUnset, cacheKeyForCheck(check, context));
+  } finally {
+    if (original === undefined) delete process.env.THEME_TOKEN_ROOTS;
+    else process.env.THEME_TOKEN_ROOTS = original;
+    if (originalDocsApi === undefined) delete process.env.DOCS_API_DIR;
+    else process.env.DOCS_API_DIR = originalDocsApi;
+  }
+});
+
+test("cache keys include contents at an overridden path", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "preflight-override-"));
+  const overrideDirectory = path.join(directory, path.delimiter === ":" ? "api:model" : "api-model");
+  fs.mkdirSync(overrideDirectory);
+  const file = path.join(overrideDirectory, "fixture.txt");
+  const context = {
+    node: "node",
+    platform: "linux",
+    arch: "x64",
+    npm: "npm",
+    dotnet: "dotnet",
+    dependencies: "deps",
+    docsApi: "api",
+    files: []
+  };
+  const check = { name: "override", command: "node override.mjs" };
+  const original = process.env.DOCS_API_DIR;
+  try {
+    fs.writeFileSync(file, "first");
+    process.env.DOCS_API_DIR = overrideDirectory;
+    const first = cacheKeyForCheck(check, context);
+    fs.writeFileSync(file, "second");
+    assert.notEqual(first, cacheKeyForCheck(check, context));
+  } finally {
+    if (original === undefined) delete process.env.DOCS_API_DIR;
+    else process.env.DOCS_API_DIR = original;
+    fs.rmSync(directory, { recursive: true, force: true });
   }
 });
 

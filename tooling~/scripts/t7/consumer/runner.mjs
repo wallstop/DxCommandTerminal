@@ -36,6 +36,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { scanLogForErrors } from "../../release/import-drill.mjs";
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(MODULE_DIR, "../../../..");
@@ -366,7 +367,7 @@ export async function runDrill(options, runtime = {}) {
   if (!fs.existsSync(options.unity)) throw new Error(`unity binary not found: ${options.unity}`);
   if (!fs.existsSync(options.artifact)) throw new Error(`artifact not found: ${options.artifact}`);
 
-  fs.mkdirSync(path.join(options.out, "logs"), { recursive: true });
+  const logsDir = path.join(options.out, "logs");
   const progressPath = path.join(options.out, "progress.txt");
   const progress = (line) => {
     fs.appendFileSync(progressPath, line);
@@ -375,6 +376,10 @@ export async function runDrill(options, runtime = {}) {
   const project = path.join(options.out, "project");
   const editorVersion = probeVersion(options.unity);
   scaffoldProject(project, editorVersion, SETTLE_DRIVER_SOURCE);
+  fs.rmSync(logsDir, { recursive: true, force: true });
+  fs.mkdirSync(logsDir, { recursive: true });
+  fs.rmSync(progressPath, { force: true });
+  fs.rmSync(path.join(options.out, "manifest.json"), { force: true });
 
   const startedAt = new Date().toISOString();
   const deadlineAt = Date.now() + options.timeoutMinutes * 60_000;
@@ -409,6 +414,7 @@ export async function runDrill(options, runtime = {}) {
     if (outcome.spawnError !== undefined) {
       record.spawnError = outcome.spawnError;
     }
+    record.logErrors = scanLogForErrors(logPathOf(phase));
     if (phase.kind === "control" || phase.kind === "edit") {
       record.attribution = parseScriptingAttribution(logPathOf(phase));
     }
@@ -443,6 +449,10 @@ export async function runDrill(options, runtime = {}) {
     }
     if (record.exitCode !== 0) {
       failure = `phase ${record.name} exited ${record.exitCode}`;
+      break;
+    }
+    if (record.logErrors.length > 0) {
+      failure = `phase ${record.name} log validation failed:\n  - ${record.logErrors.join("\n  - ")}`;
       break;
     }
     if (phase.kind === "settle" && !fs.existsSync(path.join(project, EDIT_TARGET))) {

@@ -166,6 +166,22 @@ test("workflow structure: remote checks precede npm and all Release mutations", 
   assert.strictEqual(ci.match(/"\.github\/workflows\/release\*\.yml"/g)?.length, 2);
 });
 
+test("workflow path filters include repository execution inputs", () => {
+  for (const name of [
+    "tooling-tests.yml",
+    "llm-instructions-lint.yml",
+    "docs-build.yml",
+    "theme-style-lint.yml",
+    "generator-tests.yml",
+    "compat-2021.yml"
+  ]) {
+    const workflow = readWorkflow(name);
+    assert.strictEqual(workflow.match(/["']\.gitattributes["']/g)?.length, 2, `${name} must trigger on .gitattributes`);
+  }
+  const tooling = readWorkflow("tooling-tests.yml");
+  assert.strictEqual(tooling.match(/["']\.npmignore["']/g)?.length, 2, "package input changes must trigger tooling tests");
+});
+
 test("workflow structure: an existing Release is reused on re-run, never re-created", () => {
   const script = shellScript(job(publishWorkflow, "github-release"), "Create the draft release");
   const view = script.indexOf("gh release view");

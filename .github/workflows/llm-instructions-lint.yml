@@ -15,6 +15,7 @@ on:
       - "tooling~/scripts/lint-llm-instructions.ps1"
       - "tooling~/scripts/lint-skill-sizes.ps1"
       - "tooling~/scripts/tests/**"
+      - ".gitattributes"
       - ".github/workflows/llm-instructions-lint.yml"
   pull_request:
     paths:
@@ -27,6 +28,7 @@ on:
       - "tooling~/scripts/lint-llm-instructions.ps1"
       - "tooling~/scripts/lint-skill-sizes.ps1"
       - "tooling~/scripts/tests/**"
+      - ".gitattributes"
       - ".github/workflows/llm-instructions-lint.yml"
 
 permissions:
