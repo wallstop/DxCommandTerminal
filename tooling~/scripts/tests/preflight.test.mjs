@@ -365,6 +365,30 @@ test("cache keys hash declared files and ignore unrelated filesystem state", () 
   }
 });
 
+test("cache keys include nested names and empty directories", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "preflight-names-"));
+  const context = {
+    node: "node",
+    platform: "linux",
+    arch: "x64",
+    files: []
+  };
+  const check = { name: "names", command: "node names.mjs", cachePaths: [directory] };
+  try {
+    const original = path.join(directory, "original.cs");
+    const renamed = path.join(directory, "renamed.cs");
+    fs.writeFileSync(original, "same contents");
+    const initial = cacheKeyForCheck(check, context);
+    fs.renameSync(original, renamed);
+    const afterRename = cacheKeyForCheck(check, context);
+    assert.notEqual(initial, afterRename);
+    fs.mkdirSync(path.join(directory, "empty"));
+    assert.notEqual(afterRename, cacheKeyForCheck(check, context));
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("dependency state includes installed dependency and baked fallback contents", () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "preflight-dependencies-"));
   const nodeModules = path.join(directory, "node_modules");

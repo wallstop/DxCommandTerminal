@@ -73,6 +73,7 @@ function repositoryFiles() {
 }
 
 function updatePathHash(hash, target, label, visited, excludes) {
+  hash.update(`${label}\0`);
   let link;
   try {
     link = fs.readlinkSync(target);
