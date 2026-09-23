@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import {
   EDIT_TARGET,
+  defaultRunPhase,
   parseDrillArgs,
   planPhases,
   runDrill,
@@ -247,6 +248,41 @@ test("drill args accept the keep flag without a value", () => {
   const options = parseDrillArgs(["--unity", "u", "--artifact", "a", "--out", "o", "--keep"]);
   assert.equal(options.keep, true);
   assert.throws(() => parseDrillArgs(["--unity", "u", "--artifact", "a", "--out", "o", "--keep=1"]), /does not take a value/);
+});
+
+test("keep flag does not swallow the following option", () => {
+  const options = parseDrillArgs(["--keep", "--unity", "u", "--artifact", "a", "--out", "o", "--pairs", "2"]);
+  assert.equal(options.keep, true);
+  assert.equal(options.pairs, 2);
+  assert.equal(options.unity, "u");
+});
+
+test("default phase runner resolves clean exits and escalates past the deadline", async () => {
+  const clean = await defaultRunPhase(
+    process.execPath,
+    { args: ["-e", "process.exit(0)"], env: undefined },
+    Date.now() + 60_000
+  );
+  assert.equal(clean.exitCode, 0);
+  assert.equal(clean.timedOut, false);
+
+  const runaway = await defaultRunPhase(
+    process.execPath,
+    { args: ["-e", "setInterval(() => {}, 1000)"], env: undefined },
+    Date.now() - 1
+  );
+  assert.equal(runaway.timedOut, true);
+  assert.notEqual(runaway.exitCode, 0);
+});
+
+test("default phase runner resolves on spawn errors instead of crashing", async () => {
+  const outcome = await defaultRunPhase(
+    "dxct-no-such-binary-000",
+    { args: [], env: undefined },
+    Date.now() + 60_000
+  );
+  assert.equal(outcome.exitCode, null);
+  assert.match(outcome.spawnError, /ENOENT|spawn/i);
 });
 
 test("run drill fails closed when a phase exits non-zero", async () => {

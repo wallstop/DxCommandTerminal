@@ -62,7 +62,6 @@ export function parseDrillArgs(argv) {
     }
     const separator = token.indexOf("=");
     const name = token.slice(2, separator === -1 ? undefined : separator);
-    const value = separator === -1 ? argv[++index] : token.slice(separator + 1);
     if (!OPTION_NAMES.has(name)) {
       throw new Error(`unknown option: --${name}`);
     }
@@ -71,6 +70,7 @@ export function parseDrillArgs(argv) {
       options.keep = true;
       continue;
     }
+    const value = separator === -1 ? argv[++index] : token.slice(separator + 1);
     if (value === undefined || value === "") {
       throw new Error(`missing value for --${name}`);
     }
@@ -325,10 +325,11 @@ function gitRevision() {
     next phase touches the same Library. Injectable so contract tests
     never launch Unity.
 */
-function defaultRunPhase(unity, phase, deadlineAt) {
+export function defaultRunPhase(unity, phase, deadlineAt) {
   return new Promise((resolve) => {
     let settled = false;
     let timedOut = false;
+    let escalated = false;
     const env = phase.env === undefined ? undefined : { ...process.env, ...phase.env };
     const child = spawn(unity, phase.args, { stdio: "ignore", env });
     const finish = (outcome) => {
@@ -338,14 +339,16 @@ function defaultRunPhase(unity, phase, deadlineAt) {
       resolve(outcome);
     };
     const watch = setInterval(() => {
-      if (settled) {
-        clearInterval(watch);
-        return;
-      }
-      if (Date.now() <= deadlineAt) return;
+      if (settled || escalated || Date.now() <= deadlineAt) return;
+      // Escalate exactly once: SIGTERM, then SIGKILL if still alive, and
+      // only the close event resolves - the next phase must not race a
+      // dying editor for Library/.
+      escalated = true;
       timedOut = true;
       child.kill("SIGTERM");
-      setTimeout(() => child.kill("SIGKILL"), 10_000);
+      setTimeout(() => {
+        if (!settled) child.kill("SIGKILL");
+      }, 10_000);
     }, 500);
     child.on("error", (error) => finish({ exitCode: null, timedOut: false, spawnError: error.message }));
     child.on("close", (code, signal) =>
