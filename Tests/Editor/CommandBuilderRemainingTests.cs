@@ -15,6 +15,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
      */
     public sealed class CommandBuilderRemainingTests
     {
+        private static readonly Func<CommandExecutionContext> GameplayContext = () =>
+            new CommandExecutionContext(CommandExecutionContexts.EditorPlayMode);
+
         private Func<CommandExecutionContext> _previousAmbientProvider;
 
         private static CommandHistory History() => new(16);
@@ -28,7 +31,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void SetUp()
         {
             _previousAmbientProvider = CommandExecutionContext.AmbientContextProvider;
-            CommandExecutionContext.AmbientContextProvider = null;
+            CommandExecutionContext.AmbientContextProvider = GameplayContext;
         }
 
         [TearDown]
