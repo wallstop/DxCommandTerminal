@@ -20,6 +20,7 @@ on:
       - "tooling~/package.json"
       - "package.json"
       - ".github/workflows/compat-2021.yml"
+      - ".gitattributes"
   pull_request:
     paths:
       - "Runtime/**"
@@ -27,6 +28,7 @@ on:
       - "tooling~/package.json"
       - "package.json"
       - ".github/workflows/compat-2021.yml"
+      - ".gitattributes"
 
 permissions:
   contents: read

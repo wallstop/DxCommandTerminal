@@ -56,6 +56,7 @@ export function buildChecks() {
     {
       name: "package-validate",
       command: "npm --prefix tooling~ run package:validate",
+      cacheGitTracked: true,
       cachePaths: [
         "Runtime",
         "Editor",
@@ -77,6 +78,7 @@ export function buildChecks() {
         "LICENSE.meta",
         "CHANGELOG.md.meta",
         ".gitignore",
+        ".npmignore",
         "tooling~/scripts/release/validate-package-contents.mjs",
         "tooling~/package.json"
       ]

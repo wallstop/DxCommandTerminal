@@ -156,6 +156,12 @@ function commandVersion(command, args) {
   }
 }
 
+function gitTrackedState() {
+  return hashText(
+    execFileSync("git", ["ls-files", "-z"], { cwd: REPO_ROOT, encoding: "utf8" })
+  );
+}
+
 export function createCacheContext() {
   return {
     node: process.version,
@@ -165,7 +171,8 @@ export function createCacheContext() {
     dotnet: commandVersion("dotnet", ["--version"]),
     dependencies: dependencyState(),
     docsApi: generatedState(path.join(REPO_ROOT, "tooling~", "docs", "obj", "api")),
-    files: repositoryFiles()
+    files: repositoryFiles(),
+    gitTracked: gitTrackedState()
   };
 }
 
@@ -258,6 +265,7 @@ export function cacheKeyForCheck(check, context = createCacheContext()) {
     `dependencies=${context.dependencies}`,
     `docs-api=${context.docsApi}`,
     `environment=${JSON.stringify(environmentState())}`,
+    `git-tracked=${check.cacheGitTracked === true ? context.gitTracked : ""}`,
     `cache-paths=${JSON.stringify(check.cachePaths ?? null)}`,
     `repo=${repositorySnapshot(selectedFiles(check, context))}`
   ].join("\n");

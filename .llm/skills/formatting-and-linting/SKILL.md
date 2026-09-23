@@ -55,6 +55,12 @@ on every commit and fails fast when tools are missing.
 - Verify APIs against each version gate's actual documentation or references;
   a shim compilation cannot prove an overload exists in older Unity versions.
 
+## Preflight cache inputs
+
+- Treat each preflight `cachePaths` list as a complete input contract. Include command manifests, generated inputs, package ignore files, and the tracked-file index when a check reads Git state.
+- A change outside a check's declared inputs may reuse its cache. A change inside one must invalidate it.
+- Add a contract test when a cache check starts reading a new file, environment variable, or external directory.
+
 ## Pre-commit hooks
 
 `.pre-commit-config.yaml` currently runs:

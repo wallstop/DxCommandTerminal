@@ -7,10 +7,12 @@ on:
       - main
     paths:
       - "Styles/**"
+      - ".gitattributes"
       - ".github/workflows/theme-style-lint.yml"
   pull_request:
     paths:
       - "Styles/**"
+      - ".gitattributes"
       - ".github/workflows/theme-style-lint.yml"
 
 permissions:

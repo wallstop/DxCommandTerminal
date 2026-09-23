@@ -23,6 +23,7 @@ on:
       - "tooling~/package.json"
       - "package.json"
       - ".config/dotnet-tools.json"
+      - ".gitattributes"
       - ".github/workflows/docs-build.yml"
   pull_request:
     paths:
@@ -35,6 +36,7 @@ on:
       - "tooling~/package.json"
       - "package.json"
       - ".config/dotnet-tools.json"
+      - ".gitattributes"
       - ".github/workflows/docs-build.yml"
   workflow_dispatch:
 

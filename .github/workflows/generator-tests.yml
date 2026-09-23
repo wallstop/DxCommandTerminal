@@ -13,6 +13,7 @@ on:
       - "Runtime/CommandTerminal/Backend/CommandCatalogEntry.cs"
       - "tooling~/scripts/verify-analyzer-payload.ps1"
       - ".github/workflows/generator-tests.yml"
+      - ".gitattributes"
   pull_request:
     paths:
       - "Generator~/**"
@@ -22,6 +23,7 @@ on:
       - "Runtime/CommandTerminal/Backend/CommandCatalogEntry.cs"
       - "tooling~/scripts/verify-analyzer-payload.ps1"
       - ".github/workflows/generator-tests.yml"
+      - ".gitattributes"
 
 permissions:
   contents: read

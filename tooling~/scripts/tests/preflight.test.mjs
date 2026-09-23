@@ -60,6 +60,9 @@ test("buildChecks: unique names, non-empty commands, expected canaries", () => {
   for (const name of expected) {
     assert.ok(names.includes(name), `expected check '${name}' in the default set`);
   }
+  const packageCheck = checks.find((check) => check.name === "package-validate");
+  assert.equal(packageCheck.cacheGitTracked, true);
+  assert.ok(packageCheck.cachePaths.includes(".npmignore"));
 });
 
 const skipCases = [
@@ -190,6 +193,25 @@ test("cache keys ignore files outside a check's declared inputs", () => {
   const check = { name: "scoped", command: "node scoped.mjs", cachePaths: ["package.json"] };
   const unrelatedContext = { ...baseContext, files: ["package.json", "README.md"] };
   assert.equal(cacheKeyForCheck(check, baseContext), cacheKeyForCheck(check, unrelatedContext));
+});
+
+test("package cache keys include git index state", () => {
+  const context = {
+    node: "node",
+    platform: "linux",
+    arch: "x64",
+    npm: "npm",
+    dotnet: "dotnet",
+    dependencies: "deps",
+    docsApi: "api",
+    files: ["package.json"],
+    gitTracked: "index-a"
+  };
+  const check = { name: "package", command: "npm pack", cacheGitTracked: true };
+  assert.notEqual(
+    cacheKeyForCheck(check, context),
+    cacheKeyForCheck(check, { ...context, gitTracked: "index-b" })
+  );
 });
 
 test("cache keys include supported environment overrides", () => {
