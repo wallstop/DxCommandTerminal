@@ -179,6 +179,8 @@ test("main: caches successful checks and --no-cache bypasses the cache", async (
   const check = { name: "cached-check", command: `node "${pass}"` };
   const lines = [];
   const originalLog = console.log;
+  const originalCi = process.env.CI;
+  delete process.env.CI;
   console.log = (line) => lines.push(String(line));
   try {
     assert.equal(await main([], [check]), 0);
@@ -189,6 +191,11 @@ test("main: caches successful checks and --no-cache bypasses the cache", async (
     assert.equal(fs.readFileSync(marker, "utf8").length, countAfterCachedRun + 1);
   } finally {
     console.log = originalLog;
+    if (originalCi === undefined) {
+      delete process.env.CI;
+    } else {
+      process.env.CI = originalCi;
+    }
     fs.rmSync(path.dirname(marker), { recursive: true, force: true });
   }
 });
