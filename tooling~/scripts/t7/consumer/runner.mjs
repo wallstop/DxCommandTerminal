@@ -330,12 +330,14 @@ export function defaultRunPhase(unity, phase, deadlineAt) {
     let settled = false;
     let timedOut = false;
     let escalated = false;
+    let sigkill = null;
     const env = phase.env === undefined ? undefined : { ...process.env, ...phase.env };
     const child = spawn(unity, phase.args, { stdio: "ignore", env });
     const finish = (outcome) => {
       if (settled) return;
       settled = true;
       clearInterval(watch);
+      clearTimeout(sigkill);
       resolve(outcome);
     };
     const watch = setInterval(() => {
@@ -346,9 +348,10 @@ export function defaultRunPhase(unity, phase, deadlineAt) {
       escalated = true;
       timedOut = true;
       child.kill("SIGTERM");
-      setTimeout(() => {
+      sigkill = setTimeout(() => {
         if (!settled) child.kill("SIGKILL");
       }, 10_000);
+      sigkill.unref?.();
     }, 500);
     child.on("error", (error) => finish({ exitCode: null, timedOut: false, spawnError: error.message }));
     child.on("close", (code, signal) =>
