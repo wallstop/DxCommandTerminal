@@ -25,6 +25,7 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { cacheKeyForCheck, createCacheContext, isCacheableCheck, readCacheEntry, writeCacheEntry } from "./preflight-cache.mjs";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -143,13 +144,46 @@ export async function main(argv = process.argv.slice(2), checks = buildChecks())
     return 1;
   }
 
-  console.log(`[preflight] running ${selected.length} checks in parallel...`);
-  const results = await runChecks(selected, {
+  const useCache = !process.env.CI && !argv.includes("--no-cache") && skip.length === 0;
+  const startedAt = Date.now();
+  const cachedResults = [];
+  const pending = [];
+  const cacheKeys = new Map();
+  const cacheContext = useCache ? createCacheContext() : null;
+  for (const check of selected) {
+    let key = null;
+    if (useCache && isCacheableCheck(check)) {
+      try {
+        key = cacheKeyForCheck(check, cacheContext);
+        cacheKeys.set(check.name, key);
+      } catch {
+        key = null;
+      }
+    }
+    if (key !== null && readCacheEntry(check, key)) {
+      cachedResults.push({ name: check.name, command: check.command, ok: true, durationMs: 0, output: "", cached: true });
+      console.log(`[preflight] cached ${check.name}`);
+    } else {
+      pending.push(check);
+    }
+  }
+
+  console.log(`[preflight] running ${pending.length} checks in parallel...`);
+  const settled = await runChecks(pending, {
     onSettled: (result) => {
       const seconds = (result.durationMs / 1000).toFixed(1);
-      console.log(result.ok ? `[preflight] ok   ${result.name} (${seconds}s)` : `[preflight] FAIL ${result.name} (${seconds}s)`);
+      if (result.ok) {
+        const key = cacheKeys.get(result.name);
+        if (key !== undefined && useCache) {
+          writeCacheEntry({ name: result.name, command: result.command }, key);
+        }
+        console.log(`[preflight] ok   ${result.name} (${seconds}s)`);
+      } else {
+        console.log(`[preflight] FAIL ${result.name} (${seconds}s)`);
+      }
     }
   });
+  const results = [...cachedResults, ...settled];
 
   const failures = results.filter((result) => !result.ok);
   for (const failure of failures) {
@@ -157,9 +191,10 @@ export async function main(argv = process.argv.slice(2), checks = buildChecks())
     console.error(failure.output);
   }
 
-  const totalSeconds = ((results.reduce((max, result) => Math.max(max, result.durationMs), 0)) / 1000).toFixed(1);
+  const totalSeconds = ((Date.now() - startedAt) / 1000).toFixed(1);
   const passed = results.length - failures.length;
-  console.log(`[preflight] ${passed}/${results.length} passed, wall ${totalSeconds}s`);
+  const cached = results.filter((result) => result.cached === true).length;
+  console.log(`[preflight] ${passed}/${results.length} passed, ${cached} cached, wall ${totalSeconds}s`);
   return failures.length > 0 ? 1 : 0;
 }
 

@@ -851,11 +851,11 @@ test("the reader parses the real exporter artifact", async () => {
   const { buffer } = exporter.exportUnityPackage({ packageRoot: path.resolve(toolingRoot, ".."), out: "" });
   const artifact = listArtifact(buffer);
   assert.strictEqual(artifact.root, "Packages/com.wallstop-studios.dxcommandterminal");
-  assert.ok(artifact.assets.length > 300, "the real artifact must carry the full tree");
+  assert.ok(artifact.assets.length > 300, "the real artifact must carry the full production tree");
   assert.deepStrictEqual(artifact.scratchDependencies, {
-    "com.unity.inputsystem": "1.7.0",
-    "com.unity.test-framework": "1.1.33"
+    "com.unity.inputsystem": "1.7.0"
   });
+  assert.ok(artifact.assets.every((asset) => !asset.pathname.includes("/Tests/")));
   const analyzers = artifact.assets.filter((asset) => asset.pathname.includes("/Analyzers/"));
   assert.ok(analyzers.length > 0, "the analyzer payload must ride the artifact");
   assert.ok(artifact.assets.some((asset) => asset.pathname.endsWith(".asmdef")));

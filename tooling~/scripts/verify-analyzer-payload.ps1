@@ -104,9 +104,11 @@ function Compare-ShippedToRebuild($payload, $builtPayload) {
 $scratchDirectory = Join-Path ([System.IO.Path]::GetTempPath()) "dxcommandterminal-analyzer-$(Get-Random)"
 New-Item -ItemType Directory -Path $scratchDirectory | Out-Null
 try {
-    foreach ($payload in $payloads) {
-        $builtPayload = Build-PayloadInto $payload.ProjectPath $scratchDirectory
-        Compare-ShippedToRebuild $payload $builtPayload
+    if (-not $TwoCheckout) {
+        foreach ($payload in $payloads) {
+            $builtPayload = Build-PayloadInto $payload.ProjectPath $scratchDirectory
+            Compare-ShippedToRebuild $payload $builtPayload
+        }
     }
 
     if ($TwoCheckout) {

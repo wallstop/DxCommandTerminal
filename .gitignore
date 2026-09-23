@@ -45,3 +45,6 @@ tooling~/docs/obj/
 # 2021.3 compile tripwire build state (tooling~/compat; rebuilt by npm run compat:check)
 tooling~/compat/bin/
 tooling~/compat/obj/
+
+# Local preflight result cache
+tooling~/scripts/.preflight-cache/

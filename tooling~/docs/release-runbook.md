@@ -197,10 +197,9 @@ linter (`npm --prefix tooling~ run lint:pr-copy`) enforces the STE PR structure.
 
 T13's release gate: import the actual release artifact into a clean throwaway
 Unity project and verify it compiles there. CI never imports Unity packages;
-this runs on a machine with the local Unity license and network access (the
-scratch project's manifest pulls the package's UPM dependencies -
-`com.unity.inputsystem`, `com.unity.test-framework` - from the registry so
-every shipped asmdef actually compiles).
+this runs on a machine with the local Unity license and network access. The scratch project's
+manifest pulls the production Input System dependency. The consumer drill also installs
+`com.unity.test-framework` on purpose to cover the #149 warm-cache headless condition.
 
 **Never import the artifact into the live maintainer project via the editor or
 the MCP bridge.** The first drill (session-025) did exactly that:
@@ -229,7 +228,7 @@ validates the result on disk:
 package - no error, no log, exit 0 - whenever any entry's `pathname` targets
 `Packages/`, which every entry of the release artifact does. The CLI argument
 imports the same artifact completely (all entries land, UPM registers the
-embedded package, all three assemblies compile). If a future import regresses
+embedded package, all shipped assemblies compile). If a future import regresses
 to importing nothing with exit 0 and an empty final refresh, suspect this
 behavior first.
 

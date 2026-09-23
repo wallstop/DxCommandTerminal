@@ -152,10 +152,9 @@ export function planPhases(options) {
 
 /*
     Scratch consumer project: pins the probed editor version, resolves the
-    same UPM floors the import drill uses (the shipped asmdefs reference
-    the Input System and test-runner assemblies), and installs the settle
-    driver. Fails closed on an existing non-empty directory or an
-    implausible version string.
+    production Input System dependency, and deliberately installs the Test
+    Framework to reproduce the #149 warm-cache headless condition. Fails
+    closed on an existing non-empty directory or an implausible version.
 */
 export function scaffoldProject(projectDir, editorVersion, driverSource) {
   if (!/^[0-9a-zA-Z][0-9a-zA-Z.\-_]*$/u.test(editorVersion)) {
