@@ -31,21 +31,94 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 
 /** The default gate set. Names are stable identifiers used by --skip. */
 export function buildChecks() {
+  const csharpRoots = ["Runtime", "Editor", "Tests", "Samples~", "Generator~"];
+  const csharpCheck = (name, command, script) => ({
+    name,
+    command,
+    cachePaths: [
+      ...csharpRoots,
+      `tooling~/scripts/${script}`,
+      "tooling~/scripts/lint-comparison-direction.mjs",
+      "tooling~/package.json"
+    ]
+  });
   return [
     { name: "node-tests", command: "npm --prefix tooling~ test" },
-    { name: "t11-check", command: "npm --prefix tooling~ run t11:check" },
-    { name: "package-validate", command: "npm --prefix tooling~ run package:validate" },
-    { name: "docs-guides", command: "npm --prefix tooling~ run docs:guides" },
+    {
+      name: "t11-check",
+      command: "npm --prefix tooling~ run t11:check",
+      cachePaths: [
+        "Tests/Runtime/Capture/Baselines~",
+        "tooling~/scripts/t11",
+        "tooling~/package.json"
+      ]
+    },
+    {
+      name: "package-validate",
+      command: "npm --prefix tooling~ run package:validate",
+      cachePaths: [
+        "Runtime",
+        "Editor",
+        "Packs",
+        "Styles",
+        "Fonts",
+        "Samples~",
+        "package.json",
+        "README.md",
+        "LICENSE",
+        "CHANGELOG.md",
+        "package.json.meta",
+        "Runtime.meta",
+        "Editor.meta",
+        "Packs.meta",
+        "Styles.meta",
+        "Fonts.meta",
+        "README.md.meta",
+        "LICENSE.meta",
+        "CHANGELOG.md.meta",
+        ".gitignore",
+        "tooling~/scripts/release/validate-package-contents.mjs",
+        "tooling~/package.json"
+      ]
+    },
+    {
+      name: "docs-guides",
+      command: "npm --prefix tooling~ run docs:guides",
+      cachePaths: [
+        "Documentation~",
+        "Samples~",
+        "Tests/Runtime/Capture/Baselines~",
+        "tooling~/docs",
+        "tooling~/scripts/t11",
+        ".config/dotnet-tools.json",
+        "tooling~/package.json"
+      ]
+    },
     { name: "compat-check", command: "npm --prefix tooling~ run compat:check" },
-    { name: "lint-comparison-direction", command: "node tooling~/scripts/lint-comparison-direction.mjs" },
-    { name: "lint-member-ordering", command: "node tooling~/scripts/lint-member-ordering.mjs" },
-    { name: "lint-multiline-comments", command: "node tooling~/scripts/lint-multiline-comments.mjs" },
-    { name: "lint-linq-production", command: "node tooling~/scripts/lint-linq-production.mjs" },
-    { name: "lint-string-equality", command: "node tooling~/scripts/lint-string-equality.mjs" },
-    { name: "lint-out-param-discipline", command: "node tooling~/scripts/lint-out-param-discipline.mjs" },
-    { name: "lint-unity-null-patterns", command: "node tooling~/scripts/lint-unity-null-patterns.mjs" },
-    { name: "lint-theme-palette-tokens", command: "node tooling~/scripts/lint-theme-palette-tokens.mjs" },
-    { name: "lint-docs-catalog", command: "node tooling~/scripts/lint-docs-catalog.mjs" }
+    csharpCheck("lint-comparison-direction", "node tooling~/scripts/lint-comparison-direction.mjs", "lint-comparison-direction.mjs"),
+    csharpCheck("lint-member-ordering", "node tooling~/scripts/lint-member-ordering.mjs", "lint-member-ordering.mjs"),
+    csharpCheck("lint-multiline-comments", "node tooling~/scripts/lint-multiline-comments.mjs", "lint-multiline-comments.mjs"),
+    csharpCheck("lint-linq-production", "node tooling~/scripts/lint-linq-production.mjs", "lint-linq-production.mjs"),
+    csharpCheck("lint-string-equality", "node tooling~/scripts/lint-string-equality.mjs", "lint-string-equality.mjs"),
+    csharpCheck("lint-out-param-discipline", "node tooling~/scripts/lint-out-param-discipline.mjs", "lint-out-param-discipline.mjs"),
+    csharpCheck("lint-unity-null-patterns", "node tooling~/scripts/lint-unity-null-patterns.mjs", "lint-unity-null-patterns.mjs"),
+    {
+      name: "lint-theme-palette-tokens",
+      command: "node tooling~/scripts/lint-theme-palette-tokens.mjs",
+      cachePaths: ["Styles", "tooling~/scripts/lint-theme-palette-tokens.mjs", "tooling~/package.json"]
+    },
+    {
+      name: "lint-docs-catalog",
+      command: "node tooling~/scripts/lint-docs-catalog.mjs",
+      cachePaths: [
+        "Documentation~",
+        "Samples~",
+        "Tests/Runtime/Capture/Baselines~",
+        "tooling~/scripts/t11",
+        "tooling~/scripts/lint-docs-catalog.mjs",
+        "tooling~/package.json"
+      ]
+    }
   ];
 }
 

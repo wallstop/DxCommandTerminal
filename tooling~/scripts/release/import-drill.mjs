@@ -617,7 +617,7 @@ function runUnityProcess(unityPath, args, logPath, timeoutMs, extraEnv = {}) {
   });
 }
 
-function scanLogForErrors(logPath) {
+export function scanLogForErrors(logPath) {
   if (!fs.existsSync(logPath)) {
     return ["(unity produced no log file)"];
   }

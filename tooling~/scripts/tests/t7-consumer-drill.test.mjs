@@ -173,11 +173,14 @@ test("run drill attributes each paired run from its own unity log", async () => 
   const seenPhases = [];
   const runPhase = async (unity, phase) => {
     seenPhases.push(phase.name);
+    const logPath = phase.args[phase.args.indexOf("-logFile") + 1];
     if (phase.kind === "import") {
       fs.mkdirSync(path.join(fakeProject, EDIT_TARGET, ".."), { recursive: true });
       fs.writeFileSync(path.join(fakeProject, EDIT_TARGET), "// shipped terminal source\n");
-    }
-    if (phase.kind === "control" || phase.kind === "edit") {
+      fs.writeFileSync(logPath, "package imported\n");
+    } else if (phase.kind === "settle") {
+      fs.writeFileSync(logPath, "pipeline settled\n");
+    } else {
       return fakeLog(phase, phase.kind === "edit");
     }
     return { exitCode: 0, timedOut: false };
@@ -213,12 +216,14 @@ test("run drill retains the scratch project with --keep and on failure", async (
   const fakeProject = path.join(options.out, "project");
   const manifest = await runDrill(options, {
     runPhase: async (unity, phase) => {
+      const logPath = phase.args[phase.args.indexOf("-logFile") + 1];
       if (phase.kind === "import") {
         fs.mkdirSync(path.join(fakeProject, EDIT_TARGET, ".."), { recursive: true });
         fs.writeFileSync(path.join(fakeProject, EDIT_TARGET), "// shipped terminal source\n");
-      }
-      if (phase.kind === "control" || phase.kind === "edit") {
-        const logPath = phase.args[phase.args.indexOf("-logFile") + 1];
+        fs.writeFileSync(logPath, "package imported\n");
+      } else if (phase.kind === "settle") {
+        fs.writeFileSync(logPath, "pipeline settled\n");
+      } else {
         fs.writeFileSync(logPath, "\tScripting: domain reloads=1, domain reload time=400 ms, compile time=500 ms, other=30 ms\n");
       }
       return { exitCode: 0, timedOut: false };
@@ -290,7 +295,13 @@ test("run drill fails closed when a phase exits non-zero", async () => {
   const options = drillOptions(root);
   let calls = 0;
   const manifest = await runDrill(options, {
-    runPhase: async () => ({ exitCode: calls++ === 0 ? 0 : 1, timedOut: false }),
+    runPhase: async (unity, phase) => {
+      const exitCode = calls++ === 0 ? 0 : 1;
+      if (exitCode === 0) {
+        fs.writeFileSync(phase.args[phase.args.indexOf("-logFile") + 1], "package imported\n");
+      }
+      return { exitCode, timedOut: false };
+    },
     probeEditorVersion: () => "6000.4.6f1",
     notify: () => {}
   });
@@ -299,12 +310,162 @@ test("run drill fails closed when a phase exits non-zero", async () => {
   assert.equal(manifest.phases.length, 2, "the run must stop at the failing phase");
 });
 
+test("run drill fails closed on compiler errors logged with a zero exit code", async () => {
+  const root = scratch();
+  const options = drillOptions(root);
+  const manifest = await runDrill(options, {
+    runPhase: async (unity, phase) => {
+      fs.writeFileSync(
+        phase.args[phase.args.indexOf("-logFile") + 1],
+        "error CS1061: 'Texture2D' does not contain a definition for 'EncodeToPNG'\n"
+      );
+      return { exitCode: 0, timedOut: false };
+    },
+    probeEditorVersion: () => "6000.4.6f1",
+    notify: () => {}
+  });
+  assert.equal(manifest.failed, true);
+  assert.match(manifest.failure, /log validation failed/);
+  assert.match(manifest.failure, /CS1061/);
+  assert.equal(manifest.phases.length, 1);
+});
+
+test("run drill does not reuse logs from a previous run", async () => {
+  const root = scratch();
+  const options = drillOptions(root);
+  const fakeProject = path.join(options.out, "project");
+  const runPhase = async (unity, phase) => {
+    const logPath = phase.args[phase.args.indexOf("-logFile") + 1];
+    if (phase.kind === "import") {
+      fs.mkdirSync(path.join(fakeProject, EDIT_TARGET, ".."), { recursive: true });
+      fs.writeFileSync(path.join(fakeProject, EDIT_TARGET), "// shipped terminal source\n");
+      fs.writeFileSync(logPath, "package imported\n");
+    } else {
+      fs.writeFileSync(logPath, "phase completed\n");
+    }
+    return { exitCode: 0, timedOut: false };
+  };
+  const first = await runDrill(options, {
+    runPhase,
+    probeEditorVersion: () => "6000.4.6f1",
+    notify: () => {}
+  });
+  assert.equal(first.failed, false, first.failure ?? "first drill failed");
+
+  const second = await runDrill(options, {
+    runPhase: async () => ({ exitCode: 0, timedOut: false }),
+    probeEditorVersion: () => "6000.4.6f1",
+    notify: () => {}
+  });
+  assert.equal(second.failed, true);
+  assert.match(second.failure, /produced no log file/);
+});
+
+test("run drill clears stale lifecycle output after a valid restart", async () => {
+  const root = scratch();
+  const options = drillOptions(root);
+  const fakeProject = path.join(options.out, "project");
+  const runPhase = async (unity, phase) => {
+    const logPath = phase.args[phase.args.indexOf("-logFile") + 1];
+    if (phase.kind === "import") {
+      fs.mkdirSync(path.join(fakeProject, EDIT_TARGET, ".."), { recursive: true });
+      fs.writeFileSync(path.join(fakeProject, EDIT_TARGET), "// shipped terminal source\n");
+      fs.writeFileSync(logPath, "package imported\n");
+    } else {
+      fs.writeFileSync(logPath, "phase completed\n");
+    }
+    return { exitCode: 0, timedOut: false };
+  };
+  await runDrill(options, {
+    runPhase,
+    probeEditorVersion: () => "6000.4.6f1",
+    notify: () => {}
+  });
+  const manifestPath = path.join(options.out, "manifest.json");
+  assert.equal(fs.existsSync(manifestPath), true);
+  await assert.rejects(
+    runDrill(options, {
+      runPhase: async () => {
+        throw new Error("interrupted");
+      },
+      probeEditorVersion: () => "6000.4.6f1",
+      notify: () => {}
+    }),
+    /interrupted/
+  );
+  assert.equal(fs.existsSync(manifestPath), false);
+  assert.equal(fs.existsSync(path.join(options.out, "progress.txt")), false);
+});
+
+test("run drill preserves diagnostics when project reuse is refused", async () => {
+  const root = scratch();
+  const options = drillOptions(root);
+  options.keep = true;
+  const fakeProject = path.join(options.out, "project");
+  const runPhase = async (unity, phase) => {
+    const logPath = phase.args[phase.args.indexOf("-logFile") + 1];
+    if (phase.kind === "import") {
+      fs.mkdirSync(path.join(fakeProject, EDIT_TARGET, ".."), { recursive: true });
+      fs.writeFileSync(path.join(fakeProject, EDIT_TARGET), "// shipped terminal source\n");
+      fs.writeFileSync(logPath, "package imported\n");
+    } else {
+      fs.writeFileSync(logPath, "phase completed\n");
+    }
+    return { exitCode: 0, timedOut: false };
+  };
+  await runDrill(options, {
+    runPhase,
+    probeEditorVersion: () => "6000.4.6f1",
+    notify: () => {}
+  });
+  const logPath = path.join(options.out, "logs", "import.log");
+  assert.equal(fs.readFileSync(logPath, "utf8"), "package imported\n");
+  await assert.rejects(
+    runDrill(options, {
+      runPhase,
+      probeEditorVersion: () => "6000.4.6f1",
+      notify: () => {}
+    }),
+    /project directory must be empty or missing/
+  );
+  assert.equal(fs.readFileSync(logPath, "utf8"), "package imported\n");
+});
+
+test("run drill validates a later phase log", async () => {
+  const root = scratch();
+  const options = drillOptions(root);
+  const fakeProject = path.join(options.out, "project");
+  const manifest = await runDrill(options, {
+    runPhase: async (unity, phase) => {
+      const logPath = phase.args[phase.args.indexOf("-logFile") + 1];
+      if (phase.kind === "import") {
+        fs.mkdirSync(path.join(fakeProject, EDIT_TARGET, ".."), { recursive: true });
+        fs.writeFileSync(path.join(fakeProject, EDIT_TARGET), "// shipped terminal source\n");
+        fs.writeFileSync(logPath, "package imported\n");
+      } else if (phase.kind === "control") {
+        fs.writeFileSync(logPath, "error CS1061: later phase failed\n");
+      } else {
+        fs.writeFileSync(logPath, "phase completed\n");
+      }
+      return { exitCode: 0, timedOut: false };
+    },
+    probeEditorVersion: () => "6000.4.6f1",
+    notify: () => {}
+  });
+  assert.equal(manifest.failed, true);
+  assert.match(manifest.failure, /control-1 log validation failed/);
+  assert.match(manifest.failure, /CS1061/);
+});
+
 test("run drill fails closed on a silent no-op import", async () => {
   const root = scratch();
   const options = drillOptions(root);
   const manifest = await runDrill(options, {
     // A no-op import: every phase "succeeds" but the package never lands.
-    runPhase: async () => ({ exitCode: 0, timedOut: false }),
+    runPhase: async (unity, phase) => {
+      fs.writeFileSync(phase.args[phase.args.indexOf("-logFile") + 1], "phase completed\n");
+      return { exitCode: 0, timedOut: false };
+    },
     probeEditorVersion: () => "6000.4.6f1",
     notify: () => {}
   });
@@ -338,12 +499,15 @@ test("run drill reports null compile attribution when logs carry no summary", as
   const fakeProject = path.join(options.out, "project");
   const manifest = await runDrill(options, {
     runPhase: async (unity, phase) => {
+      const logPath = phase.args[phase.args.indexOf("-logFile") + 1];
       if (phase.kind === "import") {
         fs.mkdirSync(path.join(fakeProject, EDIT_TARGET, ".."), { recursive: true });
         fs.writeFileSync(path.join(fakeProject, EDIT_TARGET), "// shipped terminal source\n");
-      }
-      if (phase.kind === "control" || phase.kind === "edit") {
-        fs.writeFileSync(phase.args[phase.args.indexOf("-logFile") + 1], "no scripting summary here\n");
+        fs.writeFileSync(logPath, "package imported\n");
+      } else if (phase.kind === "settle") {
+        fs.writeFileSync(logPath, "pipeline settled\n");
+      } else {
+        fs.writeFileSync(logPath, "no scripting summary here\n");
       }
       return { exitCode: 0, timedOut: false };
     },

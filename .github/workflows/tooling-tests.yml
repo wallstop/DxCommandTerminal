@@ -10,9 +10,18 @@ on:
       - "tooling~/**"
       - "Runtime/**"
       - "Editor/**"
+      - "Packs/**"
+      - "Styles/**"
+      - "Fonts/**"
       - "Samples~/**"
       - "Tests/**"
       - "Generator~/**"
+      - "Documentation~/**"
+      - "*.meta"
+      - "README.md"
+      - "LICENSE"
+      - "CHANGELOG.md"
+      - ".gitignore"
       - ".github/workflows/tooling-tests.yml"
       - ".github/workflows/release*.yml"
   pull_request:
@@ -21,9 +30,18 @@ on:
       - "tooling~/**"
       - "Runtime/**"
       - "Editor/**"
+      - "Packs/**"
+      - "Styles/**"
+      - "Fonts/**"
       - "Samples~/**"
       - "Tests/**"
       - "Generator~/**"
+      - "Documentation~/**"
+      - "*.meta"
+      - "README.md"
+      - "LICENSE"
+      - "CHANGELOG.md"
+      - ".gitignore"
       - ".github/workflows/tooling-tests.yml"
       - ".github/workflows/release*.yml"
 
@@ -92,25 +110,6 @@ jobs:
         # docfx API model, generated in the docs-build workflow instead).
         run: npm --prefix tooling~ run lint:docs-catalog
 
-  csharp-style:
-    # C# style gates that are pure Node stdlib, so they run Unity-free on both OSes the
-    # repo's other Node lanes already matrix (issues #50/#51). Each linter exits non-zero
-    # on a violation and refuses to scan nothing, so a broken walk cannot read as green.
-    name: csharp-style (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Setup Node
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24
-
       - name: Lint comparison direction
         run: node tooling~/scripts/lint-comparison-direction.mjs
 
@@ -132,22 +131,6 @@ jobs:
       - name: Lint Unity-object null assertions
         run: node tooling~/scripts/lint-unity-null-patterns.mjs
 
-  package-content:
-    # Clean-install guard for the UPM artifact (issue #22, PLAN.md T02
-    # "package-content validators"): packs the package exactly like npm/UPM
-    # consumers receive it and asserts required artifacts ship, tooling and
-    # repo-internal files do not, and every shipped file carries its .meta.
-    # Unity-free: node stdlib + npm pack + system tar only.
-    name: package-content
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Setup Node
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24
-
       - name: Validate package contents
+        if: matrix.os == 'ubuntu-latest'
         run: npm --prefix tooling~ run package:validate
