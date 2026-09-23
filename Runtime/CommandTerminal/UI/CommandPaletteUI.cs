@@ -472,8 +472,16 @@
                     hold again.
                  */
                 _caretStickPasses = 0;
+#if UNITY_2022_1_OR_NEWER
                 _input.cursorIndex = index;
                 _input.selectIndex = index;
+#else
+                /*
+                    2021.3 exposes the caret getters only; the engine owns
+                    placement, so the queue retires instead of re-asserting.
+                 */
+                QueueCaret(null);
+#endif
             }
 
             if (CaretStickPasses <= _caretStickPasses)

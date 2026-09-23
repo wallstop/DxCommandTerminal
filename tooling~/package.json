@@ -8,6 +8,7 @@
   "scripts": {
     "test": "node --test \"scripts/mcp/__tests__/*.test.mjs\" \"scripts/tests/*.test.mjs\"",
     "docs:build": "node docs/build.mjs",
+    "compat:check": "dotnet build compat/runtime-2021.3.csproj -c Release --nologo",
     "package:validate": "node scripts/release/validate-package-contents.mjs",
     "package:export": "node scripts/release/export-unitypackage.mjs",
     "package:import-drill": "node scripts/release/import-drill.mjs",

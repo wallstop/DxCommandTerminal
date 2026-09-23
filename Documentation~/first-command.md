@@ -44,11 +44,12 @@ What this registers:
 - `Terminal.Shell.AddCommand(name, handler, min, max, help)` - manual,
   imperative registration.
 
-Both are documented in the package README ("Registering Commands") and will
-get their own guide pages.
+Both are documented in [Registering commands](commands.md).
 
 ## Where next
 
+- [Registering commands](commands.md) - every registration form, side by side.
+- [Typed arguments](arguments.md) - parsing, validation, custom parsers.
 - [Quick-launch bar](palette.md) - run commands without the terminal.
 - [API Reference](xref:WallstopStudios.DxCommandTerminal.Backend.CommandBuilder) -
   `CommandBuilder`, `CommandDefinition`, `CommandShell`, and the rest of the
