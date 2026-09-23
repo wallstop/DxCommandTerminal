@@ -154,15 +154,23 @@ export function planPhases(options) {
     Scratch consumer project: pins the probed editor version, resolves the
     same UPM floors the import drill uses (the shipped asmdefs reference
     the Input System and test-runner assemblies), and installs the settle
-    driver. Fails closed on an existing non-empty directory.
+    driver. Fails closed on an existing non-empty directory or an
+    implausible version string.
 */
 export function scaffoldProject(projectDir, editorVersion, driverSource) {
+  if (!/^[0-9a-zA-Z][0-9a-zA-Z.\-_]*$/u.test(editorVersion)) {
+    throw new Error(`implausible editor version: ${JSON.stringify(editorVersion)}`);
+  }
   if (fs.existsSync(projectDir) && fs.readdirSync(projectDir).length > 0) {
     throw new Error(`project directory must be empty or missing: ${projectDir}`);
   }
   fs.mkdirSync(path.join(projectDir, "Assets", "Editor"), { recursive: true });
   fs.mkdirSync(path.join(projectDir, "Packages"), { recursive: true });
-  fs.writeFileSync(path.join(projectDir, "ProjectVersion.txt"), `m_EditorVersion: ${editorVersion}\n`);
+  fs.mkdirSync(path.join(projectDir, "ProjectSettings"), { recursive: true });
+  fs.writeFileSync(
+    path.join(projectDir, "ProjectSettings", "ProjectVersion.txt"),
+    `m_EditorVersion: ${editorVersion}\n`
+  );
   fs.writeFileSync(
     path.join(projectDir, "Packages", "manifest.json"),
     `${JSON.stringify(
@@ -262,6 +270,9 @@ function median(values) {
 }
 
 export function summarizePairs(pairRecords) {
+  const compileDeltas = pairRecords
+    .filter((pair) => pair.compileTimeDeltaMs !== null)
+    .map((pair) => pair.compileTimeDeltaMs);
   if (pairRecords.length === 0) {
     return {
       pairs: 0,
@@ -282,11 +293,7 @@ export function summarizePairs(pairRecords) {
     deltaMinMs: Math.min(...pairRecords.map((pair) => pair.deltaMs)),
     deltaMaxMs: Math.max(...pairRecords.map((pair) => pair.deltaMs)),
     recompilePairs: pairRecords.filter((pair) => pair.editRequestedRecompile).length,
-    compileTimeDeltaMedianMs: median(
-      pairRecords
-        .filter((pair) => pair.compileTimeDeltaMs !== null)
-        .map((pair) => pair.compileTimeDeltaMs)
-    )
+    compileTimeDeltaMedianMs: compileDeltas.length === 0 ? null : median(compileDeltas)
   };
 }
 
@@ -313,23 +320,37 @@ function gitRevision() {
 
 /*
     Default phase runner: spawn detached from the caller's event loop and
-    poll for exit; the watchdog kills a phase that outlives its deadline.
-    Injectable so contract tests never launch Unity.
+    poll for exit. Spawn failures resolve (never crash the drill); the
+    watchdog escalates SIGTERM -> SIGKILL and waits for close before the
+    next phase touches the same Library. Injectable so contract tests
+    never launch Unity.
 */
 function defaultRunPhase(unity, phase, deadlineAt) {
   return new Promise((resolve) => {
+    let settled = false;
+    let timedOut = false;
     const env = phase.env === undefined ? undefined : { ...process.env, ...phase.env };
     const child = spawn(unity, phase.args, { stdio: "ignore", env });
+    const finish = (outcome) => {
+      if (settled) return;
+      settled = true;
+      clearInterval(watch);
+      resolve(outcome);
+    };
     const watch = setInterval(() => {
-      if (child.exitCode !== null || child.signalCode !== null) {
+      if (settled) {
         clearInterval(watch);
-        resolve({ exitCode: child.exitCode ?? -1, timedOut: false });
-      } else if (Date.now() > deadlineAt) {
-        clearInterval(watch);
-        child.kill("SIGKILL");
-        resolve({ exitCode: null, timedOut: true });
+        return;
       }
+      if (Date.now() <= deadlineAt) return;
+      timedOut = true;
+      child.kill("SIGTERM");
+      setTimeout(() => child.kill("SIGKILL"), 10_000);
     }, 500);
+    child.on("error", (error) => finish({ exitCode: null, timedOut: false, spawnError: error.message }));
+    child.on("close", (code, signal) =>
+      finish({ exitCode: code ?? (signal === null ? 0 : -1), timedOut })
+    );
   });
 }
 
@@ -352,6 +373,13 @@ export async function runDrill(options, runtime = {}) {
 
   const startedAt = new Date().toISOString();
   const deadlineAt = Date.now() + options.timeoutMinutes * 60_000;
+  // Hash and size the artifact once up front: a mid-run move or delete must
+  // not throw past the manifest write.
+  const artifact = {
+    path: options.artifact,
+    sha256: sha256File(options.artifact),
+    bytes: fs.statSync(options.artifact).size
+  };
   const phaseRecords = [];
   const pairRecords = [];
   let failure = null;
@@ -373,6 +401,9 @@ export async function runDrill(options, runtime = {}) {
       timedOut: outcome.timedOut === true,
       durationMs: Date.now() - started
     };
+    if (outcome.spawnError !== undefined) {
+      record.spawnError = outcome.spawnError;
+    }
     if (phase.kind === "control" || phase.kind === "edit") {
       record.attribution = parseScriptingAttribution(logPathOf(phase));
     }
@@ -401,8 +432,19 @@ export async function runDrill(options, runtime = {}) {
       failure = `phase ${record.name} outlived the drill deadline and was killed`;
       break;
     }
+    if (record.spawnError !== undefined) {
+      failure = `phase ${record.name} could not launch unity: ${record.spawnError}`;
+      break;
+    }
     if (record.exitCode !== 0) {
       failure = `phase ${record.name} exited ${record.exitCode}`;
+      break;
+    }
+    if (phase.kind === "settle" && !fs.existsSync(path.join(project, EDIT_TARGET))) {
+      // Batch imports can silently drop the whole package with exit 0
+      // (import-drill.mjs header note); fail closed instead of measuring
+      // a project that never received it.
+      failure = `import did not land the package (${EDIT_TARGET} missing after settle)`;
       break;
     }
   }
@@ -414,11 +456,7 @@ export async function runDrill(options, runtime = {}) {
     failure,
     editorVersion,
     unity: options.unity,
-    artifact: {
-      path: options.artifact,
-      sha256: sha256File(options.artifact),
-      bytes: fs.statSync(options.artifact).size
-    },
+    artifact,
     importRoot: IMPORT_ROOT,
     editTarget: EDIT_TARGET,
     project,

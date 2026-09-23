@@ -103,7 +103,7 @@ test("scaffold pins the editor version, upm floors, and settle driver; refuses r
   const project = path.join(root, "project");
   scaffoldProject(project, "6000.4.6f1", SETTLE_DRIVER_SOURCE);
   assert.equal(
-    fs.readFileSync(path.join(project, "ProjectVersion.txt"), "utf8"),
+    fs.readFileSync(path.join(project, "ProjectSettings", "ProjectVersion.txt"), "utf8"),
     "m_EditorVersion: 6000.4.6f1\n"
   );
   const manifest = JSON.parse(fs.readFileSync(path.join(project, "Packages", "manifest.json"), "utf8"));
@@ -113,6 +113,15 @@ test("scaffold pins the editor version, upm floors, and settle driver; refuses r
   assert.ok(driver.includes("EditorApplication.Exit(0)"));
   assert.ok(driver.includes("isCompiling || EditorApplication.isUpdating"));
   assert.throws(() => scaffoldProject(project, "6000.4.6f1", SETTLE_DRIVER_SOURCE), /empty or missing/);
+});
+
+test("scaffold rejects implausible editor versions", () => {
+  const root = scratch();
+  assert.throws(
+    () => scaffoldProject(path.join(root, "p"), "6000.4.6f1\nLicensing client connected", SETTLE_DRIVER_SOURCE),
+    /implausible editor version/
+  );
+  assert.throws(() => scaffoldProject(path.join(root, "q"), "", SETTLE_DRIVER_SOURCE), /implausible editor version/);
 });
 
 test("settle driver survives domain reloads and self-exits with codes", () => {
@@ -252,4 +261,63 @@ test("run drill fails closed when a phase exits non-zero", async () => {
   assert.equal(manifest.failed, true);
   assert.match(manifest.failure, /settle exited 1/);
   assert.equal(manifest.phases.length, 2, "the run must stop at the failing phase");
+});
+
+test("run drill fails closed on a silent no-op import", async () => {
+  const root = scratch();
+  const options = drillOptions(root);
+  const manifest = await runDrill(options, {
+    // A no-op import: every phase "succeeds" but the package never lands.
+    runPhase: async () => ({ exitCode: 0, timedOut: false }),
+    probeEditorVersion: () => "6000.4.6f1",
+    notify: () => {}
+  });
+  assert.equal(manifest.failed, true);
+  assert.match(manifest.failure, /import did not land the package/);
+  assert.equal(manifest.pairRecords.length, 0, "no pairs may be measured without the package");
+  assert.equal(
+    fs.existsSync(path.join(options.out, "project")),
+    true,
+    "a failed run keeps the project for diagnosis"
+  );
+});
+
+test("run drill records a timed-out phase and keeps the project", async () => {
+  const root = scratch();
+  const options = drillOptions(root);
+  const manifest = await runDrill(options, {
+    runPhase: async () => ({ exitCode: null, timedOut: true }),
+    probeEditorVersion: () => "6000.4.6f1",
+    notify: () => {}
+  });
+  assert.equal(manifest.failed, true);
+  assert.match(manifest.failure, /outlived the drill deadline/);
+  assert.equal(manifest.phases[0].timedOut, true);
+  assert.equal(fs.existsSync(path.join(options.out, "project")), true);
+});
+
+test("run drill reports null compile attribution when logs carry no summary", async () => {
+  const root = scratch();
+  const options = drillOptions(root);
+  const fakeProject = path.join(options.out, "project");
+  const manifest = await runDrill(options, {
+    runPhase: async (unity, phase) => {
+      if (phase.kind === "import") {
+        fs.mkdirSync(path.join(fakeProject, EDIT_TARGET, ".."), { recursive: true });
+        fs.writeFileSync(path.join(fakeProject, EDIT_TARGET), "// shipped terminal source\n");
+      }
+      if (phase.kind === "control" || phase.kind === "edit") {
+        fs.writeFileSync(phase.args[phase.args.indexOf("-logFile") + 1], "no scripting summary here\n");
+      }
+      return { exitCode: 0, timedOut: false };
+    },
+    probeEditorVersion: () => "6000.4.6f1",
+    notify: () => {}
+  });
+  assert.equal(manifest.failed, false, manifest.failure ?? "drill failed");
+  assert.equal(manifest.pairs.recompilePairs, 0);
+  assert.equal(manifest.pairs.compileTimeDeltaMedianMs, null, "no attribution must not fabricate a median");
+  for (const record of manifest.pairRecords) {
+    assert.equal(record.compileTimeDeltaMs, null);
+  }
 });

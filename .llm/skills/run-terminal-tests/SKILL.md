@@ -45,7 +45,8 @@ metadata:
    | Tooling (node) | `npm test` |
 
    `unity:tests` wraps `unity-mcp.mjs tests`: `--mode all|editmode|playmode`,
-   `--filter` (case-insensitive partial test-name match), `--run-timeout MS`.
+   `--filter` (the bridge's test-name filter; case-insensitive partial match
+   on the pinned backend), `--run-timeout MS` (minimum 30000).
 3. Unity Test Runner: Window > General > Test Runner -> PlayMode tab -> Run All.
 4. Unity CLI (CI-style):
    `Unity -batchmode -projectPath <proj> -runTests -testPlatform PlayMode -testResults results.xml -quit`

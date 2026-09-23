@@ -21,6 +21,7 @@ test("test run options validate mode and timeout before any endpoint contact", (
   assert.throws(() => resolveTestRunOptions({ mode: "smoke" }), /Unknown --mode/);
   assert.throws(() => resolveTestRunOptions({ runTimeout: "abc" }), /--run-timeout/);
   assert.throws(() => resolveTestRunOptions({ runTimeout: "0" }), /--run-timeout/);
+  assert.throws(() => resolveTestRunOptions({ runTimeout: "1000" }), /at least 30000ms/);
 });
 
 test("test run options accept explicit mode, filter, and timeout", () => {
@@ -38,10 +39,13 @@ test("run_tests status decoding is data-driven across bridge generations", () =>
     ['{"summary":{"total":3,"passed":2,"failed":1,"skipped":0},"status":"Completed"}', false, true, false, 3],
     ['{"status":"in_progress"}', false, false, true, null],
     ['{"status":"Running"}', false, false, true, null],
-    // Idle before the run starts must not end the poll even with a summary object.
+    // Idle before the run starts must never end the poll - the summary may
+    // be a stale previous run (the false-green trap).
     ['{"summary":{"total":0},"status":"idle"}', false, false, false, 0],
-    // Idle after the run was seen in flight is the zero-total completion shape.
+    ['{"summary":{"total":7,"passed":7,"failed":0,"skipped":0},"status":"idle"}', false, false, false, 7],
+    // Idle after the run was seen in flight is the completion shape.
     ['{"summary":{"total":0},"status":"idle"}', true, true, false, 0],
+    ['{"summary":{"total":7,"passed":7,"failed":0,"skipped":0},"status":"idle"}', true, true, false, 7],
     ['{"status":"completed"}', true, false, false, null],
     ['{"status":"completed","summary":{"total":0,"passed":0,"failed":0,"skipped":0}}', true, true, false, 0],
     ["not json at all", false, false, false, null]

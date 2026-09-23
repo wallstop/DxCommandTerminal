@@ -2153,15 +2153,19 @@ export function resolveTestRunOptions(runtime = {}) {
   if (!Number.isFinite(parsedTimeout) || parsedTimeout <= 0) {
     fail(`--run-timeout must be a positive number of milliseconds, got: ${runtime.runTimeout}`);
   }
-  return { mode, filter, runTimeout: Math.max(parsedTimeout, 30_000) };
+  if (parsedTimeout < 30_000) {
+    fail(`--run-timeout must be at least 30000ms (got ${runtime.runTimeout}); editor runs need startup room`);
+  }
+  return { mode, filter, runTimeout: parsedTimeout };
 }
 
 /**
  * Decode run_tests/test_status payloads across bridge generations: the
  * summary may sit under `Summary` or `summary`, and the run state may be a
- * bare status string. `finished` conservatively requires a positive total,
- * or a completed/idle status once the run was seen in flight (an idle
- * status before the run starts must not end the poll).
+ * bare status string. An `idle` status never finishes the poll before the
+ * run was seen in flight - a stale previous-run summary riding an idle
+ * payload must not read as a green gate. Absent or `completed` statuses may
+ * finish on the summary alone so a blocking run_tests response terminates.
  */
 export function parseTestStatus(text, seenRunning = false) {
   let parsed = null;
@@ -2174,10 +2178,13 @@ export function parseTestStatus(text, seenRunning = false) {
   const summary = parsed.Summary ?? parsed.summary ?? null;
   const status = typeof parsed.status === "string" ? parsed.status.toLowerCase() : "";
   const running = /in_progress|^running$|started/u.test(status);
+  if (status === "idle" && !seenRunning) {
+    return { finished: false, running, summary };
+  }
   if (summary && Number(summary.total ?? 0) > 0) {
     return { finished: true, running, summary };
   }
-  if ((status === "completed" || (status === "idle" && seenRunning)) && summary) {
+  if ((status === "completed" || status === "idle") && summary) {
     return { finished: true, running, summary };
   }
   return { finished: false, running, summary };
@@ -2217,11 +2224,18 @@ export async function runUnityTests(options, runtime = {}) {
 
     await waitForEditorIdle(client, evalCall, deadline);
 
+    const runArguments = { mode, async_tests: true };
+    if (filter !== "") {
+      runArguments.filter = filter;
+    }
     const run = await callFirstWorking(
       client,
       [
-        { name: "run_tests", arguments: { mode, filter, async_tests: true } },
-        { name: "run_tests", arguments: { mode, filter } }
+        { name: "run_tests", arguments: runArguments },
+        {
+          name: "run_tests",
+          arguments: filter === "" ? { mode } : { mode, filter }
+        }
       ],
       signal
     );
