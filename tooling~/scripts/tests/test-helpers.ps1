@@ -90,6 +90,21 @@ function Invoke-PwshScript {
     return @{ ExitCode = $exitCode; Output = ($output -join "`n") }
 }
 
+# Runs a script's in-process entry (dot-sourced scripts behind an
+# 'InvocationName -ne '.' main guard) and returns @{ ExitCode; Output }.
+# The entry returns its exit code on the success stream; Write-Host output
+# rides the information stream (6>&1), so the exit code is the last object.
+function Invoke-InProcessEntry {
+    param(
+        [Parameter(Mandatory = $true)][scriptblock]$Entry,
+        [hashtable]$Parameters = @{}
+    )
+    $emitted = @(& $Entry @Parameters 6>&1 2>&1 | ForEach-Object { "$_" })
+    $exitCode = [int]$emitted[-1]
+    $output = if ($emitted.Count -gt 1) { @($emitted[0..($emitted.Count - 2)]) -join "`n" } else { '' }
+    return @{ ExitCode = $exitCode; Output = $output }
+}
+
 # Materializes an isolated fixture repo root and returns its path.
 function New-FixtureRepo {
     param(
