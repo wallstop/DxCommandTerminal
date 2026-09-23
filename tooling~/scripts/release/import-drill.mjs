@@ -19,7 +19,7 @@
     `pathname` targets `Packages/`, which every entry of the release
     artifact does. The CLI `-importPackage` argument imports the same
     artifact completely (probe-037: all entries landed, UPM registered the
-    embedded package, all three assemblies compiled). The release artifact
+    embedded package, all shipped assemblies compiled). The release artifact
     itself is unchanged.
 
     The drill exists because the session-025 drill wedged the maintainer's

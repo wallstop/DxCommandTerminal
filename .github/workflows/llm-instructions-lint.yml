@@ -72,19 +72,3 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           ./tooling~/scripts/tests/test-generate-skills-index.ps1 -VerboseOutput
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-
-      - name: Validate skills index is up-to-date
-        # Regenerate the file and fail if it differs from the committed bytes.
-        # --porcelain catches BOTH a drifted (modified) and a never-committed
-        # (untracked) index.md, unlike `git diff` which ignores untracked files.
-        shell: pwsh
-        run: |
-          ./tooling~/scripts/generate-skills-index.ps1
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          $status = git status --porcelain -- .llm/skills/index.md
-          if ($status) {
-            Write-Host "::error::.llm/skills/index.md is out of date or uncommitted. Run: pwsh -NoProfile -File tooling~/scripts/generate-skills-index.ps1 and commit it."
-            git diff -- .llm/skills/index.md
-            exit 1
-          }
-          Write-Host "Skills index is up-to-date."

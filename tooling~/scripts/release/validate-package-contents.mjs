@@ -17,9 +17,7 @@ const REQUIRED_FILES = [
   "Runtime/WallstopStudios.DxCommandTerminal.asmdef",
   "Runtime/WallstopStudios.DxCommandTerminal.asmdef.meta",
   "Editor/WallstopStudios.DxCommandTerminal.Editor.asmdef",
-  "Editor/WallstopStudios.DxCommandTerminal.Editor.asmdef.meta",
-  "Tests/Runtime/WallstopStudios.DxCommandTerminal.Tests.Runtime.asmdef",
-  "Tests/Runtime/WallstopStudios.DxCommandTerminal.Tests.Runtime.asmdef.meta"
+  "Editor/WallstopStudios.DxCommandTerminal.Editor.asmdef.meta"
 ];
 
 const FORBIDDEN_EXACT = new Set([
@@ -34,7 +32,8 @@ const FORBIDDEN_EXACT = new Set([
   ".pre-commit-config.yaml",
   ".env.example",
   "package-lock.json",
-  ".DS_Store"
+  ".DS_Store",
+  "Tests.meta"
 ]);
 
 const FORBIDDEN_PREFIXES = [
@@ -56,7 +55,8 @@ const FORBIDDEN_PREFIXES = [
   // Documentation media (README screenshots and the demo GIF): consumers do
   // not import it, and the README references it through absolute repository
   // URLs so npm rendering keeps working without shipping it (#47).
-  "Media"
+  "Media",
+  "Tests"
 ];
 
 // Node refuses to spawn .cmd/.bat without a shell on Windows (CVE-2024-27980

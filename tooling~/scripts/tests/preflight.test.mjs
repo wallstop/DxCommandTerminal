@@ -173,6 +173,26 @@ test("main: injected checks drive the happy path and exit 0", async () => {
   }
 });
 
+test("main: caches successful checks and --no-cache bypasses the cache", async () => {
+  const marker = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "preflight-marker-")), "count");
+  const pass = writeTempScript(`import fs from "node:fs"; fs.appendFileSync(${JSON.stringify(marker)}, "x"); process.exit(0);`);
+  const check = { name: "cached-check", command: `node "${pass}"` };
+  const lines = [];
+  const originalLog = console.log;
+  console.log = (line) => lines.push(String(line));
+  try {
+    assert.equal(await main([], [check]), 0);
+    assert.equal(await main([], [check]), 0);
+    assert.ok(lines.some((line) => line.includes("cached cached-check")));
+    const countAfterCachedRun = fs.readFileSync(marker, "utf8").length;
+    assert.equal(await main(["--no-cache"], [check]), 0);
+    assert.equal(fs.readFileSync(marker, "utf8").length, countAfterCachedRun + 1);
+  } finally {
+    console.log = originalLog;
+    fs.rmSync(path.dirname(marker), { recursive: true, force: true });
+  }
+});
+
 test("main: failing check prints its output and exits 1", async () => {
   const pass = writeTempScript("process.exit(0);");
   const fail = writeTempScript("console.error('burst-marker'); process.exit(9);");
