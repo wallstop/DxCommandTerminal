@@ -18,7 +18,7 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import { T4_DEFAULT_SCENARIOS, T4_VARIANT_SCENARIOS } from "../mcp/unity-mcp.mjs";
+import { T4_DEFAULT_SCENARIOS, T4_VARIANT_SCENARIOS } from "./scenarios.mjs";
 import {
   BASELINE_STORE_VERSION,
   decodePng,

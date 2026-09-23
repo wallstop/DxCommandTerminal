@@ -4,23 +4,27 @@
     The exporter must pair every npm-shipped file with its checked-in meta,
     exclude Samples~ (no metas exist there by design), refuse broken GUID
     identity fail-closed, and rebuild byte-identically from two checkouts.
-    A minimal tar reader pins the artifact structure itself: GUID directory
-    names, asset/asset.meta/pathname contents, folder entries without an
-    asset, and the deterministic header fields (mtime 0, uid/gid 0, fixed
-    modes, ustar magic) plus the normalized gzip header (MTIME 0, OS 0xFF).
+    A minimal tar reader (tests/support/unitypackage-artifact.mjs) pins the
+    artifact structure itself: GUID directory names, asset/asset.meta/pathname
+    contents, folder entries without an asset, and the deterministic header
+    fields (mtime 0, uid/gid 0, fixed modes, ustar magic) plus the normalized
+    gzip header (MTIME 0, OS 0xFF).
+
+    The real-package export (the suite's wall-time pole: an `npm pack` spawn
+    plus two full archive builds) lives in export-unitypackage-real.test.mjs so
+    the parallel test runner overlaps it with everything else.
 */
 import test from "node:test";
 import assert from "node:assert";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import zlib from "node:zlib";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { entryMap, readArtifact } from "./support/unitypackage-artifact.mjs";
 
 // The other tooling tests call the tooling~ root "repoRoot"; the exported
 // package root is one level above it.
 const toolingRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const packageRoot = path.resolve(toolingRoot, "..");
 const exporterPath = path.join(toolingRoot, "scripts", "release", "export-unitypackage.mjs");
 const { collectAssets, exportUnityPackage } = await import(
   pathToFileURL(exporterPath).href
@@ -79,69 +83,6 @@ function makeFixture(root) {
   writeMeta(root, "Runtime/Foo.cs", GUIDS.foo, false);
   fs.mkdirSync(path.join(root, "Samples~"), { recursive: true });
   fs.writeFileSync(path.join(root, "Samples~", "Widget.cs"), "// sample\n");
-}
-
-const TAR_HEADER_FIELDS = {
-  name: [0, 100],
-  mode: [100, 8],
-  uid: [108, 8],
-  gid: [116, 8],
-  size: [124, 12],
-  mtime: [136, 12],
-  chksum: [148, 8],
-  typeflag: [156, 1],
-  magic: [257, 6],
-  version: [263, 2]
-};
-
-function* untar(tarBuffer) {
-  let offset = 0;
-  while (offset + TAR_HEADER_FIELDS.name[1] <= tarBuffer.length) {
-    const block = tarBuffer.subarray(offset, offset + 512);
-    if (block.every((byte) => byte === 0)) {
-      return;
-    }
-    const field = (name) => {
-      const [start, width] = TAR_HEADER_FIELDS[name];
-      return block.subarray(start, start + width);
-    };
-    const checksum = parseInt(field("chksum").toString("utf8").trim(), 8);
-    const computed = block.subarray(0, 148).reduce((sum, byte) => sum + byte, 0) +
-      8 * 32 +
-      block.subarray(156).reduce((sum, byte) => sum + byte, 0);
-    const size = parseInt(field("size").toString("utf8").replace(/\0.*$/, "").trim() || "0", 8);
-    const name = field("name").toString("utf8").replace(/\0.*$/, "");
-    yield {
-      name,
-      typeflag: field("typeflag").toString("utf8"),
-      mode: field("mode").toString("utf8").replace(/\0.*$/, ""),
-      uid: field("uid").toString("utf8").replace(/\0.*$/, ""),
-      gid: field("gid").toString("utf8").replace(/\0.*$/, ""),
-      mtime: field("mtime").toString("utf8").replace(/\0.*$/, ""),
-      magic: field("magic").toString("utf8").replace(/\0.*$/, ""),
-      checksumMatches: checksum === computed,
-      content: tarBuffer.subarray(offset + 512, offset + 512 + size)
-    };
-    offset += 512 + Math.ceil(size / 512) * 512;
-  }
-}
-
-function readArtifact(buffer) {
-  assert.strictEqual(buffer[4] | buffer[5] | buffer[6] | buffer[7], 0, "gzip MTIME must be 0");
-  assert.strictEqual(buffer[9], 0xff, "gzip OS byte must be normalized to 0xff");
-  const tar = zlib.gunzipSync(buffer);
-  assert.strictEqual(tar.length % (20 * 512), 0, "tar must be padded to a full record");
-  const entries = [...untar(tar)];
-  assert.ok(entries.length > 0);
-  assert.ok(entries.every((entry) => entry.checksumMatches), "every tar header checksum must validate");
-  assert.ok(entries.every((entry) => entry.magic === "ustar"), "entries must carry the ustar magic");
-  assert.ok(entries.every((entry) => entry.uid === "0000000" && entry.gid === "0000000"), "uid/gid must be 0");
-  assert.ok(entries.every((entry) => entry.mtime === "00000000000"), "mtime must be the epoch");
-  return entries;
-}
-
-function entryMap(entries) {
-  return new Map(entries.map((entry) => [entry.name, entry]));
 }
 
 test("exported artifact carries every fixture asset under the import root", () => {
@@ -303,16 +244,4 @@ test("an orphan meta without its target fails the export", () => {
     violations.some((message) => message.includes("orphan meta without its target")),
     `expected an orphan-meta violation, got: ${violations.join("; ")}`
   );
-});
-
-test("the real package exports, validates, and rebuilds byte-identically", () => {
-  const artifact = exportUnityPackage({ packageRoot, out: "" });
-  const repeated = exportUnityPackage({ packageRoot, out: "" });
-  assert.strictEqual(artifact.buffer.equals(repeated.buffer), true);
-  assert.strictEqual(artifact.name, "com.wallstop-studios.dxcommandterminal");
-  const names = readArtifact(artifact.buffer).map((entry) => entry.name);
-  assert.ok(names.every((name) => !name.includes("Samples~")));
-  assert.strictEqual(artifact.rootPrefix, "Packages/com.wallstop-studios.dxcommandterminal");
-  assert.ok(artifact.fileCount > 350 && artifact.folderCount > 50,
-    "the real allowlist must ship the full tree");
 });

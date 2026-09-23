@@ -22,6 +22,8 @@
       href: generator.md
     - name: Performance
       href: performance.md
+    - name: Screenshots
+      href: screenshots.md
     - name: Migrating from Command Terminal
       href: migration.md
 - name: API Reference

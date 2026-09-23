@@ -38,6 +38,15 @@
                 "dest": "."
             }
         ],
+        "resource": [
+            {
+                "files": [
+                    "images/**"
+                ],
+                "src": "obj/guides",
+                "dest": "."
+            }
+        ],
         "dest": "obj/_site",
         "globalMetadata": {
             "_appTitle": "DxCommandTerminal",

@@ -1823,50 +1823,22 @@ async function waitForEditorIdle(client, evalCall, deadline) {
 // manifests they write under .artifacts/t4/.
 // ---------------------------------------------------------------------------
 
-export const T4_DEFAULT_SCENARIOS = Object.freeze([
-  "CapturesTerminalSmallSurface",
-  "CapturesTerminalFullSurfaceWithErrors",
-  "CapturesCompletionHintsSurface",
-  "CapturesScrollingLogSurface",
-  "CapturesLongNameCompletionSurface",
-  "CapturesCommandPaletteSurface",
-  "CapturesPaletteEmptyResultsSurface",
-  "CapturesPaletteLongDescriptionSurface",
-  "CapturesLightThemeSurface",
-  "CapturesDarkThemeSurface",
-  "CapturesTerminalUIInspectorSurface",
-  "CapturesThemePackInspectorSurface",
-  "CapturesFontPackInspectorSurface"
-]);
-// The negative control proves the bounds can fail, and the closed-terminal
-// capture proves the closed state actually produces that blank (a visible
-// closed frame would mean close leaks pixels). Both are expected incomplete;
-// neither is ever baselined because the store refuses blank pixels by design.
-export const T4_EXPECTED_INCOMPLETE = Object.freeze([
-  "BlankRenderFailsBounds",
-  "CapturesClosedTerminalRendersNothing"
-]);
-// Env-variant scenarios (T11): each pins one surface under a non-pinned
-// environment (resolution/scale/font). They are captured and validated by
-// every t4:capture run and baseline-compared like the pinned canon, but they
-// never gate a pinned environment's coverage: resolution/scale variants live
-// in their own environment directories, and font variants ride the pinned
-// environment as an extra scenario (font is per-entry provenance, not part
-// of the environment key).
-export const T4_VARIANT_SCENARIOS = Object.freeze([
-  "CapturesNarrowScreenTerminalSmall",
-  "CapturesWideScreenPaletteLongHelp",
-  "CapturesScaleTwoTerminalSmall",
-  "CapturesAlternateFontTerminalSmall",
-  "CapturesTallScreenTerminalFull",
-  "CapturesResizedViewportTerminalSmall"
-]);
-/** Every scenario a capture may baseline: the pinned canon plus variants. */
-export const T4_ALL_SCENARIOS = Object.freeze([
-  ...T4_DEFAULT_SCENARIOS,
-  ...T4_VARIANT_SCENARIOS
-]);
-export const T4_TEST_FILTER = "TerminalSurfaceCapture";
+// The scenario registries live in ../t11/scenarios.mjs (pure data, stdlib-free)
+// so Unity-free consumers import them without this SDK-coupled module.
+import {
+  T4_ALL_SCENARIOS,
+  T4_DEFAULT_SCENARIOS,
+  T4_EXPECTED_INCOMPLETE,
+  T4_TEST_FILTER,
+  T4_VARIANT_SCENARIOS
+} from "../t11/scenarios.mjs";
+export {
+  T4_ALL_SCENARIOS,
+  T4_DEFAULT_SCENARIOS,
+  T4_EXPECTED_INCOMPLETE,
+  T4_TEST_FILTER,
+  T4_VARIANT_SCENARIOS
+};
 
 export function parseT4Scenarios(raw) {
   if (raw === undefined || raw === null) return [...T4_ALL_SCENARIOS];

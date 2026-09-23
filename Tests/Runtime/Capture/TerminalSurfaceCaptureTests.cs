@@ -69,8 +69,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         /*
             Keep in sync with T4_DEFAULT_SCENARIOS in
-            tooling~/scripts/mcp/unity-mcp.mjs, which fails t4:capture when
-            any of these manifests is missing.
+            tooling~/scripts/t11/scenarios.mjs (re-exported by unity-mcp.mjs),
+            which fails t4:capture when any of these manifests is missing.
          */
         private const string LightScenarioName = "CapturesLightThemeSurface";
         private const string DarkScenarioName = "CapturesDarkThemeSurface";
