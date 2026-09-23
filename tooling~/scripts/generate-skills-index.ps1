@@ -49,12 +49,6 @@ Param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-if (-not $RepoRoot) {
-    $RepoRoot = (Get-Item $PSScriptRoot).Parent.Parent.FullName
-}
-$skillsDir = Join-Path -Path $RepoRoot -ChildPath '.llm/skills'
-$indexFileName = 'index.md'
-
 function Write-Info($msg) {
     if ($VerboseOutput) { Write-Host "[skills-index] $msg" -ForegroundColor Cyan }
 }
@@ -208,23 +202,50 @@ function Get-SkillsIndexContent {
     return $sb.ToString()
 }
 
-if (-not (Test-Path -LiteralPath $skillsDir)) {
-    Write-Host "[skills-index] ERROR: Skills directory not found at: $skillsDir" -ForegroundColor Red
-    exit 1
+# Generates the index for one repo root and returns 0/1. Dot-sourced callers
+# (lint-llm-instructions.ps1, fixture helpers) invoke this in-process; running
+# the file as a script reaches the same function through the main guard below.
+function New-SkillsIndex {
+    param(
+        [string]$OutputPath,
+        [switch]$Stdout,
+        [switch]$VerboseOutput,
+        [string]$RepoRoot
+    )
+
+    if (-not $RepoRoot) {
+        $RepoRoot = (Get-Item $PSScriptRoot).Parent.Parent.FullName
+    }
+    $skillsDir = Join-Path -Path $RepoRoot -ChildPath '.llm/skills'
+    $indexFileName = 'index.md'
+
+    if (-not (Test-Path -LiteralPath $skillsDir)) {
+        Write-Host "[skills-index] ERROR: Skills directory not found at: $skillsDir" -ForegroundColor Red
+        return 1
+    }
+
+    if (-not $OutputPath) {
+        $OutputPath = Join-Path -Path $skillsDir -ChildPath $indexFileName
+    }
+
+    $content = Get-SkillsIndexContent -Dir $skillsDir
+
+    if ($Stdout) {
+        [Console]::Out.Write($content)
+    }
+    else {
+        # UTF-8 WITHOUT BOM + LF: identical bytes on every OS / PowerShell edition.
+        $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+        [System.IO.File]::WriteAllText($OutputPath, $content, $utf8NoBom)
+        Write-Info "Wrote $OutputPath"
+    }
+
+    return 0
 }
 
-if (-not $OutputPath) {
-    $OutputPath = Join-Path -Path $skillsDir -ChildPath $indexFileName
-}
-
-$content = Get-SkillsIndexContent -Dir $skillsDir
-
-if ($Stdout) {
-    [Console]::Out.Write($content)
-}
-else {
-    # UTF-8 WITHOUT BOM + LF: identical bytes on every OS / PowerShell edition.
-    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
-    [System.IO.File]::WriteAllText($OutputPath, $content, $utf8NoBom)
-    Write-Info "Wrote $OutputPath"
+# Main guard: dot-sourcing defines the functions without running (the linter
+# and fixture helpers generate in-process; spawning a pwsh per call costs
+# ~0.5-1s and dominated the lint suite).
+if ($MyInvocation.InvocationName -ne '.') {
+    exit (New-SkillsIndex -OutputPath:$OutputPath -Stdout:$Stdout -VerboseOutput:$VerboseOutput -RepoRoot:$RepoRoot)
 }

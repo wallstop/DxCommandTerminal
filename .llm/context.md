@@ -67,7 +67,7 @@ over the authenticated MCP bridge in `tooling~/scripts/mcp/unity-mcp.mjs` (see t
 [unity-mcp](./skills/unity-mcp/SKILL.md) and
 [capture-unity-state](./skills/capture-unity-state/SKILL.md) skills). Credentials
 live in gitignored `.env.local` (see `.env.example`); agent MCP configs are
-generated, never hand-edited; `npm test` runs the Node tooling suite.
+generated, never hand-edited; `npm test` runs the Node suite; `npm run preflight` = all gates parallel (~3-4s).
 
 ## Skills Reference
 

@@ -60,6 +60,7 @@
   ],
   "scripts": {
     "test": "npm --prefix tooling~ run test --",
+    "preflight": "npm --prefix tooling~ run preflight --",
     "docs:build": "npm --prefix tooling~ run docs:build --",
     "compat:check": "npm --prefix tooling~ run compat:check",
     "package:validate": "npm --prefix tooling~ run package:validate --",
