@@ -21,6 +21,8 @@ on:
       - "package.json"
       - ".github/workflows/compat-2021.yml"
       - ".gitattributes"
+      - ".npmrc"
+      - "tooling~/.npmrc"
   pull_request:
     paths:
       - "Runtime/**"
@@ -29,6 +31,8 @@ on:
       - "package.json"
       - ".github/workflows/compat-2021.yml"
       - ".gitattributes"
+      - ".npmrc"
+      - "tooling~/.npmrc"
 
 permissions:
   contents: read

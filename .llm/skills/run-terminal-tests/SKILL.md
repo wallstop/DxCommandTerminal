@@ -32,7 +32,9 @@ metadata:
 1. Local preflight (fastest full gate, no Unity): `npm run preflight` - runs the
    node suite, the nine C#/asset linters, the T11 baseline gate, the package
    gate, docs guides build, and the compat compile in parallel (~3-4s wall vs
-   ~30s serial). `--skip=a,b` narrows a run.
+   ~30s serial). `--skip=a,b` narrows a run. Local success results are cached by
+   their full input fingerprint. Use `--no-cache` for a clean run. CI and the
+   compat compile do not use the cache.
 2. One-command entry point per suite category (through the bridge; host editor
    up with the bridge running; exit 1 on any failure):
 

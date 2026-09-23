@@ -14,7 +14,7 @@
       - the nine C#/asset linters (mirrors the pre-commit fleet + CI)
 
     Usage:
-      node tooling~/scripts/preflight.mjs [--skip=name1,name2]
+      node tooling~/scripts/preflight.mjs [--skip=name1,name2] [--no-cache]
 
     Exit codes: 0 = all checks passed, 1 = at least one failed (or the check
     set resolved empty, or --skip named an unknown check).
@@ -31,22 +31,59 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 
 /** The default gate set. Names are stable identifiers used by --skip. */
 export function buildChecks() {
-  const csharpRoots = ["Runtime", "Editor", "Tests", "Samples~", "Generator~"];
-  const csharpCheck = (name, command, script) => ({
+  const csharpCheck = (name, command, script, roots, cacheEnvironment) => ({
     name,
     command,
+    cacheEnvironment,
+    cacheRuntimeEnvironment: true,
     cachePaths: [
-      ...csharpRoots,
+      ...roots,
       `tooling~/scripts/${script}`,
-      "tooling~/scripts/lint-comparison-direction.mjs",
-      "tooling~/package.json"
+      "tooling~/scripts/lint-comparison-direction.mjs"
     ]
   });
   return [
-    { name: "node-tests", command: "npm --prefix tooling~ test" },
+    {
+      name: "node-tests",
+      command: "npm --prefix tooling~ test",
+      cacheTrackedFiles: true,
+      cacheNpm: true,
+      cacheGit: true,
+      cacheTar: true,
+      cacheGzip: true,
+      cacheDependencies: true,
+      cacheRuntimeEnvironment: true,
+      cacheEnvironment: ["BASH_ENV"],
+      cacheBash: true,
+      cacheNpmConfig: true,
+      cacheGitConfig: true,
+      cachePaths: [
+        "Runtime",
+        "Editor",
+        "Packs",
+        "Styles",
+        "Fonts",
+        "Samples~",
+        "Tests",
+        "Generator~",
+        "Documentation~",
+        "tooling~/scripts",
+        "tooling~/docs/build.mjs",
+        "tooling~/docs/docfx.json",
+        "tooling~/docs/refs.csproj",
+        "tooling~/docs/toc.yml",
+        "Tests/Runtime/Capture/Baselines~",
+        "tooling~/docs/obj/api",
+        ".config/dotnet-tools.json"
+      ],
+      cacheExcludes: ["tooling~/scripts/.preflight-cache"]
+    },
     {
       name: "t11-check",
       command: "npm --prefix tooling~ run t11:check",
+      cacheNpm: true,
+      cacheRuntimeEnvironment: true,
+      cacheNpmConfig: true,
       cachePaths: [
         "Tests/Runtime/Capture/Baselines~",
         "tooling~/scripts/t11",
@@ -57,6 +94,13 @@ export function buildChecks() {
       name: "package-validate",
       command: "npm --prefix tooling~ run package:validate",
       cacheGitTracked: true,
+      cacheGit: true,
+      cacheTar: true,
+      cacheGzip: true,
+      cacheNpm: true,
+      cacheRuntimeEnvironment: true,
+      cacheNpmConfig: true,
+      cacheGitConfig: true,
       cachePaths: [
         "Runtime",
         "Editor",
@@ -86,39 +130,93 @@ export function buildChecks() {
     {
       name: "docs-guides",
       command: "npm --prefix tooling~ run docs:guides",
+      cacheNpm: true,
+      cacheRuntimeEnvironment: true,
+      cacheNpmConfig: true,
+      cacheDotnet: true,
+      cacheDotnetTool: true,
+      cacheDocsApi: true,
       cachePaths: [
         "Documentation~",
-        "Samples~",
+        "Samples~/TerminalCommands",
         "Tests/Runtime/Capture/Baselines~",
-        "tooling~/docs",
+        "tooling~/docs/build.mjs",
+        "tooling~/docs/docfx.json",
+        "tooling~/docs/toc.yml",
         "tooling~/scripts/t11",
         ".config/dotnet-tools.json",
         "tooling~/package.json"
       ]
     },
     { name: "compat-check", command: "npm --prefix tooling~ run compat:check" },
-    csharpCheck("lint-comparison-direction", "node tooling~/scripts/lint-comparison-direction.mjs", "lint-comparison-direction.mjs"),
-    csharpCheck("lint-member-ordering", "node tooling~/scripts/lint-member-ordering.mjs", "lint-member-ordering.mjs"),
-    csharpCheck("lint-multiline-comments", "node tooling~/scripts/lint-multiline-comments.mjs", "lint-multiline-comments.mjs"),
-    csharpCheck("lint-linq-production", "node tooling~/scripts/lint-linq-production.mjs", "lint-linq-production.mjs"),
-    csharpCheck("lint-string-equality", "node tooling~/scripts/lint-string-equality.mjs", "lint-string-equality.mjs"),
-    csharpCheck("lint-out-param-discipline", "node tooling~/scripts/lint-out-param-discipline.mjs", "lint-out-param-discipline.mjs"),
-    csharpCheck("lint-unity-null-patterns", "node tooling~/scripts/lint-unity-null-patterns.mjs", "lint-unity-null-patterns.mjs"),
+    csharpCheck(
+      "lint-comparison-direction",
+      "node tooling~/scripts/lint-comparison-direction.mjs",
+      "lint-comparison-direction.mjs",
+      ["Runtime", "Editor", "Tests", "Generator~"],
+      ["COMPARISON_DIRECTION_ROOTS"]
+    ),
+    csharpCheck(
+      "lint-member-ordering",
+      "node tooling~/scripts/lint-member-ordering.mjs",
+      "lint-member-ordering.mjs",
+      ["Runtime", "Editor", "Tests", "Samples~", "Generator~"],
+      ["NESTED_TYPE_PLACEMENT_ROOTS"]
+    ),
+    csharpCheck(
+      "lint-multiline-comments",
+      "node tooling~/scripts/lint-multiline-comments.mjs",
+      "lint-multiline-comments.mjs",
+      ["Runtime", "Editor", "Tests", "Generator~"],
+      ["MULTILINE_COMMENT_ROOTS"]
+    ),
+    csharpCheck(
+      "lint-linq-production",
+      "node tooling~/scripts/lint-linq-production.mjs",
+      "lint-linq-production.mjs",
+      ["Runtime", "Editor"],
+      ["LINQ_PRODUCTION_ROOTS"]
+    ),
+    csharpCheck(
+      "lint-string-equality",
+      "node tooling~/scripts/lint-string-equality.mjs",
+      "lint-string-equality.mjs",
+      ["Runtime", "Editor"],
+      ["STRING_EQUALITY_ROOTS"]
+    ),
+    csharpCheck(
+      "lint-out-param-discipline",
+      "node tooling~/scripts/lint-out-param-discipline.mjs",
+      "lint-out-param-discipline.mjs",
+      ["Runtime", "Editor", "Tests", "Samples~", "Generator~"],
+      ["OUT_PARAM_DISCIPLINE_ROOTS"]
+    ),
+    csharpCheck(
+      "lint-unity-null-patterns",
+      "node tooling~/scripts/lint-unity-null-patterns.mjs",
+      "lint-unity-null-patterns.mjs",
+      ["Runtime", "Editor", "Tests", "Generator~"],
+      ["UNITY_NULL_ROOTS"]
+    ),
     {
       name: "lint-theme-palette-tokens",
       command: "node tooling~/scripts/lint-theme-palette-tokens.mjs",
-      cachePaths: ["Styles", "tooling~/scripts/lint-theme-palette-tokens.mjs", "tooling~/package.json"]
+      cacheRuntimeEnvironment: true,
+      cacheEnvironment: ["THEME_TOKEN_ROOTS"],
+      cachePaths: ["Styles/Themes", "Styles/BaseStyles.uss", "tooling~/scripts/lint-theme-palette-tokens.mjs"]
     },
     {
       name: "lint-docs-catalog",
       command: "node tooling~/scripts/lint-docs-catalog.mjs",
+      cacheRuntimeEnvironment: true,
+      cacheDocsApi: true,
+      cacheEnvironment: ["DOCS_CATALOG", "DOCS_GUIDES_DIR", "DOCS_SAMPLES_DIR", "DOCS_BASELINES_DIR", "DOCS_API_DIR"],
       cachePaths: [
         "Documentation~",
         "Samples~",
         "Tests/Runtime/Capture/Baselines~",
         "tooling~/scripts/t11",
-        "tooling~/scripts/lint-docs-catalog.mjs",
-        "tooling~/package.json"
+        "tooling~/scripts/lint-docs-catalog.mjs"
       ]
     }
   ];
@@ -224,7 +322,14 @@ export async function main(argv = process.argv.slice(2), checks = buildChecks())
   const cachedResults = [];
   const pending = [];
   const cacheKeys = new Map();
-  const cacheContext = useCache ? createCacheContext() : null;
+  let cacheContext = null;
+  if (useCache) {
+    try {
+      cacheContext = createCacheContext();
+    } catch {
+      console.warn("[preflight] cache setup failed; running every selected check");
+    }
+  }
   for (const check of selected) {
     let key = null;
     if (useCache && isCacheableCheck(check)) {

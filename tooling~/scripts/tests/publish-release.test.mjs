@@ -178,6 +178,11 @@ test("workflow path filters include repository execution inputs", () => {
     const workflow = readWorkflow(name);
     assert.strictEqual(workflow.match(/["']\.gitattributes["']/g)?.length, 2, `${name} must trigger on .gitattributes`);
   }
+  for (const name of ["tooling-tests.yml", "docs-build.yml", "compat-2021.yml"]) {
+    const workflow = readWorkflow(name);
+    assert.strictEqual(workflow.match(/["']\.npmrc["']/g)?.length, 2, `${name} must trigger on .npmrc`);
+    assert.strictEqual(workflow.match(/["']tooling~\/\.npmrc["']/g)?.length, 2, `${name} must trigger on tooling~/.npmrc`);
+  }
   const tooling = readWorkflow("tooling-tests.yml");
   assert.strictEqual(tooling.match(/["']\.npmignore["']/g)?.length, 2, "package input changes must trigger tooling tests");
 });
