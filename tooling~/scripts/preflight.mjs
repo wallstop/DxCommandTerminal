@@ -49,6 +49,7 @@ export function buildChecks() {
 }
 
 const OUTPUT_TAIL_LINES = 40;
+const CHECK_TIMEOUT_MS = 5 * 60 * 1000;
 
 /** Keeps the last `maxLines` lines of a check's output for failure reports. */
 function tailLines(text, maxLines = OUTPUT_TAIL_LINES) {
@@ -60,7 +61,9 @@ function tailLines(text, maxLines = OUTPUT_TAIL_LINES) {
 
 /**
  * Runs every check concurrently. Resolves once all exits are collected; never
- * rejects for a check's non-zero exit (that is a result, not a crash).
+ * rejects for a check's non-zero exit (that is a result, not a crash). A check
+ * exceeding CHECK_TIMEOUT_MS is killed and reported as failed so a hung gate
+ * cannot hang the run.
  */
 export function runChecks(checks, { onSettled = () => {} } = {}) {
   return Promise.all(
@@ -74,19 +77,26 @@ export function runChecks(checks, { onSettled = () => {} } = {}) {
             stdio: ["ignore", "pipe", "pipe"]
           });
           let output = "";
+          let timedOut = false;
           const capture = (chunk) => {
             output += chunk;
           };
+          const timer = setTimeout(() => {
+            timedOut = true;
+            output += `\n[preflight] check exceeded ${CHECK_TIMEOUT_MS / 1000}s; killed`;
+            child.kill("SIGKILL");
+          }, CHECK_TIMEOUT_MS);
           child.stdout.on("data", capture);
           child.stderr.on("data", capture);
           child.on("error", (error) => {
             output += `\n[preflight] failed to spawn: ${error.message}`;
           });
           child.on("close", (code) => {
+            clearTimeout(timer);
             const result = {
               name: check.name,
               command: check.command,
-              ok: code === 0,
+              ok: code === 0 && !timedOut,
               durationMs: Date.now() - startedAt,
               output: tailLines(output)
             };
@@ -103,7 +113,11 @@ export function parseSkip(argv, knownNames) {
   let raw = "";
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--skip") {
-      raw = argv[i + 1] ?? "";
+      const value = argv[i + 1];
+      if (value === undefined || value.startsWith("--")) {
+        throw new Error("--skip requires a comma-separated name list");
+      }
+      raw = value;
       i++;
     } else if (argv[i].startsWith("--skip=")) {
       raw = argv[i].slice("--skip=".length);
@@ -121,19 +135,20 @@ export function parseSkip(argv, knownNames) {
   return names;
 }
 
-export async function main(argv = process.argv.slice(2)) {
-  const allChecks = buildChecks();
-  const skip = parseSkip(argv, allChecks.map((check) => check.name));
-  const checks = allChecks.filter((check) => !skip.includes(check.name));
-  if (checks.length === 0) {
+export async function main(argv = process.argv.slice(2), checks = buildChecks()) {
+  const skip = parseSkip(argv, checks.map((check) => check.name));
+  const selected = checks.filter((check) => !skip.includes(check.name));
+  if (selected.length === 0) {
     console.error("[preflight] no checks to run; refusing to scan nothing");
     return 1;
   }
 
-  console.log(`[preflight] running ${checks.length} checks in parallel...`);
-  const results = await runChecks(checks, (result) => {
-    const seconds = (result.durationMs / 1000).toFixed(1);
-    console.log(result.ok ? `[preflight] ok   ${result.name} (${seconds}s)` : `[preflight] FAIL ${result.name} (${seconds}s)`);
+  console.log(`[preflight] running ${selected.length} checks in parallel...`);
+  const results = await runChecks(selected, {
+    onSettled: (result) => {
+      const seconds = (result.durationMs / 1000).toFixed(1);
+      console.log(result.ok ? `[preflight] ok   ${result.name} (${seconds}s)` : `[preflight] FAIL ${result.name} (${seconds}s)`);
+    }
   });
 
   const failures = results.filter((result) => !result.ok);

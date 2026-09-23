@@ -18,6 +18,10 @@ Param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# Capture before the dot-sources below: they rebind same-named Param() vars
+# into this scope (the linter and the generator both declare $VerboseOutput).
+$script:harnessVerboseOutput = $VerboseOutput
+
 . (Join-Path $PSScriptRoot 'test-helpers.ps1')
 
 $instructionsLinter = (Get-Item (Join-Path $PSScriptRoot '../lint-llm-instructions.ps1')).FullName

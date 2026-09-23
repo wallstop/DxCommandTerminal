@@ -6,7 +6,7 @@
     runCollect reports per-check pass/fail with captured output, and main
     refuses to scan nothing.
 */
-import test from "node:test";
+import { test, after } from "node:test";
 import assert from "node:assert";
 import fs from "node:fs";
 import os from "node:os";
@@ -23,8 +23,14 @@ function writeTempScript(body) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "preflight-test-"));
   const file = path.join(dir, "subject.mjs");
   fs.writeFileSync(file, body);
+  tempDirs.push(dir);
   return file;
 }
+
+const tempDirs = [];
+after(() => {
+  for (const dir of tempDirs) fs.rmSync(dir, { recursive: true, force: true });
+});
 
 function case_(name, overrides) {
   return { name, ...overrides };
@@ -85,6 +91,17 @@ test("parseSkip: unknown name fails loudly with the known set", () => {
   assert.throws(() => parseSkip(["--skip=nope"], ["node-tests"]), /unknown --skip name 'nope'/);
 });
 
+const strictSkipCases = [
+  case_("missing value", { argv: ["--skip"] }),
+  case_("flag-shaped value", { argv: ["--skip", "--help"] })
+];
+
+for (const { name, argv } of strictSkipCases) {
+  test(`parseSkip: ${name} fails instead of skipping silently`, () => {
+    assert.throws(() => parseSkip(argv, ["node-tests"]), /--skip requires a comma-separated name list/);
+  });
+}
+
 const runCases = [
   case_("passing command", {
     body: "process.exit(0);",
@@ -136,4 +153,47 @@ test("main: skipping every check refuses to scan nothing", async () => {
 
 test("main: unknown --skip name throws before spawning", async () => {
   await assert.rejects(() => main(["--skip=definitely-not-a-check"]), /unknown --skip name/);
+});
+
+test("main: injected checks drive the happy path and exit 0", async () => {
+  const pass = writeTempScript("console.log('fine'); process.exit(0);");
+  const logged = [];
+  const originalLog = console.log;
+  console.log = (line) => logged.push(line);
+  try {
+    const exitCode = await main([], [
+      { name: "stub-pass", command: `node "${pass}"` }
+    ]);
+    assert.equal(exitCode, 0, "all-pass set must exit 0");
+    const output = logged.join("\n");
+    assert.ok(output.includes("ok   stub-pass"), `success line must report the check: ${output}`);
+    assert.ok(output.includes("1/1 passed"), `summary must count the checks: ${output}`);
+  } finally {
+    console.log = originalLog;
+  }
+});
+
+test("main: failing check prints its output and exits 1", async () => {
+  const pass = writeTempScript("process.exit(0);");
+  const fail = writeTempScript("console.error('burst-marker'); process.exit(9);");
+  const lines = [];
+  const originalError = console.error;
+  const originalLog = console.log;
+  console.error = (line) => lines.push(String(line));
+  console.log = (line) => lines.push(String(line));
+  try {
+    const exitCode = await main([], [
+      { name: "stub-pass", command: `node "${pass}"` },
+      { name: "stub-fail", command: `node "${fail}"` }
+    ]);
+    assert.equal(exitCode, 1, "any failure must exit 1");
+    const report = lines.join("\n");
+    assert.ok(report.includes("FAIL stub-fail"), "status line must flag the failing check");
+    assert.ok(report.includes("stub-fail failed"), "failure header must name the check");
+    assert.ok(report.includes("burst-marker"), "failure output must be printed");
+    assert.ok(report.includes("1/2 passed"), "summary must count both checks");
+  } finally {
+    console.error = originalError;
+    console.log = originalLog;
+  }
 });
