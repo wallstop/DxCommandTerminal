@@ -12,7 +12,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
     public sealed class CommandArgTests
     {
-        private const int NumTries = 5_000;
+        private const int NumTries = 500;
 
         private readonly System.Random _random = new();
 

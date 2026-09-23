@@ -16,5 +16,13 @@
       href: lifecycle.md
     - name: Quick-launch bar
       href: palette.md
+    - name: Themes and fonts
+      href: theming.md
+    - name: Source-generated registration
+      href: generator.md
+    - name: Performance
+      href: performance.md
+    - name: Migrating from Command Terminal
+      href: migration.md
 - name: API Reference
   href: ../api/toc.yml
