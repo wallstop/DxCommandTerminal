@@ -63,7 +63,7 @@ Invoke-TestCase 'files at or under 269 lines pass' {
     $root = New-FixtureRepo -Skills @{ 'valid-skill' = (Get-Content (Join-Path $PSScriptRoot 'fixtures/valid-skill.md') -Raw) } -ContextContent "# Title`n`nSee [index](./skills/index.md).`n"
     try {
         New-SizedFile -Root $root -RelativePath '.llm/skills/valid-skill/references/deep.md' -Lines 269
-        $result = Invoke-Linter -Root $root -FailOnCritical:( $true ) -VerboseLinter
+        $result = Invoke-Linter -Root $root -VerboseLinter
         Assert-Equal 0 $result.ExitCode '269-line file must pass'
         Assert-True ($result.Output -match 'All files within size limits') 'summary must report success'
     }

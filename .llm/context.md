@@ -268,9 +268,8 @@ Details: [llm-attribution](./skills/llm-attribution/SKILL.md).
 
 - Pure-logic suites are EditMode tests under `Tests/Editor/` (EditMode-safe screen in [run-terminal-tests](./skills/run-terminal-tests/SKILL.md));
   UI/allocation/player-adjacent suites stay PlayMode under `Tests/Runtime/`; run via Unity Test Runner or `-runTests`.
-- Command-behavior tests are data-driven over the static facades; house style in
-  `Tests/Editor/CommandArgTests.cs` + `Tests/Editor/CommandShellTests.cs`.
-- See [run-terminal-tests](./skills/run-terminal-tests/SKILL.md) before writing or debugging tests.
+- Command-behavior tests are data-driven over the static facades; house style in `Tests/Editor/CommandArgTests.cs`
+  + `Tests/Runtime/CommandShellTests.cs`; see [run-terminal-tests](./skills/run-terminal-tests/SKILL.md) before writing tests.
 
 ## Enforcement (LLM Context Hygiene)
 
