@@ -24,16 +24,39 @@ $instructionsLinter = (Get-Item (Join-Path $PSScriptRoot '../lint-llm-instructio
 $validSkill = Get-Content (Join-Path $PSScriptRoot 'fixtures/valid-skill.md') -Raw
 $validContext = "# Title`n`nSee [index](./skills/index.md).`n"
 
+# Dot-source the linter for in-process validation: the main guard defines the
+# functions without running. Three cases below still spawn the CLI to pin
+# param binding and exit-code propagation; the rest run in-process so the
+# suite does not pay a pwsh spawn (~0.5-1s) per case.
+. $instructionsLinter
+
 function New-ValidFixture {
     $root = New-FixtureRepo -Skills @{ 'valid-skill' = $validSkill } -ContextContent $validContext
     return $root
 }
 
-function Invoke-Linter {
+function Invoke-LinterCli {
     param([Parameter(Mandatory = $true)][string]$Root, [switch]$Fix)
     $args = @('-RepoRoot', $Root)
     if ($Fix) { $args += '-Fix' }
     return Invoke-PwshScript -Path $instructionsLinter -Arguments $args
+}
+
+function Invoke-Linter {
+    param([Parameter(Mandatory = $true)][string]$Root, [switch]$Fix)
+    $script:lastLintExitCode = 0
+    # Write-Host flows to the information stream; errors to the error stream.
+    # The return value lands in $script:lastLintExitCode so it never mixes
+    # into the captured output.
+    $output = & {
+        if ($Fix) {
+            $script:lastLintExitCode = Invoke-LlmInstructionsLint -RepoRoot $Root -Fix
+        }
+        else {
+            $script:lastLintExitCode = Invoke-LlmInstructionsLint -RepoRoot $Root
+        }
+    } 2>&1 6>&1 | ForEach-Object { "$_" }
+    return @{ ExitCode = $script:lastLintExitCode; Output = ($output -join "`n") }
 }
 
 function Assert-LinterFailed {
@@ -47,7 +70,7 @@ Start-TestRun 'lint-llm-instructions tests'
 Invoke-TestCase 'valid fixture passes' {
     $root = New-ValidFixture
     try {
-        $result = Invoke-Linter -Root $root
+        $result = Invoke-LinterCli -Root $root
         Assert-Equal 0 $result.ExitCode "valid fixture must pass; output:`n$($result.Output)"
         Assert-True ($result.Output -match 'LLM instructions validation passed!') 'success banner expected'
     }
@@ -58,7 +81,7 @@ Invoke-TestCase 'missing pointer file fails' {
     $root = New-ValidFixture
     try {
         Remove-Item -LiteralPath (Join-Path $root 'CLAUDE.md') -Force
-        $result = Invoke-Linter -Root $root
+        $result = Invoke-LinterCli -Root $root
         Assert-LinterFailed $result 'Claude Code entrypoint not found' 'missing pointer'
     }
     finally { Remove-FixtureRepo $root }
@@ -217,10 +240,10 @@ Invoke-TestCase 'stale index fails; -Fix repairs it' {
         $edited = $validSkill -replace 'Valid fixture skill used by the automated linter tests\.', 'Edited description that is not yet reflected in the index.'
         [System.IO.File]::WriteAllText((Join-Path $root '.llm/skills/valid-skill/SKILL.md'), $edited, $utf8NoBom)
 
-        $result = Invoke-Linter -Root $root
+        $result = Invoke-LinterCli -Root $root
         Assert-LinterFailed $result 'Skills index index\.md is out of date!' 'stale index must fail'
 
-        $fixed = Invoke-Linter -Root $root -Fix
+        $fixed = Invoke-LinterCli -Root $root -Fix
         Assert-Equal 0 $fixed.ExitCode "-Fix must repair the index; output:`n$($fixed.Output)"
         Assert-True ($fixed.Output -match 'Regenerated index\.md') '-Fix must report regeneration'
         Assert-True (([System.IO.File]::ReadAllText((Join-Path $root '.llm/skills/index.md')) -match 'Edited description')) 'index must contain the new description'

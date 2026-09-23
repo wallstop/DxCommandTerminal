@@ -113,8 +113,12 @@ function New-FixtureRepo {
     }
 
     if (-not $NoIndex) {
-        & pwsh -NoProfile -File (Join-Path $PSScriptRoot '../generate-skills-index.ps1') -RepoRoot $root | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw "fixture index generation failed" }
+        # In-process generation: dot-sourcing skips the generator's main guard,
+        # so fixture setup avoids a pwsh spawn per fixture.
+        if (-not (Get-Command New-SkillsIndex -ErrorAction SilentlyContinue)) {
+            . (Join-Path $PSScriptRoot '../generate-skills-index.ps1')
+        }
+        if ((New-SkillsIndex -RepoRoot $root) -ne 0) { throw "fixture index generation failed" }
         if ($IndexContent) {
             [System.IO.File]::WriteAllText((Join-Path $root '.llm/skills/index.md'), $IndexContent.Content, $utf8NoBom)
         }

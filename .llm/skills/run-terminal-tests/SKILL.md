@@ -16,8 +16,12 @@ metadata:
 
 ## Running
 
-1. Unity Test Runner: Window > General > Test Runner -> PlayMode tab -> Run All.
-2. Unity CLI (CI-style):
+1. Local preflight (fastest full gate, no Unity): `npm run preflight` - runs the
+   node suite, the nine C#/asset linters, the T11 baseline gate, the package
+   gate, docs guides build, and the compat compile in parallel (~3-4s wall vs
+   ~30s serial). `--skip=a,b` narrows a run.
+2. Unity Test Runner: Window > General > Test Runner -> PlayMode tab -> Run All.
+3. Unity CLI (CI-style):
    `Unity -batchmode -projectPath <proj> -runTests -testPlatform PlayMode -testResults results.xml -quit`
    (requires a valid Unity license; exit code reflects test success).
 
