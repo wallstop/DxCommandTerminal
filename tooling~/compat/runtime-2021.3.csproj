@@ -1,0 +1,47 @@
+<!--
+    Member-level 2021.3 compile tripwire (issue #136). The docs build's
+    docfx extraction only surfaces missing *types* (CS0246); it suppresses
+    member-level errors (CS1061), so an unguarded method on a pre-6000.4
+    type can slip through. This project compiles the real Runtime sources
+    against the same pinned UnityEngine 2021.3.33 reference assemblies
+    (the package minimum), so any member or API absent from the oldest
+    supported editor fails the build outright.
+
+    No defines are set: Unity projects define ENABLE_INPUT_SYSTEM etc., and
+    the source guards (see the unity-version-guards skill) expect those
+    blocks to compile out here. False positives are possible where a
+    Unity-defined block needs a gated reference; fix by guarding the source
+    (preferred) or excluding the file below with a reason.
+
+    Run via `npm run compat:check` (delegates to `dotnet build`), or
+    `dotnet build tooling~/compat/runtime-2021.3.csproj`.
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!--
+        CS0649/CS0169/CS0414: Unity assigns serialized fields outside C#, so
+        a Unity-free compile sees them as never assigned/used.
+    -->
+    <NoWarn>$(NoWarn);NU1701;CS0649;CS0169;CS0414</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="UnityEngine.Modules" Version="2021.3.33" />
+    <Compile Include="../../Runtime/**/*.cs" Exclude="../../Runtime/Analyzers/**" />
+  </ItemGroup>
+  <!--
+    The legacy-input project profile: Unity defines
+    ENABLE_LEGACY_INPUT_MANAGER and/or ENABLE_INPUT_SYSTEM per Active Input
+    Handling, and InputMode marks members obsolete per that pair. The
+    new-input profile additionally needs a Unity.InputSystem reference
+    assembly, which nuget does not carry - T13's real-editor version matrix
+    covers it.
+  -->
+  <PropertyGroup>
+    <DefineConstants>$(DefineConstants);ENABLE_LEGACY_INPUT_MANAGER</DefineConstants>
+  </PropertyGroup>
+</Project>

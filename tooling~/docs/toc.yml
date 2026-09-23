@@ -6,6 +6,14 @@
       href: install.md
     - name: First command
       href: first-command.md
+    - name: Registering commands
+      href: commands.md
+    - name: Typed arguments
+      href: arguments.md
+    - name: Completion
+      href: completion.md
+    - name: Lifetime
+      href: lifecycle.md
     - name: Quick-launch bar
       href: palette.md
 - name: API Reference

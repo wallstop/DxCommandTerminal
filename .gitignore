@@ -41,3 +41,7 @@ Generator~/**/obj/
 
 # Docs site build state (docfx project under tooling~/docs; rebuilt by npm run docs:build)
 tooling~/docs/obj/
+
+# 2021.3 compile tripwire build state (tooling~/compat; rebuilt by npm run compat:check)
+tooling~/compat/bin/
+tooling~/compat/obj/

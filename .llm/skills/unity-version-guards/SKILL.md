@@ -44,9 +44,18 @@ deprecation warnings) on editors that already have the newer API.
 
 ## Tripwires
 
+- `npm run compat:check` compiles the real Runtime sources against UnityEngine
+  2021.3.33 reference assemblies (tooling~/compat, warnings-as-errors):
+  catches member-level leaks (CS1061, CS0200) below the minimum editor -
+  the failure class the docs build cannot see. It compiles the
+  legacy-input project profile (`ENABLE_LEGACY_INPUT_MANAGER`); the
+  new-input profile needs a Unity.InputSystem reference assembly nuget
+  does not carry (T13's real-editor matrix covers it).
 - `npm run docs:build` compiles Runtime sources against UnityEngine
   2021.3.33 reference assemblies (tooling~/docs): catches type-level leaks
   below the minimum editor. It suppresses member-level errors (CS1061), so
-  it is a type-level tripwire only (issue #136 tracks a fuller compile lane).
+  it is a type-level tripwire only.
+- After compiling on the pinned host, check the console for CS0618 warnings;
+  the repo's zero-warnings rule makes any deprecation warning a failure.
 - After compiling on the pinned host, check the console for CS0618 warnings;
   the repo's zero-warnings rule makes any deprecation warning a failure.

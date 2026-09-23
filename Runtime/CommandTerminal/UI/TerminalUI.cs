@@ -1607,8 +1607,16 @@
                 return;
             }
 
+#if UNITY_2022_1_OR_NEWER
             _commandInput.cursorIndex = index;
             _commandInput.selectIndex = index;
+#else
+            /*
+                2021.3 exposes the caret getters only; once the field holds
+                the input, the engine owns placement and the marker retires.
+             */
+            _pendingCaretIndex = null;
+#endif
         }
 
         /*
@@ -2441,9 +2449,11 @@
 
             // A fresh focus places the caret at the end of the input.
             _textInput.Focus();
+#if UNITY_2022_1_OR_NEWER
             int textEndPosition = _commandInput.value.Length;
             _commandInput.cursorIndex = textEndPosition;
             _commandInput.selectIndex = textEndPosition;
+#endif
         }
 
         private void RetryInputFocus()
