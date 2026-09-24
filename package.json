@@ -62,7 +62,6 @@
     "compat:check": "npm --prefix tooling~ run compat:check",
     "package:validate": "npm --prefix tooling~ run package:validate --",
     "package:export": "npm --prefix tooling~ run package:export --",
-    "t13:compat": "npm --prefix tooling~ run t13:compat --",
     "release:prepare": "npm --prefix tooling~ run release:prepare --",
     "release:gate": "npm --prefix tooling~ run release:gate --",
     "unity:mcp:probe": "npm --prefix tooling~ run unity:mcp:probe --",
