@@ -11,7 +11,7 @@ readonly NPM_PREFIX="${NPM_CONFIG_PREFIX:-${HOME}/.local}"
 readonly LOG_PREFIX="[agent-clis]"
 readonly PACKAGES=(
     "@openai/codex"
-    "opencode-ai"
+    "@opencode/cli"
     "@nanocollective/nanocoder"
     "@anthropic-ai/claude-code"
 )
@@ -35,6 +35,14 @@ if ! command -v npm >/dev/null 2>&1; then
     exit 0
 fi
 
+if npm list --global --depth=0 opencode-ai >/dev/null 2>&1; then
+    log "removing legacy opencode-ai package."
+    if ! timeout 300 npm uninstall --global opencode-ai --silent --no-fund --no-audit; then
+        warn "failed to remove the legacy opencode-ai package."
+        exit 1
+    fi
+fi
+
 mkdir -p "${NPM_PREFIX}/bin" "${NPM_PREFIX}/lib"
 export PATH="${NPM_PREFIX}/bin:${PATH}"
 
@@ -53,7 +61,7 @@ command_version() {
     local output=""
     case "${command_name}" in
         codex) output="$(timeout 10 codex --version 2>/dev/null || true)" ;;
-        opencode) output="$(timeout 10 opencode --version 2>/dev/null || true)" ;;
+        opencode|opencode2) output="$(timeout 10 "${command_name}" --version 2>/dev/null || true)" ;;
         nanocoder) output="$(timeout 10 nanocoder --version 2>/dev/null || true)" ;;
         claude) output="$(timeout 10 claude --version 2>/dev/null || true)" ;;
         *) return 1 ;;
@@ -93,7 +101,7 @@ for index in "${!PACKAGES[@]}"; do
     installed_ok=false
     for attempt in 1 2 3; do
         if timeout 300 npm install -g "${package_name}@${latest}" \
-            --allow-scripts=opencode-ai,@anthropic-ai/claude-code \
+            --allow-scripts=@opencode/cli,@anthropic-ai/claude-code \
             --silent --no-fund --no-audit; then
             if [[ "$(command_version "${command_name}" || true)" == "${latest}" ]]; then
                 installed_ok=true
@@ -110,6 +118,15 @@ for index in "${!PACKAGES[@]}"; do
         ((failures += 1))
     fi
 done
+
+opencode_version="$(command_version opencode || true)"
+if [[ "${opencode_version}" != 2.* ]]; then
+    warn "OpenCode v2 is required; found ${opencode_version:-missing}."
+    ((failures += 1))
+elif [[ "$(command_version opencode2 || true)" != "${opencode_version}" ]]; then
+    warn "opencode2 does not match opencode ${opencode_version}."
+    ((failures += 1))
+fi
 
 if [[ "${failures}" -gt 0 ]]; then
     warn "${failures} agent CLI refresh(es) failed; see messages above."

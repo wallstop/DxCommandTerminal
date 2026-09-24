@@ -106,18 +106,19 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 # ------------------------------------------------------------------------------
 RUN npm install --global --prefix /usr/local \
         @openai/codex@latest \
-        opencode-ai@latest \
+        @opencode/cli@latest \
         @nanocollective/nanocoder@latest \
         @anthropic-ai/claude-code@latest \
         @z_ai/mcp-server@latest \
         @upstash/context7-mcp@latest \
         mcp-remote@latest \
-        --allow-scripts=opencode-ai,@anthropic-ai/claude-code \
+        --allow-scripts=@opencode/cli,@anthropic-ai/claude-code \
         --no-fund \
         --no-audit \
     && claude --version \
     && codex --version \
-    && opencode --version \
+    && opencode --version | grep -Eq '(^|[[:space:]])2\.' \
+    && test "$(opencode2 --version)" = "$(opencode --version)" \
     && nanocoder --version
 
 # MCP configuration must work before the workspace volume has dependencies.
@@ -205,7 +206,10 @@ RUN echo "=== Environment Verification ===" \
     && echo "--- .NET SDKs ---" && dotnet --list-sdks \
     && echo "--- Node tooling ---" && node --version && npm --version \
     && echo "--- Agent CLIs ---" \
-    && claude --version && codex --version && opencode --version && nanocoder --version \
+    && claude --version && codex --version \
+    && opencode --version | grep -Eq '(^|[[:space:]])2\.' \
+    && test "$(opencode2 --version)" = "$(opencode --version)" \
+    && nanocoder --version \
     && echo "--- MCP executables ---" \
     && command -v mcp-server-git && command -v mcp-server-fetch \
     && command -v zai-mcp-server && command -v mcp-remote \
