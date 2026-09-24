@@ -2,18 +2,18 @@
 # shellcheck shell=bash
 
 # Refresh the user-scoped agent CLIs. The image provides a build-time copy, so an
-# offline launch keeps working while an online launch moves each CLI to npm's
-# current latest tag without requiring sudo.
+# offline launch keeps working while an online launch moves each CLI to its npm
+# release line without requiring sudo.
 
 set -euo pipefail
 
 readonly NPM_PREFIX="${NPM_CONFIG_PREFIX:-${HOME}/.local}"
 readonly LOG_PREFIX="[agent-clis]"
 readonly PACKAGES=(
-    "@openai/codex"
-    "@opencode/cli"
-    "@nanocollective/nanocoder"
-    "@anthropic-ai/claude-code"
+    "@openai/codex@latest"
+    "@opencode/cli@2"
+    "@nanocollective/nanocoder@latest"
+    "@anthropic-ai/claude-code@latest"
 )
 readonly COMMANDS=(
     "codex"
@@ -35,14 +35,6 @@ if ! command -v npm >/dev/null 2>&1; then
     exit 0
 fi
 
-if npm list --global --depth=0 opencode-ai >/dev/null 2>&1; then
-    log "removing legacy opencode-ai package."
-    if ! timeout 300 npm uninstall --global opencode-ai --silent --no-fund --no-audit; then
-        warn "failed to remove the legacy opencode-ai package."
-        exit 1
-    fi
-fi
-
 mkdir -p "${NPM_PREFIX}/bin" "${NPM_PREFIX}/lib"
 export PATH="${NPM_PREFIX}/bin:${PATH}"
 
@@ -53,6 +45,14 @@ if command -v flock >/dev/null 2>&1; then
     if ! flock -n 9; then
         log "another agent CLI refresh is already running."
         exit 0
+    fi
+fi
+
+if npm list --global --depth=0 opencode-ai >/dev/null 2>&1; then
+    log "removing legacy opencode-ai package."
+    if ! timeout 300 npm uninstall --global opencode-ai --silent --no-fund --no-audit; then
+        warn "failed to remove the legacy opencode-ai package."
+        exit 1
     fi
 fi
 
@@ -71,10 +71,11 @@ command_version() {
 
 failures=0
 for index in "${!PACKAGES[@]}"; do
-    package_name="${PACKAGES[$index]}"
+    package_spec="${PACKAGES[$index]}"
+    package_name="${package_spec%@*}"
     command_name="${COMMANDS[$index]}"
     installed="$(command_version "${command_name}" || true)"
-    latest="$(timeout 20 npm view "${package_name}@latest" version 2>/dev/null | tr -d '[:space:]' || true)"
+    latest="$(timeout 20 npm view "${package_spec}" version 2>/dev/null | sort -V | tail -n 1 | tr -d '[:space:]' || true)"
 
     if [[ -z "${latest}" ]]; then
         if command -v "${command_name}" >/dev/null 2>&1; then
@@ -97,10 +98,10 @@ for index in "${!PACKAGES[@]}"; do
         continue
     fi
 
-    log "installing ${package_name}@${latest} (current: ${installed:-missing})..."
+    log "installing ${package_spec} (current: ${installed:-missing})..."
     installed_ok=false
     for attempt in 1 2 3; do
-        if timeout 300 npm install -g "${package_name}@${latest}" \
+        if timeout 300 npm install -g "${package_spec}" \
             --allow-scripts=@opencode/cli,@anthropic-ai/claude-code \
             --silent --no-fund --no-audit; then
             if [[ "$(command_version "${command_name}" || true)" == "${latest}" ]]; then

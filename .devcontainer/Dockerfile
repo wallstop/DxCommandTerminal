@@ -101,12 +101,12 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 
 # ------------------------------------------------------------------------------
 # Agent CLIs + MCP adapters baked into the image. The user-scoped lifecycle
-# refresh moves them to npm's latest tags; these copies keep offline launches
-# working.
+# refresh moves them to their configured npm lines; these copies keep offline
+# launches working.
 # ------------------------------------------------------------------------------
 RUN npm install --global --prefix /usr/local \
         @openai/codex@latest \
-        @opencode/cli@latest \
+        @opencode/cli@2 \
         @nanocollective/nanocoder@latest \
         @anthropic-ai/claude-code@latest \
         @z_ai/mcp-server@latest \

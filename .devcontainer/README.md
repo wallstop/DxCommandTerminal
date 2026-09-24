@@ -63,7 +63,7 @@ sudo** anywhere.
 | Base | `mcr.microsoft.com/devcontainers/dotnet:1-9.0-bookworm` + .NET 10 side-by-side (C# Dev Kit) |
 | Repo tooling | PowerShell (lint scripts), CSharpier 1.1.2, pre-commit, yamllint, git-lfs |
 | Node LTS | NodeSource LTS; user-global npm prefix is `~/.local` (no sudo, ever) |
-| Agent CLIs | `@anthropic-ai/claude-code`, `@openai/codex`, `@opencode/cli`, `@nanocollective/nanocoder` (latest at build; refreshed on every start) |
+| Agent CLIs | `@anthropic-ai/claude-code`, `@openai/codex`, `@opencode/cli` v2, `@nanocollective/nanocoder` (configured npm lines; refreshed on every start) |
 | MCP servers | `mcp-server-git`, `mcp-server-fetch` (uv), `@z_ai/mcp-server` (vision), `@upstash/context7-mcp` (docs), `mcp-remote` (Z.AI↔Codex adapter), baked `@modelcontextprotocol/sdk` + `smol-toml` + `jsonc-parser` under `/opt/dxt-mcp` |
 
 Offline launches keep working: configure uses the baked dependencies, and the
@@ -75,7 +75,7 @@ image copies of the CLIs remain until a refresh succeeds.
 | --- | --- | --- |
 | `updateContentCommand` | `post-start.sh --prepare` | Repair cache ownership, configure MCP offline, then allow attach |
 | `postCreateCommand` | `post-create.sh` | npm prefix, agent CLI refresh, `dotnet tool restore`, `npm install`, MCP configure, Z.AI launcher install, pre-commit, welcome panel |
-| `postStartCommand` / `postAttachCommand` | `post-start.sh` | Ownership repair, offline MCP configure, background CLI refresh to npm latest |
+| `postStartCommand` / `postAttachCommand` | `post-start.sh` | Ownership repair, offline MCP configure, background CLI refresh to configured npm lines |
 
 Logs for the background refresh: `/tmp/dxt-agent-cli-refresh.log`.
 

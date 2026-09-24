@@ -110,6 +110,12 @@ jobs:
       - name: Test tooling
         run: npm --prefix tooling~ test
 
+      - name: Test AI backends
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          bash -n .devcontainer/install-agent-clis.sh
+          bash tooling~/scripts/tests/test-ai-backends.sh
+
       - name: Check capture baselines
         # T11 Unity-free integrity gate: baseline schema, scenario coverage,
         # decodability, and provenance (never Unity rendering).
