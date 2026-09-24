@@ -26,7 +26,7 @@ namespace DxCommandTerminal.T13.Compatibility.Tests
         {
             Assert.That(Application.isPlaying, Is.True);
             string expectedDomainReload = Environment.GetEnvironmentVariable(
-                "DX_T13_EXPECT_DOMAIN_RELOAD"
+                "DX_T13_DOMAIN_RELOAD_ENABLED"
             );
             if (expectedDomainReload != null)
             {
@@ -34,7 +34,7 @@ namespace DxCommandTerminal.T13.Compatibility.Tests
                     EditorSettings.enterPlayModeOptionsEnabled,
                     Is.EqualTo(expectedDomainReload == "0")
                 );
-                if (expectedDomainReload == "1")
+                if (expectedDomainReload == "0")
                 {
                     Assert.That(
                         (

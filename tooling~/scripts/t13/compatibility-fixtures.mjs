@@ -17,8 +17,9 @@ import {
 import { exportUnityPackage } from "../release/export-unitypackage.mjs";
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(MODULE_DIR, "../../..");
-const DEFAULT_MATRIX = path.join(REPO_ROOT, "compat", "matrix.json");
-const DEFAULT_FIXTURE_ROOT = path.join(REPO_ROOT, "compat", "fixtures");
+const TOOLING_ROOT = path.resolve(MODULE_DIR, "../..");
+const DEFAULT_MATRIX = path.join(TOOLING_ROOT, "compat", "matrix.json");
+const DEFAULT_FIXTURE_ROOT = path.join(TOOLING_ROOT, "compat", "fixtures");
 const TEST_FILTER = "DxCommandTerminal.T13.Compatibility.Tests";
 const INPUT_PROFILES = new Map([
   ["legacy", 0],
@@ -428,7 +429,7 @@ export async function runLeg(options, matrix, leg, runtime = {}) {
   const phases = [
     { name: "import", args: importUnityArgs(project, options.artifact, path.join(logsDirectory, "import.log")), env: undefined },
     { name: "settle", args: settleUnityArgs(project, path.join(logsDirectory, "settle.log")), env: SETTLE_PHASE_ENV },
-    { name: "tests", args: testUnityArgs(project, resultsPath, path.join(logsDirectory, "tests.log")), env: { DX_T13_EXPECT_DOMAIN_RELOAD: settings.domainReloadEnabled ? "0" : "1", DX_T13_PERSISTENCE_FILE: path.join(reportDirectory, "fixture-persistence.json") } }
+    { name: "tests", args: testUnityArgs(project, resultsPath, path.join(logsDirectory, "tests.log")), env: { DX_T13_DOMAIN_RELOAD_ENABLED: settings.domainReloadEnabled ? "1" : "0", DX_T13_PERSISTENCE_FILE: path.join(reportDirectory, "fixture-persistence.json") } }
   ];
   const timeoutMs = options.timeoutMinutes * 60_000;
   for (const phase of phases) {
@@ -479,7 +480,7 @@ export function resolveLegs(options, matrix) {
   }
   for (const leg of matrix.editors) {
     if (!options.unityById.has(leg.id)) {
-      throw new Error(`missing --unity-${leg.id} for matrix leg ${leg.id}`);
+      throw new Error(`missing --${leg.id} for matrix leg ${leg.id}`);
     }
   }
   return matrix.editors;

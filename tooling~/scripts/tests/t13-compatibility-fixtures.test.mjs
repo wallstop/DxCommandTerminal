@@ -8,8 +8,10 @@ import { runUnityProcess } from "../release/import-drill.mjs";
 import { exportUnityPackage } from "../release/export-unitypackage.mjs";
 import {
   loadMatrix,
+  parseArgs,
   parseTestResults,
   requireFreshDirectory,
+  resolveLegs,
   runMatrix,
   validateMatrix,
   writeProjectSettings
@@ -55,6 +57,23 @@ test("matrix validates profiles, coverage, and no-domain-reload settings", () =>
     assert.match(fs.readFileSync(path.join(project, "ProjectSettings/EditorSettings.asset"), "utf8"), new RegExp(`m_EnterPlayModeOptionsEnabled: ${enterPlayMode}\\b`));
     assert.match(fs.readFileSync(path.join(project, "ProjectSettings/EditorSettings.asset"), "utf8"), new RegExp(`m_EnterPlayModeOptions: ${enterPlayMode}\\b`));
   }
+});
+
+test("default paths load the shipped tooling compatibility fixtures", () => {
+  const options = parseArgs(["--artifact", "artifact.unitypackage"]);
+  assert.equal(options.matrix, MATRIX_PATH);
+  assert.equal(options.fixtureRoot, FIXTURE_ROOT);
+  assert.doesNotThrow(() => loadMatrix(options.matrix));
+});
+
+test("matrix leg errors name the exact editor flag", () => {
+  const matrix = loadMatrix(MATRIX_PATH);
+  const missing = { only: "", unity: "", unityById: new Map() };
+  assert.throws(() => resolveLegs(missing, matrix), /missing --unity-2021/);
+  assert.throws(
+    () => resolveLegs({ ...missing, only: "unity-6" }, matrix),
+    /missing --unity or --unity-6/
+  );
 });
 
 test("test results require a strict all-passed test-run", () => {
@@ -145,10 +164,12 @@ test("matrix manifests record complete identity and reject stale reports", async
   const out = path.join(root, "reports");
   const options = { artifact: artifactPath, out, only: "unity-6", unity: "unity", unityById: new Map(), fixtureRoot: FIXTURE_ROOT, keep: true, timeoutMinutes: 5 };
   const matrix = loadMatrix(MATRIX_PATH);
+  const testEnvironments = [];
   const runtime = {
     probeEditorVersion: () => "6000.4.6f1",
     validateImportedProject: () => ({ failures: [], checks: [] }),
-    runUnity: async (unity, args, logPath) => {
+    runUnity: async (unity, args, logPath, timeoutMs, environment) => {
+      if (args.includes("-runTests")) testEnvironments.push(environment);
       fs.writeFileSync(logPath, "phase complete\n");
       if (args.includes("-runTests")) {
         const project = args[args.indexOf("-projectPath") + 1];
@@ -160,6 +181,14 @@ test("matrix manifests record complete identity and reject stale reports", async
   const report = await runMatrix(options, matrix, runtime);
   assert.deepStrictEqual(report.requestedLegs, ["unity-6"]);
   assert.deepStrictEqual(report.selectedLegs, ["unity-6"]);
+  assert.equal(testEnvironments[0].DX_T13_DOMAIN_RELOAD_ENABLED, "1");
+  const noReloadReport = await runMatrix(
+    { ...options, out: path.join(root, "no-reload"), only: "unity-6-no-reload" },
+    matrix,
+    runtime
+  );
+  assert.equal(testEnvironments[1].DX_T13_DOMAIN_RELOAD_ENABLED, "0");
+  assert.equal(noReloadReport.failed, false);
   assert.match(report.matrixSha256, /^[0-9a-f]{64}$/);
   assert.match(report.git.revision, /^[0-9a-f]{40}$/);
   assert.equal(typeof report.git.dirty, "boolean");
