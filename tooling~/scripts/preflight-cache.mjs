@@ -6,8 +6,15 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const CACHE_VERSION = 2;
+const CACHE_VERSION = 3;
 const CACHE_DIRECTORY = path.join(path.dirname(fileURLToPath(import.meta.url)), ".preflight-cache");
+const CHECKOUT_ID = (() => {
+  try {
+    return fs.realpathSync(REPO_ROOT);
+  } catch {
+    return REPO_ROOT;
+  }
+})();
 const CACHE_DISABLED_CHECKS = new Set(["compat-check"]);
 const CACHE_PATH_KEYS = new Set([
   "COMPARISON_DIRECTION_ROOTS",
@@ -341,6 +348,7 @@ export function createCacheContext() {
     platform: process.platform,
     arch: process.arch
   };
+  lazy(context, "checkout", () => CHECKOUT_ID);
   const npm = process.platform === "win32" ? "npm.cmd" : "npm";
   lazy(context, "nodeExecutable", () => pathState(process.execPath));
   lazy(context, "nodeCommand", () => resolvedExecutableState("node"));
@@ -432,6 +440,7 @@ export function cacheKeyForCheck(check, context = createCacheContext()) {
     `version=${CACHE_VERSION}`,
     `name=${check.name}`,
     `command=${check.command}`,
+    `checkout=${context.checkout ?? CHECKOUT_ID}`,
     `node=${context.node}`,
     `node-executable=${context.nodeExecutable ?? ""}`,
     `node-command=${context.nodeCommand ?? ""}`,
@@ -474,6 +483,56 @@ function cachePath(check, key) {
   return path.join(CACHE_DIRECTORY, `${name}-${key}.json`);
 }
 
+export function cachePathForCheck(check, key) {
+  return cachePath(check, key);
+}
+
+function isCacheDirectory() {
+  try {
+    const stat = fs.lstatSync(CACHE_DIRECTORY);
+    return stat.isDirectory() && !stat.isSymbolicLink();
+  } catch {
+    return false;
+  }
+}
+
+function sameFile(left, right) {
+  return left.dev === right.dev && left.ino === right.ino;
+}
+
+function closeDescriptor(descriptor) {
+  if (descriptor === null) {
+    return;
+  }
+  try {
+    fs.closeSync(descriptor);
+  } catch {
+    return;
+  }
+}
+
+function readRegularFile(filePath) {
+  let descriptor = null;
+  try {
+    const before = fs.lstatSync(filePath);
+    if (!before.isFile()) {
+      return null;
+    }
+    const noFollow = fs.constants.O_NOFOLLOW ?? 0;
+    descriptor = fs.openSync(filePath, fs.constants.O_RDONLY | noFollow);
+    const opened = fs.fstatSync(descriptor);
+    const after = fs.lstatSync(filePath);
+    if (!sameFile(before, opened) || !sameFile(opened, after) || !after.isFile()) {
+      return null;
+    }
+    return JSON.parse(fs.readFileSync(descriptor, "utf8"));
+  } catch {
+    return null;
+  } finally {
+    closeDescriptor(descriptor);
+  }
+}
+
 export function isCacheableCheck(check) {
   if (CACHE_DISABLED_CHECKS.has(check.name)) {
     return false;
@@ -485,36 +544,63 @@ export function isCacheableCheck(check) {
 }
 
 export function readCacheEntry(check, key) {
-  if (process.env.CI || !isCacheableCheck(check)) {
+  if (process.env.CI || !isCacheableCheck(check) || !isCacheDirectory()) {
     return false;
   }
-  try {
-    const entry = JSON.parse(fs.readFileSync(cachePath(check, key), "utf8"));
-    return entry.version === CACHE_VERSION && entry.key === key && entry.ok === true;
-  } catch {
-    return false;
-  }
+  const entry = readRegularFile(cachePath(check, key));
+  return entry !== null && entry.version === CACHE_VERSION && entry.key === key && entry.ok === true;
 }
 
 export function writeCacheEntry(check, key) {
   if (process.env.CI || !isCacheableCheck(check)) {
-    return;
+    return false;
   }
-  const destination = cachePath(check, key);
-  const temporary = `${destination}.${process.pid}.${crypto.randomBytes(6).toString("hex")}.tmp`;
+  let temporary = null;
+  let descriptor = null;
   try {
     fs.mkdirSync(CACHE_DIRECTORY, { recursive: true });
-    fs.writeFileSync(
+    if (!isCacheDirectory()) {
+      return false;
+    }
+    const destination = cachePath(check, key);
+    temporary = `${destination}.${process.pid}.${crypto.randomBytes(6).toString("hex")}.tmp`;
+    const noFollow = fs.constants.O_NOFOLLOW ?? 0;
+    descriptor = fs.openSync(
       temporary,
-      `${JSON.stringify({ version: CACHE_VERSION, key, ok: true, completedAt: new Date().toISOString() })}\n`,
-      { encoding: "utf8", flag: "wx" }
+      fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | noFollow,
+      0o600
     );
+    fs.writeFileSync(
+      descriptor,
+      `${JSON.stringify({ version: CACHE_VERSION, key, ok: true, completedAt: new Date().toISOString() })}\n`,
+      { encoding: "utf8" }
+    );
+    fs.closeSync(descriptor);
+    descriptor = null;
     fs.renameSync(temporary, destination);
+    temporary = null;
+    return true;
   } catch {
-    fs.rmSync(temporary, { force: true });
+    return false;
+  } finally {
+    closeDescriptor(descriptor);
+    if (temporary !== null) {
+      try {
+        fs.rmSync(temporary, { force: true });
+      } catch {
+        return false;
+      }
+    }
   }
 }
 
 export function clearCacheForCheck(check, key) {
-  fs.rmSync(cachePath(check, key), { force: true });
+  if (!isCacheDirectory()) {
+    return;
+  }
+  try {
+    fs.rmSync(cachePath(check, key), { force: true });
+  } catch {
+    return;
+  }
 }

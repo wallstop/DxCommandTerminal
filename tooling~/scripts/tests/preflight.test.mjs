@@ -20,13 +20,16 @@ const { buildChecks, parseSkip, runChecks, main } = await import(
 );
 const {
   cacheKeyForCheck,
+  cachePathForCheck,
   dependencyState,
   dotnetToolState,
   isCacheableCheck,
   npmConfigState,
   npmExecutableState,
   pathState,
-  resolvedExecutableState
+  readCacheEntry,
+  resolvedExecutableState,
+  writeCacheEntry
 } = await import(
   pathToFileURL(path.join(toolingRoot, "scripts", "preflight-cache.mjs")).href
 );
@@ -238,6 +241,21 @@ test("cache keys include the cache and check implementation", () => {
   assert.notEqual(
     cacheKeyForCheck(check, context),
     cacheKeyForCheck(check, { ...context, implementation: "cache-v2" })
+  );
+});
+
+test("cache keys are isolated by checkout", () => {
+  const context = {
+    node: "node",
+    platform: "linux",
+    arch: "x64",
+    files: [],
+    checkout: "checkout-a"
+  };
+  const check = { name: "checkout-isolated", command: "node check.mjs" };
+  assert.notEqual(
+    cacheKeyForCheck(check, context),
+    cacheKeyForCheck(check, { ...context, checkout: "checkout-b" })
   );
 });
 
@@ -648,6 +666,47 @@ test("main: caches successful checks and --no-cache bypasses the cache", async (
       process.env.CI = originalCi;
     }
     fs.rmSync(path.dirname(marker), { recursive: true, force: true });
+  }
+});
+
+test("cache storage rejects malformed entries without failing writes", () => {
+  const check = {
+    name: `malformed-cache-storage-${process.pid}-${Date.now()}`,
+    command: "node malformed-cache.mjs"
+  };
+  const key = "malformed-key";
+  const entryPath = cachePathForCheck(check, key);
+  const cacheDirectory = path.dirname(entryPath);
+  const targetPath = `${entryPath}.target`;
+  const originalCi = process.env.CI;
+  delete process.env.CI;
+  try {
+    fs.mkdirSync(cacheDirectory, { recursive: true });
+
+    fs.writeFileSync(entryPath, "not json");
+    assert.equal(readCacheEntry(check, key), false);
+    assert.equal(writeCacheEntry(check, key), true);
+    assert.equal(readCacheEntry(check, key), true);
+    fs.rmSync(entryPath, { force: true });
+
+    fs.mkdirSync(entryPath);
+    assert.equal(readCacheEntry(check, key), false);
+    assert.equal(writeCacheEntry(check, key), false);
+    fs.rmSync(entryPath, { recursive: true, force: true });
+
+    if (process.platform !== "win32") {
+      fs.writeFileSync(targetPath, "not a cache entry");
+      fs.symlinkSync(targetPath, entryPath);
+      assert.equal(readCacheEntry(check, key), false);
+      assert.equal(writeCacheEntry(check, key), true);
+      assert.equal(fs.lstatSync(entryPath).isFile(), true);
+      assert.equal(readCacheEntry(check, key), true);
+    }
+  } finally {
+    if (originalCi === undefined) delete process.env.CI;
+    else process.env.CI = originalCi;
+    fs.rmSync(entryPath, { force: true });
+    fs.rmSync(targetPath, { force: true });
   }
 });
 
