@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "fixtureRevision": "t13-first-tranche-v1",
+  "inputProfile": "legacy",
+  "domainReloadEnabled": true,
+  "coverage": [
+    "playmode-prefab-settings-early-log-and-reset-state",
+    "playmode-theme-font-persistence-hydration-and-save",
+    "playmode-scene-change",
+    "project-domain-reload-profile"
+  ],
+  "editors": [
+    {
+      "id": "unity-2021",
+      "family": "2021.3",
+      "versionPattern": "^2021\\.3\\."
+    },
+    {
+      "id": "unity-2022",
+      "family": "2022.3",
+      "versionPattern": "^2022\\.3\\."
+    },
+    {
+      "id": "unity-6",
+      "family": "6000.0",
+      "versionPattern": "^6000\\.",
+      "expectedVersion": "6000.4.6f1"
+    },
+    {
+      "id": "unity-6-no-reload",
+      "family": "6000.0",
+      "versionPattern": "^6000\\.",
+      "expectedVersion": "6000.4.6f1",
+      "domainReloadEnabled": false
+    }
+  ]
+}
