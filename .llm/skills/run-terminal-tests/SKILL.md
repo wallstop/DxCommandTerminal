@@ -223,3 +223,9 @@ field write is frame-coupled and flakes under session sequences
 - Static state leaks between tests (`Terminal.Shell`, registered parsers, control sets on
   `CommandArg`) - reset or isolate when a test mutates global state, see
   [custom-argument-parsing](../custom-argument-parsing/SKILL.md) for the mutable statics list.
+
+## Clean-project compatibility fixtures
+
+- Root default matrix and fixture paths at `tooling~/`; add a test that parses an empty argument list and loads those paths.
+- Name per-leg editor flags directly from the leg id, such as `--unity-2021`; test the exact flag named in missing-input errors.
+- Pass positive boolean environment values such as `DX_T13_DOMAIN_RELOAD_ENABLED=1`; test both boolean polarities against the Unity setting they describe.

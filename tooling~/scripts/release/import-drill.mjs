@@ -248,6 +248,7 @@ export function listArtifact(buffer) {
   }
   const model = {
     root,
+    packageIdentity: packageIdentity(assets, root),
     assets: assets.map((asset) => ({
       guid: asset.guid,
       pathname: asset.pathname,
@@ -258,6 +259,22 @@ export function listArtifact(buffer) {
   };
   model.scratchDependencies = scratchDependencies(model);
   return model;
+}
+
+function packageIdentity(assets, root) {
+  const packageAsset = assets.find((asset) => asset.pathname === `${root}/package.json`);
+  if (packageAsset === undefined || !packageAsset.hasAsset) {
+    return null;
+  }
+  try {
+    const source = JSON.parse(packageAsset.assetText);
+    if (typeof source.name !== "string" || typeof source.version !== "string") {
+      return null;
+    }
+    return { name: source.name, version: source.version };
+  } catch {
+    return null;
+  }
 }
 
 function commonRoot(pathnames) {
@@ -573,7 +590,7 @@ export function probeEditorVersion(unityPath, versionArgs = ["-version"]) {
   throw new Error(`<unity> -version printed no plausible version for ${unityPath}: ${stdout.trim().slice(0, 200)}`);
 }
 
-function runUnityProcess(unityPath, args, logPath, timeoutMs, extraEnv = {}) {
+export function runUnityProcess(unityPath, args, logPath, timeoutMs, extraEnv = {}) {
   return new Promise((resolve) => {
     const child = spawn(unityPath, args, {
       env: { ...process.env, ...extraEnv },
@@ -593,7 +610,9 @@ function runUnityProcess(unityPath, args, logPath, timeoutMs, extraEnv = {}) {
       settled = true;
       resolve(result);
     };
+    let timedOut = false;
     const timer = setTimeout(() => {
+      timedOut = true;
       child.kill();
       // SIGTERM can be ignored; make sure the editor dies even if it hangs.
       timers.add(
@@ -603,12 +622,11 @@ function runUnityProcess(unityPath, args, logPath, timeoutMs, extraEnv = {}) {
           }
         }, 10_000)
       );
-      finish({ timedOut: true, code: null, signal: null });
     }, timeoutMs);
     timers.add(timer);
     child.on("close", (code, signal) => {
       clearTimers();
-      finish({ timedOut: false, code, signal });
+      finish({ timedOut, code, signal });
     });
     child.on("error", (error) => {
       clearTimers();

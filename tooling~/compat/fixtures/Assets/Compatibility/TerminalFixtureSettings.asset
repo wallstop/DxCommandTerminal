@@ -1,0 +1,10 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_Script: {fileID: 11500000, guid: 64ed0627ec92248cebe13f4920c22271, type: 3}
+  m_Name: TerminalFixtureSettings
+  logBufferSize: 64
+  historyBufferSize: 32
+  inputCaret: '>'
+  resetStateOnInit: 0
