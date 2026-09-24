@@ -93,6 +93,7 @@ test("configure writes every client schema with the unity endpoint", () => {
       disabled: false,
       timeout: { catalog: 30000, execution: 30000 }
     });
+    assert.equal(opencode["mcp"]["unity-mcp"], undefined);
     assert.equal(opencode["mcp"]["servers"]["git"].type, "local");
     assert.deepEqual(opencode["mcp"]["servers"]["git"].command, [
       "mcp-server-git",
@@ -205,6 +206,7 @@ test("configure migrates opencode v1 settings without replacing explicit values"
     configure(options(repoRoot), ENDPOINT);
     const document = JSON.parse(fs.readFileSync(clientConfigPaths(repoRoot).openCode, "utf8"));
     assert.deepEqual(document["mcp"]["timeout"], { startup: 45000 });
+    assert.equal(document["mcp"]["custom"], undefined);
     assert.deepEqual(document["mcp"]["servers"]["custom"], {
       type: "local",
       command: ["custom-server"],

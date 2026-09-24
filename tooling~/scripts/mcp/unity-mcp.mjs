@@ -867,7 +867,10 @@ function prepareOpenCodeConfig(filePath, servers, removed = [], defaults = {}) {
       migrateOpenCodeServer(filePath, name, config)
     ])
   );
-  document.mcp = { ...mcp, servers: { ...migratedServers, ...servers } };
+  const retainedMcp = { ...mcp };
+  delete retainedMcp.servers;
+  for (const name of Object.keys(legacyServers)) delete retainedMcp[name];
+  document.mcp = { ...retainedMcp, servers: { ...migratedServers, ...servers } };
   for (const name of removed) delete document.mcp.servers[name];
   if (document.skills !== undefined) {
     document.skills = migrateOpenCodeSkills(filePath, document.skills);
