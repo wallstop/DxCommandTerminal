@@ -63,7 +63,7 @@ sudo** anywhere.
 | Base | `mcr.microsoft.com/devcontainers/dotnet:1-9.0-bookworm` + .NET 10 side-by-side (C# Dev Kit) |
 | Repo tooling | PowerShell (lint scripts), CSharpier 1.1.2, pre-commit, yamllint, git-lfs |
 | Node LTS | NodeSource LTS; user-global npm prefix is `~/.local` (no sudo, ever) |
-| Agent CLIs | `@anthropic-ai/claude-code`, `@openai/codex`, `opencode-ai`, `@nanocollective/nanocoder` (latest at build; refreshed on every start) |
+| Agent CLIs | `@anthropic-ai/claude-code`, `@openai/codex`, `@opencode/cli`, `@nanocollective/nanocoder` (latest at build; refreshed on every start) |
 | MCP servers | `mcp-server-git`, `mcp-server-fetch` (uv), `@z_ai/mcp-server` (vision), `@upstash/context7-mcp` (docs), `mcp-remote` (Z.AI↔Codex adapter), baked `@modelcontextprotocol/sdk` + `smol-toml` + `jsonc-parser` under `/opt/dxt-mcp` |
 
 Offline launches keep working: configure uses the baked dependencies, and the
@@ -120,11 +120,13 @@ The loader prints one `export KEY='value'` line per credential found
 
 `configure --offline` writes all seven client configs (Claude Code, Codex,
 OpenCode, Nanocoder, VS Code, Cursor, Copilot CLI) in one transaction with
-rollback, mode 0600. Generated configs are gitignored; the OpenCode config pins
-session `share` to `disabled` (existing explicit values are preserved) so
-transcripts never sync to a public share URL. After editing
-`.env.local`, run `npm run unity:mcp:configure -- --offline` and restart the
-agents' MCP connections.
+rollback, mode 0600. Generated configs are gitignored. The OpenCode v2 config
+uses native `mcp.servers` entries, enables Code Mode, and registers the shared
+`.llm/skills` catalog. It also converts existing v1 MCP and skill fields without
+replacing explicit values. Session `share` stays `disabled` so transcripts never
+sync to a public URL. After editing `.env.local`, run
+`npm run unity:mcp:configure -- --offline` and restart the agents' MCP
+connections.
 
 ## Alternate agent backends (`claude-zai` / `codex-zai` / `claude-openrouter` / `codex-openrouter`)
 
