@@ -84,16 +84,22 @@ test("configure writes every client schema with the unity endpoint", () => {
     const opencode = JSON.parse(
       fs.readFileSync(paths.openCode, "utf8").replace(/^\/\/.*$/gm, "")
     );
-    assert.deepEqual(opencode["mcp"]["unity-mcp"], {
+    assert.deepEqual(opencode["mcp"]["servers"]["unity-mcp"], {
       type: "remote",
       url,
       headers: { Authorization: `Bearer ${BEARER}` },
       oauth: false,
-      enabled: true,
-      timeout: 30000
+      codemode: true,
+      disabled: false,
+      timeout: { catalog: 30000, execution: 30000 }
     });
-    assert.equal(opencode["mcp"]["git"].type, "local");
-    assert.deepEqual(opencode["mcp"]["git"].command, ["mcp-server-git", "--repository", repoRoot]);
+    assert.equal(opencode["mcp"]["servers"]["git"].type, "local");
+    assert.deepEqual(opencode["mcp"]["servers"]["git"].command, [
+      "mcp-server-git",
+      "--repository",
+      repoRoot
+    ]);
+    assert.deepEqual(opencode["skills"], ["./.llm/skills"]);
     assert.equal(opencode["share"], "disabled", "session sharing must default to disabled");
 
     const copilot = JSON.parse(fs.readFileSync(paths.copilot, "utf8"));
@@ -176,14 +182,47 @@ test("configure preserves unrelated keys and servers in JSON clients", () => {
   }
 });
 
-test("configure defaults opencode share to disabled and preserves an explicit value", () => {
+test("configure migrates opencode v1 settings without replacing explicit values", () => {
   const repoRoot = tempRepo({
-    "opencode.jsonc": `{ "mcp": {}, "share": "auto" }`
+    "opencode.jsonc": JSON.stringify({
+      mcp: {
+        timeout: { startup: 45000 },
+        custom: { type: "local", command: ["custom-server"], enabled: true, timeout: 1000 },
+        servers: {
+          native: {
+            type: "remote",
+            url: "https://example.test/mcp",
+            disabled: true,
+            timeout: { execution: 2000 }
+          }
+        }
+      },
+      share: "auto",
+      skills: { paths: ["./custom-skills"], urls: ["https://example.test/skills/"] }
+    })
   });
   try {
     configure(options(repoRoot), ENDPOINT);
     const document = JSON.parse(fs.readFileSync(clientConfigPaths(repoRoot).openCode, "utf8"));
-    assert.equal(document["share"], "auto", "an explicit share setting must not be stomped");
+    assert.deepEqual(document["mcp"]["timeout"], { startup: 45000 });
+    assert.deepEqual(document["mcp"]["servers"]["custom"], {
+      type: "local",
+      command: ["custom-server"],
+      disabled: false,
+      timeout: { catalog: 1000, execution: 1000 }
+    });
+    assert.deepEqual(document["mcp"]["servers"]["native"], {
+      type: "remote",
+      url: "https://example.test/mcp",
+      disabled: true,
+      timeout: { execution: 2000 }
+    });
+    assert.ok(document["mcp"]["servers"]["unity-mcp"]);
+    assert.equal(document["share"], "auto");
+    assert.deepEqual(document["skills"], [
+      "./custom-skills",
+      "https://example.test/skills/"
+    ]);
   } finally {
     fs.rmSync(repoRoot, { recursive: true, force: true });
   }
@@ -193,17 +232,37 @@ test("configure defaults opencode share to disabled and preserves an explicit va
     configure(options(untouched), ENDPOINT);
     const document = JSON.parse(fs.readFileSync(clientConfigPaths(untouched).openCode, "utf8"));
     assert.equal(document["share"], "disabled", "absent share must default to disabled");
+    assert.deepEqual(document["skills"], ["./.llm/skills"]);
   } finally {
     fs.rmSync(untouched, { recursive: true, force: true });
   }
 });
 
-test("configure refuses to replace malformed client configs", () => {
-  const repoRoot = tempRepo({ ".mcp.json": "{ not json" });
-  try {
-    assert.throws(() => configure(options(repoRoot), ENDPOINT), /Invalid JSON/);
-  } finally {
-    fs.rmSync(repoRoot, { recursive: true, force: true });
+test("configure refuses to replace malformed client configs", (t) => {
+  const cases = [
+    ["Claude config", ".mcp.json", "{ not json", /Invalid JSON/],
+    [
+      "OpenCode MCP",
+      "opencode.jsonc",
+      '{"mcp":{"servers":[]}}',
+      /Expected mcp\.servers to be an object/
+    ],
+    [
+      "OpenCode skills",
+      "opencode.jsonc",
+      '{"skills":{"paths":"bad"}}',
+      /Expected skills\.paths and skills\.urls/
+    ]
+  ];
+  for (const [name, file, content, expected] of cases) {
+    t.test(name, () => {
+      const repoRoot = tempRepo({ [file]: content });
+      try {
+        assert.throws(() => configure(options(repoRoot), ENDPOINT), expected);
+      } finally {
+        fs.rmSync(repoRoot, { recursive: true, force: true });
+      }
+    });
   }
 });
 

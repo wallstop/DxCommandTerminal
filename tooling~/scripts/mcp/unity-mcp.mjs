@@ -817,6 +817,67 @@ export function prepareJsonServers(filePath, collection, servers, removed = [], 
   return `${JSON.stringify(document, null, 2)}\n`;
 }
 
+function migrateOpenCodeServer(filePath, name, config) {
+  if (!config || typeof config !== "object" || Array.isArray(config)) {
+    fail(`Expected OpenCode MCP server ${name} to be an object in ${filePath}`);
+  }
+  const { enabled, timeout, ...server } = config;
+  if (enabled !== undefined) server.disabled = !enabled;
+  if (typeof timeout === "number") {
+    server.timeout = { catalog: timeout, execution: timeout };
+  } else {
+    server.timeout = timeout;
+  }
+  if (server.timeout === undefined) delete server.timeout;
+  return server;
+}
+
+function migrateOpenCodeSkills(filePath, skills) {
+  if (Array.isArray(skills)) return skills;
+  if (!skills || typeof skills !== "object") {
+    fail(`Expected skills to be an array or object in ${filePath}`);
+  }
+  const { paths = [], urls = [] } = skills;
+  if (!Array.isArray(paths) || !Array.isArray(urls)) {
+    fail(`Expected skills.paths and skills.urls to be arrays in ${filePath}`);
+  }
+  return [...paths, ...urls];
+}
+
+function prepareOpenCodeConfig(filePath, servers, removed = [], defaults = {}) {
+  const document = readJsonObject(filePath);
+  const mcp = document.mcp ?? {};
+  if (!mcp || typeof mcp !== "object" || Array.isArray(mcp)) {
+    fail(`Expected mcp to be an object in ${filePath}`);
+  }
+  const nestedServers = mcp.servers;
+  if (
+    nestedServers !== undefined &&
+    (!nestedServers || typeof nestedServers !== "object" || Array.isArray(nestedServers))
+  ) {
+    fail(`Expected mcp.servers to be an object in ${filePath}`);
+  }
+  const legacyServers = Object.fromEntries(
+    Object.entries(mcp).filter(([name]) => name !== "servers" && name !== "timeout")
+  );
+  const existingServers = { ...legacyServers, ...(nestedServers ?? {}) };
+  const migratedServers = Object.fromEntries(
+    Object.entries(existingServers).map(([name, config]) => [
+      name,
+      migrateOpenCodeServer(filePath, name, config)
+    ])
+  );
+  document.mcp = { ...mcp, servers: { ...migratedServers, ...servers } };
+  for (const name of removed) delete document.mcp.servers[name];
+  if (document.skills !== undefined) {
+    document.skills = migrateOpenCodeSkills(filePath, document.skills);
+  }
+  for (const [key, value] of Object.entries(defaults)) {
+    if (document[key] === undefined) document[key] = value;
+  }
+  return `${JSON.stringify(document, null, 2)}\n`;
+}
+
 export function mergeCodexToml(raw, url, bearerToken, serverName = "unity-mcp") {
   let document;
   try {
@@ -911,7 +972,11 @@ function clientServers(kind, options, url) {
         config = url
           ? { type: "remote", url, ...(headers ? { headers, oauth: false } : {}) }
           : { type: "local", command: [command, ...args], ...(env ? { environment: env } : {}) };
-        Object.assign(config, { enabled: true, timeout: 30000 });
+        Object.assign(config, {
+          codemode: true,
+          disabled: false,
+          timeout: { catalog: 30000, execution: 30000 }
+        });
       } else {
         config = url
           ? { url, ...(headers ? { headers } : {}) }
@@ -940,11 +1005,12 @@ export function configure(inputOptions, endpoint, beforeCommit) {
       }
       return [file, raw];
     }
-    const collection = kind === "vscode" ? "servers" : kind === "openCode" ? "mcp" : "mcpServers";
-    // OpenCode's share feature uploads full sessions to a public URL; the
-    // checkout pins it off unless the user set an explicit value themselves.
-    const defaults = kind === "openCode" ? { share: "disabled" } : {};
-    return [file, prepareJsonServers(file, collection, servers, removed, defaults)];
+    if (kind === "openCode") {
+      const defaults = { share: "disabled", skills: ["./.llm/skills"] };
+      return [file, prepareOpenCodeConfig(file, servers, removed, defaults)];
+    }
+    const collection = kind === "vscode" ? "servers" : "mcpServers";
+    return [file, prepareJsonServers(file, collection, servers, removed)];
   });
   const written = transactionalWrite(writes, beforeCommit);
   for (const filePath of Object.values(paths)) fs.chmodSync(filePath, 0o600);
