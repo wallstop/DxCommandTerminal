@@ -817,11 +817,26 @@ export function prepareJsonServers(filePath, collection, servers, removed = [], 
   return `${JSON.stringify(document, null, 2)}\n`;
 }
 
+function migrateOpenCodeOAuth(oauth) {
+  if (!oauth || typeof oauth !== "object" || Array.isArray(oauth)) return oauth;
+  const migrated = { ...oauth };
+  for (const [legacy, native] of [
+    ["clientId", "client_id"],
+    ["clientSecret", "client_secret"],
+    ["callbackPort", "callback_port"],
+    ["redirectUri", "redirect_uri"]
+  ]) {
+    if (legacy in migrated && !(native in migrated)) migrated[native] = migrated[legacy];
+    delete migrated[legacy];
+  }
+  return migrated;
+}
+
 function migrateOpenCodeServer(filePath, name, config) {
   if (!config || typeof config !== "object" || Array.isArray(config)) {
     fail(`Expected OpenCode MCP server ${name} to be an object in ${filePath}`);
   }
-  const { enabled, timeout, ...server } = config;
+  const { enabled, timeout, oauth, ...server } = config;
   if (enabled !== undefined) server.disabled = !enabled;
   if (typeof timeout === "number") {
     server.timeout = { catalog: timeout, execution: timeout };
@@ -829,28 +844,66 @@ function migrateOpenCodeServer(filePath, name, config) {
     server.timeout = timeout;
   }
   if (server.timeout === undefined) delete server.timeout;
+  server.oauth = migrateOpenCodeOAuth(oauth);
+  if (server.oauth === undefined) delete server.oauth;
   return server;
 }
 
+function isOpenCodeServerConfig(config) {
+  if (config === null || typeof config !== "object" || Array.isArray(config)) return false;
+  if (config.type === "local") return Array.isArray(config.command);
+  return config.type === "remote" && typeof config.url === "string";
+}
+
+const OPEN_CODE_SKILLS_PATH = "./.llm/skills";
+
 function migrateOpenCodeSkills(filePath, skills) {
-  if (Array.isArray(skills)) return skills;
-  if (!skills || typeof skills !== "object") {
-    fail(`Expected skills to be an array or object in ${filePath}`);
+  let entries;
+  if (Array.isArray(skills)) {
+    entries = skills;
+  } else {
+    if (!skills || typeof skills !== "object") {
+      fail(`Expected skills to be an array or object in ${filePath}`);
+    }
+    const { paths = [], urls = [] } = skills;
+    if (!Array.isArray(paths) || !Array.isArray(urls)) {
+      fail(`Expected skills.paths and skills.urls to be arrays in ${filePath}`);
+    }
+    entries = [...paths, ...urls];
   }
-  const { paths = [], urls = [] } = skills;
-  if (!Array.isArray(paths) || !Array.isArray(urls)) {
-    fail(`Expected skills.paths and skills.urls to be arrays in ${filePath}`);
+  return [...new Set([...entries, OPEN_CODE_SKILLS_PATH])];
+}
+
+function migrateOpenCodeMcpTimeout(document, mcp) {
+  const experimental = document.experimental;
+  if (
+    !experimental ||
+    typeof experimental !== "object" ||
+    Array.isArray(experimental) ||
+    typeof experimental.mcp_timeout !== "number"
+  ) {
+    return;
   }
-  return [...paths, ...urls];
+  if (!Object.hasOwn(mcp, "timeout")) {
+    mcp.timeout = { catalog: experimental.mcp_timeout, execution: experimental.mcp_timeout };
+  }
+  const migratedExperimental = { ...experimental };
+  delete migratedExperimental.mcp_timeout;
+  if (Object.keys(migratedExperimental).length === 0) {
+    delete document.experimental;
+  } else {
+    document.experimental = migratedExperimental;
+  }
 }
 
 function prepareOpenCodeConfig(filePath, servers, removed = [], defaults = {}) {
   const document = readJsonObject(filePath);
-  const mcp = document.mcp ?? {};
+  const mcp = document.mcp === undefined ? {} : document.mcp;
   if (!mcp || typeof mcp !== "object" || Array.isArray(mcp)) {
     fail(`Expected mcp to be an object in ${filePath}`);
   }
-  const nestedServers = mcp.servers;
+  const serversIsNativeMap = mcp.servers !== undefined && !isOpenCodeServerConfig(mcp.servers);
+  const nestedServers = serversIsNativeMap ? mcp.servers : undefined;
   if (
     nestedServers !== undefined &&
     (!nestedServers || typeof nestedServers !== "object" || Array.isArray(nestedServers))
@@ -858,7 +911,11 @@ function prepareOpenCodeConfig(filePath, servers, removed = [], defaults = {}) {
     fail(`Expected mcp.servers to be an object in ${filePath}`);
   }
   const legacyServers = Object.fromEntries(
-    Object.entries(mcp).filter(([name]) => name !== "servers" && name !== "timeout")
+    Object.entries(mcp).filter(
+      ([name, config]) =>
+        (name !== "servers" || !serversIsNativeMap) &&
+        (name !== "timeout" || isOpenCodeServerConfig(config))
+    )
   );
   const existingServers = { ...legacyServers, ...(nestedServers ?? {}) };
   const migratedServers = Object.fromEntries(
@@ -870,6 +927,7 @@ function prepareOpenCodeConfig(filePath, servers, removed = [], defaults = {}) {
   const retainedMcp = { ...mcp };
   delete retainedMcp.servers;
   for (const name of Object.keys(legacyServers)) delete retainedMcp[name];
+  migrateOpenCodeMcpTimeout(document, retainedMcp);
   document.mcp = { ...retainedMcp, servers: { ...migratedServers, ...servers } };
   for (const name of removed) delete document.mcp.servers[name];
   if (document.skills !== undefined) {
@@ -1009,7 +1067,7 @@ export function configure(inputOptions, endpoint, beforeCommit) {
       return [file, raw];
     }
     if (kind === "openCode") {
-      const defaults = { share: "disabled", skills: ["./.llm/skills"] };
+      const defaults = { share: "disabled", skills: [OPEN_CODE_SKILLS_PATH] };
       return [file, prepareOpenCodeConfig(file, servers, removed, defaults)];
     }
     const collection = kind === "vscode" ? "servers" : "mcpServers";

@@ -189,6 +189,18 @@ test("configure migrates opencode v1 settings without replacing explicit values"
       mcp: {
         timeout: { startup: 45000 },
         custom: { type: "local", command: ["custom-server"], enabled: true, timeout: 1000 },
+        "oauth-legacy": {
+          type: "remote",
+          url: "https://oauth.example/mcp",
+          enabled: true,
+          oauth: {
+            clientId: "legacy-client",
+            clientSecret: "legacy-secret",
+            callbackPort: 19875,
+            redirectUri: "http://127.0.0.1:19875/callback",
+            scope: "tools:read"
+          }
+        },
         servers: {
           native: {
             type: "remote",
@@ -213,6 +225,18 @@ test("configure migrates opencode v1 settings without replacing explicit values"
       disabled: false,
       timeout: { catalog: 1000, execution: 1000 }
     });
+    assert.deepEqual(document["mcp"]["servers"]["oauth-legacy"], {
+      type: "remote",
+      url: "https://oauth.example/mcp",
+      disabled: false,
+      oauth: {
+        client_id: "legacy-client",
+        client_secret: "legacy-secret",
+        callback_port: 19875,
+        redirect_uri: "http://127.0.0.1:19875/callback",
+        scope: "tools:read"
+      }
+    });
     assert.deepEqual(document["mcp"]["servers"]["native"], {
       type: "remote",
       url: "https://example.test/mcp",
@@ -223,10 +247,57 @@ test("configure migrates opencode v1 settings without replacing explicit values"
     assert.equal(document["share"], "auto");
     assert.deepEqual(document["skills"], [
       "./custom-skills",
-      "https://example.test/skills/"
+      "https://example.test/skills/",
+      "./.llm/skills"
     ]);
   } finally {
     fs.rmSync(repoRoot, { recursive: true, force: true });
+  }
+
+  const reservedServerCases = [
+    {
+      name: "servers",
+      config: {
+        type: "local",
+        command: ["reserved-local"],
+        enabled: true
+      },
+      expected: {
+        type: "local",
+        command: ["reserved-local"],
+        disabled: false
+      }
+    },
+    {
+      name: "timeout",
+      config: {
+        type: "remote",
+        url: "https://reserved.example/mcp",
+        enabled: false
+      },
+      expected: {
+        type: "remote",
+        url: "https://reserved.example/mcp",
+        disabled: true
+      }
+    }
+  ];
+  for (const { name, config, expected } of reservedServerCases) {
+    const repoRoot = tempRepo({
+      "opencode.jsonc": JSON.stringify({
+        mcp: { [name]: config },
+        experimental: { mcp_timeout: 5000 }
+      })
+    });
+    try {
+      configure(options(repoRoot), ENDPOINT);
+      const document = JSON.parse(fs.readFileSync(clientConfigPaths(repoRoot).openCode, "utf8"));
+      assert.deepEqual(document["mcp"]["timeout"], { catalog: 5000, execution: 5000 });
+      assert.equal(document["experimental"], undefined);
+      assert.deepEqual(document["mcp"]["servers"][name], expected);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
   }
 
   const untouched = tempRepo();
@@ -240,6 +311,45 @@ test("configure migrates opencode v1 settings without replacing explicit values"
   }
 });
 
+test("configure migrates v1 MCP timeout without replacing native timeout", (t) => {
+  const cases = [
+    {
+      name: "migrates timeout and removes empty experimental",
+      input: { experimental: { mcp_timeout: 30000 } },
+      expectedTimeout: { catalog: 30000, execution: 30000 },
+      expectedExperimental: undefined
+    },
+    {
+      name: "preserves other experimental fields",
+      input: { experimental: { mcp_timeout: 30000, preserve: true } },
+      expectedTimeout: { catalog: 30000, execution: 30000 },
+      expectedExperimental: { preserve: true }
+    },
+    {
+      name: "native timeout wins",
+      input: {
+        mcp: { timeout: { catalog: 1000, execution: 2000 } },
+        experimental: { mcp_timeout: 30000, preserve: true }
+      },
+      expectedTimeout: { catalog: 1000, execution: 2000 },
+      expectedExperimental: { preserve: true }
+    }
+  ];
+  for (const { name, input, expectedTimeout, expectedExperimental } of cases) {
+    t.test(name, () => {
+      const repoRoot = tempRepo({ "opencode.jsonc": JSON.stringify(input) });
+      try {
+        configure(options(repoRoot), ENDPOINT);
+        const document = JSON.parse(fs.readFileSync(clientConfigPaths(repoRoot).openCode, "utf8"));
+        assert.deepEqual(document["mcp"]["timeout"], expectedTimeout);
+        assert.deepEqual(document["experimental"], expectedExperimental);
+      } finally {
+        fs.rmSync(repoRoot, { recursive: true, force: true });
+      }
+    });
+  }
+});
+
 test("configure refuses to replace malformed client configs", (t) => {
   const cases = [
     ["Claude config", ".mcp.json", "{ not json", /Invalid JSON/],
@@ -248,6 +358,18 @@ test("configure refuses to replace malformed client configs", (t) => {
       "opencode.jsonc",
       '{"mcp":{"servers":[]}}',
       /Expected mcp\.servers to be an object/
+    ],
+    [
+      "OpenCode MCP null",
+      "opencode.jsonc",
+      '{"mcp":null}',
+      /Expected mcp to be an object/
+    ],
+    [
+      "OpenCode MCP array",
+      "opencode.jsonc",
+      '{"mcp":[]}',
+      /Expected mcp to be an object/
     ],
     [
       "OpenCode skills",
