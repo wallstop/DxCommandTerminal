@@ -21,6 +21,7 @@ const { buildChecks, parseSkip, runChecks, main } = await import(
 const {
   cacheKeyForCheck,
   cachePathForCheck,
+  clearCacheForCheck,
   dependencyState,
   dotnetToolState,
   isCacheableCheck,
@@ -700,11 +701,32 @@ test("cache storage rejects malformed entries without failing writes", () => {
       assert.equal(readCacheEntry(check, key), false);
       assert.equal(writeCacheEntry(check, key), true);
       assert.equal(fs.lstatSync(entryPath).isFile(), true);
-      assert.equal(readCacheEntry(check, key), true);
+      assert.equal(JSON.parse(fs.readFileSync(entryPath, "utf8")).key, key);
     }
   } finally {
     if (originalCi === undefined) delete process.env.CI;
     else process.env.CI = originalCi;
+    fs.rmSync(entryPath, { force: true });
+    fs.rmSync(targetPath, { force: true });
+  }
+});
+
+test("cache cleanup removes an entry link without following its target", { skip: process.platform === "win32" }, () => {
+  const check = {
+    name: `cache-cleanup-${process.pid}-${Date.now()}`,
+    command: "node cleanup.mjs"
+  };
+  const key = "cleanup-key";
+  const entryPath = cachePathForCheck(check, key);
+  const targetPath = `${entryPath}.target`;
+  try {
+    fs.mkdirSync(path.dirname(entryPath), { recursive: true });
+    fs.writeFileSync(targetPath, "keep");
+    fs.symlinkSync(targetPath, entryPath);
+    clearCacheForCheck(check, key);
+    assert.equal(fs.existsSync(entryPath), false);
+    assert.equal(fs.existsSync(targetPath), true);
+  } finally {
     fs.rmSync(entryPath, { force: true });
     fs.rmSync(targetPath, { force: true });
   }
