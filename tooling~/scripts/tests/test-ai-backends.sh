@@ -106,7 +106,10 @@ assert_contains "${out}" '^ZAI_API_KEY=test-key-codex$' "codex-zai exports ZAI_A
 
 echo "== codex-zai: Z_AI_API_KEY alias and reasoning override =="
 out="${WORK}/codex-alias.txt"
-Z_AI_API_KEY="alias-key" CODEX_ZAI_REASONING_EFFORT=low record "${out}" codex-zai
+(
+    unset ZAI_API_KEY
+    Z_AI_API_KEY="alias-key" CODEX_ZAI_REASONING_EFFORT=low record "${out}" codex-zai
+)
 assert_contains "${out}" '^ZAI_API_KEY=alias-key$' "Z_AI_API_KEY alias is honored"
 assert_contains "${out}" 'model_reasoning_effort="low"' "reasoning effort override applied"
 
@@ -427,7 +430,7 @@ printf 'ZAI_API_KEY=zai-file-key\nGITHUB_PERSONAL_ACCESS_TOKEN="gh-token-file"\n
     > "${WORK}/zai-envroot/.env.local"
 out="${WORK}/env-exports.txt"
 (
-    unset ZAI_API_KEY Z_AI_API_KEY OPENROUTER_API_KEY \
+    unset ZAI_API_KEY Z_AI_API_KEY ZHIPU_API_KEY OPENROUTER_API_KEY \
         GITHUB_TOKEN GH_TOKEN GITHUB_PERSONAL_ACCESS_TOKEN GITHUB_PAT \
         UNITY_MCP_BEARER_TOKEN UNITY_PROJECT_PATH
     export AI_BACKENDS_REPO_ROOT="${WORK}/zai-envroot"
@@ -445,7 +448,7 @@ assert_contains "${out}" "^export UNITY_PROJECT_PATH='/unity/path'\$" "env expor
 echo "== env: unset keys are omitted and output evaluates cleanly =="
 out="${WORK}/env-eval.txt"
 (
-    unset ZAI_API_KEY Z_AI_API_KEY OPENROUTER_API_KEY \
+    unset ZAI_API_KEY Z_AI_API_KEY ZHIPU_API_KEY OPENROUTER_API_KEY \
         GITHUB_TOKEN GH_TOKEN GITHUB_PERSONAL_ACCESS_TOKEN GITHUB_PAT \
         UNITY_MCP_BEARER_TOKEN UNITY_PROJECT_PATH
     export AI_BACKENDS_REPO_ROOT="${WORK}/empty-root"
