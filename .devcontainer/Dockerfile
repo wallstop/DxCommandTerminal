@@ -104,6 +104,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 # refresh moves them to their configured npm lines; these copies keep offline
 # launches working.
 # ------------------------------------------------------------------------------
+COPY .devcontainer/verify-opencode.sh /tmp/verify-opencode.sh
 RUN npm install --global --prefix /usr/local \
         @openai/codex@latest \
         @opencode/cli@2 \
@@ -117,8 +118,7 @@ RUN npm install --global --prefix /usr/local \
         --no-audit \
     && claude --version \
     && codex --version \
-    && opencode --version | grep -Eq '(^|[[:space:]])2\.' \
-    && test "$(opencode2 --version)" = "$(opencode --version)" \
+    && bash /tmp/verify-opencode.sh \
     && nanocoder --version
 
 # MCP configuration must work before the workspace volume has dependencies.
@@ -207,8 +207,7 @@ RUN echo "=== Environment Verification ===" \
     && echo "--- Node tooling ---" && node --version && npm --version \
     && echo "--- Agent CLIs ---" \
     && claude --version && codex --version \
-    && opencode --version | grep -Eq '(^|[[:space:]])2\.' \
-    && test "$(opencode2 --version)" = "$(opencode --version)" \
+    && bash /tmp/verify-opencode.sh \
     && nanocoder --version \
     && echo "--- MCP executables ---" \
     && command -v mcp-server-git && command -v mcp-server-fetch \
@@ -224,5 +223,5 @@ RUN echo "=== Environment Verification ===" \
     && rg --version | head -n1 && jq --version && fd --version && bat --version \
     && echo "=== Verification Complete ==="
 
-WORKDIR /workspaces
+WORKDIR /workspaces/package
 USER vscode

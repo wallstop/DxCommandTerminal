@@ -70,6 +70,14 @@ for name in codex claude; do
     printf '%s\n' "\$@"
     echo "--- env ---"
     env | LC_ALL=C sort
+    if [ "\${FAKE_CLI_RUN_CHILD:-0}" = "1" ]; then
+        echo "--- child env ---"
+        if [ "\${FAKE_CLI_SCRUB_ZAI:-0}" = "1" ]; then
+            env -u ZAI_API_KEY -u Z_AI_API_KEY bash -c 'env | LC_ALL=C sort'
+        else
+            bash -c 'env | LC_ALL=C sort'
+        fi
+    fi
 } >> "\${FAKE_CLI_OUT:-/dev/stdout}"
 exit 0
 FAKE
@@ -103,6 +111,8 @@ assert_contains "${out}" '^devcontainer-zai$' "codex-zai uses the zai profile"
 assert_contains "${out}" 'model_provider="ZAI"' "codex-zai pins the ZAI provider"
 assert_contains "${out}" 'model_reasoning_effort="max"' "codex-zai defaults reasoning to max"
 assert_contains "${out}" '^ZAI_API_KEY=test-key-codex$' "codex-zai exports ZAI_API_KEY"
+assert_not_contains "${out}" '^Z_AI_API_KEY=' "codex-zai removes the Z.AI alias"
+assert_not_contains "${out}" '^ZHIPU_API_KEY=' "codex-zai removes the native OpenCode mirror"
 
 echo "== codex-zai: Z_AI_API_KEY alias and reasoning override =="
 out="${WORK}/codex-alias.txt"
@@ -125,6 +135,16 @@ out="${WORK}/codex-zai-envfile.txt"
 assert_contains "${out}" '^ZAI_API_KEY=zai-key-from-envfile$' \
     ".env.local Z_AI_API_KEY alias is resolved (quotes stripped)"
 
+printf '  Z_AI_API_KEY = "zai-spaced-key"  \n' > "${WORK}/zai-envroot/.env.local"
+out="${WORK}/codex-zai-spaced-envfile.txt"
+(
+    unset ZAI_API_KEY Z_AI_API_KEY
+    export AI_BACKENDS_REPO_ROOT="${WORK}/zai-envroot"
+    record "${out}" codex-zai
+)
+assert_contains "${out}" '^ZAI_API_KEY=zai-spaced-key$' \
+    ".env.local whitespace around the assignment is accepted"
+
 printf 'ZAI_API_KEY=zai-file-key\n' > "${WORK}/zai-envroot/.env.local"
 out="${WORK}/codex-zai-envfile2.txt"
 (
@@ -133,6 +153,17 @@ out="${WORK}/codex-zai-envfile2.txt"
     record "${out}" codex-zai
 )
 assert_contains "${out}" '^ZAI_API_KEY=zai-file-key$' ".env.local ZAI_API_KEY is resolved"
+
+printf '\357\273\277ZAI_API_KEY=zai-bom-key\n' > "${WORK}/zai-envroot/.env.local"
+out="${WORK}/codex-zai-bom-envfile.txt"
+(
+    unset ZAI_API_KEY Z_AI_API_KEY
+    export AI_BACKENDS_REPO_ROOT="${WORK}/zai-envroot"
+    record "${out}" codex-zai
+)
+assert_contains "${out}" '^ZAI_API_KEY=zai-bom-key$' \
+    ".env.local UTF-8 BOM is ignored for the first key"
+printf 'ZAI_API_KEY=zai-file-key\n' > "${WORK}/zai-envroot/.env.local"
 
 echo "== codex-zai: environment beats .env.local; empty env vars are ignored =="
 out="${WORK}/codex-zai-precedence.txt"
@@ -210,7 +241,32 @@ assert_not_contains "${out}" '^CLAUDE_CODE_USE_BEDROCK=' "Bedrock selector is re
 assert_not_contains "${out}" '^CLAUDE_CODE_USE_VERTEX=' "Vertex selector is removed"
 assert_not_contains "${out}" '^CLAUDE_CODE_USE_GATEWAY=' "Gateway selector is removed"
 assert_not_contains "${out}" '^ZAI_API_KEY=' "ZAI key is scrubbed from the claude process"
+assert_not_contains "${out}" '^Z_AI_API_KEY=' "ZAI alias is scrubbed from the claude process"
+assert_not_contains "${out}" '^ZHIPU_API_KEY=' "Z.AI mirror is scrubbed from the claude process"
 assert_contains "${out}" '^--dangerously-skip-permissions$' "extra arguments are forwarded"
+
+echo "== scrubbed launchers: BASH_ENV cannot restore provider keys =="
+scrub_root="${WORK}/scrub-root"
+mkdir -p "${scrub_root}"
+printf 'ZAI_API_KEY=zai-scrub-key\n' > "${scrub_root}/.env.local"
+out="${WORK}/codex-scrub-env.txt"
+(
+    unset ZAI_API_KEY Z_AI_API_KEY
+    export AI_BACKENDS_REPO_ROOT="${scrub_root}"
+    export DXT_WORKSPACE_ROOT="${scrub_root}"
+    export BASH_ENV="${SCRIPT_DIR}/../../../.devcontainer/env-autoload.sh"
+    export FAKE_CLI_RUN_CHILD=1
+    export FAKE_CLI_SCRUB_ZAI=1
+    FAKE_CLI_OUT="${out}" PATH="${SANDBOX_PATH}" CODEX_HOME="${WORK}/codex-home" \
+        "${BACKENDS}" codex-zai >/dev/null 2>&1
+)
+assert_contains "${out}" '^ZAI_API_KEY=zai-scrub-key$' "codex parent receives the file key"
+assert_contains "${out}" '^DXT_ENV_AUTOLOAD_DISABLED=1$' "codex disables shell autoload"
+child_out="${WORK}/codex-scrub-child.txt"
+awk '/^--- child env ---$/{capture=1; next} capture{print}' "${out}" > "${child_out}"
+assert_not_contains "${child_out}" '^ZAI_API_KEY=' "codex child did not restore the Z.AI key"
+assert_contains "${child_out}" '^DXT_ENV_AUTOLOAD_DISABLED=1$' "codex child keeps autoload disabled"
+assert_contains "${child_out}" '^BASH_ENV=/dev/null$' "codex child uses a no-op BASH_ENV"
 
 echo "== claude-zai: .env.local fallback =="
 out="${WORK}/claude-zai-envfile.txt"
@@ -232,6 +288,11 @@ PATH="${SANDBOX_PATH}" CODEX_HOME="${WORK}/codex-home" \
     ZAI_API_KEY="k2" "${BACKENDS}" claude-zai >>"${out}" 2>&1
 assert_contains "${out}" '"sandbox":{"enabled":false,"enableWeakerNestedSandbox":true}' \
     "container mode passes the weaker-sandbox settings"
+
+echo "== scrubbed launchers: every provider disables shell autoload =="
+[[ "$(grep -c 'prepare_scrubbed_agent_environment' "${BACKENDS}")" -eq 5 ]] \
+    && ok "all provider launchers call the scrub helper" \
+    || bad "a provider launcher can restore BASH_ENV credentials"
 
 echo "== install: launchers and profile files =="
 bin_dir="${WORK}/launchers"
@@ -491,6 +552,16 @@ assert_contains "${out}" '^OPENROUTER_API_KEY=or-file-key$' "autoload exports th
 assert_contains "${out}" '^ZHIPU_API_KEY=zai-file-key$' "autoload mirrors the Z.AI key for native opencode"
 assert_not_contains "${out}" '^DXT_WORKSPACE_ROOT=' "autoload unsets its own plumbing variable"
 
+out="${WORK}/autoload-disabled.txt"
+(
+    unset ZAI_API_KEY Z_AI_API_KEY ZHIPU_API_KEY OPENROUTER_API_KEY \
+        GITHUB_TOKEN GH_TOKEN GITHUB_PERSONAL_ACCESS_TOKEN GITHUB_PAT \
+        UNITY_MCP_BEARER_TOKEN UNITY_PROJECT_PATH
+    DXT_ENV_AUTOLOAD_DISABLED=1 DXT_WORKSPACE_ROOT="${WORK}/autoload-root" \
+        bash -c '. "$1"; printf "%s\\n" "${ZAI_API_KEY-UNSET}"' _ "${AUTOLOAD}" >"${out}" 2>&1
+)
+assert_contains "${out}" '^UNSET$' "disabled autoload does not import credentials"
+
 echo "== env-autoload: environment precedence and safe no-op =="
 out="${WORK}/autoload-precedence.txt"
 (
@@ -511,12 +582,22 @@ assert_contains "${out}" '^exit=0 zai=UNSET$' "autoload is a silent no-op withou
 echo "== post-create: installs the autoload rc block idempotently =="
 out="${WORK}/pc-home"
 mkdir -p "${out}/.config"
-# The devcontainer image ships .bashrc and .profile; ensure_env_local_autoload
-# skips missing rc files (same contract as ensure_path_line).
-touch "${out}/.bashrc" "${out}/.profile"
+# Seed the old block shape to prove reused containers migrate their path.
+old_root="${WORK}/old-workspace"
+for rc_file in "${out}/.bashrc" "${out}/.profile"; do
+    cat >"${rc_file}" <<EOF
+# >>> dxcommandterminal .env.local autoload >>>
+DXT_WORKSPACE_ROOT='${old_root}'
+if [ -f '${old_root}/.devcontainer/env-autoload.sh' ]; then
+    . '${old_root}/.devcontainer/env-autoload.sh'
+fi
+# <<< dxcommandterminal .env.local autoload <<<
+EOF
+done
 (
     # Sourcing post-create.sh only defines functions and enables -euo pipefail
     # (main is guarded); relax the flags for the assertions below.
+    # shellcheck disable=SC1091
     . "${SCRIPT_DIR}/../../../.devcontainer/post-create.sh"
     set +e +u
     HOME="${WORK}/pc-home"; export HOME
@@ -533,6 +614,8 @@ assert "bashrc block pins the workspace root" \
     grep -Fq "DXT_WORKSPACE_ROOT='${WORK}/autoload-root'" "${WORK}/pc-home/.bashrc"
 assert "bashrc block guards the snippet path" \
     grep -Fq "[ -f '${WORK}/autoload-root/.devcontainer/env-autoload.sh' ]" "${WORK}/pc-home/.bashrc"
+assert_not_contains "${WORK}/pc-home/.bashrc" "${old_root}" "bashrc drops the old workspace path"
+assert_not_contains "${WORK}/pc-home/.profile" "${old_root}" "profile drops the old workspace path"
 
 echo ""
 echo "ai-backends: ${PASS} passed, ${FAIL} failed"

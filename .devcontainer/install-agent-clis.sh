@@ -69,13 +69,20 @@ command_version() {
     grep -Eo '[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?' <<< "${output}" | head -n 1
 }
 
+resolve_latest_version() {
+    local package_spec="$1"
+    timeout 20 npm view "${package_spec}" version --json 2>/dev/null \
+        | jq -r 'if type == "array" then max_by((split(".")[0:3] | map(tonumber? // 0))) else . end' \
+        | tr -d '[:space:]' || true
+}
+
 failures=0
 for index in "${!PACKAGES[@]}"; do
     package_spec="${PACKAGES[$index]}"
     package_name="${package_spec%@*}"
     command_name="${COMMANDS[$index]}"
     installed="$(command_version "${command_name}" || true)"
-    latest="$(timeout 20 npm view "${package_spec}" version 2>/dev/null | sort -V | tail -n 1 | tr -d '[:space:]' || true)"
+    latest="$(resolve_latest_version "${package_spec}")"
 
     if [[ -z "${latest}" ]]; then
         if command -v "${command_name}" >/dev/null 2>&1; then
@@ -124,7 +131,8 @@ opencode_version="$(command_version opencode || true)"
 if [[ "${opencode_version}" != 2.* ]]; then
     warn "OpenCode v2 is required; found ${opencode_version:-missing}."
     ((failures += 1))
-elif [[ "$(command_version opencode2 || true)" != "${opencode_version}" ]]; then
+elif command -v opencode2 >/dev/null 2>&1 \
+    && [[ "$(command_version opencode2 || true)" != "${opencode_version}" ]]; then
     warn "opencode2 does not match opencode ${opencode_version}."
     ((failures += 1))
 fi

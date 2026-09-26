@@ -116,6 +116,15 @@ jobs:
           bash -n .devcontainer/install-agent-clis.sh
           bash tooling~/scripts/tests/test-ai-backends.sh
 
+      - name: Test devcontainer contract
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          bash -n .devcontainer/verify-opencode.sh \
+            .devcontainer/install-env-autoload.sh \
+            .devcontainer/post-start.sh \
+            .devcontainer/post-create.sh
+          bash tooling~/scripts/tests/test-devcontainer.sh
+
       - name: Check capture baselines
         # T11 Unity-free integrity gate: baseline schema, scenario coverage,
         # decodability, and provenance (never Unity rendering).
