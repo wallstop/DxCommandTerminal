@@ -101,23 +101,24 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 
 # ------------------------------------------------------------------------------
 # Agent CLIs + MCP adapters baked into the image. The user-scoped lifecycle
-# refresh moves them to npm's latest tags; these copies keep offline launches
-# working.
+# refresh moves them to their configured npm lines; these copies keep offline
+# launches working.
 # ------------------------------------------------------------------------------
+COPY .devcontainer/verify-opencode.sh /tmp/verify-opencode.sh
 RUN npm install --global --prefix /usr/local \
         @openai/codex@latest \
-        opencode-ai@latest \
+        @opencode/cli@2 \
         @nanocollective/nanocoder@latest \
         @anthropic-ai/claude-code@latest \
         @z_ai/mcp-server@latest \
         @upstash/context7-mcp@latest \
         mcp-remote@latest \
-        --allow-scripts=opencode-ai,@anthropic-ai/claude-code \
+        --allow-scripts=@opencode/cli,@anthropic-ai/claude-code \
         --no-fund \
         --no-audit \
     && claude --version \
     && codex --version \
-    && opencode --version \
+    && bash /tmp/verify-opencode.sh \
     && nanocoder --version
 
 # MCP configuration must work before the workspace volume has dependencies.
@@ -205,7 +206,9 @@ RUN echo "=== Environment Verification ===" \
     && echo "--- .NET SDKs ---" && dotnet --list-sdks \
     && echo "--- Node tooling ---" && node --version && npm --version \
     && echo "--- Agent CLIs ---" \
-    && claude --version && codex --version && opencode --version && nanocoder --version \
+    && claude --version && codex --version \
+    && bash /tmp/verify-opencode.sh \
+    && nanocoder --version \
     && echo "--- MCP executables ---" \
     && command -v mcp-server-git && command -v mcp-server-fetch \
     && command -v zai-mcp-server && command -v mcp-remote \
@@ -220,5 +223,5 @@ RUN echo "=== Environment Verification ===" \
     && rg --version | head -n1 && jq --version && fd --version && bat --version \
     && echo "=== Verification Complete ==="
 
-WORKDIR /workspaces
+WORKDIR /workspaces/package
 USER vscode

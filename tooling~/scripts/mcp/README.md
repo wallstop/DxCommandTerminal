@@ -39,7 +39,11 @@ talk to that endpoint. See `.devcontainer/README.md` for the full picture and
 `.env.local` at the repository root, parsed as data (never sourced). Process env
 beats the file; empty env vars are ignored. Aliases: `GITHUB_TOKEN`, `GH_TOKEN`,
 `GITHUB_PERSONAL_ACCESS_TOKEN`, `GITHUB_PAT`; `Z_AI_API_KEY`, `ZAI_API_KEY`;
-`UNITY_PROJECT_PATH`, `UNITY_MCP_BEARER_TOKEN`.
+`UNITY_PROJECT_PATH`, `UNITY_PROJECT_CONTAINER_PATH`, `UNITY_MCP_BEARER_TOKEN`.
+`UNITY_PROJECT_PATH` stays the host identity the bridge needs for the port and
+the capture output path. `UNITY_PROJECT_CONTAINER_PATH` (container only) is the
+project directory this process can read and write, used to install the capture
+script and to pick the artifact layout.
 
 ## Generated client configs
 
@@ -47,7 +51,7 @@ beats the file; empty env vars are ignored. Aliases: `GITHUB_TOKEN`, `GH_TOKEN`,
 | --- | --- | --- |
 | Claude Code | `.mcp.json` | `mcpServers` |
 | Codex | `.codex/config.toml` | `mcp_servers` |
-| OpenCode | `opencode.jsonc` | `mcp` |
+| OpenCode | `opencode.jsonc` | `mcp.servers` |
 | Nanocoder | `.nanocoder/mcp.json` | `mcpServers` |
 | VS Code / Copilot Chat | `.vscode/mcp.json` | `servers` |
 | Cursor | `.cursor/mcp.json` | `mcpServers` |
@@ -55,10 +59,19 @@ beats the file; empty env vars are ignored. Aliases: `GITHUB_TOKEN`, `GH_TOKEN`,
 
 All seven are written as one transaction with rollback, mode `0600`, and are
 gitignored. Unrelated keys and servers survive; malformed files abort configure
-before anything is written. The catalog also includes `context7` (library
-docs, `@upstash/context7-mcp`). Z.AI remote servers go through `mcp-remote` for Codex
-only (its HTTP client rejects Z.AI's empty 200s on `initialized` notifications);
-the key travels via the child's `ZAI_AUTH_HEADER` env var, never argv.
+before anything is written. OpenCode receives the published schema, native v2
+`mcp.servers` entries, a 30-second catalog timeout, a 300-second execution
+timeout, Code Mode, and the shared `.llm/skills` catalog. The execution timeout
+is raised because a Play Mode suite over this bridge outlasts the 30-second
+default. Generated OpenCode credentials use `{env:NAME}` references.
+`GITHUB_TOKEN` and `ZAI_API_KEY` are the canonical names; the devcontainer
+lifecycle and interactive shell normalize accepted aliases before OpenCode
+starts, and `configure` names any reference it cannot resolve. Existing v1 MCP
+fields and skill sources convert in place. The catalog also includes `context7`
+(library docs, `@upstash/context7-mcp`). Z.AI remote servers go through
+`mcp-remote` for Codex only (its HTTP client rejects Z.AI's empty 200s on
+`initialized` notifications); the key travels via the child's
+`ZAI_AUTH_HEADER` env var, never argv.
 
 ## State capture
 

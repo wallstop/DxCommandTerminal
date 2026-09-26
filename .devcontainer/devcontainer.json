@@ -16,6 +16,8 @@
     "dockerfile": "Dockerfile",
     "context": ".."
   },
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/package,type=bind,consistency=consistent",
+  "workspaceFolder": "/workspaces/package",
   // ---------------------------------------------------------------------------
   // Dev Container Features
   // ---------------------------------------------------------------------------
@@ -42,7 +44,7 @@
     "source=dxt-python-cache,target=/home/vscode/.cache/pip,type=volume",
     "source=dxt-npm-cache,target=/home/vscode/.npm,type=volume",
     "source=dxt-node-modules,target=${containerWorkspaceFolder}/tooling~/node_modules,type=volume",
-    "source=${localWorkspaceFolder}/../..,target=/unity-project,type=bind,consistency=cached"
+    "source=${localWorkspaceFolder}/../..,target=/unity-project,type=bind,consistency=consistent"
   ],
   // ---------------------------------------------------------------------------
   // Container Environment
@@ -60,12 +62,15 @@
     "PATH": "/home/vscode/.local/bin:${containerEnv:PATH}",
     "Z_AI_API_KEY": "${localEnv:Z_AI_API_KEY}",
     "ZAI_API_KEY": "${localEnv:ZAI_API_KEY}",
+    "ZHIPU_API_KEY": "${localEnv:ZHIPU_API_KEY}",
     "OPENROUTER_API_KEY": "${localEnv:OPENROUTER_API_KEY}",
     "GITHUB_TOKEN": "${localEnv:GITHUB_TOKEN}",
     "GH_TOKEN": "${localEnv:GH_TOKEN}",
     "GITHUB_PERSONAL_ACCESS_TOKEN": "${localEnv:GITHUB_PERSONAL_ACCESS_TOKEN}",
     "GITHUB_PAT": "${localEnv:GITHUB_PAT}",
     "UNITY_PROJECT_PATH": "${localEnv:UNITY_PROJECT_PATH}",
+    "UNITY_PROJECT_CONTAINER_PATH": "/unity-project",
+    "UNITY_MCP_BEARER_TOKEN": "${localEnv:UNITY_MCP_BEARER_TOKEN}",
     "UNITY_MCP_BRIDGE_HOST": "${localEnv:UNITY_MCP_BRIDGE_HOST}",
     "UNITY_MCP_BRIDGE_PORT": "${localEnv:UNITY_MCP_BRIDGE_PORT}",
     "WORKSPACE_FOLDER": "${containerWorkspaceFolder}",
@@ -79,8 +84,9 @@
   "updateContentCommand": "bash .devcontainer/post-start.sh --prepare",
   "postCreateCommand": "bash .devcontainer/post-create.sh",
   "postStartCommand": "bash .devcontainer/post-start.sh",
-  "postAttachCommand": "bash .devcontainer/post-start.sh",
-  "waitFor": "updateContentCommand",
+  "postAttachCommand": "bash .devcontainer/post-start.sh --attach",
+  // Wait for user-scoped setup so the first terminal sees v2 and MCP configs.
+  "waitFor": "postCreateCommand",
   // ---------------------------------------------------------------------------
   // Host Requirements
   // ---------------------------------------------------------------------------
@@ -119,7 +125,8 @@
         "GitHub.copilot-chat",
         "anthropic.claude-code",
         "openai.chatgpt",
-        "sst-dev.opencode",
+        // OpenCode v2's supported editor path is its terminal/ACP client.
+        // The legacy editor extension launches removed v1 flags.
         // ----- Git & CI -----
         "eamodio.gitlens",
         "github.vscode-github-actions",

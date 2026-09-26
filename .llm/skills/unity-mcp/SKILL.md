@@ -51,8 +51,11 @@ gitignored. Servers: `unity-mcp`, `github` (remote, PAT from
 `web-search-prime`, `web-reader`, `zread`, `zai-mcp-server` (vision). No key -> the
 four Z.AI entries are removed. A running bridge that rejected the token aborts
 configure before writing anything: copy `UNITY_MCP_BEARER_TOKEN` from the host
-`.env.local` instead of minting a second one. After editing `.env.local`, run
-`npm run unity:mcp:configure -- --offline`, then reconnect MCP or restart agents.
+`.env.local` instead of minting a second one. In the devcontainer,
+`UNITY_PROJECT_PATH` remains the host identity used for port discovery, while
+`UNITY_PROJECT_CONTAINER_PATH=/unity-project` is used for local capture files.
+After editing `.env.local`, run `npm run unity:mcp:configure -- --offline`, then
+reconnect MCP or restart agents.
 
 ## OpenRouter backends (API key, any model)
 

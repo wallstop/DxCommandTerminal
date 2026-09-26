@@ -2,33 +2,61 @@
 # shellcheck shell=bash
 
 # Refresh the user-scoped agent CLIs. The image provides a build-time copy, so an
-# offline launch keeps working while an online launch moves each CLI to npm's
-# current latest tag without requiring sudo.
+# offline launch keeps working while an online launch moves each CLI to its npm
+# release line without requiring sudo.
 
 set -euo pipefail
 
-readonly NPM_PREFIX="${NPM_CONFIG_PREFIX:-${HOME}/.local}"
-readonly LOG_PREFIX="[agent-clis]"
-readonly PACKAGES=(
-    "@openai/codex"
-    "opencode-ai"
-    "@nanocollective/nanocoder"
-    "@anthropic-ai/claude-code"
+log() {
+    echo "[agent-clis] $*"
+}
+
+warn() {
+    echo "[agent-clis] WARN: $*" >&2
+}
+
+command_version() {
+    local command_name="$1"
+    local output=""
+    case "${command_name}" in
+        codex) output="$(timeout 10 codex --version 2>/dev/null || true)" ;;
+        opencode|opencode2) output="$(timeout 10 "${command_name}" --version 2>/dev/null || true)" ;;
+        nanocoder) output="$(timeout 10 nanocoder --version 2>/dev/null || true)" ;;
+        claude) output="$(timeout 10 claude --version 2>/dev/null || true)" ;;
+        *) return 1 ;;
+    esac
+    grep -Eo '[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?' <<< "${output}" | head -n 1
+}
+
+resolve_latest_version() {
+    local package_spec="$1"
+    # An empty range or a null response must read as "no answer" so the caller
+    # keeps the installed CLI instead of failing on the string "null".
+    timeout 20 npm view "${package_spec}" version --json 2>/dev/null \
+        | jq -r 'if type == "array" then (if length == 0 then "" else max_by((split(".")[0:3] | map(tonumber? // 0))) end) else (. // "") end' \
+        | tr -d '[:space:]' || true
+}
+
+# Sourced by the regression suite to exercise the helpers above. Everything
+# below this point reads the environment, touches the npm prefix, or runs npm.
+if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
+    # shellcheck disable=SC2317
+    return 0 2>/dev/null || exit 0
+fi
+
+NPM_PREFIX="${NPM_CONFIG_PREFIX:-${HOME}/.local}"
+PACKAGES=(
+    "@openai/codex@latest"
+    "@opencode/cli@2"
+    "@nanocollective/nanocoder@latest"
+    "@anthropic-ai/claude-code@latest"
 )
-readonly COMMANDS=(
+COMMANDS=(
     "codex"
     "opencode"
     "nanocoder"
     "claude"
 )
-
-log() {
-    echo "${LOG_PREFIX} $*"
-}
-
-warn() {
-    echo "${LOG_PREFIX} WARN: $*" >&2
-}
 
 if ! command -v npm >/dev/null 2>&1; then
     warn "npm is unavailable; keeping the image-provided agent CLIs."
@@ -48,25 +76,20 @@ if command -v flock >/dev/null 2>&1; then
     fi
 fi
 
-command_version() {
-    local command_name="$1"
-    local output=""
-    case "${command_name}" in
-        codex) output="$(timeout 10 codex --version 2>/dev/null || true)" ;;
-        opencode) output="$(timeout 10 opencode --version 2>/dev/null || true)" ;;
-        nanocoder) output="$(timeout 10 nanocoder --version 2>/dev/null || true)" ;;
-        claude) output="$(timeout 10 claude --version 2>/dev/null || true)" ;;
-        *) return 1 ;;
-    esac
-    grep -Eo '[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?' <<< "${output}" | head -n 1
-}
+if npm list --global --depth=0 opencode-ai >/dev/null 2>&1; then
+    log "removing legacy opencode-ai package."
+    # A stale v1 package is not worth blocking the v2 refresh for.
+    timeout 300 npm uninstall --global opencode-ai --silent --no-fund --no-audit \
+        || warn "failed to remove the legacy opencode-ai package."
+fi
 
 failures=0
 for index in "${!PACKAGES[@]}"; do
-    package_name="${PACKAGES[$index]}"
+    package_spec="${PACKAGES[$index]}"
+    package_name="${package_spec%@*}"
     command_name="${COMMANDS[$index]}"
     installed="$(command_version "${command_name}" || true)"
-    latest="$(timeout 20 npm view "${package_name}@latest" version 2>/dev/null | tr -d '[:space:]' || true)"
+    latest="$(resolve_latest_version "${package_spec}")"
 
     if [[ -z "${latest}" ]]; then
         if command -v "${command_name}" >/dev/null 2>&1; then
@@ -89,11 +112,11 @@ for index in "${!PACKAGES[@]}"; do
         continue
     fi
 
-    log "installing ${package_name}@${latest} (current: ${installed:-missing})..."
+    log "installing ${package_spec} (current: ${installed:-missing})..."
     installed_ok=false
     for attempt in 1 2 3; do
-        if timeout 300 npm install -g "${package_name}@${latest}" \
-            --allow-scripts=opencode-ai,@anthropic-ai/claude-code \
+        if timeout 300 npm install -g "${package_spec}" \
+            --allow-scripts=@opencode/cli,@anthropic-ai/claude-code \
             --silent --no-fund --no-audit; then
             if [[ "$(command_version "${command_name}" || true)" == "${latest}" ]]; then
                 installed_ok=true
@@ -110,6 +133,16 @@ for index in "${!PACKAGES[@]}"; do
         ((failures += 1))
     fi
 done
+
+opencode_version="$(command_version opencode || true)"
+if [[ "${opencode_version}" != 2.* ]]; then
+    warn "OpenCode v2 is required; found ${opencode_version:-missing}."
+    ((failures += 1))
+elif command -v opencode2 >/dev/null 2>&1 \
+    && [[ "$(command_version opencode2 || true)" != "${opencode_version}" ]]; then
+    warn "opencode2 does not match opencode ${opencode_version}."
+    ((failures += 1))
+fi
 
 if [[ "${failures}" -gt 0 ]]; then
     warn "${failures} agent CLI refresh(es) failed; see messages above."

@@ -50,8 +50,23 @@ env_local_value() {
     fi
     env_file="${root}/.env.local"
     [ -f "${env_file}" ] || return 1
-    value="$(sed -n "s/^${key}=//p" "${env_file}" | tail -n 1)"
-    value="${value%$'\r'}"
+    local line candidate bom
+    bom=$'\xEF\xBB\xBF'
+    value=""
+    while IFS= read -r line || [ -n "${line}" ]; do
+        line="${line%$'\r'}"
+        if [[ "${line}" == "${bom}"* ]]; then
+            line="${line#"${bom}"}"
+        fi
+        if [[ "${line}" =~ ^[[:space:]]*(export[[:space:]]+)?${key}[[:space:]]*=(.*)$ ]]; then
+            candidate="${BASH_REMATCH[2]}"
+            candidate="${candidate#"${candidate%%[![:space:]]*}"}"
+            candidate="${candidate%"${candidate##*[![:space:]]}"}"
+        else
+            continue
+        fi
+        value="${candidate}"
+    done < "${env_file}"
     case "${value}" in
         \"*\")
             value="${value#\"}"
@@ -229,6 +244,13 @@ resolve_openrouter_key() {
     die "Set OPENROUTER_API_KEY (environment or the checkout's .env.local) before launching an OpenRouter backend."
 }
 
+# Prevent a global BASH_ENV loader from restoring managed keys after the
+# provider launcher applies its scrub policy.
+prepare_scrubbed_agent_environment() {
+    export DXT_ENV_AUTOLOAD_DISABLED=1
+    export BASH_ENV=/dev/null
+}
+
 # Shared Claude sandbox handling. $1 is the resolved subprocess-scrub request
 # (auto|0|1). Sets CLAUDE_SCRUB and, inside a container, CLAUDE_SANDBOX_SETTINGS.
 claude_sandbox_prepare() {
@@ -330,6 +352,7 @@ launch_codex_zai() {
     command -v codex >/dev/null 2>&1 || die "codex is not installed."
     zai_key="$(resolve_zai_key)"
     export ZAI_API_KEY="${zai_key}"
+    unset Z_AI_API_KEY ZHIPU_API_KEY
 
     codex_home="${CODEX_HOME:-${HOME}/.codex}"
     catalog_file="${codex_home}/${PROFILE_NAME}-models.json"
@@ -343,6 +366,7 @@ launch_codex_zai() {
         low|high|max) ;;
         *) die "CODEX_ZAI_REASONING_EFFORT must be low, high, or max." ;;
     esac
+    prepare_scrubbed_agent_environment
     exec codex \
         --profile "${PROFILE_NAME}" \
         --model "${model}" \
@@ -368,6 +392,8 @@ launch_claude_zai() {
     esac
     mkdir -p "${config_dir}"
     chmod 700 "${config_dir}"
+    unset ZAI_API_KEY Z_AI_API_KEY ZHIPU_API_KEY
+    prepare_scrubbed_agent_environment
 
     claude_sandbox_prepare "${CLAUDE_ZAI_SUBPROCESS_ENV_SCRUB:-auto}"
 
@@ -390,7 +416,6 @@ launch_claude_zai() {
         CLAUDE_CODE_USE_MANTLE \
         CLAUDE_CODE_USE_GATEWAY
     export ANTHROPIC_AUTH_TOKEN="${zai_key}"
-    unset ZAI_API_KEY Z_AI_API_KEY
     export ANTHROPIC_BASE_URL="${ZAI_ANTHROPIC_URL}"
     export ANTHROPIC_DEFAULT_HAIKU_MODEL="${CLAUDE_ZAI_HAIKU_MODEL:-glm-5.3-flash[1m]}"
     export ANTHROPIC_DEFAULT_SONNET_MODEL="${CLAUDE_ZAI_SONNET_MODEL:-glm-5.3[1m]}"
@@ -417,6 +442,7 @@ launch_codex_openrouter() {
     fi
 
     model="${CODEX_OPENROUTER_MODEL:-${OPENROUTER_DEFAULT_MODEL}}"
+    prepare_scrubbed_agent_environment
     exec codex \
         --profile "${OPENROUTER_PROFILE_NAME}" \
         --model "${model}" \
@@ -437,6 +463,8 @@ launch_claude_openrouter() {
     esac
     mkdir -p "${config_dir}"
     chmod 700 "${config_dir}"
+    unset OPENROUTER_API_KEY
+    prepare_scrubbed_agent_environment
 
     claude_sandbox_prepare "${CLAUDE_OPENROUTER_SUBPROCESS_ENV_SCRUB:-auto}"
 
@@ -463,7 +491,6 @@ launch_claude_openrouter() {
     # OpenRouter's Anthropic skin authenticates with a bearer token; ANTHROPIC_API_KEY
     # must exist but be explicitly empty so Claude Code never falls back to Anthropic.
     export ANTHROPIC_AUTH_TOKEN="${openrouter_key}"
-    unset OPENROUTER_API_KEY
     export ANTHROPIC_API_KEY=""
     export ANTHROPIC_BASE_URL="${OPENROUTER_ANTHROPIC_URL}"
     export ANTHROPIC_DEFAULT_FABLE_MODEL="${CLAUDE_OPENROUTER_FABLE_MODEL:-${OPENROUTER_CLAUDE_FABLE_MODEL}}"

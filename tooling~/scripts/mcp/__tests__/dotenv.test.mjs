@@ -39,6 +39,10 @@ test("parseDotEnv rejects malformed lines", () => {
   assert.throws(() => parseDotEnv('A="unterminated'), /line 1/);
 });
 
+test("parseDotEnv accepts a UTF-8 BOM at the start of the file", () => {
+  assert.deepEqual(parseDotEnv("\uFEFFFIRST=1\nSECOND=2"), { FIRST: "1", SECOND: "2" });
+});
+
 test("readLocalEnv skips malformed lines without aborting", () => {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "dxt-env-"));
   try {

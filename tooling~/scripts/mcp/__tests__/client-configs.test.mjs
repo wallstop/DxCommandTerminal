@@ -10,6 +10,7 @@ import {
   prepareJsonServers,
   stripJsonComments,
   transactionalWrite,
+  unresolvedOpenCodeVariables,
   ZAI_SERVERS,
   GITHUB_MCP_URL
 } from "../unity-mcp.mjs";
@@ -44,6 +45,25 @@ function options(repoRoot, overrides = {}) {
     ...overrides
   };
 }
+
+test("OpenCode credential references are reported when only aliases are set", () => {
+  const canonical = {
+    UNITY_MCP_BEARER_TOKEN: BEARER,
+    GITHUB_TOKEN: "gh",
+    ZAI_API_KEY: ZAI_KEY
+  };
+  const all = { githubToken: "gh-token-123", zaiToken: ZAI_KEY };
+  assert.deepEqual(unresolvedOpenCodeVariables(all, canonical), []);
+  assert.deepEqual(
+    unresolvedOpenCodeVariables(all, { ...canonical, GITHUB_TOKEN: undefined, ZAI_API_KEY: undefined }),
+    ["GITHUB_TOKEN", "ZAI_API_KEY"]
+  );
+  // Without a credential the server is removed, so nothing is referenced.
+  assert.deepEqual(
+    unresolvedOpenCodeVariables({ githubToken: undefined, zaiToken: undefined }, {}),
+    ["UNITY_MCP_BEARER_TOKEN"]
+  );
+});
 
 test("configure writes every client schema with the unity endpoint", () => {
   const repoRoot = tempRepo();
@@ -84,16 +104,24 @@ test("configure writes every client schema with the unity endpoint", () => {
     const opencode = JSON.parse(
       fs.readFileSync(paths.openCode, "utf8").replace(/^\/\/.*$/gm, "")
     );
-    assert.deepEqual(opencode["mcp"]["unity-mcp"], {
+    assert.deepEqual(opencode["mcp"]["servers"]["unity-mcp"], {
       type: "remote",
       url,
-      headers: { Authorization: `Bearer ${BEARER}` },
+      headers: { Authorization: "Bearer {env:UNITY_MCP_BEARER_TOKEN}" },
       oauth: false,
-      enabled: true,
-      timeout: 30000
+      codemode: true,
+      disabled: false,
+      timeout: { catalog: 30000, execution: 300000 }
     });
-    assert.equal(opencode["mcp"]["git"].type, "local");
-    assert.deepEqual(opencode["mcp"]["git"].command, ["mcp-server-git", "--repository", repoRoot]);
+    assert.equal(opencode["$schema"], "https://opencode.ai/config.json");
+    assert.equal(opencode["mcp"]["unity-mcp"], undefined);
+    assert.equal(opencode["mcp"]["servers"]["git"].type, "local");
+    assert.deepEqual(opencode["mcp"]["servers"]["git"].command, [
+      "mcp-server-git",
+      "--repository",
+      repoRoot
+    ]);
+    assert.deepEqual(opencode["skills"], ["./.llm/skills"]);
     assert.equal(opencode["share"], "disabled", "session sharing must default to disabled");
 
     const copilot = JSON.parse(fs.readFileSync(paths.copilot, "utf8"));
@@ -119,6 +147,24 @@ test("configure writes every client schema with the unity endpoint", () => {
   }
 });
 
+test("an explicit bearer token is persisted for later OpenCode launches", () => {
+  const repoRoot = tempRepo();
+  const explicit = "b".repeat(64);
+  try {
+    configure(options(repoRoot, { bearerToken: explicit, bearerTokenFromArgument: true }), ENDPOINT);
+    const envText = fs.readFileSync(path.join(repoRoot, ".env.local"), "utf8");
+    assert.match(envText, new RegExp(`UNITY_MCP_BEARER_TOKEN=${explicit}`));
+    assert.doesNotMatch(envText, new RegExp(BEARER));
+    const opencode = JSON.parse(fs.readFileSync(clientConfigPaths(repoRoot).openCode, "utf8"));
+    assert.equal(
+      opencode["mcp"]["servers"]["unity-mcp"].headers.Authorization,
+      "Bearer {env:UNITY_MCP_BEARER_TOKEN}"
+    );
+  } finally {
+    fs.rmSync(repoRoot, { recursive: true, force: true });
+  }
+});
+
 test("configure adds Z.AI servers when a key exists and removes them when it does not", () => {
   const repoRoot = tempRepo();
   try {
@@ -136,6 +182,16 @@ test("configure adds Z.AI servers when a key exists and removes them when it doe
       args: [],
       env: { Z_AI_API_KEY: ZAI_KEY, Z_AI_MODE: "ZAI" }
     });
+    const opencodeWithZai = JSON.parse(fs.readFileSync(paths.openCode, "utf8"));
+    assert.equal(
+      opencodeWithZai["mcp"]["servers"]["web-search-prime"].headers.Authorization,
+      "Bearer {env:ZAI_API_KEY}"
+    );
+    assert.equal(
+      opencodeWithZai["mcp"]["servers"]["zai-mcp-server"].environment.Z_AI_API_KEY,
+      "{env:ZAI_API_KEY}"
+    );
+    assert.doesNotMatch(JSON.stringify(opencodeWithZai), new RegExp(ZAI_KEY));
 
     const codexWithZai = fs.readFileSync(paths.codex, "utf8");
     assert.match(codexWithZai, /command = "mcp-remote"/);
@@ -176,16 +232,121 @@ test("configure preserves unrelated keys and servers in JSON clients", () => {
   }
 });
 
-test("configure defaults opencode share to disabled and preserves an explicit value", () => {
+test("configure migrates opencode v1 settings without replacing explicit values", () => {
   const repoRoot = tempRepo({
-    "opencode.jsonc": `{ "mcp": {}, "share": "auto" }`
+    "opencode.jsonc": JSON.stringify({
+      mcp: {
+        timeout: { startup: 45000 },
+        custom: { type: "local", command: ["custom-server"], enabled: true, timeout: 1000 },
+        "oauth-legacy": {
+          type: "remote",
+          url: "https://oauth.example/mcp",
+          enabled: true,
+          oauth: {
+            clientId: "legacy-client",
+            clientSecret: "legacy-secret",
+            callbackPort: 19875,
+            redirectUri: "http://127.0.0.1:19875/callback",
+            scope: "tools:read"
+          }
+        },
+        servers: {
+          native: {
+            type: "remote",
+            url: "https://example.test/mcp",
+            disabled: true,
+            timeout: { execution: 2000 }
+          }
+        }
+      },
+      share: "auto",
+      skills: { paths: ["./custom-skills"], urls: ["https://example.test/skills/"] }
+    })
   });
   try {
     configure(options(repoRoot), ENDPOINT);
     const document = JSON.parse(fs.readFileSync(clientConfigPaths(repoRoot).openCode, "utf8"));
-    assert.equal(document["share"], "auto", "an explicit share setting must not be stomped");
+    assert.deepEqual(document["mcp"]["timeout"], { startup: 45000 });
+    assert.equal(document["mcp"]["custom"], undefined);
+    assert.deepEqual(document["mcp"]["servers"]["custom"], {
+      type: "local",
+      command: ["custom-server"],
+      disabled: false,
+      timeout: { catalog: 1000, execution: 1000 }
+    });
+    assert.deepEqual(document["mcp"]["servers"]["oauth-legacy"], {
+      type: "remote",
+      url: "https://oauth.example/mcp",
+      disabled: false,
+      oauth: {
+        client_id: "legacy-client",
+        client_secret: "legacy-secret",
+        callback_port: 19875,
+        redirect_uri: "http://127.0.0.1:19875/callback",
+        scope: "tools:read"
+      }
+    });
+    assert.deepEqual(document["mcp"]["servers"]["native"], {
+      type: "remote",
+      url: "https://example.test/mcp",
+      disabled: true,
+      timeout: { execution: 2000 }
+    });
+    assert.ok(document["mcp"]["servers"]["unity-mcp"]);
+    assert.equal(document["share"], "auto");
+    assert.deepEqual(document["skills"], [
+      "./custom-skills",
+      "https://example.test/skills/",
+      "./.llm/skills"
+    ]);
   } finally {
     fs.rmSync(repoRoot, { recursive: true, force: true });
+  }
+
+  const reservedServerCases = [
+    {
+      name: "servers",
+      config: {
+        type: "local",
+        command: ["reserved-local"],
+        enabled: true
+      },
+      expected: {
+        type: "local",
+        command: ["reserved-local"],
+        disabled: false
+      }
+    },
+    {
+      name: "timeout",
+      config: {
+        type: "remote",
+        url: "https://reserved.example/mcp",
+        enabled: false
+      },
+      expected: {
+        type: "remote",
+        url: "https://reserved.example/mcp",
+        disabled: true
+      }
+    }
+  ];
+  for (const { name, config, expected } of reservedServerCases) {
+    const repoRoot = tempRepo({
+      "opencode.jsonc": JSON.stringify({
+        mcp: { [name]: config },
+        experimental: { mcp_timeout: 5000 }
+      })
+    });
+    try {
+      configure(options(repoRoot), ENDPOINT);
+      const document = JSON.parse(fs.readFileSync(clientConfigPaths(repoRoot).openCode, "utf8"));
+      assert.deepEqual(document["mcp"]["timeout"], { catalog: 5000, execution: 5000 });
+      assert.equal(document["experimental"], undefined);
+      assert.deepEqual(document["mcp"]["servers"][name], expected);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
   }
 
   const untouched = tempRepo();
@@ -193,17 +354,88 @@ test("configure defaults opencode share to disabled and preserves an explicit va
     configure(options(untouched), ENDPOINT);
     const document = JSON.parse(fs.readFileSync(clientConfigPaths(untouched).openCode, "utf8"));
     assert.equal(document["share"], "disabled", "absent share must default to disabled");
+    assert.deepEqual(document["skills"], ["./.llm/skills"]);
   } finally {
     fs.rmSync(untouched, { recursive: true, force: true });
   }
 });
 
-test("configure refuses to replace malformed client configs", () => {
-  const repoRoot = tempRepo({ ".mcp.json": "{ not json" });
-  try {
-    assert.throws(() => configure(options(repoRoot), ENDPOINT), /Invalid JSON/);
-  } finally {
-    fs.rmSync(repoRoot, { recursive: true, force: true });
+test("configure migrates v1 MCP timeout without replacing native timeout", (t) => {
+  const cases = [
+    {
+      name: "migrates timeout and removes empty experimental",
+      input: { experimental: { mcp_timeout: 30000 } },
+      expectedTimeout: { catalog: 30000, execution: 30000 },
+      expectedExperimental: undefined
+    },
+    {
+      name: "preserves other experimental fields",
+      input: { experimental: { mcp_timeout: 30000, preserve: true } },
+      expectedTimeout: { catalog: 30000, execution: 30000 },
+      expectedExperimental: { preserve: true }
+    },
+    {
+      name: "native timeout wins",
+      input: {
+        mcp: { timeout: { catalog: 1000, execution: 2000 } },
+        experimental: { mcp_timeout: 30000, preserve: true }
+      },
+      expectedTimeout: { catalog: 1000, execution: 2000 },
+      expectedExperimental: { preserve: true }
+    }
+  ];
+  for (const { name, input, expectedTimeout, expectedExperimental } of cases) {
+    t.test(name, () => {
+      const repoRoot = tempRepo({ "opencode.jsonc": JSON.stringify(input) });
+      try {
+        configure(options(repoRoot), ENDPOINT);
+        const document = JSON.parse(fs.readFileSync(clientConfigPaths(repoRoot).openCode, "utf8"));
+        assert.deepEqual(document["mcp"]["timeout"], expectedTimeout);
+        assert.deepEqual(document["experimental"], expectedExperimental);
+      } finally {
+        fs.rmSync(repoRoot, { recursive: true, force: true });
+      }
+    });
+  }
+});
+
+test("configure refuses to replace malformed client configs", (t) => {
+  const cases = [
+    ["Claude config", ".mcp.json", "{ not json", /Invalid JSON/],
+    [
+      "OpenCode MCP",
+      "opencode.jsonc",
+      '{"mcp":{"servers":[]}}',
+      /Expected mcp\.servers to be an object/
+    ],
+    [
+      "OpenCode MCP null",
+      "opencode.jsonc",
+      '{"mcp":null}',
+      /Expected mcp to be an object/
+    ],
+    [
+      "OpenCode MCP array",
+      "opencode.jsonc",
+      '{"mcp":[]}',
+      /Expected mcp to be an object/
+    ],
+    [
+      "OpenCode skills",
+      "opencode.jsonc",
+      '{"skills":{"paths":"bad"}}',
+      /Expected skills\.paths and skills\.urls/
+    ]
+  ];
+  for (const [name, file, content, expected] of cases) {
+    t.test(name, () => {
+      const repoRoot = tempRepo({ [file]: content });
+      try {
+        assert.throws(() => configure(options(repoRoot), ENDPOINT), expected);
+      } finally {
+        fs.rmSync(repoRoot, { recursive: true, force: true });
+      }
+    });
   }
 });
 

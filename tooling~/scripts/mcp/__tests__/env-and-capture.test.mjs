@@ -46,6 +46,20 @@ test("z.ai key aliases resolve with env beating file", () => {
   );
 });
 
+test("host and container project paths remain separate", () => {
+  const options = resolveOptions(
+    {},
+    {
+      UNITY_PROJECT_PATH: "/Users/dev/UnityProject",
+      UNITY_PROJECT_CONTAINER_PATH: "/unity-project"
+    },
+    {},
+    "/tmp"
+  );
+  assert.equal(options.projectPath, path.resolve("/Users/dev/UnityProject"));
+  assert.equal(options.projectContainerPath, path.resolve("/unity-project"));
+});
+
 test("capture script source lives outside Unity compilation", () => {
   const source = captureScriptSourcePath(REPO_ROOT);
   assert.equal(path.basename(source), "DxTerminalStateCapture.cs.txt");
@@ -80,6 +94,18 @@ test("capture artifacts prefer the package tree and fall back to Library", () =>
     assert.equal(
       captureOutputDir(project, stamp),
       path.join(packageRoot, ".artifacts", "unity-state", stamp)
+    );
+
+    // A host path no local filesystem can see must still pick the layout from
+    // the container-visible project, then write through the resolved host path.
+    const hostProject = path.resolve(path.sep, "host", "UnityProject");
+    assert.equal(
+      captureOutputDir(hostProject, stamp, project),
+      path.join(hostProject, "Packages", CAPTURE_PACKAGE_NAME, ".artifacts", "unity-state", stamp)
+    );
+    assert.equal(
+      captureOutputDir(hostProject, stamp, path.join(path.sep, "absent")),
+      path.join(hostProject, "Library", "DxTerminalStateCapture", stamp)
     );
   } finally {
     fs.rmSync(project, { recursive: true, force: true });
