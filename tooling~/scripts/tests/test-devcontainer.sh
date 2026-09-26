@@ -167,6 +167,10 @@ case "${1:-}" in
         if [[ "${2:-}" == "list" ]]; then
             if [[ "${DXT_FAKE_MCP_FAILURE:-0}" == "1" ]]; then
                 printf '%s\n' '✗ unity-mcp failed: Unauthorized'
+            elif [[ "${DXT_FAKE_OTHER_MCP_FAILURE:-0}" == "1" ]]; then
+                # A healthy unity bridge next to a failing optional server.
+                printf '%s\n' '✗ github failed: Unauthorized'
+                printf '%s\n' '✓ unity-mcp connected'
             else
                 printf '%s\n' '✓ unity-mcp connected'
             fi
@@ -183,6 +187,7 @@ touch "${LIFECYCLE_ROOT}/home/.bashrc" "${LIFECYCLE_ROOT}/home/.profile"
 # leak in from the caller, or process precedence hides what the lifecycle did.
 run_lifecycle() {
     DXT_FAKE_MCP_FAILURE="${DXT_FAKE_MCP_FAILURE:-0}" \
+        DXT_FAKE_OTHER_MCP_FAILURE="${DXT_FAKE_OTHER_MCP_FAILURE:-0}" \
         HOME="${LIFECYCLE_ROOT}/home" WORKSPACE_FOLDER="${LIFECYCLE_ROOT}" \
         PATH="${LIFECYCLE_ROOT}/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
         env -u ZAI_API_KEY -u Z_AI_API_KEY -u ZHIPU_API_KEY -u OPENROUTER_API_KEY \
@@ -219,6 +224,17 @@ grep -Fq 'rejected the Unity credentials' "${LIFECYCLE_ROOT}/lifecycle.log" \
     || fail "post-attach accepted an unauthorized OpenCode MCP service"
 grep -Fq 'service stop' "${LIFECYCLE_ROOT}/opencode-calls.txt" \
     || fail "post-attach did not stop the unusable OpenCode service"
+
+# Another server failing must never stop a healthy service (issue: a global
+# Unauthorized match in the readiness probe).
+: >"${LIFECYCLE_ROOT}/opencode-calls.txt"
+DXT_FAKE_OTHER_MCP_FAILURE=1 run_lifecycle --attach
+if grep -Fq 'service stop' "${LIFECYCLE_ROOT}/opencode-calls.txt"; then
+    fail "an unauthorized optional server stopped a healthy OpenCode service"
+fi
+if grep -Fq 'rejected the Unity credentials' "${LIFECYCLE_ROOT}/lifecycle.log"; then
+    fail "an unauthorized optional server was reported as a Unity credential failure"
+fi
 grep -Fq "DXT_WORKSPACE_ROOT='${LIFECYCLE_ROOT}'" "${LIFECYCLE_ROOT}/home/.bashrc" \
     || fail "post-attach did not migrate the interactive autoload block"
 
@@ -251,6 +267,30 @@ if HOME="${LIFECYCLE_ROOT}/home" \
 fi
 grep -Fqx 'export KEEPME=1' "${LIFECYCLE_ROOT}/home/.bashrc" \
     || fail "a reversed autoload block truncated the rest of the rc file"
+
+# The block must land after Ubuntu's non-interactive guard: a block above it
+# hands credentials to every process that sources .bashrc.
+printf '%s\n' '# If not running interactively, do not do anything' \
+    'case $- in' '    *i*) ;;' '      *) return;;' 'esac' \
+    > "${LIFECYCLE_ROOT}/home/.bashrc"
+HOME="${LIFECYCLE_ROOT}/home" \
+    PATH="${LIFECYCLE_ROOT}/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
+    bash -c 'source "$1"; install_env_local_autoload "$2"' \
+    _ "${LIFECYCLE_ROOT}/.devcontainer/install-env-autoload.sh" "${LIFECYCLE_ROOT}" \
+    >/dev/null 2>&1 \
+    || fail "a clean rc file could not receive the autoload block"
+grep -Fqx '# >>> dxcommandterminal .env.local autoload >>>' \
+    "${LIFECYCLE_ROOT}/home/.bashrc" || fail "the autoload block was not installed"
+# The inner shell must expand $HOME and the credentials, not this one.
+# shellcheck disable=SC2016
+leaked="$(HOME="${LIFECYCLE_ROOT}/home" \
+    PATH="${LIFECYCLE_ROOT}/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
+    env -u ZAI_API_KEY -u Z_AI_API_KEY -u ZHIPU_API_KEY -u GITHUB_TOKEN \
+    -u GH_TOKEN -u GITHUB_PERSONAL_ACCESS_TOKEN -u GITHUB_PAT \
+    -u UNITY_MCP_BEARER_TOKEN -u DXT_WORKSPACE_ROOT \
+    bash -c '. "$HOME/.bashrc"; env | grep -cE "^(ZAI_API_KEY|GITHUB_TOKEN)=" || true')"
+[[ "${leaked}" == "0" ]] \
+    || fail "a non-interactive .bashrc source imported ${leaked} credential(s)"
 
 # The gate this change exists for: a v1-only image must not reach the attach
 # point. The stub reports v1 through the same commands the verifier reads.

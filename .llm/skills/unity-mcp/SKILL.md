@@ -55,7 +55,9 @@ configure before writing anything: copy `UNITY_MCP_BEARER_TOKEN` from the host
 `UNITY_PROJECT_PATH` remains the host identity used for port discovery, while
 `UNITY_PROJECT_CONTAINER_PATH=/unity-project` is used for local capture files.
 After editing `.env.local`, run `npm run unity:mcp:configure -- --offline`, then
-reconnect MCP or restart agents.
+reconnect MCP or restart agents. Credential loading, scrubbing, and the OpenCode
+v2 readiness gate are covered in
+[devcontainer-lifecycle](../devcontainer-lifecycle/SKILL.md).
 
 ## OpenRouter backends (API key, any model)
 

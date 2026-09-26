@@ -60,9 +60,12 @@ EOF
             return 1
         fi
         # Build the whole file first: a failed write must not truncate the rc.
+        # Append, never prepend: Ubuntu's .bashrc returns early when the shell
+        # is not interactive, and a block above that guard hands credentials
+        # to every process that sources the file.
         {
-            printf '\n%s\n' "${block}"
             cat "${temporary}"
+            printf '\n%s\n' "${block}"
         } >"${rewritten}" || return 1
         cat "${rewritten}" >"${rc_file}" || return 1
         rm -f "${temporary}" "${rewritten}"
