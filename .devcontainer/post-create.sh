@@ -9,9 +9,14 @@
 # =============================================================================
 
 set -euo pipefail
+# Do not pass a legacy global BASH_ENV loader to child agents.
+unset BASH_ENV
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+# shellcheck source=.devcontainer/install-env-autoload.sh
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/install-env-autoload.sh"
 LOG_PREFIX="[post-create]"
 
 if [[ -t 1 ]]; then
@@ -67,42 +72,16 @@ ensure_path_line() {
     fi
 }
 
-# `waitFor: updateContentCommand` lets post-create and post-start overlap, and
-# both configure the MCP clients. Without a lock, two runs starting from an
+# `waitFor: postCreateCommand` lets VS Code wait for this bootstrap, while
+# post-start can still run on later starts. Both configure the MCP clients, so a
+# lock is required when they overlap. Without it, two runs starting from an
 # .env.local with no bearer token would each mint one and write different values
 # into the generated client configs.
 MCP_CONFIGURE_LOCK="${TMPDIR:-/tmp}/dxt-mcp-configure.lock"
 
-# Appends a guarded block to interactive rc files so every new shell exports
-# the checkout's managed credentials (from the environment or .env.local,
-# parsed as data) before the user launches claude/codex/opencode/nanocoder.
-# The block sources .devcontainer/env-autoload.sh from the checkout, so
-# updates to the loader apply to new shells without touching rc files again.
+# Keep the lifecycle name stable for callers that source this script.
 ensure_env_local_autoload() {
-    local workspace_root="$1"
-    # Escape single quotes so the literal path is written quoted and
-    # unexpanded into the rc file, mirroring ensure_path_line.
-    local root_quoted="${workspace_root//\'/\'\\\'\'}"
-    local marker="# >>> dxcommandterminal .env.local autoload >>>"
-    local block rc_file
-    block=$(cat <<EOF
-${marker}
-DXT_WORKSPACE_ROOT='${root_quoted}'
-if [ -f '${root_quoted}/.devcontainer/env-autoload.sh' ]; then
-    . '${root_quoted}/.devcontainer/env-autoload.sh'
-fi
-# <<< dxcommandterminal .env.local autoload <<<
-EOF
-)
-    for rc_file in "$HOME/.bashrc" "$HOME/.profile"; do
-        [[ -f "$rc_file" ]] || continue
-        if ! grep -Fqx "${marker}" "$rc_file"; then
-            {
-                echo ""
-                printf '%s\n' "$block"
-            } >> "$rc_file"
-        fi
-    done
+    install_env_local_autoload "$@"
 }
 
 configure_agent_mcps() {
@@ -117,15 +96,27 @@ configure_agent_mcps() {
 
 install_agent_clis() {
     local installer="${SCRIPT_DIR}/install-agent-clis.sh"
+    local verifier="${SCRIPT_DIR}/verify-opencode.sh"
+    local refresh_status=0
+
     if [[ ! -f "${installer}" ]]; then
-        log_warning "install-agent-clis.sh not found; skipping agent CLI refresh"
-        return 1
+        log_warning "install-agent-clis.sh not found; checking the baked OpenCode CLI"
+    else
+        if bash "${installer}"; then
+            refresh_status=0
+        else
+            refresh_status=$?
+        fi
     fi
-    if bash "${installer}"; then
+
+    if bash "${verifier}"; then
+        if [[ "${refresh_status}" -ne 0 ]]; then
+            log_warning "Agent refresh failed; the baked OpenCode v2 command is usable"
+        fi
         return 0
     fi
-    # Keep post-create resilient when offline or the npm registry is unreachable.
-    log_warning "One or more agent CLI refreshes failed (continuing)"
+
+    log_error "No usable OpenCode v2 command is available"
     return 1
 }
 
@@ -176,6 +167,8 @@ print_summary() {
     echo ""
     echo -e "  ${BOLD}Toolchain${NC}"
     echo -e "    .NET SDK:      $(dotnet --version 2>/dev/null || echo 'N/A')"
+    # The single quotes keep PowerShell's variable expression intact in Bash.
+    # shellcheck disable=SC2016
     echo -e "    PowerShell:    $(pwsh -NoProfile -Command '$PSVersionTable.PSVersion.ToString()' 2>/dev/null || echo 'N/A')"
     echo -e "    Node.js:       $(node --version 2>/dev/null || echo 'N/A')"
     echo -e "    claude:        $(claude --version 2>/dev/null | head -n1 || echo 'N/A')"
@@ -219,9 +212,12 @@ main() {
 
     configure_npm_prefix || { log_error "npm prefix configuration failed"; return 1; }
 
-    # Step 2: refresh the agent CLIs to npm's latest tags (foreground on create).
+    # Step 2: refresh the agent CLIs, but fail readiness if no usable v2 exists.
     log_header "Refreshing Agent CLIs (claude, codex, opencode, nanocoder)"
-    install_agent_clis || true
+    if ! install_agent_clis; then
+        log_error "OpenCode v2 readiness check failed"
+        return 1
+    fi
 
     # Step 3: workspace bootstrap.
     log_header "Bootstrapping Workspace"

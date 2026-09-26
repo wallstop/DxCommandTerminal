@@ -7,6 +7,7 @@ on:
       - main
     paths:
       - "package.json"
+      - ".devcontainer/**"
       - "tooling~/**"
       - "Runtime/**"
       - "Editor/**"
@@ -31,6 +32,7 @@ on:
   pull_request:
     paths:
       - "package.json"
+      - ".devcontainer/**"
       - "tooling~/**"
       - "Runtime/**"
       - "Editor/**"
@@ -107,6 +109,17 @@ jobs:
 
       - name: Test tooling
         run: npm --prefix tooling~ test
+
+      - name: Test AI backends
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          # One file per call: `bash -n a b` checks a and passes b as arguments.
+          for script in .devcontainer/*.sh; do bash -n "${script}"; done
+          bash tooling~/scripts/tests/test-ai-backends.sh
+
+      - name: Test devcontainer contract
+        if: matrix.os == 'ubuntu-latest'
+        run: bash tooling~/scripts/tests/test-devcontainer.sh
 
       - name: Check capture baselines
         # T11 Unity-free integrity gate: baseline schema, scenario coverage,

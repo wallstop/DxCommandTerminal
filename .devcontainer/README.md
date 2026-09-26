@@ -54,7 +54,12 @@ sudo** anywhere.
    codex-zai                 # Codex on the Z.AI subscription
    claude-openrouter         # Claude Code on any OpenRouter model
    codex-openrouter          # Codex on any OpenRouter model
+   opencode                  # OpenCode v2 in the integrated terminal
    ```
+
+The old `sst-dev.opencode` extension is not installed: it launches the removed
+v1 `--port` interface. Use the integrated terminal command `opencode`, or an ACP
+client that starts `opencode acp`.
 
 ## What the image bakes in
 
@@ -63,7 +68,7 @@ sudo** anywhere.
 | Base | `mcr.microsoft.com/devcontainers/dotnet:1-9.0-bookworm` + .NET 10 side-by-side (C# Dev Kit) |
 | Repo tooling | PowerShell (lint scripts), CSharpier 1.1.2, pre-commit, yamllint, git-lfs |
 | Node LTS | NodeSource LTS; user-global npm prefix is `~/.local` (no sudo, ever) |
-| Agent CLIs | `@anthropic-ai/claude-code`, `@openai/codex`, `opencode-ai`, `@nanocollective/nanocoder` (latest at build; refreshed on every start) |
+| Agent CLIs | `@anthropic-ai/claude-code`, `@openai/codex`, `@opencode/cli` v2, `@nanocollective/nanocoder` (configured npm lines; refreshed on every start) |
 | MCP servers | `mcp-server-git`, `mcp-server-fetch` (uv), `@z_ai/mcp-server` (vision), `@upstash/context7-mcp` (docs), `mcp-remote` (Z.AI↔Codex adapter), baked `@modelcontextprotocol/sdk` + `smol-toml` + `jsonc-parser` under `/opt/dxt-mcp` |
 
 Offline launches keep working: configure uses the baked dependencies, and the
@@ -73,9 +78,10 @@ image copies of the CLIs remain until a refresh succeeds.
 
 | Hook | Script | Work |
 | --- | --- | --- |
-| `updateContentCommand` | `post-start.sh --prepare` | Repair cache ownership, configure MCP offline, then allow attach |
-| `postCreateCommand` | `post-create.sh` | npm prefix, agent CLI refresh, `dotnet tool restore`, `npm install`, MCP configure, Z.AI launcher install, pre-commit, welcome panel |
-| `postStartCommand` / `postAttachCommand` | `post-start.sh` | Ownership repair, offline MCP configure, background CLI refresh to npm latest |
+| `updateContentCommand` | `post-start.sh --prepare` | Repair caches, verify OpenCode v2, and configure MCP offline |
+| `postCreateCommand` | `post-create.sh` | npm prefix, agent CLI refresh, `dotnet tool restore`, `npm install`, MCP configure, Z.AI launcher install, pre-commit, welcome panel; VS Code waits for completion |
+| `postStartCommand` | `post-start.sh` | Ownership repair, offline MCP configure, OpenCode service credential refresh, and background CLI refresh |
+| `postAttachCommand` | `post-start.sh --attach` | Refresh credentials, MCP config, and an existing OpenCode service after reattach |
 
 Logs for the background refresh: `/tmp/dxt-agent-cli-refresh.log`.
 
@@ -96,19 +102,23 @@ the file; empty forwarded variables never hide file values. Supported aliases:
 - GitHub: `GITHUB_TOKEN`, `GH_TOKEN`, `GITHUB_PERSONAL_ACCESS_TOKEN`, `GITHUB_PAT`
 - Z.AI: `Z_AI_API_KEY`, `ZAI_API_KEY`
 - OpenRouter: `OPENROUTER_API_KEY`
-- Unity bridge: `UNITY_PROJECT_PATH`, `UNITY_MCP_BRIDGE_PORT`, `UNITY_MCP_BEARER_TOKEN`
+- Unity bridge: `UNITY_PROJECT_PATH`, `UNITY_PROJECT_CONTAINER_PATH`, `UNITY_MCP_BRIDGE_PORT`, `UNITY_MCP_BEARER_TOKEN`
 
 Every launcher reads `.env.local` (parsed as data, never sourced), so a key
 placed in the file works for `claude-zai`, `codex-zai`, `claude-openrouter`,
 `codex-openrouter`, and the MCP config generator alike.
 
-**Automatic shell loading:** post-create installs a guarded block into
-`~/.bashrc` and `~/.profile` that sources `.devcontainer/env-autoload.sh`,
-which evaluates the managed exports in every new interactive shell. Native
-agents (`claude`, `codex`, `opencode` — opencode's Z.AI Coding Plan provider
-reads `ZHIPU_API_KEY`, which the loader mirrors automatically), `nanocoder`,
-`gh`, and MCP tooling therefore pick up `.env.local` credentials with no manual
-step. Non-interactive contexts can still evaluate the exports explicitly:
+**Interactive shell loading:** post-create installs a guarded shell block, and
+trusted lifecycle scripts source `.devcontainer/env-autoload.sh` explicitly. The
+container does not set `BASH_ENV`, so arbitrary Bash subprocesses do not inherit
+credentials. Native agents launched from the integrated terminal (`claude`,
+`codex`, `opencode`, `nanocoder`, and `gh`) receive the managed exports. The
+OpenCode Z.AI provider uses the loader's `ZHIPU_API_KEY` mirror. Provider
+launchers disable autoloading before starting their agent subprocesses. If an
+OpenCode background service was already running, `post-start.sh` restarts it
+from the credential-bearing lifecycle shell, so a window reload ends any running
+OpenCode session. Non-interactive contexts can still evaluate the exports
+explicitly:
 
 ```bash
 eval "$(bash .devcontainer/ai-backends.sh env)"
@@ -120,11 +130,18 @@ The loader prints one `export KEY='value'` line per credential found
 
 `configure --offline` writes all seven client configs (Claude Code, Codex,
 OpenCode, Nanocoder, VS Code, Cursor, Copilot CLI) in one transaction with
-rollback, mode 0600. Generated configs are gitignored; the OpenCode config pins
-session `share` to `disabled` (existing explicit values are preserved) so
-transcripts never sync to a public share URL. After editing
-`.env.local`, run `npm run unity:mcp:configure -- --offline` and restart the
-agents' MCP connections.
+rollback, mode 0600. Generated configs are gitignored. The OpenCode v2 config
+adds the published schema, uses native `mcp.servers` entries, enables Code Mode,
+and registers the shared `.llm/skills` catalog. The 300-second execution timeout
+covers a Play Mode suite over the bridge. Generated OpenCode credentials use
+`{env:NAME}` references; they are not written into the config. It also
+converts existing v1 MCP and skill fields without replacing explicit values.
+Session `share` stays `disabled` so transcripts never sync to a public URL.
+OpenCode references canonical `GITHUB_TOKEN` and `ZAI_API_KEY` names. Evaluate
+`ai-backends.sh env` before starting OpenCode outside the devcontainer.
+After editing `.env.local`, run
+`npm run unity:mcp:configure -- --offline` and restart the agents' MCP
+connections.
 
 ## Alternate agent backends (`claude-zai` / `codex-zai` / `claude-openrouter` / `codex-openrouter`)
 
@@ -174,14 +191,16 @@ More overrides: `OPENROUTER_API_TIMEOUT_MS`, `CLAUDE_OPENROUTER_CONFIG_DIR`,
 
 Deterministic named volumes survive full rebuilds: NuGet, dotnet tools, PowerShell
 modules, pip, npm cache, and the Linux `node_modules` tree. The enclosing Unity
-project is bind-mounted read-write at `/unity-project` so agents can inspect host
-code and capture tooling can be installed into `Assets/Editor`. It is excluded
-from workspace watching; the workspace itself remains the package repository.
+project is bind-mounted read-write and consistent at `/unity-project`, so agents
+can inspect host code and capture tooling can be installed into `Assets/Editor`.
+It is excluded from workspace watching; the workspace itself remains the package
+repository.
 
 ## Verify
 
 ```bash
 npm test                                   # node --test tooling~/scripts/mcp/__tests__
 bash tooling~/scripts/tests/test-ai-backends.sh     # Z.AI launcher regression suite
+bash tooling~/scripts/tests/test-devcontainer.sh   # OpenCode v2 build contract
 npm run unity:mcp:probe                    # host editor readiness (bridge running)
 ```

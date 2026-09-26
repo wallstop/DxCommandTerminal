@@ -118,6 +118,7 @@ const OPTION_NAMES = new Set([
   "no-discover",
   "offline",
   "out",
+  "project-container",
   "scenarios",
   "mode",
   "filter",
@@ -130,6 +131,7 @@ const ENV_KEYS = Object.freeze({
   port: "UNITY_MCP_BRIDGE_PORT",
   endpointPath: "UNITY_MCP_BRIDGE_PATH",
   projectPath: "UNITY_PROJECT_PATH",
+  projectContainerPath: "UNITY_PROJECT_CONTAINER_PATH",
   relayPath: "UNITY_MCP_RELAY_PATH",
   backend: "UNITY_MCP_BACKEND",
   cliPath: "UNITY_CLI_PATH",
@@ -181,7 +183,8 @@ const QUOTED_VALUE = Object.freeze({
 });
 export function parseDotEnv(raw, source = ".env.local") {
   const values = {};
-  for (const [index, original] of raw.split(/\r?\n/).entries()) {
+  const normalized = raw.replace(/^\uFEFF/, "");
+  for (const [index, original] of normalized.split(/\r?\n/).entries()) {
     const line = original.trim();
     if (!line || line.startsWith("#")) continue;
     const match = /^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line);
@@ -293,6 +296,11 @@ export function resolveOptions(args, environment = process.env, localValues, rep
     environment[ENV_KEYS.projectPath],
     local[ENV_KEYS.projectPath]
   );
+  const projectContainerPath = first(
+    args["project-container"],
+    environment[ENV_KEYS.projectContainerPath],
+    local[ENV_KEYS.projectContainerPath]
+  );
 
   // Project-port-local default: when the checkout knows its Unity project but no
   // explicit port, the deterministic project port replaces the stock bridge port.
@@ -308,6 +316,8 @@ export function resolveOptions(args, environment = process.env, localValues, rep
     explicitPort: explicitPort === undefined ? undefined : integer(explicitPort, "Port", 1, 65_535),
     endpointPath: validateEndpointPath(get("path", "endpointPath", DEFAULTS.endpointPath)),
     projectPath: projectPath === undefined ? undefined : path.resolve(projectPath),
+    projectContainerPath:
+      projectContainerPath === undefined ? undefined : path.resolve(projectContainerPath),
     backend: get("backend", "backend", "cli"),
     cliPath: get("cli", "cliPath", "unity"),
     relayPath: first(args.relay, environment[ENV_KEYS.relayPath], local[ENV_KEYS.relayPath]),
@@ -322,6 +332,7 @@ export function resolveOptions(args, environment = process.env, localValues, rep
     ),
     logLevel: get("log-level", "logLevel", "info"),
     bearerToken: validateToken(get("token", "bearerToken", undefined)),
+    bearerTokenFromArgument: args.token !== undefined,
     githubToken: githubToken(environment, local),
     zaiToken: first(
       environment.Z_AI_API_KEY,
@@ -355,6 +366,20 @@ export function requireProjectPath(options) {
     fail(`Unity project directory does not exist: ${options.projectPath}`);
   }
   return options.projectPath;
+}
+
+export function requireProjectFilesystemPath(options) {
+  const usesContainerPath = options.projectContainerPath !== undefined;
+  const projectPath = options.projectContainerPath ?? options.projectPath;
+  const source = usesContainerPath ? "--project-container" : "--project";
+  const variable = usesContainerPath ? ENV_KEYS.projectContainerPath : ENV_KEYS.projectPath;
+  if (!projectPath) {
+    fail(`Unity project path is required. Pass ${source} or set ${variable}.`);
+  }
+  if (!fs.existsSync(projectPath) || !fs.statSync(projectPath).isDirectory()) {
+    fail(`Unity project directory does not exist: ${projectPath} (from ${variable})`);
+  }
+  return projectPath;
 }
 
 export function endpointUrl({ host, port, endpointPath }) {
@@ -762,8 +787,25 @@ export function transactionalWrite(writes, beforeCommit = () => {}) {
   return changed.map(([filePath]) => filePath);
 }
 
+function persistBearerToken(repoRoot, token) {
+  const envPath = path.join(repoRoot, ".env.local");
+  if (readLocalEnv(repoRoot)[ENV_KEYS.bearerToken] === token) return;
+  const current = fs.existsSync(envPath) ? fs.readFileSync(envPath, "utf8") : "";
+  const pattern = /^(\uFEFF?[ \t]*(?:export[ \t]+)?UNITY_MCP_BEARER_TOKEN[ \t]*=)[^\r\n]*/gm;
+  const updated = current.replace(pattern, `$1${token}`);
+  if (updated !== current) {
+    atomicWrite(envPath, updated);
+    return;
+  }
+  const prefix = current && !current.endsWith("\n") ? "\n" : "";
+  atomicWrite(envPath, `${current}${prefix}${ENV_KEYS.bearerToken}=${token}\n`);
+}
+
 function ensureBearerToken(options) {
-  if (options.bearerToken) return options;
+  if (options.bearerToken) {
+    if (options.bearerTokenFromArgument) persistBearerToken(options.repoRoot, options.bearerToken);
+    return options;
+  }
   const saved = readLocalEnv(options.repoRoot)[ENV_KEYS.bearerToken];
   if (saved) return { ...options, bearerToken: validateToken(saved) };
   const bearerToken = randomBytes(32).toString("hex");
@@ -817,6 +859,128 @@ export function prepareJsonServers(filePath, collection, servers, removed = [], 
   return `${JSON.stringify(document, null, 2)}\n`;
 }
 
+function migrateOpenCodeOAuth(oauth) {
+  if (!oauth || typeof oauth !== "object" || Array.isArray(oauth)) return oauth;
+  const migrated = { ...oauth };
+  for (const [legacy, native] of [
+    ["clientId", "client_id"],
+    ["clientSecret", "client_secret"],
+    ["callbackPort", "callback_port"],
+    ["redirectUri", "redirect_uri"]
+  ]) {
+    if (legacy in migrated && !(native in migrated)) migrated[native] = migrated[legacy];
+    delete migrated[legacy];
+  }
+  return migrated;
+}
+
+function migrateOpenCodeServer(filePath, name, config) {
+  if (!config || typeof config !== "object" || Array.isArray(config)) {
+    fail(`Expected OpenCode MCP server ${name} to be an object in ${filePath}`);
+  }
+  const { enabled, timeout, oauth, ...server } = config;
+  if (enabled !== undefined) server.disabled = !enabled;
+  if (typeof timeout === "number") {
+    server.timeout = { catalog: timeout, execution: timeout };
+  } else {
+    server.timeout = timeout;
+  }
+  if (server.timeout === undefined) delete server.timeout;
+  server.oauth = migrateOpenCodeOAuth(oauth);
+  if (server.oauth === undefined) delete server.oauth;
+  return server;
+}
+
+function isOpenCodeServerConfig(config) {
+  if (config === null || typeof config !== "object" || Array.isArray(config)) return false;
+  if (config.type === "local") return Array.isArray(config.command);
+  return config.type === "remote" && typeof config.url === "string";
+}
+
+const OPEN_CODE_SKILLS_PATH = "./.llm/skills";
+
+function migrateOpenCodeSkills(filePath, skills) {
+  let entries;
+  if (Array.isArray(skills)) {
+    entries = skills;
+  } else {
+    if (!skills || typeof skills !== "object") {
+      fail(`Expected skills to be an array or object in ${filePath}`);
+    }
+    const { paths = [], urls = [] } = skills;
+    if (!Array.isArray(paths) || !Array.isArray(urls)) {
+      fail(`Expected skills.paths and skills.urls to be arrays in ${filePath}`);
+    }
+    entries = [...paths, ...urls];
+  }
+  return [...new Set([...entries, OPEN_CODE_SKILLS_PATH])];
+}
+
+function migrateOpenCodeMcpTimeout(document, mcp) {
+  const experimental = document.experimental;
+  if (
+    !experimental ||
+    typeof experimental !== "object" ||
+    Array.isArray(experimental) ||
+    typeof experimental.mcp_timeout !== "number"
+  ) {
+    return;
+  }
+  if (!Object.hasOwn(mcp, "timeout")) {
+    mcp.timeout = { catalog: experimental.mcp_timeout, execution: experimental.mcp_timeout };
+  }
+  const migratedExperimental = { ...experimental };
+  delete migratedExperimental.mcp_timeout;
+  if (Object.keys(migratedExperimental).length === 0) {
+    delete document.experimental;
+  } else {
+    document.experimental = migratedExperimental;
+  }
+}
+
+function prepareOpenCodeConfig(filePath, servers, removed = [], defaults = {}) {
+  const document = readJsonObject(filePath);
+  const mcp = document.mcp === undefined ? {} : document.mcp;
+  if (!mcp || typeof mcp !== "object" || Array.isArray(mcp)) {
+    fail(`Expected mcp to be an object in ${filePath}`);
+  }
+  const serversIsNativeMap = mcp.servers !== undefined && !isOpenCodeServerConfig(mcp.servers);
+  const nestedServers = serversIsNativeMap ? mcp.servers : undefined;
+  if (
+    nestedServers !== undefined &&
+    (!nestedServers || typeof nestedServers !== "object" || Array.isArray(nestedServers))
+  ) {
+    fail(`Expected mcp.servers to be an object in ${filePath}`);
+  }
+  const legacyServers = Object.fromEntries(
+    Object.entries(mcp).filter(
+      ([name, config]) =>
+        (name !== "servers" || !serversIsNativeMap) &&
+        (name !== "timeout" || isOpenCodeServerConfig(config))
+    )
+  );
+  const existingServers = { ...legacyServers, ...(nestedServers ?? {}) };
+  const migratedServers = Object.fromEntries(
+    Object.entries(existingServers).map(([name, config]) => [
+      name,
+      migrateOpenCodeServer(filePath, name, config)
+    ])
+  );
+  const retainedMcp = { ...mcp };
+  delete retainedMcp.servers;
+  for (const name of Object.keys(legacyServers)) delete retainedMcp[name];
+  migrateOpenCodeMcpTimeout(document, retainedMcp);
+  document.mcp = { ...retainedMcp, servers: { ...migratedServers, ...servers } };
+  for (const name of removed) delete document.mcp.servers[name];
+  if (document.skills !== undefined) {
+    document.skills = migrateOpenCodeSkills(filePath, document.skills);
+  }
+  for (const [key, value] of Object.entries(defaults)) {
+    if (document[key] === undefined) document[key] = value;
+  }
+  return `${JSON.stringify(document, null, 2)}\n`;
+}
+
 export function mergeCodexToml(raw, url, bearerToken, serverName = "unity-mcp") {
   let document;
   try {
@@ -858,7 +1022,51 @@ export function clientConfigPaths(repoRoot) {
   };
 }
 const ZAI_SERVERS = ["web-search-prime", "web-reader", "zread", "zai-mcp-server"];
+const OPEN_CODE_TOKEN_ENV = Object.freeze({
+  "unity-mcp": "UNITY_MCP_BEARER_TOKEN",
+  github: "GITHUB_TOKEN",
+  "web-search-prime": "ZAI_API_KEY",
+  "web-reader": "ZAI_API_KEY",
+  zread: "ZAI_API_KEY"
+});
 export { ZAI_SERVERS };
+
+function openCodeAuthHeaders(name, token) {
+  if (!token) return undefined;
+  const variable = OPEN_CODE_TOKEN_ENV[name];
+  if (!variable) fail(`No OpenCode environment variable is defined for ${name}`);
+  return { Authorization: `Bearer {env:${variable}}` };
+}
+
+function openCodeLocalEnvironment(environment) {
+  if (!environment) return undefined;
+  const result = { ...environment };
+  if (result.Z_AI_API_KEY) result.Z_AI_API_KEY = "{env:ZAI_API_KEY}";
+  return result;
+}
+
+/*
+    A {env:NAME} reference resolves only when that exact name is exported. An
+    accepted alias (Z_AI_API_KEY, GITHUB_PAT) would otherwise leave OpenCode
+    sending an empty header and failing at request time.
+*/
+export function unresolvedOpenCodeVariables(options, values) {
+  const referenced = [OPEN_CODE_TOKEN_ENV["unity-mcp"]];
+  if (options.githubToken) referenced.push(OPEN_CODE_TOKEN_ENV.github);
+  if (options.zaiToken) referenced.push(OPEN_CODE_TOKEN_ENV["web-search-prime"]);
+  return [...new Set(referenced)].filter((variable) => !values[variable]);
+}
+
+function warnOnUnresolvedOpenCodeReferences(options) {
+  const missing = unresolvedOpenCodeVariables(options, {
+    ...readLocalEnv(options.repoRoot),
+    ...process.env
+  });
+  if (missing.length === 0) return;
+  console.warn(
+    `[unity-mcp] OpenCode reads ${missing.join(", ")}. Export the listed names (ai-backends.sh env does) or those servers fail to authenticate.`
+  );
+}
 
 // One catalog, rendered in each client's documented schema.
 function clientServers(kind, options, url) {
@@ -886,6 +1094,7 @@ function clientServers(kind, options, url) {
   return Object.fromEntries(
     Object.entries(catalog).map(([name, { url, token, command, args, env }]) => {
       const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+      const openCodeHeaders = kind === "openCode" ? openCodeAuthHeaders(name, token) : undefined;
       let config;
       if (kind === "codex") {
         // ZAI returns an empty 200 without Content-Type for initialized notifications.
@@ -909,9 +1118,17 @@ function clientServers(kind, options, url) {
               : { command, args, ...(env ? { env } : {}) };
       } else if (kind === "openCode") {
         config = url
-          ? { type: "remote", url, ...(headers ? { headers, oauth: false } : {}) }
-          : { type: "local", command: [command, ...args], ...(env ? { environment: env } : {}) };
-        Object.assign(config, { enabled: true, timeout: 30000 });
+          ? { type: "remote", url, ...(openCodeHeaders ? { headers: openCodeHeaders, oauth: false } : {}) }
+          : {
+              type: "local",
+              command: [command, ...args],
+              ...(env ? { environment: openCodeLocalEnvironment(env) } : {})
+            };
+        Object.assign(config, {
+          codemode: true,
+          disabled: false,
+          timeout: { catalog: 30000, execution: 300000 }
+        });
       } else {
         config = url
           ? { url, ...(headers ? { headers } : {}) }
@@ -925,6 +1142,7 @@ function clientServers(kind, options, url) {
 }
 export function configure(inputOptions, endpoint, beforeCommit) {
   const options = ensureBearerToken(inputOptions);
+  warnOnUnresolvedOpenCodeReferences(options);
   const url = endpointUrl(endpoint);
   const paths = clientConfigPaths(options.repoRoot);
   const removed = options.zaiToken ? [] : ZAI_SERVERS;
@@ -940,11 +1158,16 @@ export function configure(inputOptions, endpoint, beforeCommit) {
       }
       return [file, raw];
     }
-    const collection = kind === "vscode" ? "servers" : kind === "openCode" ? "mcp" : "mcpServers";
-    // OpenCode's share feature uploads full sessions to a public URL; the
-    // checkout pins it off unless the user set an explicit value themselves.
-    const defaults = kind === "openCode" ? { share: "disabled" } : {};
-    return [file, prepareJsonServers(file, collection, servers, removed, defaults)];
+    if (kind === "openCode") {
+      const defaults = {
+        $schema: "https://opencode.ai/config.json",
+        share: "disabled",
+        skills: [OPEN_CODE_SKILLS_PATH]
+      };
+      return [file, prepareOpenCodeConfig(file, servers, removed, defaults)];
+    }
+    const collection = kind === "vscode" ? "servers" : "mcpServers";
+    return [file, prepareJsonServers(file, collection, servers, removed)];
   });
   const written = transactionalWrite(writes, beforeCommit);
   for (const filePath of Object.values(paths)) fs.chmodSync(filePath, 0o600);
@@ -1501,16 +1724,18 @@ export function captureInstallTarget(projectPath) {
   return path.join(path.resolve(projectPath), "Assets", "Editor", CAPTURE_TARGET_NAME);
 }
 
-export function captureArtifactRoot(projectPath) {
+export function captureArtifactRoot(projectPath, layoutPath = projectPath) {
   const project = path.resolve(projectPath);
-  const packageRoot = path.join(project, "Packages", CAPTURE_PACKAGE_NAME);
+  // The package probe needs a locally visible root: a host path does not exist
+  // in a container, which would silently select the Library fallback.
+  const packageRoot = path.join(path.resolve(layoutPath), "Packages", CAPTURE_PACKAGE_NAME);
   return fs.existsSync(packageRoot)
-    ? path.join(packageRoot, ".artifacts", "unity-state")
+    ? path.join(project, "Packages", CAPTURE_PACKAGE_NAME, ".artifacts", "unity-state")
     : path.join(project, "Library", "DxTerminalStateCapture");
 }
 
-export function captureOutputDir(projectPath, utcStamp) {
-  return path.join(captureArtifactRoot(projectPath), utcStamp);
+export function captureOutputDir(projectPath, utcStamp, layoutPath = projectPath) {
+  return path.join(captureArtifactRoot(projectPath, layoutPath), utcStamp);
 }
 
 function captureStamp(date = new Date()) {
@@ -1602,6 +1827,8 @@ export function ensureCaptureScript(projectPath, repoRoot = REPO_ROOT) {
   if (existing === sourceText) return { target, changed: false, backup: undefined };
   let backup;
   if (existing !== null) {
+    // projectPath is always the locally writable root here, so the default
+    // layout probe is the correct one.
     const backupDir = path.join(captureArtifactRoot(projectPath), "backup");
     fs.mkdirSync(backupDir, { recursive: true });
     backup = path.join(backupDir, `${CAPTURE_TARGET_NAME}.${captureStamp()}.bak`);
@@ -1612,7 +1839,7 @@ export function ensureCaptureScript(projectPath, repoRoot = REPO_ROOT) {
 }
 
 export async function runInstallCapture(options) {
-  const projectPath = requireProjectPath(options);
+  const projectPath = requireProjectFilesystemPath(options);
   const result = ensureCaptureScript(projectPath, options.repoRoot);
   if (result.changed) {
     console.log(
@@ -1709,11 +1936,14 @@ export async function runCapture(options, runtime = {}) {
         signal
       );
 
-    // Install locally when possible (host runs, or the project bind mount exists).
+    // Install through the container bind mount when one is configured. The
+    // bridge still receives the host project path for deterministic port and
+    // artifact paths because Unity runs on the host.
     const projectPath = options.projectPath;
+    const filesystemProjectPath = options.projectContainerPath ?? options.projectPath;
     let installed = false;
-    if (projectPath && !options.noInstall && fs.existsSync(projectPath)) {
-      const result = ensureCaptureScript(projectPath, options.repoRoot);
+    if (filesystemProjectPath && !options.noInstall && fs.existsSync(filesystemProjectPath)) {
+      const result = ensureCaptureScript(filesystemProjectPath, options.repoRoot);
       installed = result.changed;
       if (result.changed) console.log(`Installed capture script: ${result.target}`);
     }
@@ -1723,8 +1953,8 @@ export async function runCapture(options, runtime = {}) {
       return evalAnswerIsTrue(extractText(call));
     };
     if (!(await typePresent())) {
-      if (!installed && projectPath && fs.existsSync(projectPath)) {
-        const result = ensureCaptureScript(projectPath, options.repoRoot);
+      if (!installed && filesystemProjectPath && fs.existsSync(filesystemProjectPath)) {
+        const result = ensureCaptureScript(filesystemProjectPath, options.repoRoot);
         console.log(`Installed capture script: ${result.target}`);
         await evalCall(CAPTURE_REFRESH_EXPRESSION);
         await waitForEditorIdle(client, evalCall, deadline);
@@ -1756,7 +1986,8 @@ export async function runCapture(options, runtime = {}) {
     await waitForEditorIdle(client, evalCall, deadline);
 
     const outputDirectory =
-      options.out ?? captureOutputDir(projectPath ?? ".", captureStamp());
+      options.out ??
+      captureOutputDir(projectPath ?? ".", captureStamp(), filesystemProjectPath ?? projectPath);
     const summary = await evalCall(
       captureInvocationExpression("CaptureAll", outputDirectory)
     );
@@ -2289,13 +2520,14 @@ function usage() {
     "  --no-discover               Probe only the configured host/port, not the fallbacks",
     "  --bind HOST                 Bridge bind interface (default: 0.0.0.0)",
     "  --project PATH              Unity project directory (bridge, install-capture, capture)",
+    "  --project-container PATH    Container-visible project directory for local capture files",
     "  --out DIR                   Capture output directory (capture only)",
     "  --scenarios LIST            Comma-separated scenario names (t4-capture only)",
     "  --no-install                Skip local capture-script installation (capture only)",
     "  --backend cli|relay         Host backend (default: cli; relay supports Assistant)",
     "  --cli PATH                  Unity CLI executable (default: unity on host PATH)",
     "  --relay PATH                Unity relay executable override",
-    "  --token TOKEN               32-256 character bearer token (generated into .env.local if omitted)",
+    "  --token TOKEN               32-256 character bearer token (stored in .env.local)",
     "  --timeout MS                Per-endpoint MCP lifecycle deadline (default: 5000)",
     "  --connect-timeout MS        Per-endpoint TCP connect timeout (default: 750)",
     "  --session-timeout MS        Idle session timeout (default: 60000)",
