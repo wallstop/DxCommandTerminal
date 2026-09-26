@@ -97,8 +97,8 @@ test("capture artifacts prefer the package tree and fall back to Library", () =>
     );
 
     // A host path no local filesystem can see must still pick the layout from
-    // the container-visible project, then write through the host path.
-    const hostProject = path.join(path.sep, "host", "UnityProject");
+    // the container-visible project, then write through the resolved host path.
+    const hostProject = path.resolve(path.sep, "host", "UnityProject");
     assert.equal(
       captureOutputDir(hostProject, stamp, project),
       path.join(hostProject, "Packages", CAPTURE_PACKAGE_NAME, ".artifacts", "unity-state", stamp)
