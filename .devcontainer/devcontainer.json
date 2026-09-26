@@ -74,7 +74,6 @@
     "UNITY_MCP_BRIDGE_HOST": "${localEnv:UNITY_MCP_BRIDGE_HOST}",
     "UNITY_MCP_BRIDGE_PORT": "${localEnv:UNITY_MCP_BRIDGE_PORT}",
     "WORKSPACE_FOLDER": "${containerWorkspaceFolder}",
-    "DXT_WORKSPACE_ROOT": "${containerWorkspaceFolder}",
     "LOCAL_WORKSPACE_FOLDER": "${localWorkspaceFolder}",
     "COPILOT_HOME": "${containerWorkspaceFolder}/.copilot",
     "NANOCODER_MCPSERVERS_FILE": "${containerWorkspaceFolder}/.nanocoder/mcp.json"

@@ -83,9 +83,22 @@ assert_contains "${INSTALLER}" 'version --json'
 if grep -Fq 'sort -V' "${INSTALLER}"; then
     fail "the npm range parser still sorts package-name-prefixed output"
 fi
-resolved_version="$(printf '%s\n' '["2.0.0","2.0.16","2.0.15"]' \
-    | jq -r 'if type == "array" then max_by((split(".")[0:3] | map(tonumber? // 0))) else . end')"
-[[ "${resolved_version}" == "2.0.16" ]] || fail "range version fixture resolved to ${resolved_version}"
+# Exercise the real resolver: `npm view <range> version` returns an array whose
+# entries are not in version order, and an exact spec returns a bare string.
+mkdir -p "${WORK_DIR}/registry"
+cat >"${WORK_DIR}/registry/npm" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "${DXT_FAKE_NPM_VIEW:-[\"2.0.0\",\"2.0.16\",\"2.0.15\"]}"
+EOF
+chmod +x "${WORK_DIR}/registry/npm"
+resolve_version() {
+    PATH="${WORK_DIR}/registry:/usr/bin:/bin" DXT_FAKE_NPM_VIEW="$1" \
+        bash -c 'source "$1"; resolve_latest_version "@opencode/cli@2"' _ "${INSTALLER}"
+}
+[[ "$(resolve_version '["2.0.0","2.0.16","2.0.15"]')" == "2.0.16" ]] \
+    || fail "the resolver did not pick the highest version from an unordered array"
+[[ "$(resolve_version '"2.0.16"')" == "2.0.16" ]] \
+    || fail "the resolver did not pass a single version through"
 assert_contains "${DOCKERFILE}" 'WORKDIR /workspaces/package'
 assert_contains "${DOCKERFILE}" 'COPY .devcontainer/verify-opencode.sh /tmp/verify-opencode.sh'
 assert_count "${DOCKERFILE}" 'bash /tmp/verify-opencode.sh' 2
@@ -166,19 +179,31 @@ chmod +x "${LIFECYCLE_ROOT}/bin/node" "${LIFECYCLE_ROOT}/bin/opencode" \
     "${LIFECYCLE_ROOT}/.devcontainer/install-agent-clis.sh"
 touch "${LIFECYCLE_ROOT}/home/.bashrc" "${LIFECYCLE_ROOT}/home/.profile"
 : >"${LIFECYCLE_ROOT}/package.json"
-# The checkout's credentials must not leak in from the caller's environment, or
-# process precedence hides what the lifecycle loaded from .env.local.
+# The checkout's credentials and the loader's own control variables must not
+# leak in from the caller, or process precedence hides what the lifecycle did.
 run_lifecycle() {
     DXT_FAKE_MCP_FAILURE="${DXT_FAKE_MCP_FAILURE:-0}" \
         HOME="${LIFECYCLE_ROOT}/home" WORKSPACE_FOLDER="${LIFECYCLE_ROOT}" \
         PATH="${LIFECYCLE_ROOT}/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
         env -u ZAI_API_KEY -u Z_AI_API_KEY -u ZHIPU_API_KEY -u OPENROUTER_API_KEY \
         -u GITHUB_TOKEN -u GH_TOKEN -u GITHUB_PERSONAL_ACCESS_TOKEN -u GITHUB_PAT \
-        -u UNITY_MCP_BEARER_TOKEN \
+        -u UNITY_MCP_BEARER_TOKEN -u AI_BACKENDS_REPO_ROOT \
+        -u DXT_WORKSPACE_ROOT -u DXT_ENV_AUTOLOAD_DISABLED -u DXT_ENV_AUTOLOAD_ACTIVE \
+        -u BASH_ENV \
         bash "${LIFECYCLE_ROOT}/.devcontainer/post-start.sh" "$@" \
         >"${LIFECYCLE_ROOT}/lifecycle.log" 2>&1
 }
 run_lifecycle
+# The first run also spawns the background refresh, which rewrites the same
+# service-token.txt. Wait for it so the assertions never race it.
+restarts="$(grep -c '^service restart$' "${LIFECYCLE_ROOT}/opencode-calls.txt" || true)"
+deadline=$((SECONDS + 30))
+while [[ "$(grep -c '^service restart$' "${LIFECYCLE_ROOT}/opencode-calls.txt" || true)" -lt 2 ]]; do
+    if [[ "${SECONDS}" -ge "${deadline}" ]]; then
+        fail "the background OpenCode refresh never finished (${restarts} restart(s) seen)"
+    fi
+    sleep 0.2
+done
 assert_contains "${LIFECYCLE_ROOT}/service-token.txt" 'UNITY=generated-token-123' \
     "post-start passes the newly generated bearer token to OpenCode"
 assert_contains "${LIFECYCLE_ROOT}/service-token.txt" 'GITHUB=github-file-key' \
@@ -191,11 +216,26 @@ run_lifecycle --attach
 assert_contains "${LIFECYCLE_ROOT}/service-token.txt" 'UNITY=rotated-token' \
     "post-attach refreshes the OpenCode service token"
 DXT_FAKE_MCP_FAILURE=1 run_lifecycle --attach
-grep -Fq 'did not load its MCP config' "${LIFECYCLE_ROOT}/lifecycle.log" \
+grep -Fq 'rejected the Unity credentials' "${LIFECYCLE_ROOT}/lifecycle.log" \
     || fail "post-attach accepted an unauthorized OpenCode MCP service"
 grep -Fq 'service stop' "${LIFECYCLE_ROOT}/opencode-calls.txt" \
     || fail "post-attach did not stop the unusable OpenCode service"
 grep -Fq "DXT_WORKSPACE_ROOT='${LIFECYCLE_ROOT}'" "${LIFECYCLE_ROOT}/home/.bashrc" \
     || fail "post-attach did not migrate the interactive autoload block"
+
+# An unterminated marker must never let the rewrite drop the rest of the file.
+printf '%s\n' 'export EDITOR=code' \
+    '# >>> dxcommandterminal .env.local autoload >>>' \
+    "DXT_WORKSPACE_ROOT='${LIFECYCLE_ROOT}'" \
+    'alias ll="ls -la"' > "${LIFECYCLE_ROOT}/home/.bashrc"
+if HOME="${LIFECYCLE_ROOT}/home" \
+    PATH="${LIFECYCLE_ROOT}/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
+    bash -c 'source "$1"; install_env_local_autoload "$2"' \
+    _ "${LIFECYCLE_ROOT}/.devcontainer/install-env-autoload.sh" "${LIFECYCLE_ROOT}" \
+    >/dev/null 2>&1; then
+    fail "an unterminated autoload block was reported as installed"
+fi
+grep -Fqx 'alias ll="ls -la"' "${LIFECYCLE_ROOT}/home/.bashrc" \
+    || fail "an unterminated autoload block truncated the rest of the rc file"
 
 printf 'PASS: devcontainer OpenCode verification contract\n'

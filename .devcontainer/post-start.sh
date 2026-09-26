@@ -62,24 +62,27 @@ refresh_opencode_service() (
             return 1
         fi
     fi
-    status="$(opencode service status 2>/dev/null || true)"
+    status="$(timeout 20 opencode service status 2>/dev/null || true)"
     [[ "${status}" == http://* || "${status}" == https://* ]] || return 0
-    if ! opencode service restart >/dev/null 2>&1; then
+    if ! timeout 120 opencode service restart >/dev/null 2>&1; then
         echo "[post-start] OpenCode service restart failed; stopping the stale service." >&2
-        opencode service stop >/dev/null 2>&1 || true
+        timeout 20 opencode service stop >/dev/null 2>&1 || true
         return 1
     fi
 
     # The service command returns before its project config and MCP connections
     # finish initializing. Wait briefly so the first terminal command sees them.
-    for attempt in 1 2 3 4 5; do
-        output="$(timeout 3 opencode mcp list 2>&1 || true)"
+    for _ in 1 2 3 4 5; do
+        output="$(timeout 15 opencode mcp list 2>&1 || true)"
         if [[ -z "${output}" || "${output}" == *"No MCP servers configured"* ]]; then
             sleep 1
             continue
         fi
-        if [[ "${output}" == *"unity-mcp"* \
-            && ( "${output}" == *"Unauthorized"* || "${output}" == *"Authorization header"* ) ]]; then
+        if [[ "${output}" != *"unity-mcp"* ]]; then
+            echo "[post-start] OpenCode service loaded no unity-mcp entry; leaving it running." >&2
+            return 0
+        fi
+        if [[ "${output}" == *"Unauthorized"* || "${output}" == *"Authorization header"* ]]; then
             sleep 1
             continue
         fi
@@ -88,14 +91,15 @@ refresh_opencode_service() (
         fi
         sleep 1
     done
-    echo "[post-start] OpenCode service did not load its MCP config after ${attempt} attempts." >&2
-    opencode service stop >/dev/null 2>&1 || true
+    echo "[post-start] OpenCode service rejected the Unity credentials; stopping it." >&2
+    timeout 20 opencode service stop >/dev/null 2>&1 || true
     return 1
 )
 
 ensure_opencode_v2
 [[ "${1:-}" == "--prepare" ]] && exit 0
-install_env_local_autoload "${WORKSPACE_DIR}"
+install_env_local_autoload "${WORKSPACE_DIR}" \
+    || echo "[post-start] Could not update the shell autoload block." >&2
 if ! refresh_opencode_service; then
     echo "[post-start] OpenCode service will retry on the next launch." >&2
 fi

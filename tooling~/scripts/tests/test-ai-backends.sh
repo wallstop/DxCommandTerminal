@@ -290,9 +290,11 @@ assert_contains "${out}" '"sandbox":{"enabled":false,"enableWeakerNestedSandbox"
     "container mode passes the weaker-sandbox settings"
 
 echo "== scrubbed launchers: every provider disables shell autoload =="
-[[ "$(grep -c 'prepare_scrubbed_agent_environment' "${BACKENDS}")" -eq 5 ]] \
-    && ok "all provider launchers call the scrub helper" \
-    || bad "a provider launcher can restore BASH_ENV credentials"
+# Anchored call sites only: a comment or the definition must not satisfy this.
+call_sites="$(grep -c '^    prepare_scrubbed_agent_environment$' "${BACKENDS}" || true)"
+[[ "${call_sites}" -eq 4 ]] \
+    && ok "all four provider launchers call the scrub helper" \
+    || bad "found ${call_sites} scrub call sites; expected one per provider launcher"
 
 echo "== install: launchers and profile files =="
 bin_dir="${WORK}/launchers"

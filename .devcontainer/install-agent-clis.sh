@@ -35,27 +35,6 @@ if ! command -v npm >/dev/null 2>&1; then
     exit 0
 fi
 
-mkdir -p "${NPM_PREFIX}/bin" "${NPM_PREFIX}/lib"
-export PATH="${NPM_PREFIX}/bin:${PATH}"
-
-# Several VS Code lifecycle hooks can overlap during a rebuild. One updater is
-# enough; the image-provided commands remain available to the other callers.
-if command -v flock >/dev/null 2>&1; then
-    exec 9>"${TMPDIR:-/tmp}/dxt-install-agent-clis.lock"
-    if ! flock -n 9; then
-        log "another agent CLI refresh is already running."
-        exit 0
-    fi
-fi
-
-if npm list --global --depth=0 opencode-ai >/dev/null 2>&1; then
-    log "removing legacy opencode-ai package."
-    if ! timeout 300 npm uninstall --global opencode-ai --silent --no-fund --no-audit; then
-        warn "failed to remove the legacy opencode-ai package."
-        exit 1
-    fi
-fi
-
 command_version() {
     local command_name="$1"
     local output=""
@@ -75,6 +54,33 @@ resolve_latest_version() {
         | jq -r 'if type == "array" then max_by((split(".")[0:3] | map(tonumber? // 0))) else . end' \
         | tr -d '[:space:]' || true
 }
+
+# Sourced by the regression suite to exercise the helpers above. Everything
+# below this point touches the npm prefix or the network.
+if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
+    # shellcheck disable=SC2317
+    return 0 2>/dev/null || exit 0
+fi
+
+mkdir -p "${NPM_PREFIX}/bin" "${NPM_PREFIX}/lib"
+export PATH="${NPM_PREFIX}/bin:${PATH}"
+
+# Several VS Code lifecycle hooks can overlap during a rebuild. One updater is
+# enough; the image-provided commands remain available to the other callers.
+if command -v flock >/dev/null 2>&1; then
+    exec 9>"${TMPDIR:-/tmp}/dxt-install-agent-clis.lock"
+    if ! flock -n 9; then
+        log "another agent CLI refresh is already running."
+        exit 0
+    fi
+fi
+
+if npm list --global --depth=0 opencode-ai >/dev/null 2>&1; then
+    log "removing legacy opencode-ai package."
+    # A stale v1 package is not worth blocking the v2 refresh for.
+    timeout 300 npm uninstall --global opencode-ai --silent --no-fund --no-audit \
+        || warn "failed to remove the legacy opencode-ai package."
+fi
 
 failures=0
 for index in "${!PACKAGES[@]}"; do

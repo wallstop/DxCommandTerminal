@@ -34,13 +34,21 @@ EOF
             continue
         fi
 
+        # An unterminated block would make the rewrite below delete the rest of
+        # the file. Refuse instead; a hand edit is the only safe repair.
+        if [[ "$(grep -Fxc "${marker}" "${rc_file}" || true)" \
+            != "$(grep -Fxc "${end_marker}" "${rc_file}" || true)" ]]; then
+            printf 'Unterminated autoload block in %s; fix it by hand.\n' "${rc_file}" >&2
+            return 1
+        fi
+
         temporary="$(mktemp "${rc_file}.dxt-autoload.XXXXXX")"
+        trap 'rm -f "${temporary}"' EXIT
         if ! awk -v start="${marker}" -v end="${end_marker}" '
             $0 == start { skip = 1; next }
             $0 == end { skip = 0; next }
             !skip { print }
         ' "${rc_file}" >"${temporary}"; then
-            rm -f "${temporary}"
             return 1
         fi
         {
@@ -48,5 +56,6 @@ EOF
             cat "${temporary}"
         } >"${rc_file}"
         rm -f "${temporary}"
+        trap - EXIT
     done
 )

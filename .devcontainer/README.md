@@ -116,8 +116,9 @@ credentials. Native agents launched from the integrated terminal (`claude`,
 OpenCode Z.AI provider uses the loader's `ZHIPU_API_KEY` mirror. Provider
 launchers disable autoloading before starting their agent subprocesses. If an
 OpenCode background service was already running, `post-start.sh` restarts it
-from the credential-bearing lifecycle shell. Non-interactive contexts can still
-evaluate the exports explicitly:
+from the credential-bearing lifecycle shell, so a window reload ends any running
+OpenCode session. Non-interactive contexts can still evaluate the exports
+explicitly:
 
 ```bash
 eval "$(bash .devcontainer/ai-backends.sh env)"
@@ -131,8 +132,9 @@ The loader prints one `export KEY='value'` line per credential found
 OpenCode, Nanocoder, VS Code, Cursor, Copilot CLI) in one transaction with
 rollback, mode 0600. Generated configs are gitignored. The OpenCode v2 config
 adds the published schema, uses native `mcp.servers` entries, enables Code Mode,
-and registers the shared `.llm/skills` catalog. Generated OpenCode credentials
-use `{env:NAME}` references; they are not written into the config. It also
+and registers the shared `.llm/skills` catalog. The 300-second execution timeout
+covers a Play Mode suite over the bridge. Generated OpenCode credentials use
+`{env:NAME}` references; they are not written into the config. It also
 converts existing v1 MCP and skill fields without replacing explicit values.
 Session `share` stays `disabled` so transcripts never sync to a public URL.
 OpenCode references canonical `GITHUB_TOKEN` and `ZAI_API_KEY` names. Evaluate

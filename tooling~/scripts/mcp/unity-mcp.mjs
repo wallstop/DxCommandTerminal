@@ -369,12 +369,15 @@ export function requireProjectPath(options) {
 }
 
 export function requireProjectFilesystemPath(options) {
+  const usesContainerPath = options.projectContainerPath !== undefined;
   const projectPath = options.projectContainerPath ?? options.projectPath;
+  const source = usesContainerPath ? "--project-container" : "--project";
+  const variable = usesContainerPath ? ENV_KEYS.projectContainerPath : ENV_KEYS.projectPath;
   if (!projectPath) {
-    fail(`Unity project path is required. Pass --project or set ${ENV_KEYS.projectPath}.`);
+    fail(`Unity project path is required. Pass ${source} or set ${variable}.`);
   }
   if (!fs.existsSync(projectPath) || !fs.statSync(projectPath).isDirectory()) {
-    fail(`Unity project directory does not exist: ${projectPath}`);
+    fail(`Unity project directory does not exist: ${projectPath} (from ${variable})`);
   }
   return projectPath;
 }
@@ -1824,6 +1827,8 @@ export function ensureCaptureScript(projectPath, repoRoot = REPO_ROOT) {
   if (existing === sourceText) return { target, changed: false, backup: undefined };
   let backup;
   if (existing !== null) {
+    // projectPath is always the locally writable root here, so the default
+    // layout probe is the correct one.
     const backupDir = path.join(captureArtifactRoot(projectPath), "backup");
     fs.mkdirSync(backupDir, { recursive: true });
     backup = path.join(backupDir, `${CAPTURE_TARGET_NAME}.${captureStamp()}.bak`);
