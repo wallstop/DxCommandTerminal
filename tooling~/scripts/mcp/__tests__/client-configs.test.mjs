@@ -10,6 +10,7 @@ import {
   prepareJsonServers,
   stripJsonComments,
   transactionalWrite,
+  unresolvedOpenCodeVariables,
   ZAI_SERVERS,
   GITHUB_MCP_URL
 } from "../unity-mcp.mjs";
@@ -44,6 +45,25 @@ function options(repoRoot, overrides = {}) {
     ...overrides
   };
 }
+
+test("OpenCode credential references are reported when only aliases are set", () => {
+  const canonical = {
+    UNITY_MCP_BEARER_TOKEN: BEARER,
+    GITHUB_TOKEN: "gh",
+    ZAI_API_KEY: ZAI_KEY
+  };
+  const all = { githubToken: "gh-token-123", zaiToken: ZAI_KEY };
+  assert.deepEqual(unresolvedOpenCodeVariables(all, canonical), []);
+  assert.deepEqual(
+    unresolvedOpenCodeVariables(all, { ...canonical, GITHUB_TOKEN: undefined, ZAI_API_KEY: undefined }),
+    ["GITHUB_TOKEN", "ZAI_API_KEY"]
+  );
+  // Without a credential the server is removed, so nothing is referenced.
+  assert.deepEqual(
+    unresolvedOpenCodeVariables({ githubToken: undefined, zaiToken: undefined }, {}),
+    ["UNITY_MCP_BEARER_TOKEN"]
+  );
+});
 
 test("configure writes every client schema with the unity endpoint", () => {
   const repoRoot = tempRepo();

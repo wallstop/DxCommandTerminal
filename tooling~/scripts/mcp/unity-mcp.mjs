@@ -1042,6 +1042,29 @@ function openCodeLocalEnvironment(environment) {
   return result;
 }
 
+/*
+    A {env:NAME} reference resolves only when that exact name is exported. An
+    accepted alias (Z_AI_API_KEY, GITHUB_PAT) would otherwise leave OpenCode
+    sending an empty header and failing at request time.
+*/
+export function unresolvedOpenCodeVariables(options, values) {
+  const referenced = [OPEN_CODE_TOKEN_ENV["unity-mcp"]];
+  if (options.githubToken) referenced.push(OPEN_CODE_TOKEN_ENV.github);
+  if (options.zaiToken) referenced.push(OPEN_CODE_TOKEN_ENV["web-search-prime"]);
+  return [...new Set(referenced)].filter((variable) => !values[variable]);
+}
+
+function warnOnUnresolvedOpenCodeReferences(options) {
+  const missing = unresolvedOpenCodeVariables(options, {
+    ...readLocalEnv(options.repoRoot),
+    ...process.env
+  });
+  if (missing.length === 0) return;
+  console.warn(
+    `[unity-mcp] OpenCode reads ${missing.join(", ")}. Export the listed names (ai-backends.sh env does) or those servers fail to authenticate.`
+  );
+}
+
 // One catalog, rendered in each client's documented schema.
 function clientServers(kind, options, url) {
   const catalog = {
@@ -1116,6 +1139,7 @@ function clientServers(kind, options, url) {
 }
 export function configure(inputOptions, endpoint, beforeCommit) {
   const options = ensureBearerToken(inputOptions);
+  warnOnUnresolvedOpenCodeReferences(options);
   const url = endpointUrl(endpoint);
   const paths = clientConfigPaths(options.repoRoot);
   const removed = options.zaiToken ? [] : ZAI_SERVERS;
