@@ -7,33 +7,13 @@
 
 set -euo pipefail
 
-readonly NPM_PREFIX="${NPM_CONFIG_PREFIX:-${HOME}/.local}"
-readonly LOG_PREFIX="[agent-clis]"
-readonly PACKAGES=(
-    "@openai/codex@latest"
-    "@opencode/cli@2"
-    "@nanocollective/nanocoder@latest"
-    "@anthropic-ai/claude-code@latest"
-)
-readonly COMMANDS=(
-    "codex"
-    "opencode"
-    "nanocoder"
-    "claude"
-)
-
 log() {
-    echo "${LOG_PREFIX} $*"
+    echo "[agent-clis] $*"
 }
 
 warn() {
-    echo "${LOG_PREFIX} WARN: $*" >&2
+    echo "[agent-clis] WARN: $*" >&2
 }
-
-if ! command -v npm >/dev/null 2>&1; then
-    warn "npm is unavailable; keeping the image-provided agent CLIs."
-    exit 0
-fi
 
 command_version() {
     local command_name="$1"
@@ -50,16 +30,37 @@ command_version() {
 
 resolve_latest_version() {
     local package_spec="$1"
+    # An empty range or a null response must read as "no answer" so the caller
+    # keeps the installed CLI instead of failing on the string "null".
     timeout 20 npm view "${package_spec}" version --json 2>/dev/null \
-        | jq -r 'if type == "array" then max_by((split(".")[0:3] | map(tonumber? // 0))) else . end' \
+        | jq -r 'if type == "array" then (if length == 0 then "" else max_by((split(".")[0:3] | map(tonumber? // 0))) end) else (. // "") end' \
         | tr -d '[:space:]' || true
 }
 
 # Sourced by the regression suite to exercise the helpers above. Everything
-# below this point touches the npm prefix or the network.
+# below this point reads the environment, touches the npm prefix, or runs npm.
 if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
     # shellcheck disable=SC2317
     return 0 2>/dev/null || exit 0
+fi
+
+NPM_PREFIX="${NPM_CONFIG_PREFIX:-${HOME}/.local}"
+PACKAGES=(
+    "@openai/codex@latest"
+    "@opencode/cli@2"
+    "@nanocollective/nanocoder@latest"
+    "@anthropic-ai/claude-code@latest"
+)
+COMMANDS=(
+    "codex"
+    "opencode"
+    "nanocoder"
+    "claude"
+)
+
+if ! command -v npm >/dev/null 2>&1; then
+    warn "npm is unavailable; keeping the image-provided agent CLIs."
+    exit 0
 fi
 
 mkdir -p "${NPM_PREFIX}/bin" "${NPM_PREFIX}/lib"

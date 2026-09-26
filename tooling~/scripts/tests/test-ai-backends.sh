@@ -17,6 +17,9 @@
 # twice (once before helpers are used, once after) so SC2317 flags the stub.
 # shellcheck disable=SC2030,SC2031,SC2015,SC2317
 set -uo pipefail
+# An ambient loader would inject credentials into every case's environment and
+# mask the file-sourced values these assertions check.
+unset BASH_ENV
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKENDS="${SCRIPT_DIR}/../../../.devcontainer/ai-backends.sh"

@@ -17,7 +17,10 @@ export DXT_ENV_AUTOLOAD_ACTIVE=1
 
 dxt_workspace_root="${DXT_WORKSPACE_ROOT:-}"
 if [ -z "${dxt_workspace_root}" ]; then
-    dxt_workspace_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-}")/.." && pwd)"
+    # A missing checkout is a no-op, so a failed cd must not abort a caller
+    # running under set -e.
+    dxt_workspace_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-}")/.." 2>/dev/null && pwd)" \
+        || dxt_workspace_root=""
 fi
 if [ -n "${dxt_workspace_root}" ] \
     && [ -f "${dxt_workspace_root}/.devcontainer/ai-backends.sh" ]; then

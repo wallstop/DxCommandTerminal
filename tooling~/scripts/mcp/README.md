@@ -39,7 +39,11 @@ talk to that endpoint. See `.devcontainer/README.md` for the full picture and
 `.env.local` at the repository root, parsed as data (never sourced). Process env
 beats the file; empty env vars are ignored. Aliases: `GITHUB_TOKEN`, `GH_TOKEN`,
 `GITHUB_PERSONAL_ACCESS_TOKEN`, `GITHUB_PAT`; `Z_AI_API_KEY`, `ZAI_API_KEY`;
-`UNITY_PROJECT_PATH`, `UNITY_MCP_BEARER_TOKEN`.
+`UNITY_PROJECT_PATH`, `UNITY_PROJECT_CONTAINER_PATH`, `UNITY_MCP_BEARER_TOKEN`.
+`UNITY_PROJECT_PATH` stays the host identity the bridge needs for the port and
+the capture output path. `UNITY_PROJECT_CONTAINER_PATH` (container only) is the
+project directory this process can read and write, used to install the capture
+script and to pick the artifact layout.
 
 ## Generated client configs
 

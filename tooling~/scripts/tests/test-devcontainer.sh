@@ -196,11 +196,10 @@ run_lifecycle() {
 run_lifecycle
 # The first run also spawns the background refresh, which rewrites the same
 # service-token.txt. Wait for it so the assertions never race it.
-restarts="$(grep -c '^service restart$' "${LIFECYCLE_ROOT}/opencode-calls.txt" || true)"
 deadline=$((SECONDS + 30))
 while [[ "$(grep -c '^service restart$' "${LIFECYCLE_ROOT}/opencode-calls.txt" || true)" -lt 2 ]]; do
     if [[ "${SECONDS}" -ge "${deadline}" ]]; then
-        fail "the background OpenCode refresh never finished (${restarts} restart(s) seen)"
+        fail "the background OpenCode refresh never finished ($(wc -l <"${LIFECYCLE_ROOT}/opencode-calls.txt" 2>/dev/null || printf 0) call(s) seen)"
     fi
     sleep 0.2
 done
@@ -237,5 +236,36 @@ if HOME="${LIFECYCLE_ROOT}/home" \
 fi
 grep -Fqx 'alias ll="ls -la"' "${LIFECYCLE_ROOT}/home/.bashrc" \
     || fail "an unterminated autoload block truncated the rest of the rc file"
+
+# A reversed marker pair is malformed too: the rewrite would drop the tail.
+printf '%s\n' 'export KEEPME=1' \
+    '# <<< dxcommandterminal .env.local autoload <<<' \
+    '# >>> dxcommandterminal .env.local autoload >>>' \
+    "DXT_WORKSPACE_ROOT='${LIFECYCLE_ROOT}'" > "${LIFECYCLE_ROOT}/home/.bashrc"
+if HOME="${LIFECYCLE_ROOT}/home" \
+    PATH="${LIFECYCLE_ROOT}/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
+    bash -c 'source "$1"; install_env_local_autoload "$2"' \
+    _ "${LIFECYCLE_ROOT}/.devcontainer/install-env-autoload.sh" "${LIFECYCLE_ROOT}" \
+    >/dev/null 2>&1; then
+    fail "a reversed autoload block was reported as installed"
+fi
+grep -Fqx 'export KEEPME=1' "${LIFECYCLE_ROOT}/home/.bashrc" \
+    || fail "a reversed autoload block truncated the rest of the rc file"
+
+# The gate this change exists for: a v1-only image must not reach the attach
+# point. The stub reports v1 through the same commands the verifier reads.
+cat >"${LIFECYCLE_ROOT}/bin/opencode" <<'EOF'
+#!/usr/bin/env bash
+case "${1:-}" in
+    --version) printf '%s\n' 'opencode v1.18.32' ;;
+    mcp) [[ "${2:-}" == "list" ]] && printf '%s\n' '✓ unity-mcp connected' ;;
+esac
+EOF
+chmod +x "${LIFECYCLE_ROOT}/bin/opencode"
+if run_lifecycle --attach; then
+    fail "post-start attached with a v1-only OpenCode"
+fi
+grep -Fq 'OpenCode v2 is required' "${LIFECYCLE_ROOT}/lifecycle.log" \
+    || fail "post-start did not report the missing OpenCode v2"
 
 printf 'PASS: devcontainer OpenCode verification contract\n'

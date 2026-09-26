@@ -54,7 +54,7 @@ ensure_opencode_v2() {
 # OpenCode's background service can outlive a shell and miss credentials loaded
 # by the lifecycle environment. Restart an existing service from this shell.
 refresh_opencode_service() (
-    local status output
+    local status output unity_line rejected=false
     if command -v flock >/dev/null 2>&1; then
         exec 8>"${TMPDIR:-/tmp}/dxt-opencode-service.lock"
         if ! flock -w 30 8; then
@@ -78,21 +78,26 @@ refresh_opencode_service() (
             sleep 1
             continue
         fi
-        if [[ "${output}" != *"unity-mcp"* ]]; then
-            echo "[post-start] OpenCode service loaded no unity-mcp entry; leaving it running." >&2
+        # Only the unity-mcp row decides this; another server may fail freely.
+        unity_line="$(printf '%s\n' "${output}" | grep -F 'unity-mcp' || true)"
+        if [[ -z "${unity_line}" ]]; then
+            echo "[post-start] OpenCode service listed no unity-mcp entry; leaving it running." >&2
             return 0
         fi
-        if [[ "${output}" == *"Unauthorized"* || "${output}" == *"Authorization header"* ]]; then
+        if printf '%s\n' "${unity_line}" \
+            | grep -Eq 'Unauthorized|Authorization header|401|forbidden'; then
+            rejected=true
             sleep 1
             continue
         fi
-        if [[ "${output}" == *"unity-mcp"* ]]; then
-            return 0
-        fi
-        sleep 1
+        return 0
     done
-    echo "[post-start] OpenCode service rejected the Unity credentials; stopping it." >&2
-    timeout 20 opencode service stop >/dev/null 2>&1 || true
+    if [[ "${rejected}" == "true" ]]; then
+        echo "[post-start] OpenCode service rejected the Unity credentials; stopping it." >&2
+        timeout 20 opencode service stop >/dev/null 2>&1 || true
+        return 1
+    fi
+    echo "[post-start] OpenCode service did not load its MCP config in time; leaving it running." >&2
     return 1
 )
 
@@ -106,8 +111,9 @@ fi
 [[ "${1:-}" == "--attach" ]] && exit 0
 
 # Every start checks the latest tags in the background. Image copies remain
-# usable while offline, and the installer serializes overlapping starts. If it
-# replaces OpenCode, refresh the service again after the install completes.
+# usable while offline, and the installer serializes overlapping starts. The
+# service is refreshed again afterwards because the install may have replaced
+# the binary behind the running service.
 (
     bash "${installer}" || true
     # Pick up a credential file edited while the installer was running.

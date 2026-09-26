@@ -58,7 +58,7 @@ sudo** anywhere.
    ```
 
 The old `sst-dev.opencode` extension is not installed: it launches the removed
-v1 `--port` interface. Use the integrated terminal command `opencode` (or an ACP
+v1 `--port` interface. Use the integrated terminal command `opencode`, or an ACP
 client that starts `opencode acp`.
 
 ## What the image bakes in
