@@ -1697,16 +1697,18 @@ export function captureInstallTarget(projectPath) {
   return path.join(path.resolve(projectPath), "Assets", "Editor", CAPTURE_TARGET_NAME);
 }
 
-export function captureArtifactRoot(projectPath) {
+export function captureArtifactRoot(projectPath, layoutPath = projectPath) {
   const project = path.resolve(projectPath);
-  const packageRoot = path.join(project, "Packages", CAPTURE_PACKAGE_NAME);
+  // The package probe needs a locally visible root: a host path does not exist
+  // in a container, which would silently select the Library fallback.
+  const packageRoot = path.join(path.resolve(layoutPath), "Packages", CAPTURE_PACKAGE_NAME);
   return fs.existsSync(packageRoot)
-    ? path.join(packageRoot, ".artifacts", "unity-state")
+    ? path.join(project, "Packages", CAPTURE_PACKAGE_NAME, ".artifacts", "unity-state")
     : path.join(project, "Library", "DxTerminalStateCapture");
 }
 
-export function captureOutputDir(projectPath, utcStamp) {
-  return path.join(captureArtifactRoot(projectPath), utcStamp);
+export function captureOutputDir(projectPath, utcStamp, layoutPath = projectPath) {
+  return path.join(captureArtifactRoot(projectPath, layoutPath), utcStamp);
 }
 
 function captureStamp(date = new Date()) {
@@ -1955,7 +1957,8 @@ export async function runCapture(options, runtime = {}) {
     await waitForEditorIdle(client, evalCall, deadline);
 
     const outputDirectory =
-      options.out ?? captureOutputDir(projectPath ?? ".", captureStamp());
+      options.out ??
+      captureOutputDir(projectPath ?? ".", captureStamp(), filesystemProjectPath ?? projectPath);
     const summary = await evalCall(
       captureInvocationExpression("CaptureAll", outputDirectory)
     );

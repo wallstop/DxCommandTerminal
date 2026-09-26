@@ -95,6 +95,18 @@ test("capture artifacts prefer the package tree and fall back to Library", () =>
       captureOutputDir(project, stamp),
       path.join(packageRoot, ".artifacts", "unity-state", stamp)
     );
+
+    // A host path no local filesystem can see must still pick the layout from
+    // the container-visible project, then write through the host path.
+    const hostProject = path.join(path.sep, "host", "UnityProject");
+    assert.equal(
+      captureOutputDir(hostProject, stamp, project),
+      path.join(hostProject, "Packages", CAPTURE_PACKAGE_NAME, ".artifacts", "unity-state", stamp)
+    );
+    assert.equal(
+      captureOutputDir(hostProject, stamp, path.join(path.sep, "absent")),
+      path.join(hostProject, "Library", "DxTerminalStateCapture", stamp)
+    );
   } finally {
     fs.rmSync(project, { recursive: true, force: true });
   }
