@@ -118,6 +118,7 @@ const OPTION_NAMES = new Set([
   "no-discover",
   "offline",
   "out",
+  "project-container",
   "scenarios",
   "mode",
   "filter",
@@ -130,6 +131,7 @@ const ENV_KEYS = Object.freeze({
   port: "UNITY_MCP_BRIDGE_PORT",
   endpointPath: "UNITY_MCP_BRIDGE_PATH",
   projectPath: "UNITY_PROJECT_PATH",
+  projectContainerPath: "UNITY_PROJECT_CONTAINER_PATH",
   relayPath: "UNITY_MCP_RELAY_PATH",
   backend: "UNITY_MCP_BACKEND",
   cliPath: "UNITY_CLI_PATH",
@@ -181,7 +183,8 @@ const QUOTED_VALUE = Object.freeze({
 });
 export function parseDotEnv(raw, source = ".env.local") {
   const values = {};
-  for (const [index, original] of raw.split(/\r?\n/).entries()) {
+  const normalized = raw.replace(/^\uFEFF/, "");
+  for (const [index, original] of normalized.split(/\r?\n/).entries()) {
     const line = original.trim();
     if (!line || line.startsWith("#")) continue;
     const match = /^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line);
@@ -293,6 +296,11 @@ export function resolveOptions(args, environment = process.env, localValues, rep
     environment[ENV_KEYS.projectPath],
     local[ENV_KEYS.projectPath]
   );
+  const projectContainerPath = first(
+    args["project-container"],
+    environment[ENV_KEYS.projectContainerPath],
+    local[ENV_KEYS.projectContainerPath]
+  );
 
   // Project-port-local default: when the checkout knows its Unity project but no
   // explicit port, the deterministic project port replaces the stock bridge port.
@@ -308,6 +316,8 @@ export function resolveOptions(args, environment = process.env, localValues, rep
     explicitPort: explicitPort === undefined ? undefined : integer(explicitPort, "Port", 1, 65_535),
     endpointPath: validateEndpointPath(get("path", "endpointPath", DEFAULTS.endpointPath)),
     projectPath: projectPath === undefined ? undefined : path.resolve(projectPath),
+    projectContainerPath:
+      projectContainerPath === undefined ? undefined : path.resolve(projectContainerPath),
     backend: get("backend", "backend", "cli"),
     cliPath: get("cli", "cliPath", "unity"),
     relayPath: first(args.relay, environment[ENV_KEYS.relayPath], local[ENV_KEYS.relayPath]),
@@ -322,6 +332,7 @@ export function resolveOptions(args, environment = process.env, localValues, rep
     ),
     logLevel: get("log-level", "logLevel", "info"),
     bearerToken: validateToken(get("token", "bearerToken", undefined)),
+    bearerTokenFromArgument: args.token !== undefined,
     githubToken: githubToken(environment, local),
     zaiToken: first(
       environment.Z_AI_API_KEY,
@@ -355,6 +366,17 @@ export function requireProjectPath(options) {
     fail(`Unity project directory does not exist: ${options.projectPath}`);
   }
   return options.projectPath;
+}
+
+export function requireProjectFilesystemPath(options) {
+  const projectPath = options.projectContainerPath ?? options.projectPath;
+  if (!projectPath) {
+    fail(`Unity project path is required. Pass --project or set ${ENV_KEYS.projectPath}.`);
+  }
+  if (!fs.existsSync(projectPath) || !fs.statSync(projectPath).isDirectory()) {
+    fail(`Unity project directory does not exist: ${projectPath}`);
+  }
+  return projectPath;
 }
 
 export function endpointUrl({ host, port, endpointPath }) {
@@ -762,8 +784,25 @@ export function transactionalWrite(writes, beforeCommit = () => {}) {
   return changed.map(([filePath]) => filePath);
 }
 
+function persistBearerToken(repoRoot, token) {
+  const envPath = path.join(repoRoot, ".env.local");
+  if (readLocalEnv(repoRoot)[ENV_KEYS.bearerToken] === token) return;
+  const current = fs.existsSync(envPath) ? fs.readFileSync(envPath, "utf8") : "";
+  const pattern = /^(\uFEFF?[ \t]*(?:export[ \t]+)?UNITY_MCP_BEARER_TOKEN[ \t]*=)[^\r\n]*/gm;
+  const updated = current.replace(pattern, `$1${token}`);
+  if (updated !== current) {
+    atomicWrite(envPath, updated);
+    return;
+  }
+  const prefix = current && !current.endsWith("\n") ? "\n" : "";
+  atomicWrite(envPath, `${current}${prefix}${ENV_KEYS.bearerToken}=${token}\n`);
+}
+
 function ensureBearerToken(options) {
-  if (options.bearerToken) return options;
+  if (options.bearerToken) {
+    if (options.bearerTokenFromArgument) persistBearerToken(options.repoRoot, options.bearerToken);
+    return options;
+  }
   const saved = readLocalEnv(options.repoRoot)[ENV_KEYS.bearerToken];
   if (saved) return { ...options, bearerToken: validateToken(saved) };
   const bearerToken = randomBytes(32).toString("hex");
@@ -980,7 +1019,28 @@ export function clientConfigPaths(repoRoot) {
   };
 }
 const ZAI_SERVERS = ["web-search-prime", "web-reader", "zread", "zai-mcp-server"];
+const OPEN_CODE_TOKEN_ENV = Object.freeze({
+  "unity-mcp": "UNITY_MCP_BEARER_TOKEN",
+  github: "GITHUB_TOKEN",
+  "web-search-prime": "ZAI_API_KEY",
+  "web-reader": "ZAI_API_KEY",
+  zread: "ZAI_API_KEY"
+});
 export { ZAI_SERVERS };
+
+function openCodeAuthHeaders(name, token) {
+  if (!token) return undefined;
+  const variable = OPEN_CODE_TOKEN_ENV[name];
+  if (!variable) fail(`No OpenCode environment variable is defined for ${name}`);
+  return { Authorization: `Bearer {env:${variable}}` };
+}
+
+function openCodeLocalEnvironment(environment) {
+  if (!environment) return undefined;
+  const result = { ...environment };
+  if (result.Z_AI_API_KEY) result.Z_AI_API_KEY = "{env:ZAI_API_KEY}";
+  return result;
+}
 
 // One catalog, rendered in each client's documented schema.
 function clientServers(kind, options, url) {
@@ -1008,6 +1068,7 @@ function clientServers(kind, options, url) {
   return Object.fromEntries(
     Object.entries(catalog).map(([name, { url, token, command, args, env }]) => {
       const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+      const openCodeHeaders = kind === "openCode" ? openCodeAuthHeaders(name, token) : undefined;
       let config;
       if (kind === "codex") {
         // ZAI returns an empty 200 without Content-Type for initialized notifications.
@@ -1031,12 +1092,16 @@ function clientServers(kind, options, url) {
               : { command, args, ...(env ? { env } : {}) };
       } else if (kind === "openCode") {
         config = url
-          ? { type: "remote", url, ...(headers ? { headers, oauth: false } : {}) }
-          : { type: "local", command: [command, ...args], ...(env ? { environment: env } : {}) };
+          ? { type: "remote", url, ...(openCodeHeaders ? { headers: openCodeHeaders, oauth: false } : {}) }
+          : {
+              type: "local",
+              command: [command, ...args],
+              ...(env ? { environment: openCodeLocalEnvironment(env) } : {})
+            };
         Object.assign(config, {
           codemode: true,
           disabled: false,
-          timeout: { catalog: 30000, execution: 30000 }
+          timeout: { catalog: 30000, execution: 300000 }
         });
       } else {
         config = url
@@ -1067,7 +1132,11 @@ export function configure(inputOptions, endpoint, beforeCommit) {
       return [file, raw];
     }
     if (kind === "openCode") {
-      const defaults = { share: "disabled", skills: [OPEN_CODE_SKILLS_PATH] };
+      const defaults = {
+        $schema: "https://opencode.ai/config.json",
+        share: "disabled",
+        skills: [OPEN_CODE_SKILLS_PATH]
+      };
       return [file, prepareOpenCodeConfig(file, servers, removed, defaults)];
     }
     const collection = kind === "vscode" ? "servers" : "mcpServers";
@@ -1739,7 +1808,7 @@ export function ensureCaptureScript(projectPath, repoRoot = REPO_ROOT) {
 }
 
 export async function runInstallCapture(options) {
-  const projectPath = requireProjectPath(options);
+  const projectPath = requireProjectFilesystemPath(options);
   const result = ensureCaptureScript(projectPath, options.repoRoot);
   if (result.changed) {
     console.log(
@@ -1836,11 +1905,14 @@ export async function runCapture(options, runtime = {}) {
         signal
       );
 
-    // Install locally when possible (host runs, or the project bind mount exists).
+    // Install through the container bind mount when one is configured. The
+    // bridge still receives the host project path for deterministic port and
+    // artifact paths because Unity runs on the host.
     const projectPath = options.projectPath;
+    const filesystemProjectPath = options.projectContainerPath ?? options.projectPath;
     let installed = false;
-    if (projectPath && !options.noInstall && fs.existsSync(projectPath)) {
-      const result = ensureCaptureScript(projectPath, options.repoRoot);
+    if (filesystemProjectPath && !options.noInstall && fs.existsSync(filesystemProjectPath)) {
+      const result = ensureCaptureScript(filesystemProjectPath, options.repoRoot);
       installed = result.changed;
       if (result.changed) console.log(`Installed capture script: ${result.target}`);
     }
@@ -1850,8 +1922,8 @@ export async function runCapture(options, runtime = {}) {
       return evalAnswerIsTrue(extractText(call));
     };
     if (!(await typePresent())) {
-      if (!installed && projectPath && fs.existsSync(projectPath)) {
-        const result = ensureCaptureScript(projectPath, options.repoRoot);
+      if (!installed && filesystemProjectPath && fs.existsSync(filesystemProjectPath)) {
+        const result = ensureCaptureScript(filesystemProjectPath, options.repoRoot);
         console.log(`Installed capture script: ${result.target}`);
         await evalCall(CAPTURE_REFRESH_EXPRESSION);
         await waitForEditorIdle(client, evalCall, deadline);
@@ -2416,13 +2488,14 @@ function usage() {
     "  --no-discover               Probe only the configured host/port, not the fallbacks",
     "  --bind HOST                 Bridge bind interface (default: 0.0.0.0)",
     "  --project PATH              Unity project directory (bridge, install-capture, capture)",
+    "  --project-container PATH    Container-visible project directory for local capture files",
     "  --out DIR                   Capture output directory (capture only)",
     "  --scenarios LIST            Comma-separated scenario names (t4-capture only)",
     "  --no-install                Skip local capture-script installation (capture only)",
     "  --backend cli|relay         Host backend (default: cli; relay supports Assistant)",
     "  --cli PATH                  Unity CLI executable (default: unity on host PATH)",
     "  --relay PATH                Unity relay executable override",
-    "  --token TOKEN               32-256 character bearer token (generated into .env.local if omitted)",
+    "  --token TOKEN               32-256 character bearer token (stored in .env.local)",
     "  --timeout MS                Per-endpoint MCP lifecycle deadline (default: 5000)",
     "  --connect-timeout MS        Per-endpoint TCP connect timeout (default: 750)",
     "  --session-timeout MS        Idle session timeout (default: 60000)",

@@ -87,12 +87,13 @@ test("configure writes every client schema with the unity endpoint", () => {
     assert.deepEqual(opencode["mcp"]["servers"]["unity-mcp"], {
       type: "remote",
       url,
-      headers: { Authorization: `Bearer ${BEARER}` },
+      headers: { Authorization: "Bearer {env:UNITY_MCP_BEARER_TOKEN}" },
       oauth: false,
       codemode: true,
       disabled: false,
-      timeout: { catalog: 30000, execution: 30000 }
+      timeout: { catalog: 30000, execution: 300000 }
     });
+    assert.equal(opencode["$schema"], "https://opencode.ai/config.json");
     assert.equal(opencode["mcp"]["unity-mcp"], undefined);
     assert.equal(opencode["mcp"]["servers"]["git"].type, "local");
     assert.deepEqual(opencode["mcp"]["servers"]["git"].command, [
@@ -126,6 +127,24 @@ test("configure writes every client schema with the unity endpoint", () => {
   }
 });
 
+test("an explicit bearer token is persisted for later OpenCode launches", () => {
+  const repoRoot = tempRepo();
+  const explicit = "b".repeat(64);
+  try {
+    configure(options(repoRoot, { bearerToken: explicit, bearerTokenFromArgument: true }), ENDPOINT);
+    const envText = fs.readFileSync(path.join(repoRoot, ".env.local"), "utf8");
+    assert.match(envText, new RegExp(`UNITY_MCP_BEARER_TOKEN=${explicit}`));
+    assert.doesNotMatch(envText, new RegExp(BEARER));
+    const opencode = JSON.parse(fs.readFileSync(clientConfigPaths(repoRoot).openCode, "utf8"));
+    assert.equal(
+      opencode["mcp"]["servers"]["unity-mcp"].headers.Authorization,
+      "Bearer {env:UNITY_MCP_BEARER_TOKEN}"
+    );
+  } finally {
+    fs.rmSync(repoRoot, { recursive: true, force: true });
+  }
+});
+
 test("configure adds Z.AI servers when a key exists and removes them when it does not", () => {
   const repoRoot = tempRepo();
   try {
@@ -143,6 +162,16 @@ test("configure adds Z.AI servers when a key exists and removes them when it doe
       args: [],
       env: { Z_AI_API_KEY: ZAI_KEY, Z_AI_MODE: "ZAI" }
     });
+    const opencodeWithZai = JSON.parse(fs.readFileSync(paths.openCode, "utf8"));
+    assert.equal(
+      opencodeWithZai["mcp"]["servers"]["web-search-prime"].headers.Authorization,
+      "Bearer {env:ZAI_API_KEY}"
+    );
+    assert.equal(
+      opencodeWithZai["mcp"]["servers"]["zai-mcp-server"].environment.Z_AI_API_KEY,
+      "{env:ZAI_API_KEY}"
+    );
+    assert.doesNotMatch(JSON.stringify(opencodeWithZai), new RegExp(ZAI_KEY));
 
     const codexWithZai = fs.readFileSync(paths.codex, "utf8");
     assert.match(codexWithZai, /command = "mcp-remote"/);

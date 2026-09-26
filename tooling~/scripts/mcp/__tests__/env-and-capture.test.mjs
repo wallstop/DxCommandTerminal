@@ -46,6 +46,20 @@ test("z.ai key aliases resolve with env beating file", () => {
   );
 });
 
+test("host and container project paths remain separate", () => {
+  const options = resolveOptions(
+    {},
+    {
+      UNITY_PROJECT_PATH: "/Users/dev/UnityProject",
+      UNITY_PROJECT_CONTAINER_PATH: "/unity-project"
+    },
+    {},
+    "/tmp"
+  );
+  assert.equal(options.projectPath, path.resolve("/Users/dev/UnityProject"));
+  assert.equal(options.projectContainerPath, path.resolve("/unity-project"));
+});
+
 test("capture script source lives outside Unity compilation", () => {
   const source = captureScriptSourcePath(REPO_ROOT);
   assert.equal(path.basename(source), "DxTerminalStateCapture.cs.txt");
