@@ -1718,27 +1718,34 @@
             the marker satisfies the poll too.
          */
         /*
-            The focus controller may report the field or the inner text-input
-            element depending on panel state, and the input poll accepts both.
-            The suite's focus waits run on the production property, so this
-            pins its two-shape contract directly.
+            The focus controller reports either the field or an element inside
+            it, and the property accepts both. The suite's focus waits run on
+            the production property, so the focus read and the closed case are
+            pinned here directly.
          */
         [UnityTest]
-        public IEnumerator InputOwnsFocusAcceptsTheInnerTextElement()
+        public IEnumerator InputOwnsFocusTracksTheFieldAndIgnoresAClosedPalette()
         {
             yield return SpawnPalette();
 
             _palette.Open();
             yield return WaitForFocusedInput("Sanity: the field reports focus");
 
-            VisualElement inner = _palette._input.Q<VisualElement>("unity-text-input");
-            Assert.That(inner, Is.Not.Null, "Sanity: the field has an inner text element");
-            inner.Focus();
-            yield return null;
-
+            VisualElement focused =
+                _palette._input.focusController?.focusedElement as VisualElement;
+            Assert.IsTrue(
+                focused == _palette._input || _palette._input.Contains(focused),
+                "Sanity: the panel reports focus on the field or inside it"
+            );
             Assert.IsTrue(
                 _palette.InputOwnsFocus,
-                "A focused inner text element must count as the query field owning focus"
+                "A focused query field must report owning focus"
+            );
+
+            _palette.Close();
+            Assert.IsFalse(
+                _palette.InputOwnsFocus,
+                "A closed palette must not report owning focus, whatever still holds it"
             );
         }
 

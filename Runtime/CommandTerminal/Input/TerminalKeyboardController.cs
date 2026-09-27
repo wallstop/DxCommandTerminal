@@ -35,8 +35,7 @@
         ///     panel focus. Overridable for test coverage; the live read is
         ///     the shipped behavior.
         /// </summary>
-        protected virtual bool TextInputOwnsFocus =>
-            TerminalUI.AnyInputOwnsFocus() || CommandPaletteUI.AnyInputOwnsFocus();
+        protected virtual bool TextInputOwnsFocus => TerminalUI.AnyConsoleFieldOwnsFocus();
 
         [Header("System")]
         public InputMode inputMode =

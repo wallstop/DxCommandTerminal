@@ -331,28 +331,26 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         /*
-            The focus controller reports either the field or the inner text
-            element depending on panel state, and the input poll accepts both;
-            this pins that contract directly rather than through a suite that
-            trusts the same predicate it is driving.
+            The focus controller reports either the field or an element inside
+            it, and the property accepts both. A suite that only reads the
+            property cannot tell a right answer from a wrong one, so the focus
+            read happens here directly, and the closed case is pinned with it.
          */
         [UnityTest]
-        public IEnumerator InputOwnsFocusAcceptsTheInnerTextElement()
+        public IEnumerator InputOwnsFocusTracksTheFieldAndIgnoresAClosedTerminal()
         {
             yield return SpawnTerminal(open: true);
             yield return WaitForFocusedInput("Sanity: the field reports focus");
 
-            _terminal._textInput.Focus();
-            yield return null;
-
-            Assert.That(
-                _terminal.State,
-                Is.EqualTo(TerminalState.OpenFull),
-                "Sanity: the terminal stays open through the focus change"
+            VisualElement focused =
+                _terminal._commandInput.focusController?.focusedElement as VisualElement;
+            Assert.IsTrue(
+                focused == _terminal._commandInput || _terminal._commandInput.Contains(focused),
+                "Sanity: the panel reports focus on the field or inside it"
             );
             Assert.IsTrue(
                 _terminal.InputOwnsFocus,
-                "A focused inner text element must count as the command field owning focus"
+                "A focused command field must report owning focus"
             );
 
             _terminal.Close();
@@ -404,10 +402,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         /*
             The palette runs its own poll on its own component, so this drives
-            the real thing: a queued Input System key event, no seam. The
-            second half is the control that proves the queue reached the
-            poll - without it, "the palette stayed open" would be a green that
-            means nothing.
+            the real thing: a queued Input System key event, no seam. The second
+            half is the control that proves the queue reached the poll -
+            without it, "the palette stayed open" would be a green that means
+            nothing. The key is released between the two, because a state event
+            re-asserting a held bit is not a new press.
          */
 #if ENABLE_INPUT_SYSTEM
         [UnityTest]
@@ -430,16 +429,36 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
 
             /*
-                Close the palette so nothing has focus, then press the same
-                key: it must open, which is what makes the first half mean
+                Close the palette so nothing has focus, then press the same key
+                again: it must open, which is what makes the first half mean
                 something.
              */
             _palette.Close();
             yield return null;
+            ReleaseKeys();
+            yield return null;
+            PressBackquote();
+            yield return WaitForPaletteState(
+                true,
+                "Sanity: the queued key reaches the palette poll once nothing is focused"
+            );
+        }
+
+        /*
+            The mirror of the test above: a character palette binding must not
+            open the bar over a focused terminal command line.
+         */
+        [UnityTest]
+        public IEnumerator PaletteTextToggleDoesNotOpenOverAFocusedTerminal()
+        {
+            yield return SpawnTerminal(open: true, withPalette: true);
+            yield return WaitForFocusedInput("Sanity: the command field holds panel focus");
+
+            _palette.toggleHotkey = "`";
             PressBackquote();
             yield return WaitForPaletteState(
                 false,
-                "Sanity: the queued key reaches the palette poll once nothing is focused"
+                "A character toggle must not open the palette over a focused command line"
             );
         }
 #endif
@@ -600,6 +619,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private static void PressBackquote()
         {
             InputSystem.QueueStateEvent(Keyboard.current, new KeyboardState(Key.Backquote));
+        }
+
+        private static void ReleaseKeys()
+        {
+            InputSystem.QueueStateEvent(Keyboard.current, default(KeyboardState));
         }
 #endif
 

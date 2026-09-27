@@ -15,6 +15,21 @@
 
         private static readonly string[] CtrlModifiers = { "ctrl+", "control+" };
 
+        /*
+            The names that type no character, from both reachable surfaces: the
+            Input System's keyboard control names, every multi-character key in
+            KeyCodeMapping, and the legacy KeyCode members the parse can name
+            directly - navigation, editing, function, modifier, lock, media,
+            IME, mouse, and joystick. Everything else the parse surface can
+            produce is a character key, so an unrecognized name counts as
+            typing - a hotkey held back for one typing session is recoverable,
+            a swallowed character is not. A key either input system adds later
+            therefore fails toward the character.
+
+            anyKey is deliberately absent: it presses on every keystroke, so a
+            binding on it is held back while a field has focus, like a
+            character key's binding is.
+         */
         private static readonly HashSet<string> NonTypedKeyNames = BuildNonTypedKeyNames();
 
         private static readonly Dictionary<string, CachedKeyName> CachedKeys = new();
@@ -481,7 +496,6 @@
             HashSet<string> names = new(StringComparer.OrdinalIgnoreCase)
             {
                 "alt",
-                "anykey",
                 "backspace",
                 "break",
                 "capslock",

@@ -876,10 +876,24 @@
         }
 
         /// <summary>
+        ///     Reports whether any console text field - a live terminal's
+        ///     command line or a palette's query - holds panel focus. Both
+        ///     input polls ask this so a key that types text is left to the
+        ///     surface being typed into (see
+        ///     <see cref="InputHelpers.ProducesTypedText"/>). It lives here so
+        ///     the two surfaces share one answer.
+        /// </summary>
+        internal static bool AnyConsoleFieldOwnsFocus()
+        {
+            return AnyInputOwnsFocus() || CommandPaletteUI.AnyInputOwnsFocus();
+        }
+
+        /// <summary>
         ///     Reports whether any live terminal's command field holds panel
-        ///     focus. A console input poll asks this so a key that types text
-        ///     is left to the surface being typed into instead of firing its
-        ///     action (see <see cref="InputHelpers.ProducesTypedText"/>).
+        ///     focus. A console input poll asks
+        ///     <see cref="AnyConsoleFieldOwnsFocus"/> so a key that types text
+        ///     is left to the surface being typed into (see
+        ///     <see cref="InputHelpers.ProducesTypedText"/>).
         /// </summary>
         internal static bool AnyInputOwnsFocus()
         {

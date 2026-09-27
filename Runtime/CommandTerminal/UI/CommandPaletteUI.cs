@@ -85,13 +85,16 @@
 
         /// <summary>
         ///     Whether the query field - or the inner text-input element the
-        ///     focus controller may report instead - holds panel focus.
+        ///     focus controller may report instead - holds panel focus. A
+        ///     closed palette does not count even if its field still holds
+        ///     focus: a field that cannot be typed into must not hold a
+        ///     character binding hostage.
         /// </summary>
         internal bool InputOwnsFocus
         {
             get
             {
-                if (_input == null)
+                if (_input == null || !_isOpen)
                 {
                     return false;
                 }
@@ -210,9 +213,10 @@
 
         /// <summary>
         ///     Reports whether any live palette's query field holds panel
-        ///     focus. A console input poll consults this so a key that types
-        ///     text stays with the surface that is being typed into
-        ///     (see <see cref="InputHelpers.ProducesTypedText"/>).
+        ///     focus. A console input poll consults
+        ///     <see cref="TerminalUI.AnyConsoleFieldOwnsFocus"/> so a key that
+        ///     types text stays with the surface being typed into (see
+        ///     <see cref="InputHelpers.ProducesTypedText"/>).
         /// </summary>
         internal static bool AnyInputOwnsFocus()
         {
@@ -220,9 +224,9 @@
             for (int index = 0; index < livePaletteCount; ++index)
             {
                 /*
-                    A component torn down abnormally can stay in the list
-                    until its disable, so the null guard is the difference
-                    between "not focused" and a throw on every poll.
+                    A component torn down abnormally stays in the list until
+                    its disable runs, so the sweep guards the entry the way the
+                    terminal's live sweep does.
                  */
                 CommandPaletteUI palette = _livePalettes[index];
                 if (palette != null && palette.InputOwnsFocus)
@@ -670,7 +674,7 @@
         {
             if (
                 InputHelpers.ProducesTypedText(toggleHotkey)
-                && (AnyInputOwnsFocus() || TerminalUI.AnyInputOwnsFocus())
+                && TerminalUI.AnyConsoleFieldOwnsFocus()
             )
             {
                 return false;
