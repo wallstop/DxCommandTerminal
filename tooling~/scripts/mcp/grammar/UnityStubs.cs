@@ -106,6 +106,14 @@ namespace UnityEditor.TestTools.TestRunner.Api
         Failed = 3,
     }
 
+    /*
+        Checked against the metadata of UnityEditor.TestRunner.dll on a host
+        editor (6000.4.6f1) rather than from memory, and declared as a subset of
+        what that assembly has: a member this file lacks is a compile error until
+        it is declared, and a member the real API does not have cannot hide a
+        defect. ITestResultAdaptor does not derive from ITestAdaptor there, and
+        repeats Name and FullName instead - so it does not derive here either.
+     */
     public interface ITestAdaptor
     {
         string Id { get; }
@@ -115,8 +123,10 @@ namespace UnityEditor.TestTools.TestRunner.Api
         TestMode TestMode { get; }
     }
 
-    public interface ITestResultAdaptor : ITestAdaptor
+    public interface ITestResultAdaptor
     {
+        string Name { get; }
+        string FullName { get; }
         ITestAdaptor Test { get; }
         TestStatus TestStatus { get; }
         double Duration { get; }

@@ -615,7 +615,7 @@ namespace DxTerminalDevTools
             cannot read; both are cases the reporter guards, and neither can be
             built from a real editor.
          */
-        private sealed class FakeTest : ITestResultAdaptor
+        private sealed class FakeTest : ITestResultAdaptor, ITestAdaptor
         {
             private readonly List<FakeTest> _children;
             private readonly bool _hasTest;
