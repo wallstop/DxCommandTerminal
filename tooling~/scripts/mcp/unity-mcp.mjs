@@ -2683,7 +2683,8 @@ export function newRunToken(label, now = Date.now()) {
  * Decode one claim line. The first token decides the state:
  *
  *   running  token=<owner|none> mode=<mode> started=<o>
- *   pass=<n> fail=<n> skipped=<n> inconclusive=<n> duration=<s> token=<owner|none> mode=<mode>
+ *   pass=<n> fail=<n> skipped=<n> inconclusive=<n> duration=<s> token=<owner|none> mode=<mode> finished=<o>
+ *           [failed-names=<a,b,c> [failed-more=<n>]]
  *   did-not-run token=<owner|none> mode=<mode> reason=<free text>
  *
  * `total` is summed here rather than reported by the editor, so the summary
@@ -2738,6 +2739,21 @@ export function parseRunClaim(text) {
     // grace as if it were our run's acknowledgement.
     return { state: "unreadable", token: null };
   }
+  /*
+      `failed-more` says how many failures the editor's cap left unnamed. It is a
+      count, not a gate, so it can never decide whether a run is a result - but it
+      is still bounded by the failures this same line reports, because a count the
+      editor could not have written must not be printed as if it were one.
+
+      `failedNames` is empty on a green run, on an editor whose reporter predates
+      the field, and on the bridge fallback: that is the honest answer, not a
+      silent "none failed".
+   */
+  const names = readFailureNames(fields.get("failed-names"));
+  const more = Number(fields.get("failed-more"));
+  const counted = /^\d+$/u.test(String(fields.get("failed-more") ?? "").trim())
+    ? Math.min(more, Math.max(0, failed - names.length))
+    : 0;
   return {
     state: "finished",
     token,
@@ -2747,9 +2763,33 @@ export function parseRunClaim(text) {
       passed,
       failed,
       skipped,
-      inconclusive
+      inconclusive,
+      failedNames: names,
+      failedMore: counted
     }
   };
+}
+
+/*
+    The failed test names the editor reported. The editor percent-encodes every
+    byte the claim grammar reserves, so the decode is a split followed by a
+    percent-decode. A `%` the editor could not have written - a hand-edited
+    claim, or a name encoded by a future reporter - decodes to itself instead
+    of throwing, because a claim that cannot be read must not take the run's
+    result with it.
+ */
+function readFailureNames(value) {
+  if (value === undefined || value === "") return [];
+  const names = [];
+  for (const part of value.split(",")) {
+    if (part.length === 0) continue;
+    try {
+      names.push(decodeURIComponent(part));
+    } catch {
+      names.push(part);
+    }
+  }
+  return names;
 }
 
 function readClaimFile(claimPath) {
@@ -3016,11 +3056,81 @@ export function parseTestStatus(text, seenRunning = false) {
   return { finished: false, running, summary };
 }
 
+/**
+ * One leg's result, counters plus the names of the tests it failed. A red leg
+ * names itself here: a counter alone leaves the reader to dig through the editor
+ * console to learn which tests broke, which is the whole cost of a red run. The
+ * names are printed once, here, so nothing downstream has to repeat them.
+ */
 export function testSummaryLine(summary) {
   return (
-    `Tests: ${summary.total} total, ${summary.passed} passed, ` +
-    `${summary.failed} failed, ${summary.skipped} skipped.`
+    `Tests: ${summary.total} total, ${summary.passed} passed, `
+    + `${summary.failed} failed, ${summary.skipped} skipped.`
+    + failureNameLines(summary)
   );
+}
+
+/*
+    Characters a printed name must not carry raw: the control and format
+    categories, plus the two line separators. The reporter percent-encodes all
+    of them, so a decoded name can carry any of them - a `[TestCase("a\nb")]` is
+    real in this repository - and one printed raw would split its own line,
+    reorder one, or hide a run's result behind an override or a zero-width
+    character.
+
+    The Unicode categories, not an enumerated range. An enumeration of this set is
+    always short: the one in the first cut of this change missed U+2028 and
+    U+2029, which are line separators, and 149 format characters - 127 of them
+    above the BMP. `Cc` is C0, DEL, and C1; `Cf` is the zero-width, bidi,
+    deprecated-format, and tag characters; `Zl` and `Zp` are the line and
+    paragraph separators. Ordinary spaces are `Zs` and stay, so a real name is
+    still readable.
+
+    A backslash is escaped too. Without that, a name holding the literal text
+    `\u000A` prints exactly like a name holding a newline, and the escape stops
+    being evidence of what the name contained.
+ */
+const UNPRINTABLE_NAME_CHARACTER = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\\]/gu;
+
+const LAST_BMP_CODE_POINT = 0xffff;
+
+/**
+ * A decoded name, safe to print on one line. The escape is for a human reading
+ * a log, not for decoding: `\uXXXX` below the BMP and `\UXXXXXXXX` above it,
+ * because `\u` takes exactly four hex digits and a five-digit `\uE0001` reads as
+ * a different character than it is. The reporter percent-encodes UTF-8 bytes, so
+ * a tag character such as U+E0001 arrives here intact and needs the long form.
+ */
+function printableName(name) {
+  return name.replace(UNPRINTABLE_NAME_CHARACTER, (character) => {
+    const hex = character.codePointAt(0).toString(16).toUpperCase();
+    return character.codePointAt(0) <= LAST_BMP_CODE_POINT
+      ? `\\u${hex.padStart(4, "0")}`
+      : `\\U${hex.padStart(8, "0")}`;
+  });
+}
+
+/**
+ * One indented line per reported name, then one line for the failures the
+ * editor's cap left unnamed. No deduplication: a parameterized test that failed
+ * on several cases has several names, and the reader's only other count is the
+ * `fail=` counter.
+ */
+function failureNameLines(summary) {
+  const names = summary?.failedNames ?? [];
+  const more = Number(summary?.failedMore ?? 0);
+  const lines = names.map((name) => `\n  failed: ${printableName(name)}`);
+  if (0 < more) {
+    lines.push(`\n  ... and ${more} more the cap did not list`);
+  } else if (0 < Number(summary?.failed ?? 0) && names.length === 0) {
+    /*
+        A red run the editor named nothing: a reporter older than this field, or
+        the bridge fallback. Without this line the output is exactly the one the
+        reader filed the issue about, with nothing to say the feature is absent.
+     */
+    lines.push("\n  no failed test names were reported (bridge fallback, or a reporter older than this change)");
+  }
+  return lines.join("");
 }
 
 /**
@@ -3149,6 +3259,8 @@ export async function runUnityTests(options, runtime = {}) {
     }
     const failed = summaries.reduce((sum, summary) => sum + Number(summary.failed ?? 0), 0);
     if (failed > 0) {
+      // The names are already on each leg's line; the count is what is left to
+      // say, and it covers every leg.
       fail(`${failed} test(s) failed.`);
     }
     return { summaries, summary: summaries[summaries.length - 1] };
@@ -3417,8 +3529,10 @@ function usage() {
     "  capture         Capture editor/game state into .artifacts through the bridge.",
     "  t4-capture      Run the T04 fixture-capture tests, validate their manifests,\n" +
     "                  and compare pixels against the T11 baseline store.",
-    "  tests           Run Unity tests over the bridge and report one summary line",
+    "  tests           Run Unity tests over the bridge and report one result block",
     "                  per leg; 'all' runs the EditMode suite then the PlayMode suite.",
+    "                  A red leg names the tests it failed when the run reporter",
+    "                  compiled in the editor named any.",
     "                  With the run reporter installed, the result is read from the",
     "                  editor's claim file instead of polling its main thread.",
     "",

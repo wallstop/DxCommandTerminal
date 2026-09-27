@@ -92,7 +92,7 @@ retries, but every such call is a guess. The reporter writes one line to
 
 ```text
 running  token=<owner|none> mode=<PlayMode|EditMode> started=<o>
-pass=<n> fail=<n> skipped=<n> inconclusive=<n> duration=<s> token=<owner|none> mode=<mode> finished=<o>
+pass=<n> fail=<n> skipped=<n> inconclusive=<n> duration=<s> token=<owner|none> mode=<mode> finished=<o> [failed-names=<a,b,c> [failed-more=<n>]]
 did-not-run token=<owner|none> mode=<mode> reason=<free text>
 ```
 
@@ -102,6 +102,20 @@ flight is never read as a finished one. The owner token comes from
 of one run carries the token it started with, so a late callback from an earlier run
 cannot be read as this run's result. The command removes the request again once the
 editor acknowledges the token, so a run nobody asked for cannot adopt it later.
+
+`failed-names` is the full name of every failed test case, up to the cap, absent on a
+green run. It is what makes a red run name itself: the counters alone leave the reader
+to dig through the editor console for the names. The reporter percent-encodes every
+UTF-8 byte outside `A-Z a-z 0-9 . ( ) [ ] _` as `%XX`, so a name with a space, a quote,
+a comma, an `=` or a non-ASCII character survives the space-separated, `key=value`
+claim line intact - a parameterized test whose cases differ only in a quoted argument
+stays three names. The reader decodes with `decodeURIComponent`, falls back to the raw
+text on a malformed escape, and JSON-escapes a decoded name before printing it, so a
+control character or a bidi override in a name can neither split its own line nor
+reorder one. The list is capped at ten, and `failed-more` carries how many failures
+the cap left unnamed - a separate field, so the cap cannot be read as a test name. A
+reporter that predates the field, and the bridge fallback, name nothing; the leg then
+says so instead of printing counters alone, which is the output this replaced.
 
 Until the editor acknowledges that token, the wait is bounded by
 `RUN_START_GRACE_MS` (120 s) instead of `--run-timeout`: an editor that never

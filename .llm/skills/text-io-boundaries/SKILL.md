@@ -1,0 +1,156 @@
+---
+name: text-io-boundaries
+description: Encode and escape text that crosses a process or file boundary - a claim or report protocol, a percent-encoded field, a decoded value printed into line-oriented output. Use when writing a line- or whitespace-delimited format, adding or decoding a protocol field, or hand-writing a character range like \u0000-\u001f. Covers allowlist encoders that fail closed, Unicode property escapes over enumerated ranges, escaping over UTF-8 bytes not code units, and a cross-language contract no CI lane compiles.
+metadata:
+  category: Core
+---
+
+# Text I/O Boundaries
+
+## The one rule
+
+Text that arrives from outside the process is data, not text. Two boundaries care
+about it, and each needs a different defense:
+
+- **Writing** into a line-based or whitespace-delimited grammar. Encode every
+  character the grammar reserves, before the value crosses the boundary.
+- **Printing** a value that was decoded from somewhere. Escape every character
+  the display sink reserves, at the point of printing.
+
+The two are not the same set, and encoding is not escaping. Percent-encoding
+protects the wire; escaping protects the reader's terminal.
+
+## Allowlists fail closed, denylists fail open
+
+A writer with an allowlist cannot leak: anything it does not name is encoded.
+`DxTerminalTestRunReporter.AllowedNameCharacter` allows only
+`A-Z a-z 0-9 . ( ) [ ] _`, so every other byte of every name is escaped and a
+future character cannot slip through.
+
+A denylist is only as good as the author's memory. The first `printableName` in
+`unity-mcp.mjs` enumerated its range and was **measured to leak 151
+characters**: U+2028 and U+2029, which are line separators that split a printed
+result line and let a name forge the line after it, plus 149 format characters,
+127 of them above the BMP. A reviewer independently proposed a range that missed
+17 of the same characters.
+
+## Never enumerate a character set. Derive it.
+
+Ask the Unicode category, not the author's memory. In JavaScript:
+
+```js
+// Cc is C0 + DEL + C1, Cf is zero-width/bidi/format, Zl and Zp are the line
+// and paragraph separators. Ordinary spaces are Zs and stay, so a real name is
+// still readable. Measured: no gaps across the BMP.
+const UNPRINTABLE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu;
+```
+
+In C# the same reasoning already applies in this repo, and is used in
+`Runtime/CommandTerminal/Backend/CommandTokenizer.cs:27,287,292`, which asks
+`char.IsWhiteSpace` rather than listing the separators. Prefer the API that
+answers the question over a range written by hand - `char.IsControl`,
+`char.IsSeparator`, or a Unicode category - and where none fits, name the
+category in a helper so the question is asked once.
+
+Replace with a **visible** escape, not a placeholder. `?` is indistinguishable
+from a question mark in the name; `\u202E` is not. Two rules make the escape
+trustworthy:
+
+- **Match the width to the magnitude.** `\u` takes exactly four hex digits, so a
+  supplementary-plane character needs `\U` and eight. Padding to four without
+  capping writes `\uE0001`, which reads as a different character than it is.
+- **Escape the escape.** A backslash must be escaped too, or a name holding the
+  literal text `\u000A` prints exactly like a name holding a real newline.
+
+## Encode bytes, not code units
+
+A percent escape is two hex digits. Writing one per UTF-16 code unit breaks on
+anything outside Latin-1: `U+2003` became `%2003`, which decodes as a space and
+`03`. Encode the UTF-8 bytes of the string:
+
+```csharp
+foreach (byte value in Encoding.UTF8.GetBytes(name)) { /* %XX per byte */ }
+```
+
+The one lossy case is a lone surrogate, which UTF-8 replaces with `U+FFFD`. No
+test name holds one; say so in a comment rather than pretending it is byte-exact.
+
+## Parse the encoded text, print the escaped text
+
+The format is only safe because of where the boundary sits. `parseRunClaim`
+splits the **encoded** line on `/\s+/u`, so a name holding a space, a comma, or
+an equals cannot move a field boundary. `printableName` escapes the **decoded**
+name at the point of printing. Reversing either half reintroduces the bug.
+
+## Pin the property, not a list
+
+A test that enumerates the expected characters drifts exactly like the code it
+guards. Derive the hostile set from the Unicode categories, then enumerate the
+scalars and assert the exact escape - a test that compares the two regex
+literals can only catch a narrowing, never a widening:
+
+```js
+for (let code = 0; code <= 0x10ffff; ++code) {
+  if (code >= 0xd800 && code <= 0xdfff) continue; // a lone surrogate, not a scalar
+  const character = String.fromCodePoint(code);
+  if (!/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(character)) continue;
+  // assert the printed block holds this character's exact escape
+}
+```
+
+Walk the whole scalar range, not the BMP: a tag character like U+E0001 arrives
+intact from a UTF-8 encoder and needs the eight-digit escape form.
+
+Assert the other direction too: a name a real suite produces (a quoted argument
+with a space, a quote, a comma, an equals, non-ASCII letters) must survive
+untouched, or the filter is only deleting information. A filter that mangles
+readable text is its own defect.
+
+State the one limit rather than implying full coverage: widening the production
+class to a category the oracle does not name is a semantic decision no test
+will second-guess.
+
+## A contract no CI lane compiles is pinned on source text
+
+`DxTerminalTestRunReporter` is C# that only compiles inside a Unity project, so
+nothing in CI runs it. `env-and-capture.test.mjs` stands in for that by pinning
+the reporter's source: the field name where it is written, each contract
+constant at both its declaration and its use, the byte-wise cast, the escape
+sites, and the allowlist's exact literals. Pin **use** sites too - renaming a
+declaration and leaving the use behind is the mutation that survives.
+
+Two costs, both real: a mutation expressed as a hex literal, and a
+behavior-preserving refactor like `Append($"%{value:X2}")`, still turn the suite
+red. State the tradeoff next to the pins. Issue #167 is the fix - compile the
+three pure helpers in CI and round-trip a generated corpus.
+
+## Sweep both directions, and both tools
+
+Ask the class, not the pattern. A grep for `\uXXXX` literals finds an
+enumerated range and misses the same defect written as a comparison - which is
+how `DxTerminalStateCapture` had `character < ' '` in its JSON writer, covering
+the C0 controls only while a DEL, a C1 character, or a line separator wrote raw
+into every manifest a capture produces. The same file also appended raw console
+messages to a one-entry-per-line file, so a message carrying a newline (a stack
+trace, or a test name holding one) added lines that read as further entries.
+
+For every writer in the family, ask: does this value carry a character the format
+reserves, and does anything print it back without asking again?
+
+## Checklist for a new field or format
+
+1. Which characters does the grammar reserve? Encode them, with an allowlist.
+2. Is the escape two hex digits? Then it is over bytes, not code units.
+3. Who prints a decoded value? Escape at that point, by Unicode category.
+4. Is the separator a character a name can hold? A comma-joined list needs a
+   separator the encoder also escapes.
+5. What test walks the property rather than a list, in both directions?
+6. If a second language reads this, which CI lane compiles it? If none, the
+   source-text pin is a stopgap, and it needs a follow-up issue.
+
+## References
+
+- Claim file contract: `tooling~/scripts/mcp/README.md`, section "Test run claim
+  file"; the maintained reporter source next to it.
+- A worked example of a hand-written range and its replacement, plus the
+  mutation probe results, in `progress/session-080-failed-test-names.md`.

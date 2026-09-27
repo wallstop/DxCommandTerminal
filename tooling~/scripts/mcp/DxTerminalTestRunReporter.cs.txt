@@ -7,11 +7,22 @@
 
     Claim grammar (one line, space separated, first token decides the state):
       running  token=<owner|none> mode=<PlayMode|EditMode> started=<o>
-      pass=<n> fail=<n> skipped=<n> inconclusive=<n> duration=<s> token=<owner|none> mode=<mode> finished=<o>
+      pass=<n> fail=<n> skipped=<n> inconclusive=<n> duration=<s> token=<owner|none> mode=<mode> finished=<o> [failed-names=<a,b,c> [failed-more=<n>]]
       did-not-run token=<owner|none> mode=<mode> reason=<free text>
 
-    The reader needs token, mode, the four counters, and reason. The timestamps and
-    the duration are for whoever reads the file after a failed run.
+    The reader needs token, mode, the four counters, reason, and, on a red run, the
+    failed names. The timestamps and the duration are for whoever reads the file
+    after a failed run.
+
+    failed-names is the full name of every failed test case, up to the cap,
+    comma separated, and percent-encoded: every UTF-8 byte outside
+    A-Z a-z 0-9 . ( ) [ ] _ becomes %XX, so the name survives the space
+    separated, key=value claim line intact. The field is what makes a red run
+    name itself - counters alone leave the reader to dig through the editor
+    console for the test names - and it is absent on a green run, so a green
+    claim is byte-for-byte what it was before. failed-more carries how many
+    failures the cap left unnamed: a separate field, so no consumer can read the
+    cap as a test name.
 
     The owner token comes from <artifact root>/test-run-request.txt, which the
     caller writes before asking for a run. Every line of one run carries the token
@@ -22,6 +33,7 @@
 namespace DxTerminalDevTools
 {
     using System;
+    using System.Collections.Generic;
     using System.Globalization;
     using System.IO;
     using System.Text;
@@ -38,6 +50,19 @@ namespace DxTerminalDevTools
         private const string PendingSuffix = ".new";
         private const string UnattributedToken = "none";
         private const string UnknownMode = "unknown";
+
+        /// <summary>
+        /// Failed names one claim carries. A fully red suite would otherwise turn
+        /// the claim into a document, and the reader only needs the head of the
+        /// list: the count comes from the `fail=` counter either way.
+        /// </summary>
+        private const int MaxReportedFailures = 10;
+
+        /// <summary>
+        /// Between two names. A comma, because a test name may contain every
+        /// other character the reporter percent-encodes.
+        /// </summary>
+        private const char FailureSeparator = ',';
 
         /// <summary>
         /// Claim directory. Resolved from the editor's own project root. The
@@ -179,6 +204,129 @@ namespace DxTerminalDevTools
         }
 
         /// <summary>
+        /// Full name of every failed test case, in tree order, up to the cap: a
+        /// fully red suite must not allocate a name per failure to report ten.
+        ///
+        /// A suite is never reported, only walked. A childless failed node is
+        /// still a suite, and reporting it would name the fixture where the
+        /// reader looks for a test.
+        /// </summary>
+        private static void CollectFailedNames(ITestResultAdaptor result, List<string> names)
+        {
+            if (MaxReportedFailures <= names.Count)
+            {
+                return;
+            }
+
+            if (result.HasChildren)
+            {
+                foreach (ITestResultAdaptor child in result.Children)
+                {
+                    CollectFailedNames(child, names);
+                }
+                return;
+            }
+
+            if (result.Test != null && result.Test.IsSuite)
+            {
+                return;
+            }
+
+            if (result.TestStatus == TestStatus.Failed && !string.IsNullOrEmpty(result.FullName))
+            {
+                names.Add(result.FullName);
+            }
+        }
+
+        /// <summary>
+        /// The claim fields for the failed names and for the failures they do not
+        /// name, or an empty string when the run named nothing. The remainder is
+        /// its own field so no consumer can mistake the cap for a test called
+        /// "+7", and so the two counts never have to be inferred from each other.
+        /// </summary>
+        private static string FailureNamesField(List<string> names, int failed)
+        {
+            if (names.Count == 0)
+            {
+                return string.Empty;
+            }
+
+            StringBuilder builder = new();
+            for (int index = 0; index < names.Count; ++index)
+            {
+                if (0 < index)
+                {
+                    builder.Append(FailureSeparator);
+                }
+
+                builder.Append(EncodeName(names[index]));
+            }
+
+            int unnamed = Math.Max(0, failed - names.Count);
+            if (0 < unnamed)
+            {
+                builder
+                    .Append(" failed-more=")
+                    .Append(unnamed.ToString(CultureInfo.InvariantCulture));
+            }
+
+            return " failed-names=" + builder;
+        }
+
+        /// <summary>
+        /// Percent-encode the name's UTF-8 bytes, so the reader's decode is a
+        /// split followed by a percent-decode and every byte a name is made of
+        /// comes back. Replacing the reserved characters instead would make three
+        /// cases of one parameterized test - ("a b"), ("a,b"), ("a=b") - collapse
+        /// into the same name, and a red run would report one failure where it
+        /// had three.
+        ///
+        /// The bytes, not the characters: an escape is two hex digits, so a
+        /// character outside ASCII has to become its encoding or the reader
+        /// would decode a different character than this one wrote. A name
+        /// holding an unpaired surrogate is the one lossy case here: UTF-8
+        /// encodes it as the replacement character, and no test name holds one.
+        /// </summary>
+        private static string EncodeName(string name)
+        {
+            StringBuilder builder = new(name.Length);
+            foreach (byte value in Encoding.UTF8.GetBytes(name))
+            {
+                /*
+                    The cast is only ever compared against ASCII, so a byte of
+                    0x80 or above lands on a character no range accepts and is
+                    escaped - which is what keeps an encoded name pure ASCII.
+                */
+                char character = (char)value;
+                if (AllowedNameCharacter(character))
+                {
+                    builder.Append(character);
+                }
+                else
+                {
+                    builder.Append('%').Append(value.ToString("X2", CultureInfo.InvariantCulture));
+                }
+            }
+
+            return builder.ToString();
+        }
+
+        /// <summary>
+        /// ASCII letters, digits, and the punctuation a C# or NUnit test name is
+        /// built from. '%' is excluded on purpose: it is the escape itself, and
+        /// a name that passed it through would decode to something else.
+        /// </summary>
+        private static bool AllowedNameCharacter(char character)
+        {
+            if (character is (>= 'a' and <= 'z') or (>= 'A' and <= 'Z') or (>= '0' and <= '9'))
+            {
+                return true;
+            }
+
+            return character is '.' or '(' or ')' or '[' or ']' or '_';
+        }
+
+        /// <summary>
         /// One run's claim. The token and mode are taken at the start and reused
         /// at the finish: re-reading the request file there would let an earlier
         /// run's finish adopt the next run's token.
@@ -192,8 +340,8 @@ namespace DxTerminalDevTools
             {
                 _token = ReadRequest();
                 _mode = testsToRun.TestMode.ToString();
-                // Written before the refusal below, so the finish callback can
-                // still name this run after a domain reload.
+                /* Written before the refusal below, so the finish callback can
+                   still name this run after a domain reload. */
                 WriteAtomically(
                     ActiveFileName,
                     $"token={Reported(_token)} mode={_mode} started={UtcNow()}"
@@ -233,20 +381,39 @@ namespace DxTerminalDevTools
                     return;
                 }
 
+                /* Walked only when the run failed, so a green run walks nothing
+                   and its claim is the line it was before. The walk reads a tree
+                   this code does not own, and an exception here would cost the
+                   whole claim - the counters included - so the names are the one
+                   part of the line that degrades instead. */
+                List<string> failedNames = new();
+                string names = string.Empty;
+                if (0 < failed)
+                {
+                    try
+                    {
+                        CollectFailedNames(result, failedNames);
+                        names = FailureNamesField(failedNames, failed);
+                    }
+                    catch (Exception exception)
+                    {
+                        Debug.LogWarning(
+                            $"DxTerminalTestRunReporter {ClaimFileName} walk failed: {exception.Message}"
+                        );
+                    }
+                }
+
                 WriteClaim(
                     $"pass={passed} fail={failed} skipped={skipped} inconclusive={inconclusive} "
                         + $"duration={Seconds(result.Duration)} token={Reported(_token)} "
                         + $"mode={_mode} finished={UtcNow()}"
+                        + names
                 );
             }
 
-            public void TestStarted(ITestAdaptor test)
-            {
-            }
+            public void TestStarted(ITestAdaptor test) { }
 
-            public void TestFinished(ITestResultAdaptor result)
-            {
-            }
+            public void TestFinished(ITestResultAdaptor result) { }
 
             private void WriteClaim(string line)
             {

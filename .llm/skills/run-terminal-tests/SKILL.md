@@ -10,22 +10,22 @@ metadata:
 ## Layout
 
 - `Tests/Runtime/` - PlayMode tests, asmdef `WallstopStudios.DxCommandTerminal.Tests.Runtime`
-  (references the Runtime assembly; `InternalsVisibleTo` already grants internal access).
-- `Tests/Editor/` - EditMode tests, asmdef `WallstopStudios.DxCommandTerminal.Tests.Editor`
-  (Editor-only; same nunit pattern). EditMode-safe screens:
-  no `[UnityTest]`/scene machinery; no default-context dispatch without pinning
-  `CommandExecutionContext.AmbientContextProvider` to a Play Mode context in
-  `[SetUp]` (`[UnityTest]` absence alone does not prove safety); no PlayMode-only
-  test-infra dependency; and no borrowed fixtures from the PlayMode assembly.
+  (references Runtime; `InternalsVisibleTo` grants internal access).
+- `Tests/Editor/` - EditMode tests, asmdef `WallstopStudios.DxCommandTerminal.Tests.Editor`.
+  EditMode-safe screens: no `[UnityTest]`/scene machinery; no default-context dispatch
+  without pinning `CommandExecutionContext.AmbientContextProvider` to a Play Mode context
+  in `[SetUp]` (`[UnityTest]` absence alone does not prove safety); no PlayMode-only
+  test-infra dependency; no borrowed fixtures from the PlayMode assembly.
 - `Tests/Runtime/Components/` - harness pieces: `TestCommands.cs` (attribute-registered test
   commands), `TerminalInputHandler.cs` (input simulation), `StartTracker.cs`.
-- Assembly-coupled suites that stay in PlayMode: `CommandDiscoveryTests` (pins the
+- Stays in PlayMode because it is assembly-coupled: `CommandDiscoveryTests` (pins the
   allocation-free classification memo through the PlayMode allocation instrument) and
-  `CommandCompatibilityBakeTests` (drives the bake over `CommandDiscoveryTests` fixtures
-  and `Components/BakePartialFixtureCommands.cs` in the PlayMode assembly).
-- Suites that pin assembly-level discovery contracts (generated catalog, TypeCache claim,
-  catalog-less provider exclusion) need attributed `[RegisterCommand]` fixtures in their
-  own assembly: `Tests/Editor/DiscoveryFixtureCommands.cs` serves Tests.Editor.
+  `CommandCompatibilityBakeTests` (drives the bake over those fixtures and
+  `Components/BakePartialFixtureCommands.cs`).
+- Suites that pin assembly-level discovery contracts - the generated catalog, the
+  TypeCache claim, catalog-less provider exclusion - need attributed `[RegisterCommand]`
+  fixtures in their own assembly, which is what `Tests/Editor/DiscoveryFixtureCommands.cs`
+  is for Tests.Editor.
 
 ## Running
 
@@ -49,10 +49,14 @@ metadata:
    `unity:tests` wraps `unity-mcp.mjs tests`: `--mode all|editmode|playmode`,
    `--filter` (the bridge's test-name filter; case-insensitive partial match
    on the pinned backend), `--run-timeout MS` (minimum 30000, per leg). `all`
-   runs the EditMode suite then the PlayMode suite and prints one summary line
-   per leg.
+   runs the EditMode suite then the PlayMode suite and prints one result block
+   per leg: the counters, then one indented line per failed test the editor
+   named. The list is capped, so a block that shows fewer names than failures
+   ends with a line saying how many were not listed. Names arrive percent-encoded
+   and are escaped before printing, per
+   [text-io-boundaries](../text-io-boundaries/SKILL.md).
 
-   Four rules make a result trustworthy. Two are in `awaitRunResult` (the
+   Four rules make a result trustworthy. Two live in `awaitRunResult` (the
    bridge-polling fallback) and two in `runUnityTests`; `awaitRunClaim` holds the
    claim-file equivalents used whenever the run reporter is installed:
 
@@ -74,15 +78,16 @@ metadata:
 
    The claim path replaces the status poll, never the `run_tests` request: the
    command writes an owner token to `test-run-request.txt`, the editor echoes it
-   on every line it writes to `test-run.txt`, and only a claim carrying that
-   token can end the wait. The request is removed once the editor acknowledges
-   the token, so a later run nobody asked for cannot adopt it.
-   `did-not-run` fails the command with the editor's reason and the request
-   path it used. Until a claim with our token arrives, the wait is bounded by
-   a 120 s start grace instead of `--run-timeout`; after it arrives the full
-   deadline applies, so a long capture leg is never cut off. A run that matches
-   no test never starts and reports nothing, so that case takes the bridge's
-   zero-total answer and the leg is reported, not failed.
+   on every line of `test-run.txt`, and only a claim carrying that token can end
+   the wait. The request is removed once acknowledged, so a later run nobody
+   asked for cannot adopt it. `did-not-run` fails with the editor's reason and
+   the request path. Until a claim with our token arrives the wait is bounded by
+   a 120 s start grace, not `--run-timeout`; after it, the full deadline, so a
+   long capture leg is never cut off. A run matching no test never starts and
+   reports nothing, so it takes the bridge's zero-total answer and the leg is
+   reported, not failed. The editor's own report is what a red leg is read
+   from: a reporter that predates the name field, or the bridge fallback, names
+   nothing and the leg says so.
 3. Unity Test Runner: Window > General > Test Runner -> PlayMode tab -> Run All.
 4. Unity CLI (CI-style):
    `Unity -batchmode -projectPath <proj> -runTests -testPlatform PlayMode -testResults results.xml -quit`
@@ -90,71 +95,51 @@ metadata:
 
 ## House style (from existing suites)
 
-- File per type under test: `CommandArgTests.cs`, `CommandShellTests.cs`, `TerminalTests.cs`,
-  `CommandHistoryTests.cs`, `TerminalKeyboardControllerTests.cs`, `TryEatArgumentTests.cs`.
-- Tests are plain NUnit (`[Test]`) over the static facades (`Terminal`, `Terminal.Shell`) - no
-  scene setup needed for command/parsing behavior.
-- Data-driven cases use `[TestCase]` rows instead of loops; failure messages assert on values,
-  not just booleans.
-- Names are PascalCase without underscores in test method bodies; mirrors the C# rules in
-  `context.md`.
+- File per type under test (`CommandArgTests.cs`, `CommandShellTests.cs`,
+  `TerminalTests.cs`, ...), plain NUnit (`[Test]`) over the static facades
+  (`Terminal`, `Terminal.Shell`); no scene setup for command/parsing behavior.
+- Data-driven cases use `[TestCase]` rows instead of loops; failure messages assert
+  on values, not just booleans. Naming and comment rules come from `context.md`.
 
 ## Adding tests
 
-1. New command behavior -> extend the matching suite; PlayMode command fixtures go in
-   `Components/TestCommands.cs` so registration scanning picks them up; EditMode-assembly
-   discovery fixtures go in `Tests/Editor/DiscoveryFixtureCommands.cs`.
-2. Input behavior -> simulate through `Components/TerminalInputHandler.cs` rather than injecting
-   raw key events.
-3. Terminal lifecycle (open/close, resize, buffer wrap) -> `TerminalTests.cs` covers the
-   component; reuse its setup helpers.
-4. Keep runtime allocations in assertions minimal; suites run in PlayMode on every change.
+1. New command behavior -> extend the matching suite; fixtures go where registration
+   scanning finds them: `Components/TestCommands.cs` for PlayMode,
+   `Tests/Editor/DiscoveryFixtureCommands.cs` for EditMode-assembly discovery.
+2. Input behavior -> simulate through `Components/TerminalInputHandler.cs`, not raw
+   key events. Terminal lifecycle (open/close, resize, buffer wrap) -> `TerminalTests.cs`,
+   reusing its setup helpers.
+3. Keep runtime allocations in assertions minimal; suites run in PlayMode on every change.
 
 ## Driving tests from agents
 
 After editing files outside Unity, confirm the editor compiled the intended
 content before trusting a run: the host sync can lag, and stale assemblies
-produce misleading failures. Check a canary (a log line, an assert message, or
-a shifted line number in the failure stack) against the current file.
+produce misleading failures. Check a canary (a log line, an assert message, or a
+shifted line number in the failure stack) against the current file.
+
+`npm run unity:capture` does **not** recompile. Its refresh prefers
+`menu: Assets/Refresh`, which answers without importing a changed script under
+`Packages/`, so a capture after an edit still reports `isCompiling: false` and
+`idle: true` while the assembly is stale (#168). The bridge has no
+force-recompile path today, so call it over MCP yourself:
+
+```js
+"UnityEditor.AssetDatabase.Refresh();"
+  + "UnityEditor.Compilation.CompilationPipeline.RequestScriptCompilation();"
+```
+
+then wait for `isCompiling` to clear and check the `Library/ScriptAssemblies`
+timestamp moved before believing a run. If the asset database must be forced,
+add `ImportAssetOptions.ForceUpdate` and `CleanBuildCache`.
 
 ## Host editor hygiene (eval drills)
 
-A modal dialog blocks the editor's main thread; while it is up, every bridge
-request times out and the outage reads as a hang (session-048: a scratch scene
-was deleted while it was the open scene, and the next play-mode entry raised
-the "save modified scene?" prompt). The techniques here are adapted from
-IshoBoy's shared-editor etiquette (`Ambiguous-Interactive/IshoBoy`,
-`.llm/references/unity-mcp-shared-editor-etiquette.md` and the capture
-runner's refusal gate).
-
-- **Open with a refusal preflight, not a state guess.** Before anything that
-  swaps, saves, reimports, compiles, or enters play mode, run one read-only
-  eval: `EditorApplication.isPlaying(OrWillChangePlaymode)`, `isCompiling`,
-  and every open scene's `path` + `isDirty`. Dirty or playing -> **refuse and
-  say so** (name the scenes) instead of stepping into a prompt only the human
-  can dismiss. Editor status endpoints cannot see scene dirtiness.
-- **Never write or `DeleteAsset` anything under `Assets/` the editor has
-  open** - reimporting a loaded file raises "Reload/Ignore" and deleting the
-  file under the open scene dirties it. Re-read the open-scene list
-  immediately before the write rather than trusting an earlier probe.
-- **Single-mode scene swaps are the modal source** (`NewScene`/`OpenScene`
-  with `NewSceneMode.Single` prompt over a dirty scene). Prefer no swap; for
-  isolated edit-mode work use `EditorSceneManager.NewPreviewScene()` /
-  `ClosePreviewScene(scene)`, which touch no open scene.
-- **`new GameObject` lands in the active scene and dirties it**; destroying
-  it does not clear the flag. In eval probes use
-  `EditorUtility.CreateGameObjectWithHideFlags(name, HideFlags.HideAndDontSave, ...)`
-  - it belongs to no scene. (Its `scene.IsValid()` is false, so bodies added
-  with it never register with a physics world.)
-- **Restore order**: record the open scenes first; open the originals back
-  with `OpenScene(path)` BEFORE deleting drill assets; end with zero dirty
-  scenes, no drill asset open, not playing. Unity 6 has no
-  `ClearSceneDirtiness`; once a prompt is dismissed, opening a clean scene is
-  the reset. Verify via eval after every drill.
-- **Play mode is a one-way door over MCP** (entering it stops the bridge
-  answering; only a human at the machine can leave). Only start
-  play-mode runs with the human present, and never as the session's last
-  operation.
+A modal dialog blocks the editor's main thread, so every bridge request times
+out and the outage reads as a hang. The drills, the refusal preflight, and the
+scene-restore order are in
+[unity-mcp](../unity-mcp/SKILL.md#host-editor-hygiene-eval-drills); read them
+before any eval that writes.
 
 ## UI test timing (frame-coupled reads)
 
@@ -196,24 +181,21 @@ field write is frame-coupled and flakes under session sequences
   moved the caret. The caret is parked only after it holds for two passes
   (`CaretStickPasses`), and a field change cancels the queued caret
   (`_pendingCaretIndex` is `int?`; null = none).
-- Historical palette/token caret flakes (QuotedTokensAcceptUnquotedInsertions,
-  TabAppliesArgumentCompletionWithQuoting, NavigateAutoLoads, the re-clamp pair)
-  were root-caused to tests asserting the live cursorIndex without the queued
-  marker; the polls now accept both surfaces and the failures stopped
-  recurring. A failure there today means the marker itself moved or drained -
-  a real regression, not a poll budget problem.
-- UITK clamps `cursorIndex` writes to the last LAID-OUT text length, not
-  the value length. The cap converges with layout and its convergence is
-  nondeterministic under session sequences: a fresh field can sit capped
-  below the value length for a whole poll budget, and re-focusing does
-  not force it. Worse, the panel can RE-CLAMP a caret write after it
-  already landed (observed session-023: a mid-line park held, then lost
-  frames later). UI tests must not assume a caret park sticks once; retry
-  the write and readiness-poll for it to HOLD (see
-  `TerminalUITokenCompletionTests.SetInput`'s retry loop), or probe for a
-  holdable position and pin position-independent rules against it (see
+- A caret failure is the marker moving or draining - a real regression, not a poll budget
+  problem. The four flakes this replaced (`QuotedTokensAcceptUnquotedInsertions`,
+  `TabAppliesArgumentCompletionWithQuoting`, `NavigateAutoLoads`, the re-clamp pair) all
+  asserted the live cursorIndex without the queued marker; the palette and token-completion
+  polls now accept the queued marker (`_pendingCaretIndex`) or the live cursor, and value
+  polls accept the input abstraction or the field mirror.
+- UITK clamps `cursorIndex` writes to the last LAID-OUT text length, not the
+  value length, and the panel can RE-CLAMP a write after it landed. A fresh
+  field can sit capped below the value length for a whole poll budget, and
+  re-focusing does not force it. Never assume a caret park sticks once: retry
+  the write and poll for it to HOLD (see
+  `TerminalUITokenCompletionTests.SetInput`'s retry loop), or pin
+  position-independent rules against a probed holdable position (see
   `CommandPaletteTests.PendingCaretConsumesOnlyAfterStablePasses`).
-  Synchronous caret reads one frame after a value write are also clamped
+  Synchronous caret reads one frame after a value write are clamped too
   (`PendingCaretWritesAndKeepsMarkerWhileUnfocused` readiness-polls its
   applied positions).
 
@@ -233,17 +215,15 @@ field write is frame-coupled and flakes under session sequences
 
 - Assert post-mutation state through the live reference: after a respawn, reset,
   destroy, or disable, read `TerminalUI.Instance` (or re-query the facade) at the
-  assert itself, not a local captured before the mutation. A stale capture makes
-  the null-check vacuous and lets the following `AreNotSame` pass against a dead
-  object (PR #101 Bugbot). Capture-then-assert is only sound when nothing mutates
-  between the capture and the assert.
+  assert, not a local captured before the mutation. A stale capture makes the
+  null-check vacuous and lets `AreNotSame` pass against a dead object.
 
-- Teardown pairs with setup: when `[UnitySetUp]` can exit early (`Assert.Ignore`
-  for -nographics or missing assets), any teardown assert that reads setup state
-  must guard on that state existing (nullable field + `HasValue`, or the same
-  skip condition). NUnit still runs `[UnityTearDown]` after a SetUp ignore, so an
-  unguarded baseline (for example a RenderTexture count) turns an intended skip
-  into a failure on machines with pre-existing objects (PR #126 Bugbot).
+- Teardown pairs with setup: when `[UnitySetUp]` can exit early (`Assert.Ignore` for
+  -nographics or missing assets), a teardown assert that reads setup state must guard
+  on that state existing (nullable field + `HasValue`, or the same skip condition).
+  NUnit runs `[UnityTearDown]` after a SetUp ignore, so an unguarded baseline - a
+  RenderTexture count, say - turns an intended skip into a failure on a machine with
+  pre-existing objects.
 - A test failing ISOLATED that passed isolated earlier in the same session
   is the poisoned-panel state below, not a code change - but verify with a
   real domain reload first: Assets > Refresh (or any script edit that
@@ -260,6 +240,7 @@ field write is frame-coupled and flakes under session sequences
 
 ## Clean-project compatibility fixtures
 
-- Root default matrix and fixture paths at `tooling~/`; add a test that parses an empty argument list and loads those paths.
-- Name per-leg editor flags directly from the leg id, such as `--unity-2021`; test the exact flag named in missing-input errors.
-- Pass positive boolean environment values such as `DX_T13_DOMAIN_RELOAD_ENABLED=1`; test both boolean polarities against the Unity setting they describe.
+- Root default matrix and fixture paths at `tooling~/`; test that an empty argument list
+  loads them. Name per-leg editor flags directly from the leg id, such as `--unity-2021`.
+- Pass positive boolean environment values such as `DX_T13_DOMAIN_RELOAD_ENABLED=1`, and
+  test both boolean polarities against the Unity setting they describe.
