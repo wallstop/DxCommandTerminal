@@ -2131,6 +2131,9 @@ export async function runCapture(options, runtime = {}) {
     if (!(await typePresent())) {
       if (!installed && filesystemProjectPath && fs.existsSync(filesystemProjectPath)) {
         install();
+        // The probe above can time out on a busy editor and read as "not
+        // compiled", so the install path waits for quiet like every other one.
+        await waitForEditorIdle(evalCall, deadline);
         await refreshScripts(evalCall, deadline);
       }
       if (!(await typePresent())) {
