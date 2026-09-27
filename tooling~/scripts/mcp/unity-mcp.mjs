@@ -2688,8 +2688,9 @@ export function newRunToken(label, now = Date.now()) {
  *
  * `total` is summed here rather than reported by the editor, so the summary
  * cannot drift from the counters, and a refusal's reason is the rest of the
- * line so it stays readable English. A line without a readable token, or with a
- * state word that is not one of the three, is `unreadable`: never a result.
+ * line so it stays readable English. A line without a readable token, with a
+ * state word that is not one of the three, or with a counter that is not a
+ * count, is `unreadable`: never a result.
  */
 export function parseRunClaim(text) {
   const line = (text ?? "").trim();
