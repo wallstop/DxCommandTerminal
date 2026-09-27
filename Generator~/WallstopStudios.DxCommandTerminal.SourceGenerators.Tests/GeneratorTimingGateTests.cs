@@ -160,8 +160,8 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators.Tests
                 median < GateMilliseconds,
                 $"Generator execution tripwire crossed: statistic=median n={SampleCount} "
                     + $"measured={median:F3} ms "
-                    + $"budget={GateMilliseconds.ToString(System.Globalization.CultureInfo.InvariantCulture)} ms "
-                    + $"margin={(GateMilliseconds - median).ToString(System.Globalization.CultureInfo.InvariantCulture)} ms "
+                    + $"budget={GateMilliseconds:F3} ms "
+                    + $"margin={GateMilliseconds - median:F3} ms "
                     + $"| median={median:F3} ms p95={p95:F3} ms max={max:F3} ms"
             );
             Assert.True(
@@ -169,8 +169,8 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators.Tests
                 $"Generator execution baseline tripwire crossed: statistic=median "
                     + $"n={SampleCount} "
                     + $"measured={median:F3} ms "
-                    + $"budget={BaselineTripwireMilliseconds.ToString(System.Globalization.CultureInfo.InvariantCulture)} ms "
-                    + $"margin={(BaselineTripwireMilliseconds - median).ToString(System.Globalization.CultureInfo.InvariantCulture)} ms "
+                    + $"budget={BaselineTripwireMilliseconds:F3} ms "
+                    + $"margin={BaselineTripwireMilliseconds - median:F3} ms "
                     + "- a flat multi-x regression can pass the 25 ms ceiling; "
                     + $"| median={median:F3} ms p95={p95:F3} ms max={max:F3} ms"
             );
@@ -178,8 +178,8 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators.Tests
                 p95 < TripwireMilliseconds,
                 $"Generator execution tail tripwire crossed: statistic=p95 n={SampleCount} "
                     + $"measured={p95:F3} ms "
-                    + $"budget={TripwireMilliseconds.ToString(System.Globalization.CultureInfo.InvariantCulture)} ms "
-                    + $"margin={(TripwireMilliseconds - p95).ToString(System.Globalization.CultureInfo.InvariantCulture)} ms "
+                    + $"budget={TripwireMilliseconds:F3} ms "
+                    + $"margin={TripwireMilliseconds - p95:F3} ms "
                     + $"| median={median:F3} ms p95={p95:F3} ms max={max:F3} ms"
             );
         }

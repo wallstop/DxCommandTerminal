@@ -28,11 +28,13 @@ pinning test. Highlights:
 - Timing tripwires in the benchmark suites catch order-of-magnitude
   regressions. They are guardrails, not benchmarks: do not quote their
   numbers as performance results.
-- A tripwire failure names the statistic, the sample count, the margin, and
-  the measured median, p95, and max, so a trip says which statistic crossed
-  and by how much. A readiness tripwire asserts the warm median against the
-  budget and the warm p95 against a loose multiple of it: with 30 samples p95
-  is the second-worst one, so two stalled samples on a shared editor cross it.
+- A tripwire failure names the statistic, the sample count, and the margin,
+  plus the measured median, p95, and max for a windowed tripwire, so a trip
+  says which statistic crossed and by how much.
+- Where p95 is effectively a maximum - under roughly 100 samples - a
+  readiness tripwire asserts the warm median against the budget and the
+  warm p95 against a loose multiple of it. At 30 samples p95 is the
+  second-worst one, so two stalled samples on a shared editor cross it.
 - Editor numbers never stand in for player numbers. IL2CPP and WebGL
   behavior is validated with local build drills.
 
