@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import {
   DEFAULT_TEST_RUN_TIMEOUT,
   TEST_MODES,
+  awaitRunResult,
   isSessionCapError,
+  newestPerScenario,
   parseTestStatus,
   readSummaryKey,
   resolveTestRunOptions,
@@ -147,4 +149,87 @@ test("the editor's full session table is recognized as transient, not a dead bri
   assert.equal(isSessionCapError(cap), true);
   assert.equal(isSessionCapError("HTTP 503: Service Unavailable"), false);
   assert.equal(isSessionCapError(undefined), false);
+});
+
+/*
+    The deadline must not decide the fate of a result fetched after it passed:
+    shaped as `while (now < deadline) { inspect; sleep; fetch }` the loop drops
+    that payload, so a run that finished during the last poll reads as missing
+    (Cursor Bugbot, PR #161). A clock that jumps past the deadline during the
+    final read is the shape that used to fail.
+ */
+test("a run result fetched after the deadline still counts", async () => {
+  const previous = readSummaryKey(
+    '{"status":"completed","duration":9,"summary":{"total":1,"passed":1,"failed":0}}'
+  );
+  const finished = { total: 3, passed: 3, failed: 0, skipped: 0 };
+  const reads = ['{"status":"completed","duration":2,"summary":{"total":3,"passed":3,"failed":0,"skipped":0}}'];
+  let polls = 0;
+  let clock = 0;
+
+  const summary = await awaitRunResult({
+    initial: '{"status":"in_progress"}',
+    previousKey: previous,
+    deadline: 1_000,
+    read: async () => {
+      polls += 1;
+      // A poll that overruns the deadline still has to be inspected.
+      clock += 500;
+      return reads[0];
+    },
+    now: () => clock,
+    sleep: async (ms) => {
+      clock += ms;
+    }
+  });
+
+  assert.deepEqual(summary, finished);
+  assert.equal(polls, 1, "the late payload is the one that ends the wait");
+  assert.ok(clock > 1_000, "the clock was past the deadline when the result arrived");
+});
+
+test("the wait still gives up when the last payload is not attributable", async () => {
+  const stale = '{"status":"completed","duration":9,"summary":{"total":1,"passed":1,"failed":0}}';
+  const previous = readSummaryKey(stale);
+  let polls = 0;
+  let clock = 0;
+
+  const summary = await awaitRunResult({
+    initial: stale,
+    previousKey: previous,
+    deadline: 1_000,
+    read: async () => {
+      polls += 1;
+      return stale;
+    },
+    now: () => clock,
+    sleep: async (ms) => {
+      clock += ms;
+    }
+  });
+
+  assert.equal(summary, null, "a run that never starts must not report a result");
+  assert.equal(polls, 1, "one poll fits before the deadline, and the retry is bounded by it");
+});
+
+test("a scenario contributes only its newest manifest to the compare", () => {
+  const entries = [
+    { filePath: "a/CapturesTerminalSmallSurface.manifest.json", mtimeMs: 10 },
+    { filePath: "b/CapturesTerminalSmallSurface.manifest.json", mtimeMs: 90 },
+    { filePath: "c/CapturesCommandPaletteSurface.manifest.json", mtimeMs: 50 },
+    { filePath: "d/CapturesFirstPaletteInteractionFrame.manifest.json", mtimeMs: 70 },
+    { filePath: "e/CapturesFirstPaletteInteractionFrame.manifest.json", mtimeMs: 70 }
+  ];
+  const scenarioOf = (entry) => entry.filePath.split("/")[1].replace(".manifest.json", "");
+  const kept = newestPerScenario(entries, scenarioOf).map((entry) => entry.filePath);
+
+  // One entry per scenario, the newest kept; a tie keeps the later one.
+  assert.deepEqual(kept, [
+    "c/CapturesCommandPaletteSurface.manifest.json",
+    "e/CapturesFirstPaletteInteractionFrame.manifest.json",
+    "b/CapturesTerminalSmallSurface.manifest.json"
+  ]);
+  // An entry the scenario cannot be read from is kept, never dropped.
+  const opaque = newestPerScenario([{ filePath: "f/unreadable.manifest.json", mtimeMs: 5 }], () => undefined);
+  assert.deepEqual(opaque.map((entry) => entry.filePath), ["f/unreadable.manifest.json"]);
 });

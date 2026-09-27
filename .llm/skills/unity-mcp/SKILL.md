@@ -91,6 +91,30 @@ launchers without touching native `claude`/`codex` logins or configs:
 Set the key only in `.env.local` or your shell/secret store; never in generated
 files or CLI arguments.
 
+## Session lifecycle and a busy editor
+
+A bridge session is a host process, and only an explicit HTTP `DELETE` carrying
+`Mcp-Session-Id` frees its slot. Closing the MCP client is not enough. The
+bridge caps concurrent sessions (`--max-sessions`, default 8; each owns a relay
+child process) and reaps an idle session after `--session-timeout` (60s), so a
+leak shows up as HTTP 503 with JSON-RPC `-32000 Too many concurrent MCP
+sessions` - the probe retries that and reports it as transient, never as a dead
+bridge. Any tool that opens a session must release it with a DELETE, including
+on its failure paths; `withMcpSession` does this through `deleteBridgeSession`.
+To prove a change here: run 8 open/close cycles, then a 9th - the 9th is the one
+that exposes a leak.
+
+The editor serves tool calls on its main thread. A request that lands while the
+editor is busy (a Play Mode run winding down, a domain reload) comes back as
+`The operation was aborted due to timeout`, and the SDK then rejects every later
+call on that session instantly with that first reason - one unlucky request
+kills the rest of the command. So a session rebuilds its transport once when a
+call throws, and the caller retries. `isCompiling` is a measured bad busy
+signal (reference runs read `false` while every call timed out); play mode is
+the discriminating one, because play mode over MCP times out every tool until
+it ends. Wait on play mode only in a bounded loop, and treat the retry as the
+real safety net.
+
 ## Troubleshooting
 
 - `probe` unreachable: is the bridge running on the host (`npm run unity:mcp`)? Is
@@ -101,6 +125,9 @@ files or CLI arguments.
   check compilation conflicts, or fall back to `--backend relay`.
 - Agent cannot see Z.AI servers: no key in `.env.local`; configs not rewritten
   since the key was added (re-run offline configure).
+- Bridge answers 503 `Too many concurrent MCP sessions`: something is leaking
+  sessions. Raise `--max-sessions` for a busy host, and check every path that
+  opens a session releases it.
 - `eval` compiles C# STATEMENTS from a `code` parameter: terminate expressions
   (`return (...);`), never rely on an `expression` parameter or direct references
   into host assemblies (resolve those via `Type.GetType`), and expect the client

@@ -2288,7 +2288,31 @@ export function validateT4Manifest(manifest, expectComplete) {
   return problems;
 }
 
-/** Manifest files written at or after sinceEpochMs, oldest first. */
+/**
+ * The newest entry per scenario, oldest first.
+ *
+ * The manifest window is time-based, so a capture run that starts right after
+ * another one collects both: the full PlayMode suite runs these same capture
+ * tests, and a `t4:capture` immediately after it sees both runs' manifests.
+ * Comparing the older copy too wastes work and can fail the command on
+ * evidence from a run that is already over.
+ */
+export function newestPerScenario(entries, scenarioOf) {
+  const newest = new Map();
+  for (const entry of entries) {
+    const key = scenarioOf(entry) ?? entry.filePath;
+    const current = newest.get(key);
+    if (current === undefined || entry.mtimeMs >= current.mtimeMs) {
+      newest.set(key, entry);
+    }
+  }
+  return [...newest.values()].sort((left, right) => left.mtimeMs - right.mtimeMs);
+}
+
+/**
+ * Manifest files written at or after sinceEpochMs, oldest first, each with its
+ * mtime so a caller can prefer the newest copy of a scenario.
+ */
 export function collectT4ManifestPaths(artifactRoot, sinceEpochMs) {
   const root = path.resolve(artifactRoot);
   if (!fs.existsSync(root)) return [];
@@ -2304,7 +2328,7 @@ export function collectT4ManifestPaths(artifactRoot, sinceEpochMs) {
     }
   }
   manifests.sort((a, b) => a.mtimeMs - b.mtimeMs);
-  return manifests.map((entry) => entry.filePath);
+  return manifests;
 }
 
 /**
@@ -2363,27 +2387,12 @@ export async function runT4Capture(options, runtime = {}) {
     );
     log(options, "debug", `run_tests via ${runTests.candidate.name}`);
 
-    const runText = extractText(runTests.call);
-    let seenRunning = parseTestStatus(runText, false).running;
-    let payload = runText;
-    let summary = null;
-    while (Date.now() < deadline) {
-      const observed = parseTestStatus(payload, seenRunning);
-      /*
-          Only a finished, non-in-flight payload that is not the previous run's
-          counts ends the wait: a run still going can carry the last run's
-          numbers, and the manifests validated below come from a window that
-          can still hold that run's captures.
-       */
-      if (observed.finished && summaryIsFresh(payload, previousKey, seenRunning)) {
-        summary = observed.summary;
-        break;
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, 2_000));
-      payload = await pollTestStatus(client, signal);
-      seenRunning ||= parseTestStatus(payload, false).running;
-    }
+    const summary = await awaitRunResult({
+      initial: extractText(runTests.call),
+      previousKey,
+      deadline,
+      read: () => pollTestStatus(client, signal)
+    });
 
     if (summary === null) {
       fail(
@@ -2396,11 +2405,21 @@ export async function runT4Capture(options, runtime = {}) {
     console.log(testSummaryLine(summary));
 
     const artifactRoot = path.join(options.repoRoot, ".artifacts", "t4");
-    const manifestPaths = collectT4ManifestPaths(artifactRoot, startedAt - 5_000);
+    const manifestPaths = newestPerScenario(
+      collectT4ManifestPaths(artifactRoot, startedAt - 5_000),
+      (entry) => {
+        try {
+          return JSON.parse(fs.readFileSync(entry.filePath, "utf8")).scenario;
+        } catch {
+          // Unreadable manifests stay in the list so the loop reports them.
+          return undefined;
+        }
+      }
+    );
     const problems = [];
     const validated = new Set();
     const validManifests = [];
-    for (const manifestPath of manifestPaths) {
+    for (const { filePath: manifestPath } of manifestPaths) {
       let manifest;
       try {
         manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
@@ -2692,10 +2711,16 @@ export async function runUnityTests(options, runtime = {}) {
 
     const summaries = [];
     for (const leg of testRunLegs(mode)) {
+      /*
+          Each leg gets its own deadline: the flag reads as how long a run may
+          take, and a slow first suite must not starve the second one. The
+          session signal stays the hard cap for the whole command.
+       */
+      const legDeadline = Date.now() + runTimeout;
       // Each leg waits for its own quiet editor: a PlayMode leg leaves the
       // session tearing down, and the next leg must not race that.
-      await waitForTestIdle(client, evalCall, deadline);
-      const summary = await runTestLeg(client, signal, leg, filter, deadline, evalCall);
+      await waitForTestIdle(client, evalCall, legDeadline);
+      const summary = await runTestLeg(client, signal, leg, filter, legDeadline, evalCall);
       console.log(`${leg}: ${testSummaryLine(summary)}`);
       summaries.push(summary);
     }
@@ -2757,6 +2782,61 @@ async function waitForTestIdleQuietly(client, evalCall, deadline) {
 }
 
 /**
+ * Wait for a run result, inspecting every payload handed to it - including the
+ * one fetched after the deadline has already passed.
+ *
+ * The loop must inspect before it re-tests the deadline. Shaped as
+ * `while (now < deadline) { inspect; sleep; fetch }` the deadline is checked
+ * first, so a poll that lands late is dropped and a run that finished during
+ * that poll reads as missing (found by Cursor Bugbot on PR #161). Here the
+ * deadline only decides whether another poll is worth starting.
+ *
+ * Returns the attributable summary, or null when the deadline passed with
+ * nothing acceptable in hand.
+ */
+export async function awaitRunResult({
+  initial,
+  previousKey,
+  deadline,
+  read,
+  beforePoll = null,
+  pollIntervalMs = 2_000,
+  now = () => Date.now(),
+  sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+}) {
+  let payload = initial;
+  let seenRunning = parseTestStatus(payload, false).running;
+  for (;;) {
+    const observed = parseTestStatus(payload, seenRunning);
+    /*
+        Only a finished, non-in-flight payload can be a result - one still
+        running, or idle before the run was ever seen, can carry the previous
+        run's numbers - and only when its run key differs from the pre-request
+        key, unless the run was seen in flight.
+     */
+    if (observed.finished && summaryIsFresh(payload, previousKey, seenRunning)) {
+      return observed.summary;
+    }
+
+    const remainingMs = deadline - now();
+    if (remainingMs <= 0) {
+      return null;
+    }
+
+    // Clamped, so the last poll lands on the deadline instead of a full
+    // interval past it: that round-trip is the one most likely to time out on a
+    // busy editor, and it buys nothing once the budget is spent.
+    await sleep(Math.min(pollIntervalMs, remainingMs));
+    if (beforePoll !== null) {
+      await beforePoll();
+    }
+
+    payload = await read();
+    seenRunning ||= parseTestStatus(payload, false).running;
+  }
+}
+
+/**
  * Run one mode's suite over the bridge and return its summary.
  *
  * The counters observed before the request belong to the previous run, so a
@@ -2782,39 +2862,19 @@ async function runTestLeg(client, signal, leg, filter, deadline, evalCall = null
     signal
   );
 
-  const runText = extractText(run.call);
-  let seenRunning = parseTestStatus(runText, false).running;
-  let payload = runText;
-  while (Date.now() < deadline) {
-    const observed = parseTestStatus(payload, seenRunning);
-    /*
-        Only a finished, non-in-flight payload can be a result - one still
-        running, or idle before the run was ever seen, can carry the previous
-        run's numbers - and only when its run key differs from the pre-request
-        key, unless the run was seen in flight.
-     */
-    if (observed.finished && summaryIsFresh(payload, previousKey, seenRunning)) {
-      return observed.summary;
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 2_000));
-    /*
-        The editor serves status calls on its main thread, which a run occupies
-        until it has wound down; polling into that window is what produces the
-        "aborted due to timeout" answers. Play mode is the discriminating flag
-        here - unlike isCompiling, which reference measurements show reading
-        false while every call is timing out (unity-helpers/.llm/references/
-        unity-mcp-fixture-runner-part-1.md) - and play mode over MCP is known to
-        time out every tool until a human stops it (IshoBoy/.llm/references/
-        unity-mcp-shared-editor-etiquette.md). So the wait is bounded, and the
-        retry below is the real safety net, not this gate.
-     */
-    if (evalCall !== null) {
-      await waitForTestIdleQuietly(client, evalCall, deadline);
-    }
-
-    payload = await pollTestStatus(client, signal);
-    seenRunning ||= parseTestStatus(payload, false).running;
+  const summary = await awaitRunResult({
+    initial: extractText(run.call),
+    previousKey,
+    deadline,
+    read: () => pollTestStatus(client, signal),
+    beforePoll:
+      evalCall === null
+        ? null
+        : () =>
+            waitForTestIdleQuietly(client, evalCall, deadline)
+  });
+  if (summary !== null) {
+    return summary;
   }
 
   fail(
@@ -2840,9 +2900,9 @@ function usage() {
     "",
     "Options:",
     "  --mode MODE                 Test mode: all, editmode, playmode (tests only; default all,",
-    "                              which runs both suites; the run timeout covers all legs)",
+    "                              which runs both suites, each with its own run timeout)",
     "  --filter TEXT               Test name filter (tests only)",
-    "  --run-timeout MS            Test run deadline (tests only; default 600000)",
+    "  --run-timeout MS            Per-leg test run deadline (tests only; default 600000)",
     "  --host HOST                 Endpoint host; the only host discovery probes",
     "  --port PORT                 Endpoint port; the only port discovery probes",
     "  --path PATH                 Streamable HTTP path (default: /mcp)",

@@ -162,11 +162,18 @@ describe("collectT4ManifestPaths", () => {
       write("run-2", "b.manifest.json", 3_000);
       write("run-3", "not-a-manifest.txt", 5_000);
 
-      assert.deepEqual(collectT4ManifestPaths(root, 500), [
+      // Each entry keeps its mtime, so a caller can prefer the newest copy of a
+      // scenario; a bare path list made that impossible.
+      const paths = (entries) => entries.map((entry) => entry.filePath);
+      assert.deepEqual(paths(collectT4ManifestPaths(root, 500)), [
         path.join(root, "run-1", "a.manifest.json"),
         path.join(root, "run-2", "b.manifest.json")
       ]);
-      assert.deepEqual(collectT4ManifestPaths(root, 2_000), [
+      assert.deepEqual(
+        collectT4ManifestPaths(root, 500).map((entry) => entry.mtimeMs),
+        [1_000, 3_000]
+      );
+      assert.deepEqual(paths(collectT4ManifestPaths(root, 2_000)), [
         path.join(root, "run-2", "b.manifest.json")
       ]);
       assert.deepEqual(collectT4ManifestPaths(root, 10_000), []);
