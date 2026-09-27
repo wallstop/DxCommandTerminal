@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { RUN_CLAIM_FILE, RUN_REQUEST_FILE, parseRunClaim } from "../unity-mcp.mjs";
 
 const GRAMMAR_DIR = path.dirname(fileURLToPath(import.meta.url));
-const GRAMMAR_PROJECT = path.join(GRAMMAR_DIR, "grammar.csproj");
+const GRAMMAR_PROJECT = path.join(GRAMMAR_DIR, "DxTerminalClaimGrammar.csproj");
 
 /*
     The reporter's grammar, both halves (issue #167).
