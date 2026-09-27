@@ -110,19 +110,26 @@ State the one limit rather than implying full coverage: widening the production
 class to a category the oracle does not name is a semantic decision no test
 will second-guess.
 
-## A contract no CI lane compiles is pinned on source text
+## Pins are the fallback, not the goal
 
-`DxTerminalTestRunReporter` is C# that only compiles inside a Unity project, so
-nothing in CI runs it. `env-and-capture.test.mjs` stands in for that by pinning
-the reporter's source: the field name where it is written, each contract
-constant at both its declaration and its use, the byte-wise cast, the escape
-sites, and the allowlist's exact literals. Pin **use** sites too - renaming a
-declaration and leaving the use behind is the mutation that survives.
+When a writer only compiles in a place CI cannot reach, pinning its source text
+holds the line until a lane can run it. `DxTerminalTestRunReporter` was pinned
+that way: each contract constant at its declaration and its use, the byte-wise
+cast, the escape sites, the allowlist's exact literals. A mutation probe
+measured those pins at 11 of 13 tried mutations, and the two survivors were C#
+behavior no text pin can see.
 
-Two costs, both real: a mutation expressed as a hex literal, and a
-behavior-preserving refactor like `Append($"%{value:X2}")`, still turn the suite
-red. State the tradeoff next to the pins. Issue #167 is the fix - compile the
-three pure helpers in CI and round-trip a generated corpus.
+The fix is to give the contract a lane, not more pins. `tooling~/scripts/mcp/grammar`
+links that file into a Unity-free project, drives it through the callbacks a real
+run uses, and decodes the claims it wrote with the real reader (`npm run mcp:grammar`).
+The mutation probe then catches the behavior mutations too, and a
+behavior-preserving refactor no longer turns the suite red.
+
+A hand-written stand-in for the foreign types is what makes that cheap; state its
+limit next to it, because it declares a surface rather than the real one. The
+generator, not the pin, is what covers a character the fixture did not think of -
+a generated corpus that walks the range fails closed where a listed set fails
+open.
 
 ## Sweep both directions, and both tools
 

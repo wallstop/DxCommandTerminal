@@ -41,7 +41,9 @@ manifest to complete. Artifacts land inside this package's `.artifacts/unity-sta
 
 1. **Baseline (red):** capture before your change; read `manifest.json` and the
    artifacts; record console error/warning counts and relevant hierarchy facts.
-2. Apply the change; let the editor recompile.
+2. Apply the change. A capture imports and compiles what changed on disk before
+   it reads anything, so the baseline and the capture cannot differ only by
+   which assembly the editor had (#168).
 3. **Verify (green):** never refresh or invoke while
    `isCompiling || isUpdating` is true - capture does this automatically via the
    eval'd idle check, and the npm command polls until the editor is idle, then
