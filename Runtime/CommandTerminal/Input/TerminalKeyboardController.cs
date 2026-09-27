@@ -30,6 +30,14 @@
             }
         }
 
+        /// <summary>
+        ///     Whether either console surface's text field currently holds
+        ///     panel focus. Overridable for test coverage; the live read is
+        ///     the shipped behavior.
+        /// </summary>
+        protected virtual bool TextInputOwnsFocus =>
+            TerminalUI.AnyInputOwnsFocus() || CommandPaletteUI.AnyInputOwnsFocus();
+
         [Header("System")]
         public InputMode inputMode =
 #if ENABLE_INPUT_SYSTEM
@@ -267,39 +275,49 @@
 
         #region Control Checks
 
+        /// <summary>
+        ///     Whether the key behind <paramref name="hotkey"/> is down this
+        ///     frame. Overridable for test coverage, so a test can simulate a
+        ///     press without the real Input API.
+        /// </summary>
+        protected virtual bool IsHotkeyDown(string hotkey)
+        {
+            return InputHelpers.IsKeyPressed(hotkey, inputMode);
+        }
+
         protected virtual bool IsClosePressed()
         {
-            return InputHelpers.IsKeyPressed(closeHotkey, inputMode);
+            return IsHotkeyActive(closeHotkey);
         }
 
         protected virtual bool IsPreviousPressed()
         {
-            return InputHelpers.IsKeyPressed(previousHotkey, inputMode);
+            return IsHotkeyActive(previousHotkey);
         }
 
         protected virtual bool IsNextPressed()
         {
-            return InputHelpers.IsKeyPressed(nextHotkey, inputMode);
+            return IsHotkeyActive(nextHotkey);
         }
 
         protected virtual bool IsToggleFullPressed()
         {
-            return InputHelpers.IsKeyPressed(toggleFullHotkey, inputMode);
+            return IsHotkeyActive(toggleFullHotkey);
         }
 
         protected virtual bool IsToggleSmallPressed()
         {
-            return InputHelpers.IsKeyPressed(toggleHotkey, inputMode);
+            return IsHotkeyActive(toggleHotkey);
         }
 
         protected virtual bool IsCompleteBackwardPressed()
         {
-            return InputHelpers.IsKeyPressed(reverseCompleteHotkey, inputMode);
+            return IsHotkeyActive(reverseCompleteHotkey);
         }
 
         protected virtual bool IsCompletePressed()
         {
-            return InputHelpers.IsKeyPressed(completeHotkey, inputMode);
+            return IsHotkeyActive(completeHotkey);
         }
 
         protected virtual bool IsEnterCommandPressed()
@@ -311,13 +329,33 @@
 
             foreach (string command in _completeCommandHotkeys)
             {
-                if (InputHelpers.IsKeyPressed(command, inputMode))
+                if (IsHotkeyActive(command))
                 {
                     return true;
                 }
             }
 
             return false;
+        }
+
+        /*
+            A key that types text belongs to the console field holding focus,
+            not to this poll: the character reaches the command line or the
+            palette query, and the action waits for a frame with no focused
+            field. A Ctrl chord or a non-typing named key keeps firing while
+            the user types (see InputHelpers.ProducesTypedText).
+
+            Overriding a per-control check replaces this call; call it from an
+            override to keep the rule.
+         */
+        protected bool IsHotkeyActive(string hotkey)
+        {
+            if (InputHelpers.ProducesTypedText(hotkey) && TextInputOwnsFocus)
+            {
+                return false;
+            }
+
+            return IsHotkeyDown(hotkey);
         }
 
         private void VerifyControlOrderIntegrity()

@@ -530,23 +530,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         /*
-            Depending on panel state the focus controller reports either the
-            TextField or its inner text-input element; both mean the input
-            owns focus (see the palette suite's equivalent helper).
+            The focus controller may report either the TextField or its inner
+            text-input element; the runtime property accepts both.
          */
         private bool InputOwnsFocus()
         {
-            if (_terminal._commandInput == null || _terminal._uiDocument == null)
-            {
-                return false;
-            }
-
-            FocusController focusController = _terminal
-                ._uiDocument
-                .rootVisualElement
-                .focusController;
-            VisualElement focused = focusController?.focusedElement as VisualElement;
-            return focused == _terminal._commandInput || _terminal._commandInput.Contains(focused);
+            return _terminal != null && _terminal.InputOwnsFocus;
         }
     }
 }

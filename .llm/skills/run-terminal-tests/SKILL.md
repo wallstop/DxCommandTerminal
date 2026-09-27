@@ -213,6 +213,16 @@ field write is frame-coupled and flakes under session sequences
   virtually), and drive the protected `Update` from a public method. The loop runs
   checks in `_controlOrder` and breaks after the first hit - that is the hotkey
   conflict contract.
+- A hotkey test that must exercise the text-focus gate overrides `IsHotkeyDown(string)`
+  instead: the gate lives in `IsHotkeyActive`, below the per-control checks, so a
+  per-control override would bypass it. `TextInputOwnsFocus` is virtual as well - a
+  `bool?` override pins focus without a panel, and leaving it null reads live focus
+  and so covers the shipped wiring. A real poll is edge-triggered, so a simulated
+  press is consumed by the first read (see `TerminalUITransitionTests.HotkeyController`).
+- A hotkey frame is observed twice: by the controller's own `Update`, and by the
+  terminal's field-change handler through `IInputHandler.ShouldHandleInputThisFrame`.
+  The controller must sit on the terminal's GameObject for the `GetComponents<IInputHandler>()`
+  in `Awake` to see it.
 
 - Assert post-mutation state through the live reference: after a respawn, reset,
   destroy, or disable, read `TerminalUI.Instance` (or re-query the facade) at the

@@ -1807,10 +1807,7 @@
 
         private bool InputOwnsFocus()
         {
-            VisualElement focused =
-                _palette._uiDocument.rootVisualElement.focusController.focusedElement
-                as VisualElement;
-            return focused == _palette._input || _palette._input.Contains(focused);
+            return _palette.InputOwnsFocus;
         }
 
         private IEnumerator WaitForFocused(VisualElement expected, string message)

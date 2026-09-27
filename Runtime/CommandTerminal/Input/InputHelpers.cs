@@ -15,6 +15,15 @@
 
         private static readonly string[] CtrlModifiers = { "ctrl+", "control+" };
 
+        /*
+            Key names that type no character: navigation, editing, function,
+            and modifier keys. Everything else this parse surface can produce
+            is a character key, so an unrecognized name counts as typing - a
+            hotkey held back for one typing session is recoverable, a
+            swallowed character is not.
+         */
+        private static readonly HashSet<string> NonTypedKeyNames = BuildNonTypedKeyNames();
+
         private static readonly Dictionary<string, CachedKeyName> CachedKeys = new();
 
         private static readonly Dictionary<string, KeyCode> KeyCodeMapping = new(
@@ -421,6 +430,109 @@
                 the parse on later calls.
              */
             return new CachedKeyName(keyName, shiftRequired, ctrlRequired);
+        }
+
+        /// <summary>
+        ///     Reports whether a hotkey binding presses a key that types text -
+        ///     any character key, with or without Shift, and with no Ctrl
+        ///     modifier. The console surfaces hand those keys to a focused text
+        ///     field instead of firing their action, so every character stays
+        ///     typeable in a command line or a palette query. Only Ctrl chords
+        ///     and the named keys that type nothing (navigation, editing,
+        ///     function, modifier) keep firing while a field has focus.
+        /// </summary>
+        internal static bool ProducesTypedText(string key)
+        {
+            if (string.IsNullOrEmpty(key))
+            {
+                return false;
+            }
+
+            if (!CachedKeys.TryGetValue(key, out CachedKeyName cached))
+            {
+                cached = ResolveKeyName(key);
+                CachedKeys[key] = cached;
+            }
+
+            /*
+                A Ctrl chord inserts no character, so it stays a live hotkey
+                while a field has focus. Every other binding resolves either to
+                a character key or to a name that types nothing, and the
+                character key belongs to the field.
+             */
+            return !cached.CtrlRequired && !TypesNothing(cached.Name);
+        }
+
+        private static bool TypesNothing(string keyName)
+        {
+            if (keyName is { Length: 1 })
+            {
+                return false;
+            }
+
+            return NonTypedKeyNames.Contains(keyName);
+        }
+
+        private static HashSet<string> BuildNonTypedKeyNames()
+        {
+            HashSet<string> names = new(StringComparer.OrdinalIgnoreCase)
+            {
+                "alt",
+                "backspace",
+                "cmd",
+                "command",
+                "control",
+                "ctrl",
+                "del",
+                "delete",
+                "down",
+                "downarrow",
+                "end",
+                "enter",
+                "esc",
+                "escape",
+                "home",
+                "ins",
+                "insert",
+                "keypadenter",
+                "left",
+                "leftalt",
+                "leftarrow",
+                "leftcmd",
+                "leftcommand",
+                "leftcontrol",
+                "leftctrl",
+                "leftmeta",
+                "leftshift",
+                "leftsuper",
+                "meta",
+                "numpadenter",
+                "pagedown",
+                "pageup",
+                "return",
+                "right",
+                "rightarrow",
+                "rightalt",
+                "rightcmd",
+                "rightcommand",
+                "rightcontrol",
+                "rightctrl",
+                "rightmeta",
+                "rightshift",
+                "rightsuper",
+                "shift",
+                "super",
+                "tab",
+                "up",
+                "uparrow",
+            };
+
+            for (int functionKey = 1; functionKey <= 24; ++functionKey)
+            {
+                names.Add($"f{functionKey}");
+            }
+
+            return names;
         }
 
         private static bool StripModifier(string key, string[] modifiers, out string stripped)

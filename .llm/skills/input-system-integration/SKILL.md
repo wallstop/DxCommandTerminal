@@ -38,6 +38,28 @@ When using PlayerInput, UNCHECK `Use Hotkeys` on the Terminal - otherwise both p
 Close -> EnterCommand -> Previous -> Next -> ToggleFull -> ToggleSmall -> AutoComplete
 (backward) -> AutoComplete (forward). PlayerInput binding order ignores this list entirely.
 
+## A character binding belongs to the field being typed into
+
+The keyboard path never fires a hotkey whose key types a character while a console text field
+holds panel focus. `InputHelpers.ProducesTypedText(key)` is the single decision point
+(an allowlist of the names that type nothing: navigation, editing, `f1`-`f24`, modifiers; a
+`ctrl+` chord also counts as non-typing), and `TerminalKeyboardController.IsHotkeyActive` applies
+it to all eight checks. The focus read is `TerminalUI.AnyInputOwnsFocus() ||
+CommandPaletteUI.AnyInputOwnsFocus()`; a closed terminal does not count even if a hidden field is
+still reported as focused.
+
+Consequences worth remembering:
+
+- With the shipped defaults, `` ` `` and `shift+backtick` type their characters while the terminal
+  is open. Escape (`closeHotkey`) is how a user closes it from inside.
+- `TerminalPlayerInputController` does NOT consult focus: a game owns its own binding there, and
+  the controller cannot read which key an action pressed.
+- Only `shift+` and `ctrl+` are parsed. `cmd+`/`super+`/`alt+` prefixes never resolve to a key, so
+  such a binding never fires.
+- Rule changes belong in `ProducesTypedText` plus the table in `Tests/Editor/InputHelpersTests.cs`;
+  both directions need a row (a character key that must be handed to the field, and a non-typing
+  name that must stay live).
+
 ## History navigation semantics
 
 - Up/Down navigation past either end yields a blank command (no "sticking").

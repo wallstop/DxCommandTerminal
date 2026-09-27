@@ -33,6 +33,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private GameObject _terminalObject;
         private CommandPaletteUI _palette;
         private GameObject _paletteObject;
+        private HotkeyController _hotkeyController;
         private PanelSettings _panelSettings;
         private readonly List<GameObject> _spawnedObjects = new();
 
@@ -213,6 +214,173 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.IsFalse(_terminal.IsClosed, "EnterCommand must not close the terminal");
         }
 
+        /*
+            The default toggle binding is a character, so pressing the console
+            key is a text edit: while the command field owns focus the key
+            belongs to the field and must not toggle the terminal.
+         */
+        [UnityTest]
+        public IEnumerator TextHotkeyDoesNotToggleWhileTheInputOwnsFocus()
+        {
+            yield return SpawnTerminal(open: true, withHotkeyController: true);
+            yield return WaitForFocusedInput("Sanity: the command field holds panel focus");
+
+            /*
+                The shipped default is a character key, which is what makes
+                this a text conflict rather than a hotkey.
+             */
+            Assert.IsTrue(
+                InputHelpers.ProducesTypedText(_hotkeyController.toggleHotkey),
+                $"Sanity: the default toggle binding \"{_hotkeyController.toggleHotkey}\" types text"
+            );
+
+            _hotkeyController.PressedHotkey = _hotkeyController.toggleHotkey;
+            _hotkeyController.DriveUpdate();
+
+            Assert.AreEqual(
+                TerminalState.OpenFull,
+                _terminal.State,
+                "Pressing the console key must type its character, not change the terminal state"
+            );
+        }
+
+        [UnityTest]
+        public IEnumerator TextHotkeyOpensTheTerminalWithNoConsoleFieldFocused()
+        {
+            yield return SpawnTerminal(open: false, withHotkeyController: true);
+
+            _hotkeyController.FocusOverride = false;
+            _hotkeyController.PressedHotkey = _hotkeyController.toggleHotkey;
+            _hotkeyController.DriveUpdate();
+
+            yield return WaitForInputVisible(
+                "With no console field focused the console key must still open the terminal"
+            );
+        }
+
+        [UnityTest]
+        public IEnumerator NonTextHotkeyFiresWhileTheInputOwnsFocus()
+        {
+            yield return SpawnTerminal(open: true, withHotkeyController: true);
+            yield return WaitForFocusedInput("Sanity: the command field holds panel focus");
+
+            _hotkeyController.PressedHotkey = _hotkeyController.closeHotkey;
+            _hotkeyController.DriveUpdate();
+
+            yield return WaitForClosed(
+                "A binding that types no character must keep working while the field has focus"
+            );
+        }
+
+        [UnityTest]
+        public IEnumerator TypedCharacterSurvivesItsOwnKeyPress()
+        {
+            yield return SpawnTerminal(open: true, withHotkeyController: true);
+            yield return WaitForFocusedInput("Sanity: the command field holds panel focus");
+
+            _hotkeyController.PressedHotkey = _hotkeyController.toggleHotkey;
+
+            /*
+                The field write stands in for the character the engine hands
+                the field from the same key press the poll sees. The change
+                handler reverts field writes on a frame a control handled, so
+                with the console key live the character never reached the
+                command line.
+             */
+            _terminal._commandInput.value = "echo `tick";
+            yield return null;
+
+            Assert.AreEqual(
+                "echo `tick",
+                DefaultTerminalInput.Instance.CommandText,
+                "A character must not be dropped from the command line by its own hotkey"
+            );
+        }
+
+        [UnityTest]
+        public IEnumerator TextHotkeyReopensATerminalClosedWhileItsFieldHeldFocus()
+        {
+            yield return SpawnTerminal(open: true, withHotkeyController: true);
+            yield return WaitForFocusedInput("Sanity: the command field holds panel focus");
+
+            _terminal.Close();
+            yield return WaitForClosed("Sanity: the terminal closes");
+
+            /*
+                Closing hides the field rather than detaching it, so a panel
+                that keeps reporting a hidden field would otherwise let a
+                stale focus report hold the console key. The property must
+                ignore it, whichever editor the leg runs on.
+             */
+            _hotkeyController.PressedHotkey = _hotkeyController.toggleHotkey;
+            _hotkeyController.DriveUpdate();
+
+            yield return WaitForInputVisible(
+                "The console key must open a terminal that was closed while its field held focus"
+            );
+        }
+
+        /*
+            The focus controller reports either the field or the inner text
+            element depending on panel state, and the input poll accepts both;
+            this pins that contract directly rather than through a suite that
+            trusts the same predicate it is driving.
+         */
+        [UnityTest]
+        public IEnumerator InputOwnsFocusAcceptsTheInnerTextElement()
+        {
+            yield return SpawnTerminal(open: true);
+            yield return WaitForFocusedInput("Sanity: the field reports focus");
+
+            _terminal._textInput.Focus();
+            yield return null;
+
+            Assert.That(
+                _terminal.State,
+                Is.EqualTo(TerminalState.OpenFull),
+                "Sanity: the terminal stays open through the focus change"
+            );
+            Assert.IsTrue(
+                _terminal.InputOwnsFocus,
+                "A focused inner text element must count as the command field owning focus"
+            );
+
+            _terminal.Close();
+            yield return WaitForClosed("Sanity: the terminal closes");
+            Assert.IsFalse(
+                _terminal.InputOwnsFocus,
+                "A closed terminal must not report owning focus, whatever still holds it"
+            );
+        }
+
+        [UnityTest]
+        public IEnumerator TextHotkeyLeavesAFocusedPaletteAlone()
+        {
+            yield return SpawnSharedSurface();
+
+            _palette.Open();
+            yield return null;
+
+            Assert.IsTrue(_palette.IsOpen, "Sanity: the palette opens over the closed terminal");
+            Assert.IsTrue(
+                CommandPaletteUI.AnyInputOwnsFocus(),
+                "Sanity: the palette query field holds panel focus"
+            );
+
+            HotkeyController controller = SpawnHotkeyController();
+            controller.PressedHotkey = controller.toggleHotkey;
+            controller.DriveUpdate();
+
+            Assert.IsTrue(
+                _terminal.IsClosed,
+                "Typing the console key in a palette query must not open the terminal over it"
+            );
+            Assert.IsTrue(
+                _palette.IsOpen,
+                "Typing the console key in a palette query must not close the palette"
+            );
+        }
+
         [UnityTest]
         public IEnumerator ControllerSkipsDestroyedTerminal()
         {
@@ -276,38 +444,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [UnityTest]
         public IEnumerator PaletteCloseSurvivesDestroyedFocusTarget()
         {
-#if UNITY_EDITOR
-            _panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
-            GameObject documentObject = new("TransitionSharedDocument");
-            documentObject.SetActive(false);
-            UIDocument document = documentObject.AddComponent<UIDocument>();
-            document.panelSettings = _panelSettings;
-            documentObject.SetActive(true);
-            _spawnedObjects.Add(documentObject);
-
-            _terminalObject = new GameObject("TransitionFocusTerminal");
-            _terminalObject.SetActive(false);
-            _terminal = _terminalObject.AddComponent<TerminalUI>();
-            _terminal._uiDocument = document;
-            _terminal.resetStateOnInit = true;
-            _terminal.easeOutTime = 0f;
-            _terminal.easeInTime = 0f;
-            _terminal._themePack = LoadAsset<TerminalThemePack>("Packs/Themes/Medium.asset");
-            _terminal._fontPack = LoadAsset<TerminalFontPack>("Packs/Fonts/Medium.asset");
-            StartTracker tracker = _terminalObject.AddComponent<StartTracker>();
-            _terminalObject.SetActive(true);
-            yield return new WaitUntil(() => tracker.Started);
-
-            _paletteObject = new GameObject("TransitionFocusPalette");
-            _paletteObject.SetActive(false);
-            _palette = _paletteObject.AddComponent<CommandPaletteUI>();
-            _palette._uiDocument = document;
-            _paletteObject.SetActive(true);
-            yield return null;
-#else
-            Assert.Ignore("Terminal UI transition coverage runs in the editor Play Mode suite.");
-            yield break;
-#endif
+            yield return SpawnSharedSurface();
 
             _terminal.SetState(TerminalState.OpenFull);
             yield return WaitForInputVisible("Sanity: the terminal opens on the shared document");
@@ -353,6 +490,17 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             return controller;
         }
 
+        private HotkeyController SpawnHotkeyController()
+        {
+            GameObject controllerObject = new("TransitionHotkeyController");
+            controllerObject.SetActive(false);
+            HotkeyController controller = controllerObject.AddComponent<HotkeyController>();
+            controller.terminal = _terminal;
+            controllerObject.SetActive(true);
+            _spawnedObjects.Add(controllerObject);
+            return controller;
+        }
+
         private IEnumerator WaitForInputVisible(string message)
         {
             int frameBudget = FrameBudget;
@@ -385,7 +533,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.IsTrue(_terminal.IsClosed, message);
         }
 
-        private IEnumerator SpawnTerminal(bool open)
+        private IEnumerator SpawnTerminal(bool open, bool withHotkeyController = false)
         {
 #if UNITY_EDITOR
             _panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
@@ -400,6 +548,16 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             _terminal.easeInTime = 0f;
             _terminal._themePack = LoadAsset<TerminalThemePack>("Packs/Themes/Medium.asset");
             _terminal._fontPack = LoadAsset<TerminalFontPack>("Packs/Fonts/Medium.asset");
+            if (withHotkeyController)
+            {
+                /*
+                    Added before activation so the terminal's Awake sees it in
+                    GetComponents<IInputHandler>, the shipped arrangement that
+                    lets the field-change handler observe a handled frame.
+                 */
+                _hotkeyController = _terminalObject.AddComponent<HotkeyController>();
+            }
+
             StartTracker tracker = _terminalObject.AddComponent<StartTracker>();
             _terminalObject.SetActive(true);
             yield return new WaitUntil(() => tracker.Started);
@@ -414,6 +572,47 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 yield return null;
                 yield return WaitForInputVisible("Sanity: the rig's terminal opens");
             }
+        }
+
+        /*
+            One panel shared by a terminal and a palette: the shipped
+            arrangement, and the only one where the two surfaces can contest
+            the same key press.
+         */
+        private IEnumerator SpawnSharedSurface()
+        {
+#if UNITY_EDITOR
+            _panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
+            GameObject documentObject = new("TransitionSharedDocument");
+            documentObject.SetActive(false);
+            UIDocument document = documentObject.AddComponent<UIDocument>();
+            document.panelSettings = _panelSettings;
+            documentObject.SetActive(true);
+            _spawnedObjects.Add(documentObject);
+
+            _terminalObject = new GameObject("TransitionFocusTerminal");
+            _terminalObject.SetActive(false);
+            _terminal = _terminalObject.AddComponent<TerminalUI>();
+            _terminal._uiDocument = document;
+            _terminal.resetStateOnInit = true;
+            _terminal.easeOutTime = 0f;
+            _terminal.easeInTime = 0f;
+            _terminal._themePack = LoadAsset<TerminalThemePack>("Packs/Themes/Medium.asset");
+            _terminal._fontPack = LoadAsset<TerminalFontPack>("Packs/Fonts/Medium.asset");
+            StartTracker tracker = _terminalObject.AddComponent<StartTracker>();
+            _terminalObject.SetActive(true);
+            yield return new WaitUntil(() => tracker.Started);
+
+            _paletteObject = new GameObject("TransitionFocusPalette");
+            _paletteObject.SetActive(false);
+            _palette = _paletteObject.AddComponent<CommandPaletteUI>();
+            _palette._uiDocument = document;
+            _paletteObject.SetActive(true);
+            yield return null;
+#else
+            Assert.Ignore("Terminal UI transition coverage runs in the editor Play Mode suite.");
+            yield break;
+#endif
         }
 
         private IEnumerator SpawnPalette()
@@ -446,23 +645,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         /*
-            Depending on panel state the focus controller reports either the
-            TextField or its inner text-input element; both mean the input
-            owns focus (see the palette suite's equivalent helper).
+            The focus controller may report either the TextField or its inner
+            text-input element; the runtime property accepts both.
          */
         private bool InputOwnsFocus()
         {
-            if (_terminal._commandInput == null || _terminal._uiDocument == null)
-            {
-                return false;
-            }
-
-            FocusController focusController = _terminal
-                ._uiDocument
-                .rootVisualElement
-                .focusController;
-            VisualElement focused = focusController?.focusedElement as VisualElement;
-            return focused == _terminal._commandInput || _terminal._commandInput.Contains(focused);
+            return _terminal != null && _terminal.InputOwnsFocus;
         }
 
 #if UNITY_EDITOR
@@ -528,6 +716,38 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             protected override bool IsCompletePressed()
             {
                 return false;
+            }
+        }
+
+        /*
+            Simulates a key press at the hotkey-string level instead of
+            overriding the per-control checks, so the text-focus gate the
+            real checks apply runs unchanged. The first poll that reads the
+            press consumes it, because the real poll is edge-triggered. A null
+            FocusOverride reads live panel focus, which is the shipped
+            behavior.
+         */
+        private sealed class HotkeyController : TerminalKeyboardController
+        {
+            protected override bool TextInputOwnsFocus => FocusOverride ?? base.TextInputOwnsFocus;
+
+            public string PressedHotkey;
+            public bool? FocusOverride;
+
+            public void DriveUpdate()
+            {
+                Update();
+            }
+
+            protected override bool IsHotkeyDown(string hotkey)
+            {
+                if (hotkey != PressedHotkey)
+                {
+                    return false;
+                }
+
+                PressedHotkey = null;
+                return true;
             }
         }
 #endif
