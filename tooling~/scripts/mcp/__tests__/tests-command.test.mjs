@@ -229,7 +229,19 @@ test("a scenario contributes only its newest manifest to the compare", () => {
     "e/CapturesFirstPaletteInteractionFrame.manifest.json",
     "b/CapturesTerminalSmallSurface.manifest.json"
   ]);
-  // An entry the scenario cannot be read from is kept, never dropped.
-  const opaque = newestPerScenario([{ filePath: "f/unreadable.manifest.json", mtimeMs: 5 }], () => undefined);
-  assert.deepEqual(opaque.map((entry) => entry.filePath), ["f/unreadable.manifest.json"]);
+  // An entry whose scenario cannot be read is kept, never dropped, and two such
+  // entries must not collapse into one under a shared placeholder key.
+  const opaque = newestPerScenario(
+    [
+      { filePath: "f/unreadable.manifest.json", mtimeMs: 5 },
+      { filePath: "g/empty-scenario.manifest.json", mtimeMs: 6 },
+      { filePath: "h/unreadable-too.manifest.json", mtimeMs: 7 }
+    ],
+    (entry) => (entry.filePath.includes("empty") ? "" : undefined)
+  );
+  assert.deepEqual(opaque.map((entry) => entry.filePath), [
+    "f/unreadable.manifest.json",
+    "g/empty-scenario.manifest.json",
+    "h/unreadable-too.manifest.json"
+  ]);
 });

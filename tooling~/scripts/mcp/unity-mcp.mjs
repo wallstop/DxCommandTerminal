@@ -2300,7 +2300,10 @@ export function validateT4Manifest(manifest, expectComplete) {
 export function newestPerScenario(entries, scenarioOf) {
   const newest = new Map();
   for (const entry of entries) {
-    const key = scenarioOf(entry) ?? entry.filePath;
+    // An unknown scenario is keyed by path, never by a shared placeholder, so a
+    // malformed manifest cannot make unrelated entries collapse into one.
+    const scenario = scenarioOf(entry);
+    const key = typeof scenario === "string" && scenario.length !== 0 ? scenario : entry.filePath;
     const current = newest.get(key);
     if (current === undefined || entry.mtimeMs >= current.mtimeMs) {
       newest.set(key, entry);
