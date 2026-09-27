@@ -1774,7 +1774,23 @@ export const CAPTURE_SCRIPTS = Object.freeze([
 // (issue #127). The simple name does not resolve: the namespace is required.
 const CAPTURE_TYPE_NAME = "DxTerminalDevTools.DxTerminalStateCapture, Assembly-CSharp-Editor";
 const CAPTURE_TYPE_PROBE = `return (System.Type.GetType("${CAPTURE_TYPE_NAME}") != null);`;
-const CAPTURE_REFRESH_EXPRESSION = "UnityEditor.AssetDatabase.Refresh();";
+/*
+    A script refresh, not a menu item. `menu: Assets/Refresh` answers success
+    without importing a changed script under Packages/ (issue #168): the editor
+    went idle, the capture reported the new state, and
+    Library/ScriptAssemblies kept the assembly it already had. An agent that
+    edits a package script and then captures was reading the old build.
+
+    The import has to be asked for in script, and the compilation with it: a
+    refresh that finds a changed script schedules the compile, and the idle wait
+    that follows can land before the compile starts. Both statements are
+    unconditional - there is no way to ask the editor what it is about to do -
+    so a command with nothing to import costs a no-op import and a no-op
+    compile request.
+ */
+export const SCRIPT_REFRESH_EXPRESSION =
+  "UnityEditor.AssetDatabase.Refresh();"
+  + " UnityEditor.Compilation.CompilationPipeline.RequestScriptCompilation();";
 
 export function captureScriptFiles(repoRoot = REPO_ROOT) {
   return CAPTURE_SCRIPTS.map(({ source, target }) => ({
@@ -2115,8 +2131,7 @@ export async function runCapture(options, runtime = {}) {
     if (!(await typePresent())) {
       if (!installed && filesystemProjectPath && fs.existsSync(filesystemProjectPath)) {
         install();
-        await evalCall(CAPTURE_REFRESH_EXPRESSION);
-        await waitForEditorIdle(client, evalCall, deadline);
+        await refreshScripts(evalCall, deadline);
       }
       if (!(await typePresent())) {
         fail(
@@ -2127,22 +2142,11 @@ export async function runCapture(options, runtime = {}) {
       }
     }
 
-    // Wait for a quiescent editor before touching the asset database.
-    await waitForEditorIdle(client, evalCall, deadline);
-
-    const refresh = await callFirstWorking(
-      client,
-      [
-        { name: "menu", arguments: { menuPath: "Assets/Refresh" } },
-        { name: "menu", arguments: { path: "Assets/Refresh" } },
-        { name: "Unity_ManageMenuItem", arguments: { MenuPath: "Assets/Refresh" } },
-        { name: "eval", arguments: { code: CAPTURE_REFRESH_EXPRESSION } },
-        { name: "eval", arguments: { expression: CAPTURE_REFRESH_EXPRESSION } }
-      ],
-      signal
-    );
-    log(options, "debug", `Refresh via ${refresh.candidate.name}`);
-    await waitForEditorIdle(client, evalCall, deadline);
+    // Wait for a quiescent editor before touching the asset database, then take
+    // what is on disk: a capture of a stale assembly is a picture of the
+    // previous code.
+    await waitForEditorIdle(evalCall, deadline);
+    await refreshScripts(evalCall, deadline);
 
     const outputDirectory =
       options.out ??
@@ -2200,7 +2204,24 @@ function assertEvalAnswer(evalAnswer, action) {
   if (failure !== null) fail(`${action} failed: ${failure}`);
 }
 
-async function waitForEditorIdle(client, evalCall, deadline) {
+/*
+    Compile what changed on disk, then wait for it. Every command that reads
+    editor state or starts a test run calls this first: a run against a stale
+    assembly is a green report on the previous code, which is the one answer a
+    caller cannot detect.
+
+    The trailing wait is the compile, not the import. A refresh that finds a
+    changed script schedules the compile, and the editor answers an idle query
+    before the scheduled compile starts, so the wait has to follow the request.
+    The caller waits for quiet first: the asset database is not to be touched
+    while the editor is already busy with an import of its own.
+ */
+async function refreshScripts(evalCall, deadline) {
+  await evalCall(SCRIPT_REFRESH_EXPRESSION);
+  await waitForEditorIdle(evalCall, deadline);
+}
+
+async function waitForEditorIdle(evalCall, deadline) {
   const expression =
     "return (UnityEditor.EditorApplication.isCompiling || UnityEditor.EditorApplication.isUpdating);";
   while (Date.now() < deadline) {
@@ -2228,7 +2249,7 @@ async function waitForEditorIdle(client, evalCall, deadline) {
     Exported for the idle-wait tests: a call the busy editor refuses is the
     expected answer here, not a reason to fail the command.
  */
-export async function waitForTestIdle(client, evalCall, deadline, now = () => Date.now()) {
+export async function waitForTestIdle(evalCall, deadline, now = () => Date.now()) {
   const expression =
     "return (UnityEditor.EditorApplication.isCompiling || UnityEditor.EditorApplication.isUpdating || UnityEditor.EditorApplication.isPlayingOrWillChangePlaymode);";
   while (now() < deadline) {
@@ -2419,7 +2440,8 @@ export async function runT4Capture(options, runtime = {}) {
         signal
       );
 
-    await waitForEditorIdle(client, evalCall, deadline);
+    await waitForEditorIdle(evalCall, deadline);
+    await refreshScripts(evalCall, deadline);
     const reporter = await openRunReporter(options, evalCall);
 
     /*
@@ -3233,8 +3255,10 @@ export async function runUnityTests(options, runtime = {}) {
       }
 
       // Each leg waits for its own quiet editor: a PlayMode leg leaves the
-      // session tearing down, and the next leg must not race that.
-      await waitForTestIdle(client, evalCall, legDeadline);
+      // session tearing down, and the next leg must not race that. Then it takes
+      // what is on disk, so a leg cannot report the previous build as green.
+      await waitForTestIdle(evalCall, legDeadline);
+      await refreshScripts(evalCall, legDeadline);
       if (!reporterProbed) {
         reporter = await openRunReporter(options, evalCall);
         reporterProbed = true;

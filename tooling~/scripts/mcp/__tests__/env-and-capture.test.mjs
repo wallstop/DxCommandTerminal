@@ -17,7 +17,8 @@ import {
   CAPTURE_PACKAGE_NAME,
   RUN_CLAIM_FILE,
   RUN_REQUEST_FILE,
-  RUN_UNATTRIBUTED_TOKEN
+  RUN_UNATTRIBUTED_TOKEN,
+  SCRIPT_REFRESH_EXPRESSION
 } from "../unity-mcp.mjs";
 import fs from "node:fs";
 import os from "node:os";
@@ -224,6 +225,28 @@ test("the state capture asks a category question, not a hand-written range", () 
   // The console file is one entry per line, so the message goes through the
   // same filter rather than being appended raw.
   assert.match(capture, /\.Append\(OneLine\(message\)\)/u);
+});
+
+test("a script refresh is asked for in script, and asks for the compile too", () => {
+  /*
+      Measured on a host editor with auto refresh switched off (issue #168):
+      `menu: Assets/Refresh` answered success, the editor went idle, and
+      Library/ScriptAssemblies kept the assembly it already had. A test leg
+      without a refresh then named a test that no longer existed in the source.
+      Both statements are load-bearing - the import finds the change, the
+      compile request is what stops the idle wait from landing before the
+      scheduled compile - so both are pinned here, and the menu variant can
+      never come back unnoticed.
+   */
+  assert.match(SCRIPT_REFRESH_EXPRESSION, /UnityEditor\.AssetDatabase\.Refresh\(\);/u);
+  assert.match(
+    SCRIPT_REFRESH_EXPRESSION,
+    /UnityEditor\.Compilation\.CompilationPipeline\.RequestScriptCompilation\(\);/u
+  );
+  // Every line is a statement: the eval compiler takes a statement list.
+  for (const line of SCRIPT_REFRESH_EXPRESSION.split("\n")) {
+    assert.match(line.trim(), /;$/u, `statement must end in ';': ${line}`);
+  }
 });
 
 test("both editor dev tools install together, and a re-install is a no-op", () => {
