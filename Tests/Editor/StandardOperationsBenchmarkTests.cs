@@ -117,10 +117,39 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Array.Sort(sorted);
             double ticksToMilliseconds = 1000.0 / Stopwatch.Frequency;
             return new OperationReport(
+                sampleCount,
                 sorted[sampleCount / 2] * ticksToMilliseconds,
                 sorted[(int)Math.Ceiling(sampleCount * 0.95) - 1] * ticksToMilliseconds,
                 sorted[sampleCount - 1] * ticksToMilliseconds,
                 gen0Collections
+            );
+        }
+
+        /*
+            p95 over 300 samples is the 285th of 300, so a single stalled
+            sample cannot move it; that is why these tripwires keep p95 and
+            the discovery suite's 30-sample readiness tripwire does not
+            (#170). Every tripwire failure names the statistic, the sample
+            count, the margin, and the whole series, so a trip says which
+            statistic crossed and by how much.
+         */
+        private static void AssertP95UnderTripwire(
+            OperationReport report,
+            float budgetMilliseconds,
+            string operation
+        )
+        {
+            Assert.Less(
+                report.Percentile95Milliseconds,
+                budgetMilliseconds,
+                $"{operation} tripwire crossed: statistic=p95 n={report.SampleCount} "
+                    + $"measured={report.Percentile95Milliseconds:F3} ms "
+                    + $"budget={budgetMilliseconds:F3} ms "
+                    + $"margin={budgetMilliseconds - report.Percentile95Milliseconds:F3} ms "
+                    + $"| median={report.MedianMilliseconds:F3} ms "
+                    + $"p95={report.Percentile95Milliseconds:F3} ms "
+                    + $"max={report.MaximumMilliseconds:F3} ms "
+                    + $"gen0={report.Gen0Collections}"
             );
         }
 
@@ -265,12 +294,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 _completionBuffer.Count,
                 "Every selective-tier command should complete"
             );
-            Assert.Less(
-                report.Percentile95Milliseconds,
-                TypingTripwireMilliseconds,
-                $"Typing completion p95 exceeded the tripwire "
-                    + $"({report.Percentile95Milliseconds:F3} ms >= {TypingTripwireMilliseconds} ms)"
-            );
+            AssertP95UnderTripwire(report, TypingTripwireMilliseconds, "Typing completion");
         }
 
         [Test]
@@ -283,12 +307,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
 
             Assert.Less(0, _history.Count, "Sanity: the executed command must push history");
-            Assert.Less(
-                report.Percentile95Milliseconds,
-                ExecutionTripwireMilliseconds,
-                $"Text execution p95 exceeded the tripwire "
-                    + $"({report.Percentile95Milliseconds:F3} ms >= {ExecutionTripwireMilliseconds} ms)"
-            );
+            AssertP95UnderTripwire(report, ExecutionTripwireMilliseconds, "Text execution");
         }
 
         [Test]
@@ -315,12 +334,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 _providerResults.Count,
                 "Every selective-tier candidate should complete"
             );
-            Assert.Less(
-                report.Percentile95Milliseconds,
+            AssertP95UnderTripwire(
+                report,
                 ProviderCompletionTripwireMilliseconds,
-                $"Provider completion p95 exceeded the tripwire "
-                    + $"({report.Percentile95Milliseconds:F3} ms >= "
-                    + $"{ProviderCompletionTripwireMilliseconds} ms)"
+                "Provider completion"
             );
         }
 
@@ -342,12 +359,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 DefaultSampleCount
             );
 
-            Assert.Less(
-                report.Percentile95Milliseconds,
-                StartupReuseTripwireMilliseconds,
-                $"Backend reuse p95 exceeded the tripwire "
-                    + $"({report.Percentile95Milliseconds:F3} ms >= {StartupReuseTripwireMilliseconds} ms)"
-            );
+            AssertP95UnderTripwire(report, StartupReuseTripwireMilliseconds, "Backend reuse");
         }
 
         [TestCaseSource(nameof(ExecutionCases))]
@@ -524,6 +536,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         private readonly struct OperationReport
         {
+            public int SampleCount { get; }
+
             public double MedianMilliseconds { get; }
 
             public double Percentile95Milliseconds { get; }
@@ -533,12 +547,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             public int Gen0Collections { get; }
 
             public OperationReport(
+                int sampleCount,
                 double medianMilliseconds,
                 double percentile95Milliseconds,
                 double maximumMilliseconds,
                 int gen0Collections
             )
             {
+                SampleCount = sampleCount;
                 MedianMilliseconds = medianMilliseconds;
                 Percentile95Milliseconds = percentile95Milliseconds;
                 MaximumMilliseconds = maximumMilliseconds;
