@@ -185,6 +185,18 @@ jobs:
         with:
           dotnet-version: 9.0.306
 
+      - name: Resolve npm cache directory
+        id: npm-cache
+        shell: bash
+        run: echo "dir=$(npm config get cache)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache npm packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.npm-cache.outputs.dir }}
+          key: ${{ runner.os }}-npm-${{ hashFiles('tooling~/package.json') }}
+          restore-keys: ${{ runner.os }}-npm-
+
       # The claim reader is imported from unity-mcp.mjs, so this job needs the
       # npm project even though it runs no node suite.
       - name: Install dependencies
