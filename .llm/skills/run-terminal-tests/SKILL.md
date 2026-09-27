@@ -48,7 +48,12 @@ metadata:
 
    `unity:tests` wraps `unity-mcp.mjs tests`: `--mode all|editmode|playmode`,
    `--filter` (the bridge's test-name filter; case-insensitive partial match
-   on the pinned backend), `--run-timeout MS` (minimum 30000).
+   on the pinned backend), `--run-timeout MS` (minimum 30000). `all` runs the
+   EditMode suite then the PlayMode suite and prints one summary line per leg.
+   A leg is only reported when its counters differ from the run before it (or
+   it was seen in flight): the bridge answers `run_tests` with the previous
+   run's result when it starts nothing, and that echo must never read as a
+   green gate.
 3. Unity Test Runner: Window > General > Test Runner -> PlayMode tab -> Run All.
 4. Unity CLI (CI-style):
    `Unity -batchmode -projectPath <proj> -runTests -testPlatform PlayMode -testResults results.xml -quit`

@@ -28,6 +28,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public string Revision { get; set; }
         public string PngFile { get; set; }
         public string Diagnostics { get; set; }
+
+        /// <summary>Panel render passes the surface needed after the opening
+        /// input before it rendered completely. Null for captures that do not
+        /// measure render latency.</summary>
+        public int? RendersToFirstCompleteFrame { get; set; }
+
         public CapturePixelMetrics Metrics { get; set; }
         public CaptureBounds Bounds { get; set; }
         public List<string> Violations { get; set; }
@@ -79,6 +85,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             AppendField(json, "revision", Revision);
             AppendField(json, "png", PngFile);
             AppendField(json, "diagnostics", Diagnostics);
+            if (RendersToFirstCompleteFrame.HasValue)
+            {
+                json.Append("\"rendersToFirstCompleteFrame\":")
+                    .Append(RendersToFirstCompleteFrame.Value)
+                    .Append(',');
+            }
             if (Metrics != null)
             {
                 json.Append("\"metrics\":{\"width\":")

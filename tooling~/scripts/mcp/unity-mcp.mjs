@@ -484,6 +484,60 @@ const EDITOR_READY_TOOL = "Unity_ManageEditor";
 const EDITOR_READY_ARGUMENTS = { Action: "GetState" };
 
 // Readiness: false = handshake, "tools" = registry, "editor" = live state.
+/**
+ * Whether a bridge error is the editor refusing new sessions because its table
+ * is full ("Too many concurrent MCP sessions", HTTP 503 / JSON-RPC -32000).
+ * That is a transient, server-side condition - other clients and earlier
+ * commands hold the slots - so it is retried instead of reported as a dead
+ * bridge, which is what the same message used to look like.
+ */
+export function isSessionCapError(detail) {
+  return /too many concurrent mcp sessions/iu.test(String(detail ?? ""));
+}
+
+const SESSION_CAP_ATTEMPTS = 4;
+const SESSION_CAP_BACKOFF_MS = [1_000, 2_000, 4_000];
+
+/**
+ * Release a bridge session with an explicit DELETE, which is the only thing
+ * that frees its slot.
+ *
+ * Closing the SDK client is not enough: the editor's MCP server keeps every
+ * session it handed out until a DELETE arrives, and it refuses new sessions
+ * past a small cap (8 on Unity 6000.4.6f1, answering
+ * "Too many concurrent MCP sessions"). A command that only closed its client
+ * leaked a slot, so a handful of commands locked every later one out with an
+ * HTTP 503 that reads like a dead bridge. Returns a warning string, or null.
+ */
+export async function deleteBridgeSession({
+  url,
+  authorization,
+  sessionId,
+  protocolVersion,
+  fetchImpl = fetch,
+  timeoutMs = 1_000
+}) {
+  if (!sessionId) return null;
+  try {
+    const response = await fetchImpl(url, {
+      method: "DELETE",
+      headers: {
+        ...authorization,
+        "Mcp-Session-Id": sessionId,
+        "MCP-Protocol-Version": protocolVersion
+      },
+      signal: AbortSignal.timeout(Math.max(1, Math.min(timeoutMs, 5_000)))
+    });
+    await response.body?.cancel();
+    if (!response.ok && response.status !== 405) {
+      return `session cleanup returned HTTP ${response.status}`;
+    }
+    return null;
+  } catch (error) {
+    return `session cleanup failed: ${error.message}`;
+  }
+}
+
 export async function probeEndpoint(candidate, options, fetchImpl = fetch, readiness = false) {
   const url = endpointUrl(candidate);
   const classify = (status, detail) => ({ ...candidate, url, ok: false, status, detail });
@@ -497,24 +551,15 @@ export async function probeEndpoint(candidate, options, fetchImpl = fetch, readi
     : {};
   const cleanupWarnings = [];
   const cleanup = async (sessionId, protocolVersion) => {
-    if (!sessionId) return;
-    try {
-      const response = await fetchImpl(url, {
-        method: "DELETE",
-        headers: {
-          ...authorization,
-          "Mcp-Session-Id": sessionId,
-          "MCP-Protocol-Version": protocolVersion
-        },
-        signal: AbortSignal.timeout(Math.min(options.timeout, 1_000))
-      });
-      await response.body?.cancel();
-      if (!response.ok && response.status !== 405) {
-        cleanupWarnings.push(`session cleanup returned HTTP ${response.status}`);
-      }
-    } catch (error) {
-      cleanupWarnings.push(`session cleanup failed: ${error.message}`);
-    }
+    const warning = await deleteBridgeSession({
+      url,
+      authorization,
+      sessionId,
+      protocolVersion,
+      fetchImpl,
+      timeoutMs: options.timeout
+    });
+    if (warning !== null) cleanupWarnings.push(warning);
   };
   const failure = (error, operation) => {
     const message = error?.message ?? String(error);
@@ -535,7 +580,8 @@ export async function probeEndpoint(candidate, options, fetchImpl = fetch, readi
     return classify(malformed ? "malformed" : "transport-error", `${operation}: ${message}`);
   };
   let result;
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+  const attempts = 1 + SESSION_CAP_ATTEMPTS;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
     result = undefined;
     let operation = "initialize";
     let sessionId;
@@ -672,7 +718,14 @@ export async function probeEndpoint(candidate, options, fetchImpl = fetch, readi
       }
     } catch (error) {
       const expired = error instanceof StreamableHTTPError && error.code === 404;
-      retry = attempt === 0 && Boolean(sessionId) && expired;
+      const capped = isSessionCapError(error?.message);
+      retry = attempt + 1 < attempts && (capped || (attempt === 0 && Boolean(sessionId) && expired));
+      if (capped && retry) {
+        console.warn(
+          `${url}: ${error.message} - retrying (attempt ${attempt + 2}/${attempts})`
+        );
+        await new Promise((resolve) => setTimeout(resolve, SESSION_CAP_BACKOFF_MS[attempt] ?? 4_000));
+      }
       result = failure(error, operation);
     } finally {
       await client.close().catch(() => {});
@@ -1858,17 +1911,99 @@ async function withMcpSession(options, endpoint, run, fetchImpl = fetch) {
   const authorization = options.bearerToken
     ? { Authorization: `Bearer ${options.bearerToken}` }
     : {};
-  const transport = new StreamableHTTPClientTransport(new URL(url), {
-    requestInit: { headers: authorization },
-    fetch: fetchImpl
-  });
-  const client = new Client({ name: "unity-mcp-capture", version: "1.0.0" });
-  await client.connect(transport);
+  const connect = async () => {
+    let sessionId;
+    const transport = new StreamableHTTPClientTransport(new URL(url), {
+      requestInit: { headers: authorization },
+      // The session id only appears on the initialize response, so the
+      // transport's fetch is the one place that can capture it.
+      fetch: async (target, init = {}) => {
+        const response = await fetchImpl(target, init);
+        sessionId ||= response.headers.get("mcp-session-id") ?? undefined;
+        return response;
+      }
+    });
+    const connected = new Client({ name: "unity-mcp-capture", version: "1.0.0" });
+    await connected.connect(transport);
+    const release = async () => {
+      await connected.close().catch(() => {});
+      const warning = await deleteBridgeSession({
+        url,
+        authorization,
+        sessionId,
+        protocolVersion: transport.protocolVersion ?? options.protocolVersion,
+        fetchImpl,
+        timeoutMs: options.timeout
+      });
+      if (warning !== null) console.warn(`${url}: ${warning}`);
+    };
+    return { client: connected, release };
+  };
+  const client = reconnectingSession(connect);
   try {
     return await run(client);
   } finally {
     await client.close().catch(() => {});
   }
+}
+
+/**
+ * A session that rebuilds its transport once when a call throws.
+ *
+ * The editor serves MCP calls on its main thread, so a request that lands
+ * while the editor is busy (a test run winding down, a domain reload) can time
+ * the session's stream out. The SDK then rejects every later call on that
+ * session instantly with the recorded reason, so one unlucky request kills the
+ * rest of the command: the observed symptom was `test_status` failing in 0 ms
+ * with "The operation was aborted due to timeout" while the editor answered
+ * the same call fine from a new session. Reconnecting turns a dead session
+ * into one retry.
+ */
+function reconnectingSession(connect) {
+  let session = null;
+  let pending = null;
+
+  const live = async () => {
+    if (session !== null) return session;
+    pending ??= connect().then(
+      (connected) => {
+        session = connected;
+        pending = null;
+        return connected;
+      },
+      (error) => {
+        pending = null;
+        throw error;
+      }
+    );
+    return pending;
+  };
+
+  const withReconnect = async (invoke) => {
+    for (let attempt = 0; attempt < 2; ++attempt) {
+      const current = await live();
+      try {
+        return await invoke(current.client);
+      } catch (error) {
+        if (attempt == 1) throw error;
+        // A dropped transport would fail every later call on this session, so
+        // release it (the DELETE is what frees the editor's slot) and rebuild.
+        await current.release().catch(() => {});
+        session = null;
+      }
+    }
+    fail("The bridge session could not complete a call after reconnecting.");
+  };
+
+  return {
+    callTool: (...args) => withReconnect((current) => current.callTool(...args)),
+    listTools: (...args) => withReconnect((current) => current.listTools(...args)),
+    close: async () => {
+      const current = session;
+      session = null;
+      await current?.release().catch(() => {});
+    }
+  };
 }
 
 /** Beta backend tool schemas drift; try each documented argument shape until one answers. */
@@ -2052,6 +2187,26 @@ async function waitForEditorIdle(client, evalCall, deadline) {
   fail("The editor did not reach an idle (non-compiling) state before the deadline.");
 }
 
+/*
+    A test run additionally needs play mode over: a PlayMode run leaves the
+    editor tearing the session down, and the editor does not answer status
+    calls while it does. The capture path must not wait for this - capturing in
+    play mode is a supported flow - so the wait lives with the test path.
+ */
+async function waitForTestIdle(client, evalCall, deadline) {
+  const expression =
+    "return (UnityEditor.EditorApplication.isCompiling || UnityEditor.EditorApplication.isUpdating || UnityEditor.EditorApplication.isPlayingOrWillChangePlaymode);";
+  while (Date.now() < deadline) {
+    const { call } = await evalCall(expression);
+    if (evalAnswerIsFalse(extractText(call))) return;
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+  }
+  fail(
+    "The editor stayed busy (compiling or in play mode) until the deadline; "
+      + "cannot start a test run."
+  );
+}
+
 // ---------------------------------------------------------------------------
 // T04 fixture capture: run the capture tests over the bridge and validate the
 // manifests they write under .artifacts/t4/.
@@ -2182,6 +2337,12 @@ export async function runT4Capture(options, runtime = {}) {
 
     await waitForEditorIdle(client, evalCall, deadline);
 
+    /*
+        Counters read before the request are the previous capture run's, and the
+        manifests validated below come from a window that can still contain
+        them, so a run is only waited for when its result is attributable.
+    */
+    const previousKey = readSummaryKey(await pollTestStatus(client, signal));
     const runTests = await callFirstWorking(
       client,
       [
@@ -2202,23 +2363,37 @@ export async function runT4Capture(options, runtime = {}) {
     );
     log(options, "debug", `run_tests via ${runTests.candidate.name}`);
 
-    let status = parseCaptureSummary(extractText(runTests.call), "");
-    while (!(status.Summary ?? status.summary ?? {}).total && Date.now() < deadline) {
+    const runText = extractText(runTests.call);
+    let seenRunning = parseTestStatus(runText, false).running;
+    let payload = runText;
+    let summary = null;
+    while (Date.now() < deadline) {
+      const observed = parseTestStatus(payload, seenRunning);
+      /*
+          Only a finished, non-in-flight payload that is not the previous run's
+          counts ends the wait: a run still going can carry the last run's
+          numbers, and the manifests validated below come from a window that
+          can still hold that run's captures.
+       */
+      if (observed.finished && summaryIsFresh(payload, previousKey, seenRunning)) {
+        summary = observed.summary;
+        break;
+      }
+
       await new Promise((resolve) => setTimeout(resolve, 2_000));
-      const poll = await callFirstWorking(
-        client,
-        [{ name: "test_status", arguments: {} }],
-        signal
-      );
-      status = parseCaptureSummary(extractText(poll.call), "");
+      payload = await pollTestStatus(client, signal);
+      seenRunning ||= parseTestStatus(payload, false).running;
     }
 
-    const summary = status.Summary ?? status.summary;
-    if (!summary) fail("The test run produced no summary; inspect the editor.");
-    console.log(
-      `Tests: ${summary.total} total, ${summary.passed} passed, ${summary.failed} failed, ` +
-        `${summary.skipped} skipped.`
-    );
+    if (summary === null) {
+      fail(
+        "The capture test run produced no fresh result; the bridge may not have "
+          + "started a run, or it answered with the previous run's result. "
+          + "Inspect the editor."
+      );
+    }
+
+    console.log(testSummaryLine(summary));
 
     const artifactRoot = path.join(options.repoRoot, ".artifacts", "t4");
     const manifestPaths = collectT4ManifestPaths(artifactRoot, startedAt - 5_000);
@@ -2370,6 +2545,17 @@ export function compareT4Baselines(options, validManifests, problems) {
 export const TEST_MODES = Object.freeze(["all", "editmode", "playmode"]);
 export const DEFAULT_TEST_RUN_TIMEOUT = 600_000;
 
+/*
+    Concrete bridge legs per mode. `all` expands to both suites instead of
+    being sent as-is: on Unity 6000.4.6f1 the bridge answers `run_tests` with
+    mode "all" by echoing the previous run's result without starting a run, so
+    the command would report the last run's numbers. Two explicit legs each
+    start a real run.
+ */
+export function testRunLegs(mode) {
+  return mode === "all" ? ["editmode", "playmode"] : [mode];
+}
+
 /**
  * Validate and normalize `tests` subcommand options. Values arrive raw from
  * argv; a bad mode or non-numeric timeout fails before any endpoint contact.
@@ -2393,10 +2579,11 @@ export function resolveTestRunOptions(runtime = {}) {
 /**
  * Decode run_tests/test_status payloads across bridge generations: the
  * summary may sit under `Summary` or `summary`, and the run state may be a
- * bare status string. An `idle` status never finishes the poll before the
- * run was seen in flight - a stale previous-run summary riding an idle
- * payload must not read as a green gate. Absent or `completed` statuses may
- * finish on the summary alone so a blocking run_tests response terminates.
+ * bare status string. A payload that is still running, or `idle` before the
+ * run was ever seen in flight, is never finished: it can still be carrying the
+ * previous run's counts, and reading one as this run's result is the false
+ * green gate. Absent or `completed` statuses may finish on the summary alone
+ * so a blocking run_tests response terminates.
  */
 export function parseTestStatus(text, seenRunning = false) {
   let parsed = null;
@@ -2409,7 +2596,7 @@ export function parseTestStatus(text, seenRunning = false) {
   const summary = parsed.Summary ?? parsed.summary ?? null;
   const status = typeof parsed.status === "string" ? parsed.status.toLowerCase() : "";
   const running = /in_progress|^running$|started/u.test(status);
-  if (status === "idle" && !seenRunning) {
+  if (running || (status === "idle" && !seenRunning)) {
     return { finished: false, running, summary };
   }
   if (summary && Number(summary.total ?? 0) > 0) {
@@ -2426,6 +2613,56 @@ export function testSummaryLine(summary) {
     `Tests: ${summary.total} total, ${summary.passed} passed, ` +
     `${summary.failed} failed, ${summary.skipped} skipped.`
   );
+}
+
+/**
+ * Canonical identity of one run: its counters plus its duration. Two payloads
+ * with the same key are the same result, which is what makes a previous run's
+ * answer recognizable - including a legitimate re-run of the same suite, whose
+ * counters repeat but whose duration does not.
+ */
+export function summaryKey(summary, duration) {
+  const counters = ["total", "passed", "failed", "skipped", "inconclusive"]
+    .map((field) => {
+      const value = Number(summary?.[field]);
+      // Keep the raw value when it is not a number, so two malformed payloads
+      // cannot collapse into one key.
+      return `${field}=${Number.isFinite(value) ? value : JSON.stringify(summary?.[field] ?? null)}`;
+    })
+    .join(",");
+  return `duration=${duration ?? "?"};${counters}`;
+}
+
+/** Run key carried by a run_tests/test_status payload, or null. */
+export function readSummaryKey(text) {
+  let parsed = null;
+  try {
+    parsed = JSON.parse(text);
+  } catch {}
+  if (!parsed || typeof parsed !== "object") {
+    return null;
+  }
+  const summary = parsed.Summary ?? parsed.summary ?? null;
+  if (!summary || typeof summary !== "object") {
+    return null;
+  }
+  return summaryKey(summary, parsed.duration);
+}
+
+/**
+ * Whether a completed payload carries a result attributable to the run we asked
+ * for. The bridge answers `run_tests` with the *previous* run's result when it
+ * declines to start one (observed with `mode: all` on Unity 6000.4.6f1), so a
+ * result that still reads exactly like the pre-request one is never accepted:
+ * a run is only believed once it was seen in flight or reported a different
+ * key. Without this, a run that never started prints the last green run.
+ */
+export function summaryIsFresh(text, previousKey, seenRunning) {
+  const key = readSummaryKey(text);
+  if (key === null) {
+    return false;
+  }
+  return seenRunning || previousKey === null || key !== previousKey;
 }
 
 /**
@@ -2453,47 +2690,138 @@ export async function runUnityTests(options, runtime = {}) {
         signal
       );
 
-    await waitForEditorIdle(client, evalCall, deadline);
-
-    const runArguments = { mode, async_tests: true };
-    if (filter !== "") {
-      runArguments.filter = filter;
-    }
-    const run = await callFirstWorking(
-      client,
-      [
-        { name: "run_tests", arguments: runArguments },
-        {
-          name: "run_tests",
-          arguments: filter === "" ? { mode } : { mode, filter }
-        }
-      ],
-      signal
-    );
-
-    let seenRunning = false;
-    let status = parseTestStatus(extractText(run.call), seenRunning);
-    seenRunning ||= status.running;
-    while (!status.finished && Date.now() < deadline) {
-      await new Promise((resolve) => setTimeout(resolve, 2_000));
-      const poll = await callFirstWorking(client, [{ name: "test_status", arguments: {} }], signal);
-      status = parseTestStatus(extractText(poll.call), seenRunning);
-      seenRunning ||= status.running;
+    const summaries = [];
+    for (const leg of testRunLegs(mode)) {
+      // Each leg waits for its own quiet editor: a PlayMode leg leaves the
+      // session tearing down, and the next leg must not race that.
+      await waitForTestIdle(client, evalCall, deadline);
+      const summary = await runTestLeg(client, signal, leg, filter, deadline, evalCall);
+      console.log(`${leg}: ${testSummaryLine(summary)}`);
+      summaries.push(summary);
     }
 
-    if (!status.finished || !status.summary) {
-      fail(`The test run produced no summary within the deadline; inspect the editor.`);
-    }
-    const summary = status.summary;
-    console.log(testSummaryLine(summary));
-    if (Number(summary.total ?? 0) === 0) {
+    const total = summaries.reduce((sum, summary) => sum + Number(summary.total ?? 0), 0);
+    if (total === 0) {
       fail(`No tests matched (mode: ${mode}${filter ? `, filter: ${filter}` : ""}).`);
     }
-    if (Number(summary.failed ?? 0) > 0) {
-      fail(`${summary.failed} test(s) failed.`);
+    const failed = summaries.reduce((sum, summary) => sum + Number(summary.failed ?? 0), 0);
+    if (failed > 0) {
+      fail(`${failed} test(s) failed.`);
     }
-    return { summary };
+    return { summaries, summary: summaries[summaries.length - 1] };
   }, fetchImpl);
+}
+
+/**
+ * Read the bridge's test status, retrying a transient failure. The editor can
+ * still be unwinding a previous run when a poll lands, and one timed-out
+ * request must not fail a command that has not run yet; a status that never
+ * answers at all is still fatal, because the freshness check needs it.
+ */
+async function pollTestStatus(client, signal, attempts = 5) {
+  let lastFailure = null;
+  for (let attempt = 0; attempt < attempts; ++attempt) {
+    try {
+      return extractText(
+        (await callFirstWorking(client, [{ name: "test_status", arguments: {} }], signal)).call
+      );
+    } catch (error) {
+      lastFailure = error;
+      if (attempt + 1 < attempts) {
+        await new Promise((resolve) => setTimeout(resolve, 2_000));
+      }
+    }
+  }
+  fail(`The bridge did not answer test_status: ${lastFailure?.message ?? "unknown error"}`);
+}
+
+/*
+    The mid-run variant of the idle wait: the editor being busy is the expected
+    state while a run winds down, so a stalled answer ends the wait instead of
+    failing the command.
+ */
+async function waitForTestIdleQuietly(client, evalCall, deadline) {
+  const expression =
+    "return (UnityEditor.EditorApplication.isCompiling || UnityEditor.EditorApplication.isUpdating || UnityEditor.EditorApplication.isPlayingOrWillChangePlaymode);";
+  for (let attempt = 0; attempt < 30; ++attempt) {
+    if (Date.now() >= deadline) return;
+    try {
+      const { call } = await evalCall(expression);
+      if (evalAnswerIsFalse(extractText(call))) return;
+    } catch {
+      return;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+  }
+}
+
+/**
+ * Run one mode's suite over the bridge and return its summary.
+ *
+ * The counters observed before the request belong to the previous run, so a
+ * summary that still reads exactly like them is never accepted as this run's
+ * result: the bridge can answer `run_tests` without starting anything, and
+ * without this guard the command would print the last run's numbers.
+ */
+async function runTestLeg(client, signal, leg, filter, deadline, evalCall = null) {
+  const previousKey = readSummaryKey(await pollTestStatus(client, signal));
+  const runArguments = { mode: leg, async_tests: true };
+  if (filter !== "") {
+    runArguments.filter = filter;
+  }
+  const run = await callFirstWorking(
+    client,
+    [
+      { name: "run_tests", arguments: runArguments },
+      {
+        name: "run_tests",
+        arguments: filter === "" ? { mode: leg } : { mode: leg, filter }
+      }
+    ],
+    signal
+  );
+
+  const runText = extractText(run.call);
+  let seenRunning = parseTestStatus(runText, false).running;
+  let payload = runText;
+  while (Date.now() < deadline) {
+    const observed = parseTestStatus(payload, seenRunning);
+    /*
+        Only a finished, non-in-flight payload can be a result - one still
+        running, or idle before the run was ever seen, can carry the previous
+        run's numbers - and only when its run key differs from the pre-request
+        key, unless the run was seen in flight.
+     */
+    if (observed.finished && summaryIsFresh(payload, previousKey, seenRunning)) {
+      return observed.summary;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+    /*
+        The editor serves status calls on its main thread, which a run occupies
+        until it has wound down; polling into that window is what produces the
+        "aborted due to timeout" answers. Play mode is the discriminating flag
+        here - unlike isCompiling, which reference measurements show reading
+        false while every call is timing out (unity-helpers/.llm/references/
+        unity-mcp-fixture-runner-part-1.md) - and play mode over MCP is known to
+        time out every tool until a human stops it (IshoBoy/.llm/references/
+        unity-mcp-shared-editor-etiquette.md). So the wait is bounded, and the
+        retry below is the real safety net, not this gate.
+     */
+    if (evalCall !== null) {
+      await waitForTestIdleQuietly(client, evalCall, deadline);
+    }
+
+    payload = await pollTestStatus(client, signal);
+    seenRunning ||= parseTestStatus(payload, false).running;
+  }
+
+  fail(
+    `The ${leg} test run produced no fresh result within the deadline`
+      + `${filter ? ` (filter: ${filter})` : ""}; the bridge may not have started a run, `
+      + "or it answered with the previous run's result. Inspect the editor."
+  );
 }
 
 function usage() {
@@ -2507,10 +2835,12 @@ function usage() {
     "  capture         Capture editor/game state into .artifacts through the bridge.",
     "  t4-capture      Run the T04 fixture-capture tests, validate their manifests,\n" +
     "                  and compare pixels against the T11 baseline store.",
-    "  tests           Run Unity tests over the bridge and report the summary.",
+    "  tests           Run Unity tests over the bridge and report one summary line",
+    "                  per leg; 'all' runs the EditMode suite then the PlayMode suite.",
     "",
     "Options:",
-    "  --mode MODE                 Test mode: all, editmode, playmode (tests only; default all)",
+    "  --mode MODE                 Test mode: all, editmode, playmode (tests only; default all,",
+    "                              which runs both suites; the run timeout covers all legs)",
     "  --filter TEXT               Test name filter (tests only)",
     "  --run-timeout MS            Test run deadline (tests only; default 600000)",
     "  --host HOST                 Endpoint host; the only host discovery probes",
