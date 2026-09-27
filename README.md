@@ -500,7 +500,7 @@ summarized on [issue #38](https://github.com/wallstop/DxCommandTerminal/issues/3
 | --- | --- |
 | Designated hot paths allocate nothing when warmed: typing completion, history traversal + copy + wrap push, borrowed-view dispatch, log writes without stack traces, steady refresh passes, per-keystroke hint sweeps | `StandardOperationsAllocationTests`, `DispatchAllocationTests`, `TerminalUIAllocationTests` |
 | Text command execution allocates by design (tokenizing) and is asserted as such, never claimed zero | `StandardOperationsAllocationTests.TextCommandExecutionAllocatesByDesign` |
-| First command readiness in a 1,000-command domain: p95 4.498 ms warm (gate < 5 ms, pinned-environment evidence; suite tripwire 8 ms) | `CommandDiscoveryScalingTests.MeasuresReadinessAcrossCommandVolume` |
+| First command readiness in a 1,000-command domain: p95 4.498 ms warm (gate < 5 ms, pinned-environment evidence; suite tripwire: warm median < 8 ms, warm p95 < 32 ms) | `CommandDiscoveryScalingTests.MeasuresReadinessAcrossCommandVolume` |
 | Provider completion with 1,000 candidates: p95 0.105 ms (gate < 1 ms) | `StandardOperationsBenchmarkTests.MeasuresProviderCompletion`, `ProviderCompletionStaysUnderTripwire` |
 | Unused startup contribution: p95 0.001 ms (gate < 1 ms) | `StandardOperationsBenchmarkTests.BackendStartupReuseStaysUnderTripwire` |
 | Source generator execution: p95 5.99 ms per assembly (local gate p95 < 25 ms; CI gates median < 25 ms) | `GeneratorTimingGateTests.GeneratorExecutionStaysUnderTheTimingGate` |

@@ -28,6 +28,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         private const int WarmupIterations = 30;
 
+        /*
+            p95 over 100 samples is the 95th of 100, the sixth worst, so a
+            single stalled sample cannot move it; every tripwire failure
+            names the statistic, the sample count, the margin, and the whole
+            series (#170).
+         */
+        private const int BudgetSampleCount = 100;
+
         private GameObject _root;
 
         private static IEnumerable<TestCaseData> ScalingCases()
@@ -170,7 +178,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 );
             }
 
-            long[] samples = new long[100];
+            long[] samples = new long[BudgetSampleCount];
             Stopwatch stopwatch = new();
             for (int i = 0; i < samples.Length; ++i)
             {
@@ -186,10 +194,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             }
 
             System.Array.Sort(samples);
+            double ticksToMilliseconds = 1000.0 / Stopwatch.Frequency;
+            double median = samples[samples.Length / 2] * ticksToMilliseconds;
             double p95 =
-                samples[(int)System.Math.Ceiling(samples.Length * 0.95) - 1]
-                * 1000.0
-                / Stopwatch.Frequency;
+                samples[(int)System.Math.Ceiling(samples.Length * 0.95) - 1] * ticksToMilliseconds;
+            double max = samples[samples.Length - 1] * ticksToMilliseconds;
 
             Assert.AreEqual(
                 objectCount,
@@ -199,8 +208,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.Less(
                 p95,
                 budgetMilliseconds,
-                $"Typed-prefix completion p95 exceeded the regression budget "
-                    + $"({p95:F3} ms >= {budgetMilliseconds} ms at {objectCount} objects)"
+                $"Typed-prefix completion tripwire crossed at {objectCount} objects: "
+                    + $"statistic=p95 n={samples.Length} measured={p95:F3} ms "
+                    + $"budget={budgetMilliseconds:F3} ms "
+                    + $"margin={budgetMilliseconds - p95:F3} ms "
+                    + $"| median={median:F3} ms p95={p95:F3} ms max={max:F3} ms"
             );
         }
 

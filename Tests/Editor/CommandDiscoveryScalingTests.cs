@@ -20,8 +20,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         ([DxCommandTerminal][Scale]) as session evidence; asserted budgets
         are generous tripwires that catch a return to broad-domain scans
         (issue #36's multi-second stalls), not the plan's 5 ms readiness
-        gate, which stays a pinned-environment measurement. Editor-only:
-        players cannot emit IL.
+        gate, which stays a pinned-environment measurement. Each warm
+        budget is asserted twice - on the median, and on a loose p95 bound
+        for gross tail blowups - so two stalled samples under 4x the budget
+        cannot fail a shared host editor (#170). Editor-only: players cannot
+        emit IL.
 
         Filler assemblies are dynamic, so classification exercises the
         IsDynamic skip rather than metadata reads; the live editor domain
@@ -53,6 +56,24 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         private const float ClassificationTripwireMilliseconds = 25f;
 
+        private const float GateTierColdBudgetMilliseconds = 60f;
+
+        private const float GateTierWarmBudgetMilliseconds = 40f;
+
+        /*
+            The warm tripwire asserts the median at the tier budget and p95
+            at this multiple of it (#170). n=30 puts p95 on the 29th sorted
+            sample, the second worst, so two stalled samples cross a p95
+            bound; the median is an interior statistic that needs 16 stalls
+            to move. 4x is 4.7x above the worst sample in session-082's
+            five-run series and ~3x above the worst 1,000-tier warm p95 ever
+            recorded (10.6 ms, session-041, before the session-044
+            classification memo). It is a 4x loosening at every tier; see the
+            budget comment for what that costs where the old bound was
+            closest.
+         */
+        private const float TailTripwireMultiplier = 4f;
+
         private static readonly Assembly[] FillerAssemblies = CreateFillerAssemblies();
 
         private readonly List<IDisposable> _handles = new();
@@ -63,13 +84,50 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             catch the #36-class broad-scan regressions and the return of
             eager per-command Delegate.CreateDelegate binding at readiness
             (measured warm p95 ~19 ms at the 1,000-command tier, over the
-            then-15 ms tripwire - still 2x over the tightened 8 ms budget) -
+            then-15 ms tripwire - still 2.4x over the tightened 8 ms budget) -
             not ordinary scheduler jitter, and not portable across machines.
-            Measured deferred-binding numbers the
-            budgets are set from: reflected tiers 0-1,000 warm p95 ~2.6-10.6 ms
-            (cold 2.5-11.5 ms), 10,000 tier warm p95 ~55 ms (cold ~87-112 ms),
-            provider gate tier warm p95 ~9.1-11.5 ms (cold ~14-16 ms),
-            inflated-domain gate tier warm p95 ~6.5-7.8 ms (cold ~18-20 ms).
+            The warm bound is split in two, because one bound cannot serve
+            both audiences on a shared host (#170): the median is asserted
+            at the tier budget, and p95 at TailTripwireMultiplier times it.
+            This is a strict relaxation at every tier, disclosed here rather
+            than buried. The old bound tolerated 1 of 30 samples at or over
+            budget. The split tolerates 15 of 30, of which at most one may sit
+            past 4x - and that one is unbounded, because p95 is the 29th of
+            30 and never reads the 30th. So the 2nd through 15th
+            over-budget sample, and one arbitrarily large sample, now pass
+            where the old bound caught them.
+            The 1,000- and 10,000-command tiers lose the most: they had the
+            least old-bound headroom (1.78x and 2.88x). At the 10,000 tier
+            the tail leg moves from 150 ms to 600 ms against a measured 52 ms
+            p95, so only a 2-of-30 population past 11.5x trips it, and the
+            median leg needs 16 of 30. That tier's warm tail is documented
+            allocator/GC dominated, so a 4x loosening there is the cost of
+            the same change that stops the stall.
+            What the split buys is narrower than "more headroom": the median
+            leg's headroom is 1.82x on the worst median in session-082's
+            series, so a host-wide slowdown of 1.82x or more still trips it.
+            Whether that is what tripped #170 is unrecoverable - the original
+            failure line was lost with the editor's console ring buffer and
+            printed no median (#173). The regression the budget was sized
+            against (a whole-distribution shift to ~19 ms) is caught by the
+            median leg at the same 8 ms threshold, on a statistic that needs
+            16 stalls to move instead of 2.
+            Session-082 series on the pinned editor (2026-09-27; four
+            filtered runs plus one inside a 363-test full EditMode run; the
+            1,000-command reflected tier): cold 8.598-18.130 ms (budget 40),
+            median 4.235-4.403 ms (budget 8), p95 4.476-4.662 ms, max
+            4.592-6.761 ms (tail bound 32) - the median spread is 4.0% and
+            the max spread 47%. Separately, a 300-sample window in that
+            session carried a 13.944 ms single sample against a 0.063 ms
+            median in SceneObjectCompletionScalingTests (objects=100,
+            token='DxS') - a different suite and tier, quoted only as this
+            host's stall scale. Measured deferred-binding numbers the
+            budgets are set from: reflected tiers
+            0-1,000 warm p95 ~2.6-10.6 ms (cold 2.5-11.5 ms; the small tiers
+            settle at 0.3-0.6 ms), 10,000 tier
+            warm p95 ~55 ms (cold ~87-112 ms), provider gate tier warm p95
+            ~9.1-11.5 ms (cold ~14-16 ms), inflated-domain gate tier warm
+            p95 ~6.5-7.8 ms (cold ~18-20 ms).
             Session-044 (assembly-classification memo in CommandShell: the
             immutable per-assembly metadata reads no longer repeat on every
             warm cycle): 0-100 tiers warm p95 ~0.3-0.9 ms (were ~2.6-3,
@@ -235,20 +293,74 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             ReadinessReport readiness,
             int commandCount,
             float coldBudgetMilliseconds,
-            float warmP95BudgetMilliseconds
+            float warmBudgetMilliseconds
         )
         {
             Assert.Less(
                 readiness.ColdMilliseconds,
                 coldBudgetMilliseconds,
-                $"Cold readiness exceeded the tripwire ({readiness.ColdMilliseconds:F3} ms "
-                    + $">= {coldBudgetMilliseconds} ms) at {commandCount} commands"
+                $"Cold readiness tripwire crossed at {commandCount} commands: "
+                    + $"statistic=cold n=1 measured={readiness.ColdMilliseconds:F3} ms "
+                    + $"budget={coldBudgetMilliseconds:F3} ms "
+                    + $"margin={coldBudgetMilliseconds - readiness.ColdMilliseconds:F3} ms"
             );
-            Assert.Less(
+            AssertWarmStatisticUnderTripwire(
+                readiness,
+                commandCount,
+                "median",
+                readiness.Median,
+                warmBudgetMilliseconds
+            );
+            AssertWarmStatisticUnderTripwire(
+                readiness,
+                commandCount,
+                "p95",
                 readiness.Percentile95,
-                warmP95BudgetMilliseconds,
-                $"Warm readiness p95 exceeded the tripwire ({readiness.Percentile95:F3} ms "
-                    + $">= {warmP95BudgetMilliseconds} ms) at {commandCount} commands"
+                warmBudgetMilliseconds * TailTripwireMultiplier
+            );
+        }
+
+        private static void AssertWarmStatisticUnderTripwire(
+            ReadinessReport readiness,
+            int commandCount,
+            string statistic,
+            double measuredMilliseconds,
+            float budgetMilliseconds
+        )
+        {
+            Assert.Less(
+                measuredMilliseconds,
+                budgetMilliseconds,
+                $"Warm readiness tripwire crossed at {commandCount} commands: "
+                    + $"statistic={statistic} n={readiness.SampleCount} "
+                    + $"measured={measuredMilliseconds:F3} ms "
+                    + $"budget={budgetMilliseconds:F3} ms "
+                    + $"margin={budgetMilliseconds - measuredMilliseconds:F3} ms "
+                    + $"samplesOver={readiness.SamplesOver(budgetMilliseconds)} | "
+                    + $"median={readiness.Median:F3} ms p95={readiness.Percentile95:F3} ms "
+                    + $"max={readiness.Maximum:F3} ms"
+            );
+        }
+
+        private static void LogReadiness(
+            string detail,
+            ReadinessReport readiness,
+            float coldBudgetMilliseconds,
+            float warmBudgetMilliseconds
+        )
+        {
+            float tailBudgetMilliseconds = warmBudgetMilliseconds * TailTripwireMultiplier;
+            Debug.Log(
+                $"[DxCommandTerminal][Scale] {detail} "
+                    + $"assemblies={AppDomain.CurrentDomain.GetAssemblies().Length} "
+                    + $"cold={readiness.ColdMilliseconds:F3}ms "
+                    + $"coldBudget={coldBudgetMilliseconds:F3}ms "
+                    + $"warmSamples={readiness.SampleCount} "
+                    + $"median={readiness.Median:F3}ms p95={readiness.Percentile95:F3}ms "
+                    + $"max={readiness.Maximum:F3}ms warmBudget={warmBudgetMilliseconds:F3}ms "
+                    + $"tailBudget={tailBudgetMilliseconds:F3}ms "
+                    + $"overWarmBudget={readiness.SamplesOver(warmBudgetMilliseconds)} "
+                    + $"overTailBudget={readiness.SamplesOver(tailBudgetMilliseconds)}"
             );
         }
 
@@ -267,7 +379,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void MeasuresReadinessAcrossCommandVolume(
             int commandCount,
             float coldBudgetMilliseconds,
-            float warmP95BudgetMilliseconds
+            float warmBudgetMilliseconds
         )
         {
             Assembly volumeAssembly = CreateVolumeAssembly(commandCount);
@@ -301,16 +413,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 readiness,
                 commandCount,
                 coldBudgetMilliseconds,
-                warmP95BudgetMilliseconds
+                warmBudgetMilliseconds
             );
 
-            Debug.Log(
-                $"[DxCommandTerminal][Scale] readiness path=reflected commands={commandCount} "
-                    + $"assemblies={AppDomain.CurrentDomain.GetAssemblies().Length} "
-                    + $"registered={readiness.Shell.AutoRegisteredCommands.Count} "
-                    + $"cold={readiness.ColdMilliseconds:F3}ms warmSamples={WarmShellCount} "
-                    + $"median={readiness.Median:F3}ms p95={readiness.Percentile95:F3}ms "
-                    + $"max={readiness.Maximum:F3}ms"
+            LogReadiness(
+                $"readiness path=reflected commands={commandCount} "
+                    + $"registered={readiness.Shell.AutoRegisteredCommands.Count}",
+                readiness,
+                coldBudgetMilliseconds,
+                warmBudgetMilliseconds
             );
         }
 
@@ -342,15 +453,19 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 GateTierCommandCount,
                 "Every provider-served command should register"
             );
-            AssertReadinessUnderTripwires(readiness, GateTierCommandCount, 60f, 40f);
+            AssertReadinessUnderTripwires(
+                readiness,
+                GateTierCommandCount,
+                GateTierColdBudgetMilliseconds,
+                GateTierWarmBudgetMilliseconds
+            );
 
-            Debug.Log(
-                $"[DxCommandTerminal][Scale] readiness path=provider commands={GateTierCommandCount} "
-                    + $"assemblies={AppDomain.CurrentDomain.GetAssemblies().Length} "
-                    + $"registered={readiness.Shell.AutoRegisteredCommands.Count} "
-                    + $"cold={readiness.ColdMilliseconds:F3}ms warmSamples={WarmShellCount} "
-                    + $"median={readiness.Median:F3}ms p95={readiness.Percentile95:F3}ms "
-                    + $"max={readiness.Maximum:F3}ms"
+            LogReadiness(
+                $"readiness path=provider commands={GateTierCommandCount} "
+                    + $"registered={readiness.Shell.AutoRegisteredCommands.Count}",
+                readiness,
+                GateTierColdBudgetMilliseconds,
+                GateTierWarmBudgetMilliseconds
             );
         }
 
@@ -374,8 +489,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.Less(
                 classificationMilliseconds,
                 ClassificationTripwireMilliseconds,
-                $"Classifying {FillerAssemblyCount} filler assemblies took "
-                    + $"{classificationMilliseconds:F3} ms >= {ClassificationTripwireMilliseconds} ms"
+                $"Classification tripwire crossed: statistic=total n=1 "
+                    + $"measured={classificationMilliseconds:F3} ms "
+                    + $"budget={ClassificationTripwireMilliseconds:F3} ms "
+                    + $"margin={ClassificationTripwireMilliseconds - classificationMilliseconds:F3} ms "
+                    + $"| assemblies={FillerAssemblyCount} "
+                    + $"perAssembly={classificationMilliseconds * 1000.0 / FillerAssemblyCount:F3} us"
             );
 
             Assembly volumeAssembly = CreateVolumeAssembly(GateTierCommandCount);
@@ -387,17 +506,23 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 GateTierCommandCount,
                 "Every volume command should register in the inflated domain"
             );
-            AssertReadinessUnderTripwires(readiness, GateTierCommandCount, 60f, 40f);
+            AssertReadinessUnderTripwires(
+                readiness,
+                GateTierCommandCount,
+                GateTierColdBudgetMilliseconds,
+                GateTierWarmBudgetMilliseconds
+            );
 
-            Debug.Log(
-                $"[DxCommandTerminal][Scale] domain fillers={FillerAssemblyCount} "
-                    + $"assemblies={AppDomain.CurrentDomain.GetAssemblies().Length} "
+            LogReadiness(
+                $"domain fillers={FillerAssemblyCount} "
                     + $"classification={classificationMilliseconds:F3}ms "
                     + $"(all {FillerAssemblyCount} fillers, "
                     + $"{classificationMilliseconds * 1000.0 / FillerAssemblyCount:F2}us each) "
-                    + $"cold={readiness.ColdMilliseconds:F3}ms warmSamples={WarmShellCount} "
-                    + $"median={readiness.Median:F3}ms p95={readiness.Percentile95:F3}ms "
-                    + $"max={readiness.Maximum:F3}ms"
+                    + $"commands={GateTierCommandCount} "
+                    + $"registered={readiness.Shell.AutoRegisteredCommands.Count}",
+                readiness,
+                GateTierColdBudgetMilliseconds,
+                GateTierWarmBudgetMilliseconds
             );
         }
 
@@ -458,6 +583,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             public double Median { get; }
             public double Percentile95 { get; }
             public double Maximum { get; }
+            public int SampleCount { get; }
+
+            private readonly double[] _sortedWarmMilliseconds;
 
             public ReadinessReport(
                 CommandShell shell,
@@ -467,9 +595,34 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             {
                 Shell = shell;
                 ColdMilliseconds = coldMilliseconds;
+                _sortedWarmMilliseconds = sortedWarmMilliseconds;
+                SampleCount = sortedWarmMilliseconds.Length;
                 Median = Percentile(sortedWarmMilliseconds, 0.5);
                 Percentile95 = Percentile(sortedWarmMilliseconds, 0.95);
                 Maximum = sortedWarmMilliseconds[sortedWarmMilliseconds.Length - 1];
+            }
+
+            /*
+                Counts samples at or over the budget. That is the set
+                Assert.Less rejects when the asserted statistic is itself a
+                sample (p95, max); for the median leg it is the over-budget
+                population, which is the useful diagnostic - a count of 1 or
+                2 means a stall, a count near 16 means a distribution
+                shift. Takes a double so a fractional float budget promotes
+                exactly instead of comparing as a float.
+             */
+            public int SamplesOver(double budgetMilliseconds)
+            {
+                int over = 0;
+                foreach (double sample in _sortedWarmMilliseconds)
+                {
+                    if (budgetMilliseconds <= sample)
+                    {
+                        over++;
+                    }
+                }
+
+                return over;
             }
         }
     }

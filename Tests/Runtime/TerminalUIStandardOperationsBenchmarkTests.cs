@@ -104,6 +104,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Array.Sort(sorted);
             double ticksToMilliseconds = 1000.0 / Stopwatch.Frequency;
             return new OperationReport(
+                sampleCount,
                 sorted[sampleCount / 2] * ticksToMilliseconds,
                 sorted[(int)Math.Ceiling(sampleCount * 0.95) - 1] * ticksToMilliseconds,
                 sorted[sampleCount - 1] * ticksToMilliseconds,
@@ -111,10 +112,37 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
         }
 
+        /*
+            p95 over 300 samples is the 285th of 300, so a single stalled
+            sample cannot move it; every tripwire failure names the
+            statistic, the sample count, the margin, and the whole series
+            (#170).
+         */
+        private static void AssertP95UnderTripwire(
+            OperationReport report,
+            float budgetMilliseconds,
+            string operation
+        )
+        {
+            Assert.Less(
+                report.Percentile95Milliseconds,
+                budgetMilliseconds,
+                $"{operation} tripwire crossed: statistic=p95 n={report.SampleCount} "
+                    + $"measured={report.Percentile95Milliseconds:F3} ms "
+                    + $"budget={budgetMilliseconds:F3} ms "
+                    + $"margin={budgetMilliseconds - report.Percentile95Milliseconds:F3} ms "
+                    + $"| median={report.MedianMilliseconds:F3} ms "
+                    + $"p95={report.Percentile95Milliseconds:F3} ms "
+                    + $"max={report.MaximumMilliseconds:F3} ms "
+                    + $"gen0={report.Gen0Collections}"
+            );
+        }
+
         private static void LogScale(string operation, string detail, OperationReport report)
         {
             Debug.Log(
                 $"[DxCommandTerminal][Scale] op={operation} {detail} "
+                    + $"samples={report.SampleCount} "
                     + $"median={report.MedianMilliseconds:F3}ms "
                     + $"p95={report.Percentile95Milliseconds:F3}ms "
                     + $"max={report.MaximumMilliseconds:F3}ms gen0={report.Gen0Collections}"
@@ -294,13 +322,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 _terminal._commandInput.value,
                 "Sanity: every measured keystroke must reach the field"
             );
-            Assert.Less(
-                report.Percentile95Milliseconds,
-                KeystrokeTripwireMilliseconds,
-                $"Per-keystroke input p95 exceeded the tripwire "
-                    + $"({report.Percentile95Milliseconds:F3} ms >= "
-                    + $"{KeystrokeTripwireMilliseconds} ms)"
-            );
+            AssertP95UnderTripwire(report, KeystrokeTripwireMilliseconds, "Per-keystroke input");
         }
 
         [UnityTest]
@@ -319,13 +341,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return null;
 
             OperationReport report = Measure(() => _terminal.RefreshUI(), DefaultSampleCount);
-            Assert.Less(
-                report.Percentile95Milliseconds,
-                SteadyRefreshTripwireMilliseconds,
-                $"Steady refresh p95 exceeded the tripwire "
-                    + $"({report.Percentile95Milliseconds:F3} ms >= "
-                    + $"{SteadyRefreshTripwireMilliseconds} ms)"
-            );
+            AssertP95UnderTripwire(report, SteadyRefreshTripwireMilliseconds, "Steady refresh");
         }
 
         [UnityTest]
@@ -535,6 +551,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         private readonly struct OperationReport
         {
+            public int SampleCount { get; }
+
             public double MedianMilliseconds { get; }
 
             public double Percentile95Milliseconds { get; }
@@ -544,12 +562,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             public int Gen0Collections { get; }
 
             public OperationReport(
+                int sampleCount,
                 double medianMilliseconds,
                 double percentile95Milliseconds,
                 double maximumMilliseconds,
                 int gen0Collections
             )
             {
+                SampleCount = sampleCount;
                 MedianMilliseconds = medianMilliseconds;
                 Percentile95Milliseconds = percentile95Milliseconds;
                 MaximumMilliseconds = maximumMilliseconds;
