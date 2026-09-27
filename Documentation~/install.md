@@ -24,7 +24,8 @@ DxCommandTerminal is a Unity package. It supports Unity 2021.3 and newer.
    those keys type their characters instead, and Escape closes the terminal.
 
 Every action is rebindable, and the [new Input System](https://docs.unity3d.com/Manual/InputSystem.html)
-can drive the terminal through `PlayerInput`. See the package README
+can drive the terminal through `PlayerInput`. A `PlayerInput` message bound to a character key
+leaves that character to the open console's field instead of running. See the package README
 ("Hotkeys" and "New Input System") for bindings and precedence.
 
 ## Try it

@@ -471,6 +471,44 @@
             return !cached.CtrlRequired && !TypesNothing(cached.Name);
         }
 
+#if ENABLE_INPUT_SYSTEM
+        /// <summary>
+        ///     Reports whether the Input System control behind a PlayerInput
+        ///     message types text. A message carries no key, but the action's
+        ///     active control is the control that performed it, so a keyboard
+        ///     character key is classified by the same rule as a polled
+        ///     binding, and anything that is not a keyboard key - a gamepad,
+        ///     mouse, or composite part - types nothing.
+        /// </summary>
+        /// <remarks>
+        ///     A <c>ctrl+</c> chord inserts no character, so it stays a live
+        ///     hotkey, matching <see cref="ProducesTypedText"/>: the control
+        ///     names the key, and the live keyboard state is where the
+        ///     modifier lives. <c>anyKey</c> is held back for the same reason
+        ///     the polled path holds it - it presses on every keystroke.
+        /// </remarks>
+        internal static bool ControlProducesTypedText(InputControl control)
+        {
+            if (control is AnyKeyControl)
+            {
+                return true;
+            }
+
+            if (control is not KeyControl keyControl)
+            {
+                return false;
+            }
+
+            Keyboard currentKeyboard = Keyboard.current;
+            if (currentKeyboard != null && currentKeyboard.ctrlKey.isPressed)
+            {
+                return false;
+            }
+
+            return ProducesTypedText(keyControl.name);
+        }
+#endif
+
         private static bool TypesNothing(string keyName)
         {
             if (keyName is { Length: 1 })

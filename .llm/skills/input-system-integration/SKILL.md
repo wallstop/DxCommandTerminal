@@ -40,20 +40,39 @@ Close -> EnterCommand -> Previous -> Next -> ToggleFull -> ToggleSmall -> AutoCo
 
 ## A character binding belongs to the field being typed into
 
-`InputHelpers.ProducesTypedText(key)` is the one decision point, and
-`TerminalKeyboardController.IsHotkeyActive` applies it to all eight checks. It
-allowlists the names that type nothing (navigation, editing, `f1`-`f24`,
+`InputHelpers.ProducesTypedText(key)` classifies a polled binding by name:
+it allowlists the names that type nothing (navigation, editing, `f1`-`f24`,
 modifiers, locks, media, mouse, joystick) and counts anything else as typing, so
-an unrecognized name fails toward protecting the character; a `ctrl+` chord never
-types. The README's "Typing wins over a character binding" section is the
-user-facing wording - keep the two in step, and add rows in both directions to
-`Tests/Editor/InputHelpersTests.cs` for any rule change.
+an unrecognized name fails toward protecting the character. A `ctrl+` chord
+never types. `TerminalKeyboardController.IsHotkeyActive` applies it to all eight
+checks.
 
-Focus is read through `TerminalUI.AnyInputOwnsFocus() ||
-CommandPaletteUI.AnyInputOwnsFocus()`; a closed terminal does not count.
-`TerminalPlayerInputController` does not consult focus at all - the game owns its
-own binding there, and the console cannot read the key an action pressed. Only
-`shift+` and `ctrl+` are parsed; `cmd+`/`super+`/`alt+` never resolve to a key.
+`InputHelpers.ControlProducesTypedText(control)` is the same decision for the
+PlayerInput path, classifying the action's `activeControl` instead of a binding
+string: an `AnyKeyControl` always types, a `KeyControl` defers to
+`ProducesTypedText(name)` unless `Keyboard.current.ctrlKey.isPressed`, and any
+other control types nothing. It fails OPEN (no control -> the message runs),
+because a console that silently ignores `Close` is worse than a toggle that
+fires once.
+
+Focus is read through `TerminalUI.AnyConsoleFieldOwnsFocus()`; a closed terminal
+does not count. `TerminalPlayerInputController` applies the rule to all eight
+messages through `ShouldHandleMessage(actionName)`: the action name is the
+message name minus `On`, it resolves the action from
+`PlayerInput.currentActionMap` first (an action in another map has no active
+control) then the asset, and a name that resolves to nothing leaves the message
+to run. The string rule's rows live in `Tests/Editor/InputHelpersTests.cs`; the
+control rule's rows and the Play Mode rig live in
+`Tests/Runtime/TerminalPlayerInputControllerTests.cs`, which needs a live
+device. Add rows in both directions to whichever owns the rule you change.
+
+Three limits to keep in step with the docs: a `ctrl+` chord is recognized only
+from live keyboard state (the control names the key, not the modifier), a
+`Value` action's release message still names the key so a character binding is
+deferred on both halves but a non-typing one runs twice, and a hand-sent
+message or an unresolvable action name runs as it always has. Only `shift+`
+and `ctrl+` are parsed in a binding string; `cmd+`/`super+`/`alt+` never resolve
+to a key.
 
 ## History navigation semantics
 

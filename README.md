@@ -442,7 +442,9 @@ Bindings that press no character keep working while you type: navigation and edi
 
 Keep `closeHotkey` on a key that presses no character (Escape by default): a character bound to it cannot close the terminal while the field has focus. Escape, or any `ctrl+` chord, closes from inside.
 
-PlayerInput bindings are yours to route: the keyboard controller reads the binding string, not the key an action pressed, so a `ToggleSmall` action bound to a single key still fires while a field has focus.
+`PlayerInput` messages follow the same rule. The console asks the action which control performed it, so a `ToggleSmall` action bound to a character key leaves that character to the field instead of closing the console. The control that fired decides, not the action's binding list: a gamepad button, a mouse button, a `ctrl+` chord, and a composite driven by any of those all keep working while you type.
+
+Bind a message to a `Button` action. A `Value` action also sends a message when the key is released: the rule covers both halves of a character binding, but on a key that types no character both run, and a toggle opens the console and immediately closes it again. A message sent by hand, or one whose action the asset cannot resolve, runs as it always has.
 
 # New Input System
 DxCommandTerminal is now fully integrated with Unity's new Input System, if it is found in the project and enabled. 
