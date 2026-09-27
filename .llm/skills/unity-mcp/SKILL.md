@@ -109,11 +109,15 @@ editor is busy (a Play Mode run winding down, a domain reload) comes back as
 `The operation was aborted due to timeout`, and the SDK then rejects every later
 call on that session instantly with that first reason - one unlucky request
 kills the rest of the command. So a session rebuilds its transport once when a
-call throws, and the caller retries. `isCompiling` is a measured bad busy
-signal (reference runs read `false` while every call timed out); play mode is
-the discriminating one, because play mode over MCP times out every tool until
-it ends. Wait on play mode only in a bounded loop, and treat the retry as the
-real safety net.
+call throws, and the caller retries.
+
+Do not gate on `isCompiling`: reference runs recorded it as `false` while every
+call was timing out
+(`ambiguous-interactive/unity-helpers/.llm/references/unity-mcp-fixture-runner-part-1.md`).
+Play mode is the discriminating flag, because play mode over MCP times out every
+tool until it ends. Wait on it only in a bounded loop; the retry is the safety
+net. The robust fix is an editor-side reporter that writes its own result file,
+tracked in #162.
 
 ## Troubleshooting
 

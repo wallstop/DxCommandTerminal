@@ -5,10 +5,10 @@ import {
   TEST_MODES,
   awaitRunResult,
   isSessionCapError,
-  newestPerScenario,
   parseTestStatus,
   readSummaryKey,
   resolveTestRunOptions,
+  sessionSignalBudgetMs,
   summaryIsFresh,
   summaryKey,
   testRunLegs,
@@ -163,7 +163,6 @@ test("a run result fetched after the deadline still counts", async () => {
     '{"status":"completed","duration":9,"summary":{"total":1,"passed":1,"failed":0}}'
   );
   const finished = { total: 3, passed: 3, failed: 0, skipped: 0 };
-  const reads = ['{"status":"completed","duration":2,"summary":{"total":3,"passed":3,"failed":0,"skipped":0}}'];
   let polls = 0;
   let clock = 0;
 
@@ -175,7 +174,7 @@ test("a run result fetched after the deadline still counts", async () => {
       polls += 1;
       // A poll that overruns the deadline still has to be inspected.
       clock += 500;
-      return reads[0];
+      return '{"status":"completed","duration":2,"summary":{"total":3,"passed":3,"failed":0,"skipped":0}}';
     },
     now: () => clock,
     sleep: async (ms) => {
@@ -188,6 +187,11 @@ test("a run result fetched after the deadline still counts", async () => {
   assert.ok(clock > 1_000, "the clock was past the deadline when the result arrived");
 });
 
+/*
+    Not a regression test for the deadline defect - it passes under the old loop
+    too. It is the over-correction guard: a wait that accepted anything to avoid
+    a false "missing" would pass here as well.
+ */
 test("the wait still gives up when the last payload is not attributable", async () => {
   const stale = '{"status":"completed","duration":9,"summary":{"total":1,"passed":1,"failed":0}}';
   const previous = readSummaryKey(stale);
@@ -212,36 +216,38 @@ test("the wait still gives up when the last payload is not attributable", async 
   assert.equal(polls, 1, "one poll fits before the deadline, and the retry is bounded by it");
 });
 
-test("a scenario contributes only its newest manifest to the compare", () => {
-  const entries = [
-    { filePath: "a/CapturesTerminalSmallSurface.manifest.json", mtimeMs: 10 },
-    { filePath: "b/CapturesTerminalSmallSurface.manifest.json", mtimeMs: 90 },
-    { filePath: "c/CapturesCommandPaletteSurface.manifest.json", mtimeMs: 50 },
-    { filePath: "d/CapturesFirstPaletteInteractionFrame.manifest.json", mtimeMs: 70 },
-    { filePath: "e/CapturesFirstPaletteInteractionFrame.manifest.json", mtimeMs: 70 }
-  ];
-  const scenarioOf = (entry) => entry.filePath.split("/")[1].replace(".manifest.json", "");
-  const kept = newestPerScenario(entries, scenarioOf).map((entry) => entry.filePath);
 
-  // One entry per scenario, the newest kept; a tie keeps the later one.
-  assert.deepEqual(kept, [
-    "c/CapturesCommandPaletteSurface.manifest.json",
-    "e/CapturesFirstPaletteInteractionFrame.manifest.json",
-    "b/CapturesTerminalSmallSurface.manifest.json"
-  ]);
-  // An entry whose scenario cannot be read is kept, never dropped, and two such
-  // entries must not collapse into one under a shared placeholder key.
-  const opaque = newestPerScenario(
-    [
-      { filePath: "f/unreadable.manifest.json", mtimeMs: 5 },
-      { filePath: "g/empty-scenario.manifest.json", mtimeMs: 6 },
-      { filePath: "h/unreadable-too.manifest.json", mtimeMs: 7 }
-    ],
-    (entry) => (entry.filePath.includes("empty") ? "" : undefined)
+test("the session signal budget covers every leg", () => {
+  // Sized for one leg the signal fires first, so the per-leg deadline is
+  // unreachable and a slow first suite still starves the second one.
+  assert.equal(sessionSignalBudgetMs(600_000, 1), 600_000);
+  assert.equal(sessionSignalBudgetMs(600_000, 2), 1_200_000);
+  assert.equal(sessionSignalBudgetMs(600_000, 0), 600_000, "never below one leg");
+  assert.equal(
+    sessionSignalBudgetMs(30_000, testRunLegs("all").length),
+    60_000,
+    "the minimum flag value must still cover both legs"
   );
-  assert.deepEqual(opaque.map((entry) => entry.filePath), [
-    "f/unreadable.manifest.json",
-    "g/empty-scenario.manifest.json",
-    "h/unreadable-too.manifest.json"
-  ]);
+});
+
+test("a poll interval of zero cannot become a spin", async () => {
+  const stale = '{"status":"completed","duration":9,"summary":{"total":1,"passed":1,"failed":0}}';
+  let polls = 0;
+  let clock = 0;
+  await awaitRunResult({
+    initial: stale,
+    previousKey: readSummaryKey(stale),
+    deadline: 40,
+    read: async () => {
+      polls += 1;
+      return stale;
+    },
+    pollIntervalMs: 0,
+    now: () => clock,
+    sleep: async (ms) => {
+      assert.ok(ms >= 1, "every sleep is at least a millisecond");
+      clock += ms;
+    }
+  });
+  assert.ok(polls <= 40, `a zero interval must not spin (polled ${polls} times)`);
 });

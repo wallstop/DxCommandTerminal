@@ -55,11 +55,14 @@ metadata:
    Three rules make a result trustworthy, all in `awaitRunResult`:
 
    - A leg is reported only when its result is finished, not in flight, and
-     either seen in flight or carrying a run key (counters plus duration) that
-     differs from the pre-request one. The bridge answers `run_tests` with the
-     previous run's result when it starts nothing, and that echo must never
-     read as a green gate. Duration is in the key so a legitimate identical
-     re-run is not mistaken for the previous one.
+     either seen in flight (from a poll, never from the `run_tests` answer
+     itself) or carrying a run key (counters plus duration) that differs from
+     the pre-request one. The bridge answers `run_tests` with the previous run's
+     result when it starts nothing, and that echo must never read as a green
+     gate. Duration is in the key so a legitimate identical re-run is not
+     mistaken for the previous one.
+   - The session signal is sized for every leg (`runTimeout * legs`), or it ends
+     the command before the per-leg deadlines can mean anything.
    - Inspect a payload before re-testing the deadline. A loop shaped
      `while (now < deadline) { inspect; sleep; fetch }` drops the payload its
      last poll fetched, so a run that finished during that poll reads as

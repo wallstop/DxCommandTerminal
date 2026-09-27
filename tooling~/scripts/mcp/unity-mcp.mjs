@@ -2046,6 +2046,8 @@ async function listAllTools(client, signal) {
  */
 export async function runCapture(options, runtime = {}) {
   const fetchImpl = runtime.fetchImpl ?? fetch;
+  // This budget covers discovery, the session connect, and the test run, so it
+  // is shorter than the number suggests by however long those take.
   const captureTimeout = Math.max(options.timeout, 120_000);
   const deadline = Date.now() + captureTimeout;
   const { found } = await discoverEndpoint(options, { ...runtime, readiness: "tools" });
@@ -2289,50 +2291,69 @@ export function validateT4Manifest(manifest, expectComplete) {
 }
 
 /**
- * The newest entry per scenario, oldest first.
+ * Manifests of the capture runs that started at or after `sinceEpochMs`, oldest
+ * first, one per scenario (the newest copy wins).
  *
- * The manifest window is time-based, so a capture run that starts right after
- * another one collects both: the full PlayMode suite runs these same capture
- * tests, and a `t4:capture` immediately after it sees both runs' manifests.
- * Comparing the older copy too wastes work and can fail the command on
- * evidence from a run that is already over.
- */
-export function newestPerScenario(entries, scenarioOf) {
-  const newest = new Map();
-  for (const entry of entries) {
-    // An unknown scenario is keyed by path, never by a shared placeholder, so a
-    // malformed manifest cannot make unrelated entries collapse into one.
-    const scenario = scenarioOf(entry);
-    const key = typeof scenario === "string" && scenario.length !== 0 ? scenario : entry.filePath;
-    const current = newest.get(key);
-    if (current === undefined || entry.mtimeMs >= current.mtimeMs) {
-      newest.set(key, entry);
-    }
-  }
-  return [...newest.values()].sort((left, right) => left.mtimeMs - right.mtimeMs);
-}
-
-/**
- * Manifest files written at or after sinceEpochMs, oldest first, each with its
- * mtime so a caller can prefer the newest copy of a scenario.
+ * A run mints one UTC-stamped directory per capture test
+ * (`TerminalSurfaceCapture.CreateRunDirectory`), so the directory name is the
+ * run's own start time and scopes collection to the run at hand. A flat
+ * time-window over file mtimes instead collects the previous run's manifests
+ * when the two are seconds apart - the full PlayMode suite runs these same
+ * capture tests - which compared 16 scenarios twice and could fail the command
+ * on evidence from a run that was already over, or satisfy a scenario's
+ * coverage check with a stale copy.
+ *
+ * The scenario comes from the filename, which is the same string the capture
+ * wrote, so this stays one read per file.
  */
 export function collectT4ManifestPaths(artifactRoot, sinceEpochMs) {
   const root = path.resolve(artifactRoot);
   if (!fs.existsSync(root)) return [];
   const manifests = [];
   for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue;
+    if (!entry.isDirectory() || !isCaptureRunDirectory(entry.name, sinceEpochMs)) continue;
     const directory = path.join(root, entry.name);
     for (const file of fs.readdirSync(directory)) {
       if (!file.endsWith(".manifest.json")) continue;
       const filePath = path.join(directory, file);
-      const stats = fs.statSync(filePath);
-      if (stats.mtimeMs >= sinceEpochMs) manifests.push({ filePath, mtimeMs: stats.mtimeMs });
+      manifests.push({ filePath, mtimeMs: fs.statSync(filePath).mtimeMs });
     }
   }
   manifests.sort((a, b) => a.mtimeMs - b.mtimeMs);
-  return manifests;
+  return newestPerScenario(manifests);
 }
+
+/**
+ * A capture run directory is stamped `yyyy-MM-ddTHH-mm-ss-fffZ` in UTC, so the
+ * name parses back to the run's start instant. Anything else is not a directory
+ * this harness made and is left alone.
+ */
+function isCaptureRunDirectory(name, sinceEpochMs) {
+  const match =
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z$/u.exec(name);
+  if (match === null) {
+    return false;
+  }
+
+  const stamp = Date.parse(
+    `${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:${match[6]}.${match[7]}Z`
+  );
+  return Number.isFinite(stamp) && stamp >= sinceEpochMs;
+}
+
+/** One entry per scenario, the newest copy kept, oldest first. */
+export function newestPerScenario(entries) {
+  const newest = new Map();
+  for (const entry of entries) {
+    const scenario = path.basename(entry.filePath, ".manifest.json");
+    const current = newest.get(scenario);
+    if (current === undefined || entry.mtimeMs >= current.mtimeMs) {
+      newest.set(scenario, entry);
+    }
+  }
+  return [...newest.values()].sort((left, right) => left.mtimeMs - right.mtimeMs);
+}
+
 
 /**
  * T04 fixture capture through the bridge: wait for an idle editor, run the
@@ -2408,17 +2429,7 @@ export async function runT4Capture(options, runtime = {}) {
     console.log(testSummaryLine(summary));
 
     const artifactRoot = path.join(options.repoRoot, ".artifacts", "t4");
-    const manifestPaths = newestPerScenario(
-      collectT4ManifestPaths(artifactRoot, startedAt - 5_000),
-      (entry) => {
-        try {
-          return JSON.parse(fs.readFileSync(entry.filePath, "utf8")).scenario;
-        } catch {
-          // Unreadable manifests stay in the list so the loop reports them.
-          return undefined;
-        }
-      }
-    );
+    const manifestPaths = collectT4ManifestPaths(artifactRoot, startedAt - RUN_DIR_SLACK_MS);
     const problems = [];
     const validated = new Set();
     const validManifests = [];
@@ -2565,6 +2576,13 @@ export function compareT4Baselines(options, validManifests, problems) {
 // ---------------------------------------------------------------------------
 
 export const TEST_MODES = Object.freeze(["all", "editmode", "playmode"]);
+
+/*
+    Slack between the command's start clock and a capture run's own directory
+    stamp: clock and filesystem granularity, nothing more. Anything older
+    belongs to a previous run.
+ */
+const RUN_DIR_SLACK_MS = 2_000;
 export const DEFAULT_TEST_RUN_TIMEOUT = 600_000;
 
 /*
@@ -2576,6 +2594,15 @@ export const DEFAULT_TEST_RUN_TIMEOUT = 600_000;
  */
 export function testRunLegs(mode) {
   return mode === "all" ? ["editmode", "playmode"] : [mode];
+}
+
+/**
+ * Session signal budget for a run: the per-leg timeout times the leg count, so
+ * the cap never fires before a leg's own deadline. Sized for one leg, the
+ * signal ends the command early and a per-leg deadline is unreachable.
+ */
+export function sessionSignalBudgetMs(runTimeoutMs, legCount) {
+  return runTimeoutMs * Math.max(1, legCount);
 }
 
 /**
@@ -2695,13 +2722,18 @@ export function summaryIsFresh(text, previousKey, seenRunning) {
 export async function runUnityTests(options, runtime = {}) {
   const fetchImpl = runtime.fetchImpl ?? fetch;
   const { mode, filter, runTimeout } = resolveTestRunOptions(runtime);
-  const deadline = Date.now() + runTimeout;
+  const legs = testRunLegs(mode);
   const { found } = await discoverEndpoint(options, { ...runtime, readiness: "tools" });
   if (!found) fail("No Unity MCP endpoint with tools found; run npm run unity:mcp:probe for detail.");
   console.log(`Unity tests via ${found.url} (mode: ${mode}${filter ? `, filter: ${filter}` : ""})`);
 
   return withMcpSession(options, found, async (client) => {
-    const signal = AbortSignal.timeout(runTimeout);
+    /*
+        The session signal is the hard cap for the whole command, so it has to
+        cover every leg: sized for one leg it fires before the per-leg deadlines
+        and a slow first suite still starves the second one.
+     */
+    const signal = AbortSignal.timeout(sessionSignalBudgetMs(runTimeout, legs.length));
     const evalCall = (expression) =>
       callFirstWorking(
         client,
@@ -2713,13 +2745,19 @@ export async function runUnityTests(options, runtime = {}) {
       );
 
     const summaries = [];
-    for (const leg of testRunLegs(mode)) {
+    for (const leg of legs) {
       /*
           Each leg gets its own deadline: the flag reads as how long a run may
-          take, and a slow first suite must not starve the second one. The
-          session signal stays the hard cap for the whole command.
+          take, and a slow first suite must not starve the second one.
        */
       const legDeadline = Date.now() + runTimeout;
+      if (signal.aborted) {
+        fail(
+          `The run timeout (${runTimeout} ms per leg) is spent after `
+            + `${summaries.length} of ${legs.length} legs; raise --run-timeout.`
+        );
+      }
+
       // Each leg waits for its own quiet editor: a PlayMode leg leaves the
       // session tearing down, and the next leg must not race that.
       await waitForTestIdle(client, evalCall, legDeadline);
@@ -2796,6 +2834,10 @@ async function waitForTestIdleQuietly(client, evalCall, deadline) {
  *
  * Returns the attributable summary, or null when the deadline passed with
  * nothing acceptable in hand.
+ *
+ * `now` and `sleep` cover this loop only. The editor-idle wait and the status
+ * retry it calls read the real clock, so a test that injects a clock bounds this
+ * loop and nothing below it.
  */
 export async function awaitRunResult({
   initial,
@@ -2808,7 +2850,13 @@ export async function awaitRunResult({
   sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 }) {
   let payload = initial;
-  let seenRunning = parseTestStatus(payload, false).running;
+  /*
+      "Seen in flight" is only recorded from a poll. The answer to our own
+      `run_tests` request is the bridge's word about that request, and taking it
+      as proof would let a bridge that reports in_progress without starting
+      anything unlock the key check below.
+   */
+  let seenRunning = false;
   for (;;) {
     const observed = parseTestStatus(payload, seenRunning);
     /*
@@ -2829,7 +2877,7 @@ export async function awaitRunResult({
     // Clamped, so the last poll lands on the deadline instead of a full
     // interval past it: that round-trip is the one most likely to time out on a
     // busy editor, and it buys nothing once the budget is spent.
-    await sleep(Math.min(pollIntervalMs, remainingMs));
+    await sleep(Math.max(1, Math.min(pollIntervalMs, remainingMs)));
     if (beforePoll !== null) {
       await beforePoll();
     }
