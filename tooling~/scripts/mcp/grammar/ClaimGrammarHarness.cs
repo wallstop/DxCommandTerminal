@@ -90,8 +90,10 @@ namespace DxTerminalDevTools
             }
             finally
             {
-                // A failed delete is not the failure being reported, and letting
-                // it escape would print a stack trace instead of the list.
+                /*
+                   A failed delete is not the failure being reported, and letting
+                   it escape would print a stack trace instead of the list.
+                */
                 try
                 {
                     Directory.Delete(project, true);
@@ -219,8 +221,10 @@ namespace DxTerminalDevTools
                     $"{Fixture}.Beta",
                     new List<FakeTest> { Failed($"{Fixture}.Beta.One") }
                 ),
-                // A childless failed node is still a suite, and reporting it
-                // would point the reader at the fixture instead of the test.
+                /*
+                   A childless failed node is still a suite, and reporting it
+                   would point the reader at the fixture instead of the test.
+                */
                 Leaf($"{Fixture}.Childless", TestStatus.Failed, isSuite: true),
                 // A result whose test never arrived: no name to report.
                 Leaf(null, TestStatus.Failed, hasTest: false),
@@ -235,9 +239,11 @@ namespace DxTerminalDevTools
             Request("grammar-red");
             StartRun(callbacks, "grammar-red");
             callbacks.RunFinished(Root(failed: names.Count, children: children));
-            // Tree order, which is depth first: the two names inside the failed
-            // fixtures come before the bulk leaves, and the suites themselves are
-            // never among them.
+            /*
+               Tree order, which is depth first: the two names inside the failed
+               fixtures come before the bulk leaves, and the suites themselves are
+               never among them.
+            */
             expectations.Add(
                 Finished(
                     "a red run over the cap",
@@ -378,8 +384,10 @@ namespace DxTerminalDevTools
                 $"{Fixture}.Mixed(  ,=%\"\u2028\u00A0)",
             };
 
-            // One run per cap-sized group, so every name is in a claim the
-            // reader can see rather than in the count the cap left out.
+            /*
+                One run per cap-sized group, so every name is in a claim the
+                reader can see rather than in the count the cap left out.
+             */
             for (int start = 0; start < names.Length; start += ReportedCap)
             {
                 List<string> group = new();
@@ -477,8 +485,7 @@ namespace DxTerminalDevTools
             int failed = 0,
             int skipped = 0,
             int more = 0,
-            string mode = "EditMode",
-            double duration = ResultDuration
+            string mode = "EditMode"
         )
         {
             return new ClaimExpectation
@@ -492,7 +499,7 @@ namespace DxTerminalDevTools
                 Failed = failed,
                 Skipped = skipped,
                 FailedMore = more,
-                Duration = duration,
+                Duration = ResultDuration,
                 Names = names,
             };
         }
@@ -524,8 +531,10 @@ namespace DxTerminalDevTools
             using FileStream stream = File.Create(path);
             using Utf8JsonWriter writer = new Utf8JsonWriter(stream);
             writer.WriteStartObject();
-            // The layout the reporter really used, so the reader can be asked to
-            // use the same two names rather than both sides hard-coding them.
+            /*
+                The layout the reporter really used, so the reader can be asked to
+                use the same two names rather than both sides hard-coding them.
+             */
             writer.WriteStartObject("layout");
             writer.WriteString("claim", Path.GetFileName(DxTerminalTestRunReporter.ClaimPath()));
             writer.WriteString(
@@ -534,8 +543,10 @@ namespace DxTerminalDevTools
             );
             writer.WriteEndObject();
             writer.WritePropertyName("claims");
-            // camelCase, so a hand-written key and a record's own field read the
-            // same in the document the node side consumes.
+            /*
+                camelCase, so a hand-written key and a record's own field read the
+                same in the document the node side consumes.
+             */
             JsonSerializer.Serialize(
                 writer,
                 expectations,
@@ -602,6 +613,41 @@ namespace DxTerminalDevTools
          */
         private sealed class FakeTest : ITestResultAdaptor, ITestAdaptor
         {
+            public string Id => FullName ?? string.Empty;
+
+            public string Name => FullName ?? string.Empty;
+
+            public string FullName { get; }
+
+            public bool IsSuite { get; }
+
+            public TestMode TestMode { get; }
+
+            public ITestAdaptor Test => _hasTest ? this : null;
+
+            public TestStatus TestStatus { get; }
+
+            public double Duration => ResultDuration;
+
+            public int PassCount { get; }
+
+            public int FailCount { get; }
+
+            public int SkipCount { get; }
+
+            public int InconclusiveCount { get; }
+
+            public bool HasChildren => _throwsOnChildren || 0 < _children.Count;
+
+            /*
+                Explicit, because the two interfaces declare Children with
+                different element types and the fake is both.
+             */
+            IEnumerable<ITestResultAdaptor> ITestResultAdaptor.Children =>
+                Children<ITestResultAdaptor>();
+
+            IEnumerable<ITestAdaptor> ITestAdaptor.Children => Children<ITestAdaptor>();
+
             private readonly List<FakeTest> _children;
             private readonly bool _hasTest;
             private readonly bool _throwsOnChildren;
@@ -632,39 +678,6 @@ namespace DxTerminalDevTools
                 _throwsOnChildren = throwsOnChildren;
                 _children = children ?? new List<FakeTest>();
             }
-
-            public string Id => FullName ?? string.Empty;
-
-            public string Name => FullName ?? string.Empty;
-
-            public string FullName { get; }
-
-            public bool IsSuite { get; }
-
-            public TestMode TestMode { get; }
-
-            public ITestAdaptor Test => _hasTest ? this : null;
-
-            public TestStatus TestStatus { get; }
-
-            public double Duration => ResultDuration;
-
-            public int PassCount { get; }
-
-            public int FailCount { get; }
-
-            public int SkipCount { get; }
-
-            public int InconclusiveCount { get; }
-
-            public bool HasChildren => _throwsOnChildren || 0 < _children.Count;
-
-            // Explicit, because the two interfaces declare Children with
-            // different element types and the fake is both.
-            IEnumerable<ITestResultAdaptor> ITestResultAdaptor.Children =>
-                Children<ITestResultAdaptor>();
-
-            IEnumerable<ITestAdaptor> ITestAdaptor.Children => Children<ITestAdaptor>();
 
             private IEnumerable<TTarget> Children<TTarget>()
             {

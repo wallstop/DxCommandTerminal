@@ -148,7 +148,8 @@ test("the refresh is requested before the idle wait, and a busy editor is waited
       return answered(probes === 1 ? "true" : "false");
     },
     60_000,
-    tick
+    tick,
+    () => Promise.resolve()
   );
 
   assert.equal(asked[0], SCRIPT_REFRESH_EXPRESSION, "the refresh must be asked for first");
@@ -164,13 +165,59 @@ test("the refresh is requested before the idle wait, and a busy editor is waited
       return answered(SCRIPT_REFRESH_EXPRESSION === expression ? "null" : "false");
     },
     60_000,
-    tick
+    tick,
+    () => Promise.resolve()
   );
   assert.equal(
     retried.filter((expression) => SCRIPT_REFRESH_EXPRESSION === expression).length,
     2,
     "a refused refresh must be asked again"
   );
+
+  /*
+      A refresh that is never accepted is the failure the whole command exists to
+      avoid: the editor is still on the assembly it had, and the caller cannot
+      see that. So the command ends, and it says why.
+   */
+  let refusals = 0;
+  await assert.rejects(
+    refreshScripts(
+      () => {
+        refusals += 1;
+        throw new Error("Main thread operation timed out after 5000ms");
+      },
+      60_000,
+      tick,
+      () => Promise.resolve()
+    ),
+    /refused the script refresh/u
+  );
+  assert.ok(1 < refusals, "a refused refresh must be asked again before giving up");
+
+  // A reported failure is the editor's own answer, and asking again would only
+  // repeat it, so it is not retried.
+  let reported = 0;
+  await assert.rejects(
+    refreshScripts(
+      () => {
+        reported += 1;
+        return {
+          call: {
+            content: [
+              {
+                text: '{"success":false,"errorDetails":{"code":-1},"error":"Runtime Error"}'
+              }
+            ]
+          }
+        };
+      },
+      60_000,
+      tick,
+      () => Promise.resolve()
+    ),
+    /script refresh failed/u
+  );
+  assert.equal(reported, 1, "a reported failure must not be retried");
 });
 
 test("both editor dev tools install together, and a re-install is a no-op", () => {

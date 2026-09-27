@@ -95,16 +95,29 @@ namespace UnityEditor
 
 namespace UnityEditor.TestTools.TestRunner.Api
 {
+    using System;
     using System.Collections.Generic;
     using DxTerminalDevTools.Grammar;
     using UnityEngine;
 
+    /// <summary>
+    /// A flag with 1 &lt;&lt; n values in the real API, so a mode is a mask and
+    /// not a count.
+    /// </summary>
+    [Flags]
     public enum TestMode
     {
-        EditMode = 0,
-        PlayMode = 1,
+        EditMode = 1 << 0,
+        PlayMode = 1 << 1,
     }
 
+    /*
+        TestStatus and HideFlags keep the real ordinals, where zero is a real
+        state (Inconclusive, None) rather than a sentinel. The repository rule
+        that wants an Unknown = 0 is for this package's own state enums; adding a
+        member the editor does not have would make this a mirror of something
+        else.
+     */
     public enum TestStatus
     {
         Inconclusive = 0,

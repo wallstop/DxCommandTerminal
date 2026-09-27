@@ -2217,7 +2217,9 @@ function assertEvalAnswer(evalAnswer, action) {
     main thread, and a changed script under Packages/ can hold it past the
     bridge's main-thread timeout, which the SDK reports as a tool error. Both
     waits above treat that as busy and keep asking, and so does this: a cold
-    compile is the state the command exists to survive.
+    compile is the state the command exists to survive. A refresh that is never
+    accepted fails the command instead, because the alternative is a green report
+    on the assembly the editor already had.
 
     The trailing wait is the compile, not the import. A refresh that finds a
     changed script schedules the compile, and the editor answers an idle query
@@ -2228,19 +2230,40 @@ function assertEvalAnswer(evalAnswer, action) {
     import of its own.
 
     Exported for the refresh tests: a command that drops this call is a command
-    that reports the assembly it already had.
+    that reports the assembly it already had. The clock and the pause between
+    attempts are injected so a test can cross eight refusures without waiting.
  */
-export async function refreshScripts(evalCall, deadline, now = () => Date.now()) {
+export async function refreshScripts(
+  evalCall,
+  deadline,
+  now = () => Date.now(),
+  pause = () => new Promise((resolve) => setTimeout(resolve, 1_000))
+) {
   for (let attempt = 0; attempt < 8 && now() < deadline; attempt += 1) {
+    let answer;
     try {
-      assertEvalAnswer(await evalCall(SCRIPT_REFRESH_EXPRESSION), "script refresh");
-      break;
+      answer = await evalCall(SCRIPT_REFRESH_EXPRESSION);
     } catch {
-      await new Promise((resolve) => setTimeout(resolve, 1_000));
+      /*
+          A refused call is the editor holding its main thread, which is what a
+          compile looks like. Asked again, not treated as a failure - but not
+          forgotten either: a refresh that is never accepted leaves the editor on
+          the assembly it already has, which is the state this exists to leave.
+       */
+      await pause();
+      continue;
     }
+
+    // Outside the retry: a reported failure is the editor's own answer, and
+    // asking again would only repeat it.
+    assertEvalAnswer(answer, "script refresh");
+    return waitForEditorIdle(evalCall, deadline, now);
   }
 
-  await waitForEditorIdle(evalCall, deadline, now);
+  fail(
+    "The editor refused the script refresh until the deadline, so what it has "
+      + "compiled is not what is on disk. Retry when the editor is idle."
+  );
 }
 
 async function waitForEditorIdle(evalCall, deadline, now = () => Date.now()) {
