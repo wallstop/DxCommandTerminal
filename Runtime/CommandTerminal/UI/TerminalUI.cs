@@ -49,6 +49,13 @@
 
         public Font CurrentFont => _runtimeFont != null ? _runtimeFont : _persistedFont;
 
+        /*
+            Internal for test coverage: a transition assertion needs the state
+            a frame left behind, and IsClosed cannot answer that while the
+            window height is still settling toward its target.
+         */
+        internal TerminalState State => _state;
+
         [Header("Window")]
         [Range(0, 1)]
         public float maxHeight = 0.7f;
@@ -811,6 +818,34 @@
 #endif
 
         /*
+            Whether the command field - or the inner text-input element the
+            focus controller may report instead - holds panel focus. A key
+            that types text belongs to that field while it does, so the input
+            poll leaves text-producing hotkeys alone
+            (see InputHelpers.ProducesTypedText).
+
+            A closed terminal does not count, whatever the focus controller
+            still names: closing hides the field instead of detaching it, and a
+            hidden field receives no character, so it must not hold the console
+            key hostage after a close.
+         */
+        internal bool InputOwnsFocus
+        {
+            get
+            {
+                if (_commandInput == null || !IsOpenState(_state))
+                {
+                    return false;
+                }
+
+                VisualElement focused =
+                    _commandInput.panel?.focusController?.focusedElement as VisualElement;
+                return focused != null
+                    && (focused == _commandInput || _commandInput.Contains(focused));
+            }
+        }
+
+        /*
             Runs once per Play Mode session with the earliest load type, so
             with disabled domain reload it clears what a previous session's
             components left behind: stale static references (the registry
@@ -838,6 +873,41 @@
              */
             Application.logMessageReceivedThreaded -= UnityLogCallback;
             Application.logMessageReceivedThreaded -= HandleUnityLog;
+        }
+
+        /// <summary>
+        ///     Reports whether any console text field - a live terminal's
+        ///     command line or a palette's query - holds panel focus. Both
+        ///     input polls ask this so a key that types text is left to the
+        ///     surface being typed into (see
+        ///     <see cref="InputHelpers.ProducesTypedText"/>). It lives here so
+        ///     the two surfaces share one answer.
+        /// </summary>
+        internal static bool AnyConsoleFieldOwnsFocus()
+        {
+            return AnyInputOwnsFocus() || CommandPaletteUI.AnyInputOwnsFocus();
+        }
+
+        /// <summary>
+        ///     Reports whether any live terminal's command field holds panel
+        ///     focus. A console input poll asks
+        ///     <see cref="AnyConsoleFieldOwnsFocus"/> so a key that types text
+        ///     is left to the surface being typed into (see
+        ///     <see cref="InputHelpers.ProducesTypedText"/>).
+        /// </summary>
+        internal static bool AnyInputOwnsFocus()
+        {
+            int liveCount = LiveTerminals.Count;
+            for (int index = liveCount - 1; 0 <= index; --index)
+            {
+                TerminalUI candidate = LiveTerminals[index];
+                if (candidate != null && candidate.InputOwnsFocus)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static void ConsumeAndLogErrors()

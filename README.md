@@ -124,7 +124,7 @@ Command Terminal is based on [an implementation by Jonathan Blow](https://youtu.
 
 ## Usage
 
-Copy the contents from [CommandTerminal](./CommandTerminal) to your Assets folder. Attach a `Terminal` Component to a game object. The console window can be toggled with a hotkey (default is backtick), and another hotkey can be used to toggle the full size window (default is shift+backtick).
+Copy the contents from [CommandTerminal](./CommandTerminal) to your Assets folder. Attach a `Terminal` Component to a game object. The console window can be toggled with a hotkey (default is backtick), and another hotkey can be used to toggle the full size window (default is shift+backtick). While the console is open those keys type their characters instead - see [Typing wins over a character binding](#typing-wins-over-a-character-binding) - and Escape closes it.
 
 Enter `help` in the console to view all available commands, use the up and down arrow keys to traverse the command history, and the tab key to autocomplete commands.
 
@@ -433,6 +433,16 @@ Keyboard hotkey bindings are now intelligent as they can be about shift key inte
 3. When using the new input system, hotkeys can be represented as `shift+<binding>`. `shift+tab` will be interpreted as the combination `left shift` + `tab`.
 
 The only combination keys that are supported without using custom bindings via the new Input System are `shift+<binding>`.
+
+## Typing wins over a character binding
+
+A binding that presses a character key is left to the field being typed into. While the command line or the palette search bar has focus, pressing the key types the character and does not run the binding - so with the defaults `` ` `` (toggle) and `` #` `` (full), those characters are typeable and the console key no longer closes an open console.
+
+Bindings that press no character keep working while you type: navigation and editing keys (arrows, Home, End, PageUp/PageDown, Enter, Tab, Escape, Backspace, Insert, Delete), function keys, modifiers, lock and media keys, and mouse or joystick buttons - plus any `ctrl+` chord. `TerminalKeyboardController` only reads `shift+` and `ctrl+`; a `cmd+`/`super+`/`alt+` prefix is not parsed, so such a binding never fires.
+
+Keep `closeHotkey` on a key that presses no character (Escape by default): a character bound to it cannot close the terminal while the field has focus. Escape, or any `ctrl+` chord, closes from inside.
+
+PlayerInput bindings are yours to route: the keyboard controller reads the binding string, not the key an action pressed, so a `ToggleSmall` action bound to a single key still fires while a field has focus.
 
 # New Input System
 DxCommandTerminal is now fully integrated with Unity's new Input System, if it is found in the project and enabled. 

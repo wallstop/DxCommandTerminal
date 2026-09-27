@@ -15,6 +15,23 @@
 
         private static readonly string[] CtrlModifiers = { "ctrl+", "control+" };
 
+        /*
+            The names that type no character, from both reachable surfaces: the
+            Input System's keyboard control names, every multi-character key in
+            KeyCodeMapping, and the legacy KeyCode members the parse can name
+            directly - navigation, editing, function, modifier, lock, media,
+            IME, mouse, and joystick. Everything else the parse surface can
+            produce is a character key, so an unrecognized name counts as
+            typing - a hotkey held back for one typing session is recoverable,
+            a swallowed character is not. A key either input system adds later
+            therefore fails toward the character.
+
+            anyKey is deliberately absent: it presses on every keystroke, so a
+            binding on it is held back while a field has focus, like a
+            character key's binding is.
+         */
+        private static readonly HashSet<string> NonTypedKeyNames = BuildNonTypedKeyNames();
+
         private static readonly Dictionary<string, CachedKeyName> CachedKeys = new();
 
         private static readonly Dictionary<string, KeyCode> KeyCodeMapping = new(
@@ -421,6 +438,178 @@
                 the parse on later calls.
              */
             return new CachedKeyName(keyName, shiftRequired, ctrlRequired);
+        }
+
+        /// <summary>
+        ///     Reports whether a hotkey binding presses a key that types text -
+        ///     any character key, with or without Shift, and with no Ctrl
+        ///     modifier. The console surfaces hand those keys to a focused text
+        ///     field instead of firing their action, so every character stays
+        ///     typeable in a command line or a palette query. Only Ctrl chords
+        ///     and the named keys that type nothing (navigation, editing,
+        ///     function, modifier) keep firing while a field has focus.
+        /// </summary>
+        internal static bool ProducesTypedText(string key)
+        {
+            if (string.IsNullOrEmpty(key))
+            {
+                return false;
+            }
+
+            if (!CachedKeys.TryGetValue(key, out CachedKeyName cached))
+            {
+                cached = ResolveKeyName(key);
+                CachedKeys[key] = cached;
+            }
+
+            /*
+                A Ctrl chord inserts no character, so it stays a live hotkey
+                while a field has focus. Every other binding resolves either to
+                a character key or to a name that types nothing, and the
+                character key belongs to the field.
+             */
+            return !cached.CtrlRequired && !TypesNothing(cached.Name);
+        }
+
+        private static bool TypesNothing(string keyName)
+        {
+            if (keyName is { Length: 1 })
+            {
+                return false;
+            }
+
+            return NonTypedKeyNames.Contains(keyName);
+        }
+
+        /*
+            The names that type no character, from both reachable surfaces: the
+            Input System's keyboard control names and every multi-character key
+            in KeyCodeMapping (navigation, editing, function, modifier, lock,
+            media, IME, mouse, and joystick names). Everything else the parse
+            surface can produce is a character key, so an unrecognized name
+            counts as typing - a hotkey held back for one typing session is
+            recoverable, a swallowed character is not. A key either input
+            system adds later therefore fails toward the character.
+         */
+        private static HashSet<string> BuildNonTypedKeyNames()
+        {
+            HashSet<string> names = new(StringComparer.OrdinalIgnoreCase)
+            {
+                "alt",
+                "backspace",
+                "break",
+                "capslock",
+                "clear",
+                "cmd",
+                "command",
+                "contextmenu",
+                "control",
+                "ctrl",
+                "del",
+                "delete",
+                "down",
+                "downarrow",
+                "end",
+                "enter",
+                "esc",
+                "escape",
+                "help",
+                "home",
+                "imeselected",
+                "ins",
+                "insert",
+                "keypadenter",
+                "lalt",
+                "lcmd",
+                "lcommand",
+                "lcontrol",
+                "lctrl",
+                "left",
+                "leftalt",
+                "leftarrow",
+                "leftcmd",
+                "leftcommand",
+                "leftcontrol",
+                "leftctrl",
+                "leftmeta",
+                "leftmouse",
+                "leftshift",
+                "leftsuper",
+                "leftwin",
+                "leftwindows",
+                "lmb",
+                "lshift",
+                "lwin",
+                "mediaforward",
+                "mediaplaypause",
+                "mediarewind",
+                "meta",
+                "middlemouse",
+                "mmb",
+                "mouse0",
+                "mouse1",
+                "mouse2",
+                "mouse3",
+                "mouse4",
+                "mouse5",
+                "mouse6",
+                "none",
+                "noscroll",
+                "numlock",
+                "numpadenter",
+                "pagedn",
+                "pagedown",
+                "pageup",
+                "pause",
+                "pausebreak",
+                "pgdn",
+                "pgup",
+                "print",
+                "printscreen",
+                "prtscn",
+                "ralt",
+                "rcmd",
+                "rcommand",
+                "rcontrol",
+                "rctrl",
+                "return",
+                "right",
+                "rightarrow",
+                "rightalt",
+                "rightcmd",
+                "rightcommand",
+                "rightcontrol",
+                "rightctrl",
+                "rightmeta",
+                "rightmouse",
+                "rightshift",
+                "rightsuper",
+                "rightwin",
+                "rightwindows",
+                "rmb",
+                "rshift",
+                "rwin",
+                "scrolllock",
+                "select",
+                "shift",
+                "super",
+                "sysreq",
+                "tab",
+                "up",
+                "uparrow",
+            };
+
+            for (int functionKey = 1; functionKey <= 24; ++functionKey)
+            {
+                names.Add($"f{functionKey}");
+            }
+
+            for (int joystickButton = 0; joystickButton <= 19; ++joystickButton)
+            {
+                names.Add($"joystickbutton{joystickButton}");
+            }
+
+            return names;
         }
 
         private static bool StripModifier(string key, string[] modifiers, out string stripped)

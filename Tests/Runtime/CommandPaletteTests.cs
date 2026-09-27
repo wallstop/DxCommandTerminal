@@ -1717,6 +1717,38 @@
             for whole polls under session sequences (issue #74 family), so
             the marker satisfies the poll too.
          */
+        /*
+            The focus controller reports either the field or an element inside
+            it, and the property accepts both. The suite's focus waits run on
+            the production property, so the focus read and the closed case are
+            pinned here directly.
+         */
+        [UnityTest]
+        public IEnumerator InputOwnsFocusTracksTheFieldAndIgnoresAClosedPalette()
+        {
+            yield return SpawnPalette();
+
+            _palette.Open();
+            yield return WaitForFocusedInput("Sanity: the field reports focus");
+
+            VisualElement focused =
+                _palette._input.focusController?.focusedElement as VisualElement;
+            Assert.IsTrue(
+                focused == _palette._input || _palette._input.Contains(focused),
+                "Sanity: the panel reports focus on the field or inside it"
+            );
+            Assert.IsTrue(
+                _palette.InputOwnsFocus,
+                "A focused query field must report owning focus"
+            );
+
+            _palette.Close();
+            Assert.IsFalse(
+                _palette.InputOwnsFocus,
+                "A closed palette must not report owning focus, whatever still holds it"
+            );
+        }
+
         private IEnumerator WaitForCaret(int expected, string message)
         {
             int frameBudget = FrameBudget;
@@ -1807,10 +1839,7 @@
 
         private bool InputOwnsFocus()
         {
-            VisualElement focused =
-                _palette._uiDocument.rootVisualElement.focusController.focusedElement
-                as VisualElement;
-            return focused == _palette._input || _palette._input.Contains(focused);
+            return _palette.InputOwnsFocus;
         }
 
         private IEnumerator WaitForFocused(VisualElement expected, string message)

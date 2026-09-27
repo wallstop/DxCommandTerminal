@@ -83,6 +83,28 @@
         InputMode.LegacyInputSystem;
 #endif
 
+        /// <summary>
+        ///     Whether the query field - or the inner text-input element the
+        ///     focus controller may report instead - holds panel focus. A
+        ///     closed palette does not count even if its field still holds
+        ///     focus: a field that cannot be typed into must not hold a
+        ///     character binding hostage.
+        /// </summary>
+        internal bool InputOwnsFocus
+        {
+            get
+            {
+                if (_input == null || !_isOpen)
+                {
+                    return false;
+                }
+
+                VisualElement focused =
+                    _input.panel?.focusController?.focusedElement as VisualElement;
+                return focused != null && (focused == _input || _input.Contains(focused));
+            }
+        }
+
         [Tooltip("Hotkey that opens/closes the palette (supports ctrl+ and shift+ modifiers)")]
         [SerializeField]
         public string toggleHotkey = "ctrl+space";
@@ -187,6 +209,33 @@
                     palette.Close();
                 }
             }
+        }
+
+        /// <summary>
+        ///     Reports whether any live palette's query field holds panel
+        ///     focus. A console input poll consults
+        ///     <see cref="TerminalUI.AnyConsoleFieldOwnsFocus"/> so a key that
+        ///     types text stays with the surface being typed into (see
+        ///     <see cref="InputHelpers.ProducesTypedText"/>).
+        /// </summary>
+        internal static bool AnyInputOwnsFocus()
+        {
+            int livePaletteCount = _livePalettes.Count;
+            for (int index = 0; index < livePaletteCount; ++index)
+            {
+                /*
+                    A component torn down abnormally stays in the list until
+                    its disable runs, so the sweep guards the entry the way the
+                    terminal's live sweep does.
+                 */
+                CommandPaletteUI palette = _livePalettes[index];
+                if (palette != null && palette.InputOwnsFocus)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         public void Open()
@@ -610,10 +659,28 @@
 
         private void Update()
         {
-            if (InputHelpers.IsKeyPressed(toggleHotkey, inputMode))
+            if (IsToggleHotkeyLive())
             {
                 Toggle();
             }
+        }
+
+        /*
+            A binding that types text belongs to whichever console field has
+            focus - this palette's query, or a terminal's command line - so
+            the character is typed instead of opening or closing a surface.
+         */
+        private bool IsToggleHotkeyLive()
+        {
+            if (
+                InputHelpers.ProducesTypedText(toggleHotkey)
+                && TerminalUI.AnyConsoleFieldOwnsFocus()
+            )
+            {
+                return false;
+            }
+
+            return InputHelpers.IsKeyPressed(toggleHotkey, inputMode);
         }
 
         private void LateUpdate()

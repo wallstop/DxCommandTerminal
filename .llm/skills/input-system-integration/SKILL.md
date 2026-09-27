@@ -38,6 +38,23 @@ When using PlayerInput, UNCHECK `Use Hotkeys` on the Terminal - otherwise both p
 Close -> EnterCommand -> Previous -> Next -> ToggleFull -> ToggleSmall -> AutoComplete
 (backward) -> AutoComplete (forward). PlayerInput binding order ignores this list entirely.
 
+## A character binding belongs to the field being typed into
+
+`InputHelpers.ProducesTypedText(key)` is the one decision point, and
+`TerminalKeyboardController.IsHotkeyActive` applies it to all eight checks. It
+allowlists the names that type nothing (navigation, editing, `f1`-`f24`,
+modifiers, locks, media, mouse, joystick) and counts anything else as typing, so
+an unrecognized name fails toward protecting the character; a `ctrl+` chord never
+types. The README's "Typing wins over a character binding" section is the
+user-facing wording - keep the two in step, and add rows in both directions to
+`Tests/Editor/InputHelpersTests.cs` for any rule change.
+
+Focus is read through `TerminalUI.AnyInputOwnsFocus() ||
+CommandPaletteUI.AnyInputOwnsFocus()`; a closed terminal does not count.
+`TerminalPlayerInputController` does not consult focus at all - the game owns its
+own binding there, and the console cannot read the key an action pressed. Only
+`shift+` and `ctrl+` are parsed; `cmd+`/`super+`/`alt+` never resolve to a key.
+
 ## History navigation semantics
 
 - Up/Down navigation past either end yields a blank command (no "sticking").
