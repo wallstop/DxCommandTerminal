@@ -353,6 +353,45 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
         }
 
+        /*
+            A control can carry several bindings. The gate applies per binding,
+            so a character added to the enter list types while Enter still runs
+            the command.
+         */
+        [UnityTest]
+        public IEnumerator TextBindingInTheEnterListTypesWhileEnterStillRuns()
+        {
+            yield return SpawnTerminal(open: true, withHotkeyController: true);
+            yield return WaitForFocusedInput("Sanity: the command field holds panel focus");
+
+            int runs = 0;
+            Assert.IsTrue(
+                Terminal.Shell.AddCommand(
+                    "mixedgate",
+                    _ => ++runs,
+                    minArgs: 0,
+                    maxArgs: 0,
+                    help: "test"
+                ),
+                "Sanity: the probe command registers"
+            );
+
+            _hotkeyController.BindEnterTo("enter", _hotkeyController.toggleHotkey);
+            DefaultTerminalInput.Instance.CommandText = "mixedgate";
+
+            _hotkeyController.PressedHotkey = _hotkeyController.toggleHotkey;
+            _hotkeyController.DriveUpdate();
+            Assert.AreEqual(
+                0,
+                runs,
+                "A character binding in the enter list must type while the field has focus"
+            );
+
+            _hotkeyController.PressedHotkey = "enter";
+            _hotkeyController.DriveUpdate();
+            Assert.AreEqual(1, runs, "A named binding in the same list must still run the command");
+        }
+
         [UnityTest]
         public IEnumerator TextHotkeyLeavesAFocusedPaletteAlone()
         {
@@ -737,6 +776,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             public void DriveUpdate()
             {
                 Update();
+            }
+
+            public void BindEnterTo(params string[] hotkeys)
+            {
+                _completeCommandHotkeys.Clear();
+                _completeCommandHotkeys.AddRange(hotkeys);
             }
 
             protected override bool IsHotkeyDown(string hotkey)
