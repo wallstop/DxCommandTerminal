@@ -29,11 +29,10 @@ pinning test. Highlights:
   regressions. They are guardrails, not benchmarks: do not quote their
   numbers as performance results.
 - A tripwire failure names the statistic, the sample count, the margin, and
-  the whole measured series, so a trip says which statistic crossed and by
-  how much. A readiness tripwire asserts the warm median against the budget
-  and the warm p95 against a loose multiple of it: a small sample set makes
-  p95 the second-worst sample, which one stalled sample on a shared editor
-  can cross.
+  the measured median, p95, and max, so a trip says which statistic crossed
+  and by how much. A readiness tripwire asserts the warm median against the
+  budget and the warm p95 against a loose multiple of it: with 30 samples p95
+  is the second-worst one, so two stalled samples on a shared editor cross it.
 - Editor numbers never stand in for player numbers. IL2CPP and WebGL
   behavior is validated with local build drills.
 

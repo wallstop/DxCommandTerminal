@@ -158,22 +158,29 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators.Tests
 
             Assert.True(
                 median < GateMilliseconds,
-                $"Generator execution median {median:F3} ms exceeded the "
-                    + $"{GateMilliseconds.ToString(System.Globalization.CultureInfo.InvariantCulture)} ms gate "
-                    + $"(p95 {p95:F3} ms, max {max:F3} ms)"
+                $"Generator execution tripwire crossed: statistic=median n={SampleCount} "
+                    + $"measured={median:F3} ms "
+                    + $"budget={GateMilliseconds.ToString(System.Globalization.CultureInfo.InvariantCulture)} ms "
+                    + $"margin={(GateMilliseconds - median).ToString(System.Globalization.CultureInfo.InvariantCulture)} ms "
+                    + $"| median={median:F3} ms p95={p95:F3} ms max={max:F3} ms"
             );
             Assert.True(
                 median < BaselineTripwireMilliseconds,
-                $"Generator execution median {median:F3} ms exceeded the "
-                    + $"{BaselineTripwireMilliseconds.ToString(System.Globalization.CultureInfo.InvariantCulture)} ms baseline tripwire "
+                $"Generator execution baseline tripwire crossed: statistic=median "
+                    + $"n={SampleCount} "
+                    + $"measured={median:F3} ms "
+                    + $"budget={BaselineTripwireMilliseconds.ToString(System.Globalization.CultureInfo.InvariantCulture)} ms "
+                    + $"margin={(BaselineTripwireMilliseconds - median).ToString(System.Globalization.CultureInfo.InvariantCulture)} ms "
                     + "- a flat multi-x regression can pass the 25 ms ceiling; "
-                    + $"(p95 {p95:F3} ms, max {max:F3} ms)"
+                    + $"| median={median:F3} ms p95={p95:F3} ms max={max:F3} ms"
             );
             Assert.True(
                 p95 < TripwireMilliseconds,
-                $"Generator execution p95 {p95:F3} ms exceeded the "
-                    + $"{TripwireMilliseconds.ToString(System.Globalization.CultureInfo.InvariantCulture)} ms tripwire "
-                    + $"(median {median:F3} ms, max {max:F3} ms)"
+                $"Generator execution tail tripwire crossed: statistic=p95 n={SampleCount} "
+                    + $"measured={p95:F3} ms "
+                    + $"budget={TripwireMilliseconds.ToString(System.Globalization.CultureInfo.InvariantCulture)} ms "
+                    + $"margin={(TripwireMilliseconds - p95).ToString(System.Globalization.CultureInfo.InvariantCulture)} ms "
+                    + $"| median={median:F3} ms p95={p95:F3} ms max={max:F3} ms"
             );
         }
     }

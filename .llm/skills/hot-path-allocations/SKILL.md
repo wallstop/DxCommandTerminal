@@ -108,11 +108,13 @@ first-inserted-wins for case-variant duplicates.
   heap pressure out of the p95 tail. In full-suite runs the 1,000-command readiness p95
   rode gen0 pauses past its 15 ms tripwire (isolated runs sat at ~9-11 ms) until the
   windows started collecting first (CommandDiscoveryScalingTests.MeasureReadiness).
-- A timing tripwire asserts a stable statistic, not a tail one: at 30 samples p95 is the
-  second-worst sample, so one stalled sample or a gen0 pause crosses it (issue #170).
-  Assert the median at the budget and p95 at a loose multiple of it, and name the
-  statistic, sample count, margin, and series in the failure. Never relax a budget to
-  make a run pass - fix the statistic or fix the regression.
+- A timing tripwire asserts a stable statistic, not a tail one. At n samples, p95 is the
+  `ceil(0.95 * n) - 1` index: at n=30 that is the second-worst sample, so two stalled
+  samples cross it, and at n=300 it is the 285th, which one stall cannot move. Assert
+  the median at the budget and p95 at a loose multiple of it, and name the statistic,
+  sample count, margin, and the median/p95/max series in the failure. Splitting the
+  bound is a relaxation for a 3-to-15-sample over-budget population, so say so where
+  the budget is set. Never relax a budget to make a run pass.
 - Zero-allocation claims go through `AllocationAssertions.AssertZeroAllocations` (it fails
   closed when the instrument cannot see its positive control). Never assert on raw
   `AllocatingGCMemory` yourself.

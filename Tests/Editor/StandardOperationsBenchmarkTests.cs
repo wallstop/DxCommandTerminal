@@ -157,6 +157,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             Debug.Log(
                 $"[DxCommandTerminal][Scale] op={operation} {detail} "
+                    + $"samples={report.SampleCount} "
                     + $"median={report.MedianMilliseconds:F3}ms "
                     + $"p95={report.Percentile95Milliseconds:F3}ms "
                     + $"max={report.MaximumMilliseconds:F3}ms gen0={report.Gen0Collections}"

@@ -64,8 +64,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             The warm tripwire asserts the median at the tier budget and p95
             at this multiple of it (#170). n=30 puts p95 on the 29th sorted
             sample, the second worst, so two stalled samples cross a p95
-            bound on a shared host editor; the median is an interior
-            statistic that a single stall cannot move.
+            bound; the median is an interior statistic that one stall
+            cannot move. 4x sits 4.7x above the worst single sample ever
+            recorded at the 1,000-command tier, which is the point: this leg
+            is a gross-tail bound, and the median leg is what catches a
+            whole-distribution regression.
          */
         private const float TailTripwireMultiplier = 4f;
 
@@ -83,17 +86,20 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             not ordinary scheduler jitter, and not portable across machines.
             The warm bound is split in two, because one bound cannot serve
             both audiences on a shared host (#170): the median is asserted
-            at the tier budget, and p95 at TailTripwireMultiplier times it
-            as the regression-class backstop. Splitting strengthens the
-            statement about the distribution - a distribution with half its
-            samples slow passed the old p95 bound - while a single stalled
-            sample can no longer fail the run. Session-082 series on the
-            pinned editor (2026-09-27, five runs, 1,000-command tier):
-            cold 8.598-18.130 ms (budget 40), median 4.235-4.403 ms
-            (budget 8), p95 4.476-5.040 ms, max 4.592-6.761 ms (tail bound
-            32) - the median spread is 1.7% and the tail spread is 47%, and
-            a 300-sample window in the same session carried a 13.944 ms
-            single sample against a 0.063 ms median. Measured deferred-
+            at the tier budget, and p95 at TailTripwireMultiplier times it.
+            The trade is deliberate and it is a relaxation for some
+            regressions - a 3-to-15-sample over-budget population now passes
+            where the old p95 bound caught it. What it buys is that two
+            stalled samples no longer fail the run, and the regression the
+            budget was sized against (a whole-distribution shift to ~19 ms)
+            is caught by the median leg with more room than before.
+            Session-082 series on the pinned editor (2026-09-27, five runs,
+            1,000-command tier): cold 8.598-18.130 ms (budget 40), median
+            4.235-4.403 ms (budget 8), p95 4.476-4.662 ms, max 4.592-6.761
+            ms (tail bound 32) - the median spread is 4.0% and the max
+            spread 47%, and a 300-sample window in the same session carried
+            a 13.944 ms single sample against a 0.063 ms median. Measured
+            deferred-
             binding numbers the budgets are set from: reflected tiers
             0-1,000 warm p95 ~2.6-10.6 ms (cold 2.5-11.5 ms), 10,000 tier
             warm p95 ~55 ms (cold ~87-112 ms), provider gate tier warm p95
@@ -319,6 +325,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             float warmBudgetMilliseconds
         )
         {
+            float tailBudgetMilliseconds = warmBudgetMilliseconds * TailTripwireMultiplier;
             Debug.Log(
                 $"[DxCommandTerminal][Scale] {detail} "
                     + $"assemblies={AppDomain.CurrentDomain.GetAssemblies().Length} "
@@ -326,7 +333,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     + $"warmSamples={readiness.SampleCount} "
                     + $"median={readiness.Median:F3}ms p95={readiness.Percentile95:F3}ms "
                     + $"max={readiness.Maximum:F3}ms warmBudget={warmBudgetMilliseconds:F3}ms "
-                    + $"samplesOverBudget={readiness.SamplesOver(warmBudgetMilliseconds)}"
+                    + $"tailBudget={tailBudgetMilliseconds:F3}ms "
+                    + $"overWarmBudget={readiness.SamplesOver(warmBudgetMilliseconds)} "
+                    + $"overTailBudget={readiness.SamplesOver(tailBudgetMilliseconds)}"
             );
         }
 
@@ -453,8 +462,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.Less(
                 classificationMilliseconds,
                 ClassificationTripwireMilliseconds,
-                $"Classifying {FillerAssemblyCount} filler assemblies took "
-                    + $"{classificationMilliseconds:F3} ms >= {ClassificationTripwireMilliseconds} ms"
+                $"Classification tripwire crossed: statistic=total n=1 "
+                    + $"measured={classificationMilliseconds:F3} ms "
+                    + $"budget={ClassificationTripwireMilliseconds:F3} ms "
+                    + $"margin={ClassificationTripwireMilliseconds - classificationMilliseconds:F3} ms "
+                    + $"| assemblies={FillerAssemblyCount} "
+                    + $"perAssembly={classificationMilliseconds * 1000.0 / FillerAssemblyCount:F3} us"
             );
 
             Assembly volumeAssembly = CreateVolumeAssembly(GateTierCommandCount);
@@ -542,7 +555,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             public double Median { get; }
             public double Percentile95 { get; }
             public double Maximum { get; }
-            public int SampleCount => _sortedWarmMilliseconds.Length;
+            public int SampleCount { get; }
 
             private readonly double[] _sortedWarmMilliseconds;
 
@@ -555,12 +568,18 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 Shell = shell;
                 ColdMilliseconds = coldMilliseconds;
                 _sortedWarmMilliseconds = sortedWarmMilliseconds;
+                SampleCount = sortedWarmMilliseconds.Length;
                 Median = Percentile(sortedWarmMilliseconds, 0.5);
                 Percentile95 = Percentile(sortedWarmMilliseconds, 0.95);
                 Maximum = sortedWarmMilliseconds[sortedWarmMilliseconds.Length - 1];
             }
 
-            public int SamplesOver(float budgetMilliseconds)
+            /*
+                Counts samples at or over the budget, which is the set
+                Assert.Less rejects. Takes a double so a fractional float
+                budget promotes exactly instead of comparing as a float.
+             */
+            public int SamplesOver(double budgetMilliseconds)
             {
                 int over = 0;
                 foreach (double sample in _sortedWarmMilliseconds)
