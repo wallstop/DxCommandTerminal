@@ -15,14 +15,6 @@
 
         private static readonly string[] CtrlModifiers = { "ctrl+", "control+" };
 
-        /*
-            Key names that type no character: navigation, editing, function,
-            modifier, lock, media, and IME keys. Everything else this parse
-            surface can produce is a character key, so an unrecognized name
-            counts as typing - a hotkey held back for one typing session is
-            recoverable, a swallowed character is not. A key the Input System
-            adds later therefore fails toward the character.
-         */
         private static readonly HashSet<string> NonTypedKeyNames = BuildNonTypedKeyNames();
 
         private static readonly Dictionary<string, CachedKeyName> CachedKeys = new();
@@ -474,6 +466,16 @@
             return NonTypedKeyNames.Contains(keyName);
         }
 
+        /*
+            The names that type no character, from both reachable surfaces: the
+            Input System's keyboard control names and every multi-character key
+            in KeyCodeMapping (navigation, editing, function, modifier, lock,
+            media, IME, mouse, and joystick names). Everything else the parse
+            surface can produce is a character key, so an unrecognized name
+            counts as typing - a hotkey held back for one typing session is
+            recoverable, a swallowed character is not. A key either input
+            system adds later therefore fails toward the character.
+         */
         private static HashSet<string> BuildNonTypedKeyNames()
         {
             HashSet<string> names = new(StringComparer.OrdinalIgnoreCase)
@@ -481,7 +483,9 @@
                 "alt",
                 "anykey",
                 "backspace",
+                "break",
                 "capslock",
+                "clear",
                 "cmd",
                 "command",
                 "contextmenu",
@@ -495,11 +499,17 @@
                 "enter",
                 "esc",
                 "escape",
+                "help",
                 "home",
                 "imeselected",
                 "ins",
                 "insert",
                 "keypadenter",
+                "lalt",
+                "lcmd",
+                "lcommand",
+                "lcontrol",
+                "lctrl",
                 "left",
                 "leftalt",
                 "leftarrow",
@@ -508,18 +518,46 @@
                 "leftcontrol",
                 "leftctrl",
                 "leftmeta",
+                "leftmouse",
                 "leftshift",
                 "leftsuper",
+                "leftwin",
+                "leftwindows",
+                "lmb",
+                "lshift",
+                "lwin",
                 "mediaforward",
                 "mediaplaypause",
                 "mediarewind",
                 "meta",
+                "middlemouse",
+                "mmb",
+                "mouse0",
+                "mouse1",
+                "mouse2",
+                "mouse3",
+                "mouse4",
+                "mouse5",
+                "mouse6",
+                "none",
+                "noscroll",
                 "numlock",
                 "numpadenter",
+                "pagedn",
                 "pagedown",
                 "pageup",
                 "pause",
+                "pausebreak",
+                "pgdn",
+                "pgup",
+                "print",
                 "printscreen",
+                "prtscn",
+                "ralt",
+                "rcmd",
+                "rcommand",
+                "rcontrol",
+                "rctrl",
                 "return",
                 "right",
                 "rightarrow",
@@ -529,11 +567,19 @@
                 "rightcontrol",
                 "rightctrl",
                 "rightmeta",
+                "rightmouse",
                 "rightshift",
                 "rightsuper",
+                "rightwin",
+                "rightwindows",
+                "rmb",
+                "rshift",
+                "rwin",
                 "scrolllock",
+                "select",
                 "shift",
                 "super",
+                "sysreq",
                 "tab",
                 "up",
                 "uparrow",
@@ -542,6 +588,11 @@
             for (int functionKey = 1; functionKey <= 24; ++functionKey)
             {
                 names.Add($"f{functionKey}");
+            }
+
+            for (int joystickButton = 0; joystickButton <= 19; ++joystickButton)
+            {
+                names.Add($"joystickbutton{joystickButton}");
             }
 
             return names;

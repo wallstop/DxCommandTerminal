@@ -669,8 +669,8 @@
         private bool IsToggleHotkeyLive()
         {
             if (
-                (AnyInputOwnsFocus() || TerminalUI.AnyInputOwnsFocus())
-                && InputHelpers.ProducesTypedText(toggleHotkey)
+                InputHelpers.ProducesTypedText(toggleHotkey)
+                && (AnyInputOwnsFocus() || TerminalUI.AnyInputOwnsFocus())
             )
             {
                 return false;

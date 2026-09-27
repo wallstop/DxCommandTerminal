@@ -11,6 +11,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     using UnityEngine.TestTools;
     using UnityEngine.UIElements;
     using WallstopStudios.DxCommandTerminal.Input;
+#if ENABLE_INPUT_SYSTEM
+    using UnityEngine.InputSystem;
+    using UnityEngine.InputSystem.LowLevel;
+#endif
 #if UNITY_EDITOR
     using UnityEditor;
 #endif
@@ -22,6 +26,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         palette behavior on a destroyed focus target. Real key events are
         never synthesized; the keyboard controller is driven through a
         scripted subclass.
+
+        Two subclasses appear below and they exercise different rule paths.
+        ScriptedInputController overrides every per-control check, so it also
+        bypasses the text-focus gate those checks apply (that is the point:
+        it drives control priority). HotkeyController overrides the key read
+        instead, so the gate runs unchanged.
      */
     public sealed class TerminalUITransitionTests
     {
@@ -308,9 +318,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             /*
                 Closing hides the field rather than detaching it, so a panel
-                that keeps reporting a hidden field would otherwise let a
-                stale focus report hold the console key. The property must
-                ignore it, whichever editor the leg runs on.
+                that keeps reporting a hidden field would let a stale focus
+                report hold the console key. Whatever this editor does, the key
+                has to open the terminal again.
              */
             _hotkeyController.PressedHotkey = _hotkeyController.toggleHotkey;
             _hotkeyController.DriveUpdate();
@@ -392,10 +402,52 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreEqual(1, runs, "A named binding in the same list must still run the command");
         }
 
+        /*
+            The palette runs its own poll on its own component, so this drives
+            the real thing: a queued Input System key event, no seam. The
+            second half is the control that proves the queue reached the
+            poll - without it, "the palette stayed open" would be a green that
+            means nothing.
+         */
+#if ENABLE_INPUT_SYSTEM
+        [UnityTest]
+        public IEnumerator PaletteTextToggleTypesWhileItsQueryHasFocus()
+        {
+            yield return SpawnTerminal(open: false, withPalette: true);
+
+            _palette.Open();
+            yield return null;
+            Assert.IsTrue(
+                CommandPaletteUI.AnyInputOwnsFocus(),
+                "Sanity: the palette query field holds panel focus"
+            );
+
+            _palette.toggleHotkey = "`";
+            PressBackquote();
+            yield return WaitForPaletteState(
+                true,
+                "A character toggle must not close the palette while its query has focus"
+            );
+
+            /*
+                Close the palette so nothing has focus, then press the same
+                key: it must open, which is what makes the first half mean
+                something.
+             */
+            _palette.Close();
+            yield return null;
+            PressBackquote();
+            yield return WaitForPaletteState(
+                false,
+                "Sanity: the queued key reaches the palette poll once nothing is focused"
+            );
+        }
+#endif
+
         [UnityTest]
         public IEnumerator TextHotkeyLeavesAFocusedPaletteAlone()
         {
-            yield return SpawnSharedSurface();
+            yield return SpawnTerminal(open: false, withPalette: true);
 
             _palette.Open();
             yield return null;
@@ -483,7 +535,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [UnityTest]
         public IEnumerator PaletteCloseSurvivesDestroyedFocusTarget()
         {
-            yield return SpawnSharedSurface();
+            yield return SpawnTerminal(open: false, withPalette: true);
 
             _terminal.SetState(TerminalState.OpenFull);
             yield return WaitForInputVisible("Sanity: the terminal opens on the shared document");
@@ -540,6 +592,34 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             return controller;
         }
 
+#if ENABLE_INPUT_SYSTEM
+        /*
+            The real Input System path, so the queue has to reach a component
+            poll: no seam, and a state event on the current keyboard.
+         */
+        private static void PressBackquote()
+        {
+            InputSystem.QueueStateEvent(Keyboard.current, new KeyboardState(Key.Backquote));
+        }
+#endif
+
+        private IEnumerator WaitForPaletteState(bool open, string message)
+        {
+            /*
+                The key is a one-shot state event, so waiting for the state to
+                match would pass on the pre-existing value. Let frames pass
+                instead; the control half of the test proves this many is
+                enough for the press to land.
+             */
+            const int SettleFrames = 5;
+            for (int frame = 0; frame < SettleFrames; ++frame)
+            {
+                yield return null;
+            }
+
+            Assert.AreEqual(open, _palette.IsOpen, message);
+        }
+
         private IEnumerator WaitForInputVisible(string message)
         {
             int frameBudget = FrameBudget;
@@ -572,7 +652,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.IsTrue(_terminal.IsClosed, message);
         }
 
-        private IEnumerator SpawnTerminal(bool open, bool withHotkeyController = false)
+        private IEnumerator SpawnTerminal(
+            bool open,
+            bool withHotkeyController = false,
+            bool withPalette = false
+        )
         {
 #if UNITY_EDITOR
             _panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
@@ -600,6 +684,20 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             StartTracker tracker = _terminalObject.AddComponent<StartTracker>();
             _terminalObject.SetActive(true);
             yield return new WaitUntil(() => tracker.Started);
+            if (withPalette)
+            {
+                /*
+                    A palette on the terminal's own document is the shipped
+                    arrangement, and the only one where the two surfaces can
+                    contest the same key press.
+                 */
+                _paletteObject = new GameObject("TransitionPalette");
+                _paletteObject.SetActive(false);
+                _palette = _paletteObject.AddComponent<CommandPaletteUI>();
+                _palette._uiDocument = document;
+                _paletteObject.SetActive(true);
+                yield return null;
+            }
 #else
             Assert.Ignore("Terminal UI transition coverage runs in the editor Play Mode suite.");
             yield break;
@@ -611,47 +709,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 yield return null;
                 yield return WaitForInputVisible("Sanity: the rig's terminal opens");
             }
-        }
-
-        /*
-            One panel shared by a terminal and a palette: the shipped
-            arrangement, and the only one where the two surfaces can contest
-            the same key press.
-         */
-        private IEnumerator SpawnSharedSurface()
-        {
-#if UNITY_EDITOR
-            _panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
-            GameObject documentObject = new("TransitionSharedDocument");
-            documentObject.SetActive(false);
-            UIDocument document = documentObject.AddComponent<UIDocument>();
-            document.panelSettings = _panelSettings;
-            documentObject.SetActive(true);
-            _spawnedObjects.Add(documentObject);
-
-            _terminalObject = new GameObject("TransitionFocusTerminal");
-            _terminalObject.SetActive(false);
-            _terminal = _terminalObject.AddComponent<TerminalUI>();
-            _terminal._uiDocument = document;
-            _terminal.resetStateOnInit = true;
-            _terminal.easeOutTime = 0f;
-            _terminal.easeInTime = 0f;
-            _terminal._themePack = LoadAsset<TerminalThemePack>("Packs/Themes/Medium.asset");
-            _terminal._fontPack = LoadAsset<TerminalFontPack>("Packs/Fonts/Medium.asset");
-            StartTracker tracker = _terminalObject.AddComponent<StartTracker>();
-            _terminalObject.SetActive(true);
-            yield return new WaitUntil(() => tracker.Started);
-
-            _paletteObject = new GameObject("TransitionFocusPalette");
-            _paletteObject.SetActive(false);
-            _palette = _paletteObject.AddComponent<CommandPaletteUI>();
-            _palette._uiDocument = document;
-            _paletteObject.SetActive(true);
-            yield return null;
-#else
-            Assert.Ignore("Terminal UI transition coverage runs in the editor Play Mode suite.");
-            yield break;
-#endif
         }
 
         private IEnumerator SpawnPalette()

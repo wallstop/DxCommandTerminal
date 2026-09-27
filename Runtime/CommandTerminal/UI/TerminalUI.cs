@@ -824,12 +824,10 @@
             poll leaves text-producing hotkeys alone
             (see InputHelpers.ProducesTypedText).
 
-            A closed terminal does not count even if its field still holds
-            focus: closing hides the field instead of detaching it, and a
-            hidden field receives no character, so it must not hold the
-            console key hostage after a close. On the editor this was written
-            against, hiding releases focus, so the state check is insurance
-            for a panel that keeps reporting a hidden field.
+            A closed terminal does not count, whatever the focus controller
+            still names: closing hides the field instead of detaching it, and a
+            hidden field receives no character, so it must not hold the console
+            key hostage after a close.
          */
         internal bool InputOwnsFocus
         {

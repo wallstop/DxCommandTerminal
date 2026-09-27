@@ -1717,6 +1717,31 @@
             for whole polls under session sequences (issue #74 family), so
             the marker satisfies the poll too.
          */
+        /*
+            The focus controller may report the field or the inner text-input
+            element depending on panel state, and the input poll accepts both.
+            The suite's focus waits run on the production property, so this
+            pins its two-shape contract directly.
+         */
+        [UnityTest]
+        public IEnumerator InputOwnsFocusAcceptsTheInnerTextElement()
+        {
+            yield return SpawnPalette();
+
+            _palette.Open();
+            yield return WaitForFocusedInput("Sanity: the field reports focus");
+
+            VisualElement inner = _palette._input.Q<VisualElement>("unity-text-input");
+            Assert.That(inner, Is.Not.Null, "Sanity: the field has an inner text element");
+            inner.Focus();
+            yield return null;
+
+            Assert.IsTrue(
+                _palette.InputOwnsFocus,
+                "A focused inner text element must count as the query field owning focus"
+            );
+        }
+
         private IEnumerator WaitForCaret(int expected, string message)
         {
             int frameBudget = FrameBudget;

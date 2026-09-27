@@ -40,25 +40,20 @@ Close -> EnterCommand -> Previous -> Next -> ToggleFull -> ToggleSmall -> AutoCo
 
 ## A character binding belongs to the field being typed into
 
-The keyboard path never fires a hotkey whose key types a character while a console text field
-holds panel focus. `InputHelpers.ProducesTypedText(key)` is the single decision point
-(an allowlist of the names that type nothing: navigation, editing, `f1`-`f24`, modifiers; a
-`ctrl+` chord also counts as non-typing), and `TerminalKeyboardController.IsHotkeyActive` applies
-it to all eight checks. The focus read is `TerminalUI.AnyInputOwnsFocus() ||
-CommandPaletteUI.AnyInputOwnsFocus()`; a closed terminal does not count even if a hidden field is
-still reported as focused.
+`InputHelpers.ProducesTypedText(key)` is the one decision point, and
+`TerminalKeyboardController.IsHotkeyActive` applies it to all eight checks. It
+allowlists the names that type nothing (navigation, editing, `f1`-`f24`,
+modifiers, locks, media, mouse, joystick) and counts anything else as typing, so
+an unrecognized name fails toward protecting the character; a `ctrl+` chord never
+types. The README's "Typing wins over a character binding" section is the
+user-facing wording - keep the two in step, and add rows in both directions to
+`Tests/Editor/InputHelpersTests.cs` for any rule change.
 
-Consequences worth remembering:
-
-- With the shipped defaults, `` ` `` and `shift+backtick` type their characters while the terminal
-  is open. Escape (`closeHotkey`) is how a user closes it from inside.
-- `TerminalPlayerInputController` does NOT consult focus: a game owns its own binding there, and
-  the controller cannot read which key an action pressed.
-- Only `shift+` and `ctrl+` are parsed. `cmd+`/`super+`/`alt+` prefixes never resolve to a key, so
-  such a binding never fires.
-- Rule changes belong in `ProducesTypedText` plus the table in `Tests/Editor/InputHelpersTests.cs`;
-  both directions need a row (a character key that must be handed to the field, and a non-typing
-  name that must stay live).
+Focus is read through `TerminalUI.AnyInputOwnsFocus() ||
+CommandPaletteUI.AnyInputOwnsFocus()`; a closed terminal does not count.
+`TerminalPlayerInputController` does not consult focus at all - the game owns its
+own binding there, and the console cannot read the key an action pressed. Only
+`shift+` and `ctrl+` are parsed; `cmd+`/`super+`/`alt+` never resolve to a key.
 
 ## History navigation semantics
 

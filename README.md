@@ -436,11 +436,13 @@ The only combination keys that are supported without using custom bindings via t
 
 ## Typing wins over a character binding
 
-A binding that presses a character key is left to the field being typed into. While the command line or the palette search bar has focus, pressing the key types the character and does not run the binding - so with the default `` ` `` and `shift+backtick`, those characters are typeable and the console key no longer closes an open console (Escape still does).
+A binding that presses a character key is left to the field being typed into. While the command line or the palette search bar has focus, pressing the key types the character and does not run the binding - so with the defaults `` ` `` (toggle) and `` #` `` (full), those characters are typeable and the console key no longer closes an open console.
 
-Bindings that press no character keep working while you type. That covers every named key (arrows, Enter, Tab, Escape, Backspace, function keys, modifiers) and any `ctrl+` chord. `TerminalKeyboardController` only reads `shift+` and `ctrl+`; a `cmd+`/`super+`/`alt+` prefix is not parsed, so such a binding never fires.
+Bindings that press no character keep working while you type: every named key the binding syntax resolves to (arrows, Enter, Tab, Escape, Backspace, function keys, modifiers, lock, media, and mouse keys) and any `ctrl+` chord. `TerminalKeyboardController` only reads `shift+` and `ctrl+`; a `cmd+`/`super+`/`alt+` prefix is not parsed, so such a binding never fires.
 
-PlayerInput bindings are yours to route: the keyboard controller cannot read what a bound action pressed, so a `ToggleSmall` action bound to a single key still fires while a field has focus.
+Keep `closeHotkey` on a key that presses no character (Escape by default): a character bound to it cannot close the terminal while the field has focus. Escape, or any `ctrl+` chord, closes from inside.
+
+PlayerInput bindings are yours to route: the keyboard controller reads the binding string, not the key an action pressed, so a `ToggleSmall` action bound to a single key still fires while a field has focus.
 
 # New Input System
 DxCommandTerminal is now fully integrated with Unity's new Input System, if it is found in the project and enabled. 

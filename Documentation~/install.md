@@ -20,7 +20,7 @@ DxCommandTerminal is a Unity package. It supports Unity 2021.3 and newer.
    Settings at the package's `TerminalSettings` asset (or set your panel's
    Theme Style Sheet to `Styles/TerminalThemeSettings-Base.tss`).
 3. Enter Play Mode. Press `` ` `` (backtick) to toggle the terminal,
-   `shift+backtick` for the full-height window. Once the terminal is open,
+   `` #` `` for the full-height window. Once the terminal is open,
    those keys type their characters instead, and Escape closes the terminal.
 
 Every action is rebindable, and the [new Input System](https://docs.unity3d.com/Manual/InputSystem.html)

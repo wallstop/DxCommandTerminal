@@ -219,6 +219,11 @@ field write is frame-coupled and flakes under session sequences
   `bool?` override pins focus without a panel, and leaving it null reads live focus
   and so covers the shipped wiring. A real poll is edge-triggered, so a simulated
   press is consumed by the first read (see `TerminalUITransitionTests.HotkeyController`).
+- A component that polls on its own `Update` (the palette's toggle) can be driven
+  for real with `InputSystem.QueueStateEvent(Keyboard.current, new KeyboardState(Key.Backquote))`
+  under `#if ENABLE_INPUT_SYSTEM` - no production seam, and one control half that
+  proves the queue reached the poll. Wait fixed frames for a one-shot state event;
+  polling for the expected state passes on the value it started with.
 - A hotkey frame is observed twice: by the controller's own `Update`, and by the
   terminal's field-change handler through `IInputHandler.ShouldHandleInputThisFrame`.
   The controller must sit on the terminal's GameObject for the `GetComponents<IInputHandler>()`

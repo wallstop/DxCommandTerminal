@@ -77,6 +77,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [TestCase("shift", false)]
         [TestCase("numpaddivide", true)]
         [TestCase("oem1", true)]
+        [TestCase("pgup", false)]
+        [TestCase("prtscn", false)]
+        [TestCase("mouse4", false)]
+        [TestCase("lshift", false)]
+        [TestCase("leftwindows", false)]
+        [TestCase("lmb", false)]
         [TestCase("", false)]
         [TestCase(null, false)]
         public void ProducesTypedTextMatchesTheBindingsThatTypeCharacters(string key, bool expected)
