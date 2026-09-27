@@ -108,16 +108,18 @@ first-inserted-wins for case-variant duplicates.
   heap pressure out of the p95 tail. In full-suite runs the 1,000-command readiness p95
   rode gen0 pauses past its 15 ms tripwire (isolated runs sat at ~9-11 ms) until the
   windows started collecting first (CommandDiscoveryScalingTests.MeasureReadiness).
-- When p95 is effectively a maximum (roughly n < 100), a timing tripwire must
-  assert a stable statistic instead. At n samples, p95 is the `ceil(0.95 * n) - 1`
-  index: at n=30 that is the second-worst sample, so two stalled samples cross it;
-  at n=300 it is the 285th, which one stall cannot move, so a p95 bound there is
-  already sound. Under that threshold, assert the median at the budget and p95 at a
-  loose multiple of it, and name the statistic, sample count, margin, and the
-  median/p95/max series in the failure. State the cost where the budget is set: a
-  split tolerates 15 of 30 samples over budget where a p95 bound tolerates 1, and
-  that loosening is steepest where the old bound had the least headroom. Never
-  relax a budget to make a run pass.
+- When a tripwire asserts p95 over a window where p95 is effectively a maximum
+  (roughly n < 100), it must assert a stable statistic instead. At n samples, p95
+  is the `ceil(0.95 * n) - 1` index: at n=30 that is the second-worst sample, so
+  two stalled samples cross it, and the 30th sample is never read at all; at n=300
+  it is the 285th, which one stall cannot move, so a p95 bound there is already
+  sound. Under that threshold, assert the median at the budget and p95 at a loose
+  multiple of it, and name the statistic, sample count, margin, and the
+  median/p95/max series in the failure. State the cost where the budget is set: at
+  n=30 a split tolerates 15 of 30 samples over budget where a p95 bound tolerates
+  1, and a fixed multiplier leaves the least room over what a tier actually
+  measures where that tier's headroom was tightest. Never relax a budget to make
+  a run pass.
 - Zero-allocation claims go through `AllocationAssertions.AssertZeroAllocations` (it fails
   closed when the instrument cannot see its positive control). Never assert on raw
   `AllocatingGCMemory` yourself.

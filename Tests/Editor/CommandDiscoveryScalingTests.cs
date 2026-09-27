@@ -22,8 +22,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         (issue #36's multi-second stalls), not the plan's 5 ms readiness
         gate, which stays a pinned-environment measurement. Each warm
         budget is asserted twice - on the median, and on a loose p95 bound
-        for gross tail blowups - so two stalled samples cannot fail a
-        shared host editor (#170). Editor-only: players cannot emit IL.
+        for gross tail blowups - so two stalled samples under 4x the budget
+        cannot fail a shared host editor (#170). Editor-only: players cannot
+        emit IL.
 
         Filler assemblies are dynamic, so classification exercises the
         IsDynamic skip rather than metadata reads; the live editor domain
@@ -64,12 +65,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             at this multiple of it (#170). n=30 puts p95 on the 29th sorted
             sample, the second worst, so two stalled samples cross a p95
             bound; the median is an interior statistic that needs 16 stalls
-            to move. 4x sits 4.7x above the worst single sample ever
-            recorded at the 1,000-command tier, which is the point: this leg
-            is a gross-tail bound, and the median leg is what catches a
-            whole-distribution regression. It is a 4x loosening at every
-            tier; see the budget comment for what that costs where the old
-            bound was closest.
+            to move. 4x is 4.7x above the worst sample in session-082's
+            five-run series and ~3x above the worst 1,000-tier warm p95 ever
+            recorded (10.6 ms, session-041, before the session-044
+            classification memo). It is a 4x loosening at every tier; see the
+            budget comment for what that costs where the old bound was
+            closest.
          */
         private const float TailTripwireMultiplier = 4f;
 
@@ -83,39 +84,47 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             catch the #36-class broad-scan regressions and the return of
             eager per-command Delegate.CreateDelegate binding at readiness
             (measured warm p95 ~19 ms at the 1,000-command tier, over the
-            then-15 ms tripwire - still 2x over the tightened 8 ms budget) -
+            then-15 ms tripwire - still 2.4x over the tightened 8 ms budget) -
             not ordinary scheduler jitter, and not portable across machines.
             The warm bound is split in two, because one bound cannot serve
             both audiences on a shared host (#170): the median is asserted
             at the tier budget, and p95 at TailTripwireMultiplier times it.
-            This is a strict relaxation at every tier and it is disclosed
-            here rather than buried. The old bound tolerated 1 of 30
-            samples at or over budget; the split tolerates 15 of 30, plus
-            one more anywhere up to 4x over. So a 2-to-15-sample
-            over-budget population that used to fail now passes, and the
-            top two tiers lose the most: at the 10,000-command tier the
-            tail leg moves from 150 ms to 600 ms against a measured 52 ms
-            p95, so only a 2-of-30 population past 11x trips it, and the
+            This is a strict relaxation at every tier, disclosed here rather
+            than buried. The old bound tolerated 1 of 30 samples at or over
+            budget. The split tolerates 15 of 30, of which at most one may sit
+            past 4x - and that one is unbounded, because p95 is the 29th of
+            30 and never reads the 30th. So the 2nd through 15th
+            over-budget sample, and one arbitrarily large sample, now pass
+            where the old bound caught them.
+            The 1,000- and 10,000-command tiers lose the most: they had the
+            least old-bound headroom (1.78x and 2.88x). At the 10,000 tier
+            the tail leg moves from 150 ms to 600 ms against a measured 52 ms
+            p95, so only a 2-of-30 population past 11.5x trips it, and the
             median leg needs 16 of 30. That tier's warm tail is documented
             allocator/GC dominated, so a 4x loosening there is the cost of
             the same change that stops the stall.
-            What the split buys is narrower than "more headroom": the
-            median leg's headroom is 1.82x on the worst observed median
-            (4.403 ms), so a host-wide slowdown of ~1.9x still trips it,
-            exactly as it tripped #170. Only 1-2 stalled samples become
-            survivable. The regression the budget was sized against (a
-            whole-distribution shift to ~19 ms) is caught by the median leg
-            at the same 8 ms threshold, on a statistic that needs 16 stalls
-            to move instead of 2.
-            Session-082 series on the pinned editor (2026-09-27, five runs,
-            1,000-command tier): cold 8.598-18.130 ms (budget 40), median
-            4.235-4.403 ms (budget 8), p95 4.476-4.662 ms, max 4.592-6.761
-            ms (tail bound 32) - the median spread is 4.0% and the max
-            spread 47%, and a 300-sample window in the same session carried
-            a 13.944 ms single sample against a 0.063 ms median. Measured
-            deferred-
-            binding numbers the budgets are set from: reflected tiers
-            0-1,000 warm p95 ~2.6-10.6 ms (cold 2.5-11.5 ms), 10,000 tier
+            What the split buys is narrower than "more headroom": the median
+            leg's headroom is 1.82x on the worst median in session-082's
+            series, so a host-wide slowdown of 1.82x or more still trips it.
+            Whether that is what tripped #170 is unrecoverable - the original
+            failure line was lost with the editor's console ring buffer and
+            printed no median (#173). The regression the budget was sized
+            against (a whole-distribution shift to ~19 ms) is caught by the
+            median leg at the same 8 ms threshold, on a statistic that needs
+            16 stalls to move instead of 2.
+            Session-082 series on the pinned editor (2026-09-27; four
+            filtered runs plus one inside a 363-test full EditMode run; the
+            1,000-command reflected tier): cold 8.598-18.130 ms (budget 40),
+            median 4.235-4.403 ms (budget 8), p95 4.476-4.662 ms, max
+            4.592-6.761 ms (tail bound 32) - the median spread is 4.0% and
+            the max spread 47%. Separately, a 300-sample window in that
+            session carried a 13.944 ms single sample against a 0.063 ms
+            median in SceneObjectCompletionScalingTests (objects=100,
+            token='DxS') - a different suite and tier, quoted only as this
+            host's stall scale. Measured deferred-binding numbers the
+            budgets are set from: reflected tiers
+            0-1,000 warm p95 ~2.6-10.6 ms (cold 2.5-11.5 ms; the small tiers
+            settle at 0.3-0.6 ms), 10,000 tier
             warm p95 ~55 ms (cold ~87-112 ms), provider gate tier warm p95
             ~9.1-11.5 ms (cold ~14-16 ms), inflated-domain gate tier warm
             p95 ~6.5-7.8 ms (cold ~18-20 ms).

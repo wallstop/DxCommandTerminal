@@ -42,6 +42,8 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators.Tests
         private const int ReferenceCommandCount = 1000;
         private const int WarmupRuns = 20;
         private const int SampleCount = 1000;
+        private const string F3 = "F3";
+
         private const double GateMilliseconds = 25.0;
         private const double BaselineTripwireMilliseconds = 12.0;
         private const double TripwireMilliseconds = 60.0;
@@ -159,28 +161,28 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators.Tests
             Assert.True(
                 median < GateMilliseconds,
                 $"Generator execution tripwire crossed: statistic=median n={SampleCount} "
-                    + $"measured={median:F3} ms "
-                    + $"budget={GateMilliseconds:F3} ms "
-                    + $"margin={GateMilliseconds - median:F3} ms "
-                    + $"| median={median:F3} ms p95={p95:F3} ms max={max:F3} ms"
+                    + $"measured={median.ToString(F3, System.Globalization.CultureInfo.InvariantCulture)} ms "
+                    + $"budget={GateMilliseconds.ToString(F3, System.Globalization.CultureInfo.InvariantCulture)} ms "
+                    + $"margin={(GateMilliseconds - median).ToString(F3, System.Globalization.CultureInfo.InvariantCulture)} ms "
+                    + $"| median={median.ToString(F3, System.Globalization.CultureInfo.InvariantCulture)} ms p95={p95.ToString(F3, System.Globalization.CultureInfo.InvariantCulture)} ms max={max.ToString(F3, System.Globalization.CultureInfo.InvariantCulture)} ms"
             );
             Assert.True(
                 median < BaselineTripwireMilliseconds,
                 $"Generator execution baseline tripwire crossed: statistic=median "
                     + $"n={SampleCount} "
-                    + $"measured={median:F3} ms "
-                    + $"budget={BaselineTripwireMilliseconds:F3} ms "
-                    + $"margin={BaselineTripwireMilliseconds - median:F3} ms "
+                    + $"measured={median.ToString(F3, System.Globalization.CultureInfo.InvariantCulture)} ms "
+                    + $"budget={BaselineTripwireMilliseconds.ToString(F3, System.Globalization.CultureInfo.InvariantCulture)} ms "
+                    + $"margin={(BaselineTripwireMilliseconds - median).ToString(F3, System.Globalization.CultureInfo.InvariantCulture)} ms "
                     + "- a flat multi-x regression can pass the 25 ms ceiling; "
-                    + $"| median={median:F3} ms p95={p95:F3} ms max={max:F3} ms"
+                    + $"| median={median.ToString(F3, System.Globalization.CultureInfo.InvariantCulture)} ms p95={p95.ToString(F3, System.Globalization.CultureInfo.InvariantCulture)} ms max={max.ToString(F3, System.Globalization.CultureInfo.InvariantCulture)} ms"
             );
             Assert.True(
                 p95 < TripwireMilliseconds,
                 $"Generator execution tail tripwire crossed: statistic=p95 n={SampleCount} "
-                    + $"measured={p95:F3} ms "
-                    + $"budget={TripwireMilliseconds:F3} ms "
-                    + $"margin={TripwireMilliseconds - p95:F3} ms "
-                    + $"| median={median:F3} ms p95={p95:F3} ms max={max:F3} ms"
+                    + $"measured={p95.ToString(F3, System.Globalization.CultureInfo.InvariantCulture)} ms "
+                    + $"budget={TripwireMilliseconds.ToString(F3, System.Globalization.CultureInfo.InvariantCulture)} ms "
+                    + $"margin={(TripwireMilliseconds - p95).ToString(F3, System.Globalization.CultureInfo.InvariantCulture)} ms "
+                    + $"| median={median.ToString(F3, System.Globalization.CultureInfo.InvariantCulture)} ms p95={p95.ToString(F3, System.Globalization.CultureInfo.InvariantCulture)} ms max={max.ToString(F3, System.Globalization.CultureInfo.InvariantCulture)} ms"
             );
         }
     }
