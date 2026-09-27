@@ -17,10 +17,11 @@
 
         /*
             Key names that type no character: navigation, editing, function,
-            and modifier keys. Everything else this parse surface can produce
-            is a character key, so an unrecognized name counts as typing - a
-            hotkey held back for one typing session is recoverable, a
-            swallowed character is not.
+            modifier, lock, media, and IME keys. Everything else this parse
+            surface can produce is a character key, so an unrecognized name
+            counts as typing - a hotkey held back for one typing session is
+            recoverable, a swallowed character is not. A key the Input System
+            adds later therefore fails toward the character.
          */
         private static readonly HashSet<string> NonTypedKeyNames = BuildNonTypedKeyNames();
 
@@ -478,9 +479,12 @@
             HashSet<string> names = new(StringComparer.OrdinalIgnoreCase)
             {
                 "alt",
+                "anykey",
                 "backspace",
+                "capslock",
                 "cmd",
                 "command",
+                "contextmenu",
                 "control",
                 "ctrl",
                 "del",
@@ -492,6 +496,7 @@
                 "esc",
                 "escape",
                 "home",
+                "imeselected",
                 "ins",
                 "insert",
                 "keypadenter",
@@ -505,10 +510,16 @@
                 "leftmeta",
                 "leftshift",
                 "leftsuper",
+                "mediaforward",
+                "mediaplaypause",
+                "mediarewind",
                 "meta",
+                "numlock",
                 "numpadenter",
                 "pagedown",
                 "pageup",
+                "pause",
+                "printscreen",
                 "return",
                 "right",
                 "rightarrow",
@@ -520,6 +531,7 @@
                 "rightmeta",
                 "rightshift",
                 "rightsuper",
+                "scrolllock",
                 "shift",
                 "super",
                 "tab",
