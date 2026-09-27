@@ -21,6 +21,14 @@ talk to that endpoint. See `.devcontainer/README.md` for the full picture and
 | `install-capture` | host | Copy the editor dev tools (`DxTerminalStateCapture.cs.txt`, `DxTerminalTestRunReporter.cs.txt`) to `<project>/Assets/Editor/` (backs up prior copies). |
 | `capture` | either | Probe, install when possible, refresh, invoke capture, poll to completion. |
 
+Every command that reads editor state or starts a test run first asks the editor to
+import and compile what changed on disk, then waits for it. The `Assets/Refresh` menu
+item answers success without importing a changed script under `Packages/`, so a
+capture or a leg taken through it reports the assembly the editor already had - a
+green report on the previous code, which no caller can detect. Ask for the compile,
+not just the import: a refresh that finds a change only schedules it, and the wait
+that follows would otherwise land before it starts.
+
 ## Ports and discovery
 
 - The bridge binds `0.0.0.0` and defaults to a **deterministic per-project port**:
@@ -136,5 +144,31 @@ bridge (`test_status` plus a run key). The claim path replaces that poll, not th
 ## Tests
 
 ```bash
-npm test   # node --test tooling~/scripts/mcp/__tests__/ (dotenv, ports, configs, capture paths)
+npm test            # the node suite: dotenv, ports, configs, capture paths, claim decoding
+npm run mcp:grammar # compiles the test run reporter and checks its claim grammar
 ```
+
+`DxTerminalTestRunReporter` is C# that only ever compiled inside a Unity project, so
+nothing in CI ran it and its claim grammar was held up by pins read out of its own
+source text. `mcp:grammar` links that file into a Unity-free project
+(`grammar/DxTerminalClaimGrammar.csproj`, `LangVersion 9.0` because 2021.3 is the
+package minimum),
+drives it through the callbacks a real run uses, and decodes every claim it wrote
+with `parseRunClaim`:
+
+- the file names both sides share, compared rather than read out of the source;
+- the acknowledgement, the refusal, the green run, the cap and its remainder, the
+  attribution across a domain reload, and a walk that throws degrading to counters;
+- a generated corpus - every printable ASCII character, plus the no-break space, em
+  space, line separator, paragraph separator, surrogate pair and bare percent - that
+  must come back name for name.
+
+The stand-in for the Unity types the reporter uses is hand written
+(`grammar/UnityStubs.cs`) and declares only members the real API has, so a new
+member is a compile error until it is declared and a member the editor does not
+have cannot be reached. The seams the harness needs - a project root, the warnings
+raised, the callbacks registered - are on a type the reporter cannot name, so every
+mirrored type carries nothing the editor lacks. It cannot answer whether a real
+editor accepts the file on a given version: that is the clean-project matrix
+(issue #164), which compiles both dev tools in a real project. The harness runs with
+invariant globalization, so a formatting culture is not observable there either.

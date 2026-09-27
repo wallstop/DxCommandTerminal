@@ -114,15 +114,16 @@ metadata:
 ## Driving tests from agents
 
 After editing files outside Unity, confirm the editor compiled the intended
-content before trusting a run: the host sync can lag, and stale assemblies
-produce misleading failures. Check a canary (a log line, an assert message, or a
-shifted line number in the failure stack) against the current file.
+content before trusting a run: the host sync can lag, and a stale assembly
+produces a green report on the previous code.
 
-`npm run unity:capture` does **not** recompile. Its refresh prefers
-`menu: Assets/Refresh`, which answers without importing a changed script under
-`Packages/`, so a capture after an edit still reports `isCompiling: false` and
-`idle: true` while the assembly is stale (#168). The bridge has no
-force-recompile path today, so call it over MCP yourself:
+`npm run unity:tests` and `npm run unity:capture` both ask the editor to import
+and compile what changed on disk, then wait for it, so neither reads the
+assembly it already had. The request is made in script because
+`menu: Assets/Refresh` answers success without importing a changed script under
+`Packages/` (#168). Driving the editor yourself over MCP means asking for the
+compile, not just the import - a refresh that finds a change only schedules it,
+so an idle check can land before it starts:
 
 ```js
 "UnityEditor.AssetDatabase.Refresh();"

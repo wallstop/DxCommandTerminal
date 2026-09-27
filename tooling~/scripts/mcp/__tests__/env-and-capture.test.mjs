@@ -9,15 +9,13 @@ import {
   captureOutputDir,
   captureInvocationExpression,
   ensureCaptureScripts,
-  parseRunClaim,
   evalResultText,
   evalFailure,
   evalAnswerIsTrue,
   evalAnswerIsFalse,
   CAPTURE_PACKAGE_NAME,
-  RUN_CLAIM_FILE,
-  RUN_REQUEST_FILE,
-  RUN_UNATTRIBUTED_TOKEN
+  SCRIPT_REFRESH_EXPRESSION,
+  refreshScripts
 } from "../unity-mcp.mjs";
 import fs from "node:fs";
 import os from "node:os";
@@ -72,134 +70,13 @@ test("capture script source lives outside Unity compilation", () => {
   assert.ok(fs.existsSync(source), `${source} must exist`);
 });
 
-test("the reporter and the claim decoder agree on names, heads, and fields", () => {
-  // The writer is C# that only compiles inside a host project, so a renamed
-  // field on either side is invisible to every other test: the reader would wait
-  // out the start grace and then fail with a false diagnosis. Pin both sides
-  // here instead.
-  const reporter = fs.readFileSync(captureScriptFiles(REPO_ROOT)[1].source, "utf8");
-  for (const name of [RUN_CLAIM_FILE, RUN_REQUEST_FILE, "test-run-active.txt"]) {
-    assert.match(reporter, new RegExp(`"${name}"`, "u"), `${name} must be named in the reporter`);
-  }
-  assert.match(reporter, /RUN_UNATTRIBUTED_TOKEN|"none"/u, "the unattributed token must be in the reporter");
-
-  for (const head of ["running", "did-not-run", "pass="]) {
-    assert.ok(reporter.includes(head), `the reporter must write a ${head} claim`);
-  }
-  // Every field the decoder reads, and the ones it only forwards to a human.
-  for (const field of [
-    "token=",
-    "mode=",
-    "reason=",
-    "pass=",
-    "fail=",
-    "failed-names=",
-    "skipped=",
-    "inconclusive=",
-    "duration=",
-    "started=",
-    "finished="
-  ]) {
-    assert.ok(reporter.includes(field), `the reporter must write ${field}`);
-  }
-  // The field name, where the reporter actually writes it. The loop above is
-  // satisfied by the header comment, so a renamed field would slip through it
-  // and the reader's `fields.get("failed-names")` would quietly read no names.
-  assert.match(reporter, /return " failed-names=" \+ builder;/u);
-  // A round trip through the decoder: the shape the reporter writes must decode
-  // as a finished run with the editor's own counters, and a red run must decode
-  // into the names it carries.
-  const claim = parseRunClaim(
-    "pass=581 fail=2 skipped=1 inconclusive=0 duration=12.595 token=t-1 mode=PlayMode finished=x"
-  );
-  assert.deepEqual(claim.summary, {
-    total: 584,
-    passed: 581,
-    failed: 2,
-    skipped: 1,
-    inconclusive: 0,
-    failedNames: [],
-    failedMore: 0
-  });
-
-  const red = parseRunClaim(
-    "pass=361 fail=7 skipped=0 inconclusive=0 duration=9.1 token=t-2 mode=EditMode "
-      + "failed-names=Wallstop.A.One,Wallstop.B.Two"
-      // %20 is a space, %E2%80%83 is U+2003: the name survives the line intact.
-      + ',Wallstop.C.Three(%22a%20b%22),Wallstop.C.Four(%E2%80%83) failed-more=3'
-  );
-  assert.deepEqual(red.summary.failedNames, [
-    "Wallstop.A.One",
-    "Wallstop.B.Two",
-    'Wallstop.C.Three("a b")',
-    "Wallstop.C.Four(\u2003)"
-  ]);
-  assert.equal(red.summary.failedMore, 3);
-
-  /*
-      The reporter's contract, at its declarations and at its use sites. Nothing
-      in this repository can run the reporter's own C# - issue #164 is the
-      follow-up that would compile it in CI - so a renamed separator, a moved cap,
-      a byte-wise encoder or a dead gate would reach a developer machine with
-      nothing red. These pins cost a behavior-preserving refactor its test suite;
-      that tradeoff belongs next to them, not only in a review.
-
-      Each of these is a value the reader also hard-codes, so disagreement between
-      the two files is a bug on either side.
-   */
-  assert.match(reporter, /private const char FailureSeparator = ',';/u);
-  assert.match(reporter, /builder\.Append\(FailureSeparator\)/u);
-  assert.match(reporter, /private const int MaxReportedFailures = 10;/u);
-  assert.match(reporter, /MaxReportedFailures <= names\.Count/u);
-  assert.match(reporter, /if \(AllowedNameCharacter\(character\)\)/u);
-  // The byte-wise cast is the whole reason U+2003 encodes to %E2%80%83 and not
-  // to %2003, which would decode as a space and "03".
-  assert.match(reporter, /char character = \(char\)value;/u);
-  /*
-      The escape, and the cap count, are the only two values the reporter puts
-      onto the line without percent-encoding them. Both carry the invariant
-      culture, so neither depends on the host's locale.
-   */
-  assert.match(
-    reporter,
-    /\.Append\('%'\)\.Append\(value\.ToString\("X2", CultureInfo\.InvariantCulture\)\)/u
-  );
-  assert.match(reporter, /\.Append\(" failed-more="\)/u);
-  assert.match(reporter, /\.Append\(unnamed\.ToString\(CultureInfo\.InvariantCulture\)\)/u);
-  const readme = fs.readFileSync(path.join(REPO_ROOT, "tooling~", "scripts", "mcp", "README.md"), "utf8");
-  assert.match(readme, /capped at ten\b/u, "the README must state the reporter's cap");
-
-  /*
-      The reporter's name allowlist is the only thing standing between a test
-      name and a broken claim line: the line is space separated, the fields are
-      key=value, and the reader splits the names on a comma. A newline, a tab, or
-      a no-break space would silently truncate the field, so the allowlist is
-      pinned by its exact contents - not by a list of characters believed to be
-      dangerous, which is a list that has to be kept up to date by hand.
-
-      Nothing in this repository can run the reporter's own C#, so the invariant
-      is pinned on its source (issue #164 is the follow-up that would compile it
-      in CI instead).
-   */
-  const start = reporter.indexOf("private static bool AllowedNameCharacter");
-  assert.notEqual(start, -1, "the reporter must hold an AllowedNameCharacter method");
-  // The method, not the rest of the file: the literals after it belong to other
-  // code, and a doc comment with an apostrophe in it would be read as a literal.
-  const end = reporter.indexOf("\n        }\n", start);
-  assert.notEqual(end, -1, "AllowedNameCharacter must be a method at eight-space indent");
-  const allowlist = reporter.slice(start, end);
-  // Every character literal in it, escape sequences included, so a `'\n'`, a
-  // `'\t'` or a `'\u00a0'` cannot slip past. What is left is the ASCII
-  // punctuation a test name is built from plus the six range endpoints. This
-  // pins the allowlist, not the encoder: a numeric widening expressed as a hex
-  // literal would pass here, which is the gap #164 closes.
-  assert.deepEqual(
-    [...new Set(allowlist.match(/'(?:\\.|[^'\\])*'/gu) ?? [])].sort(),
-    ["'('", "')'", "'.'", "'0'", "'9'", "'A'", "'Z'", "'['", "']'", "'_'", "'a'", "'z'"],
-    "only ASCII letters, digits, and the punctuation a test name is built from may pass through"
-  );
-});
-
+/*
+    The reporter's claim grammar is not pinned here. It is driven through the
+    callbacks a real run uses and its claims are decoded with the real reader:
+    `npm run mcp:grammar`, and the `devtool-grammar` CI job. The reader's own
+    states (a torn line, a counter that is not a count, a refusal) are tabulated
+    in tests-command.test.mjs.
+ */
 /*
     The same class in the other dev tool, which the reporter's pins do not
     cover. `DxTerminalStateCapture` has no node-side reader for its output, so
@@ -224,6 +101,123 @@ test("the state capture asks a category question, not a hand-written range", () 
   // The console file is one entry per line, so the message goes through the
   // same filter rather than being appended raw.
   assert.match(capture, /\.Append\(OneLine\(message\)\)/u);
+});
+
+test("a script refresh is asked for in script, and asks for the compile too", () => {
+  /*
+      Measured on a host editor with auto refresh switched off (issue #168):
+      `menu: Assets/Refresh` answered success, the editor went idle, and
+      Library/ScriptAssemblies kept the assembly it already had. A test leg
+      without a refresh then named a test that no longer existed in the source.
+      Both statements are load-bearing: the import finds the change, and the
+      compile request is what the wait after it is for.
+   */
+  assert.match(SCRIPT_REFRESH_EXPRESSION, /UnityEditor\.AssetDatabase\.Refresh\(\);/u);
+  assert.match(
+    SCRIPT_REFRESH_EXPRESSION,
+    /UnityEditor\.Compilation\.CompilationPipeline\.RequestScriptCompilation\(\);/u
+  );
+  // The eval compiler takes a statement list, so every statement ends here.
+  const statements = SCRIPT_REFRESH_EXPRESSION.split(";").filter((part) => part.trim().length > 0);
+  assert.equal(statements.length, 2, `two statements, got: ${SCRIPT_REFRESH_EXPRESSION}`);
+});
+
+test("the refresh is requested before the idle wait, and a busy editor is waited out", async () => {
+  /*
+      The order is the fix. The import and the compile request have to reach the
+      editor before anything asks whether it is idle, and the wait after it has to
+      survive an editor that is busy - which a compile that was only just
+      scheduled looks like. Neither fact is visible to a reader of the source, and
+      a command that dropped either step is the regression this gate exists for.
+   */
+  const answered = (text) => ({ call: { content: [{ text }] } });
+  let clock = 0;
+  const tick = () => {
+    clock += 1_000;
+    return clock;
+  };
+
+  const asked = [];
+  let probes = 0;
+  await refreshScripts(
+    (expression) => {
+      asked.push(expression);
+      if (SCRIPT_REFRESH_EXPRESSION === expression) return answered("null");
+      // Busy once, then idle: a compile that has only just been scheduled.
+      probes += 1;
+      return answered(probes === 1 ? "true" : "false");
+    },
+    60_000,
+    tick,
+    () => Promise.resolve()
+  );
+
+  assert.equal(asked[0], SCRIPT_REFRESH_EXPRESSION, "the refresh must be asked for first");
+  assert.equal(asked.length, 3, `refresh, then two probes, got: ${asked.length}`);
+
+  // A refused call is the editor holding its main thread, which is what a cold
+  // compile looks like. It must be asked again rather than ending the command.
+  const retried = [];
+  await refreshScripts(
+    (expression) => {
+      retried.push(expression);
+      if (retried.length === 1) throw new Error("Main thread operation timed out after 5000ms");
+      return answered(SCRIPT_REFRESH_EXPRESSION === expression ? "null" : "false");
+    },
+    60_000,
+    tick,
+    () => Promise.resolve()
+  );
+  assert.equal(
+    retried.filter((expression) => SCRIPT_REFRESH_EXPRESSION === expression).length,
+    2,
+    "a refused refresh must be asked again"
+  );
+
+  /*
+      A refresh that is never accepted is the failure the whole command exists to
+      avoid: the editor is still on the assembly it had, and the caller cannot
+      see that. So the command ends, and it says why.
+   */
+  let refusals = 0;
+  await assert.rejects(
+    refreshScripts(
+      () => {
+        refusals += 1;
+        throw new Error("Main thread operation timed out after 5000ms");
+      },
+      60_000,
+      tick,
+      () => Promise.resolve()
+    ),
+    /refused the script refresh/u
+  );
+  assert.ok(1 < refusals, "a refused refresh must be asked again before giving up");
+
+  // A reported failure is the editor's own answer, and asking again would only
+  // repeat it, so it is not retried.
+  let reported = 0;
+  await assert.rejects(
+    refreshScripts(
+      () => {
+        reported += 1;
+        return {
+          call: {
+            content: [
+              {
+                text: '{"success":false,"errorDetails":{"code":-1},"error":"Runtime Error"}'
+              }
+            ]
+          }
+        };
+      },
+      60_000,
+      tick,
+      () => Promise.resolve()
+    ),
+    /script refresh failed/u
+  );
+  assert.equal(reported, 1, "a reported failure must not be retried");
 });
 
 test("both editor dev tools install together, and a re-install is a no-op", () => {

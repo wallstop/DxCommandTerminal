@@ -996,7 +996,6 @@ test("a busy editor that refuses the idle probe is waited out, not failed", asyn
   ];
 
   await waitForTestIdle(
-    null,
     () => answers[Math.min(probes++, answers.length - 1)](),
     60_000,
     () => clock
@@ -1005,7 +1004,6 @@ test("a busy editor that refuses the idle probe is waited out, not failed", asyn
 
   await assert.rejects(
     waitForTestIdle(
-      null,
       () => {
         throw new Error("Main thread operation timed out after 5000ms");
       },

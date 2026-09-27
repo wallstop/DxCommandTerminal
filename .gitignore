@@ -48,3 +48,7 @@ tooling~/compat/obj/
 
 # Local preflight result cache
 tooling~/scripts/.preflight-cache/
+
+# Dev tool grammar gate build state (tooling~/scripts/mcp/grammar; rebuilt by npm run mcp:grammar)
+tooling~/scripts/mcp/grammar/bin/
+tooling~/scripts/mcp/grammar/obj/
