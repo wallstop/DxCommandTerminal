@@ -1762,6 +1762,13 @@ export async function runBridge(options) {
 export const CAPTURE_PACKAGE_NAME = "com.wallstop-studios.dxcommandterminal";
 const CAPTURE_SOURCE_NAME = "DxTerminalStateCapture.cs.txt";
 const CAPTURE_TARGET_NAME = "DxTerminalStateCapture.cs";
+const REPORTER_SOURCE_NAME = "DxTerminalTestRunReporter.cs.txt";
+const REPORTER_TARGET_NAME = "DxTerminalTestRunReporter.cs";
+// Both installed dev tools ship as maintained sources outside Unity compilation.
+export const CAPTURE_SCRIPTS = Object.freeze([
+  Object.freeze({ source: CAPTURE_SOURCE_NAME, target: CAPTURE_TARGET_NAME }),
+  Object.freeze({ source: REPORTER_SOURCE_NAME, target: REPORTER_TARGET_NAME })
+]);
 // The eval compiler does not reference Assembly-CSharp-Editor, so the capture
 // type is unreachable by name; only assembly-qualified reflection resolves it
 // (issue #127). The simple name does not resolve: the namespace is required.
@@ -1769,12 +1776,19 @@ const CAPTURE_TYPE_NAME = "DxTerminalDevTools.DxTerminalStateCapture, Assembly-C
 const CAPTURE_TYPE_PROBE = `return (System.Type.GetType("${CAPTURE_TYPE_NAME}") != null);`;
 const CAPTURE_REFRESH_EXPRESSION = "UnityEditor.AssetDatabase.Refresh();";
 
-export function captureScriptSourcePath(repoRoot = REPO_ROOT) {
-  return path.join(repoRoot, "tooling~", "scripts", "mcp", CAPTURE_SOURCE_NAME);
+export function captureScriptFiles(repoRoot = REPO_ROOT) {
+  return CAPTURE_SCRIPTS.map(({ source, target }) => ({
+    source: path.join(repoRoot, "tooling~", "scripts", "mcp", source),
+    target
+  }));
 }
 
-export function captureInstallTarget(projectPath) {
-  return path.join(path.resolve(projectPath), "Assets", "Editor", CAPTURE_TARGET_NAME);
+export function captureScriptSourcePath(repoRoot = REPO_ROOT) {
+  return captureScriptFiles(repoRoot)[0].source;
+}
+
+export function captureInstallTarget(projectPath, target = CAPTURE_TARGET_NAME) {
+  return path.join(path.resolve(projectPath), "Assets", "Editor", target);
 }
 
 export function captureArtifactRoot(projectPath, layoutPath = projectPath) {
@@ -1865,44 +1879,48 @@ export function evalAnswerIsFalse(text) {
 }
 
 /**
- * Host-side installation of the maintained capture source. An existing different
- * file is backed up under the artifact root; never silently clobbered.
+ * Host-side installation of the maintained dev-tool sources. An existing
+ * different file is backed up under the artifact root; never silently
+ * clobbered. Returns one result per script, in install order.
  */
-export function ensureCaptureScript(projectPath, repoRoot = REPO_ROOT) {
-  const source = captureScriptSourcePath(repoRoot);
-  const sourceText = fs.readFileSync(source, "utf8");
-  const target = captureInstallTarget(projectPath);
-  fs.mkdirSync(path.dirname(target), { recursive: true });
-  let existing = null;
-  try {
-    existing = fs.readFileSync(target, "utf8");
-  } catch {}
-  if (existing === sourceText) return { target, changed: false, backup: undefined };
-  let backup;
-  if (existing !== null) {
-    // projectPath is always the locally writable root here, so the default
-    // layout probe is the correct one.
-    const backupDir = path.join(captureArtifactRoot(projectPath), "backup");
-    fs.mkdirSync(backupDir, { recursive: true });
-    backup = path.join(backupDir, `${CAPTURE_TARGET_NAME}.${captureStamp()}.bak`);
-    fs.copyFileSync(target, backup);
-  }
-  atomicWrite(target, sourceText);
-  return { target, changed: true, backup };
+export function ensureCaptureScripts(projectPath, repoRoot = REPO_ROOT) {
+  return captureScriptFiles(repoRoot).map(({ source, target: name }) => {
+    const sourceText = fs.readFileSync(source, "utf8");
+    const target = captureInstallTarget(projectPath, name);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    let existing = null;
+    try {
+      existing = fs.readFileSync(target, "utf8");
+    } catch {}
+    if (existing === sourceText) return { target, changed: false, backup: undefined };
+    let backup;
+    if (existing !== null) {
+      // projectPath is always the locally writable root here, so the default
+      // layout probe is the correct one.
+      const backupDir = path.join(captureArtifactRoot(projectPath), "backup");
+      fs.mkdirSync(backupDir, { recursive: true });
+      backup = path.join(backupDir, `${name}.${captureStamp()}.bak`);
+      fs.copyFileSync(target, backup);
+    }
+    atomicWrite(target, sourceText);
+    return { target, changed: true, backup };
+  });
 }
 
 export async function runInstallCapture(options) {
   const projectPath = requireProjectFilesystemPath(options);
-  const result = ensureCaptureScript(projectPath, options.repoRoot);
-  if (result.changed) {
-    console.log(
-      `Installed ${result.target}${result.backup ? ` (previous copy saved to ${result.backup})` : ""}.`
-    );
-    console.log("Unity will import it on the next refresh; then run npm run unity:capture.");
-  } else {
-    console.log(`Capture script already current: ${result.target}`);
+  const results = ensureCaptureScripts(projectPath, options.repoRoot);
+  for (const result of results) {
+    if (result.changed) {
+      console.log(
+        `Installed ${result.target}${result.backup ? ` (previous copy saved to ${result.backup})` : ""}.`
+      );
+    } else {
+      console.log(`Dev tool already current: ${result.target}`);
+    }
   }
-  return result.target;
+  console.log("Unity will import it on the next refresh; then run npm run unity:capture.");
+  return results.map((result) => result.target);
 }
 
 // Persistent MCP session for editor-backed commands (unlike the disposable probe session).
@@ -2078,11 +2096,16 @@ export async function runCapture(options, runtime = {}) {
     // artifact paths because Unity runs on the host.
     const projectPath = options.projectPath;
     const filesystemProjectPath = options.projectContainerPath ?? options.projectPath;
+    const install = () => {
+      const results = ensureCaptureScripts(filesystemProjectPath, options.repoRoot);
+      for (const result of results) {
+        if (result.changed) console.log(`Installed dev tool: ${result.target}`);
+      }
+      return results.some((result) => result.changed);
+    };
     let installed = false;
     if (filesystemProjectPath && !options.noInstall && fs.existsSync(filesystemProjectPath)) {
-      const result = ensureCaptureScript(filesystemProjectPath, options.repoRoot);
-      installed = result.changed;
-      if (result.changed) console.log(`Installed capture script: ${result.target}`);
+      installed = install();
     }
 
     const typePresent = async () => {
@@ -2091,8 +2114,7 @@ export async function runCapture(options, runtime = {}) {
     };
     if (!(await typePresent())) {
       if (!installed && filesystemProjectPath && fs.existsSync(filesystemProjectPath)) {
-        const result = ensureCaptureScript(filesystemProjectPath, options.repoRoot);
-        console.log(`Installed capture script: ${result.target}`);
+        install();
         await evalCall(CAPTURE_REFRESH_EXPRESSION);
         await waitForEditorIdle(client, evalCall, deadline);
       }
@@ -2182,8 +2204,16 @@ async function waitForEditorIdle(client, evalCall, deadline) {
   const expression =
     "return (UnityEditor.EditorApplication.isCompiling || UnityEditor.EditorApplication.isUpdating);";
   while (Date.now() < deadline) {
-    const { call } = await evalCall(expression);
-    if (evalAnswerIsFalse(extractText(call))) return;
+    /*
+        A call that lands while the editor is busy does not answer at all: the
+        bridge reports a main-thread timeout and the SDK poisons the session. That
+        is the state this wait exists for, so it counts as busy and keeps asking.
+     */
+    try {
+      const { call } = await evalCall(expression);
+      if (evalAnswerIsFalse(extractText(call))) return;
+    } catch {}
+
     await new Promise((resolve) => setTimeout(resolve, 1_000));
   }
   fail("The editor did not reach an idle (non-compiling) state before the deadline.");
@@ -2194,13 +2224,19 @@ async function waitForEditorIdle(client, evalCall, deadline) {
     editor tearing the session down, and the editor does not answer status
     calls while it does. The capture path must not wait for this - capturing in
     play mode is a supported flow - so the wait lives with the test path.
+
+    Exported for the idle-wait tests: a call the busy editor refuses is the
+    expected answer here, not a reason to fail the command.
  */
-async function waitForTestIdle(client, evalCall, deadline) {
+export async function waitForTestIdle(client, evalCall, deadline, now = () => Date.now()) {
   const expression =
     "return (UnityEditor.EditorApplication.isCompiling || UnityEditor.EditorApplication.isUpdating || UnityEditor.EditorApplication.isPlayingOrWillChangePlaymode);";
-  while (Date.now() < deadline) {
-    const { call } = await evalCall(expression);
-    if (evalAnswerIsFalse(extractText(call))) return;
+  while (now() < deadline) {
+    try {
+      const { call } = await evalCall(expression);
+      if (evalAnswerIsFalse(extractText(call))) return;
+    } catch {}
+
     await new Promise((resolve) => setTimeout(resolve, 1_000));
   }
   fail(
@@ -2384,13 +2420,25 @@ export async function runT4Capture(options, runtime = {}) {
       );
 
     await waitForEditorIdle(client, evalCall, deadline);
+    const reporter = await openRunReporter(options, evalCall);
 
     /*
         Counters read before the request are the previous capture run's, and the
         manifests validated below come from a window that can still contain
-        them, so a run is only waited for when its result is attributable.
-    */
-    const previousKey = readSummaryKey(await pollTestStatus(client, signal));
+        them, so a run is only waited for when its result is attributable. The
+        reporter's owner token carries that attribution without the pre-request
+        poll.
+     */
+    let previousKey = null;
+    let token = null;
+    let requestedAt = null;
+    if (reporter !== null) {
+      token = newRunToken("t4");
+      beginRunRequest(reporter, token);
+      requestedAt = Date.now();
+    } else {
+      previousKey = readSummaryKey(await pollTestStatus(client, signal));
+    }
     const runTests = await callFirstWorking(
       client,
       [
@@ -2411,19 +2459,21 @@ export async function runT4Capture(options, runtime = {}) {
     );
     log(options, "debug", `run_tests via ${runTests.candidate.name}`);
 
-    const summary = await awaitRunResult({
+    const { summary, detail } = await awaitTestRunResult({
+      label: "capture",
+      client,
+      signal,
+      reporter,
+      token,
+      expectMode: "playmode",
       initial: extractText(runTests.call),
       previousKey,
-      deadline,
-      read: () => pollTestStatus(client, signal)
+      requestedAt,
+      deadline
     });
 
     if (summary === null) {
-      fail(
-        "The capture test run produced no fresh result; the bridge may not have "
-          + "started a run, or it answered with the previous run's result. "
-          + "Inspect the editor."
-      );
+      fail(`The capture test run produced no result: ${detail}. Inspect the editor.`);
     }
 
     console.log(testSummaryLine(summary));
@@ -2586,6 +2636,315 @@ const RUN_DIR_SLACK_MS = 2_000;
 export const DEFAULT_TEST_RUN_TIMEOUT = 600_000;
 
 /*
+    Claim file: the editor's own report of one test run, so the caller reads a
+    file instead of polling a main thread a Play Mode run occupies. The
+    reporter (DxTerminalTestRunReporter, installed by install-capture) writes
+    one line whose first token is `running`, `pass=`, or `did-not-run`, and
+    every line carries the owner token of the run request the caller wrote to
+    the request file. Falls back to bridge polling when the reporter is absent
+    or its artifact directory is not writable from here (issue #162).
+ */
+export const RUN_CLAIM_FILE = "test-run.txt";
+export const RUN_REQUEST_FILE = "test-run-request.txt";
+/*
+    Token the editor reports when it started a run it has no request for. It is
+    written in exactly one place, so it always means "this run belongs to
+    nobody" - a diagnosis, not a result to wait on.
+ */
+export const RUN_UNATTRIBUTED_TOKEN = "none";
+/*
+    How long the editor may take to acknowledge the request at all before the
+    run counts as one that never began. Generous against a cold Play Mode start
+    (compile plus domain reload), and far below the run timeout: a refusal must
+    read as a refusal instead of as patience. It stops the moment a claim with
+    our own token arrives, so a long run is never cut off by it.
+ */
+export const RUN_START_GRACE_MS = 120_000;
+const RUN_REPORTER_TYPE_NAME = "DxTerminalDevTools.DxTerminalTestRunReporter, Assembly-CSharp-Editor";
+const RUN_REPORTER_PROBE = `return (System.Type.GetType("${RUN_REPORTER_TYPE_NAME}") != null);`;
+
+export function runClaimPaths(artifactRoot) {
+  return {
+    request: path.join(artifactRoot, RUN_REQUEST_FILE),
+    claim: path.join(artifactRoot, RUN_CLAIM_FILE)
+  };
+}
+
+/**
+ * Owner token of one run request. Unique per call, so a claim written by an
+ * earlier run (or by a run this command never asked for) cannot be read as
+ * this run's result.
+ */
+export function newRunToken(label, now = Date.now()) {
+  return `${label}-${now.toString(36)}-${randomBytes(4).toString("hex")}`;
+}
+
+/**
+ * Decode one claim line. The first token decides the state:
+ *
+ *   running  token=<owner|none> mode=<mode> started=<o>
+ *   pass=<n> fail=<n> skipped=<n> inconclusive=<n> duration=<s> token=<owner|none> mode=<mode>
+ *   did-not-run token=<owner|none> mode=<mode> reason=<free text>
+ *
+ * `total` is summed here rather than reported by the editor, so the summary
+ * cannot drift from the counters, and a refusal's reason is the rest of the
+ * line so it stays readable English. A line without a readable token, with a
+ * state word that is not one of the three, or with a counter that is not a
+ * count, is `unreadable`: never a result.
+ */
+export function parseRunClaim(text) {
+  const line = (text ?? "").trim();
+  const fields = new Map();
+  const parts = line.split(/\s+/u).filter((part) => part.length > 0);
+  if (parts.length === 0) return { state: "unreadable", token: null };
+  const head = parts.shift();
+  for (const part of parts) {
+    const separator = part.indexOf("=");
+    if (separator <= 0) continue;
+    fields.set(part.slice(0, separator), part.slice(separator + 1));
+  }
+  // An absent or empty token means a torn or hand-written line: never a result,
+  // and never "another run's claim" that would suppress the start grace.
+  const token = fields.get("token") ?? null;
+  if (token === null || token === "") return { state: "unreadable", token: null };
+  if (head === "running") return { state: "running", token, mode: fields.get("mode") ?? null };
+  if (head === "did-not-run") {
+    // The reason is the rest of the line, so it stays readable English; a
+    // refusal with no reason text is still a refusal.
+    const marker = line.indexOf("reason=");
+    const reason = marker < 0 ? "" : line.slice(marker + "reason=".length);
+    return {
+      state: "refused",
+      token,
+      mode: fields.get("mode") ?? null,
+      reason: reason.length === 0 ? "unspecified" : reason
+    };
+  }
+  if (!head.startsWith("pass=")) return { state: "unreadable", token };
+  fields.set("pass", head.slice("pass=".length));
+  // A counter that is not a non-negative integer makes the summary NaN, and NaN
+  // passes both exit guards (total === 0, failed > 0): a green run out of a
+  // malformed line. Such a line is unreadable instead.
+  const count = (name) => {
+    const value = Number(fields.get(name) ?? 0);
+    return Number.isSafeInteger(value) && 0 <= value ? value : null;
+  };
+  const passed = count("pass");
+  const failed = count("fail");
+  const skipped = count("skipped");
+  const inconclusive = count("inconclusive");
+  if (passed === null || failed === null || skipped === null || inconclusive === null) {
+    // A line we cannot count names nothing: it must not suppress the start
+    // grace as if it were our run's acknowledgement.
+    return { state: "unreadable", token: null };
+  }
+  return {
+    state: "finished",
+    token,
+    mode: fields.get("mode") ?? null,
+    summary: {
+      total: passed + failed + skipped + inconclusive,
+      passed,
+      failed,
+      skipped,
+      inconclusive
+    }
+  };
+}
+
+function readClaimFile(claimPath) {
+  try {
+    return fs.readFileSync(claimPath, "utf8");
+  } catch {
+    return "";
+  }
+}
+
+function consumeRequestFile(requestPath) {
+  if (requestPath === null) return;
+  try {
+    fs.rmSync(requestPath, { force: true });
+  } catch {
+    // A request that survives is overwritten by the next run; losing it is not
+    // worth failing a result we already have.
+  }
+}
+
+/*
+    A claim that carries our token but a different mode is a run the editor
+    started for something else. Reported loudly instead of accepted: the token
+    is the attribution, and a mode that disagrees with the leg means the
+    attribution is wrong.
+ */
+function assertClaimMode(mode, expected) {
+  if (expected === null || mode === null) return;
+  if (mode.toLowerCase() !== expected.toLowerCase()) {
+    fail(`The editor reported a ${mode} run while the ${expected} leg was requested.`);
+  }
+}
+
+/**
+ * Wait for the claim of one run, reading only the file.
+ *
+ * Inspects every payload handed to it, including one read after the deadline
+ * passed (the same rule the bridge wait follows: a loop that tests the deadline
+ * before inspecting drops the result its last poll fetched).
+ *
+ * A claim is only ours when its token is the request token. The start grace only
+ * applies until the editor acknowledges that token, so a long run is never cut
+ * off; an editor that never acknowledges it fails with a reason instead of
+ * sitting out the whole run timeout.
+ *
+ * A missing claim path or token is refused here instead of reading as "no claim
+ * yet": a wiring mistake must never look like patience.
+ *
+ * `now` and `sleep` cover this loop only.
+ */
+export async function awaitRunClaim({
+  claim,
+  request = null,
+  token,
+  expectMode = null,
+  requestedAt = null,
+  deadline,
+  read = readClaimFile,
+  consume = consumeRequestFile,
+  startGraceMs = RUN_START_GRACE_MS,
+  pollIntervalMs = 2_000,
+  now = () => Date.now(),
+  sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+}) {
+  if (typeof claim !== "string" || claim === "" || typeof token !== "string" || token === "") {
+    fail(`The run claim wait needs a claim path and an owner token; got ${claim} / ${token}.`);
+  }
+  const requested = requestedAt ?? now();
+  let started = false;
+  let sawForeign = false;
+  let text = read(claim);
+  for (;;) {
+    const observed = parseRunClaim(text);
+    if (observed.token === token) {
+      /*
+          Acknowledged: the editor is running our request, so the start grace is
+          spent and the token is dead. Consuming the request file here is what
+          keeps a run nobody asked for (a person in the Test Runner window, a
+          second agent) from stamping itself with our token later.
+       */
+      if (!started) {
+        started = true;
+        consume(request);
+      }
+      if (observed.state === "finished") {
+        assertClaimMode(observed.mode, expectMode);
+        return { state: "finished", summary: observed.summary };
+      }
+      if (observed.state === "refused") {
+        return { state: "refused", reason: observed.reason };
+      }
+    } else if (observed.state === "refused" && observed.token === RUN_UNATTRIBUTED_TOKEN) {
+      // The editor found no request at all: the two sides disagree about the
+      // claim directory, or a run nobody requested is in flight. Its own reason
+      // is the diagnosis, so it must not wait out the deadline.
+      return { state: "refused", reason: observed.reason };
+    } else if (observed.state !== "unreadable") {
+      sawForeign = true;
+    }
+
+    if (!started && startGraceMs <= now() - requested) {
+      return {
+        state: "no-start",
+        detail: `the editor wrote no claim for this run within ${startGraceMs} ms`
+      };
+    }
+    const remainingMs = deadline - now();
+    if (remainingMs <= 0) {
+      return {
+        state: "no-claim",
+        detail: sawForeign
+          ? "the only claim on disk belongs to another run"
+          : "the editor wrote no claim for this run"
+      };
+    }
+
+    await sleep(Math.max(1, Math.min(pollIntervalMs, remainingMs)));
+    text = read(claim);
+  }
+}
+
+/**
+ * The bridge's own "nothing matched" answer: a finished summary whose total is
+ * zero. Only a zero total is accepted, so the previous run's counts can never be
+ * read as this run's result. Null when the bridge says anything else, or does
+ * not answer.
+ */
+async function noTestsMatchedSummary(client, signal, initial) {
+  const candidates = [initial];
+  try {
+    candidates.push(
+      extractText((await callFirstWorking(client, [{ name: "test_status", arguments: {} }], signal)).call)
+    );
+  } catch {}
+
+  for (const candidate of candidates) {
+    const status = parseTestStatus(candidate, true);
+    if (status.finished && Number(status.summary?.total ?? -1) === 0) {
+      return status.summary;
+    }
+  }
+  return null;
+}
+
+/**
+ * Claim paths when the reporter is installed in the editor and its artifact
+ * directory can be written from here, or null to poll the bridge instead. The
+ * probe is one eval while the editor is quiet, and every failure (no eval tool,
+ * no reporter, no local project, an unwritable directory) means the fallback,
+ * never a failed command.
+ */
+async function openRunReporter(options, evalCall) {
+  const localProjectPath = options.projectContainerPath ?? options.projectPath;
+  if (localProjectPath === undefined || !fs.existsSync(localProjectPath)) return null;
+  let installed = false;
+  try {
+    const { call } = await evalCall(RUN_REPORTER_PROBE);
+    installed = evalAnswerIsTrue(extractText(call));
+  } catch {}
+  const root = captureArtifactRoot(localProjectPath, localProjectPath);
+  // The request has to be written before every run, so the directory is created
+  // if this project never captured, and a read-only one is a fallback rather
+  // than a crash on the first leg.
+  try {
+    fs.mkdirSync(root, { recursive: true });
+    fs.accessSync(root, fs.constants.W_OK);
+  } catch {
+    installed = false;
+  }
+  if (!installed) {
+    log(
+      options,
+      "debug",
+      "The editor-side test run reporter is unusable here; polling the bridge instead."
+    );
+    return null;
+  }
+
+  return runClaimPaths(root);
+}
+
+/**
+ * Claim the next run: write the owner token the editor will echo, and clear
+ * the previous claim so a leftover line is never the first thing read. The wait
+ * removes the request again once the editor acknowledges the token.
+ */
+function beginRunRequest(paths, token) {
+  fs.mkdirSync(path.dirname(paths.request), { recursive: true });
+  // World readable: the editor runs as the host user, this writes as the
+  // container user.
+  atomicWrite(paths.request, token, 0o644);
+  fs.rmSync(paths.claim, { force: true });
+}
+
+/*
     Concrete bridge legs per mode. `all` expands to both suites instead of
     being sent as-is: on Unity 6000.4.6f1 the bridge answers `run_tests` with
     mode "all" by echoing the previous run's result without starting a run, so
@@ -2745,6 +3104,11 @@ export async function runUnityTests(options, runtime = {}) {
       );
 
     const summaries = [];
+    // Probed once, on the first leg's quiet editor: a busy main thread is the
+    // one moment the probe must not land on, and the answer cannot change
+    // mid-command (nothing installs the reporter while a run is in flight).
+    let reporter = null;
+    let reporterProbed = false;
     for (const leg of legs) {
       /*
           Each leg gets its own deadline: the flag reads as how long a run may
@@ -2761,7 +3125,20 @@ export async function runUnityTests(options, runtime = {}) {
       // Each leg waits for its own quiet editor: a PlayMode leg leaves the
       // session tearing down, and the next leg must not race that.
       await waitForTestIdle(client, evalCall, legDeadline);
-      const summary = await runTestLeg(client, signal, leg, filter, legDeadline, evalCall);
+      if (!reporterProbed) {
+        reporter = await openRunReporter(options, evalCall);
+        reporterProbed = true;
+      }
+
+      const summary = await runTestLeg(
+        client,
+        signal,
+        leg,
+        filter,
+        legDeadline,
+        reporter,
+        evalCall
+      );
       console.log(`${leg}: ${testSummaryLine(summary)}`);
       summaries.push(summary);
     }
@@ -2888,15 +3265,103 @@ export async function awaitRunResult({
 }
 
 /**
+ * Wait for one run's result through the editor's claim file, or through bridge
+ * polling when no reporter is installed.
+ *
+ * Returns the attributable summary, or `{ summary: null, detail }` when the
+ * deadline passed with nothing attributable. A refusal is the editor's own
+ * answer, so it fails the command here instead of returning as a missing
+ * result: `did-not-run` must never read as patience.
+ */
+async function awaitTestRunResult({
+  label,
+  client,
+  signal,
+  reporter = null,
+  token = null,
+  expectMode = null,
+  initial = null,
+  previousKey = null,
+  requestedAt = null,
+  deadline,
+  beforePoll = null
+}) {
+  const paths = reporter ?? null;
+  if (paths === null) {
+    const summary = await awaitRunResult({
+      initial,
+      previousKey,
+      deadline,
+      beforePoll,
+      read: () => pollTestStatus(client, signal)
+    });
+    return {
+      summary,
+      detail:
+        "the bridge may not have started a run, or it answered with the previous run's result"
+    };
+  }
+
+  // Both paths are passed by name, never spread: a spread of the reporter
+  // object once read a file that was never written, for the whole deadline.
+  const claim = await awaitRunClaim({
+    claim: paths.claim,
+    request: paths.request,
+    token,
+    expectMode,
+    requestedAt,
+    deadline
+  });
+  if (claim.state === "finished") {
+    return { summary: claim.summary, detail: null };
+  }
+  if (claim.state === "refused") {
+    fail(
+      `The ${label} test run was refused by the editor: ${claim.reason} `
+        + `(this command's run request was ${paths.request})`
+    );
+  }
+  if (claim.state === "no-start") {
+    /*
+        A run that matches no test never starts, so the editor has nothing to
+        report. The bridge does answer that case, with a finished zero-total
+        summary, and a mode-specific filter is not an error by itself: only a
+        zero total across legs fails. Nothing else is taken from the bridge here,
+        because a non-zero summary on this path is unverified by construction.
+     */
+    const empty = await noTestsMatchedSummary(client, signal, initial);
+    if (empty !== null) {
+      return { summary: empty, detail: null };
+    }
+  }
+  // No claim is deleted here: the next run clears it, and a claim on disk may
+  // be the evidence the failure message names.
+  return { summary: null, detail: claim.detail };
+}
+
+/**
  * Run one mode's suite over the bridge and return its summary.
  *
- * The counters observed before the request belong to the previous run, so a
+ * With the reporter installed, the owner token written before the request is
+ * what makes the result attributable; the token replaces the pre-request poll
+ * entirely, so the request is made while the editor is still free. Without it,
+ * the counters observed before the request belong to the previous run, so a
  * summary that still reads exactly like them is never accepted as this run's
  * result: the bridge can answer `run_tests` without starting anything, and
- * without this guard the command would print the last run's numbers.
+ * without that guard the command would print the last run's numbers.
  */
-async function runTestLeg(client, signal, leg, filter, deadline, evalCall = null) {
-  const previousKey = readSummaryKey(await pollTestStatus(client, signal));
+async function runTestLeg(client, signal, leg, filter, deadline, reporter = null, evalCall = null) {
+  const paths = reporter ?? null;
+  let previousKey = null;
+  let token = null;
+  let requestedAt = null;
+  if (paths !== null) {
+    token = newRunToken(leg);
+    beginRunRequest(paths, token);
+    requestedAt = Date.now();
+  } else {
+    previousKey = readSummaryKey(await pollTestStatus(client, signal));
+  }
   const runArguments = { mode: leg, async_tests: true };
   if (filter !== "") {
     runArguments.filter = filter;
@@ -2913,25 +3378,30 @@ async function runTestLeg(client, signal, leg, filter, deadline, evalCall = null
     signal
   );
 
-  const summary = await awaitRunResult({
+  const { summary, detail } = await awaitTestRunResult({
+    label: leg,
+    client,
+    signal,
+    reporter: paths,
+    token,
+    expectMode: leg,
     initial: extractText(run.call),
     previousKey,
+    requestedAt,
     deadline,
-    read: () => pollTestStatus(client, signal),
     beforePoll:
-      evalCall === null
-        ? null
-        : () =>
+      paths === null && evalCall !== null
+        ? () =>
             waitForTestIdleQuietly(client, evalCall, deadline)
+        : null
   });
   if (summary !== null) {
     return summary;
   }
 
   fail(
-    `The ${leg} test run produced no fresh result within the deadline`
-      + `${filter ? ` (filter: ${filter})` : ""}; the bridge may not have started a run, `
-      + "or it answered with the previous run's result. Inspect the editor."
+    `The ${leg} test run produced no result`
+      + `${filter ? ` (filter: ${filter})` : ""}: ${detail}. Inspect the editor.`
   );
 }
 
@@ -2942,12 +3412,15 @@ function usage() {
     "  probe           Discover Unity tools and check editor readiness.",
     "  configure       Configure agent MCP servers, discovering Unity unless --offline is set.",
     "  bridge          Serve Unity CLI or the legacy relay over authenticated HTTP on the host.",
-    "  install-capture Install DxTerminalStateCapture.cs into the host project (host side).",
+    "  install-capture Install the editor dev tools (state capture, test run reporter)\n" +
+      "                  into the host project (host side).",
     "  capture         Capture editor/game state into .artifacts through the bridge.",
     "  t4-capture      Run the T04 fixture-capture tests, validate their manifests,\n" +
     "                  and compare pixels against the T11 baseline store.",
     "  tests           Run Unity tests over the bridge and report one summary line",
     "                  per leg; 'all' runs the EditMode suite then the PlayMode suite.",
+    "                  With the run reporter installed, the result is read from the",
+    "                  editor's claim file instead of polling its main thread.",
     "",
     "Options:",
     "  --mode MODE                 Test mode: all, editmode, playmode (tests only; default all,",

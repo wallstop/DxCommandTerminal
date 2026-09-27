@@ -52,7 +52,9 @@ metadata:
    runs the EditMode suite then the PlayMode suite and prints one summary line
    per leg.
 
-   Three rules make a result trustworthy, all in `awaitRunResult`:
+   Four rules make a result trustworthy. Two are in `awaitRunResult` (the
+   bridge-polling fallback) and two in `runUnityTests`; `awaitRunClaim` holds the
+   claim-file equivalents used whenever the run reporter is installed:
 
    - A leg is reported only when its result is finished, not in flight, and
      either seen in flight (from a poll, never from the `run_tests` answer
@@ -69,6 +71,18 @@ metadata:
      missing.
    - A leg that matched no test is reported, and only a zero total across legs
      fails, so a mode-specific `--filter` is not an error.
+
+   The claim path replaces the status poll, never the `run_tests` request: the
+   command writes an owner token to `test-run-request.txt`, the editor echoes it
+   on every line it writes to `test-run.txt`, and only a claim carrying that
+   token can end the wait. The request is removed once the editor acknowledges
+   the token, so a later run nobody asked for cannot adopt it.
+   `did-not-run` fails the command with the editor's reason and the request
+   path it used. Until a claim with our token arrives, the wait is bounded by
+   a 120 s start grace instead of `--run-timeout`; after it arrives the full
+   deadline applies, so a long capture leg is never cut off. A run that matches
+   no test never starts and reports nothing, so that case takes the bridge's
+   zero-total answer and the leg is reported, not failed.
 3. Unity Test Runner: Window > General > Test Runner -> PlayMode tab -> Run All.
 4. Unity CLI (CI-style):
    `Unity -batchmode -projectPath <proj> -runTests -testPlatform PlayMode -testResults results.xml -quit`

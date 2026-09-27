@@ -16,12 +16,15 @@ manifest to complete. Artifacts land inside this package's `.artifacts/unity-sta
 
 1. Bridge running on the host (`npm run unity:mcp`) and `npm run unity:mcp:probe`
    passing from where you run capture.
-2. Capture script compiled in the editor. Install it host-side with
+2. Capture script compiled in the editor. Install the dev tools host-side with
    `npm run unity:mcp:install-capture -- --project <host-project>` (it copies
-   `tooling~/scripts/mcp/DxTerminalStateCapture.cs.txt` to `<project>/Assets/Editor/`,
-   backing up any previous copy under `.artifacts/unity-state/backup/`). `capture`
-   performs this install itself when the project directory is reachable locally
-   (host runs, or the container's `/unity-project` bind mount).
+   `tooling~/scripts/mcp/DxTerminalStateCapture.cs.txt` and
+   `DxTerminalTestRunReporter.cs.txt` to `<project>/Assets/Editor/`, backing up any
+   previous copy under `.artifacts/unity-state/backup/`). `capture` performs this
+   install itself when the project directory is reachable locally (host runs, or the
+   container's `/unity-project` bind mount). The reporter is what lets
+   `npm run unity:tests` read a run's result from a file instead of polling a busy
+   editor; see [unity-mcp](../unity-mcp/SKILL.md).
 
 ## What one capture produces
 

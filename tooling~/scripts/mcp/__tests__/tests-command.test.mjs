@@ -2,18 +2,26 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   DEFAULT_TEST_RUN_TIMEOUT,
+  RUN_CLAIM_FILE,
+  RUN_REQUEST_FILE,
   TEST_MODES,
+  awaitRunClaim,
   awaitRunResult,
   isSessionCapError,
+  newRunToken,
+  parseRunClaim,
   parseTestStatus,
   readSummaryKey,
   resolveTestRunOptions,
+  runClaimPaths,
   sessionSignalBudgetMs,
   summaryIsFresh,
   summaryKey,
   testRunLegs,
-  testSummaryLine
+  testSummaryLine,
+  waitForTestIdle
 } from "../unity-mcp.mjs";
+import path from "node:path";
 
 test("test run options default to the full suite with the standard deadline", () => {
   assert.deepEqual(resolveTestRunOptions({}), {
@@ -250,4 +258,382 @@ test("a poll interval of zero cannot become a spin", async () => {
     }
   });
   assert.ok(polls <= 40, `a zero interval must not spin (polled ${polls} times)`);
+});
+
+/*
+    The claim file is the editor's own report of one run (issue #162), so the
+    node side never polls a main thread a Play Mode run occupies. The first
+    token is the state; the owner token is the attribution, and a claim the
+    editor wrote by a torn write has neither and can never be a result.
+ */
+test("claim decoding is data-driven over the three states and the torn cases", () => {
+  const cases = [
+    // [line, state, token, extra]
+    [
+      "running token=t-1 mode=PlayMode started=2026-09-27T02:28:00.0Z",
+      "running",
+      "t-1",
+      { mode: "PlayMode" }
+    ],
+    [
+      "pass=18 fail=0 skipped=0 inconclusive=0 duration=0.071 token=t-2 mode=PlayMode finished=x",
+      "finished",
+      "t-2",
+      { summary: { total: 18, passed: 18, failed: 0, skipped: 0, inconclusive: 0 } }
+    ],
+    [
+      "pass=3 fail=2 skipped=1 inconclusive=4 token=t-3",
+      "finished",
+      "t-3",
+      { summary: { total: 10, passed: 3, failed: 2, skipped: 1, inconclusive: 4 } }
+    ],
+    [
+      "did-not-run token=t-4 mode=EditMode reason=the EditMode run executed no tests",
+      "refused",
+      "t-4",
+      { reason: "the EditMode run executed no tests" }
+    ],
+    // A run started by something other than the MCP tooling still reports, and
+    // the reason says so.
+    [
+      "did-not-run token=none mode=PlayMode reason=a run was started by something other than the MCP tooling",
+      "refused",
+      "none",
+      { reason: "a run was started by something other than the MCP tooling" }
+    ],
+    // A refusal with no reason text still refuses.
+    ["did-not-run token=t-5", "refused", "t-5", { reason: "unspecified" }],
+    // Torn or foreign writes carry no token: unreadable, never a result.
+    ["pass=581 fail=0 skipped=0 inconcl", "unreadable", null, {}],
+    ["running mode=PlayMode", "unreadable", null, {}],
+    // An empty token names nothing. Reading it as "another run's claim" would
+    // suppress the start grace and hide a run that never started.
+    ["pass=54 fail=0 skipped=0 inconclusive=0 token=", "unreadable", null, {}],
+    // A non-numeric or non-finite counter would make the summary NaN, and NaN
+    // passes both exit guards: a green run out of a malformed line.
+    ["pass=3 fail=oops skipped=0 inconclusive=0 token=t-6", "unreadable", null, {}],
+    ["pass=1e999 fail=0 skipped=0 inconclusive=0 token=t-7", "unreadable", null, {}],
+    ["pass=-1 fail=0 skipped=0 inconclusive=0 token=t-8", "unreadable", null, {}],
+    ["totally unrelated text", "unreadable", null, {}],
+    ["", "unreadable", null, {}],
+    [undefined, "unreadable", null, {}]
+  ];
+  for (const [line, state, token, extra] of cases) {
+    const claim = parseRunClaim(line);
+    assert.equal(claim.state, state, `state for: ${line}`);
+    assert.equal(claim.token, token, `token for: ${line}`);
+    for (const [key, value] of Object.entries(extra)) {
+      assert.deepEqual(claim[key], value, `${key} for: ${line}`);
+    }
+  }
+});
+
+test("claim paths sit beside each other and the owner token is unique per run", () => {
+  const root = path.join(path.sep, "project", "Packages", "pkg", ".artifacts", "unity-state");
+  const paths = runClaimPaths(root);
+  assert.equal(paths.request, path.join(root, RUN_REQUEST_FILE));
+  assert.equal(paths.claim, path.join(root, RUN_CLAIM_FILE));
+  assert.notEqual(paths.request, paths.claim);
+
+  const tokens = new Set([newRunToken("editmode", 42), newRunToken("editmode", 42)]);
+  assert.equal(tokens.size, 2, "two requests at the same instant must not share a token");
+  for (const token of tokens) {
+    assert.match(token, /^editmode-[0-9a-z]+-[0-9a-f]{8}$/u, `token shape: ${token}`);
+  }
+});
+
+test("a claim read after the deadline is still this run's result", async () => {
+  // The same rule the bridge wait follows: inspect before re-testing the
+  // deadline, or the read the last poll made is dropped.
+  let reads = 0;
+  let clock = 0;
+  const outcome = await awaitRunClaim({
+    claim: "claim",
+    token: "t-1",
+    requestedAt: 0,
+    deadline: 1_000,
+    read: () => {
+      reads += 1;
+      // A read that overruns the deadline still has to be inspected.
+      clock += 500;
+      return reads === 1 ? "running token=t-1" : "pass=3 fail=0 skipped=0 inconclusive=0 token=t-1";
+    },
+    now: () => clock,
+    sleep: async (ms) => {
+      clock += ms;
+    }
+  });
+
+  assert.equal(outcome.state, "finished");
+  assert.equal(outcome.summary.total, 3);
+  assert.ok(clock > 1_000, "the clock was past the deadline when the claim arrived");
+  assert.equal(reads, 2, "the late claim is the one that ends the wait");
+});
+
+test("another run's claim is never this run's result", async () => {
+  // The previous run's line is the trap the token removes: its counters look
+  // exactly like a result, and it can be the only claim on disk.
+  let clock = 0;
+  const outcome = await awaitRunClaim({
+    claim: "claim",
+    token: "t-2",
+    requestedAt: 0,
+    deadline: 20_000,
+    read: () => "pass=363 fail=0 skipped=0 inconclusive=0 token=t-1",
+    now: () => clock,
+    sleep: async (ms) => {
+      clock += ms;
+    }
+  });
+
+  assert.equal(outcome.state, "no-claim");
+  assert.match(outcome.detail, /belongs to another run/u, outcome.detail);
+});
+
+test("a foreign claim that disappears does not disable the start grace", async () => {
+  // A second session's request clears the claim for a moment. Latching its
+  // token would make the "the editor never started this run" failure
+  // unreachable for the rest of the wait.
+  let clock = 0;
+  let reads = 0;
+  const outcome = await awaitRunClaim({
+    claim: "claim",
+    token: "t-2",
+    requestedAt: 0,
+    deadline: 600_000,
+    startGraceMs: 500,
+    pollIntervalMs: 100,
+    read: () => {
+      reads += 1;
+      return reads === 1 ? "pass=363 fail=0 skipped=0 inconclusive=0 token=t-1" : "";
+    },
+    now: () => clock,
+    sleep: async (ms) => {
+      clock += ms;
+    }
+  });
+
+  assert.equal(outcome.state, "no-start");
+  assert.match(outcome.detail, /no claim for this run within 500 ms/u, outcome.detail);
+  assert.ok(clock <= 700, `waited ${clock} ms, grace 500 ms plus one 100 ms poll`);
+});
+
+test("a run that never reports a start fails on the grace, not the whole timeout", async () => {
+  let clock = 0;
+  const outcome = await awaitRunClaim({
+    claim: "claim",
+    token: "t-1",
+    requestedAt: 0,
+    deadline: 600_000,
+    startGraceMs: 500,
+    pollIntervalMs: 100,
+    read: () => "",
+    now: () => clock,
+    sleep: async (ms) => {
+      clock += ms;
+    }
+  });
+
+  assert.equal(outcome.state, "no-start");
+  assert.match(outcome.detail, /no claim for this run within 500 ms/u, outcome.detail);
+  // At most one poll interval past the grace: a refusal must not sit out the
+  // whole run timeout.
+  assert.ok(clock <= 700, `waited ${clock} ms, grace 500 ms plus one 100 ms poll`);
+});
+
+test("the start grace stops the moment the editor acknowledges our run", async () => {
+  // The regression the first cut had: the grace was gated on "no foreign claim"
+  // only, so a run that reported `running` and then took longer than the grace
+  // failed as if it had never started - a T04 capture leg budgets far more than
+  // that.
+  let clock = 0;
+  const outcome = await awaitRunClaim({
+    claim: "claim",
+    token: "t-1",
+    requestedAt: 0,
+    deadline: 600_000,
+    startGraceMs: 500,
+    read: () => (clock <= 20_000 ? "running token=t-1 mode=PlayMode" : "pass=1 fail=0 skipped=0 inconclusive=0 token=t-1"),
+    now: () => clock,
+    sleep: async (ms) => {
+      clock += ms;
+    }
+  });
+
+  assert.equal(outcome.state, "finished");
+  assert.equal(outcome.summary.total, 1);
+  assert.ok(clock > 20_000, `the wait must not end on the grace (waited ${clock} ms)`);
+});
+
+test("did-not-run ends the wait with its reason, and an in-flight claim does not", async () => {
+  let clock = 0;
+  const refused = await awaitRunClaim({
+    claim: "claim",
+    token: "t-1",
+    requestedAt: 0,
+    deadline: 60_000,
+    read: () => "did-not-run token=t-1 mode=PlayMode reason=the playmode run executed no tests",
+    now: () => clock,
+    sleep: async (ms) => {
+      clock += ms;
+    }
+  });
+  assert.deepEqual(refused, {
+    state: "refused",
+    reason: "the playmode run executed no tests"
+  });
+  assert.equal(clock, 0, "a refusal needs no further read");
+
+  clock = 0;
+  const inFlight = await awaitRunClaim({
+    claim: "claim",
+    token: "t-1",
+    requestedAt: 0,
+    deadline: 4_000,
+    read: () => "running token=t-1 mode=PlayMode",
+    now: () => clock,
+    sleep: async (ms) => {
+      clock += ms;
+    }
+  });
+  assert.equal(inFlight.state, "no-claim", "a run in flight waits out the deadline");
+  assert.match(inFlight.detail, /wrote no claim for this run/u, inFlight.detail);
+  assert.equal(clock, 4_000);
+});
+
+test("an unattributed refusal is the editor's diagnosis, not a wait", async () => {
+  // The editor writes token=none in exactly one case: it started a run it has
+  // no request for. That is the answer to "why did my request not arrive", and
+  // waiting out the deadline would throw it away.
+  let clock = 0;
+  const outcome = await awaitRunClaim({
+    claim: "claim",
+    token: "t-1",
+    requestedAt: 0,
+    deadline: 600_000,
+    read: () =>
+      "did-not-run token=none mode=EditMode reason=not requested by the MCP tooling",
+    now: () => clock,
+    sleep: async (ms) => {
+      clock += ms;
+    }
+  });
+
+  assert.deepEqual(outcome, { state: "refused", reason: "not requested by the MCP tooling" });
+  assert.equal(clock, 0);
+});
+
+test("the request is consumed once the editor acknowledges it, and the mode is checked", async () => {
+  // Consuming is what stops a run nobody asked for (a person in the Test Runner
+  // window, a second agent) from stamping itself with our token later.
+  const consumed = [];
+  let clock = 0;
+  const outcome = await awaitRunClaim({
+    claim: "claim",
+    request: "request",
+    token: "t-1",
+    expectMode: "playmode",
+    requestedAt: 0,
+    deadline: 60_000,
+    read: () => (clock <= 4_000 ? "running token=t-1 mode=PlayMode" : "pass=2 fail=0 skipped=0 inconclusive=0 token=t-1 mode=PlayMode"),
+    consume: (file) => consumed.push(file),
+    now: () => clock,
+    sleep: async (ms) => {
+      clock += ms;
+    }
+  });
+
+  assert.equal(outcome.state, "finished");
+  assert.deepEqual(consumed, ["request"], "the request is consumed once, not per poll");
+});
+
+test("a claim from another mode is refused, not reported as this leg", async () => {
+  // The token is the attribution, so a mode that disagrees with the leg means
+  // the attribution is wrong. Silent acceptance would report another run's
+  // counters as this leg's result.
+  await assert.rejects(
+    awaitRunClaim({
+      claim: "claim",
+      token: "t-1",
+      expectMode: "playmode",
+      requestedAt: 0,
+      deadline: 60_000,
+      read: () => "pass=363 fail=0 skipped=0 inconclusive=0 token=t-1 mode=EditMode",
+      consume: () => {},
+      now: () => 0,
+      sleep: async () => {}
+    }),
+    /reported a EditMode run while the playmode leg was requested/u
+  );
+});
+
+test("a busy editor that refuses the idle probe is waited out, not failed", async () => {
+  // Observed live: a main-thread timeout right at the start of `unity:tests`
+  // killed the command with "No backend tool variant answered", even though the
+  // editor became idle seconds later. Busy is the state this wait exists for.
+  let clock = 0;
+  let probes = 0;
+  const idleCall = (text) => () => ({ call: { content: [{ text }] } });
+  const answers = [
+    () => {
+      throw new Error("Main thread operation timed out after 5000ms");
+    },
+    idleCall("true"),
+    idleCall("false")
+  ];
+
+  await waitForTestIdle(
+    null,
+    () => answers[Math.min(probes++, answers.length - 1)](),
+    60_000,
+    () => clock
+  );
+  assert.equal(probes, 3, "the wait must keep asking through a refused call");
+
+  await assert.rejects(
+    waitForTestIdle(
+      null,
+      () => {
+        throw new Error("Main thread operation timed out after 5000ms");
+      },
+      2_000,
+      () => {
+        clock = 3_000;
+        return clock;
+      }
+    ),
+    /stayed busy/u
+  );
+});
+
+test("a claim wait with no path or token is refused, not polled to the deadline", async () => {
+  // The wiring mistake that shipped once: the reporter object was spread into
+  // the wait, so the claim path never arrived and every read returned nothing
+  // for the whole run timeout.
+  for (const broken of [{ token: "t-1" }, { claim: "claim" }, { claim: "", token: "t-1" }]) {
+    await assert.rejects(
+      awaitRunClaim({ ...broken, deadline: 600_000, read: () => "" }),
+      /needs a claim path and an owner token/u
+    );
+  }
+});
+
+test("a claim poll interval of zero cannot become a spin", async () => {
+  let sleeps = 0;
+  let clock = 0;
+  await awaitRunClaim({
+    claim: "claim",
+    token: "t-1",
+    requestedAt: 0,
+    deadline: 40,
+    read: () => "running token=t-1",
+    pollIntervalMs: 0,
+    now: () => clock,
+    sleep: async (ms) => {
+      sleeps += 1;
+      assert.ok(ms >= 1, "every sleep is at least a millisecond");
+      clock += ms;
+    }
+  });
+  assert.ok(sleeps <= 40, `a zero interval must not spin (slept ${sleeps} times)`);
 });
