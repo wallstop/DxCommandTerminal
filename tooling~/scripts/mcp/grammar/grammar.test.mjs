@@ -30,21 +30,28 @@ const GRAMMAR_PROJECT = path.join(GRAMMAR_DIR, "grammar.csproj");
     guarantee, and a locale that is real belongs to a real editor.
  */
 let cached;
+let scratch;
+
+test.after(() => {
+  if (scratch !== undefined) fs.rmSync(scratch, { recursive: true, force: true });
+});
+
 function runReporter() {
   if (cached !== undefined) return cached;
-  const output = path.join(
-    fs.mkdtempSync(path.join(os.tmpdir(), "dxt-grammar-")),
-    "claims.json"
-  );
+  scratch = fs.mkdtempSync(path.join(os.tmpdir(), "dxt-grammar-"));
+  const output = path.join(scratch, "claims.json");
   const result = spawnSync(
     "dotnet",
     ["run", "--project", GRAMMAR_PROJECT, "-c", "Release", "--", output],
-    { encoding: "utf8" }
+    { encoding: "utf8", timeout: 300_000 }
   );
+  // result.error is the launch failure (no dotnet, a timeout); result.status is
+  // the reporter's own verdict, and it is the one that matters.
   assert.equal(
     result.status,
     0,
-    `the reporter must compile and run:\n${result.stdout}\n${result.stderr}`
+    `the reporter must compile and run:\n`
+      + `${result.error?.message ?? ""}\n${result.stdout}\n${result.stderr}`
   );
   cached = JSON.parse(fs.readFileSync(output, "utf8"));
   return cached;
@@ -104,10 +111,11 @@ test("every claim the reporter wrote decodes to the result the run describes", (
 
     /*
         The line itself, which the decoded result cannot show. It stays ASCII, so
-        nothing a name holds can break the line from the inside; the counters
-        lead it; the duration is a number this side can parse, so its separator
-        is part of the grammar; and a names field is written only when there are
-        names to put in it.
+        nothing a name holds can break the line from the inside. Its fields are
+        the set the reader may look for, and the duration is a number this side
+        can parse - so its separator is part of the grammar. The order they are
+        written in is not: nothing here depends on it, so a reorder is not a
+        failure.
      */
     assert.deepEqual(
       [...claim].filter((character) => character.codePointAt(0) > 0x7f),
@@ -115,17 +123,32 @@ test("every claim the reporter wrote decodes to the result the run describes", (
       `${label}: the claim must stay ASCII, so no name can break the line`
     );
     if (expected.state !== "refused") {
-      assert.ok(
-        claim.startsWith(
-          `pass=${expected.passed} fail=${expected.failed} `
-            + `skipped=${expected.skipped} inconclusive=${expected.inconclusive} `
-            + `duration=0.5 token=${expected.token} mode=${expected.mode} finished=`
-        ),
-        `${label}: the claim must lead with its counters, duration, token, mode and stamp: ${claim}`
+      const fields = new Map(
+        claim
+          .split(/\s+/u)
+          .map((part) => [part.slice(0, part.indexOf("=")), part])
       );
-      const named = claim.includes("failed-names=");
+      const wanted = new Map(
+        Object.entries({
+          pass: String(expected.passed),
+          fail: String(expected.failed),
+          skipped: String(expected.skipped),
+          inconclusive: String(expected.inconclusive),
+          duration: String(expected.duration),
+          token: expected.token,
+          mode: expected.mode
+        })
+      );
+      for (const [name, value] of wanted) {
+        assert.equal(fields.get(name), `${name}=${value}`, `${label}: ${claim}`);
+      }
+      assert.ok(fields.has("finished"), `${label}: the claim must carry its stamp: ${claim}`);
+      assert.ok(
+        Number.isFinite(Number(fields.get("duration")?.slice("duration=".length))),
+        `${label}: the duration must be a number this side can read: ${claim}`
+      );
       assert.equal(
-        named,
+        claim.includes("failed-names="),
         0 < expected.names.length,
         `${label}: a names field is written only when there are names to put in it`
       );

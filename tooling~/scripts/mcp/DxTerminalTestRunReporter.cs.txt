@@ -24,6 +24,10 @@
     failures the cap left unnamed: a separate field, so no consumer can read the
     cap as a test name.
 
+    This file is compiled and driven without Unity by `npm run mcp:grammar`
+    (tooling~/scripts/mcp/grammar), which decodes the claims it writes with the
+    reader that consumes them. Change it, and run that before anything else.
+
     The owner token comes from <artifact root>/test-run-request.txt, which the
     caller writes before asking for a run. Every line of one run carries the token
     it started with (or none, when the run was not requested through the MCP

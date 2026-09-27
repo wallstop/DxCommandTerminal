@@ -185,6 +185,15 @@ jobs:
         with:
           dotnet-version: 9.0.306
 
+      # net8.0 under a newer SDK pulls its targeting and apphost packs from
+      # nuget.org, so the shared cold cost is cached here too.
+      - name: Cache NuGet packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('tooling~/scripts/mcp/grammar/grammar.csproj') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
       - name: Resolve npm cache directory
         id: npm-cache
         shell: bash

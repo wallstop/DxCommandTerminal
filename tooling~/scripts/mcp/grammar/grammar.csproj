@@ -30,15 +30,16 @@
         <LangVersion>9.0</LangVersion>
         <Nullable>disable</Nullable>
         <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-        <RootNamespace>DxTerminalDevTools</RootNamespace>
         <AssemblyName>DxTerminalClaimGrammar</AssemblyName>
         <InvariantGlobalization>true</InvariantGlobalization>
         <!-- Built against the oldest runtime this gate can be built on, run on
          whatever the machine has. A contributor with only a newer SDK installed
          must not have to install a second runtime to run the gate. -->
         <RollForward>LatestMajor</RollForward>
-        <!-- No PackageReference on purpose: the restore is offline, so this gate
-         needs no registry and cannot fail because a package moved. -->
+        <!-- No PackageReference on purpose, so nothing here can break because a
+         package moved. The restore is not free: building net8.0 under a newer
+         SDK pulls the 8.0 targeting and apphost packs from nuget.org, which is
+         why the CI job caches ~/.nuget/packages. -->
     </PropertyGroup>
     <ItemGroup>
         <Compile

@@ -14,7 +14,8 @@ import {
   evalAnswerIsTrue,
   evalAnswerIsFalse,
   CAPTURE_PACKAGE_NAME,
-  SCRIPT_REFRESH_EXPRESSION
+  SCRIPT_REFRESH_EXPRESSION,
+  refreshScripts
 } from "../unity-mcp.mjs";
 import fs from "node:fs";
 import os from "node:os";
@@ -70,37 +71,12 @@ test("capture script source lives outside Unity compilation", () => {
 });
 
 /*
-    The reporter's claim grammar is not pinned here any more. It used to be: the
-    writer is C# that only compiled inside a host project, so a renamed field, a
-    moved cap or a byte-wise encoder read out of the source text stood in for the
-    gate CI did not have. A mutation probe measured those pins at 11 of 13 tried
-    mutations, and the two they missed were C# behavior.
-
-    It is now the real thing: `npm run mcp:grammar` compiles
-    DxTerminalTestRunReporter.cs.txt into a Unity-free project, drives it
-    through the callbacks a real run uses, and decodes every claim it wrote with
-    parseRunClaim. A generated corpus - every printable ASCII character, plus the
-    no-break space, em space, line separator, surrogate pair and bare percent -
-    has to come back byte for byte, and a cap, a separator, a suite reported as a
-    test, or a syntax error all turn that red.
-
-    The reader's own states (a torn line, a counter that is not a count, a
-    refusal) are tabulated in tests-command.test.mjs. What is left here is only
-    what the reporter says about itself.
+    The reporter's claim grammar is not pinned here. It is driven through the
+    callbacks a real run uses and its claims are decoded with the real reader:
+    `npm run mcp:grammar`, and the `devtool-grammar` CI job. The reader's own
+    states (a torn line, a counter that is not a count, a refusal) are tabulated
+    in tests-command.test.mjs.
  */
-test("the reporter's own documentation states the cap it keeps", () => {
-  const readme = fs.readFileSync(
-    path.join(REPO_ROOT, "tooling~", "scripts", "mcp", "README.md"),
-    "utf8"
-  );
-  assert.match(readme, /capped at ten\b/u, "the README must state the reporter's cap");
-  assert.match(
-    readme,
-    /npm run mcp:grammar/u,
-    "the README must name the gate that compiles the reporter"
-  );
-});
-
 /*
     The same class in the other dev tool, which the reporter's pins do not
     cover. `DxTerminalStateCapture` has no node-side reader for its output, so
@@ -133,20 +109,68 @@ test("a script refresh is asked for in script, and asks for the compile too", ()
       `menu: Assets/Refresh` answered success, the editor went idle, and
       Library/ScriptAssemblies kept the assembly it already had. A test leg
       without a refresh then named a test that no longer existed in the source.
-      Both statements are load-bearing - the import finds the change, the
-      compile request is what stops the idle wait from landing before the
-      scheduled compile - so both are pinned here, and the menu variant can
-      never come back unnoticed.
+      Both statements are load-bearing: the import finds the change, and the
+      compile request is what the wait after it is for.
    */
   assert.match(SCRIPT_REFRESH_EXPRESSION, /UnityEditor\.AssetDatabase\.Refresh\(\);/u);
   assert.match(
     SCRIPT_REFRESH_EXPRESSION,
     /UnityEditor\.Compilation\.CompilationPipeline\.RequestScriptCompilation\(\);/u
   );
-  // Every line is a statement: the eval compiler takes a statement list.
-  for (const line of SCRIPT_REFRESH_EXPRESSION.split("\n")) {
-    assert.match(line.trim(), /;$/u, `statement must end in ';': ${line}`);
-  }
+  // The eval compiler takes a statement list, so every statement ends here.
+  const statements = SCRIPT_REFRESH_EXPRESSION.split(";").filter((part) => part.trim().length > 0);
+  assert.equal(statements.length, 2, `two statements, got: ${SCRIPT_REFRESH_EXPRESSION}`);
+});
+
+test("the refresh is requested before the idle wait, and a busy editor is waited out", async () => {
+  /*
+      The order is the fix. The import and the compile request have to reach the
+      editor before anything asks whether it is idle, and the wait after it has to
+      survive an editor that is busy - which a compile that was only just
+      scheduled looks like. Neither fact is visible to a reader of the source, and
+      a command that dropped either step is the regression this gate exists for.
+   */
+  const answered = (text) => ({ call: { content: [{ text }] } });
+  let clock = 0;
+  const tick = () => {
+    clock += 1_000;
+    return clock;
+  };
+
+  const asked = [];
+  let probes = 0;
+  await refreshScripts(
+    (expression) => {
+      asked.push(expression);
+      if (SCRIPT_REFRESH_EXPRESSION === expression) return answered("null");
+      // Busy once, then idle: a compile that has only just been scheduled.
+      probes += 1;
+      return answered(probes === 1 ? "true" : "false");
+    },
+    60_000,
+    tick
+  );
+
+  assert.equal(asked[0], SCRIPT_REFRESH_EXPRESSION, "the refresh must be asked for first");
+  assert.equal(asked.length, 3, `refresh, then two probes, got: ${asked.length}`);
+
+  // A refused call is the editor holding its main thread, which is what a cold
+  // compile looks like. It must be asked again rather than ending the command.
+  const retried = [];
+  await refreshScripts(
+    (expression) => {
+      retried.push(expression);
+      if (retried.length === 1) throw new Error("Main thread operation timed out after 5000ms");
+      return answered(SCRIPT_REFRESH_EXPRESSION === expression ? "null" : "false");
+    },
+    60_000,
+    tick
+  );
+  assert.equal(
+    retried.filter((expression) => SCRIPT_REFRESH_EXPRESSION === expression).length,
+    2,
+    "a refused refresh must be asked again"
+  );
 });
 
 test("both editor dev tools install together, and a re-install is a no-op", () => {

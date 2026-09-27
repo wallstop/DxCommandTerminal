@@ -2,25 +2,37 @@
     A stand-in for the Unity types DxTerminalTestRunReporter uses, so the real
     file compiles and runs in CI without an editor (issue #167).
 
-    Only the surface the reporter touches is declared, with the real
-    signatures. That is deliberate in both directions: a member the reporter
-    starts using is a compile error here, which is the safe direction; and a
-    member declared here that the real API does not have cannot hide a defect,
-    because the reporter never calls one. What this cannot answer is whether
-    the real editor accepts the file on a given version - that is #164's
-    clean-project matrix, which compiles both dev tools in a real project.
+    Every mirrored type here carries only members the real API has, with the real
+    signatures, and is a subset of what the real type declares. That is what makes
+    the stand-in a gate rather than a mock: a member the reporter starts using is
+    a compile error here until it is declared, and a member the real API lacks
+    cannot be reached at all. The Test Runner half was checked against the
+    metadata of the host editor's own UnityEditor.TestRunner.dll (6000.4.6f1) and
+    against the package's source for both the 2021.3 floor and Unity 6:
+    ITestResultAdaptor does not derive from ITestAdaptor there, it repeats Name
+    and FullName, and RegisterCallbacks is a generic method that appends to a
+    list - so none of those are approximated here either.
 
-    One file holds every type because this is a stand-in for a foreign
-    assembly's surface, not package code. The production conventions
-    (`Runtime/`, `Editor/`, `Generator~/`) are one top-level type per file, an
-    explicit accessibility on every member, and a member ordering per type; the
-    reporter itself is held to all of them and the harness is held to the
-    formatting, but the type-per-file rule has no meaning for eleven shims of
-    eleven different foreign types.
+    What the gate cannot answer is whether the real editor accepts the file on a
+    given version. That is #164's clean-project matrix, which compiles both dev
+    tools in a real project.
+
+    The seams the harness needs - a project root, the warnings raised, the
+    callbacks registered - are on TestProject at the end of this file, which is
+    not a Unity type. A mirrored type therefore has nothing on it that the editor
+    does not also have, so a reporter reaching for one is reaching for something
+    the editor does not have either.
+
+    One file holds every type because this is a stand-in for a foreign assembly's
+    surface, not package code. The production conventions - one top-level type per
+    file, a member ordering per type - have no meaning for shims of foreign types.
+    The reporter is held to all of them; these files are held to CSharpier, which
+    is what the pre-commit hook runs on them.
  */
 namespace UnityEngine
 {
     using System;
+    using DxTerminalDevTools.Grammar;
 
     public class Object
     {
@@ -57,24 +69,18 @@ namespace UnityEngine
     public static class Application
     {
         /// <summary>
-        /// The editor's own project root, which the stand-in cannot know. The
-        /// harness points it at a temporary directory, so a claim written by a
-        /// test run never lands in a real project's artifacts.
+        /// The editor's own project root, which a stand-in cannot know and the
+        /// real API only reads. The seam is on TestProject, so nothing here is
+        /// writable that is not writable in the editor.
         /// </summary>
-        public static string dataPath { get; set; } = string.Empty;
+        public static string dataPath => TestProject.DataPath;
     }
 
     public static class Debug
     {
-        /// <summary>
-        /// Every warning the reporter raises, so the harness can assert that the
-        /// degrade paths ran and that nothing else did.
-        /// </summary>
-        public static System.Collections.Generic.List<string> Warnings { get; } = new();
-
         public static void LogWarning(object message)
         {
-            Warnings.Add(message?.ToString() ?? string.Empty);
+            TestProject.Warnings.Add(message?.ToString() ?? string.Empty);
         }
     }
 }
@@ -90,6 +96,7 @@ namespace UnityEditor
 namespace UnityEditor.TestTools.TestRunner.Api
 {
     using System.Collections.Generic;
+    using DxTerminalDevTools.Grammar;
     using UnityEngine;
 
     public enum TestMode
@@ -106,20 +113,14 @@ namespace UnityEditor.TestTools.TestRunner.Api
         Failed = 3,
     }
 
-    /*
-        Checked against the metadata of UnityEditor.TestRunner.dll on a host
-        editor (6000.4.6f1) rather than from memory, and declared as a subset of
-        what that assembly has: a member this file lacks is a compile error until
-        it is declared, and a member the real API does not have cannot hide a
-        defect. ITestResultAdaptor does not derive from ITestAdaptor there, and
-        repeats Name and FullName instead - so it does not derive here either.
-     */
     public interface ITestAdaptor
     {
         string Id { get; }
         string Name { get; }
         string FullName { get; }
         bool IsSuite { get; }
+        bool HasChildren { get; }
+        IEnumerable<ITestAdaptor> Children { get; }
         TestMode TestMode { get; }
     }
 
@@ -148,16 +149,34 @@ namespace UnityEditor.TestTools.TestRunner.Api
 
     public class TestRunnerApi : ScriptableObject
     {
-        /// <summary>
-        /// What the editor would have kept. The real API registers the
-        /// callbacks with the test runner and holds them; nothing here can run a
-        /// suite, so the instance is handed back instead.
-        /// </summary>
-        public static ICallbacks Registered { get; set; }
-
-        public void RegisterCallbacks(ICallbacks testCallbacks, int priority = 0)
+        public void RegisterCallbacks<T>(T testCallbacks, int priority = 0)
+            where T : ICallbacks
         {
-            Registered = testCallbacks;
+            TestProject.Registered.Add(testCallbacks);
         }
+    }
+}
+
+namespace DxTerminalDevTools.Grammar
+{
+    using System.Collections.Generic;
+    using UnityEditor.TestTools.TestRunner.Api;
+
+    /*
+        The seams the harness drives, none of them Unity types and none of them
+        reachable from the reporter, which names only the mirrored ones.
+     */
+    public static class TestProject
+    {
+        public static string DataPath { get; set; } = string.Empty;
+
+        public static List<string> Warnings { get; } = new();
+
+        /// <summary>
+        /// Every callback the reporter registered, in order. The real API keeps a
+        /// priority-ordered list; a domain reload empties it and the editor
+        /// registers again, which is what the reload case models.
+        /// </summary>
+        public static List<ICallbacks> Registered { get; } = new();
     }
 }

@@ -32,14 +32,19 @@ namespace DxTerminalDevTools
     using System.IO;
     using System.Text;
     using System.Text.Json;
+    using DxTerminalDevTools.Grammar;
     using UnityEditor.TestTools.TestRunner.Api;
-    using UnityEngine;
 
     internal static class ClaimGrammarHarness
     {
         private const string Fixture = "Wallstop.Fixture";
         private const int ReportedCap = 10;
-        private const char Separator = ',';
+
+        /// <summary>
+        /// The duration every result reports, so the claim's own duration is an
+        /// expectation rather than a string repeated in a test.
+        /// </summary>
+        private const double ResultDuration = 0.5;
 
         private static readonly List<string> Failures = new();
 
@@ -56,13 +61,13 @@ namespace DxTerminalDevTools
                 "dxt-grammar-" + Guid.NewGuid().ToString("N")
             );
             Directory.CreateDirectory(Path.Combine(project, "Assets"));
-            Application.dataPath = Path.Combine(project, "Assets");
+            TestProject.DataPath = Path.Combine(project, "Assets");
 
             List<ClaimExpectation> expectations = new();
             try
             {
                 DxTerminalTestRunReporter.RegisterCallbacks();
-                ICallbacks callbacks = TestRunnerApi.Registered;
+                ICallbacks callbacks = Last();
                 if (callbacks is null)
                 {
                     Console.Error.WriteLine("the reporter registered no callbacks");
@@ -85,7 +90,14 @@ namespace DxTerminalDevTools
             }
             finally
             {
-                Directory.Delete(project, true);
+                // A failed delete is not the failure being reported, and letting
+                // it escape would print a stack trace instead of the list.
+                try
+                {
+                    Directory.Delete(project, true);
+                }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
             }
 
             foreach (string failure in Failures)
@@ -254,7 +266,7 @@ namespace DxTerminalDevTools
             Request("grammar-reload");
             StartRun(callbacks, "grammar-reload");
             DxTerminalTestRunReporter.RegisterCallbacks();
-            ICallbacks reloaded = TestRunnerApi.Registered;
+            ICallbacks reloaded = Last();
             Require(
                 !ReferenceEquals(callbacks, reloaded),
                 "registering again must hand back a new instance, or this case proves nothing"
@@ -280,7 +292,7 @@ namespace DxTerminalDevTools
         )
         {
             Request("grammar-throwing");
-            int warningsBefore = Debug.Warnings.Count;
+            int warningsBefore = TestProject.Warnings.Count;
             StartRun(callbacks, "grammar-throwing");
             callbacks.RunFinished(
                 Root(
@@ -303,11 +315,11 @@ namespace DxTerminalDevTools
                     failed: 2
                 )
             );
-            int raised = Debug.Warnings.Count - warningsBefore;
+            int raised = TestProject.Warnings.Count - warningsBefore;
             Require(raised == 1, $"the degrade path must be reported once, not {raised} times");
             if (raised == 1)
             {
-                string warning = Debug.Warnings[warningsBefore];
+                string warning = TestProject.Warnings[warningsBefore];
                 Require(
                     warning.Contains("walk failed", StringComparison.Ordinal)
                         && warning.Contains("broken tree", StringComparison.Ordinal),
@@ -447,6 +459,11 @@ namespace DxTerminalDevTools
             );
         }
 
+        private static ICallbacks Last()
+        {
+            return TestProject.Registered[TestProject.Registered.Count - 1];
+        }
+
         private static string ReadClaim()
         {
             return File.ReadAllText(DxTerminalTestRunReporter.ClaimPath()).Trim();
@@ -460,7 +477,8 @@ namespace DxTerminalDevTools
             int failed = 0,
             int skipped = 0,
             int more = 0,
-            string mode = "EditMode"
+            string mode = "EditMode",
+            double duration = ResultDuration
         )
         {
             return new ClaimExpectation
@@ -474,6 +492,7 @@ namespace DxTerminalDevTools
                 Failed = failed,
                 Skipped = skipped,
                 FailedMore = more,
+                Duration = duration,
                 Names = names,
             };
         }
@@ -628,7 +647,7 @@ namespace DxTerminalDevTools
 
             public TestStatus TestStatus { get; }
 
-            public double Duration => 0.5;
+            public double Duration => ResultDuration;
 
             public int PassCount { get; }
 
@@ -640,19 +659,23 @@ namespace DxTerminalDevTools
 
             public bool HasChildren => _throwsOnChildren || 0 < _children.Count;
 
-            public IEnumerable<ITestResultAdaptor> Children
-            {
-                get
-                {
-                    if (_throwsOnChildren)
-                    {
-                        throw new InvalidOperationException("broken tree");
-                    }
+            // Explicit, because the two interfaces declare Children with
+            // different element types and the fake is both.
+            IEnumerable<ITestResultAdaptor> ITestResultAdaptor.Children =>
+                Children<ITestResultAdaptor>();
 
-                    foreach (FakeTest child in _children)
-                    {
-                        yield return child;
-                    }
+            IEnumerable<ITestAdaptor> ITestAdaptor.Children => Children<ITestAdaptor>();
+
+            private IEnumerable<TTarget> Children<TTarget>()
+            {
+                if (_throwsOnChildren)
+                {
+                    throw new InvalidOperationException("broken tree");
+                }
+
+                foreach (FakeTest child in _children)
+                {
+                    yield return (TTarget)(object)child;
                 }
             }
         }
@@ -686,6 +709,8 @@ namespace DxTerminalDevTools
             public int Inconclusive { get; init; }
 
             public int FailedMore { get; init; }
+
+            public double Duration { get; init; }
 
             public string[] Names { get; init; }
         }

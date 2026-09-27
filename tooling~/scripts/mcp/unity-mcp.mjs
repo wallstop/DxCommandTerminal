@@ -2213,21 +2213,40 @@ function assertEvalAnswer(evalAnswer, action) {
     assembly is a green report on the previous code, which is the one answer a
     caller cannot detect.
 
+    A refused call is "busy", not a failure. The refresh runs on the editor's
+    main thread, and a changed script under Packages/ can hold it past the
+    bridge's main-thread timeout, which the SDK reports as a tool error. Both
+    waits above treat that as busy and keep asking, and so does this: a cold
+    compile is the state the command exists to survive.
+
     The trailing wait is the compile, not the import. A refresh that finds a
     changed script schedules the compile, and the editor answers an idle query
     before the scheduled compile starts, so the wait has to follow the request.
-    The caller waits for quiet first: the asset database is not to be touched
-    while the editor is already busy with an import of its own.
+    That narrows the window; it cannot close it, because the editor cannot be
+    asked what it is about to do. The caller waits for quiet first: the asset
+    database is not to be touched while the editor is already busy with an
+    import of its own.
+
+    Exported for the refresh tests: a command that drops this call is a command
+    that reports the assembly it already had.
  */
-async function refreshScripts(evalCall, deadline) {
-  await evalCall(SCRIPT_REFRESH_EXPRESSION);
-  await waitForEditorIdle(evalCall, deadline);
+export async function refreshScripts(evalCall, deadline, now = () => Date.now()) {
+  for (let attempt = 0; attempt < 8 && now() < deadline; attempt += 1) {
+    try {
+      assertEvalAnswer(await evalCall(SCRIPT_REFRESH_EXPRESSION), "script refresh");
+      break;
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 1_000));
+    }
+  }
+
+  await waitForEditorIdle(evalCall, deadline, now);
 }
 
-async function waitForEditorIdle(evalCall, deadline) {
+async function waitForEditorIdle(evalCall, deadline, now = () => Date.now()) {
   const expression =
     "return (UnityEditor.EditorApplication.isCompiling || UnityEditor.EditorApplication.isUpdating);";
-  while (Date.now() < deadline) {
+  while (now() < deadline) {
     /*
         A call that lands while the editor is busy does not answer at all: the
         bridge reports a main-thread timeout and the SDK poisons the session. That
