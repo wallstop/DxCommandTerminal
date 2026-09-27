@@ -3071,23 +3071,43 @@ export function testSummaryLine(summary) {
 }
 
 /*
-    Characters that must not reach the output raw: the C0 and C1 controls, DEL,
-    the zero-width and bidi formatting characters, and the BOM. The reporter
-    percent-encodes all of them, so a decoded name can carry any of them - a
-    `[TestCase("a\nb")]` is real in this repository - and one printed raw would
-    split its own line, reorder one, or hide a run's result behind an override.
-    Replaced with a visible escape rather than dropped, so a reader can tell the
-    name was changed.
- */
-const UNPRINTABLE_NAME_CHARACTER = /[\u0000-\u001f\u007f-\u009f\u00ad\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/gu;
+    Characters a printed name must not carry raw: the control and format
+    categories, plus the two line separators. The reporter percent-encodes all
+    of them, so a decoded name can carry any of them - a `[TestCase("a\nb")]` is
+    real in this repository - and one printed raw would split its own line,
+    reorder one, or hide a run's result behind an override or a zero-width
+    character.
 
-/** A decoded name, safe to print on one line. */
+    The Unicode categories, not an enumerated range. An enumeration of this set is
+    always short: the one in the first cut of this change missed U+2028 and
+    U+2029, which are line separators, and 149 format characters - 127 of them
+    above the BMP. `Cc` is C0, DEL, and C1; `Cf` is the zero-width, bidi,
+    deprecated-format, and tag characters; `Zl` and `Zp` are the line and
+    paragraph separators. Ordinary spaces are `Zs` and stay, so a real name is
+    still readable.
+
+    A backslash is escaped too. Without that, a name holding the literal text
+    `\u000A` prints exactly like a name holding a newline, and the escape stops
+    being evidence of what the name contained.
+ */
+const UNPRINTABLE_NAME_CHARACTER = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\\]/gu;
+
+const LAST_BMP_CODE_POINT = 0xffff;
+
+/**
+ * A decoded name, safe to print on one line. The escape is for a human reading
+ * a log, not for decoding: `\uXXXX` below the BMP and `\UXXXXXXXX` above it,
+ * because `\u` takes exactly four hex digits and a five-digit `\uE0001` reads as
+ * a different character than it is. The reporter percent-encodes UTF-8 bytes, so
+ * a tag character such as U+E0001 arrives here intact and needs the long form.
+ */
 function printableName(name) {
-  return name.replace(
-    UNPRINTABLE_NAME_CHARACTER,
-    (character) =>
-      `\\u${character.codePointAt(0).toString(16).toUpperCase().padStart(4, "0")}`
-  );
+  return name.replace(UNPRINTABLE_NAME_CHARACTER, (character) => {
+    const hex = character.codePointAt(0).toString(16).toUpperCase();
+    return character.codePointAt(0) <= LAST_BMP_CODE_POINT
+      ? `\\u${hex.padStart(4, "0")}`
+      : `\\U${hex.padStart(8, "0")}`;
+  });
 }
 
 /**

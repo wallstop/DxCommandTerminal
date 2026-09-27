@@ -532,7 +532,11 @@ namespace DxTerminalDevTools
                 {
                     builder.Append('\n');
                 }
-                builder.Append('[').Append(type).Append("] ").Append(message);
+                // One entry per line, so a message carrying a newline - a stack
+                // trace, or any test name holding one - must not append lines
+                // that read as further entries. Same rule as Json() below: a
+                // category question, never a hand-written range.
+                builder.Append('[').Append(type).Append("] ").Append(OneLine(message));
                 count++;
             }
             if (skipped > 0)
@@ -602,9 +606,17 @@ namespace DxTerminalDevTools
                         builder.Append("\\t");
                         break;
                     default:
-                        if (character < ' ')
+                        /*
+                            char.IsControl, not a hand-written range. The range
+                            this replaced covered C0 only, so a DEL, a C1, or a
+                            line separator wrote raw into every manifest a
+                            capture produces.
+                         */
+                        if (char.IsControl(character) || IsLineSeparator(character))
                         {
-                            builder.Append("\\u").Append(((int)character).ToString("x4", CultureInfo.InvariantCulture));
+                            builder
+                                .Append("\\u")
+                                .Append(((int)character).ToString("x4", CultureInfo.InvariantCulture));
                         }
                         else
                         {
@@ -614,6 +626,46 @@ namespace DxTerminalDevTools
                 }
             }
             builder.Append('"');
+            return builder.ToString();
+        }
+
+        /// <summary>
+        /// U+2028 and U+2029. They are neither control characters nor whitespace
+        /// on every platform, and a reader that splits a line on whitespace
+        /// treats both as one.
+        /// </summary>
+        private static bool IsLineSeparator(char character)
+        {
+            return character is '\u2028' or '\u2029';
+        }
+
+        /// <summary>
+        /// A console message reduced to one line, with every character that ends
+        /// or hides a line made visible. A bare CR overwrites in a terminal, so
+        /// it is escaped with the rest.
+        /// </summary>
+        private static string OneLine(string message)
+        {
+            if (message == null)
+            {
+                return string.Empty;
+            }
+
+            StringBuilder builder = new(message.Length);
+            foreach (char character in message)
+            {
+                if (char.IsControl(character) || IsLineSeparator(character))
+                {
+                    builder
+                        .Append("\\u")
+                        .Append(((int)character).ToString("x4", CultureInfo.InvariantCulture));
+                }
+                else
+                {
+                    builder.Append(character);
+                }
+            }
+
             return builder.ToString();
         }
     }

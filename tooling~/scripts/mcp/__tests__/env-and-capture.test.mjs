@@ -200,6 +200,32 @@ test("the reporter and the claim decoder agree on names, heads, and fields", () 
   );
 });
 
+/*
+    The same class in the other dev tool, which the reporter's pins do not
+    cover. `DxTerminalStateCapture` has no node-side reader for its output, so
+    source text is all CI can check - the same stopgap, and the same follow-up
+    (#167).
+
+    Both of these replaced a hand-written range. `character < ' '` covered the
+    C0 controls only, so a DEL, a C1 character, or a line separator wrote raw
+    into every manifest a capture produces; a raw console message with a newline
+    appended lines to a one-entry-per-line file that a red run is read from.
+ */
+test("the state capture asks a category question, not a hand-written range", () => {
+  const capture = fs.readFileSync(captureScriptSourcePath(REPO_ROOT), "utf8");
+
+  // The JSON writer, and the console-message writer: both must go through the
+  // category predicate. A bare range comparison here is the regression.
+  assert.doesNotMatch(capture, /character < ' '/u, "a hand-written C0 range must not return");
+  const predicates = capture.match(/char\.IsControl\(character\)/gu) ?? [];
+  assert.equal(predicates.length, 2, "both writers must ask char.IsControl");
+  assert.match(capture, /IsLineSeparator\(char character\)/u);
+  assert.match(capture, /return character is '\\u2028' or '\\u2029';/u);
+  // The console file is one entry per line, so the message goes through the
+  // same filter rather than being appended raw.
+  assert.match(capture, /\.Append\(OneLine\(message\)\)/u);
+});
+
 test("both editor dev tools install together, and a re-install is a no-op", () => {
   const files = captureScriptFiles(REPO_ROOT);
   // State capture and the test run reporter: one command installs both, or the

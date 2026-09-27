@@ -132,17 +132,25 @@ test("a result block names its failures, and says so when it cannot", () => {
     // A control character, a bidi override, or a zero-width joiner in a name
     // must not split it across two lines, reorder one, or forge a result line -
     // and the escape has to be visible, or a reader cannot tell a name changed.
+    // U+2028 and U+2029 are here because they are line separators: a name
+    // holding one splits its line in a log viewer, which is where a red run is
+    // read. An enumerated range missed both.
     [
       {
         total: 1,
         passed: 0,
         failed: 1,
         skipped: 0,
-        failedNames: ["Ns.A.One\n  Tests: 1 total, 1 passed, 0 failed, 0 skipped.", "Ns.A\u202E﻿B"]
+        failedNames: [
+          "Ns.A.One\n  Tests: 1 total, 1 passed, 0 failed, 0 skipped.",
+          "Ns.A\u202E﻿B",
+          "Ns.A\u2028  Tests: 9 total, 9 passed, 0 failed, 0 skipped."
+        ]
       },
       "Tests: 1 total, 0 passed, 1 failed, 0 skipped.\n"
         + "  failed: Ns.A.One\\u000A  Tests: 1 total, 1 passed, 0 failed, 0 skipped.\n"
-        + "  failed: Ns.A\\u202E\\uFEFFB"
+        + "  failed: Ns.A\\u202E\\uFEFFB\n"
+        + "  failed: Ns.A\\u2028  Tests: 9 total, 9 passed, 0 failed, 0 skipped."
     ],
     // A red run the editor named nothing says so, instead of printing the
     // counters alone - which is the output this whole change replaced.
@@ -172,6 +180,107 @@ test("a result block names its failures, and says so when it cannot", () => {
     assert.equal(testSummaryLine(summary), expected, expected);
   }
 });
+
+/*
+    The oracle for "a printed name cannot break a line", in both directions.
+
+    The hostile set is derived from the Unicode categories and then enumerated,
+    not read off the production literal: a test that compares the two strings can
+    only catch a narrowing, never a widening. The first version of the filter
+    enumerated its own range and missed 24 characters below the BMP - two of them
+    line separators - and 127 more above it, so an enumerated expectation here
+    would drift exactly the way the code did.
+
+    The whole scalar range, not the BMP: the reporter percent-encodes UTF-8
+    bytes, so a tag character like U+E0001 arrives intact, and it needs the
+    eight-digit escape form. A BMP-only walk would never have reached it.
+
+    The other direction matters too. A filter that escapes a comma, a space, or a
+    letter is its own defect: the reader loses the name it was given.
+
+    One limit, stated: widening the production class to a category this oracle
+    does not name is a semantic decision this test will not second-guess. What it
+    does catch is a narrow, a malformed escape, a dropped character, an
+    over-filter, and any enumerating of the range.
+ */
+const NAME_LINE = "\n  failed: ";
+
+function printedName(name) {
+  const block = testSummaryLine({
+    total: 1,
+    passed: 0,
+    failed: 1,
+    skipped: 0,
+    failedNames: [name]
+  });
+  const at = block.indexOf(NAME_LINE);
+  assert.notEqual(at, -1, `the block must name the test: ${JSON.stringify(block)}`);
+  return block.slice(at + NAME_LINE.length);
+}
+
+test("every control, format, or line-separator scalar is escaped, and nothing else is", () => {
+  const hostile = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
+  const problems = [];
+  let checked = 0;
+  for (let code = 0; code <= 0x10ffff; ++code) {
+    if (code >= 0xd800 && code <= 0xdfff) continue; // a lone surrogate, not a scalar
+    const character = String.fromCodePoint(code);
+    const name = "Ns.A" + character + "B";
+    if (hostile.test(character)) {
+      checked += 1;
+      // The exact escape, so a malformed one is caught: `\u` takes four hex
+      // digits and `\U` takes eight.
+      const hex = code.toString(16).toUpperCase();
+      const expected =
+        code <= 0xffff ? "\\u" + hex.padStart(4, "0") : "\\U" + hex.padStart(8, "0");
+      const actual = printedName(name);
+      if (actual !== "Ns.A" + expected + "B") {
+        problems.push(
+          "U+" + hex.padStart(4, "0")
+            + " printed as "
+            + JSON.stringify(actual)
+            + ", expected "
+            + JSON.stringify("Ns.A" + expected + "B")
+        );
+      }
+      continue;
+    }
+    // Not hostile: it must reach the reader. Sampled rather than exhaustive -
+    // every scalar in the plane is the same assertion 1.1M times over - but
+    // spread across the categories a wrong class would grab.
+    if (code % 4093 !== 0) continue;
+    const actual = printedName(name);
+    if (actual !== name) {
+      problems.push(
+        "U+" + hex4(code) + " is not hostile but was rewritten to " + JSON.stringify(actual)
+      );
+    }
+  }
+  assert.ok(0 < checked, "the hostile set must not be empty");
+  assert.deepEqual(problems, [], problems.slice(0, 8).join("\n"));
+
+  // A name a real suite produces survives untouched. A backslash is not here: the
+  // filter escapes it, which is what keeps a literal `\u000A` in a name from
+  // reading as an escape of a real one.
+  for (const name of [
+    'Ns.M.Case("a b")',
+    "Ns.M.Case(a,b)",
+    "Ns.M.Case(a=b)",
+    "Ns.M.中文",
+    "Ns.M.😀"
+  ]) {
+    assert.equal(printedName(name), name, "must survive untouched: " + name);
+  }
+  assert.equal(
+    printedName("Ns.A\\u000AB"),
+    "Ns.A\\u005Cu000AB",
+    "a literal backslash-u sequence must not read as an escape of a real one"
+  );
+});
+
+function hex4(code) {
+  return code.toString(16).toUpperCase().padStart(4, "0");
+}
 
 test("a result identical to the pre-request run is the previous run's", () => {
   const before =
