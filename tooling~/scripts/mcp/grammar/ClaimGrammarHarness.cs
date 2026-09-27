@@ -13,11 +13,12 @@
       acknowledged with the token it was started under, and that a walk which
       throws costs the names and not the claim.
     - node (grammar.test.mjs): that the claims decode into exactly the results
-      below. The decoder is JavaScript, so no C# can check it, and the two halves
-      agreeing is the whole contract. Each expectation is the object the reader
-      must return for that line, so the comparison is an equality rather than a
-      search for a fragment - which is also where a suite reported as a failed
-      test, or a name mangled on the way, is caught.
+      stated here. The decoder is JavaScript, so no C# can check it, and the two
+      halves agreeing is the whole contract. Each record says what the run was,
+      and the node side composes the object the reader must return for the line
+      and compares it, so the comparison is an equality rather than a search for
+      a fragment - which is also where a suite reported as a failed test, or a
+      name mangled on the way, is caught.
 
     Every assertion reads the claim the reporter wrote, never a string this file
     assembled from the reporter's constants: a pin on the source cannot catch a
@@ -524,6 +525,11 @@ namespace DxTerminalDevTools
             writer.WriteEndObject();
         }
 
+        /*
+            The three shapes a result tree is built from. A leaf, a failed
+            fixture, and the suite the editor hands back at the end: the
+            reporter walks all of them and reports only the first.
+         */
         private static FakeTest Leaf(
             string name,
             TestStatus status = TestStatus.Passed,
@@ -533,19 +539,7 @@ namespace DxTerminalDevTools
             TestMode mode = TestMode.EditMode
         )
         {
-            return new FakeTest(
-                name,
-                status,
-                isSuite,
-                hasTest,
-                throwsOnChildren,
-                mode,
-                null,
-                0,
-                0,
-                0,
-                0
-            );
+            return new FakeTest(name, status, isSuite, hasTest, throwsOnChildren, mode);
         }
 
         /*
@@ -555,36 +549,12 @@ namespace DxTerminalDevTools
          */
         private static FakeTest Failed(string name)
         {
-            return new FakeTest(
-                name,
-                TestStatus.Failed,
-                false,
-                true,
-                false,
-                TestMode.EditMode,
-                null,
-                0,
-                0,
-                0,
-                0
-            );
+            return new FakeTest(name, TestStatus.Failed);
         }
 
         private static FakeTest FailedFixture(string name, List<FakeTest> children)
         {
-            return new FakeTest(
-                name,
-                TestStatus.Failed,
-                true,
-                true,
-                false,
-                TestMode.EditMode,
-                children,
-                0,
-                0,
-                0,
-                0
-            );
+            return new FakeTest(name, TestStatus.Failed, isSuite: true, children: children);
         }
 
         private static FakeTest Root(
@@ -597,15 +567,11 @@ namespace DxTerminalDevTools
             return new FakeTest(
                 Fixture,
                 TestStatus.Passed,
-                true,
-                true,
-                false,
-                TestMode.EditMode,
-                children,
-                passed,
-                failed,
-                skipped,
-                0
+                isSuite: true,
+                children: children,
+                passed: passed,
+                failed: failed,
+                skipped: skipped
             );
         }
 
@@ -623,16 +589,16 @@ namespace DxTerminalDevTools
 
             public FakeTest(
                 string fullName,
-                TestStatus status,
-                bool isSuite,
-                bool hasTest,
-                bool throwsOnChildren,
-                TestMode mode,
-                List<FakeTest> children,
-                int passed,
-                int failed,
-                int skipped,
-                int inconclusive
+                TestStatus status = TestStatus.Passed,
+                bool isSuite = false,
+                bool hasTest = true,
+                bool throwsOnChildren = false,
+                TestMode mode = TestMode.EditMode,
+                List<FakeTest> children = null,
+                int passed = 0,
+                int failed = 0,
+                int skipped = 0,
+                int inconclusive = 0
             )
             {
                 FullName = fullName;
