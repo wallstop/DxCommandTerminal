@@ -7,15 +7,17 @@
 
     What is checked here, and what is left to the node side:
 
-    - C#: the claim line itself. The counters, token and mode are the ones the
-      result tree describes; a red run names no more than the cap and reports
-      how many it did not name; a run that named nothing writes no names field;
-      a run nobody asked for is attributed to nobody; a run that ran no tests is
-      a refusal. The line must stay ASCII, so no name can break it from inside.
-    - node (grammar.test.mjs): that each claim decodes back to the exact names
-      that went in. The decoder is JavaScript, so no C# can check it, and the
-      two halves agreeing is the whole contract. That is also where a suite
-      reported as a failed test, or a name mangled on the way, is caught.
+    - C#: what the raw line looks like, because no reader can see it. That a
+      claim stays ASCII, that a name list is a list of non-empty fields, that a
+      run nobody asked for is refused rather than acknowledged, that the start is
+      acknowledged with the token it was started under, and that a walk which
+      throws costs the names and not the claim.
+    - node (grammar.test.mjs): that the claims decode into exactly the results
+      below. The decoder is JavaScript, so no C# can check it, and the two halves
+      agreeing is the whole contract. Each expectation is the object the reader
+      must return for that line, so the comparison is an equality rather than a
+      search for a fragment - which is also where a suite reported as a failed
+      test, or a name mangled on the way, is caught.
 
     Every assertion reads the claim the reporter wrote, never a string this file
     assembled from the reporter's constants: a pin on the source cannot catch a
@@ -100,9 +102,9 @@ namespace DxTerminalDevTools
         }
 
         /*
-            Nobody asked for this run. It is still reported, but as nobody's: a
-            late callback must never adopt the token of the next request, and
-            the reader is looking for a token of its own.
+            Nobody asked for this run. It is refused at the start, and reported
+            as nobody's at the end: a late callback must never adopt the token of
+            the next request, and the reader is looking for a token of its own.
          */
         private static void RunNobodyAskedFor(
             ICallbacks callbacks,
@@ -110,23 +112,16 @@ namespace DxTerminalDevTools
         )
         {
             File.Delete(DxTerminalTestRunReporter.RequestPath());
-            string name = $"{Fixture}.Unattributed";
-            callbacks.RunStarted(new FakeTest(Fixture, isSuite: true));
+            string[] names = { $"{Fixture}.Unattributed" };
+            callbacks.RunStarted(Leaf(Fixture, isSuite: true));
             Require(
                 ReadClaim().Contains("did-not-run token=none", StringComparison.Ordinal),
                 "a run nobody asked for is refused at the start, not acknowledged"
             );
             callbacks.RunFinished(
-                new FakeTest(
-                    Fixture,
-                    isSuite: true,
-                    failed: 1,
-                    children: new List<FakeTest> { new FakeTest(name, TestStatus.Failed) }
-                )
+                Root(children: new List<FakeTest> { Failed(names[0]) }, failed: 1)
             );
-            expectations.Add(
-                Expect("a run nobody asked for", new[] { "token=none", "fail=1" }, new[] { name })
-            );
+            expectations.Add(Finished("a run nobody asked for", "none", names, failed: 1));
         }
 
         /*
@@ -141,15 +136,12 @@ namespace DxTerminalDevTools
         {
             Request("grammar-empty");
             StartRun(callbacks, "grammar-empty");
-            callbacks.RunFinished(new FakeTest(Fixture, isSuite: true));
+            callbacks.RunFinished(Root());
             expectations.Add(
-                Expect(
+                Refused(
                     "a run that executed no tests",
-                    new[]
-                    {
-                        "did-not-run token=grammar-empty mode=EditMode",
-                        "reason=the run executed no tests",
-                    }
+                    "grammar-empty",
+                    "the run executed no tests"
                 )
             );
         }
@@ -160,106 +152,167 @@ namespace DxTerminalDevTools
          */
         private static void RunGreen(ICallbacks callbacks, List<ClaimExpectation> expectations)
         {
-            Request("grammar-green");
-            List<FakeTest> children = new()
-            {
-                new FakeTest($"{Fixture}.One.TestAlpha", TestStatus.Passed),
-                new FakeTest($"{Fixture}.One.TestBeta", TestStatus.Passed),
-                new FakeTest($"{Fixture}.One.TestGamma", TestStatus.Skipped),
-            };
-            StartRun(callbacks, "grammar-green", TestMode.PlayMode);
+            const string token = "grammar-green";
+            Request(token);
+            StartRun(callbacks, token, TestMode.PlayMode);
             callbacks.RunFinished(
-                new FakeTest(Fixture, isSuite: true, passed: 2, skipped: 1, children: children)
+                Root(
+                    passed: 2,
+                    skipped: 1,
+                    children: new List<FakeTest>
+                    {
+                        Leaf($"{Fixture}.One.TestAlpha"),
+                        Leaf($"{Fixture}.One.TestBeta"),
+                        Leaf($"{Fixture}.One.TestGamma", TestStatus.Skipped),
+                    }
+                )
             );
-
-            ClaimExpectation expectation = Expect(
-                "a green run",
-                new[]
-                {
-                    "pass=2 fail=0 skipped=1 inconclusive=0",
-                    // The duration and the two timestamps are for whoever reads
-                    // the file after a failed run; the first is a number a
-                    // reader can parse, so the separator is fixed too.
-                    "duration=0.5",
-                    "token=grammar-green",
-                    "mode=PlayMode",
-                    "finished=",
-                }
+            expectations.Add(
+                Finished(
+                    "a green run",
+                    token,
+                    new string[0],
+                    passed: 2,
+                    skipped: 1,
+                    mode: "PlayMode"
+                )
             );
-            Require(
-                !expectation.Claim.Contains("failed-names", StringComparison.Ordinal),
-                $"a green run must write no names field, got: {expectation.Claim}"
-            );
-            expectations.Add(expectation);
         }
 
         /*
             The red run, shaped so every rule the reporter states is observable:
             a failed fixture is walked and must not be named, a childless failed
             node is still a suite and must not be named either, a result whose
-            test never arrived has no name to give, and more failures than the
-            cap become the cap plus a count of the rest.
+            test never arrived has no name to give, and more failures than the cap
+            become the cap plus a count of the rest.
          */
         private static void RunRedOverTheCap(
             ICallbacks callbacks,
             List<ClaimExpectation> expectations
         )
         {
-            List<string> named = new() { $"{Fixture}.Alpha.One", $"{Fixture}.Beta.One" };
+            List<string> names = new() { $"{Fixture}.Alpha.One", $"{Fixture}.Beta.One" };
             List<FakeTest> children = new()
             {
-                new FakeTest(
+                FailedFixture(
                     $"{Fixture}.Alpha",
-                    TestStatus.Failed,
-                    children: new List<FakeTest>
+                    new List<FakeTest>
                     {
-                        new FakeTest($"{Fixture}.Alpha.Skipped", TestStatus.Skipped),
-                        new FakeTest($"{Fixture}.Alpha.One", TestStatus.Failed),
+                        Leaf($"{Fixture}.Alpha.Skipped", TestStatus.Skipped),
+                        Failed($"{Fixture}.Alpha.One"),
                     }
                 ),
-                new FakeTest(
+                FailedFixture(
                     $"{Fixture}.Beta",
-                    TestStatus.Failed,
-                    children: new List<FakeTest>
-                    {
-                        new FakeTest($"{Fixture}.Beta.One", TestStatus.Failed),
-                    }
+                    new List<FakeTest> { Failed($"{Fixture}.Beta.One") }
                 ),
                 // A childless failed node is still a suite, and reporting it
                 // would point the reader at the fixture instead of the test.
-                new FakeTest($"{Fixture}.Childless", TestStatus.Failed, isSuite: true),
+                Leaf($"{Fixture}.Childless", TestStatus.Failed, isSuite: true),
                 // A result whose test never arrived: no name to report.
-                new FakeTest(null, TestStatus.Failed, hasTest: false),
+                Leaf(null, TestStatus.Failed, hasTest: false),
             };
             for (int index = 0; index < 12; ++index)
             {
                 string name = $"{Fixture}.Bulk{index:00}";
-                children.Add(new FakeTest(name, TestStatus.Failed));
-                named.Add(name);
+                children.Add(Failed(name));
+                names.Add(name);
             }
 
             Request("grammar-red");
             StartRun(callbacks, "grammar-red");
+            callbacks.RunFinished(Root(failed: names.Count, children: children));
+            // Tree order, which is depth first: the two names inside the failed
+            // fixtures come before the bulk leaves, and the suites themselves are
+            // never among them.
+            expectations.Add(
+                Finished(
+                    "a red run over the cap",
+                    "grammar-red",
+                    names.GetRange(0, ReportedCap).ToArray(),
+                    failed: names.Count,
+                    more: names.Count - ReportedCap
+                )
+            );
+        }
+
+        /*
+            A Play Mode run reloads the domain between the start and the finish,
+            so the instance that sees the finish is a new one with nothing in
+            memory. Registering again and finishing from the new instance is what
+            that looks like, and the attribution has to survive it: a run that
+            reported itself as somebody else's, or as nobody's, would be discarded
+            by the caller waiting for it.
+         */
+        private static void RunAcrossADomainReload(
+            ICallbacks callbacks,
+            List<ClaimExpectation> expectations
+        )
+        {
+            string[] names = { $"{Fixture}.Reload.One" };
+            Request("grammar-reload");
+            StartRun(callbacks, "grammar-reload");
+            DxTerminalTestRunReporter.RegisterCallbacks();
+            ICallbacks reloaded = TestRunnerApi.Registered;
+            Require(
+                !ReferenceEquals(callbacks, reloaded),
+                "registering again must hand back a new instance, or this case proves nothing"
+            );
+            reloaded.RunFinished(
+                Root(failed: 1, children: new List<FakeTest> { Failed(names[0]) })
+            );
+            expectations.Add(
+                Finished("a run across a domain reload", "grammar-reload", names, failed: 1)
+            );
+        }
+
+        /*
+            A result tree the walk cannot survive. The walk reads a tree this code
+            does not own, so an exception there must cost the names and not the
+            claim: the counters are the part a caller has no other way to get.
+            Without the guard the exception leaves RunFinished and the caller is
+            left with no line at all.
+         */
+        private static void RunWithAThrowingResultTree(
+            ICallbacks callbacks,
+            List<ClaimExpectation> expectations
+        )
+        {
+            Request("grammar-throwing");
+            int warningsBefore = Debug.Warnings.Count;
+            StartRun(callbacks, "grammar-throwing");
             callbacks.RunFinished(
-                new FakeTest(Fixture, isSuite: true, failed: named.Count, children: children)
+                Root(
+                    passed: 4,
+                    failed: 2,
+                    children: new List<FakeTest>
+                    {
+                        Failed($"{Fixture}.Alpha.One"),
+                        Leaf($"{Fixture}.Broken", TestStatus.Failed, throwsOnChildren: true),
+                    }
+                )
             );
 
             expectations.Add(
-                Expect(
-                    "a red run over the cap",
-                    new[]
-                    {
-                        $"pass=0 fail={named.Count} skipped=0 inconclusive=0",
-                        "token=grammar-red",
-                        "mode=EditMode",
-                        $"failed-more={named.Count - ReportedCap}",
-                    },
-                    // Tree order, which is depth first: the two names inside the
-                    // failed fixtures come before the bulk leaves, and the
-                    // suites themselves are never among them.
-                    named.GetRange(0, ReportedCap).ToArray()
+                Finished(
+                    "a result tree the walk cannot survive",
+                    "grammar-throwing",
+                    new string[0],
+                    passed: 4,
+                    failed: 2
                 )
             );
+            int raised = Debug.Warnings.Count - warningsBefore;
+            Require(raised == 1, $"the degrade path must be reported once, not {raised} times");
+            if (raised == 1)
+            {
+                string warning = Debug.Warnings[warningsBefore];
+                Require(
+                    warning.Contains("walk failed", StringComparison.Ordinal)
+                        && warning.Contains("broken tree", StringComparison.Ordinal),
+                    $"the warning must name the walk and the failure, got: {warning}"
+                );
+            }
         }
 
         /*
@@ -276,12 +329,11 @@ namespace DxTerminalDevTools
             for (int code = 0x20; code <= 0x7F; ++code)
             {
                 char character = (char)code;
-                string name = $"{Fixture}.Char{code:X2}({character})";
                 RunNames(
                     callbacks,
                     "grammar-char",
                     "character U+" + code.ToString("X4", CultureInfo.InvariantCulture),
-                    new[] { name },
+                    new[] { $"{Fixture}.Char{code:X2}({character})" },
                     expectations
                 );
             }
@@ -338,103 +390,8 @@ namespace DxTerminalDevTools
         }
 
         /*
-            A Play Mode run reloads the domain between the start and the finish,
-            so the instance that sees the finish is a new one with nothing in
-            memory. Registering again and finishing from the new instance is
-            what that looks like, and the attribution has to survive it: a run
-            that reported itself as somebody else's, or as nobody's, would be
-            discarded by the caller waiting for it.
-         */
-        private static void RunAcrossADomainReload(
-            ICallbacks callbacks,
-            List<ClaimExpectation> expectations
-        )
-        {
-            string name = $"{Fixture}.Reload.One";
-            Request("grammar-reload");
-            StartRun(callbacks, "grammar-reload");
-            DxTerminalTestRunReporter.RegisterCallbacks();
-            ICallbacks reloaded = TestRunnerApi.Registered;
-            Require(
-                !ReferenceEquals(callbacks, reloaded),
-                "registering again must hand back a new instance, or this case proves nothing"
-            );
-            reloaded.RunFinished(
-                new FakeTest(
-                    Fixture,
-                    isSuite: true,
-                    failed: 1,
-                    children: new List<FakeTest> { new FakeTest(name, TestStatus.Failed) }
-                )
-            );
-            expectations.Add(
-                Expect(
-                    "a run across a domain reload",
-                    new[] { "token=grammar-reload", "mode=EditMode", "fail=1" },
-                    new[] { name }
-                )
-            );
-        }
-
-        /*
-            A result tree the walk cannot survive. The walk reads a tree this
-            code does not own, so an exception there must cost the names and not
-            the claim: the counters are the part a caller has no other way to
-            get. Without the guard the exception leaves RunFinished and the
-            caller is left with no line at all.
-         */
-        private static void RunWithAThrowingResultTree(
-            ICallbacks callbacks,
-            List<ClaimExpectation> expectations
-        )
-        {
-            Request("grammar-throwing");
-            int warningsBefore = Debug.Warnings.Count;
-            StartRun(callbacks, "grammar-throwing");
-            callbacks.RunFinished(
-                new FakeTest(
-                    Fixture,
-                    isSuite: true,
-                    passed: 4,
-                    failed: 2,
-                    children: new List<FakeTest>
-                    {
-                        new FakeTest($"{Fixture}.Alpha.One", TestStatus.Failed),
-                        new FakeTest(
-                            $"{Fixture}.Broken",
-                            TestStatus.Failed,
-                            throwsOnChildren: true
-                        ),
-                    }
-                )
-            );
-
-            ClaimExpectation expectation = Expect(
-                "a result tree the walk cannot survive",
-                new[] { "pass=4 fail=2 skipped=0 inconclusive=0", "token=grammar-throwing" }
-            );
-            Require(
-                !expectation.Claim.Contains("failed-names", StringComparison.Ordinal),
-                $"a degraded walk must name nothing rather than half a tree, got: {expectation.Claim}"
-            );
-            int raised = Debug.Warnings.Count - warningsBefore;
-            Require(raised == 1, $"the degrade path must be reported once, not {raised} times");
-            if (raised == 1)
-            {
-                string warning = Debug.Warnings[warningsBefore];
-                Require(
-                    warning.Contains("walk failed", StringComparison.Ordinal)
-                        && warning.Contains("broken tree", StringComparison.Ordinal),
-                    $"the warning must name the walk and the failure, got: {warning}"
-                );
-            }
-
-            expectations.Add(expectation);
-        }
-
-        /*
-            One claim per group of names, every one of them failed, so the
-            names the reader gets back are exactly the group.
+            One claim per group of names, every one of them failed, so the names
+            the reader gets back are exactly the group.
          */
         private static void RunNames(
             ICallbacks callbacks,
@@ -447,17 +404,13 @@ namespace DxTerminalDevTools
             List<FakeTest> children = new();
             foreach (string name in names)
             {
-                children.Add(new FakeTest(name, TestStatus.Failed));
+                children.Add(Failed(name));
             }
 
             Request(token);
             StartRun(callbacks, token);
-            callbacks.RunFinished(
-                new FakeTest(Fixture, isSuite: true, failed: names.Length, children: children)
-            );
-            expectations.Add(
-                Expect(label, new[] { $"token={token}", $"fail={names.Length}" }, names)
-            );
+            callbacks.RunFinished(Root(failed: names.Length, children: children));
+            expectations.Add(Finished(label, token, names, failed: names.Length));
         }
 
         /*
@@ -472,8 +425,8 @@ namespace DxTerminalDevTools
             TestMode mode = TestMode.EditMode
         )
         {
-            callbacks.RunStarted(new FakeTest(Fixture, isSuite: true, mode: mode));
-            string claim = ReadClaim().Trim();
+            callbacks.RunStarted(Leaf(Fixture, isSuite: true, mode: mode));
+            string claim = ReadClaim();
             Require(
                 claim.Contains($"running token={token} mode={mode}", StringComparison.Ordinal),
                 $"the start must be acknowledged with its own token, got: {claim}"
@@ -482,11 +435,6 @@ namespace DxTerminalDevTools
                 claim.Contains("started=", StringComparison.Ordinal),
                 $"the acknowledgement must carry its timestamp, got: {claim}"
             );
-        }
-
-        private static string ReadClaim()
-        {
-            return File.ReadAllText(DxTerminalTestRunReporter.ClaimPath()).Trim();
         }
 
         private static void Request(string token)
@@ -498,80 +446,49 @@ namespace DxTerminalDevTools
             );
         }
 
-        /*
-            One claim, read back from the file the reporter wrote, checked
-            against the fragments the grammar owes it and the names it must
-            carry. Whether those names decode back is the node side's business.
-         */
-        private static ClaimExpectation Expect(
+        private static string ReadClaim()
+        {
+            return File.ReadAllText(DxTerminalTestRunReporter.ClaimPath()).Trim();
+        }
+
+        private static ClaimExpectation Finished(
             string label,
-            string[] fragments,
-            string[] names = null
+            string token,
+            string[] names,
+            int passed = 0,
+            int failed = 0,
+            int skipped = 0,
+            int more = 0,
+            string mode = "EditMode"
         )
         {
-            string claim = ReadClaim();
-            foreach (string fragment in fragments)
+            return new ClaimExpectation
             {
-                Require(
-                    claim.Contains(fragment, StringComparison.Ordinal),
-                    $"{label}: the claim must carry '{fragment}', got: {claim}"
-                );
-            }
-
-            Require(IsAscii(claim), $"{label}: the claim must stay ASCII, got: {claim}");
-
-            string field = Field(claim, "failed-names");
-            if (names is null)
-            {
-                Require(
-                    field.Length == 0,
-                    $"{label}: a claim that names nothing must write no field, got: {claim}"
-                );
-            }
-            else
-            {
-                string[] parts = field.Split(Separator);
-                Require(
-                    parts.Length == names.Length,
-                    $"{label}: {names.Length} names must be {parts.Length} fields, got: {claim}"
-                );
-                foreach (string part in parts)
-                {
-                    Require(
-                        part.Length > 0,
-                        $"{label}: a name must not encode to nothing, got: {claim}"
-                    );
-                }
-            }
-
-            return new ClaimExpectation(label, claim, names ?? new string[0]);
+                Label = label,
+                Claim = ReadClaim(),
+                State = "finished",
+                Token = token,
+                Mode = mode,
+                Passed = passed,
+                Failed = failed,
+                Skipped = skipped,
+                FailedMore = more,
+                Names = names,
+            };
         }
 
-        private static string Field(string claim, string field)
+        private static ClaimExpectation Refused(string label, string token, string reason)
         {
-            string marker = field + "=";
-            int start = claim.IndexOf(marker, StringComparison.Ordinal);
-            if (start < 0)
+            return new ClaimExpectation
             {
-                return string.Empty;
-            }
-
-            start += marker.Length;
-            int end = claim.IndexOf(' ', start);
-            return end < 0 ? claim.Substring(start) : claim.Substring(start, end - start);
-        }
-
-        private static bool IsAscii(string value)
-        {
-            foreach (char character in value)
-            {
-                if (0x7F < character)
-                {
-                    return false;
-                }
-            }
-
-            return true;
+                Label = label,
+                Claim = ReadClaim(),
+                State = "refused",
+                Token = token,
+                Mode = "EditMode",
+                Reason = reason,
+                Names = new string[0],
+            };
         }
 
         private static void Require(bool condition, string message)
@@ -596,63 +513,126 @@ namespace DxTerminalDevTools
                 Path.GetFileName(DxTerminalTestRunReporter.RequestPath())
             );
             writer.WriteEndObject();
-            writer.WriteStartArray("claims");
-            foreach (ClaimExpectation expectation in expectations)
-            {
-                writer.WriteStartObject();
-                writer.WriteString("label", expectation.Label);
-                writer.WriteString("claim", expectation.Claim);
-                writer.WriteStartArray("names");
-                foreach (string name in expectation.Names)
-                {
-                    writer.WriteStringValue(name);
-                }
-
-                writer.WriteEndArray();
-                writer.WriteEndObject();
-            }
-
-            writer.WriteEndArray();
+            writer.WritePropertyName("claims");
+            // camelCase, so a hand-written key and a record's own field read the
+            // same in the document the node side consumes.
+            JsonSerializer.Serialize(
+                writer,
+                expectations,
+                new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }
+            );
             writer.WriteEndObject();
         }
 
-        private sealed class ClaimExpectation
+        private static FakeTest Leaf(
+            string name,
+            TestStatus status = TestStatus.Passed,
+            bool isSuite = false,
+            bool hasTest = true,
+            bool throwsOnChildren = false,
+            TestMode mode = TestMode.EditMode
+        )
         {
-            public ClaimExpectation(string label, string claim, string[] names)
-            {
-                Label = label;
-                Claim = claim;
-                Names = names;
-            }
+            return new FakeTest(
+                name,
+                status,
+                isSuite,
+                hasTest,
+                throwsOnChildren,
+                mode,
+                null,
+                0,
+                0,
+                0,
+                0
+            );
+        }
 
-            public string Label { get; }
+        /*
+            A failed test case, and a failed fixture. Two shapes, because the
+            reporter treats them differently: the fixture is walked and never
+            named, the case inside it is.
+         */
+        private static FakeTest Failed(string name)
+        {
+            return new FakeTest(
+                name,
+                TestStatus.Failed,
+                false,
+                true,
+                false,
+                TestMode.EditMode,
+                null,
+                0,
+                0,
+                0,
+                0
+            );
+        }
 
-            public string Claim { get; }
+        private static FakeTest FailedFixture(string name, List<FakeTest> children)
+        {
+            return new FakeTest(
+                name,
+                TestStatus.Failed,
+                true,
+                true,
+                false,
+                TestMode.EditMode,
+                children,
+                0,
+                0,
+                0,
+                0
+            );
+        }
 
-            public string[] Names { get; }
+        private static FakeTest Root(
+            List<FakeTest> children = null,
+            int passed = 0,
+            int failed = 0,
+            int skipped = 0
+        )
+        {
+            return new FakeTest(
+                Fixture,
+                TestStatus.Passed,
+                true,
+                true,
+                false,
+                TestMode.EditMode,
+                children,
+                passed,
+                failed,
+                skipped,
+                0
+            );
         }
 
         /*
             One node of a result tree. `hasTest: false` is a result the editor
-            could not attribute to a test, which is the case the reporter guards
-            before it reads a name.
+            could not attribute to a test, and `throwsOnChildren` a tree the walk
+            cannot read; both are cases the reporter guards, and neither can be
+            built from a real editor.
          */
         private sealed class FakeTest : ITestResultAdaptor
         {
             private readonly List<FakeTest> _children;
+            private readonly bool _hasTest;
+            private readonly bool _throwsOnChildren;
 
             public FakeTest(
                 string fullName,
-                TestStatus status = TestStatus.Passed,
-                bool isSuite = false,
-                bool hasTest = true,
-                bool throwsOnChildren = false,
-                TestMode mode = TestMode.EditMode,
-                int passed = 0,
-                int failed = 0,
-                int skipped = 0,
-                int inconclusive = 0,
-                List<FakeTest> children = null
+                TestStatus status,
+                bool isSuite,
+                bool hasTest,
+                bool throwsOnChildren,
+                TestMode mode,
+                List<FakeTest> children,
+                int passed,
+                int failed,
+                int skipped,
+                int inconclusive
             )
             {
                 FullName = fullName;
@@ -663,14 +643,10 @@ namespace DxTerminalDevTools
                 FailCount = failed;
                 SkipCount = skipped;
                 InconclusiveCount = inconclusive;
-                HasTest = hasTest;
-                ThrowsOnChildren = throwsOnChildren;
+                _hasTest = hasTest;
+                _throwsOnChildren = throwsOnChildren;
                 _children = children ?? new List<FakeTest>();
             }
-
-            public bool HasTest { get; }
-
-            public bool ThrowsOnChildren { get; }
 
             public string Id => FullName ?? string.Empty;
 
@@ -682,7 +658,7 @@ namespace DxTerminalDevTools
 
             public TestMode TestMode { get; }
 
-            public ITestAdaptor Test => HasTest ? this : null;
+            public ITestAdaptor Test => _hasTest ? this : null;
 
             public TestStatus TestStatus { get; }
 
@@ -696,13 +672,13 @@ namespace DxTerminalDevTools
 
             public int InconclusiveCount { get; }
 
-            public bool HasChildren => ThrowsOnChildren || 0 < _children.Count;
+            public bool HasChildren => _throwsOnChildren || 0 < _children.Count;
 
             public IEnumerable<ITestResultAdaptor> Children
             {
                 get
                 {
-                    if (ThrowsOnChildren)
+                    if (_throwsOnChildren)
                     {
                         throw new InvalidOperationException("broken tree");
                     }
@@ -713,6 +689,39 @@ namespace DxTerminalDevTools
                     }
                 }
             }
+        }
+
+        /*
+            One claim, and the result the reader must return for it. Flat, because
+            the shape of a decoded claim is the reader's business: the node side
+            composes the object it compares against, so this file only states
+            what the run was.
+         */
+        private sealed class ClaimExpectation
+        {
+            public string Label { get; init; }
+
+            public string Claim { get; init; }
+
+            public string State { get; init; }
+
+            public string Token { get; init; }
+
+            public string Mode { get; init; }
+
+            public string Reason { get; init; }
+
+            public int Passed { get; init; }
+
+            public int Failed { get; init; }
+
+            public int Skipped { get; init; }
+
+            public int Inconclusive { get; init; }
+
+            public int FailedMore { get; init; }
+
+            public string[] Names { get; init; }
         }
     }
 }

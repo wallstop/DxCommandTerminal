@@ -21,16 +21,16 @@ const GRAMMAR_PROJECT = path.join(GRAMMAR_DIR, "grammar.csproj");
 
     The pins this replaced each cost a behavior-preserving refactor its test
     suite, and two of them - the suite skip and the guarded walk - were C#
-    behavior that no text pin could see. A mutation probe measured the pins at
-    11 of 13 tried mutations; this gate catches the behavior ones too, because
-    the change under test is a claim, not a line of source.
+    behavior that no text pin could see. A mutation probe measured the pins at 11
+    of 13 tried mutations; this gate catches the behavior ones too, because the
+    change under test is a claim, not a line of source.
 
-    Invariant globalization is on for the harness process, so a formatting
-    culture cannot be observed here. The reporter's own InvariantCulture calls
-    are the guarantee, and a locale that is real belongs to a real editor.
+    Invariant globalization is on for the harness process, so a formatting culture
+    cannot be observed here. The reporter's own InvariantCulture calls are the
+    guarantee, and a locale that is real belongs to a real editor.
  */
 let cached;
-function readReporterClaims() {
+function runReporter() {
   if (cached !== undefined) return cached;
   const output = path.join(
     fs.mkdtempSync(path.join(os.tmpdir(), "dxt-grammar-")),
@@ -53,41 +53,85 @@ function readReporterClaims() {
 test("the reader and the reporter agree on the claim files they share", () => {
   // A renamed file on either side is invisible to every other test: the reader
   // would wait out the start grace and then fail with a false diagnosis. The
-  // reporter's own accessor answers for the reporter, so nothing here reads
-  // its source.
-  const { layout } = readReporterClaims();
+  // reporter's own accessor answers for the reporter, so nothing here reads its
+  // source. The reporter is run once for this file; two runs would build it
+  // twice to learn the same thing.
+  const { layout } = runReporter();
   assert.equal(layout.claim, RUN_CLAIM_FILE);
   assert.equal(layout.request, RUN_REQUEST_FILE);
 });
 
-test("every claim the reporter wrote decodes back to the names that went in", () => {
-  const { claims } = readReporterClaims();
+test("every claim the reporter wrote decodes to the result the run describes", () => {
+  const { claims } = runReporter();
   assert.ok(Array.isArray(claims) && 0 < claims.length, "the harness must write claims");
 
-  const decoded = new Map();
-  for (const { label, claim, names } of claims) {
-    const parsed = parseRunClaim(claim);
-    if (claim.startsWith("did-not-run")) {
-      assert.equal(parsed.state, "refused", `${label}: a refusal must decode as one`);
-      assert.deepEqual(names, [], `${label}: a refusal names nothing`);
-      continue;
-    }
-    assert.equal(parsed.state, "finished", `${label}: ${claim}`);
+  const corpus = new Set();
+  for (const expected of claims) {
+    const { label, claim } = expected;
+    /*
+        The result the run described. The decoded claim is the reader's whole
+        shape, so this is one equality rather than a search for each field: a
+        field written twice, a field in the wrong place, and a counter the line
+        does not lead with all fail here.
+     */
+    const decoded = parseRunClaim(claim);
     assert.deepEqual(
-      parsed.summary.failedNames,
-      names,
-      `${label}: the names must survive the line intact`
+      decoded,
+      expected.state === "refused"
+        ? {
+            state: expected.state,
+            token: expected.token,
+            mode: expected.mode,
+            reason: expected.reason
+          }
+        : {
+            state: expected.state,
+            token: expected.token,
+            mode: expected.mode,
+            summary: {
+              total:
+                expected.passed + expected.failed + expected.skipped + expected.inconclusive,
+              passed: expected.passed,
+              failed: expected.failed,
+              skipped: expected.skipped,
+              inconclusive: expected.inconclusive,
+              failedNames: expected.names,
+              failedMore: expected.failedMore
+            }
+          },
+      `${label}: ${claim}`
     );
-    // The remainder is the editor's own count, bounded by the failures this
-    // same line reports: a count the editor could not have written must never be
-    // printed as if it were one.
-    assert.ok(
-      parsed.summary.failedMore <=
-        Math.max(0, parsed.summary.failed - parsed.summary.failedNames.length),
-      `${label}: failed-more must be bounded by the failures on the line`
+
+    /*
+        The line itself, which the decoded result cannot show. It stays ASCII, so
+        nothing a name holds can break the line from the inside; the counters
+        lead it; the duration is a number this side can parse, so its separator
+        is part of the grammar; and a names field is written only when there are
+        names to put in it.
+     */
+    assert.deepEqual(
+      [...claim].filter((character) => character.codePointAt(0) > 0x7f),
+      [],
+      `${label}: the claim must stay ASCII, so no name can break the line`
     );
-    for (const name of names) {
-      decoded.set(name, true);
+    if (expected.state !== "refused") {
+      assert.ok(
+        claim.startsWith(
+          `pass=${expected.passed} fail=${expected.failed} `
+            + `skipped=${expected.skipped} inconclusive=${expected.inconclusive} `
+            + `duration=0.5 token=${expected.token} mode=${expected.mode} finished=`
+        ),
+        `${label}: the claim must lead with its counters, duration, token, mode and stamp: ${claim}`
+      );
+      const named = claim.includes("failed-names=");
+      assert.equal(
+        named,
+        0 < expected.names.length,
+        `${label}: a names field is written only when there are names to put in it`
+      );
+    }
+    for (const name of expected.names ?? []) {
+      corpus.add(name);
     }
   }
 
@@ -98,11 +142,11 @@ test("every claim the reporter wrote decodes back to the names that went in", ()
       three. A sweep that quietly stopped at A would leave the rest untested with
       every other assertion still green.
    */
-  const corpus = [...decoded.keys()];
+  const names = [...corpus];
   for (let code = 0x20; code <= 0x7f; code += 1) {
     const hex = code.toString(16).toUpperCase().padStart(2, "0");
     assert.ok(
-      corpus.some((name) => name.includes(`Char${hex}`)),
+      names.some((name) => name.includes(`Char${hex}`)),
       `a decoded name must carry the character U+${hex}`
     );
   }
@@ -118,6 +162,6 @@ test("every claim the reporter wrote decodes back to the names that went in", ()
     "Wallstop.Fixture.Tab(a\tb)",
     "Wallstop.Fixture.Emoji(\u{1F600})"
   ]) {
-    assert.ok(decoded.has(name), `the decoded names must carry ${JSON.stringify(name)}`);
+    assert.ok(corpus.has(name), `the decoded names must carry ${JSON.stringify(name)}`);
   }
 });
