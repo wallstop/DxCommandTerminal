@@ -18,7 +18,7 @@ talk to that endpoint. See `.devcontainer/README.md` for the full picture and
 | `bridge` | host | Serve Unity over MCP HTTP. Needs `--project` or `UNITY_PROJECT_PATH`. `--backend cli` (Unity 6 CLI) or `relay` (legacy Assistant). |
 | `probe` | either | Discover endpoints; verify a live editor answers (`editor_status` / `Unity_ManageEditor`). |
 | `configure` | either | Probe (unless `--offline`) then write all agent MCP configs in one transaction. |
-| `install-capture` | host | Copy `DxTerminalStateCapture.cs.txt` to `<project>/Assets/Editor/` (backs up prior copies). |
+| `install-capture` | host | Copy the editor dev tools (`DxTerminalStateCapture.cs.txt`, `DxTerminalTestRunReporter.cs.txt`) to `<project>/Assets/Editor/` (backs up prior copies). |
 | `capture` | either | Probe, install when possible, refresh, invoke capture, poll to completion. |
 
 ## Ports and discovery
@@ -80,6 +80,44 @@ fields and skill sources convert in place. The catalog also includes `context7`
 1 Hz editor-state snapshots, and play-mode Game View screenshots, written under
 `<project>/Packages/com.wallstop-studios.dxcommandterminal/.artifacts/unity-state/`.
 Details: [capture-unity-state](../../.llm/skills/capture-unity-state/SKILL.md).
+
+## Test run claim file
+
+`DxTerminalTestRunReporter` (same install command) makes a test run report itself,
+so `unity:tests` and `t4:capture` never ask a busy editor for a result. The editor
+answers MCP calls on its main thread, and a status poll that lands while a run is
+winding down returns a main-thread timeout; the npm side then rebuilds the session and
+retries, but every such call is a guess. The reporter writes one line to
+`.artifacts/unity-state/test-run.txt` and the npm side only reads the file:
+
+```text
+running  token=<owner|none> mode=<PlayMode|EditMode> started=<o>
+pass=<n> fail=<n> skipped=<n> inconclusive=<n> duration=<s> token=<owner|none> mode=<mode> finished=<o>
+did-not-run token=<owner|none> mode=<mode> reason=<free text>
+```
+
+The first token decides the state, so a refusal never reads as patience and a run in
+flight is never read as a finished one. The owner token comes from
+`test-run-request.txt`, which the command writes before it asks for a run: every line
+of one run carries the token it started with, so a late callback from an earlier run
+cannot be read as this run's result. The command removes the request again once the
+editor acknowledges the token, so a run nobody asked for cannot adopt it later.
+
+Until the editor acknowledges that token, the wait is bounded by
+`RUN_START_GRACE_MS` (120 s) instead of `--run-timeout`: an editor that never
+acknowledges the request failed with a named reason rather than a long silence. A
+claim that arrives after the grace never fails on it. A refused claim ends the wait
+with the editor's reason and the request path it used. `token=none` is the usual answer
+when something other than the MCP tooling started the run; on the first leg it means
+the two sides resolved different claim directories.
+
+A run that matches no test never starts, so there is no claim at all. That case takes
+the bridge's own zero-total answer and reports the leg, which keeps a mode-specific
+`--filter` from reading as a failure.
+
+Without the reporter compiled in the editor, the command falls back to polling the
+bridge (`test_status` plus a run key). The claim path replaces that poll, not the
+`run_tests` request.
 
 ## Tests
 

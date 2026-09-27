@@ -3,15 +3,21 @@ import assert from "node:assert/strict";
 import {
   resolveOptions,
   captureScriptSourcePath,
+  captureScriptFiles,
   captureInstallTarget,
   captureArtifactRoot,
   captureOutputDir,
   captureInvocationExpression,
+  ensureCaptureScripts,
+  parseRunClaim,
   evalResultText,
   evalFailure,
   evalAnswerIsTrue,
   evalAnswerIsFalse,
-  CAPTURE_PACKAGE_NAME
+  CAPTURE_PACKAGE_NAME,
+  RUN_CLAIM_FILE,
+  RUN_REQUEST_FILE,
+  RUN_UNATTRIBUTED_TOKEN
 } from "../unity-mcp.mjs";
 import fs from "node:fs";
 import os from "node:os";
@@ -64,6 +70,92 @@ test("capture script source lives outside Unity compilation", () => {
   const source = captureScriptSourcePath(REPO_ROOT);
   assert.equal(path.basename(source), "DxTerminalStateCapture.cs.txt");
   assert.ok(fs.existsSync(source), `${source} must exist`);
+});
+
+test("the reporter and the claim decoder agree on names, heads, and fields", () => {
+  // The writer is C# that only compiles inside a host project, so a renamed
+  // field on either side is invisible to every other test: the reader would wait
+  // out the start grace and then fail with a false diagnosis. Pin both sides
+  // here instead.
+  const reporter = fs.readFileSync(captureScriptFiles(REPO_ROOT)[1].source, "utf8");
+  for (const name of [RUN_CLAIM_FILE, RUN_REQUEST_FILE, "test-run-active.txt"]) {
+    assert.match(reporter, new RegExp(`"${name}"`, "u"), `${name} must be named in the reporter`);
+  }
+  assert.match(reporter, /RUN_UNATTRIBUTED_TOKEN|"none"/u, "the unattributed token must be in the reporter");
+
+  for (const head of ["running", "did-not-run", "pass="]) {
+    assert.ok(reporter.includes(head), `the reporter must write a ${head} claim`);
+  }
+  // Every field the decoder reads, and the ones it only forwards to a human.
+  for (const field of [
+    "token=",
+    "mode=",
+    "reason=",
+    "pass=",
+    "fail=",
+    "skipped=",
+    "inconclusive=",
+    "duration=",
+    "started=",
+    "finished="
+  ]) {
+    assert.ok(reporter.includes(field), `the reporter must write ${field}`);
+  }
+  // A round trip through the decoder: the shape the reporter writes must decode
+  // as a finished run with the editor's own counters.
+  const claim = parseRunClaim(
+    "pass=581 fail=2 skipped=1 inconclusive=0 duration=12.595 token=t-1 mode=PlayMode finished=x"
+  );
+  assert.deepEqual(claim.summary, {
+    total: 584,
+    passed: 581,
+    failed: 2,
+    skipped: 1,
+    inconclusive: 0
+  });
+});
+
+test("both editor dev tools install together, and a re-install is a no-op", () => {
+  const files = captureScriptFiles(REPO_ROOT);
+  // State capture and the test run reporter: one command installs both, or the
+  // reporter is missing on a fresh host and every run polls the bridge.
+  assert.deepEqual(
+    files.map((file) => file.target),
+    ["DxTerminalStateCapture.cs", "DxTerminalTestRunReporter.cs"]
+  );
+  for (const file of files) {
+    assert.ok(fs.existsSync(file.source), `${file.source} must exist`);
+  }
+
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), "dxt-install-"));
+  try {
+    // The reporter has no package tree here, so backups land under Library.
+    const assets = path.join(project, "Assets", "Editor");
+    fs.mkdirSync(assets, { recursive: true });
+    const reporter = captureInstallTarget(project, "DxTerminalTestRunReporter.cs");
+    fs.writeFileSync(reporter, "// a different local copy\n");
+
+    const installed = ensureCaptureScripts(project, REPO_ROOT);
+    assert.equal(installed.length, files.length);
+    for (const result of installed) {
+      assert.equal(result.changed, true, `${result.target} must install`);
+      assert.equal(
+        fs.readFileSync(result.target, "utf8"),
+        fs.readFileSync(captureScriptFiles(REPO_ROOT).find((file) => file.target === path.basename(result.target)).source, "utf8")
+      );
+    }
+    // A clobbered file is backed up, never silently replaced.
+    const backup = installed.find((result) => result.target === reporter).backup;
+    assert.match(backup, /DxTerminalTestRunReporter\.cs\..*\.bak$/u);
+    assert.equal(fs.readFileSync(backup, "utf8"), "// a different local copy\n");
+
+    for (const result of ensureCaptureScripts(project, REPO_ROOT)) {
+      assert.equal(result.changed, false, `${result.target} must be current`);
+      assert.equal(result.backup, undefined);
+    }
+  } finally {
+    fs.rmSync(project, { recursive: true, force: true });
+  }
 });
 
 test("capture install target follows the DxMessaging Assets/Editor convention", () => {

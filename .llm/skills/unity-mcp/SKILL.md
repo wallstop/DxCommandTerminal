@@ -18,6 +18,7 @@ Unity runs on the host; agents (in the devcontainer or on the host) reach it thr
 | `npm run unity:mcp:probe` | Discover endpoints, verify a live editor answers. |
 | `npm run unity:mcp:configure` | Write all agent MCP configs (probe first). `-- --offline` writes without network. |
 | `npm run unity:capture` | Capture editor/game state; see [capture-unity-state](../capture-unity-state/SKILL.md). |
+| `npm run unity:mcp:install-capture` | Install the editor dev tools (state capture, test run reporter) host-side. |
 | `npm run ai:backends -- install` | (Re)install the Z.AI and OpenRouter launchers. |
 
 ## Ports are project-local
@@ -116,8 +117,22 @@ call was timing out
 (`ambiguous-interactive/unity-helpers/.llm/references/unity-mcp-fixture-runner-part-1.md`).
 Play mode is the discriminating flag, because play mode over MCP times out every
 tool until it ends. Wait on it only in a bounded loop; the retry is the safety
-net. The robust fix is an editor-side reporter that writes its own result file,
-tracked in #162.
+net.
+
+The robust fix is in place: `DxTerminalTestRunReporter` (installed by
+`npm run unity:mcp:install-capture` next to the state-capture script) makes the
+editor report each run into `.artifacts/unity-state/test-run.txt`, and
+`unity:tests` / `t4:capture` read that file instead of polling a main thread a
+Play Mode run occupies. The first token is `running`, `pass=`, or `did-not-run`,
+and every line carries the owner token from `test-run-request.txt`, so a late
+callback from an earlier run is never read as this run's result. Without the
+reporter compiled in, or without a writable claim directory, the command falls
+back to `test_status` polling. The claim path replaces the status poll, never the
+`run_tests` request. Two facts worth keeping: an editor that answers
+`did-not-run token=none` saw no request file, which is normal when something other
+than the MCP tooling started the run and means the two sides resolved different claim
+directories on the first leg; and a run that matches no test never starts, so the
+editor reports nothing and the bridge's zero-total answer is used instead.
 
 ## Troubleshooting
 

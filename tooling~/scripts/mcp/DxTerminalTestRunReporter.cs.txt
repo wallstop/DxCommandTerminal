@@ -1,0 +1,257 @@
+/*
+    DxTerminalTestRunReporter - maintained source for the editor-side test run claim.
+    Installed by `npm run unity:mcp:install-capture` into the host project's
+    Assets/Editor next to DxTerminalStateCapture. A test run occupies the editor's
+    main thread, so a caller that polls the editor for a result gets timeouts; the
+    editor therefore reports the run itself into a claim file the caller only reads.
+
+    Claim grammar (one line, space separated, first token decides the state):
+      running  token=<owner|none> mode=<PlayMode|EditMode> started=<o>
+      pass=<n> fail=<n> skipped=<n> inconclusive=<n> duration=<s> token=<owner|none> mode=<mode> finished=<o>
+      did-not-run token=<owner|none> mode=<mode> reason=<free text>
+
+    The reader needs token, mode, the four counters, and reason. The timestamps and
+    the duration are for whoever reads the file after a failed run.
+
+    The owner token comes from <artifact root>/test-run-request.txt, which the
+    caller writes before asking for a run. Every line of one run carries the token
+    it started with (or none, when the run was not requested through the MCP
+    tooling), so a late callback from an earlier run can never be read as the
+    current run's result.
+*/
+namespace DxTerminalDevTools
+{
+    using System;
+    using System.Globalization;
+    using System.IO;
+    using System.Text;
+    using UnityEditor;
+    using UnityEditor.TestTools.TestRunner.Api;
+    using UnityEngine;
+
+    internal static class DxTerminalTestRunReporter
+    {
+        private const string PackageName = "com.wallstop-studios.dxcommandterminal";
+        private const string ClaimFileName = "test-run.txt";
+        private const string RequestFileName = "test-run-request.txt";
+        private const string ActiveFileName = "test-run-active.txt";
+        private const string PendingSuffix = ".new";
+        private const string UnattributedToken = "none";
+        private const string UnknownMode = "unknown";
+
+        /// <summary>
+        /// Claim directory. Resolved from the editor's own project root. The
+        /// capture script and the node tool each carry their own copy of this
+        /// layout on purpose, so every installed file stands alone; a divergence
+        /// shows up as a claim the editor reports as `did-not-run token=none`.
+        /// </summary>
+        private static string ClaimRoot()
+        {
+            string projectRoot = Directory.GetParent(Application.dataPath).FullName;
+            string packageRoot = Path.Combine(projectRoot, "Packages", PackageName);
+            string root = Directory.Exists(packageRoot)
+                ? Path.Combine(packageRoot, ".artifacts", "unity-state")
+                : Path.Combine(projectRoot, "Library", "DxTerminalStateCapture");
+            Directory.CreateDirectory(root);
+            return root;
+        }
+
+        private static string ClaimPath()
+        {
+            return Path.Combine(ClaimRoot(), ClaimFileName);
+        }
+
+        /// <summary>
+        /// Owner token of the run in flight, empty when nobody asked for one.
+        /// </summary>
+        private static string ReadRequest()
+        {
+            return ReadTrimmed(RequestFileName);
+        }
+
+        /// <summary>
+        /// Token and mode of the run this callback belongs to, or empty when no
+        /// run started. A Play Mode run reloads the domain between the two
+        /// callbacks, and the callback list is not serialized, so the instance
+        /// that sees the finish is a new one with nothing in memory. The active
+        /// file is what carries the attribution across that reload.
+        /// </summary>
+        private static string[] ReadActive()
+        {
+            string line = ReadTrimmed(ActiveFileName);
+            if (line.Length == 0)
+            {
+                return new[] { string.Empty, UnknownMode };
+            }
+
+            string token = FieldValue(line, "token");
+            string mode = FieldValue(line, "mode");
+            return new[] { token, mode.Length == 0 ? UnknownMode : mode };
+        }
+
+        private static string FieldValue(string line, string field)
+        {
+            string marker = field + "=";
+            int start = line.IndexOf(marker, StringComparison.Ordinal);
+            if (start < 0)
+            {
+                return string.Empty;
+            }
+
+            start += marker.Length;
+            int end = line.IndexOf(' ', start);
+            return end < 0 ? line.Substring(start) : line.Substring(start, end - start);
+        }
+
+        private static string ReadTrimmed(string fileName)
+        {
+            try
+            {
+                return File.ReadAllText(Path.Combine(ClaimRoot(), fileName)).Trim();
+            }
+            catch (IOException)
+            {
+                return string.Empty;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return string.Empty;
+            }
+        }
+
+        /// <summary>
+        /// Replace a file in one step. A reader must never see half a line: a
+        /// truncated `pass=` would look like a finished run with fewer tests.
+        /// Never throws: this runs inside a test-run callback, so a locked or
+        /// unwritable file must not break the run the claim exists to report.
+        /// </summary>
+        private static void WriteAtomically(string fileName, string line)
+        {
+            try
+            {
+                string target = Path.Combine(ClaimRoot(), fileName);
+                string pending = target + PendingSuffix;
+                File.WriteAllText(pending, line, new UTF8Encoding(false));
+                if (File.Exists(target))
+                {
+                    File.Delete(target);
+                }
+
+                File.Move(pending, target);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning(
+                    $"DxTerminalTestRunReporter {fileName} write failed: {exception.Message}"
+                );
+            }
+        }
+
+        /// <summary>
+        /// Re-register on every domain load: a Play Mode run reloads the
+        /// domain, and an unregistered callback is a run that reports nothing.
+        /// </summary>
+        [InitializeOnLoadMethod]
+        private static void RegisterCallbacks()
+        {
+            TestRunnerApi api = ScriptableObject.CreateInstance<TestRunnerApi>();
+            api.hideFlags = HideFlags.HideAndDontSave;
+            api.RegisterCallbacks(new RunClaim());
+        }
+
+        private static string Seconds(double value)
+        {
+            return value.ToString("0.###", CultureInfo.InvariantCulture);
+        }
+
+        private static string UtcNow()
+        {
+            return DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture);
+        }
+
+        /// <summary>
+        /// Token to report, or `none` when the run had none: an empty token
+        /// field would read as a malformed claim instead of naming itself.
+        /// </summary>
+        private static string Reported(string token)
+        {
+            return token.Length == 0 ? UnattributedToken : token;
+        }
+
+        /// <summary>
+        /// One run's claim. The token and mode are taken at the start and reused
+        /// at the finish: re-reading the request file there would let an earlier
+        /// run's finish adopt the next run's token.
+        /// </summary>
+        private sealed class RunClaim : ICallbacks
+        {
+            private string _token = string.Empty;
+            private string _mode = UnknownMode;
+
+            public void RunStarted(ITestAdaptor testsToRun)
+            {
+                _token = ReadRequest();
+                _mode = testsToRun.TestMode.ToString();
+                // Written before the refusal below, so the finish callback can
+                // still name this run after a domain reload.
+                WriteAtomically(
+                    ActiveFileName,
+                    $"token={Reported(_token)} mode={_mode} started={UtcNow()}"
+                );
+                if (_token.Length == 0)
+                {
+                    WriteAtomically(
+                        ClaimFileName,
+                        $"did-not-run token={UnattributedToken} mode={_mode} "
+                            + "reason=not requested by the MCP tooling"
+                    );
+                    return;
+                }
+
+                WriteClaim($"running token={_token} mode={_mode} started={UtcNow()}");
+            }
+
+            public void RunFinished(ITestResultAdaptor result)
+            {
+                if (_token.Length == 0)
+                {
+                    string[] active = ReadActive();
+                    _token = active[0] == UnattributedToken ? string.Empty : active[0];
+                    _mode = active[1];
+                }
+
+                int passed = result.PassCount;
+                int failed = result.FailCount;
+                int skipped = result.SkipCount;
+                int inconclusive = result.InconclusiveCount;
+                if (passed + failed + skipped + inconclusive == 0)
+                {
+                    WriteClaim(
+                        $"did-not-run token={Reported(_token)} mode={_mode} "
+                            + "reason=the run executed no tests"
+                    );
+                    return;
+                }
+
+                WriteClaim(
+                    $"pass={passed} fail={failed} skipped={skipped} inconclusive={inconclusive} "
+                        + $"duration={Seconds(result.Duration)} token={Reported(_token)} "
+                        + $"mode={_mode} finished={UtcNow()}"
+                );
+            }
+
+            public void TestStarted(ITestAdaptor test)
+            {
+            }
+
+            public void TestFinished(ITestResultAdaptor result)
+            {
+            }
+
+            private void WriteClaim(string line)
+            {
+                WriteAtomically(ClaimFileName, line);
+            }
+        }
+    }
+}
