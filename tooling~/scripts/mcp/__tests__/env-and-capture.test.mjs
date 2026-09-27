@@ -9,15 +9,11 @@ import {
   captureOutputDir,
   captureInvocationExpression,
   ensureCaptureScripts,
-  parseRunClaim,
   evalResultText,
   evalFailure,
   evalAnswerIsTrue,
   evalAnswerIsFalse,
   CAPTURE_PACKAGE_NAME,
-  RUN_CLAIM_FILE,
-  RUN_REQUEST_FILE,
-  RUN_UNATTRIBUTED_TOKEN,
   SCRIPT_REFRESH_EXPRESSION
 } from "../unity-mcp.mjs";
 import fs from "node:fs";
@@ -73,131 +69,35 @@ test("capture script source lives outside Unity compilation", () => {
   assert.ok(fs.existsSync(source), `${source} must exist`);
 });
 
-test("the reporter and the claim decoder agree on names, heads, and fields", () => {
-  // The writer is C# that only compiles inside a host project, so a renamed
-  // field on either side is invisible to every other test: the reader would wait
-  // out the start grace and then fail with a false diagnosis. Pin both sides
-  // here instead.
-  const reporter = fs.readFileSync(captureScriptFiles(REPO_ROOT)[1].source, "utf8");
-  for (const name of [RUN_CLAIM_FILE, RUN_REQUEST_FILE, "test-run-active.txt"]) {
-    assert.match(reporter, new RegExp(`"${name}"`, "u"), `${name} must be named in the reporter`);
-  }
-  assert.match(reporter, /RUN_UNATTRIBUTED_TOKEN|"none"/u, "the unattributed token must be in the reporter");
+/*
+    The reporter's claim grammar is not pinned here any more. It used to be: the
+    writer is C# that only compiled inside a host project, so a renamed field, a
+    moved cap or a byte-wise encoder read out of the source text stood in for the
+    gate CI did not have. A mutation probe measured those pins at 11 of 13 tried
+    mutations, and the two they missed were C# behavior.
 
-  for (const head of ["running", "did-not-run", "pass="]) {
-    assert.ok(reporter.includes(head), `the reporter must write a ${head} claim`);
-  }
-  // Every field the decoder reads, and the ones it only forwards to a human.
-  for (const field of [
-    "token=",
-    "mode=",
-    "reason=",
-    "pass=",
-    "fail=",
-    "failed-names=",
-    "skipped=",
-    "inconclusive=",
-    "duration=",
-    "started=",
-    "finished="
-  ]) {
-    assert.ok(reporter.includes(field), `the reporter must write ${field}`);
-  }
-  // The field name, where the reporter actually writes it. The loop above is
-  // satisfied by the header comment, so a renamed field would slip through it
-  // and the reader's `fields.get("failed-names")` would quietly read no names.
-  assert.match(reporter, /return " failed-names=" \+ builder;/u);
-  // A round trip through the decoder: the shape the reporter writes must decode
-  // as a finished run with the editor's own counters, and a red run must decode
-  // into the names it carries.
-  const claim = parseRunClaim(
-    "pass=581 fail=2 skipped=1 inconclusive=0 duration=12.595 token=t-1 mode=PlayMode finished=x"
+    It is now the real thing: `npm run mcp:grammar` compiles
+    DxTerminalTestRunReporter.cs.txt into a Unity-free project, drives it
+    through the callbacks a real run uses, and decodes every claim it wrote with
+    parseRunClaim. A generated corpus - every printable ASCII character, plus the
+    no-break space, em space, line separator, surrogate pair and bare percent -
+    has to come back byte for byte, and a cap, a separator, a suite reported as a
+    test, or a syntax error all turn that red.
+
+    The reader's own states (a torn line, a counter that is not a count, a
+    refusal) are tabulated in tests-command.test.mjs. What is left here is only
+    what the reporter says about itself.
+ */
+test("the reporter's own documentation states the cap it keeps", () => {
+  const readme = fs.readFileSync(
+    path.join(REPO_ROOT, "tooling~", "scripts", "mcp", "README.md"),
+    "utf8"
   );
-  assert.deepEqual(claim.summary, {
-    total: 584,
-    passed: 581,
-    failed: 2,
-    skipped: 1,
-    inconclusive: 0,
-    failedNames: [],
-    failedMore: 0
-  });
-
-  const red = parseRunClaim(
-    "pass=361 fail=7 skipped=0 inconclusive=0 duration=9.1 token=t-2 mode=EditMode "
-      + "failed-names=Wallstop.A.One,Wallstop.B.Two"
-      // %20 is a space, %E2%80%83 is U+2003: the name survives the line intact.
-      + ',Wallstop.C.Three(%22a%20b%22),Wallstop.C.Four(%E2%80%83) failed-more=3'
-  );
-  assert.deepEqual(red.summary.failedNames, [
-    "Wallstop.A.One",
-    "Wallstop.B.Two",
-    'Wallstop.C.Three("a b")',
-    "Wallstop.C.Four(\u2003)"
-  ]);
-  assert.equal(red.summary.failedMore, 3);
-
-  /*
-      The reporter's contract, at its declarations and at its use sites. Nothing
-      in this repository can run the reporter's own C# - issue #164 is the
-      follow-up that would compile it in CI - so a renamed separator, a moved cap,
-      a byte-wise encoder or a dead gate would reach a developer machine with
-      nothing red. These pins cost a behavior-preserving refactor its test suite;
-      that tradeoff belongs next to them, not only in a review.
-
-      Each of these is a value the reader also hard-codes, so disagreement between
-      the two files is a bug on either side.
-   */
-  assert.match(reporter, /private const char FailureSeparator = ',';/u);
-  assert.match(reporter, /builder\.Append\(FailureSeparator\)/u);
-  assert.match(reporter, /private const int MaxReportedFailures = 10;/u);
-  assert.match(reporter, /MaxReportedFailures <= names\.Count/u);
-  assert.match(reporter, /if \(AllowedNameCharacter\(character\)\)/u);
-  // The byte-wise cast is the whole reason U+2003 encodes to %E2%80%83 and not
-  // to %2003, which would decode as a space and "03".
-  assert.match(reporter, /char character = \(char\)value;/u);
-  /*
-      The escape, and the cap count, are the only two values the reporter puts
-      onto the line without percent-encoding them. Both carry the invariant
-      culture, so neither depends on the host's locale.
-   */
-  assert.match(
-    reporter,
-    /\.Append\('%'\)\.Append\(value\.ToString\("X2", CultureInfo\.InvariantCulture\)\)/u
-  );
-  assert.match(reporter, /\.Append\(" failed-more="\)/u);
-  assert.match(reporter, /\.Append\(unnamed\.ToString\(CultureInfo\.InvariantCulture\)\)/u);
-  const readme = fs.readFileSync(path.join(REPO_ROOT, "tooling~", "scripts", "mcp", "README.md"), "utf8");
   assert.match(readme, /capped at ten\b/u, "the README must state the reporter's cap");
-
-  /*
-      The reporter's name allowlist is the only thing standing between a test
-      name and a broken claim line: the line is space separated, the fields are
-      key=value, and the reader splits the names on a comma. A newline, a tab, or
-      a no-break space would silently truncate the field, so the allowlist is
-      pinned by its exact contents - not by a list of characters believed to be
-      dangerous, which is a list that has to be kept up to date by hand.
-
-      Nothing in this repository can run the reporter's own C#, so the invariant
-      is pinned on its source (issue #164 is the follow-up that would compile it
-      in CI instead).
-   */
-  const start = reporter.indexOf("private static bool AllowedNameCharacter");
-  assert.notEqual(start, -1, "the reporter must hold an AllowedNameCharacter method");
-  // The method, not the rest of the file: the literals after it belong to other
-  // code, and a doc comment with an apostrophe in it would be read as a literal.
-  const end = reporter.indexOf("\n        }\n", start);
-  assert.notEqual(end, -1, "AllowedNameCharacter must be a method at eight-space indent");
-  const allowlist = reporter.slice(start, end);
-  // Every character literal in it, escape sequences included, so a `'\n'`, a
-  // `'\t'` or a `'\u00a0'` cannot slip past. What is left is the ASCII
-  // punctuation a test name is built from plus the six range endpoints. This
-  // pins the allowlist, not the encoder: a numeric widening expressed as a hex
-  // literal would pass here, which is the gap #164 closes.
-  assert.deepEqual(
-    [...new Set(allowlist.match(/'(?:\\.|[^'\\])*'/gu) ?? [])].sort(),
-    ["'('", "')'", "'.'", "'0'", "'9'", "'A'", "'Z'", "'['", "']'", "'_'", "'a'", "'z'"],
-    "only ASCII letters, digits, and the punctuation a test name is built from may pass through"
+  assert.match(
+    readme,
+    /npm run mcp:grammar/u,
+    "the README must name the gate that compiles the reporter"
   );
 });
 

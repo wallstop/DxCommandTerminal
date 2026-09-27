@@ -155,3 +155,40 @@ jobs:
       - name: Validate package contents
         if: matrix.os == 'ubuntu-latest'
         run: npm --prefix tooling~ run package:validate
+
+  devtool-grammar:
+    # DxTerminalTestRunReporter only ever compiled inside a host Unity project,
+    # so nothing in CI ran it (issue #167). This job links it into a Unity-free
+    # project, drives it through the callbacks a real run uses, and decodes the
+    # claims it wrote with the real reader - the compile alone is what stops a
+    # C# error in a dev tool from reaching a developer machine first (#164).
+    # Unity is never provisioned here either: the stand-in is a declared surface,
+    # and the host matrix is what answers the real editor.
+    name: devtool-grammar (ubuntu-latest)
+    runs-on: ubuntu-latest
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+
+      # Matches the generator-tests job: the same pinned SDK, so a language or
+      # analyzer difference cannot make one gate red and the other green.
+      - name: Setup DotNet
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 9.0.306
+
+      # The claim reader is imported from unity-mcp.mjs, so this job needs the
+      # npm project even though it runs no node suite.
+      - name: Install dependencies
+        run: npm --prefix tooling~ install --no-audit --no-fund --prefer-offline
+
+      - name: Check the reporter compiles and its claim grammar round-trips
+        run: npm --prefix tooling~ run mcp:grammar

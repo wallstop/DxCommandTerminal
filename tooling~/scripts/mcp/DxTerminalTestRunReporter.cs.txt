@@ -64,6 +64,50 @@ namespace DxTerminalDevTools
         /// </summary>
         private const char FailureSeparator = ',';
 
+        /*
+            The three members below are the seams the Unity-free grammar gate
+            drives (tooling~/scripts/mcp/grammar, issue #167): the entry point a
+            domain load calls, and the two paths into the claim directory, so the
+            gate reads the claim the reporter really wrote and asks for a run the
+            reporter will really accept. The class is internal, so internal
+            members widen nothing outside the assembly - and every other member
+            stays private, because the gate reaches the walk and the encoder only
+            through the callbacks at the end of this file, which is the path a
+            real run takes.
+         */
+
+        /// <summary>
+        /// Re-register on every domain load: a Play Mode run reloads the
+        /// domain, and an unregistered callback is a run that reports nothing.
+        /// </summary>
+        [InitializeOnLoadMethod]
+        internal static void RegisterCallbacks()
+        {
+            TestRunnerApi api = ScriptableObject.CreateInstance<TestRunnerApi>();
+            api.hideFlags = HideFlags.HideAndDontSave;
+            api.RegisterCallbacks(new RunClaim());
+        }
+
+        /// <summary>
+        /// The file a caller writes its owner token to. The gate writes the token
+        /// here, so it asks for a run through the same path a caller uses rather
+        /// than reaching into the reporter's state.
+        /// </summary>
+        internal static string RequestPath()
+        {
+            return Path.Combine(ClaimRoot(), RequestFileName);
+        }
+
+        /// <summary>
+        /// The claim the last run wrote. The gate reads it back, so what it
+        /// decodes is the reporter's own output and not a string it assembled
+        /// from the same constants.
+        /// </summary>
+        internal static string ClaimPath()
+        {
+            return Path.Combine(ClaimRoot(), ClaimFileName);
+        }
+
         /// <summary>
         /// Claim directory. Resolved from the editor's own project root. The
         /// capture script and the node tool each carry their own copy of this
@@ -79,11 +123,6 @@ namespace DxTerminalDevTools
                 : Path.Combine(projectRoot, "Library", "DxTerminalStateCapture");
             Directory.CreateDirectory(root);
             return root;
-        }
-
-        private static string ClaimPath()
-        {
-            return Path.Combine(ClaimRoot(), ClaimFileName);
         }
 
         /// <summary>
@@ -170,18 +209,6 @@ namespace DxTerminalDevTools
                     $"DxTerminalTestRunReporter {fileName} write failed: {exception.Message}"
                 );
             }
-        }
-
-        /// <summary>
-        /// Re-register on every domain load: a Play Mode run reloads the
-        /// domain, and an unregistered callback is a run that reports nothing.
-        /// </summary>
-        [InitializeOnLoadMethod]
-        private static void RegisterCallbacks()
-        {
-            TestRunnerApi api = ScriptableObject.CreateInstance<TestRunnerApi>();
-            api.hideFlags = HideFlags.HideAndDontSave;
-            api.RegisterCallbacks(new RunClaim());
         }
 
         private static string Seconds(double value)
