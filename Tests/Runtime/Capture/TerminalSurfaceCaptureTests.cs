@@ -50,6 +50,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private const int SettleFrames = 3;
 
         /*
+            The first-interaction gate measures renders, not frames: the panel
+            renders on demand, so the fixture drives exactly one Repaint+Render
+            pass per read and the surface must be complete in that pass.
+         */
+        private const int FirstRenderPasses = 1;
+
+        /*
             The palette caret freeze must outlast the native UITK blink
             interval (~0.5 s) so the repeat capture cannot land inside the
             same blink phase as the first; wall-clock, not frames, because
@@ -138,6 +145,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private int? _renderTexturesBefore;
         private CaptureOutcome _lastOutcome;
         private string _diagnosticsSuffix;
+        private TerminalSurfaceCapture.CursorFreezeScope _firstInteractionCaretFreeze;
         private int _captureWidth;
         private int _captureHeight;
 
@@ -153,6 +161,65 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     element.worldBound.height
                 )
                 : "null";
+        }
+
+        private static string DescribeFocus(Focusable focused)
+        {
+            return focused == null
+                ? "nothing"
+                : focused.GetType().Name + "/" + (focused as VisualElement)?.name;
+        }
+
+        /*
+            Violations for a first-render read: the shared surface bounds plus
+            "no poorer than the settled frame of the same surface". A first
+            render that painted only part of the surface is not blank, so the
+            bounds alone would let it through.
+         */
+        private static List<string> FirstFrameViolations(
+            CapturePixelMetrics firstFrame,
+            CapturePixelMetrics settledFrame
+        )
+        {
+            List<string> violations = TerminalSurfaceCapture.Evaluate(
+                firstFrame,
+                CaptureBounds.Default()
+            );
+            if (firstFrame.DistinctColors < settledFrame.DistinctColors)
+            {
+                violations.Add(
+                    $"first render is poorer than the settled frame "
+                        + $"({firstFrame.DistinctColors} < {settledFrame.DistinctColors} "
+                        + "distinct colors)"
+                );
+            }
+
+            return violations;
+        }
+
+        private static void ClearCaptureTarget(RenderTexture target)
+        {
+            RenderTexture previousTarget = RenderTexture.active;
+            RenderTexture.active = target;
+            GL.Clear(true, true, Color.clear);
+            RenderTexture.active = previousTarget;
+        }
+
+        private static void AssertFrameComplete(
+            CapturePixelMetrics firstFrame,
+            CapturePixelMetrics settledFrame,
+            string label
+        )
+        {
+            List<string> violations = FirstFrameViolations(firstFrame, settledFrame);
+            Assert.That(
+                violations,
+                Is.Empty,
+                $"The {label} first frame must be complete: "
+                    + string.Join("; ", violations)
+                    + $" (first: {firstFrame.DistinctColors} distinct colors, "
+                    + $"settled: {settledFrame.DistinctColors})"
+            );
         }
 
         private static void AssertAcceptable(CaptureOutcome outcome)
@@ -821,6 +888,127 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
         }
 
+        /*
+            First palette interaction (the PLAN "first palette interaction"
+            gate): the palette must be rendered and focused on the first frame
+            the panel renders after the opening input, with no preparation
+            frame and no terminal animation in the way.
+
+            The unit is one render pass, not one frame: the panel renders on
+            demand, so how many frames pass before the game view repaints is
+            editor behavior, while "the first rendered frame" is a property of
+            the package. Each read clears the target, drives exactly one
+            Repaint+Render pass, and reads the pixels back.
+
+            "Rendered" is measured against the frame the same fixture renders
+            once it has settled (the harness default of several passes), not
+            against a flat pixel floor: the first pass must be at least as rich
+            as the settled frame, so a first frame that painted only chrome
+            fails. The fixture also warms the font atlas through the terminal,
+            so the first-frame claim covers the palette's own surface rather
+            than glyph-atlas growth.
+
+            The fixture is a session that has used the terminal and closed it,
+            not a never-opened one: that resolves the shipped theme font (the
+            palette reads the terminal's resolved font) and leaves the shared
+            document root clamped to the closed window, so the measurement also
+            covers the palette restoring automatic root height before its first
+            render. The terminal is fully closed, so no slide animation is in
+            flight.
+
+            The blank controls prove the pixels belong to the palette: a closed
+            terminal renders nothing, and detaching the palette on close empties
+            the frame again. Focus is asserted in the frame that processes the
+            input and again after a frame boundary, so a later focus steal fails
+            too. The reopen frame must render exactly like the first open; the
+            byte proof needs the caret freeze, and falls back to the frame
+            metrics when a host cannot freeze the caret.
+
+            The controls record no manifest: an incomplete capture is only legal
+            for a registered negative-control scenario, and these names are
+            measurements, not screenshots (nothing baselines them).
+         */
+        [UnityTest]
+        public IEnumerator CapturesFirstPaletteInteractionFrame()
+        {
+            yield return SpawnCalibratedTerminal(TerminalState.OpenSmall, withPalette: true);
+            RegisterFixtureCommands(CaptureCommandNames);
+            _terminal.Close();
+            yield return WaitForTerminalClosed();
+            string scenario = nameof(CapturesFirstPaletteInteractionFrame);
+            RenderTexture target = AttachRenderTarget(
+                scenario,
+                PinnedCaptureWidth,
+                PinnedCaptureHeight
+            );
+            try
+            {
+                CapturePixelMetrics closed = CaptureRender(target, scenario + "-closed");
+                AssertRendersNothing(closed, "a closed terminal renders nothing");
+
+                _palette.Open();
+                _firstInteractionCaretFreeze = TerminalSurfaceCapture.FreezeCursor(_palette._input);
+                AssertInputOwnsFocus(
+                    "the palette input owns focus in the frame the input is processed"
+                );
+                CapturePixelMetrics firstFrame = CaptureRender(target, scenario);
+                CapturePixelMetrics settledFrame = CaptureSettledRender(
+                    target,
+                    scenario + "-settled"
+                );
+                AssertFrameComplete(firstFrame, settledFrame, "first palette interaction");
+
+                /*
+                    A focus steal, a deferred re-layout, or a palette that
+                    detaches itself would all land after the opening frame.
+                 */
+                yield return null;
+                AssertInputOwnsFocus("the palette input still owns focus on the next frame");
+
+                _palette.Close();
+                CapturePixelMetrics afterClose = CaptureRender(target, scenario + "-after-close");
+                AssertRendersNothing(
+                    afterClose,
+                    "closing the palette detaches it, so the next render is empty"
+                );
+
+                _palette.Open();
+                AssertInputOwnsFocus("the reopened palette input owns focus immediately");
+                CapturePixelMetrics reopenFrame = CaptureRender(target, scenario + "-reopen");
+                CapturePixelMetrics reopenSettled = CaptureSettledRender(
+                    target,
+                    scenario + "-reopen-settled"
+                );
+                AssertFrameComplete(reopenFrame, reopenSettled, "reopened palette");
+                AssertRendersIdentically(scenario, scenario + "-reopen", firstFrame, reopenFrame);
+
+                WriteFrameTimingManifest(
+                    scenario,
+                    firstFrame,
+                    FirstFrameViolations(firstFrame, settledFrame),
+                    warm: false
+                );
+                WriteFrameTimingManifest(
+                    scenario + "-reopen",
+                    reopenFrame,
+                    FirstFrameViolations(reopenFrame, reopenSettled),
+                    warm: true
+                );
+            }
+            finally
+            {
+                try
+                {
+                    _firstInteractionCaretFreeze?.Dispose();
+                    _firstInteractionCaretFreeze = null;
+                }
+                finally
+                {
+                    DetachRenderTarget(target);
+                }
+            }
+        }
+
         private IEnumerator SpawnTerminal(
             float? panelScale = null,
             string fontPackPath = FontPackPath
@@ -1242,6 +1430,126 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 friendlyTheme,
                 _terminal.CurrentFriendlyTheme,
                 $"Theme '{friendlyTheme}' applied before capture"
+            );
+        }
+
+        /*
+            One read of "the first frame the panel renders": clear the target,
+            drive exactly one Repaint+Render pass, then read the pixels back.
+         */
+        private CapturePixelMetrics CaptureRender(RenderTexture target, string scenario)
+        {
+            ClearCaptureTarget(target);
+            TerminalSurfaceCapture.ForcePanelRender(
+                _terminal._uiDocument.rootVisualElement,
+                FirstRenderPasses
+            );
+            return TerminalSurfaceCapture.CaptureToPng(
+                target,
+                null,
+                Path.Combine(_runDirectory, scenario + ".png")
+            );
+        }
+
+        /*
+            The same read once the panel has had its settling passes, so a
+            first-frame read has a reference for "this surface, fully drawn"
+            instead of a flat pixel floor.
+         */
+        private CapturePixelMetrics CaptureSettledRender(RenderTexture target, string scenario)
+        {
+            ClearCaptureTarget(target);
+            return TerminalSurfaceCapture.CaptureToPng(
+                target,
+                _terminal._uiDocument.rootVisualElement,
+                Path.Combine(_runDirectory, scenario + ".png")
+            );
+        }
+
+        private void AssertRendersNothing(CapturePixelMetrics metrics, string because)
+        {
+            Assert.That(
+                TerminalSurfaceCapture.Evaluate(metrics, CaptureBounds.Default()),
+                Is.Not.Empty,
+                $"Sanity: {because} (distinctColors {metrics.DistinctColors})"
+            );
+        }
+
+        /*
+            The palette's own input or anything it delegates focus to, matching
+            the focus contract the palette relies on (delegatesFocus on the text
+            field).
+         */
+        private void AssertInputOwnsFocus(string message)
+        {
+            VisualElement input = _palette._input;
+            Assert.That(input != null, "The palette input exists while the palette is open");
+            Focusable focused = input.panel?.focusController?.focusedElement;
+            VisualElement focusedElement = focused as VisualElement;
+            bool ownsFocus = focusedElement == input || input.Contains(focusedElement);
+            Assert.IsTrue(ownsFocus, $"{message} (focused: {DescribeFocus(focused)})");
+        }
+
+        /*
+            The warm open must render exactly like the cold one. The byte proof
+            needs the caret freeze: without it the native caret blinks and the
+            two frames land in different phases, so those hosts compare the
+            frame metrics instead (and the manifest records why).
+         */
+        private void AssertRendersIdentically(
+            string coldScenario,
+            string warmScenario,
+            CapturePixelMetrics coldFrame,
+            CapturePixelMetrics warmFrame
+        )
+        {
+            if (_firstInteractionCaretFreeze != null && !_firstInteractionCaretFreeze.Engaged)
+            {
+                Assert.AreEqual(
+                    coldFrame.DistinctColors,
+                    warmFrame.DistinctColors,
+                    "A warm open must render as richly as the cold open"
+                );
+                return;
+            }
+
+            Assert.That(
+                File.ReadAllBytes(Path.Combine(_runDirectory, warmScenario + ".png")),
+                Is.EqualTo(File.ReadAllBytes(Path.Combine(_runDirectory, coldScenario + ".png"))),
+                "A warm open must render the same first frame as the cold open"
+            );
+        }
+
+        private void WriteFrameTimingManifest(
+            string scenario,
+            CapturePixelMetrics metrics,
+            List<string> violations,
+            bool warm
+        )
+        {
+            CaptureOutcome outcome = new CaptureOutcome
+            {
+                Metrics = metrics,
+                Violations = violations,
+                PngPath = Path.Combine(_runDirectory, scenario + ".png"),
+            };
+            _diagnosticsSuffix =
+                (warm ? "warm" : "cold")
+                + " rendersToFirstCompleteFrame="
+                + FirstRenderPasses
+                + " cursorFreeze="
+                + (
+                    _firstInteractionCaretFreeze == null
+                        ? "unavailable"
+                        : _firstInteractionCaretFreeze.Describe()
+                )
+                + " focus="
+                + DescribeFocus(_palette._input?.panel?.focusController?.focusedElement);
+            outcome.Manifest = BuildManifest(scenario, CaptureBounds.Default(), outcome);
+            outcome.Manifest.RendersToFirstCompleteFrame = FirstRenderPasses;
+            TerminalSurfaceCapture.WriteManifest(
+                outcome.Manifest,
+                Path.Combine(_runDirectory, scenario + ".manifest.json")
             );
         }
 

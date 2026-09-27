@@ -48,7 +48,27 @@ metadata:
 
    `unity:tests` wraps `unity-mcp.mjs tests`: `--mode all|editmode|playmode`,
    `--filter` (the bridge's test-name filter; case-insensitive partial match
-   on the pinned backend), `--run-timeout MS` (minimum 30000).
+   on the pinned backend), `--run-timeout MS` (minimum 30000, per leg). `all`
+   runs the EditMode suite then the PlayMode suite and prints one summary line
+   per leg.
+
+   Three rules make a result trustworthy, all in `awaitRunResult`:
+
+   - A leg is reported only when its result is finished, not in flight, and
+     either seen in flight (from a poll, never from the `run_tests` answer
+     itself) or carrying a run key (counters plus duration) that differs from
+     the pre-request one. The bridge answers `run_tests` with the previous run's
+     result when it starts nothing, and that echo must never read as a green
+     gate. Duration is in the key so a legitimate identical re-run is not
+     mistaken for the previous one.
+   - The session signal is sized for every leg (`runTimeout * legs`), or it ends
+     the command before the per-leg deadlines can mean anything.
+   - Inspect a payload before re-testing the deadline. A loop shaped
+     `while (now < deadline) { inspect; sleep; fetch }` drops the payload its
+     last poll fetched, so a run that finished during that poll reads as
+     missing.
+   - A leg that matched no test is reported, and only a zero total across legs
+     fails, so a mode-specific `--filter` is not an error.
 3. Unity Test Runner: Window > General > Test Runner -> PlayMode tab -> Run All.
 4. Unity CLI (CI-style):
    `Unity -batchmode -projectPath <proj> -runTests -testPlatform PlayMode -testResults results.xml -quit`

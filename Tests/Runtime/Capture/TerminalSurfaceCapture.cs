@@ -276,6 +276,27 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
          */
         internal static void ForcePanelRender(VisualElement contentRoot)
         {
+            ForcePanelRender(contentRoot, ForcedRenderPasses);
+        }
+
+        /*
+            The pass count is a parameter so a latency measurement can read the
+            panel's *first* render after a change, which is the only way to tell
+            a surface that settles in one render from one that needs a second;
+            every capture fixture uses the settled default. A zero-pass call
+            would read whatever the target held, so it is refused.
+         */
+        internal static void ForcePanelRender(VisualElement contentRoot, int passes)
+        {
+            if (passes < 1)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(passes),
+                    passes,
+                    "A forced capture must drive at least one repaint/render pass."
+                );
+            }
+
             IPanel panel = contentRoot.panel;
             if (panel == null)
             {
@@ -309,7 +330,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 );
             }
 
-            for (int pass = 0; pass < ForcedRenderPasses; ++pass)
+            for (int pass = 0; pass < passes; ++pass)
             {
                 repaintMethod.Invoke(
                     panel,

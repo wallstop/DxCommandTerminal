@@ -148,28 +148,55 @@ describe("validateT4Manifest", () => {
 });
 
 describe("collectT4ManifestPaths", () => {
-  it("collects manifests newer than the cutoff, oldest first", () => {
+  // A capture run stamps its directory `yyyy-MM-ddTHH-mm-ss-fffZ` in UTC, and
+  // that stamp is what scopes collection to the run at hand.
+  const stamp = (iso) => iso.replace(/[-:]/gu, "-").replace(".", "-");
+
+  it("collects the runs at or after the cutoff, one newest copy per scenario", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "t4-manifests-"));
     try {
-      const write = (stamp, name, mtimeMs) => {
-        const directory = path.join(root, stamp);
-        fs.mkdirSync(directory, { recursive: true });
-        const filePath = path.join(directory, name);
+      const write = (directory, name, mtimeMs) => {
+        const full = path.join(root, directory);
+        fs.mkdirSync(full, { recursive: true });
+        const filePath = path.join(full, name);
         fs.writeFileSync(filePath, "{}");
         fs.utimesSync(filePath, new Date(mtimeMs), new Date(mtimeMs));
       };
-      write("run-1", "a.manifest.json", 1_000);
-      write("run-2", "b.manifest.json", 3_000);
-      write("run-3", "not-a-manifest.txt", 5_000);
+      const older = stamp("2026-09-27T01:00:00.000Z");
+      const previous = stamp("2026-09-27T01:14:40.000Z");
+      const current = stamp("2026-09-27T01:14:45.854Z");
+      const cutoff = Date.parse("2026-09-27T01:14:45.000Z");
 
-      assert.deepEqual(collectT4ManifestPaths(root, 500), [
-        path.join(root, "run-1", "a.manifest.json"),
-        path.join(root, "run-2", "b.manifest.json")
-      ]);
-      assert.deepEqual(collectT4ManifestPaths(root, 2_000), [
-        path.join(root, "run-2", "b.manifest.json")
-      ]);
-      assert.deepEqual(collectT4ManifestPaths(root, 10_000), []);
+      write(older, "CapturesTerminalSmallSurface.manifest.json", 1_000);
+      write(previous, "CapturesTerminalSmallSurface.manifest.json", 2_000);
+      write(previous, "CapturesCommandPaletteSurface.manifest.json", 3_000);
+      write(current, "CapturesTerminalSmallSurface.manifest.json", 9_000);
+      write(current, "CapturesCommandPaletteSurface.manifest.json", 8_000);
+      write(current, "not-a-manifest.txt", 9_500);
+      fs.mkdirSync(path.join(root, "run-1"), { recursive: true });
+      fs.writeFileSync(path.join(root, "run-1", "a.manifest.json"), "{}");
+
+      // The previous run is excluded even though its file mtimes are inside a
+      // naive window, and the current run's copy of each scenario is kept.
+      const collected = collectT4ManifestPaths(root, cutoff);
+      assert.deepEqual(
+        collected.map((entry) => path.basename(entry.filePath)),
+        [
+          "CapturesCommandPaletteSurface.manifest.json",
+          "CapturesTerminalSmallSurface.manifest.json"
+        ]
+      );
+      assert.deepEqual(
+        collected.map((entry) => entry.mtimeMs),
+        [8_000, 9_000]
+      );
+
+      // No cutoff still yields one entry per scenario, and never a directory
+      // that is not a run directory.
+      assert.deepEqual(collectT4ManifestPaths(root, 0).length, 2);
+      // The cutoff is an epoch instant, so a time after the last run collects
+      // nothing.
+      assert.deepEqual(collectT4ManifestPaths(root, Date.parse("2026-09-27T02:00:00.000Z")), []);
       assert.deepEqual(collectT4ManifestPaths(path.join(root, "missing"), 0), []);
     } finally {
       fs.rmSync(root, { recursive: true, force: true });

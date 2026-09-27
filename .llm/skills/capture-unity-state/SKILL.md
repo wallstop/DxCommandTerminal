@@ -87,13 +87,26 @@ violations, tree diagnostics).
 Rules the harness enforces on itself:
 
 - Read-only for the surfaces: it redirects `PanelSettings.targetTexture`,
-  forces one synchronous panel render per capture, and restores render state.
+  forces the panel's own render passes per capture, and restores render state.
 - Deterministic: the terminal caret is frozen via
   `TerminalUI.SetCursorBlinkPaused(true)`; ease times are zeroed; the palette's
   native caret is frozen through its `cursorColor` (blink-invariance is proven
   by a byte-identical repeat readback).
 - Leak-checked: RenderTexture counts are asserted back to baseline in teardown
   (guarded when setup skipped, so -nographics ignores cannot fail teardown).
+
+### First-interaction gate (render latency, not a baseline)
+
+`CapturesFirstPaletteInteractionFrame` is a measurement, not a screenshot. Each
+read clears the target, drives one `Repaint`+`Render` pass, and reads the pixels
+back, so "the first frame the panel renders after the input" is the unit: the
+panel renders on demand, and a frame count would read the editor's repaint luck
+instead of the package's latency. A first render must be at least as rich as
+the same fixture's settled frame, so a first frame that painted only part of the
+surface fails even though it is not blank. Its manifests record
+`rendersToFirstCompleteFrame` and the focus witness, and the scenario stays
+outside the scenario registries on purpose: it is a measurement, so no golden
+image is ever minted for it.
 
 ## Golden baselines (T11, `npm run t11:check` / `npm run t11:update`)
 
