@@ -80,11 +80,97 @@ test("run_tests status decoding is data-driven across bridge generations", () =>
   }
 });
 
-test("summary line reports the four counters in order", () => {
+test("the summary line reports the four counters in order", () => {
   assert.equal(
-    testSummaryLine({ total: 9, passed: 7, failed: 1, skipped: 1 }),
-    "Tests: 9 total, 7 passed, 1 failed, 1 skipped."
+    testSummaryLine({ total: 9, passed: 9, failed: 0, skipped: 0, failedNames: [] }),
+    "Tests: 9 total, 9 passed, 0 failed, 0 skipped."
   );
+});
+
+/*
+    A red run has to name itself. The counters alone leave the reader to dig
+    through the editor console for the test names, which is the whole cost of a
+    red run. Nothing downstream repeats the names, so this block is the only
+    place they appear.
+ */
+test("a result block names its failures, and says so when it cannot", () => {
+  const cases = [
+    // [summary, expected]
+    // A green leg: the counters, and nothing else.
+    [
+      { total: 9, passed: 9, failed: 0, skipped: 0, failedNames: [] },
+      "Tests: 9 total, 9 passed, 0 failed, 0 skipped."
+    ],
+    [
+      {
+        total: 363,
+        passed: 361,
+        failed: 2,
+        skipped: 0,
+        failedNames: ["Wallstop.A.One", "Wallstop.B.Two(System.String)"]
+      },
+      "Tests: 363 total, 361 passed, 2 failed, 0 skipped.\n"
+        + "  failed: Wallstop.A.One\n"
+        + "  failed: Wallstop.B.Two(System.String)"
+    ],
+    // The editor's cap is its own count, and it is printed as its own line, so
+    // the cap can never be read as a test name.
+    [
+      {
+        total: 12,
+        passed: 0,
+        failed: 12,
+        skipped: 0,
+        failedNames: ["Ns.A.One", "Ns.A.Two"],
+        failedMore: 10
+      },
+      "Tests: 12 total, 0 passed, 12 failed, 0 skipped.\n"
+        + "  failed: Ns.A.One\n"
+        + "  failed: Ns.A.Two\n"
+        + "  ... and 10 more the cap did not list"
+    ],
+    // A control character, a bidi override, or a zero-width joiner in a name
+    // must not split it across two lines, reorder one, or forge a result line -
+    // and the escape has to be visible, or a reader cannot tell a name changed.
+    [
+      {
+        total: 1,
+        passed: 0,
+        failed: 1,
+        skipped: 0,
+        failedNames: ["Ns.A.One\n  Tests: 1 total, 1 passed, 0 failed, 0 skipped.", "Ns.A\u202E﻿B"]
+      },
+      "Tests: 1 total, 0 passed, 1 failed, 0 skipped.\n"
+        + "  failed: Ns.A.One\\u000A  Tests: 1 total, 1 passed, 0 failed, 0 skipped.\n"
+        + "  failed: Ns.A\\u202E\\uFEFFB"
+    ],
+    // A red run the editor named nothing says so, instead of printing the
+    // counters alone - which is the output this whole change replaced.
+    [
+      { total: 4, passed: 3, failed: 1, skipped: 0, failedNames: [] },
+      "Tests: 4 total, 3 passed, 1 failed, 0 skipped.\n"
+        + "  no failed test names were reported (bridge fallback, or a reporter older than this change)"
+    ],
+    // One name per failing case, even when the cases share a method: a
+    // parameterized test that failed twice failed twice, and the reader's only
+    // other count is the `fail=` counter.
+    [
+      {
+        total: 3,
+        passed: 0,
+        failed: 3,
+        skipped: 0,
+        failedNames: ['Ns.M.Case("a b")', 'Ns.M.Case("a,b")', 'Ns.M.Case("a=b")']
+      },
+      "Tests: 3 total, 0 passed, 3 failed, 0 skipped.\n"
+        + '  failed: Ns.M.Case("a b")\n'
+        + '  failed: Ns.M.Case("a,b")\n'
+        + '  failed: Ns.M.Case("a=b")'
+    ]
+  ];
+  for (const [summary, expected] of cases) {
+    assert.equal(testSummaryLine(summary), expected, expected);
+  }
 });
 
 test("a result identical to the pre-request run is the previous run's", () => {
@@ -279,13 +365,231 @@ test("claim decoding is data-driven over the three states and the torn cases", (
       "pass=18 fail=0 skipped=0 inconclusive=0 duration=0.071 token=t-2 mode=PlayMode finished=x",
       "finished",
       "t-2",
-      { summary: { total: 18, passed: 18, failed: 0, skipped: 0, inconclusive: 0 } }
+      {
+        summary: {
+          total: 18,
+          passed: 18,
+          failed: 0,
+          skipped: 0,
+          inconclusive: 0,
+          failedNames: [],
+          failedMore: 0
+        }
+      }
     ],
     [
       "pass=3 fail=2 skipped=1 inconclusive=4 token=t-3",
       "finished",
       "t-3",
-      { summary: { total: 10, passed: 3, failed: 2, skipped: 1, inconclusive: 4 } }
+      {
+        summary: {
+          total: 10,
+          passed: 3,
+          failed: 2,
+          skipped: 1,
+          inconclusive: 4,
+          failedNames: [],
+          failedMore: 0
+        }
+      }
+    ],
+    // A red run names its failures. The editor percent-encodes every character
+    // the claim grammar reserves, so a name with a space, a comma, or an equals
+    // survives the round trip instead of collapsing into its neighbours.
+    [
+      "pass=361 fail=2 skipped=0 inconclusive=0 token=t-9 mode=EditMode "
+        + "failed-names=Ns.A.One,Ns.B.Two(System.Int32)",
+      "finished",
+      "t-9",
+      {
+        summary: {
+          total: 363,
+          passed: 361,
+          failed: 2,
+          skipped: 0,
+          inconclusive: 0,
+          failedNames: ["Ns.A.One", "Ns.B.Two(System.Int32)"],
+          failedMore: 0
+        }
+      }
+    ],
+    // The three cases of one parameterized test that a replace-with-underscore
+    // encoder would have merged into one name. `a b` is %20, `a,b` is %2C, and
+    // `a=b` is %3D - all reserved, all distinct once decoded.
+    [
+      "pass=0 fail=3 token=t-12 failed-names="
+        + 'Ns.M.Case(%22a%20b%22),Ns.M.Case(%22a%2Cb%22),Ns.M.Case(%22a%3Db%22)',
+      "finished",
+      "t-12",
+      {
+        summary: {
+          total: 3,
+          passed: 0,
+          failed: 3,
+          skipped: 0,
+          inconclusive: 0,
+          failedNames: ['Ns.M.Case("a b")', 'Ns.M.Case("a,b")', 'Ns.M.Case("a=b")'],
+          failedMore: 0
+        }
+      }
+    ],
+    // A '%' is escaped as %25, so a name that already reads as an escape comes
+    // back as itself. A truncated escape - which no reporter writes, but a hand
+    // edited claim can - decodes to itself instead of taking the run with it.
+    [
+      "pass=0 fail=2 token=t-13 failed-names=Ns.M.Case(100%25),Ns.M.Case(%ZZ)",
+      "finished",
+      "t-13",
+      {
+        summary: {
+          total: 2,
+          passed: 0,
+          failed: 2,
+          skipped: 0,
+          inconclusive: 0,
+          failedNames: ["Ns.M.Case(100%)", "Ns.M.Case(%ZZ)"],
+          failedMore: 0
+        }
+      }
+    ],
+    // An escape is over UTF-8 bytes, so a name outside ASCII arrives as two to
+    // four escapes. Encoding the character instead would write %2003, which
+    // decodes as a space and "03": a real case in this repository, whose
+    // ChoiceFormattingPreservesQuotedWhitespace cases include U+2003.
+    [
+      "pass=0 fail=2 token=t-14 failed-names=Ns.M.Case(%E2%80%83),Ns.M.Case(%C3%A9)",
+      "finished",
+      "t-14",
+      {
+        summary: {
+          total: 2,
+          passed: 0,
+          failed: 2,
+          skipped: 0,
+          inconclusive: 0,
+          failedNames: ["Ns.M.Case(\u2003)", "Ns.M.Case(é)"],
+          failedMore: 0
+        }
+      }
+    ],
+    // The cap is a sibling count, not a name, so a 12-failure run reports ten
+    // names and two unnamed. Ten is the reporter's cap.
+    [
+      "pass=1 fail=12 token=t-10 failed-more=2 failed-names="
+        + "Ns.C.One,Ns.C.Two,Ns.C.Three,Ns.C.Four,Ns.C.Five,Ns.C.Six,Ns.C.Seven,Ns.C.Eight,"
+        + "Ns.C.Nine,Ns.C.Ten",
+      "finished",
+      "t-10",
+      {
+        summary: {
+          total: 13,
+          passed: 1,
+          failed: 12,
+          skipped: 0,
+          inconclusive: 0,
+          failedNames: [
+            "Ns.C.One",
+            "Ns.C.Two",
+            "Ns.C.Three",
+            "Ns.C.Four",
+            "Ns.C.Five",
+            "Ns.C.Six",
+            "Ns.C.Seven",
+            "Ns.C.Eight",
+            "Ns.C.Nine",
+            "Ns.C.Ten"
+          ],
+          failedMore: 2
+        }
+      }
+    ],
+    // failed-more is a count, not a gate, and it is still bounded by the
+    // failures this same line reports: a malformed, oversized, or
+    // editor-impossible value must not print as if the editor had written it.
+    [
+      "pass=1 fail=2 token=t-15 failed-more=lots failed-names=Ns.C.One",
+      "finished",
+      "t-15",
+      {
+        summary: {
+          total: 3,
+          passed: 1,
+          failed: 2,
+          skipped: 0,
+          inconclusive: 0,
+          failedNames: ["Ns.C.One"],
+          failedMore: 0
+        }
+      }
+    ],
+    [
+      "pass=0 fail=1 token=t-17 failed-more=1e1 failed-names=Ns.C.One",
+      "finished",
+      "t-17",
+      {
+        summary: {
+          total: 1,
+          passed: 0,
+          failed: 1,
+          skipped: 0,
+          inconclusive: 0,
+          failedNames: ["Ns.C.One"],
+          failedMore: 0
+        }
+      }
+    ],
+    [
+      "pass=0 fail=1 token=t-18 failed-more=9 failed-names=Ns.C.One",
+      "finished",
+      "t-18",
+      {
+        summary: {
+          total: 1,
+          passed: 0,
+          failed: 1,
+          skipped: 0,
+          inconclusive: 0,
+          failedNames: ["Ns.C.One"],
+          failedMore: 0
+        }
+      }
+    ],
+    // An empty part between separators is a claim the editor never writes, and
+    // dropping it cannot lose a name the editor reported.
+    [
+      "pass=1 fail=2 token=t-16 failed-names=Ns.C.One,,Ns.C.Two",
+      "finished",
+      "t-16",
+      {
+        summary: {
+          total: 3,
+          passed: 1,
+          failed: 2,
+          skipped: 0,
+          inconclusive: 0,
+          failedNames: ["Ns.C.One", "Ns.C.Two"],
+          failedMore: 0
+        }
+      }
+    ],
+    // An empty field, and an absent one, both decode to no names. The editor
+    // writes neither on a green run; the reader cannot tell them apart, so the
+    // summary must not claim that nothing failed.
+    [
+      "pass=2 fail=1 token=t-11 failed-names=",
+      "finished",
+      "t-11",
+      {
+        summary: {
+          total: 3,
+          passed: 2,
+          failed: 1,
+          skipped: 0,
+          inconclusive: 0,
+          failedNames: [],
+          failedMore: 0
+        }
+      }
     ],
     [
       "did-not-run token=t-4 mode=EditMode reason=the EditMode run executed no tests",

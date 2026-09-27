@@ -4,7 +4,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     using System.Collections.Generic;
     using Backend;
     using NUnit.Framework;
-    using UI;
 
     /*
         Contract tests for builder subcommands (PLAN T09 phase 2): one
@@ -58,10 +57,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void TearDown()
         {
             CommandExecutionContext.AmbientContextProvider = _previousAmbientProvider;
-            if (TerminalUI.Instance != null)
-            {
-                UnityEngine.Object.Destroy(TerminalUI.Instance.gameObject);
-            }
         }
 
         [Test]

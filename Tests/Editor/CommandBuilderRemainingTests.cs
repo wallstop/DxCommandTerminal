@@ -4,8 +4,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     using System.Collections.Generic;
     using Backend;
     using NUnit.Framework;
-    using UI;
-    using UnityEngine;
 
     /*
         Contract tests for the builder's unbounded trailing argument (PLAN T09
@@ -38,10 +36,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void TearDown()
         {
             CommandExecutionContext.AmbientContextProvider = _previousAmbientProvider;
-            if (TerminalUI.Instance != null)
-            {
-                UnityEngine.Object.Destroy(TerminalUI.Instance.gameObject);
-            }
         }
 
         [Test]

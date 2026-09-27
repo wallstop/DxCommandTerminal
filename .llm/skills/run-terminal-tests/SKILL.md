@@ -49,8 +49,10 @@ metadata:
    `unity:tests` wraps `unity-mcp.mjs tests`: `--mode all|editmode|playmode`,
    `--filter` (the bridge's test-name filter; case-insensitive partial match
    on the pinned backend), `--run-timeout MS` (minimum 30000, per leg). `all`
-   runs the EditMode suite then the PlayMode suite and prints one summary line
-   per leg.
+   runs the EditMode suite then the PlayMode suite and prints one result block
+   per leg: the counters, then one indented line per failed test the editor
+   named. The list is capped, so a block that shows fewer names than failures
+   ends with a line saying how many were not listed.
 
    Four rules make a result trustworthy. Two are in `awaitRunResult` (the
    bridge-polling fallback) and two in `runUnityTests`; `awaitRunClaim` holds the
