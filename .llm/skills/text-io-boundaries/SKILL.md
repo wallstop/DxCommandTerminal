@@ -125,6 +125,32 @@ Two limits to state rather than fix:
   units, because `=` is a unit of its own. Do not "fix" that one, and do not
   copy it as a pattern for a caret.
 
+## A queued position has one owner
+
+A caret the console writes later is *queued*, and a queued field is volatile:
+any reset helper called after the queue takes it away.
+`TerminalUI.RecallHistoryLine` assigned `_pendingCaretIndex` and then called
+`ResetAutoComplete`, which runs `ResetTokenCompletion` and nulls the marker.
+The queue never reached `ApplyPendingCaret`, so history recall left the caret
+exactly where it was and the next character landed mid-line - a fix that
+compiled, passed every Unity-free gate, and did nothing. Two reviews and
+Cursor Bugbot found it; nothing runnable here could, because only a live panel
+moves a caret.
+
+The rule is mechanical: **queue last**, and for every write to a `_pending*`
+field list what the rest of that method calls. One grep settles the
+enumeration - two queued fields, `_pendingCaretIndex` on each surface, and
+five writers between them.
+
+The mirror question is the same one asked of derived state. A field that
+records what was *rendered* is written where the render happens, never in a
+`finally` that runs whatever happened: a `finally` records intent, so a row
+loop that stopped early would leave the mirror claiming rows that were never
+written, the next pass would compare equal, and the stale rows would never be
+corrected. `TerminalUI.RefreshAutoCompleteHints` writes its candidate mirror
+with the rows it describes, and only when every row was written; the log-list
+version stamp next to it has been written that way all along.
+
 ## Parse the encoded text, print the escaped text
 
 The format is only safe because of where the boundary sits. `parseRunClaim`
@@ -150,6 +176,15 @@ for (let code = 0; code <= 0x10ffff; ++code) {
 
 Walk the whole scalar range, not the BMP: a tag character like U+E0001 arrives
 intact from a UTF-8 encoder and needs the eight-digit escape form.
+
+**An expectation the subject already satisfies is not a pin.** A test that
+clicked a suggestion and then asserted the input holds that candidate passed
+with the fix removed, because the field had been left holding it. Put the
+subject in a state only the fix can produce - the caret at the head of a
+longer line, the input sitting on a different candidate - and assert the
+transition. The same rig rule worth stating out loud: a poll that accepts the
+queued position pins that the surface *queues* the right end, not that a frame
+lands it, so the comment beside the helper should say which one it claims.
 
 **Re-derive the whole table, and run the derivation.** An expected value
 counted by hand out of an implementation is a second implementation of it,

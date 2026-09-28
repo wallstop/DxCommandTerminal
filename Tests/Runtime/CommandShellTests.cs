@@ -4,6 +4,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     using System.Collections;
     using System.Linq;
     using System.Text;
+    using System.Text.RegularExpressions;
     using Backend;
     using NUnit.Framework;
     using UI;
@@ -379,6 +380,68 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     exception = e;
                     throw;
                 }
+            }
+        }
+
+        /*
+            A developer's handler can throw, and the two registration shapes
+            dispatch differently, so both are pinned by the same contract: the
+            failure is queued where every other failure is queued, the frames
+            stay with Unity's logger, and the shell keeps running commands
+            afterwards.
+         */
+        [TestCase(true)]
+        [TestCase(false)]
+        public void AThrowingHandlerIsContainedReportedAndRecoverable(bool contextAware)
+        {
+            CommandShell shell = new(new CommandHistory(16));
+            int invocations = 0;
+            Assert.IsTrue(
+                contextAware
+                    ? shell.AddCommand(
+                        new CommandDefinition
+                        {
+                            Name = "throwingCommand",
+                            Handler = (context, arguments) => Throw(),
+                        }
+                    )
+                    : shell.AddCommand("throwingCommand", arguments => Throw()),
+                "Sanity: the throwing command registers"
+            );
+            Assert.IsTrue(
+                shell.AddCommand("recoverCommand", arguments => { }),
+                "Sanity: the command that runs afterwards registers"
+            );
+
+            LogAssert.Expect(LogType.Exception, new Regex("handler exploded"));
+
+            Assert.IsTrue(
+                shell.RunCommand("throwingCommand"),
+                "The command ran, so the shell still answers that it ran"
+            );
+            Assert.AreEqual(1, invocations, "The handler ran once");
+            Assert.IsTrue(
+                shell.TryConsumeErrorMessage(out string error),
+                "A thrown handler is reported where every other failure is"
+            );
+            StringAssert.Contains("throwingCommand", error, "The report names the command");
+            StringAssert.Contains(
+                "InvalidOperationException",
+                error,
+                "The report names what was thrown"
+            );
+            StringAssert.Contains("handler exploded", error, "The report carries the message");
+            Assert.IsFalse(shell.TryConsumeErrorMessage(out _), "One failure reports one message");
+
+            Assert.IsTrue(
+                shell.RunCommand("recoverCommand"),
+                "A command after the failure still runs"
+            );
+
+            void Throw()
+            {
+                ++invocations;
+                throw new InvalidOperationException("handler exploded");
             }
         }
 

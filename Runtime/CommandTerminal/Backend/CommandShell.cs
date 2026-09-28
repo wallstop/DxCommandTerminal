@@ -961,6 +961,15 @@
         /// <summary>
         ///     Parses an input line into a command and runs that command.
         /// </summary>
+        /// <remarks>
+        ///     True means the command was dispatched, not that it ran
+        ///     cleanly: a command that reports a failure through the error
+        ///     queue - a rejected argument, a builder validation, a handler
+        ///     that threw - is contained and reported there, and the caller
+        ///     drains it with <see cref="TryConsumeErrorMessage"/>. False
+        ///     means no command ran: the name was empty, unknown, ineligible
+        ///     in this execution context, or the arguments did not match.
+        /// </remarks>
         public bool RunCommand(string line)
         {
             /*
@@ -1827,29 +1836,13 @@
             }
 
             int errorCount = _errorMessages.Count;
-            if (command.handler != null)
+            try
             {
-                command.handler(context, new BorrowedCommandArguments(arguments));
+                InvokeCommand(command, context, arguments);
             }
-            else if (arguments is CommandArg[] ownedArguments)
+            catch (Exception exception)
             {
-                // Array callers dispatch their own array, as before.
-                command.proc?.Invoke(ownedArguments);
-            }
-            else
-            {
-                /*
-                   Legacy handlers may retain their argument array, so each
-                   invocation materializes a fresh one. The array is never
-                   pooled or reused after the handler returns.
-                */
-                CommandArg[] materialized = new CommandArg[arguments.Count];
-                for (int i = 0; i < materialized.Length; ++i)
-                {
-                    materialized[i] = arguments[i];
-                }
-
-                command.proc?.Invoke(materialized);
+                ReportCommandFailure(commandName, exception);
             }
 
             // Known command executed, respect addToHistory flag
@@ -1863,6 +1856,68 @@
             }
 
             return true;
+        }
+
+        /*
+            A developer's handler can throw, and the two channels answer
+            different questions: the error queue carries the line the log and
+            the palette's error bar show - what failed, no frames - and
+            Debug.LogException keeps the frames in the Editor console and the
+            player log, which is where a developer reads a stack trace. The
+            log list renders the message and not the trace, so the trace
+            cannot be the in-game record. A terminal forwarding Unity's own
+            messages into its buffer (opt-in, off by default) shows the
+            exception there as well, which is what it asked for.
+         */
+        private void ReportCommandFailure(string commandName, Exception exception)
+        {
+            IssueErrorMessage(
+                $"Command '{commandName}' threw {exception.GetType().Name}: {exception.Message}"
+            );
+            Debug.LogException(exception);
+        }
+
+        /*
+            The three dispatch shapes a registered command can take, in one
+            place: the context-aware handler, an array caller dispatching its
+            own array, and a legacy proc that may retain its argument array
+            and so gets a fresh one per invocation.
+         */
+        private void InvokeCommand(
+            CommandInfo command,
+            CommandExecutionContext context,
+            IReadOnlyList<CommandArg> arguments
+        )
+        {
+            if (command.handler != null)
+            {
+                command.handler(context, new BorrowedCommandArguments(arguments));
+                return;
+            }
+
+            if (arguments is CommandArg[] ownedArguments)
+            {
+                // Array callers dispatch their own array, as before.
+                command.proc?.Invoke(ownedArguments);
+                return;
+            }
+
+            /*
+                Legacy handlers may retain their argument array, so each
+                invocation materializes a fresh one. The array is never
+                pooled or reused after the handler returns. The count is read
+                once and sizes both the array and the loop: two length
+                expressions are two chances to disagree about how many
+                arguments this dispatch carries.
+             */
+            int count = arguments.Count;
+            CommandArg[] materialized = new CommandArg[count];
+            for (int i = 0; i < count; ++i)
+            {
+                materialized[i] = arguments[i];
+            }
+
+            command.proc?.Invoke(materialized);
         }
 
         private string BuildHistoryLine(string commandName, IReadOnlyList<CommandArg> arguments)

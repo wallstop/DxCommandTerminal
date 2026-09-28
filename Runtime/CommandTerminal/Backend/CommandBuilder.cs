@@ -773,12 +773,13 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 );
             }
 
-            SubcommandRoute[] children = new SubcommandRoute[_subcommands.Count];
+            int childCount = _subcommands.Count;
+            SubcommandRoute[] children = new SubcommandRoute[childCount];
             Dictionary<string, SubcommandRoute> lookup = new(
-                children.Length,
+                childCount,
                 StringComparer.OrdinalIgnoreCase
             );
-            for (int i = 0; i < children.Length; ++i)
+            for (int i = 0; i < childCount; ++i)
             {
                 CommandBuilder child = _subcommands[i];
                 SubcommandRoute route = child.BuildRoute($"{path} {child.Name}");

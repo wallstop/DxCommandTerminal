@@ -971,12 +971,16 @@
                 if (_completionMode)
                 {
                     CommandCompletion completion = _completions[index];
-                    _rowNameLabels[index].text = completion.EffectiveDisplayLabel;
-                    _rowHelpLabels[index].text = completion.Description ?? string.Empty;
+                    _rowNameLabels[index].text = LogTextSanitizer.Sanitize(
+                        completion.EffectiveDisplayLabel
+                    );
+                    _rowHelpLabels[index].text = LogTextSanitizer.Sanitize(
+                        completion.Description ?? string.Empty
+                    );
                     continue;
                 }
 
-                _rowNameLabels[index].text = _matchNames[index];
+                _rowNameLabels[index].text = LogTextSanitizer.Sanitize(_matchNames[index]);
                 string help = null;
                 if (
                     shell != null
@@ -986,7 +990,9 @@
                     help = info.help;
                 }
 
-                _rowHelpLabels[index].text = string.IsNullOrWhiteSpace(help) ? string.Empty : help;
+                _rowHelpLabels[index].text = string.IsNullOrWhiteSpace(help)
+                    ? string.Empty
+                    : LogTextSanitizer.Sanitize(help);
             }
 
             int excessRowStart = _matchNames.Count;
@@ -1366,10 +1372,20 @@
                 Terminal.Log(TerminalLogType.Error, $"Error: {error}");
             }
 
+            /*
+                A controlled error is not a success, whatever the shell
+                returned: RunCommand answers whether the command ran, and a
+                validation failure or a thrown handler ran and then reported
+                one. Returning that true closed the palette over the error it
+                had just written, so the only answer the developer got was
+                nothing. The terminal answers the same case by staying open
+                and logging the error, so the bar stays with the error
+                visible and the typed line still editable.
+             */
             if (firstError != null)
             {
                 ShowFeedback($"Error: {firstError}");
-                return success;
+                return false;
             }
 
             List<string> output = CollectOutput(buffer, versionBefore);

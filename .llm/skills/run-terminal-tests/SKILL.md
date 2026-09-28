@@ -194,11 +194,11 @@ field write is frame-coupled and flakes under session sequences
   (`CaretStickPasses`), and a field change cancels the queued caret
   (`_pendingCaretIndex` is `int?`; null = none).
 - A caret failure is the marker moving or draining - a real regression, not a poll budget
-  problem. The four flakes this replaced (`QuotedTokensAcceptUnquotedInsertions`,
-  `TabAppliesArgumentCompletionWithQuoting`, `NavigateAutoLoads`, the re-clamp pair) all
-  asserted the live cursorIndex without the queued marker; the palette and token-completion
-  polls now accept the queued marker (`_pendingCaretIndex`) or the live cursor, and value
-  polls accept the input abstraction or the field mirror.
+  problem.
+- An expectation the subject already satisfies is not a pin. A test that applied a
+  suggestion and then asserted the input holds that candidate passed with the fix
+  removed, because the field was left holding it: park the caret at the head of a longer
+  line, or sit the input on a different candidate, and assert the transition.
 - UITK clamps `cursorIndex` writes to the last LAID-OUT text length, not the
   value length, and the panel can RE-CLAMP a write after it landed. A fresh
   field can sit capped below the value length for a whole poll budget, and

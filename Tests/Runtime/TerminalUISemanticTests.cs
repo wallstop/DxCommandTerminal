@@ -3,6 +3,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     using System;
     using System.Collections;
     using System.Collections.Generic;
+    using System.Text.RegularExpressions;
     using Backend;
     using Components;
     using NUnit.Framework;
@@ -165,6 +166,67 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             DefaultTerminalInput.Instance.CommandText = "semanticafter";
             _terminal.EnterCommand();
             Assert.AreEqual(1, runs, "The terminal must stay usable after a failed command");
+        }
+
+        /*
+            The user-visible half of the containment: EnterCommand drains the
+            shell's error queue into the log, so a handler that throws leaves a
+            line naming the command and what it threw. Nothing else reports it
+            in a device build, and Unity's own logger keeps the frames.
+         */
+        [UnityTest]
+        public IEnumerator AThrowingCommandReportsItselfInTheLog()
+        {
+            yield return SpawnOpenTerminal();
+
+            Assert.IsTrue(
+                Terminal.Shell.AddCommand(
+                    "semanticthrow",
+                    _ => throw new InvalidOperationException("semantic explosion"),
+                    minArgs: 0,
+                    maxArgs: 0,
+                    help: "test"
+                ),
+                "Sanity: the throwing command registers"
+            );
+            Assert.IsTrue(
+                Terminal.Shell.AddCommand(
+                    "semanticafterthrow",
+                    _ => { },
+                    minArgs: 0,
+                    maxArgs: 0,
+                    help: "test"
+                ),
+                "Sanity: the command that runs afterwards registers"
+            );
+
+            LogAssert.Expect(LogType.Exception, new Regex("semantic explosion"));
+
+            DefaultTerminalInput.Instance.CommandText = "semanticthrow";
+            _terminal.EnterCommand();
+
+            AssertLogContains(
+                TerminalLogType.Error,
+                "semanticthrow",
+                "The thrown command must be reported in the log"
+            );
+            AssertLogContains(
+                TerminalLogType.Error,
+                "semantic explosion",
+                "The report carries what was thrown"
+            );
+            Assert.IsFalse(
+                Terminal.Shell.TryConsumeErrorMessage(out _),
+                "EnterCommand must drain the report with the log entry"
+            );
+
+            DefaultTerminalInput.Instance.CommandText = "semanticafterthrow";
+            _terminal.EnterCommand();
+            AssertLogContains(
+                TerminalLogType.Input,
+                "semanticafterthrow",
+                "A command after the failure still runs"
+            );
         }
 
         [UnityTest]
@@ -352,6 +414,144 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
         }
 
+        /*
+            A recalled line is a new value, so its caret belongs at the end.
+            The field was already focused, so FocusInput wrote no caret and the
+            caret stayed where the developer left it: the next character landed
+            in the middle of the line they had just recalled. The rig parks the
+            caret mid-line first, which is the reported shape.
+         */
+        [UnityTest]
+        public IEnumerator HistoryRecallParksTheCaretAtTheEndOfTheRecalledLine()
+        {
+            yield return SpawnOpenTerminal();
+
+            Assert.IsTrue(
+                Terminal.Shell.AddCommand(
+                    "hist-caret",
+                    _ => { },
+                    minArgs: 0,
+                    maxArgs: 0,
+                    help: "test"
+                ),
+                "Sanity: the recalled command registers"
+            );
+
+            RunThroughInput("hist-caret");
+            yield return SetInputText("hist");
+            yield return SetInputCaret(1);
+            Assert.AreEqual(
+                1,
+                _terminal._commandInput.cursorIndex,
+                "Sanity: the caret sits mid-line, as it does while typing"
+            );
+
+            _terminal.HandlePrevious();
+
+            Assert.AreEqual(
+                "hist-caret",
+                DefaultTerminalInput.Instance.CommandText,
+                "The recalled line loads"
+            );
+            yield return WaitForCaret(
+                "hist-caret".Length,
+                "A recalled line takes the caret to its end"
+            );
+        }
+
+        /*
+            HintDisplayMode.Always refills the bar on every keystroke. The bar
+            re-rendered on child count and selection only, so a candidate set
+            that changed without changing count - "zapo" narrowed to "zapt" -
+            left the previous candidate on screen, and the click closure
+            applied the text its row carried when the row was built.
+         */
+        [UnityTest]
+        public IEnumerator SuggestionBarFollowsTheCurrentCandidates()
+        {
+            yield return SpawnOpenTerminal();
+            _terminal.hintDisplayMode = HintDisplayMode.Always;
+
+            Assert.IsTrue(
+                Terminal.Shell.AddCommand("zapo", _ => { }, minArgs: 0, maxArgs: 0, help: "test"),
+                "Sanity: the first candidate registers"
+            );
+            Assert.IsTrue(
+                Terminal.Shell.AddCommand("zapt", _ => { }, minArgs: 0, maxArgs: 0, help: "test"),
+                "Sanity: the second candidate registers"
+            );
+
+            yield return SetInputText("zap");
+            yield return WaitForHintCount(2);
+            yield return SetInputText("zapo");
+            yield return WaitForHintCount(1);
+            yield return SetInputText("zapt");
+            yield return WaitForSingleHintText(
+                "zapt",
+                "The bar shows the candidate the current input resolves to"
+            );
+
+            /*
+                The line goes back to the two candidates and the click takes
+                the second row, so the applied text is not what the input
+                already held: a row applying the previous query's candidate
+                fails here. The caret starts at the head, so the end position
+                below can only hold if the row placed it.
+             */
+            yield return SetInputText("zap");
+            yield return WaitForHintCount(2);
+            yield return SetInputCaret(0);
+            Assert.AreEqual(
+                0,
+                _terminal._commandInput.cursorIndex,
+                "Sanity: the caret starts at the head of the line"
+            );
+
+            _terminal.ApplyHint(1);
+
+            Assert.AreEqual(
+                "zapt",
+                DefaultTerminalInput.Instance.CommandText,
+                "A row applies the candidate it currently shows"
+            );
+            yield return WaitForCaret(
+                "zapt".Length,
+                "An applied row takes the caret to the end of the line"
+            );
+        }
+
+        /*
+            A hint row is a rendering path, not the log funnel: a candidate is
+            a history line, so the row shows the escaped text and still applies
+            the raw one.
+         */
+        [UnityTest]
+        public IEnumerator SuggestionRowEscapesWhatItRendersAndAppliesTheRawCandidate()
+        {
+            yield return SpawnOpenTerminal();
+            _terminal.hintDisplayMode = HintDisplayMode.Always;
+
+            Assert.IsTrue(
+                Terminal.Shell.AddCommand("uniarg", _ => { }, minArgs: 1, maxArgs: 1, help: "test"),
+                "Sanity: the argument command registers"
+            );
+            RunThroughInput("uniarg a\u202Eb");
+
+            yield return SetInputText("uniarg a");
+            yield return WaitForSingleHintText(
+                "uniarg a\\u202Eb",
+                "The row shows the escaped history line"
+            );
+
+            _terminal.ApplyHint(0);
+
+            Assert.AreEqual(
+                "uniarg a\u202Eb",
+                DefaultTerminalInput.Instance.CommandText,
+                "The applied candidate is the raw text the developer chose"
+            );
+        }
+
         private IEnumerator SpawnOpenTerminal()
         {
 #if UNITY_EDITOR
@@ -413,6 +613,106 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             _terminal._commandInput.value = text;
             yield return null;
+        }
+
+        /*
+            UITK clamps a programmatic caret write to the last laid-out text
+            length and can re-clamp it after it landed, so the placement
+            retries and polls for it to hold.
+         */
+        private IEnumerator SetInputCaret(int caretIndex)
+        {
+            for (int attempt = 0; attempt < 3; ++attempt)
+            {
+                _terminal._commandInput.cursorIndex = caretIndex;
+                _terminal._commandInput.selectIndex = caretIndex;
+
+                int frameBudget = 100;
+                while (0 < frameBudget-- && _terminal._commandInput.cursorIndex != caretIndex)
+                {
+                    yield return null;
+                }
+
+                if (_terminal._commandInput.cursorIndex == caretIndex)
+                {
+                    yield break;
+                }
+            }
+        }
+
+        /*
+            A queued caret is applied on a later refresh pass, and editor
+            throttling can defer that for frames; the rig polls the live
+            caret and the queued position rather than assuming a frame. The
+            queued position is the invariant when a throttled panel applies
+            nothing, so what these tests pin is that the surface queues the
+            end of the line, not that a frame lands it.
+         */
+        private IEnumerator WaitForCaret(int expectedCaretIndex, string message)
+        {
+            int frameBudget = FrameBudget;
+            while (
+                0 < frameBudget--
+                && _terminal._commandInput.cursorIndex != expectedCaretIndex
+                && _terminal._pendingCaretIndex != expectedCaretIndex
+            )
+            {
+                yield return null;
+            }
+
+            Assert.IsTrue(
+                _terminal._commandInput.cursorIndex == expectedCaretIndex
+                    || _terminal._pendingCaretIndex == expectedCaretIndex,
+                $"{message}: cursor={_terminal._commandInput.cursorIndex}"
+                    + $" queued={_terminal._pendingCaretIndex}"
+            );
+        }
+
+        private IEnumerator WaitForHintCount(int expectedCount)
+        {
+            int frameBudget = FrameBudget;
+            while (0 < frameBudget-- && HintRowCount() != expectedCount)
+            {
+                yield return null;
+            }
+
+            Assert.AreEqual(
+                expectedCount,
+                HintRowCount(),
+                $"The bar must hold {expectedCount} rows for the current input"
+            );
+        }
+
+        private IEnumerator WaitForSingleHintText(string expectedText, string message)
+        {
+            int frameBudget = FrameBudget;
+            while (0 < frameBudget-- && !IsSingleHint(expectedText))
+            {
+                yield return null;
+            }
+
+            Assert.IsTrue(IsSingleHint(expectedText), message);
+        }
+
+        private int HintRowCount()
+        {
+            ScrollView hints = _terminal._autoCompleteContainer;
+            return hints == null ? 0 : hints.childCount;
+        }
+
+        private bool IsSingleHint(string expectedText)
+        {
+            ScrollView hints = _terminal._autoCompleteContainer;
+            if (hints == null || hints.childCount != 1)
+            {
+                return false;
+            }
+
+            return string.Equals(
+                (hints[0] as TextElement)?.text,
+                expectedText,
+                StringComparison.Ordinal
+            );
         }
 
         private IEnumerator WaitForFocusedInput(string message)

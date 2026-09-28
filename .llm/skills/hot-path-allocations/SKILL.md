@@ -124,6 +124,15 @@ first-inserted-wins for case-variant duplicates.
   (`words[writeIndex] = ...` in the body - its *inner* read loop is safe and is hoisted), and
   `TerminalUI`'s `while (content.childCount < logs.Count)`, which appends the labels it is
   counting. Hoisting any of them is a bug, not an optimization.
+- **One count per copy, and it is the one the allocation used.**
+  `new CommandArg[arguments.Count]` followed by
+  `for (int i = 0; i < materialized.Length; ++i)` states the same count twice,
+  in two expressions that can drift: change the allocation - a subrange, a
+  clamped size, a filter - and the copy silently under-runs instead of
+  failing. Hoist it and let it size both, the way
+  `BorrowedCommandArguments.ToArray` already does. This is a drift rule, not a
+  speed one, and it is a review rule rather than a lint rule: a token-level
+  linter cannot see that two expressions name the same count.
 - Hoisting `string.Length`/`array.Length` is a **measured wash, not a win**: with tiered JIT
   disabled the inline and hoisted forms were identical at the median (0.00%, n=2000 x 7
   interleaved reps, 13- and 200-char workloads). The JIT already hoists the load; the
@@ -172,5 +181,6 @@ first-inserted-wins for case-variant duplicates.
 - Building strings per call? `CachedStringBuilder.Rent` (context.md rule 23).
 - Shared rented buffer? Lease-guarded slots + evict oversized on return.
 - New mutation site on a snapshotted collection? Bump the version.
+- New copy or fill loop? One count, read once, sizing the allocation and the bound.
 - New allocation test? Warm first; pin through `AllocationAssertions`.
 - New lambda argument on a memoization/registration path? Captureless means `static`.
