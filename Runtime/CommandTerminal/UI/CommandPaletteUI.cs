@@ -1184,7 +1184,7 @@
              */
             if (TextFieldPaste.TryApply(_input, evt, out int pastedCaret))
             {
-                Consume(evt);
+                KeyEvents.Consume(_paletteRoot, evt);
                 RefreshQuery(_input.value ?? string.Empty, pastedCaret);
                 return;
             }
@@ -1192,24 +1192,24 @@
             switch (evt.keyCode)
             {
                 case KeyCode.DownArrow:
-                    Consume(evt);
+                    KeyEvents.Consume(_paletteRoot, evt);
                     MoveSelection(1);
                     break;
                 case KeyCode.UpArrow:
-                    Consume(evt);
+                    KeyEvents.Consume(_paletteRoot, evt);
                     MoveSelection(-1);
                     break;
                 case KeyCode.Return:
                 case KeyCode.KeypadEnter:
-                    Consume(evt);
+                    KeyEvents.Consume(_paletteRoot, evt);
                     Submit();
                     break;
                 case KeyCode.Escape:
-                    Consume(evt);
+                    KeyEvents.Consume(_paletteRoot, evt);
                     Close();
                     break;
                 case KeyCode.Tab:
-                    Consume(evt);
+                    KeyEvents.Consume(_paletteRoot, evt);
                     ApplySelected();
                     break;
             }
@@ -1298,21 +1298,6 @@
         private void FocusInput()
         {
             _input?.Focus();
-        }
-
-        /*
-            A consumed key must not reach the focused text field or move panel
-            focus. Unity 6 replaced PreventDefault with IgnoreEvent; older
-            versions keep PreventDefault.
-         */
-        private void Consume(KeyDownEvent evt)
-        {
-            evt.StopPropagation();
-#if UNITY_6000_0_OR_NEWER
-            _paletteRoot.panel.focusController.IgnoreEvent(evt);
-#else
-            evt.PreventDefault();
-#endif
         }
 
         private void CapturePreviousFocus()

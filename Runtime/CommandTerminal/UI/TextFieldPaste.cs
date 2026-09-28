@@ -29,8 +29,8 @@ namespace WallstopStudios.DxCommandTerminal.UI
         and 22px tall - a newline that lands in the value is invisible, and it
         used to reach the command as one argument. So every run of whitespace
         collapses to the single space that separates arguments, and TryApply
-        drops a leading space when the paste starts the value, where a run of
-        whitespace separates nothing.
+        drops a leading space when the paste lands at the start of the value,
+        where a run of whitespace separates nothing.
 
         A control character that is not whitespace is left in the value,
         which is a stated limit. It cannot be shown in a single-line field,
@@ -88,6 +88,17 @@ namespace WallstopStudios.DxCommandTerminal.UI
              */
             int start = Math.Clamp(Math.Min(field.cursorIndex, field.selectIndex), 0, value.Length);
             int end = Math.Clamp(Math.Max(field.cursorIndex, field.selectIndex), 0, value.Length);
+
+            /*
+                A run at the very start of the value is dropped. The tokenizer
+                skips a leading separator before it reads a token, so a space
+                there cannot separate the pasted text from what precedes it
+                (nothing) or from what follows it (it is inside the same token
+                either way). Keeping it would change the field's appearance and
+                nothing else, so the field gets no stray leading space. Pasted
+                anywhere else the run is kept, because there it is the break
+                the copied line meant.
+             */
             if (start == 0)
             {
                 flattened = flattened.TrimStart(' ');
@@ -150,9 +161,8 @@ namespace WallstopStudios.DxCommandTerminal.UI
             using CachedStringBuilder.Scope scope = CachedStringBuilder.Rent(length);
             StringBuilder builder = scope.Builder;
             bool pendingSpace = false;
-            for (int i = 0; i < length; ++i)
+            foreach (char c in text)
             {
-                char c = text[i];
                 if (CommandTokenizer.IsSeparator(c))
                 {
                     pendingSpace = true;

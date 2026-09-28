@@ -13,6 +13,17 @@ them on a new runtime.
 
 ## What allocates on Unity's Mono
 
+- **`string` is not a value-typed enumerable, so `foreach` over one allocates.**
+  `string.GetEnumerator()` returns `System.CharEnumerator`, a class - verified by reflection
+  (`typeof(string).GetMethod("GetEnumerator").ReturnType.IsValueType == false`, alongside
+  `List<char>`, which is `true`). Rule 11's "value-based enumerables" therefore does not
+  cover strings. A `foreach (char c in text)` is fine off a hot path; on a per-keystroke or
+  per-frame path it is one allocation per walk, and a walk inside another loop is
+  allocations times the outer count. The standing case is
+  `CommandPaletteSearch.IsSubsequence`, called once per command name per rank tier per
+  keystroke, which stays a counting loop with the reason in a comment beside it. Sweep for
+  `for (int i = 0; i < <string>.Length; ++i)` where `i` is used for nothing but
+  `text[i]`, and convert only where the path is not hot.
 - Every pass over a `SortedDictionary` or `SortedSet` allocates: `Keys`/`Values` hand out a
   fresh collection, and the enumerator is a class. A per-keystroke or per-frame sweep of a
   live sorted collection allocates every pass, even when the collection is empty.

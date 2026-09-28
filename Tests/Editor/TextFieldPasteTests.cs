@@ -1,5 +1,7 @@
 namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 {
+    using System.Collections.Generic;
+    using Backend;
     using NUnit.Framework;
     using UI;
     using UnityEngine;
@@ -17,6 +19,19 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private static KeyDownEvent PasteKeyDown(KeyCode keyCode, EventModifiers modifiers)
         {
             return KeyDownEvent.GetPooled('\0', keyCode, modifiers);
+        }
+
+        private static string Tokenize(string line)
+        {
+            List<CommandToken> tokens = new();
+            CommandTokenizer.Tokenize(line, tokens);
+            List<string> contents = new();
+            foreach (CommandToken token in tokens)
+            {
+                contents.Add(token.Contents);
+            }
+
+            return string.Join("|", contents);
         }
 
         [SetUp]
@@ -242,6 +257,58 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 "A plain V is not a paste"
             );
             Assert.AreEqual(0, caret, "A failed paste reports no position");
+        }
+
+        /*
+            The leading-space drop is a display rule, not an argument rule, and
+            a review read it as the second. Both halves are pinned: the field
+            gets no leading space when the paste lands at the start, and the
+            space is kept everywhere else, where it is the break the copied
+            line meant.
+         */
+        [TestCase("give", 0, "  item 42", "item 42give", Description = "At the start, dropped")]
+        [TestCase("give", 4, "  item 42", "give item 42", Description = "At the end, kept")]
+        [TestCase("give", 2, "  item 42", "gi item 42ve", Description = "Mid-line, kept")]
+        public void ALeadingRunIsDroppedOnlyAtTheStartOfTheValue(
+            string value,
+            int caret,
+            string clipboard,
+            string expectedValue
+        )
+        {
+            TextField field = new TextField();
+            field.value = value;
+            field.selectIndex = caret;
+            field.cursorIndex = caret;
+            GUIUtility.systemCopyBuffer = clipboard;
+
+            using KeyDownEvent paste = PasteKeyDown(EventModifiers.Control);
+            Assert.IsTrue(TextFieldPaste.TryApply(field, paste, out _), "Ctrl+V should paste");
+            Assert.AreEqual(expectedValue, field.value, "The field holds the paste");
+        }
+
+        /*
+            The drop is safe because the tokenizer skips a leading separator
+            before it reads a token, so a value that starts with one is the same
+            command as one that does not. Pinned so the next reader does not
+            have to re-derive it.
+         */
+        [Test]
+        public void ADroppedLeadingRunCannotChangeTheArguments()
+        {
+            string dropped = "item 42give";
+            string kept = " item 42give";
+
+            Assert.AreEqual(
+                "item|42give",
+                Tokenize(dropped),
+                "Without the run the value is a command and one argument"
+            );
+            Assert.AreEqual(
+                Tokenize(dropped),
+                Tokenize(kept),
+                "A leading separator separates nothing, so both lines run the same command"
+            );
         }
 
         [TestCase(KeyCode.V, EventModifiers.None, Description = "A plain V types a V")]

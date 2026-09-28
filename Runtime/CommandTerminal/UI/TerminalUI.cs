@@ -2337,16 +2337,17 @@
                     if (TextFieldPaste.TryApply(context._commandInput, evt, out _))
                     {
                         /*
-                            Stopped, not just the value written: the key must
-                            not reach the focused element below the field,
-                            which is a TextElement and does have paste
-                            handling. StopPropagation is what keeps that from
-                            becoming a second paste of the same clipboard.
-                            IgnoreEvent is the palette's extra step and is a
-                            focus-controller concern, which this surface does
-                            not otherwise act on.
+                            Consumed the way the bar consumes, not just
+                            stopped: KeyEvents is the shared definition
+                            because the two surfaces used to differ here, and a
+                            key answered in one and only half-answered in the
+                            other reads as a flaky double action. The focused
+                            element below the field is a TextElement with its
+                            own paste handling, so letting the key continue
+                            would paste the raw clipboard a second time,
+                            newlines and all.
                          */
-                        evt.StopPropagation();
+                        KeyEvents.Consume(context._commandInput, evt);
                     }
                 },
                 userArgs: this,
