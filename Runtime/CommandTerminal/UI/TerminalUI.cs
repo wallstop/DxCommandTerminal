@@ -2321,6 +2321,27 @@
                 useTrickleDown: TrickleDown.TrickleDown
             );
 
+            /*
+                A TextField owns no clipboard, so paste is a key the terminal
+                has to answer for. Trickle-down, because the field's own key
+                handling sits below this and would otherwise see the key first
+                and the platform's Ctrl+V would never arrive. The callback is
+                static and captureless for the reason the change callback above
+                states, and the key is consumed only when a paste happened, so
+                an ordinary V types a V.
+             */
+            _commandInput.RegisterCallback<KeyDownEvent, TerminalUI>(
+                static (evt, context) =>
+                {
+                    if (TextFieldPaste.TryApply(context._commandInput, evt))
+                    {
+                        evt.StopPropagation();
+                    }
+                },
+                userArgs: this,
+                useTrickleDown: TrickleDown.TrickleDown
+            );
+
             _inputContainer.Add(_commandInput);
             ResetTokenCompletion();
             _textInput = _commandInput.Q<VisualElement>("unity-text-input");

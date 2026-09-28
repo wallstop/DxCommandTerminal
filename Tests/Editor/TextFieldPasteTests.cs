@@ -1,0 +1,225 @@
+namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
+{
+    using NUnit.Framework;
+    using UI;
+    using UnityEngine;
+    using UnityEngine.UIElements;
+
+    public sealed class TextFieldPasteTests
+    {
+        private string _originalClipboard;
+
+        private static KeyDownEvent PasteKeyDown(EventModifiers modifiers)
+        {
+            return PasteKeyDown(KeyCode.V, modifiers);
+        }
+
+        private static KeyDownEvent PasteKeyDown(KeyCode keyCode, EventModifiers modifiers)
+        {
+            return KeyDownEvent.GetPooled('\0', keyCode, modifiers);
+        }
+
+        [SetUp]
+        public void SetUp()
+        {
+            _originalClipboard = GUIUtility.systemCopyBuffer;
+        }
+
+        [TearDown]
+        public void TearDown()
+        {
+            GUIUtility.systemCopyBuffer = _originalClipboard;
+        }
+
+        [TestCase("give item 42", "give item 42", Description = "Plain text is untouched")]
+        [TestCase("give\nitem\n42", "give item 42", Description = "Newlines become spaces")]
+        [TestCase("give\r\nitem", "give item", Description = "A CRLF is one separator")]
+        [TestCase("give\ta\tb", "give a b", Description = "Tabs become spaces")]
+        [TestCase(
+            "give   item",
+            "give item",
+            Description = "An interior run collapses to one space"
+        )]
+        [TestCase("  give", " give", Description = "A leading run keeps its one space")]
+        [TestCase("give  ", "give ", Description = "A trailing run keeps its one space")]
+        [TestCase("a\n\n\nb", "a b", Description = "Blank pasted lines are one separator")]
+        [TestCase("give\u00a0item", "give item", Description = "A non-breaking space separates")]
+        [TestCase("   ", " ", Description = "An all-whitespace clipboard is one space")]
+        [TestCase("", "", Description = "An empty clipboard flattens to nothing")]
+        public void FlattenCollapsesWhitespaceRuns(string clipboard, string expected)
+        {
+            Assert.AreEqual(expected, TextFieldPaste.Flatten(clipboard), $"Flatten '{clipboard}'");
+        }
+
+        [TestCase(
+            "",
+            0,
+            0,
+            "give item 42",
+            "give item 42",
+            12,
+            Description = "Into an empty field"
+        )]
+        [TestCase(
+            "give ",
+            5,
+            5,
+            "item 42",
+            "give item 42",
+            12,
+            Description = "At the end of the field"
+        )]
+        [TestCase(
+            "give 42",
+            4,
+            4,
+            " item",
+            "give item 42",
+            9,
+            Description = "In the middle of the field"
+        )]
+        [TestCase(
+            "give",
+            4,
+            4,
+            " spawn\n enemy",
+            "give spawn enemy",
+            16,
+            Description = "A pasted block flattens on the way in"
+        )]
+        [TestCase(
+            "give ",
+            5,
+            5,
+            "   ",
+            "give  ",
+            6,
+            Description = "An all-whitespace paste is one space"
+        )]
+        [TestCase(
+            "",
+            0,
+            0,
+            "  give item",
+            "give item",
+            9,
+            Description = "A leading run at the start is dropped"
+        )]
+        public void TryApplyReplacesTheSelection(
+            string value,
+            int selectIndex,
+            int cursorIndex,
+            string clipboard,
+            string expectedValue,
+            int expectedCaret
+        )
+        {
+            var field = new TextField();
+            field.value = value;
+            field.selectIndex = selectIndex;
+            field.cursorIndex = cursorIndex;
+            GUIUtility.systemCopyBuffer = clipboard;
+
+            using KeyDownEvent paste = PasteKeyDown(EventModifiers.Control);
+            Assert.IsTrue(
+                TextFieldPaste.TryApply(field, paste),
+                $"Ctrl+V should paste '{clipboard}'"
+            );
+            Assert.AreEqual(expectedValue, field.value, "Pasted value");
+            Assert.AreEqual(expectedCaret, field.cursorIndex, "Caret after the paste");
+            Assert.AreEqual(expectedCaret, field.selectIndex, "Selection after the paste");
+        }
+
+        [Test]
+        public void TryApplyReplacesTheSelectedSpan()
+        {
+            var field = new TextField();
+            field.value = "give item 42";
+            field.selectIndex = 5;
+            field.cursorIndex = 9;
+            GUIUtility.systemCopyBuffer = "torch\npick";
+
+            using KeyDownEvent paste = PasteKeyDown(EventModifiers.Control);
+            Assert.IsTrue(TextFieldPaste.TryApply(field, paste), "Ctrl+V should paste");
+            Assert.AreEqual("give torch pick 42", field.value, "The selection was replaced");
+            Assert.AreEqual(15, field.cursorIndex, "Caret sits after the pasted text");
+        }
+
+        [Test]
+        public void AnAllWhitespacePasteAtTheStartDoesNothing()
+        {
+            var field = new TextField();
+            field.value = "give";
+            field.selectIndex = 0;
+            field.cursorIndex = 0;
+            GUIUtility.systemCopyBuffer = "   ";
+
+            using KeyDownEvent paste = PasteKeyDown(EventModifiers.Control);
+            Assert.IsFalse(
+                TextFieldPaste.TryApply(field, paste),
+                "A leading whitespace run separates nothing, so there is no paste to apply"
+            );
+            Assert.AreEqual("give", field.value, "The field is untouched");
+        }
+
+        [Test]
+        public void ABackwardsSelectionIsReplaced()
+        {
+            var field = new TextField();
+            field.value = "give item 42";
+            field.cursorIndex = 5;
+            field.selectIndex = 9;
+            GUIUtility.systemCopyBuffer = "torch";
+
+            using KeyDownEvent paste = PasteKeyDown(EventModifiers.Command);
+            Assert.IsTrue(
+                TextFieldPaste.TryApply(field, paste),
+                "A macOS Cmd+V pastes the same way"
+            );
+            Assert.AreEqual("give torch 42", field.value, "The selection was replaced");
+            Assert.AreEqual(10, field.cursorIndex, "Caret sits after the pasted text");
+        }
+
+        [TestCase(KeyCode.V, EventModifiers.None, Description = "A plain V types a V")]
+        [TestCase(KeyCode.V, EventModifiers.Shift, Description = "Shift+V types a V")]
+        [TestCase(KeyCode.V, EventModifiers.Alt, Description = "Alt+V is not a paste")]
+        [TestCase(KeyCode.T, EventModifiers.Control, Description = "Ctrl+T is not a paste")]
+        [TestCase(
+            KeyCode.LeftArrow,
+            EventModifiers.Control,
+            Description = "Ctrl+Left still moves the caret"
+        )]
+        public void NonPasteKeysAreLeftAlone(KeyCode keyCode, EventModifiers modifiers)
+        {
+            var field = new TextField();
+            field.value = "give";
+            field.selectIndex = 4;
+            field.cursorIndex = 4;
+            GUIUtility.systemCopyBuffer = "item";
+
+            using KeyDownEvent key = PasteKeyDown(keyCode, modifiers);
+            Assert.IsFalse(
+                TextFieldPaste.TryApply(field, key),
+                $"'{keyCode}' with {modifiers} is not a paste"
+            );
+            Assert.AreEqual("give", field.value, "The field is untouched");
+        }
+
+        [Test]
+        public void AnEmptyClipboardIsNotAConsumedPaste()
+        {
+            var field = new TextField();
+            field.value = "give";
+            field.selectIndex = 4;
+            field.cursorIndex = 4;
+            GUIUtility.systemCopyBuffer = string.Empty;
+
+            using KeyDownEvent paste = PasteKeyDown(EventModifiers.Control);
+            Assert.IsFalse(
+                TextFieldPaste.TryApply(field, paste),
+                "tvOS has no clipboard and a platform's async clipboard reads empty; that is not a paste"
+            );
+            Assert.AreEqual("give", field.value, "The field is untouched");
+        }
+    }
+}

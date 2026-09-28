@@ -715,6 +715,37 @@
             );
         }
 
+        /*
+            A UI Toolkit TextField has no clipboard, so the palette answers
+            Ctrl+V itself. A pasted block arrives flattened, and the value
+            write is a user edit, which is what re-filters the rows.
+         */
+        [UnityTest]
+        public IEnumerator CtrlVPastesAFlattenedBlockIntoTheSearchInput()
+        {
+            yield return SpawnPalette();
+
+            string originalClipboard = GUIUtility.systemCopyBuffer;
+            try
+            {
+                _palette.Open();
+                yield return null;
+                GUIUtility.systemCopyBuffer = "palette\tping\n1 2";
+
+                yield return SendKeyDown(KeyCode.V, EventModifiers.Control);
+
+                Assert.AreEqual(
+                    "palette ping 1 2",
+                    _palette._input.value,
+                    "A pasted block arrives as one line of arguments"
+                );
+            }
+            finally
+            {
+                GUIUtility.systemCopyBuffer = originalClipboard;
+            }
+        }
+
         [UnityTest]
         public IEnumerator ToggleFlipsOpenStateAndFiresEvents()
         {
@@ -1926,9 +1957,12 @@
          */
         private IEnumerator SendKeyDown(KeyCode keyCode)
         {
-            using (
-                KeyDownEvent keyDown = KeyDownEvent.GetPooled('\0', keyCode, EventModifiers.None)
-            )
+            yield return SendKeyDown(keyCode, EventModifiers.None);
+        }
+
+        private IEnumerator SendKeyDown(KeyCode keyCode, EventModifiers modifiers)
+        {
+            using (KeyDownEvent keyDown = KeyDownEvent.GetPooled('\0', keyCode, modifiers))
             {
                 _palette._paletteRoot.SendEvent(keyDown);
             }

@@ -51,6 +51,18 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [TestCase("set var \"with space\"")]
         [TestCase("path/to/file,other")]
         [TestCase("log \"quote'inside\" 'quote\"inside'")]
+        [TestCase("give item 42", Description = "A pasted block splits into arguments")]
+        [TestCase("give\titem\t42", Description = "Pasted tabs split like spaces")]
+        [TestCase("give\nitem\n42", Description = "Pasted newlines split like spaces")]
+        [TestCase(
+            "give \r\n item \t 42",
+            Description = "A pasted CRLF and tab run is one separator"
+        )]
+        [TestCase("give\u00a0item", Description = "A non-breaking space separates too")]
+        [TestCase(
+            "set name \"two\nlines\"",
+            Description = "A newline inside quotes stays one argument"
+        )]
         public void TokenizeMatchesTryEatArgument(string line)
         {
             List<CommandArg> expected = ParseWithTryEatArgument(line);
@@ -87,6 +99,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [TestCase("target$", "target$")]
         [TestCase("target", "target")]
         [TestCase("target name", "\"target name\"")]
+        [TestCase("two\nlines", "\"two\nlines\"")]
+        [TestCase("tab\there", "\"tab\there\"")]
+        [TestCase(" leading", "\" leading\"")]
         public void UnquotedInsertionPreservesLiteralValue(string value, string expected)
         {
             string insertion = CommandTokenizer.QuoteInsertionIfNeeded(value, false);
@@ -124,6 +139,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [TestCase("inspect x", "\u2003x")]
         [TestCase("inspect x", "x\\path")]
         [TestCase("inspect x", "x$target")]
+        [TestCase("inspect x", "x\ny")]
+        [TestCase("inspect\tx", "x")]
+        [TestCase("inspect\r\nx", "x")]
         public void PreparedInsertionRoundTripsLiteral(string input, string value)
         {
             List<CommandToken> before = Tokenize(input);
@@ -255,6 +273,44 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreEqual(13, tokens[1].End, "Quoted content ends before the closing quote");
             Assert.AreEqual(15, tokens[2].Start);
             Assert.AreEqual(19, tokens[2].End);
+        }
+
+        /*
+            The user-facing claim behind the whitespace rule, pinned on its
+            own so it survives both implementations regressing together: a
+            pasted block is the arguments it reads as, and the token spans
+            still cover the raw text completion replaces.
+         */
+        [TestCase("give item 42", 3, "give|item|42")]
+        [TestCase("give\titem\t42", 3, "give|item|42")]
+        [TestCase("give\nitem\r\n42", 3, "give|item|42")]
+        [TestCase("give\u00a0item\u00a042", 3, "give|item|42")]
+        [TestCase("  give \t item  42  ", 3, "give|item|42")]
+        [TestCase("give \"pick axe\" 42", 3, "give|pick axe|42")]
+        public void PastedBlockSplitsIntoArguments(
+            string line,
+            int expectedCount,
+            string expectedContents
+        )
+        {
+            List<CommandToken> tokens = Tokenize(line);
+
+            Assert.AreEqual(
+                expectedCount,
+                tokens.Count,
+                $"Token count for the pasted block '{line}'"
+            );
+            List<string> contents = new();
+            foreach (CommandToken token in tokens)
+            {
+                contents.Add(token.Contents);
+                Assert.That(
+                    token.End <= line.Length,
+                    $"Token span {token.Start}..{token.End} stays inside '{line}'"
+                );
+            }
+
+            Assert.AreEqual(expectedContents, string.Join("|", contents), $"Contents of '{line}'");
         }
 
         [TestCase("log", 0)]

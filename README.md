@@ -58,6 +58,7 @@ Grab a copy of this repo (either `git clone` or [download a zip of the source](h
 - Fixed Input handling bugs related to [WebGL](#web-gl)
 - Fully integrated with Unity's [new Input System](#new-input-system)
 - Fully [configurable and bindable controls](#hotkeys) for every action
+- [Paste](#paste) on both the command line and the quick-launch bar, with a pasted block split into the arguments it reads as
 - Add ability to ignore commands that have been annotated with `RegisterCommandAttribute`. In this way, your terminals can ignore any built-in commands, for cleanliness. A custom editor has been added to provide users with the ability to identify what commands are available to ignore, and selectively ignore them.
 - Add ability to ignore certain (or all) log levels, such that unwanted logs do not clutter terminal output
 - Add ability to optionally have Unity log messages routed to the terminal, default on, but can be turned off
@@ -433,6 +434,16 @@ Keyboard hotkey bindings are now intelligent as they can be about shift key inte
 3. When using the new input system, hotkeys can be represented as `shift+<binding>`. `shift+tab` will be interpreted as the combination `left shift` + `tab`.
 
 The only combination keys that are supported without using custom bindings via the new Input System are `shift+<binding>`.
+
+## Paste
+
+Both surfaces accept Ctrl+V (Cmd+V on macOS). A UI Toolkit text field has no clipboard of its own, so the terminal answers the key itself: it reads the system clipboard and writes the result into the field you are typing into, replacing the current selection.
+
+A pasted block arrives as the arguments it reads as. Every run of whitespace - newlines from a copied stack trace, tabs from a copied log line, the trailing newline of a copied command - collapses to the single space that separates arguments, so `give item 42` pastes as three arguments instead of one token holding two newlines. A run at the start of the field separates nothing and is dropped.
+
+A pasted value that contains whitespace is quoted when a completion offers it, so a candidate like `two lines` still lands as one argument. Whitespace inside quotes is preserved: `set name "two\nlines"` stays one argument.
+
+The clipboard is unavailable on tvOS, and a platform whose clipboard is asynchronous (WebGL) reads empty. Neither is an error: the key is left alone, and anything the platform does with it still happens.
 
 ## Typing wins over a character binding
 

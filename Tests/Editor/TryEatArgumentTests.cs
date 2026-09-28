@@ -106,10 +106,18 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [TestCase(
             "hello\tworld",
             true,
-            "hello\tworld",
+            "hello",
             null,
             null,
-            Description = "Tab character is not a space delimiter"
+            Description = "A tab ends an unquoted argument, like a space"
+        )]
+        [TestCase(
+            "hello\nworld",
+            true,
+            "hello",
+            null,
+            null,
+            Description = "A pasted newline ends an unquoted argument"
         )]
         [TestCase(
             "\"quoted\"extra",

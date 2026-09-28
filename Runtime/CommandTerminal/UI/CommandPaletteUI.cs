@@ -1173,6 +1173,12 @@
                 return;
             }
 
+            if (TextFieldPaste.TryApply(_input, evt))
+            {
+                Consume(evt);
+                return;
+            }
+
             switch (evt.keyCode)
             {
                 case KeyCode.DownArrow:
