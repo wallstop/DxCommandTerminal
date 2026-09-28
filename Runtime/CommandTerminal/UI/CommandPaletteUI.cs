@@ -974,7 +974,9 @@
                     _rowNameLabels[index].text = LogTextSanitizer.Sanitize(
                         completion.EffectiveDisplayLabel
                     );
-                    _rowHelpLabels[index].text = LogTextSanitizer.Sanitize(completion.Description);
+                    _rowHelpLabels[index].text = LogTextSanitizer.Sanitize(
+                        completion.Description ?? string.Empty
+                    );
                     continue;
                 }
 

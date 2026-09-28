@@ -3,6 +3,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     using System;
     using System.Collections;
     using System.Collections.Generic;
+    using System.Text.RegularExpressions;
     using Backend;
     using Components;
     using NUnit.Framework;
@@ -165,6 +166,67 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             DefaultTerminalInput.Instance.CommandText = "semanticafter";
             _terminal.EnterCommand();
             Assert.AreEqual(1, runs, "The terminal must stay usable after a failed command");
+        }
+
+        /*
+            The user-visible half of the containment: EnterCommand drains the
+            shell's error queue into the log, so a handler that throws leaves a
+            line naming the command and what it threw. Nothing else reports it
+            in a device build, and Unity's own logger keeps the frames.
+         */
+        [UnityTest]
+        public IEnumerator AThrowingCommandReportsItselfInTheLog()
+        {
+            yield return SpawnOpenTerminal();
+
+            Assert.IsTrue(
+                Terminal.Shell.AddCommand(
+                    "semanticthrow",
+                    _ => throw new InvalidOperationException("semantic explosion"),
+                    minArgs: 0,
+                    maxArgs: 0,
+                    help: "test"
+                ),
+                "Sanity: the throwing command registers"
+            );
+            Assert.IsTrue(
+                Terminal.Shell.AddCommand(
+                    "semanticafterthrow",
+                    _ => { },
+                    minArgs: 0,
+                    maxArgs: 0,
+                    help: "test"
+                ),
+                "Sanity: the command that runs afterwards registers"
+            );
+
+            LogAssert.Expect(LogType.Exception, new Regex("semantic explosion"));
+
+            DefaultTerminalInput.Instance.CommandText = "semanticthrow";
+            _terminal.EnterCommand();
+
+            AssertLogContains(
+                TerminalLogType.Error,
+                "semanticthrow",
+                "The thrown command must be reported in the log"
+            );
+            AssertLogContains(
+                TerminalLogType.Error,
+                "semantic explosion",
+                "The report carries what was thrown"
+            );
+            Assert.IsFalse(
+                Terminal.Shell.TryConsumeErrorMessage(out _),
+                "EnterCommand must drain the report with the log entry"
+            );
+
+            DefaultTerminalInput.Instance.CommandText = "semanticafterthrow";
+            _terminal.EnterCommand();
+            AssertLogContains(
+                TerminalLogType.Input,
+                "semanticafterthrow",
+                "A command after the failure still runs"
+            );
         }
 
         [UnityTest]
@@ -429,6 +491,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 "The bar shows the candidate the current input resolves to"
             );
 
+            /*
+                The caret starts at the head of the line the row is about to
+                replace, so the end position below can only hold if the row
+                placed it: a value write that lands the caret itself would
+                pass an assertion starting from anywhere else.
+             */
+            yield return SetInputCaret(0);
             _terminal.ApplyHint(0);
 
             Assert.AreEqual(

@@ -772,6 +772,7 @@
             if (CheckForRefresh(_autoCompleteProperties))
             {
                 _autoCompleteContainer?.Clear();
+                _renderedHintCandidates.Clear();
                 ResetAutoComplete();
             }
 
@@ -1889,12 +1890,14 @@
         }
 
         /*
-            A click reads the candidate its row currently shows. The closure
-            used to capture that text when the row was built, so a candidate
-            the developer had not seen - the buffer moves under the bar
-            while it is open - was what the row applied. The queued caret
-            matches the palette: a row replaces the whole line, so the caret
-            belongs at its end.
+            A click applies the candidate its row shows now. Two things move
+            under the bar while it is open - the candidate set, and the
+            carousel's row order - so the row's position is resolved at click
+            time and the text is read then; the closure used to capture both
+            when the row was built, so it applied a candidate the developer
+            could not see. The queued caret matches the palette: a row
+            replaces the whole line, so the caret belongs at its end. 2022.1
+            and newer write it; see RecallHistoryLine for 2021.3.
 
             Internal for test coverage of what a row applies (see
             WallstopStudios.DxCommandTerminal.Tests.Runtime); Unity's
@@ -1909,8 +1912,8 @@
             }
 
             string candidate = _renderedHintCandidates[index];
-            _pendingCaretIndex = candidate.Length;
             _input.CommandText = candidate;
+            _pendingCaretIndex = candidate.Length;
             _lastCompletionIndex = index;
             _needsFocus = true;
         }
@@ -1920,15 +1923,18 @@
             FocusInput only writes a caret on a fresh focus, and the field was
             already focused, so the caret stayed where the developer left it
             and the next character landed in the middle of the line they had
-            just recalled. The queued position is the end of the recalled
-            text, which is a character boundary by definition.
+            just recalled. The end of the recalled text is a character
+            boundary by definition, and the position is queued after the
+            completion reset, which retires any pending caret of its own.
+            2022.1 and newer write it; 2021.3 has no caret setter, and its
+            engine places the caret after the value lands.
          */
         private void RecallHistoryLine(string line)
         {
             string recalled = line ?? string.Empty;
-            _pendingCaretIndex = recalled.Length;
             _input.CommandText = recalled;
             ResetAutoComplete();
+            _pendingCaretIndex = recalled.Length;
             _needsFocus = true;
         }
 
@@ -2810,9 +2816,9 @@
 
                         if (makeHintsClickable)
                         {
-                            int currentIndex = i;
                             Button hintButton = new();
-                            hintButton.clicked += () => ApplyHint(currentIndex);
+                            hintButton.clicked += () =>
+                                ApplyHint(_autoCompleteContainer.IndexOf(hintButton));
                             hintButton.text = LogTextSanitizer.Sanitize(hint);
                             hintElement = hintButton;
                         }
@@ -2875,18 +2881,28 @@
                         hintElement.EnableInClassList("autocomplete-item-selected", isSelected);
                         hintElement.EnableInClassList("autocomplete-item", !isSelected);
                     }
+
+                    /*
+                        The mirror is written with the rows it describes, so a
+                        row loop that stops early leaves it short and the next
+                        pass rebuilds. It runs after UpdateAutoCompleteView,
+                        the only writer of the buffer, so the order it reads
+                        is the order the rows show.
+                     */
+                    if (rowCount == bufferLength)
+                    {
+                        _renderedHintCandidates.Clear();
+                        for (int i = 0; i < bufferLength; ++i)
+                        {
+                            _renderedHintCandidates.Add(_lastCompletionBuffer[i]);
+                        }
+                    }
                 }
             }
             finally
             {
                 if (shouldUpdateCompletionIndex)
                 {
-                    _renderedHintCandidates.Clear();
-                    for (int i = 0; i < bufferLength; ++i)
-                    {
-                        _renderedHintCandidates.Add(_lastCompletionBuffer[i]);
-                    }
-
                     _previousLastCompletionIndex = _lastCompletionIndex;
                 }
             }

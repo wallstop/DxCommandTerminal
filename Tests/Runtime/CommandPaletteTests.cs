@@ -1023,7 +1023,7 @@
             _palette._input.value = "pickitem ";
             yield return null;
 
-            Assert.AreEqual(1, _palette._rows.Count, "The candidate row exists");
+            Assert.AreEqual(1, _palette._matchNames.Count, "The candidate row exists");
             Label rowLabel = _palette._rows[0].Q<Label>(name: "PaletteRowName");
             Assert.That(rowLabel != null, "The row carries a name label");
             StringAssert.Contains(
@@ -1032,7 +1032,7 @@
                 "The row shows the escape, not the raw override"
             );
             Assert.That(
-                rowLabel.text.IndexOf('\u202E', StringComparison.Ordinal) < 0,
+                rowLabel.text.IndexOf("\u202E", StringComparison.Ordinal) < 0,
                 $"The row must hold no raw override: '{rowLabel.text}'"
             );
 

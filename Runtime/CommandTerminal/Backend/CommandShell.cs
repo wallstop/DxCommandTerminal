@@ -961,6 +961,15 @@
         /// <summary>
         ///     Parses an input line into a command and runs that command.
         /// </summary>
+        /// <remarks>
+        ///     True means the command was dispatched, not that it ran
+        ///     cleanly: a command that reports a failure through the error
+        ///     queue - a rejected argument, a builder validation, a handler
+        ///     that threw - is contained and reported there, and the caller
+        ///     drains it with <see cref="TryConsumeErrorMessage"/>. False
+        ///     means no command ran: the name was empty, unknown, ineligible
+        ///     in this execution context, or the arguments did not match.
+        /// </remarks>
         public bool RunCommand(string line)
         {
             /*
