@@ -1851,12 +1851,14 @@
 
         /*
             A developer's handler can throw, and the two channels answer
-            different questions. The error queue carries the line the log
-            shows and the palette shows in its error bar - what failed, with
-            no frames - and Debug.LogException keeps the frames where a
-            developer already looks for them: the Editor console and the
-            player log. The terminal log renders the message and not the
-            trace, so the trace cannot be the in-game record.
+            different questions: the error queue carries the line the log and
+            the palette's error bar show - what failed, no frames - and
+            Debug.LogException keeps the frames in the Editor console and the
+            player log, which is where a developer reads a stack trace. The
+            log list renders the message and not the trace, so the trace
+            cannot be the in-game record. A terminal forwarding Unity's own
+            messages into its buffer (opt-in, off by default) shows the
+            exception there as well, which is what it asked for.
          */
         private void ReportCommandFailure(string commandName, Exception exception)
         {
