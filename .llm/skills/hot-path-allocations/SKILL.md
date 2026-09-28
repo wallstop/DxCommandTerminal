@@ -13,17 +13,21 @@ them on a new runtime.
 
 ## What allocates on Unity's Mono
 
-- **`string` is not a value-typed enumerable, so `foreach` over one allocates.**
+- **`string` is not a value-typed enumerable, so `foreach` over one always allocates.**
   `string.GetEnumerator()` returns `System.CharEnumerator`, a class - verified by reflection
   (`typeof(string).GetMethod("GetEnumerator").ReturnType.IsValueType == false`, alongside
   `List<char>`, which is `true`). Rule 11's "value-based enumerables" therefore does not
-  cover strings. A `foreach (char c in text)` is fine off a hot path; on a per-keystroke or
-  per-frame path it is one allocation per walk, and a walk inside another loop is
-  allocations times the outer count. The standing case is
-  `CommandPaletteSearch.IsSubsequence`, called once per command name per rank tier per
-  keystroke, which stays a counting loop with the reason in a comment beside it. Sweep for
-  `for (int i = 0; i < <string>.Length; ++i)` where `i` is used for nothing but
-  `text[i]`, and convert only where the path is not hot.
+  cover strings, and there is no "off a hot path is fine" exemption: the enumerator is
+  allocated per walk whether or not the path is measured, and a `foreach` over a string is
+  the only way to add an allocation to a loop that had none. Walk a string with a counting
+  loop in production code; `foreach` is fine in tests, where allocation does not matter and
+  readability wins. The two standing cases, both fixed in PR #180 with the reason in a
+  comment beside each loop: `CommandPaletteSearch.IsSubsequence` (per command name per rank
+  tier per keystroke) and `StringExtensions.NeedsLowerInvariantConversion` (per command name
+  when the completion list rebuilds, and a 1,000-command rebuild is a measured gate). Sweep
+  for `for (int i = 0; i < <string>.Length; ++i)` where `i` is used for nothing but
+  `text[i]` - those are the loops that should be `foreach` - and the reverse,
+  `foreach` over a string, which should be a counting loop.
 - Every pass over a `SortedDictionary` or `SortedSet` allocates: `Keys`/`Values` hand out a
   fresh collection, and the enumerator is a class. A per-keystroke or per-frame sweep of a
   live sorted collection allocates every pass, even when the collection is empty.

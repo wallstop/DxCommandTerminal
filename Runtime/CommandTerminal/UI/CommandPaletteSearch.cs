@@ -76,6 +76,15 @@
             string walked anywhere else on a per-keystroke or per-frame path
             earns the same treatment.
          */
+        /*
+            Counting loop over a string, which is the one case rule 11's
+            "value-based enumerables" does not cover and never covers:
+            string.GetEnumerator() returns CharEnumerator, a class, so foreach
+            here allocates one enumerator per call. This runs once per command
+            name per tier per keystroke, so that is thousands of allocations a
+            keystroke. The measurement and the reverse sweep are in
+            hot-path-allocations.
+         */
         private static bool IsSubsequence(string query, string candidate)
         {
             int searchIndex = 0;

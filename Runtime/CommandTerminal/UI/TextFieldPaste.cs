@@ -161,8 +161,15 @@ namespace WallstopStudios.DxCommandTerminal.UI
             using CachedStringBuilder.Scope scope = CachedStringBuilder.Rent(length);
             StringBuilder builder = scope.Builder;
             bool pendingSpace = false;
-            foreach (char c in text)
+
+            /*
+                Counting, not foreach: a string's enumerator is a class, so
+                foreach here would add the one allocation this pass exists to
+                avoid (rule 11).
+             */
+            for (int i = 0; i < length; ++i)
             {
+                char c = text[i];
                 if (CommandTokenizer.IsSeparator(c))
                 {
                     pendingSpace = true;

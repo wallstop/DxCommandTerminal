@@ -167,8 +167,11 @@ namespace WallstopStudios.DxCommandTerminal.Themes
             using CachedStringBuilder.Scope scope = new(value.Length + 16);
             StringBuilder builder = scope.Builder;
             bool previousWasBoundary = true;
-            foreach (char c in value)
+
+            /* Counting, not foreach: a string's enumerator is a class (rule 11). */
+            for (int i = 0; i < value.Length; ++i)
             {
+                char c = value[i];
                 if (char.IsUpper(c))
                 {
                     if (!previousWasBoundary)

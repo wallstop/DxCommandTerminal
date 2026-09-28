@@ -112,12 +112,11 @@ frontmatter validity, index freshness, and pointer-file delegation; see
    Editor and Tests.Runtime assemblies (`Runtime/AssemblyInfo.cs`).
 10. Annotate format-string methods with `[StringFormatMethod("...")]` (JetBrains) so callers get
     format checking.
-11. `foreach` over collections with value-typed enumerables (`List<T>`, arrays, structs, spans).
-    Counting `for` only when the index is used, the collection is `IReadonlyList`, or the
-    count direction/skip matters. Convert last-element separator logic to a first/last flag.
-    `string` is the exception (its enumerator is a class, so `foreach` allocates): fine off a
-    hot path, a counting loop with a comment on one. Facts:
-    [hot-path-allocations](./skills/hot-path-allocations/SKILL.md).
+11. `foreach` over value-typed enumerables (`List<T>`, arrays, structs, spans); counting `for`
+    only when the index is used, the collection is `IReadonlyList`, or the direction/skip
+    matters. Last-element separator logic becomes a first/last flag. `string` is never one of
+    them: its enumerator is a class, so `foreach` allocates - counting loop in production,
+    `foreach` in tests. Facts: [hot-path-allocations](./skills/hot-path-allocations/SKILL.md).
 12. One top-level type (class/struct/enum/delegate) per file. Nested helper types are fine.
 13. Assign `out` parameters immediately before each `return`, per path; never blanket-assign at method entry - that
     defeats the compiler's definite-assignment bugcheck. Enforced by `npm --prefix tooling~ run lint:out-param-discipline` (pre-commit + CI, #119).
