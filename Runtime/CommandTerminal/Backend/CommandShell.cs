@@ -2105,6 +2105,7 @@
                 }
 
                 _provider = null;
+                /* The body removes from the list, so Count must stay inline. */
                 for (int i = 0; i < DiscoveryProviders.Count; ++i)
                 {
                     if (ReferenceEquals(DiscoveryProviders[i], provider))
@@ -2140,6 +2141,7 @@
                 }
 
                 _assembly = null;
+                /* The body removes from the list, so Count must stay inline. */
                 for (int i = 0; i < IncludedScanAssemblies.Count; ++i)
                 {
                     if (ReferenceEquals(IncludedScanAssemblies[i], assembly))

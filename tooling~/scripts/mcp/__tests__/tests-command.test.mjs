@@ -5,6 +5,7 @@ import {
   RUN_CLAIM_FILE,
   RUN_REQUEST_FILE,
   TEST_MODES,
+  assertCompilationSucceeded,
   awaitRunClaim,
   awaitRunResult,
   isSessionCapError,
@@ -1047,4 +1048,53 @@ test("a claim poll interval of zero cannot become a spin", async () => {
     }
   });
   assert.ok(sleeps <= 40, `a zero interval must not spin (slept ${sleeps} times)`);
+});
+
+// A compile that failed leaves the previous assembly loaded, so a leg runs the
+// old code and reports it green - indistinguishable from a real pass in the
+// printed output. The guard is what separates the two.
+test("a failed script compilation refuses the leg instead of reporting the old assembly green", async () => {
+  const answers = [
+    { call: { content: [{ text: "true" }] } },
+    { call: { content: [{ text: "CS0103: The name 'X' does not exist" }] } }
+  ];
+  let probes = 0;
+  await assert.rejects(
+    assertCompilationSucceeded(
+      () => answers[Math.min(probes++, answers.length - 1)],
+      "editmode",
+      Date.now() + 60_000
+    ),
+    /compilation failed/u
+  );
+});
+
+test("a clean compilation lets the leg proceed without a second opinion", async () => {
+  let probes = 0;
+  await assertCompilationSucceeded(
+    () => {
+      probes += 1;
+      return { call: { content: [{ text: "false" }] } };
+    },
+    "editmode",
+    Date.now() + 60_000
+  );
+  assert.equal(probes, 1, "a false answer is the whole check, so it is asked once");
+});
+
+test("a compile probe that does not answer is not treated as a failure", async () => {
+  // A busy editor can time out or answer something unexpected. That is not
+  // evidence of a broken build, so it must not fail a run that may be fine.
+  await assertCompilationSucceeded(
+    () => {
+      throw new Error("Main thread operation timed out after 5000ms");
+    },
+    "editmode",
+    Date.now() + 60_000
+  );
+  await assertCompilationSucceeded(
+    () => ({ call: { content: [{ text: "some unrelated text" }] } }),
+    "editmode",
+    Date.now() + 60_000
+  );
 });

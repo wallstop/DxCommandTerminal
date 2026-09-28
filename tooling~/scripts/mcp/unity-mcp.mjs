@@ -2311,6 +2311,53 @@ export async function waitForTestIdle(evalCall, deadline, now = () => Date.now()
   );
 }
 
+/*
+    Refuse to believe a test result taken against a build that never compiled.
+    A failed compile leaves the previous assembly loaded, so a leg runs the old
+    code and reports it green - indistinguishable from a real pass in the
+    output, and the reason a mutation probe can look like a clean green. The
+    probe is asked over the same eval path the idle wait uses; a probe that
+    times out on a busy editor is not treated as a failure, because the idle
+    wait has already run.
+ */
+export async function assertCompilationSucceeded(evalCall, leg, deadline) {
+  const expression = "return UnityEditor.EditorUtility.scriptCompilationFailed;";
+  if (Date.now() >= deadline) return;
+  let failed;
+  try {
+    const { call } = await evalCall(expression);
+    const text = extractText(call);
+    if (evalAnswerIsTrue(text)) failed = true;
+    else if (evalAnswerIsFalse(text)) return;
+    // Neither true nor false: the probe did not answer, so it is not evidence.
+    else return;
+  } catch {
+    return;
+  }
+
+  if (failed) {
+    const log = await compilationErrorsQuietly(evalCall);
+    fail(
+      `The editor's last script compilation failed, so the ${leg} leg would run the ` +
+        "previous assembly and report it green. Fix the compile error and re-run." +
+        (log ? ` First error: ${log}` : "")
+    );
+  }
+}
+
+async function compilationErrorsQuietly(evalCall) {
+  try {
+    const { call } = await evalCall(
+      "var __e = UnityEditor.LogEntries.GetLogEntriesByType(" +
+        "UnityEditor.LogEntryType.Error, 0); " +
+        "return __e.Length > 0 ? __e[0].message : null;"
+    );
+    return extractText(call) || "";
+  } catch {
+    return "";
+  }
+}
+
 // ---------------------------------------------------------------------------
 // T04 fixture capture: run the capture tests over the bridge and validate the
 // manifests they write under .artifacts/t4/.
@@ -3304,6 +3351,14 @@ export async function runUnityTests(options, runtime = {}) {
       // what is on disk, so a leg cannot report the previous build as green.
       await waitForTestIdle(evalCall, legDeadline);
       await refreshScripts(evalCall, legDeadline);
+      /*
+          A failed compile leaves the PREVIOUS assembly loaded, and a leg then
+          reports the old code's result - green, from a build that never
+          contained the change. That reads exactly like a passing test run and
+          cost a session twice, so the compile has to be proven current before
+          its result is believed.
+       */
+      await assertCompilationSucceeded(evalCall, leg, legDeadline);
       if (!reporterProbed) {
         reporter = await openRunReporter(options, evalCall);
         reporterProbed = true;

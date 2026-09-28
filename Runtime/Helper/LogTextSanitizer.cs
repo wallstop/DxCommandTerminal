@@ -55,7 +55,8 @@ namespace WallstopStudios.DxCommandTerminal.Helper
 
             using CachedStringBuilder.Scope scope = CachedStringBuilder.Rent(message.Length + 16);
             StringBuilder builder = scope.Builder;
-            for (int i = 0; i < message.Length; ++i)
+            int length = message.Length;
+            for (int i = 0; i < length; ++i)
             {
                 char c = message[i];
                 if (c == '\r')
@@ -67,7 +68,7 @@ namespace WallstopStudios.DxCommandTerminal.Helper
                         frame would otherwise carry a visible escape.
                      */
                     builder.Append('\n');
-                    if (i + 1 < message.Length && message[i + 1] == '\n')
+                    if (i + 1 < length && message[i + 1] == '\n')
                     {
                         ++i;
                     }
