@@ -441,9 +441,13 @@ Both surfaces accept Ctrl+V (Cmd+V on macOS). A UI Toolkit text field has no cli
 
 A pasted block arrives as the arguments it reads as. Every run of whitespace - newlines from a copied stack trace, tabs from a copied log line, the trailing newline of a copied command - collapses to the single space that separates arguments, so `give item 42` pastes as three arguments instead of one token holding two newlines. A run at the start of the field separates nothing and is dropped.
 
-A pasted value that contains whitespace is quoted when a completion offers it, so a candidate like `two lines` still lands as one argument. Whitespace inside quotes is preserved: `set name "two\nlines"` stays one argument.
+A quote still groups after a paste, so `set name "two words"` is one argument, not two. What the paste changes is the text inside the quotes: a newline inside a quoted argument becomes a space, because the paste normalizes the text before the tokenizer sees it. Quoted whitespace survives when you type, not when you paste.
 
-The clipboard is unavailable on tvOS, and a platform whose clipboard is asynchronous (WebGL) reads empty. Neither is an error: the key is left alone, and anything the platform does with it still happens.
+A completion candidate that contains whitespace is quoted rather than inserted bare, so a candidate like `two lines` still lands as one argument.
+
+The clipboard is unavailable on tvOS, and a platform that will not answer without a user gesture (a browser clipboard API) may read empty. Neither is an error: the key is left alone, and anything the platform does with it still happens. Neither is measured here - the degradation is the design, not a fallback that failed.
+
+One limit: a control character in the copied text is left in the field. A single line cannot show it, so it is invisible while you are typing, and it reaches the argument as the exact character you copied. Dropping it would lose your text; escaping it there would change the command. A command that prints it gets the visible escape from the log.
 
 ## Typing wins over a character binding
 

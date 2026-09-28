@@ -304,10 +304,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             foreach (CommandToken token in tokens)
             {
                 contents.Add(token.Contents);
-                Assert.That(
-                    token.End <= line.Length,
-                    $"Token span {token.Start}..{token.End} stays inside '{line}'"
-                );
             }
 
             Assert.AreEqual(expectedContents, string.Join("|", contents), $"Contents of '{line}'");

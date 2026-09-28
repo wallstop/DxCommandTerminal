@@ -185,6 +185,18 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Description = "Multiple spaces leaves remaining spaces minus one"
         )]
         [TestCase(
+            "hello\tworld",
+            "hello",
+            "world",
+            Description = "A tab is consumed as one separator, like a space"
+        )]
+        [TestCase(
+            "hello\nworld",
+            "hello",
+            "world",
+            Description = "A pasted newline is consumed as one separator"
+        )]
+        [TestCase(
             "\"quoted\"extra",
             "quoted",
             "extra",

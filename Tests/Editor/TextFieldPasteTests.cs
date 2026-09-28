@@ -46,6 +46,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [TestCase("give\u00a0item", "give item", Description = "A non-breaking space separates")]
         [TestCase("   ", " ", Description = "An all-whitespace clipboard is one space")]
         [TestCase("", "", Description = "An empty clipboard flattens to nothing")]
+        [TestCase(
+            "set name \"two\nlines\"",
+            "set name \"two lines\"",
+            Description = "A quote still groups, but the run inside it is normalized"
+        )]
         public void FlattenCollapsesWhitespaceRuns(string clipboard, string expected)
         {
             Assert.AreEqual(expected, TextFieldPaste.Flatten(clipboard), $"Flatten '{clipboard}'");
@@ -114,7 +119,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             int expectedCaret
         )
         {
-            var field = new TextField();
+            TextField field = new TextField();
             field.value = value;
             field.selectIndex = selectIndex;
             field.cursorIndex = cursorIndex;
@@ -133,7 +138,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void TryApplyReplacesTheSelectedSpan()
         {
-            var field = new TextField();
+            TextField field = new TextField();
             field.value = "give item 42";
             field.selectIndex = 5;
             field.cursorIndex = 9;
@@ -148,7 +153,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void AnAllWhitespacePasteAtTheStartDoesNothing()
         {
-            var field = new TextField();
+            TextField field = new TextField();
             field.value = "give";
             field.selectIndex = 0;
             field.cursorIndex = 0;
@@ -165,7 +170,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void ABackwardsSelectionIsReplaced()
         {
-            var field = new TextField();
+            TextField field = new TextField();
             field.value = "give item 42";
             field.cursorIndex = 5;
             field.selectIndex = 9;
@@ -191,7 +196,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         )]
         public void NonPasteKeysAreLeftAlone(KeyCode keyCode, EventModifiers modifiers)
         {
-            var field = new TextField();
+            TextField field = new TextField();
             field.value = "give";
             field.selectIndex = 4;
             field.cursorIndex = 4;
@@ -208,7 +213,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void AnEmptyClipboardIsNotAConsumedPaste()
         {
-            var field = new TextField();
+            TextField field = new TextField();
             field.value = "give";
             field.selectIndex = 4;
             field.cursorIndex = 4;
@@ -217,9 +222,47 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             using KeyDownEvent paste = PasteKeyDown(EventModifiers.Control);
             Assert.IsFalse(
                 TextFieldPaste.TryApply(field, paste),
-                "tvOS has no clipboard and a platform's async clipboard reads empty; that is not a paste"
+                "tvOS has no clipboard and a platform that will not answer reads empty; that is not a paste"
             );
             Assert.AreEqual("give", field.value, "The field is untouched");
+        }
+
+        [Test]
+        public void AMissingFieldOrKeyIsNotAPaste()
+        {
+            TextField field = new TextField();
+            GUIUtility.systemCopyBuffer = "item";
+            using KeyDownEvent paste = PasteKeyDown(EventModifiers.Control);
+
+            Assert.IsFalse(
+                TextFieldPaste.TryApply(null, paste),
+                "No field means nothing to paste into"
+            );
+            Assert.IsFalse(
+                TextFieldPaste.TryApply(field, null),
+                "No key means nothing was asked for"
+            );
+            Assert.AreEqual(string.Empty, field.value, "Neither call wrote the field");
+        }
+
+        [Test]
+        public void AControlCharacterInAClipIsLeftToTheCommand()
+        {
+            /*
+                The stated limit, pinned: a control character cannot be shown
+                in a single-line field, but it is the text the developer
+                copied and it still has to reach the argument intact. The log
+                funnel is what renders it safely once the command prints it.
+             */
+            string clipboard = "give" + ((char)7) + "item";
+
+            Assert.AreEqual(clipboard, TextFieldPaste.Flatten(clipboard), "Flatten keeps it");
+
+            TextField field = new TextField();
+            GUIUtility.systemCopyBuffer = clipboard;
+            using KeyDownEvent paste = PasteKeyDown(EventModifiers.Control);
+            Assert.IsTrue(TextFieldPaste.TryApply(field, paste), "The paste still happens");
+            Assert.AreEqual(clipboard, field.value, "The copied text is what lands in the field");
         }
     }
 }

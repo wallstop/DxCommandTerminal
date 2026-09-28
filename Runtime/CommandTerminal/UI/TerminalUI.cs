@@ -2323,18 +2323,29 @@
 
             /*
                 A TextField owns no clipboard, so paste is a key the terminal
-                has to answer for. Trickle-down, because the field's own key
-                handling sits below this and would otherwise see the key first
-                and the platform's Ctrl+V would never arrive. The callback is
-                static and captureless for the reason the change callback above
-                states, and the key is consumed only when a paste happened, so
-                an ordinary V types a V.
+                has to answer for. Trickle-down, because the focused element
+                is the field's own inner text input and the field's key
+                handling sits below this; a real keystroke therefore arrives
+                here before the field sees it. The callback is static and
+                captureless for the reason the change callback above states,
+                and the key is stopped only when a paste happened, so an
+                ordinary V types a V.
              */
             _commandInput.RegisterCallback<KeyDownEvent, TerminalUI>(
                 static (evt, context) =>
                 {
                     if (TextFieldPaste.TryApply(context._commandInput, evt))
                     {
+                        /*
+                            Stopped, not just the value written: the key must
+                            not reach the focused element below the field,
+                            which is a TextElement and does have paste
+                            handling. StopPropagation is what keeps that from
+                            becoming a second paste of the same clipboard.
+                            IgnoreEvent is the palette's extra step and is a
+                            focus-controller concern, which this surface does
+                            not otherwise act on.
+                         */
                         evt.StopPropagation();
                     }
                 },

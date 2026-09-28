@@ -19,11 +19,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         read from. A UI Toolkit TextField has no clipboard of its own, so
         nothing here happens unless the terminal registers the key.
 
-        Keys are injected at the document root, not at the field: a panel
-        retargets a key event to its focused element, and a synthetic panel
-        has none, so an event sent at the field is dropped before it reaches
-        any callback. The root is where the palette suite injects for the
-        same reason.
+        Keys are injected at the document root, which is what makes the
+        event travel down to the field the way a real keystroke does. An
+        event aimed at the field itself is dropped: a panel routes a key by
+        focus, and this synthetic panel has none. The palette suite injects
+        at its own root for the same reason.
      */
     public sealed class TerminalUIPasteTests
     {
@@ -107,12 +107,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreEqual(
                 string.Empty,
                 _terminal._commandInput.value,
-                "A plain V is a character, not a paste"
+                "A V with no paste modifier leaves the field alone"
             );
             Assert.AreEqual(
                 string.Empty,
                 DefaultTerminalInput.Instance.CommandText,
-                "A plain V leaves the command text alone"
+                "A V with no paste modifier leaves the command text alone"
             );
         }
 

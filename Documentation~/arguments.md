@@ -33,6 +33,10 @@ newline, or a non-breaking space ends an unquoted argument, so text that
 was not typed on one line - a pasted block, a copied log line - arrives as
 the arguments it reads as rather than as one token.
 
+A `$variable` is the exception, and by design: it is substituted after the
+split, so a value stored with `set-variable` keeps whatever whitespace it
+holds and arrives as one argument.
+
 Quote a value that must hold whitespace:
 
 ```text

@@ -20,15 +20,29 @@ give item 42      <- a three-line clipboard pastes as this
 ```
 
 A run at the start of the field separates nothing, so it is dropped.
-Whitespace inside quotes is preserved, so `set name "two
-words"` stays one argument - see
+
+A quote still groups: `set name "two words"` pastes as one argument, not
+two. What the paste changes is the text inside the quotes - a newline
+inside a quoted argument becomes a space, because the paste normalizes
+before the tokenizer ever sees it. Quoted whitespace is preserved when
+you type, not when you paste. See
 [Typed arguments](arguments.md#separators).
 
 ## Where the clipboard is unavailable
 
-tvOS has no system clipboard, and a platform whose clipboard is
-asynchronous (WebGL) reads empty. Neither is an error: the key is left
-alone, and whatever the platform does with it still happens.
+tvOS has no system clipboard, and a platform that will not answer without a
+user gesture (a browser clipboard API) may read empty. Neither is an
+error: the key is left alone, and whatever the platform does with it still
+happens. Neither case is measured here; the degradation is the design, not
+a fallback that failed.
+
+## Limits
+
+A control character in the copied text is left in the field. A single line
+cannot show it, so it is invisible while you type, and it reaches the
+argument as the exact character you copied. Dropping it would lose your
+text; escaping it there would change the command. A command that prints it
+gets the visible escape from the log.
 
 ## Where next
 

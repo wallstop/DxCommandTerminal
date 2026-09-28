@@ -2,6 +2,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
 {
     using System;
     using System.Text;
+    using Backend;
     using Helper;
     using UnityEngine;
     using UnityEngine.UIElements;
@@ -16,18 +17,27 @@ namespace WallstopStudios.DxCommandTerminal.UI
         The clipboard read is the one cross-version public path,
         GUIUtility.systemCopyBuffer (UnityEngine.IMGUIModule, always
         referenced by an assembly with engine references). It is not
-        universal: tvOS has no clipboard, and a platform whose clipboard is
-        asynchronous (WebGL) answers with an empty string. An empty answer is
-        the detection, and the key is left unconsumed so the platform keeps
-        whatever it does with it.
+        universal: tvOS has no clipboard, and a platform that needs a user
+        gesture before it will answer - a browser clipboard API, as on
+        WebGL - may read empty. An empty answer is the detection, and the
+        key is left unconsumed so the platform keeps whatever it does with
+        it. Neither case is measured here; the degradation is the design,
+        not a fallback that failed.
 
         A pasted block is not typed input, and it must not arrive as one. A
         stack trace is newlines, a log line is tabs, the field is single-line
         and 22px tall - a newline that lands in the value is invisible, and it
-        used to reach the command as one argument. So every run of
-        whitespace collapses to the single space that separates arguments,
-        and the caller drops a leading space at the start of the value, where
-        a run of whitespace separates nothing.
+        used to reach the command as one argument. So every run of whitespace
+        collapses to the single space that separates arguments, and TryApply
+        drops a leading space when the paste starts the value, where a run of
+        whitespace separates nothing.
+
+        A control character is left in the value, which is a stated limit. It
+        cannot be shown in a single-line field, but the field is the
+        developer's own input: the character is the one they copied, it still
+        reaches the argument intact, and a command that prints it gets the
+        escape from the log funnel. Dropping it would lose their text and
+        escaping it here would change the command they pasted.
      */
     internal static class TextFieldPaste
     {
@@ -75,7 +85,10 @@ namespace WallstopStudios.DxCommandTerminal.UI
             /*
                 The value write, not SetValueWithoutNotify: both surfaces read
                 a paste as a user edit, which is what routes it into the
-                command text and refreshes the palette rows.
+                command text and refreshes the palette rows. It also runs their
+                change handler, which cancels any caret a completion had
+                queued, so the write below is the last word on where the caret
+                sits and needs no queue of its own.
              */
             field.value = value.Remove(start, end - start).Insert(start, flattened);
 
@@ -93,8 +106,15 @@ namespace WallstopStudios.DxCommandTerminal.UI
             One space per whitespace run, whatever the run was made of and
             including a run at either end, so a copied line keeps the spacing
             that separates it from what it is pasted next to. A clipboard that
-            is nothing but whitespace flattens to a single space, which still
-            opens the argument slot a copied line's own trailing newline meant.
+            is nothing but whitespace flattens to a single space, which the
+            caller then drops when the paste starts the value.
+
+            The same class as the tokenizer's separator, deliberately: this
+            runs first, so it leaves only plain spaces behind. That is what
+            makes a quote still group - a run collapsed to a space is still
+            inside the quotes, so the argument stays one argument. It is also
+            why a newline inside a quoted argument becomes a space rather
+            than surviving: a paste normalizes, a typed quote keeps the text.
          */
         internal static string Flatten(string text)
         {
@@ -110,7 +130,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             for (int i = 0; i < length; ++i)
             {
                 char c = text[i];
-                if (char.IsWhiteSpace(c))
+                if (CommandTokenizer.IsSeparator(c))
                 {
                     pendingSpace = true;
                     continue;

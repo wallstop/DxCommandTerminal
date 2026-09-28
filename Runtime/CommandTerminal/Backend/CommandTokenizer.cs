@@ -6,10 +6,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     /// <summary>
     ///     Single tokenization model shared by execution and completion.
     ///     Production (<see cref="CommandShell.TryEatArgument"/>) semantics
-    ///     are preserved exactly: whitespace is skipped with
-    ///     <see cref="char.IsWhiteSpace"/>, both quote characters open a
-    ///     quoted token, an unclosed quote consumes the rest of the line, and
-    ///     unquoted tokens end at the next whitespace character.
+    ///     are preserved exactly: leading whitespace is skipped, both quote
+    ///     characters open a quoted token, an unclosed quote consumes the rest
+    ///     of the line, and unquoted tokens end at the next whitespace
+    ///     character.
     /// </summary>
     /// <remarks>
     ///     The terminator is the whitespace class, not the space character,
@@ -18,6 +18,12 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     ///     newline inside a token is not a name a developer typed: it is a
     ///     pasted block, a log line, or a message from another system, and it
     ///     has to arrive as the arguments it reads as.
+    ///     <para>
+    ///         The rule is about a line. A <c>$variable</c> is substituted after
+    ///         the split, so a stored value is substituted whole and keeps
+    ///         whatever it holds - <c>set-variable</c> stores one value by
+    ///         design, and splitting it here would undo that.
+    ///     </para>
     /// </remarks>
     internal static class CommandTokenizer
     {
@@ -32,7 +38,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             int length = line.Length;
             while (index < length)
             {
-                while (index < length && char.IsWhiteSpace(line[index]))
+                while (index < length && IsSeparator(line[index]))
                 {
                     ++index;
                 }
@@ -88,7 +94,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 else
                 {
                     int end = index;
-                    while (end < length && !char.IsWhiteSpace(line[end]))
+                    while (end < length && !IsSeparator(line[end]))
                     {
                         ++end;
                     }
@@ -293,9 +299,12 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         }
 
         /*
-            The one definition of a token boundary, shared with
-            CommandShell.TryEatArgument: a token ends at any whitespace, not
-            only at a space, so every caller splits a line the same way.
+            The one definition of a token boundary. A token ends at any
+            whitespace, not only at a space, so every caller splits a line the
+            same way: Tokenize below, CommandShell.TryEatArgument (production
+            execution and the public parse entry), the completion quoting and
+            replacement checks here, and TextFieldPaste.Flatten (which
+            collapses a run to the space this returns).
          */
         internal static bool IsSeparator(char c)
         {
@@ -309,6 +318,14 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         )
         {
             bool requiresQuote = value[0] == '$' || CommandArg.Quotes.Contains(value[0]);
+
+            /*
+                The scan starts at zero, not one: a value that leads with
+                whitespace carries a separator at index zero, and starting
+                past it would leave requiresQuote false, so the value would
+                be inserted bare and the tokenizer would drop the run
+                instead of quoting it.
+             */
             for (int i = 0; i < value.Length && !requiresQuote; ++i)
             {
                 requiresQuote = IsSeparator(value[i]);

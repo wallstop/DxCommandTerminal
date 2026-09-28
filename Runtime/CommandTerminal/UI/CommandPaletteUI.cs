@@ -1173,9 +1173,19 @@
                 return;
             }
 
+            /*
+                Pasted before the switch, and consumed the way every other
+                handled key is. The query is then re-derived from the caret
+                the paste actually left: the value write fires OnInputChanged
+                synchronously, before TryApply places the caret, so that first
+                pass read the pre-paste one. Without this, a paste into the
+                middle of a query ranks rows against a caret that is no longer
+                there, and Tab would edit the wrong token.
+             */
             if (TextFieldPaste.TryApply(_input, evt))
             {
                 Consume(evt);
+                RefreshQuery(_input.value ?? string.Empty, _input.cursorIndex);
                 return;
             }
 
