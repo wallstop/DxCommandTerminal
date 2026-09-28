@@ -37,6 +37,17 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
         }
 
+        /* Half a character is not text: it renders as a replacement glyph and
+           no candidate can start with it, so the tests that need to know
+           whether a string holds one ask for the code units themselves. */
+        private static void AssertNoSurrogate(string value, string message)
+        {
+            foreach (char c in value)
+            {
+                Assert.IsFalse(char.IsSurrogate(c), $"{message} {value}");
+            }
+        }
+
         [Test]
         public void ChoiceFormattingPreservesQuotedWhitespace(
             [Values("static", "dynamic", "formatted")] string source,
@@ -113,6 +124,119 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 new[] { "valid" },
                 results.Select(item => item.InsertionText)
             );
+        }
+
+        /*
+            A text field moves its caret a UTF-16 code unit at a time, so it can
+            hand back one that sits between the halves of a character. The
+            token a provider is given is the text up to that caret, so an
+            unsnapped one arrives as half a surrogate: not a string any
+            candidate can start with, so the provider filters every candidate
+            out and Tab does nothing at all, silently.
+
+            Every row asserts the same four things for one character: the token
+            the provider receives is the whole text in front of it and holds no
+            half character, the caret the provider is told about is the
+            character's own boundary, the replacement range still covers the
+            argument whole so accepting a candidate cannot leave half of one
+            behind, and the completed line holds no half character either. Two
+            rows put the character mid-argument, where the token in front of it
+            is not empty: without those, an implementation that floored to the
+            start of the argument would pass every row.
+         */
+        [TestCase(
+            "give \ud83d\ude00 x",
+            6,
+            5,
+            Description = "An emoji at the start of the argument"
+        )]
+        [TestCase("give cafe\u0301 x", 9, 8, Description = "An accented letter mid-argument")]
+        [TestCase(
+            "give \ud83d\udc4d\ud83c\udffd x",
+            7,
+            5,
+            Description = "An emoji with a skin tone"
+        )]
+        [TestCase(
+            "give \ud83c\udde6\ud83c\udde7 x",
+            7,
+            5,
+            Description = "A flag at the start of the argument"
+        )]
+        [TestCase(
+            "give \ud83d\udc68\u200d\ud83d\udc69 x",
+            7,
+            5,
+            Description = "A joined emoji sequence"
+        )]
+        [TestCase(
+            "give to\ud83d\ude00ken x",
+            8,
+            7,
+            Description = "An emoji after other text in the argument"
+        )]
+        [TestCase(
+            "give ca\u0301fety x",
+            7,
+            6,
+            Description = "An accent after other text in the argument"
+        )]
+        public void ACaretInsideACharacterCompletesTheWholeCharacter(
+            string input,
+            int caretInside,
+            int expectedCaret
+        )
+        {
+            CommandShell shell = new(new CommandHistory(16));
+            CommandCompletionContext received = default;
+            Assert.IsTrue(
+                shell.AddCommand(
+                    new CommandDefinition
+                    {
+                        Name = "give",
+                        Handler = (context, arguments) => { },
+                        CompletionProvider = (
+                            in CommandCompletionContext context,
+                            List<CommandCompletion> results
+                        ) =>
+                        {
+                            received = context;
+                            results.Add(new CommandCompletion(context.Token + " sword"));
+                        },
+                    }
+                )
+            );
+
+            List<CommandCompletion> results = new();
+            Assert.IsTrue(
+                shell.TryComplete(
+                    CommandExecutionContext.Current,
+                    input,
+                    caretInside,
+                    results,
+                    out CommandCompletionContext context
+                )
+            );
+
+            /* The token is the one argument being edited, and its bounds are
+               the two spaces around it, so a row states only the two offsets
+               the field and the snap disagree about. */
+            int tokenStart = input.IndexOf(' ') + 1;
+            int tokenEnd = input.IndexOf(' ', tokenStart);
+
+            AssertNoSurrogate(received.Token, "The provider was handed");
+            Assert.AreEqual(
+                input.Substring(tokenStart, expectedCaret - tokenStart),
+                received.Token
+            );
+            Assert.AreEqual(expectedCaret, received.CaretIndex);
+            Assert.AreEqual(tokenStart, context.ReplacementStart);
+            Assert.AreEqual(tokenEnd - tokenStart, context.ReplacementLength);
+
+            string completed = input
+                .Remove(context.ReplacementStart, context.ReplacementLength)
+                .Insert(context.ReplacementStart, results[0].InsertionText);
+            AssertNoSurrogate(completed, "The completed line holds");
         }
 
         [TestCase(true, false, false)]

@@ -1920,7 +1920,8 @@
         private int NormalizeCaret(int caret)
         {
             string input = _input.CommandText ?? string.Empty;
-            return caret < 0 || input.Length < caret ? input.Length : caret;
+            int clamped = caret < 0 || input.Length < caret ? input.Length : caret;
+            return input.SnapToTextBoundary(clamped);
         }
 
         private void ResetTokenCompletion()
@@ -2088,7 +2089,15 @@
                 .Remove(replacementStart, replacementLength)
                 .Insert(replacementStart, insertion);
             _tokenCompletionAppliedText = newInput;
-            _pendingCaretIndex = replacementStart + insertion.Length;
+            /*
+                Snapped here, where the position is an offset into the text
+                this write puts in the field. The field applies the value on its
+                own schedule, so the queued position is applied later and
+                against whatever the field holds then; snapping it there would
+                snap it against the old text, and the retry that re-asserts the
+                caret would hold it at the wrong place.
+             */
+            _pendingCaretIndex = newInput.SnapToTextBoundary(replacementStart + insertion.Length);
 
             _input.CommandText = newInput;
             _needsFocus = true;

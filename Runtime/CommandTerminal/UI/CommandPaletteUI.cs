@@ -3,6 +3,7 @@
     using System;
     using System.Collections.Generic;
     using Backend;
+    using Extensions;
     using Helper;
     using Input;
     using Themes;
@@ -269,7 +270,13 @@
             int cut = text.LastIndexOf('\n', maxLength);
             if (cut < 0)
             {
-                cut = maxLength;
+                /*
+                    A hard cut is a code-unit offset like any other, so a
+                    character straddling the budget would leave half of itself
+                    in the shown text. Snapped, the cut is the whole character
+                    before the budget.
+                 */
+                cut = text.SnapToTextBoundary(maxLength);
             }
 
             int dropped = text.Length - cut;
@@ -527,6 +534,15 @@
                 return;
             }
 
+            /*
+                Snapped here, not where the caret is queued: a queued position
+                can be waiting for a value write that has not landed, and
+                clamping it against the old value would move it. The field
+                holds the position now, so this is the one place a caret is
+                written and the one place it is snapped.
+             */
+            int snapped = _input.value.SnapToTextBoundary(index);
+
             if (_logCaretPasses)
             {
                 VisualElement focused =
@@ -536,14 +552,14 @@
                     : focused == _input || _input.Contains(focused) ? "input"
                     : focused.name;
                 Debug.Log(
-                    $"[CommandPaletteUI] caret pass frame={Time.frameCount} pending={index}"
+                    $"[CommandPaletteUI] caret pass frame={Time.frameCount} pending={snapped}"
                         + $" cursor={_input.cursorIndex} select={_input.selectIndex}"
                         + $" valueLength={_input.value.Length} focus='{focusOwner}'",
                     this
                 );
             }
 
-            if (_input.cursorIndex == index && _input.selectIndex == index)
+            if (_input.cursorIndex == snapped && _input.selectIndex == snapped)
             {
                 /*
                     The position held across a panel pass; once it has held
@@ -560,8 +576,8 @@
                  */
                 _caretStickPasses = 0;
 #if UNITY_2022_1_OR_NEWER
-                _input.cursorIndex = index;
-                _input.selectIndex = index;
+                _input.cursorIndex = snapped;
+                _input.selectIndex = snapped;
 #else
                 /*
                     2021.3 exposes the caret getters only; the engine owns
@@ -1125,7 +1141,8 @@
 
         private int NormalizeCaret(int caret, string query)
         {
-            return caret < 0 || query.Length < caret ? query.Length : caret;
+            int clamped = caret < 0 || query.Length < caret ? query.Length : caret;
+            return query.SnapToTextBoundary(clamped);
         }
 
         private void EnsureRowCapacity(int count)

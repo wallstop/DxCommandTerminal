@@ -9,6 +9,7 @@
     using System.Threading;
     using Attributes;
     using DataStructures;
+    using Extensions;
     using Helper;
     using UnityEngine;
     using Debug = UnityEngine.Debug;
@@ -1103,6 +1104,16 @@
 
             EnsureAutoCommandsRegistered();
 
+            /*
+                The caret arrives as a UTF-16 offset from a text field, which
+                is the unit it is counted in and not the one a character is
+                made of. Snapped here, once, so the active token, the
+                replacement range and the provider's token all describe the
+                same whole character, and so a provider is never handed half a
+                surrogate. Everything below can then read the caret as given.
+            */
+            caretIndex = input.SnapToTextBoundary(caretIndex);
+
             _dispatchDepth++;
             try
             {
@@ -1155,8 +1166,7 @@
                 else
                 {
                     CommandToken activeToken = tokens[activeTokenIndex];
-                    int clampedCaret = Math.Clamp(caretIndex, 0, input.Length);
-                    token = input.Substring(activeToken.Start, clampedCaret - activeToken.Start);
+                    token = input.Substring(activeToken.Start, caretIndex - activeToken.Start);
                     isQuoted = activeToken.StartQuote != null;
                     quoteCharacter = activeToken.StartQuote;
                 }
