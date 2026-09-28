@@ -1678,8 +1678,14 @@
             }
 
 #if UNITY_2022_1_OR_NEWER
-            _commandInput.cursorIndex = index;
-            _commandInput.selectIndex = index;
+            /*
+                Snapped against the value the field holds now: the queued
+                position is a code-unit offset, and writing it as one leaves
+                the caret inside a character.
+             */
+            int snapped = _commandInput.value.SnapToTextBoundary(index);
+            _commandInput.cursorIndex = snapped;
+            _commandInput.selectIndex = snapped;
 #else
             /*
                 2021.3 exposes the caret getters only; once the field holds
@@ -1920,7 +1926,8 @@
         private int NormalizeCaret(int caret)
         {
             string input = _input.CommandText ?? string.Empty;
-            return caret < 0 || input.Length < caret ? input.Length : caret;
+            int clamped = caret < 0 || input.Length < caret ? input.Length : caret;
+            return input.SnapToTextBoundary(clamped);
         }
 
         private void ResetTokenCompletion()

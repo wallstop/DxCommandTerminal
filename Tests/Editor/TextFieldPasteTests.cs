@@ -288,6 +288,68 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         /*
+            A field moves its caret a code unit at a time, so it can report one
+            between the halves of a character. A paste landing there would split
+            it: the value would hold half a surrogate, which is not text, and
+            the argument the command runs would carry it. The paste lands in
+            front of the character instead, and the value stays whole.
+
+            The row is the caret the field reports, the position the paste lands
+            on, the pasted text, the value the field is left holding, and the
+            caret it reports back.
+         */
+        [TestCase(
+            "give \ud83d\ude00 item",
+            6,
+            5,
+            "torch",
+            "give torch\ud83d\ude00 item",
+            10,
+            Description = "A caret inside an emoji pastes in front of it"
+        )]
+        [TestCase(
+            "give \ud83d\ude00 item",
+            7,
+            7,
+            "torch",
+            "give \ud83d\ude00torch item",
+            12,
+            Description = "A caret after an emoji pastes where it is"
+        )]
+        [TestCase(
+            "give cafe\u0301 item",
+            9,
+            8,
+            "torch",
+            "give cafetorche\u0301 item",
+            13,
+            Description = "A caret before an accent pastes in front of it"
+        )]
+        public void APasteNeverSplitsACharacter(
+            string value,
+            int caret,
+            int expectedLanding,
+            string clipboard,
+            string expectedValue,
+            int expectedCaret
+        )
+        {
+            TextField field = new TextField();
+            field.value = value;
+            field.selectIndex = caret;
+            field.cursorIndex = caret;
+            GUIUtility.systemCopyBuffer = clipboard;
+
+            using KeyDownEvent paste = PasteKeyDown(EventModifiers.Control);
+            Assert.IsTrue(
+                TextFieldPaste.TryApply(field, paste, out int landed),
+                "Ctrl+V should paste"
+            );
+            Assert.AreEqual(expectedValue, field.value, "The character is not split");
+            Assert.AreEqual(expectedLanding, landed, "The paste landed where the caret is");
+        }
+
+        /*
             The drop is safe because the tokenizer skips a leading separator
             before it reads a token, so a value that starts with one is the same
             command as one that does not. Pinned so the next reader does not

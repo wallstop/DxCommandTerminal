@@ -23,6 +23,23 @@ A provider always sees the command's own arguments:
 relative to that command, and the shell shifts them per routing level
 for subcommands. A provider never sees the parent command's tokens.
 
+## A caret never lands inside a character
+
+An emoji, an accented letter, a joined emoji sequence, and a flag are one
+character but two or more UTF-16 code units, and a text field moves its
+caret one code unit at a time. Every caret the console reads or writes is
+snapped out to the start of the character it is in, so:
+
+- the token a provider receives is whole text, never half a surrogate;
+- the replacement range covers the whole character, so accepting a
+  candidate cannot leave half of one in the line;
+- a paste lands beside the character instead of inside it.
+
+The snap moves the caret to the front of the character, never past it. The
+one sequence it does not join is the Hangul one Unicode composes from
+separate jamo, so a caret can still split a syllable that arrived
+decomposed.
+
 ## Engine-backed values
 
 Scene objects, layers, and tags complete through the opt-in

@@ -3,6 +3,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
     using System;
     using System.Text;
     using Backend;
+    using Extensions;
     using Helper;
     using UnityEngine;
     using UnityEngine.UIElements;
@@ -83,11 +84,18 @@ namespace WallstopStudios.DxCommandTerminal.UI
             /*
                 The caret is the moving end and selectIndex the anchor, so a
                 drag made right-to-left reads as cursorIndex below
-                selectIndex; the replaced span is the smaller of the two to
-                the larger, and the paste lands at the smaller.
+                selectIndex; the replaced span is the smaller of the two to the
+                larger, and the paste lands at the smaller.
+
+                Both ends are snapped. The field moves its caret a code unit at
+                a time, so it can report one inside a character, and a paste
+                landing there would split it: the value would hold half a
+                surrogate, which is not text, and the argument the command runs
+                would carry it. Snapped, the paste lands beside the character
+                and replaces all of it.
              */
-            int start = Math.Clamp(Math.Min(field.cursorIndex, field.selectIndex), 0, value.Length);
-            int end = Math.Clamp(Math.Max(field.cursorIndex, field.selectIndex), 0, value.Length);
+            int start = value.SnapToTextBoundary(Math.Min(field.cursorIndex, field.selectIndex));
+            int end = value.SnapToTextBoundary(Math.Max(field.cursorIndex, field.selectIndex));
 
             /*
                 A run at the very start of the value is dropped. The tokenizer

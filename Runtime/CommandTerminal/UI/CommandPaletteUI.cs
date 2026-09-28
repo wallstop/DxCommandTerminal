@@ -3,6 +3,7 @@
     using System;
     using System.Collections.Generic;
     using Backend;
+    using Extensions;
     using Helper;
     using Input;
     using Themes;
@@ -269,7 +270,13 @@
             int cut = text.LastIndexOf('\n', maxLength);
             if (cut < 0)
             {
-                cut = maxLength;
+                /*
+                    A hard cut is a code-unit offset like any other, so a
+                    character straddling the budget would leave half of itself
+                    in the shown text. Snapped, the cut is the whole character
+                    before the budget.
+                 */
+                cut = text.SnapToTextBoundary(maxLength);
             }
 
             int dropped = text.Length - cut;
@@ -1125,7 +1132,8 @@
 
         private int NormalizeCaret(int caret, string query)
         {
-            return caret < 0 || query.Length < caret ? query.Length : caret;
+            int clamped = caret < 0 || query.Length < caret ? query.Length : caret;
+            return query.SnapToTextBoundary(clamped);
         }
 
         private void EnsureRowCapacity(int count)
@@ -1291,7 +1299,17 @@
 
         private void QueueCaret(int? index)
         {
-            _pendingCaretIndex = index;
+            /*
+                The one place a caret is queued, so it is the one place the
+                caret is snapped: a position computed from the text is a
+                code-unit offset, and the field would then hold a caret inside
+                a character. A queued cancel is not a position and passes
+                through.
+             */
+            _pendingCaretIndex =
+                index is int caret && _input != null
+                    ? _input.value.SnapToTextBoundary(caret)
+                    : null;
             _caretStickPasses = 0;
         }
 
