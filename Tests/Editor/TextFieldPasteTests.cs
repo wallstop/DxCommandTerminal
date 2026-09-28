@@ -191,8 +191,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             against, and it has to hold where the caret setters do not exist
             (2021.3). A key that is not a paste reports zero, so a caller
             cannot mistake a failed paste for a position.
+
+            The clamp on the reported caret - which keeps it inside a value a
+            change handler shortened in the same dispatch - needs a panel to
+            reproduce, so it is a bound and not a case here.
          */
-        [TestCase("give", 4, 4, "item 42", 12, Description = "At the end of the field")]
+        [TestCase("give", 4, 4, "item 42", 11, Description = "At the end of the field")]
         [TestCase("give 42", 4, 4, " item", 9, Description = "In the middle of the field")]
         [TestCase("give item 42", 5, 9, "torch pick", 15, Description = "Over a selection")]
         [TestCase("", 0, 0, "give\titem", 9, Description = "A pasted block, flattened")]
