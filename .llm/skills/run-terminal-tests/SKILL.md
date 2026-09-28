@@ -121,7 +121,18 @@ produces a green report on the previous code.
 and compile what changed on disk, then wait for it, so neither reads the
 assembly it already had. The request is made in script because
 `menu: Assets/Refresh` answers success without importing a changed script under
-`Packages/` (#168). Driving the editor yourself over MCP means asking for the
+`Packages/` (#168). `unity:tests` then refuses to believe a leg whose compilation
+failed, naming the first error. A compile failure leaves the previous assembly
+loaded, so the leg would otherwise report the OLD code green, which is
+indistinguishable from a pass in the printed counters. That guard is why a
+mutation probe cannot look like a clean green.
+
+`npm --prefix tooling~ run compat:check` is the same check without Unity, in about
+a second. A `CS0162` unreachable-code probe, or a missing `using` in a new test,
+is a compile error - so the confident green it produces is a lie. Check it
+before interpreting any surprising result.
+
+Driving the editor yourself over MCP means asking for the
 compile, not just the import - a refresh that finds a change only schedules it,
 so an idle check can land before it starts:
 

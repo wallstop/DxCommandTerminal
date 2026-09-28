@@ -30,6 +30,15 @@
         private const string PaletteDividerName = "PaletteDivider";
         private const string PaletteOutputName = "PaletteOutput";
         private const string PaletteFeedbackName = "PaletteFeedback";
+
+        /*
+            The run result and the error bar share this panel, and it is the
+            one sink that genuinely overflows: unlike the results list it has
+            no scroller and no max height, so long text would push the bar off
+            screen. Capping the line count alone is not enough either, because
+            eight long lines still overflow.
+         */
+        private const int MaxOutputCharacters = 512;
         private const string PaletteFooterName = "PaletteFooter";
         private const string RowName = "PaletteRow";
         private const string RowNameLabel = "PaletteRowName";
@@ -236,6 +245,35 @@
             }
 
             return false;
+        }
+
+        /*
+            Trims joined command output to a character budget. The cut lands on
+            the last line break at or before the budget, so a shown line is
+            never cut mid-sentence; a single line longer than the budget falls
+            back to a hard cut.
+         */
+        internal static string ClampOutputLength(string text, int maxLength)
+        {
+            if (text.Length <= maxLength)
+            {
+                return text;
+            }
+
+            /*
+                The cut lands on the last break at or before the budget, so a
+                break that falls exactly on the boundary still fills the
+                budget. A shown character is index < cut, so the character at
+                the cut is counted as hidden.
+             */
+            int cut = text.LastIndexOf('\n', maxLength);
+            if (cut < 0)
+            {
+                cut = maxLength;
+            }
+
+            int dropped = text.Length - cut;
+            return $"{text.Substring(0, cut)}\n(+{dropped} more chars)";
         }
 
         public void Open()
@@ -1369,6 +1407,7 @@
         private void ShowOutput(List<string> lines)
         {
             const int MaxOutputLines = 8;
+
             using CachedStringBuilder.Scope builder = new(256);
             int shown = Mathf.Min(lines.Count, MaxOutputLines);
             for (int index = 0; index < shown; ++index)
@@ -1389,7 +1428,7 @@
             }
 
             _feedback.style.display = DisplayStyle.None;
-            _output.text = builder.Builder.ToString();
+            _output.text = ClampOutputLength(builder.Builder.ToString(), MaxOutputCharacters);
             _output.style.display = DisplayStyle.Flex;
             _lastRunProducedOutput = true;
         }
@@ -1422,8 +1461,19 @@
 
         private void ShowFeedback(string message)
         {
+            /*
+                A shell error quotes the token the developer typed (see
+                CommandArgumentSpec's invalid-value message), so the bar needs
+                the same normalization the log list gets - and the same length
+                bound, because it shares this panel with _output and that panel
+                has no scroller of its own. A pasted token lands in the message
+                whole, so an unbounded error bar would push the bar off screen.
+             */
             _output.style.display = DisplayStyle.None;
-            _feedback.text = message;
+            _feedback.text = ClampOutputLength(
+                LogTextSanitizer.Sanitize(message),
+                MaxOutputCharacters
+            );
             _feedback.style.display = DisplayStyle.Flex;
         }
 

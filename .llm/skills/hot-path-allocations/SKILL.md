@@ -97,6 +97,24 @@ Constructor-time work is not a hot path: bulk add then sort once (`List.Sort`) i
 insertion-time binary searches (quadratic). Keep a seen set only to preserve
 first-inserted-wins for case-variant duplicates.
 
+## Loop bounds: hoist a `Count`, never a mutated collection's length
+
+- Hoist `List<T>.Count`, interface `Count`, and UIToolkit `childCount` out of a counting
+  loop's condition: those are property or interface reads, re-dispatched per iteration.
+- **Never hoist a `Length`/`Count` read when the loop body mutates that collection.** The
+  inline re-read is what makes the loop terminate; a hoisted value pins a stale count. Three
+  in-repo loops are traps that read like hoistable candidates, and all three are commented
+  as such: `CommandShell`'s provider and scan-assembly removals (`RemoveAt` in the body),
+  `CommandAutoComplete.CollapseCaseInsensitiveDuplicates`' outer rewrite loop
+  (`words[writeIndex] = ...` in the body - its *inner* read loop is safe and is hoisted), and
+  `TerminalUI`'s `while (content.childCount < logs.Count)`, which appends the labels it is
+  counting. Hoisting any of them is a bug, not an optimization.
+- Hoisting `string.Length`/`array.Length` is a **measured wash, not a win**: with tiered JIT
+  disabled the inline and hoisted forms were identical at the median (0.00%, n=2000 x 7
+  interleaved reps, 13- and 200-char workloads). The JIT already hoists the load; the
+  "bounds-check elision" rationale that used to sit in context.md rule 18 was never real.
+  Write whichever form reads clearly and keep one form per type.
+
 ## Probe methodology (allocation tests)
 
 - `Is.AllocatingGCMemory` probes MUST warm their subject and the probe path before the
@@ -123,6 +141,12 @@ first-inserted-wins for case-variant duplicates.
 - Zero-allocation claims go through `AllocationAssertions.AssertZeroAllocations` (it fails
   closed when the instrument cannot see its positive control). Never assert on raw
   `AllocatingGCMemory` yourself.
+- Micro-benchmarks must run with tiered compilation off (`DOTNET_TieredCompilation=0`) before
+  a difference is real. Left on, the same comparison reported a 52% median win for hoisting a
+  `string.Length` read on one run, 7% on the next, and 0% with tiering off - the 52% was a
+  variant reaching full optimization earlier, and p95 showed no effect in any run. Interleave
+  the variants and alternate which runs first, or the first variant absorbs warmup. A
+  dramatic single-run delta with a stable p95 is a tiering artifact, not a finding.
 - Documented, deliberate allocations (stack-trace extraction, tokenize substrings) use
   `AssertDetectsAllocation` so a future optimization must consciously update them.
 

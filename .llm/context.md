@@ -134,12 +134,13 @@ frontmatter validity, index freshness, and pointer-file delegation; see
 17. No `params` on frequently-called APIs; provide fixed-arity overloads (`params` allocates).
     One-time configuration APIs may use `params`.
 18. Hot-path collection access avoids interface dispatch: specialize arrays and `List<T>`
-    (Unity does not de-virtualize `IReadOnlyList` indexers); arrays are preferred (bound-check
-    elision). Copy with `Array.Copy` / `CopyTo`, not element loops; reserve `Clone()` for
-    cases where its `object` return is acceptable. Counting loops hoist `List<T>.Count`,
-    interface `Count`, and UIToolkit `childCount` reads out of the condition (per-iteration
-    property/interface dispatch, PR #73 review); keep `array.Length`/`string.Length` inline
-    (bounds-check elision / inlined read); never hoist when the body mutates the collection.
+    (Unity does not de-virtualize `IReadOnlyList` indexers); arrays are preferred. Copy with
+    `Array.Copy` / `CopyTo`, not element loops; reserve `Clone()` for cases where its `object`
+    return is acceptable. Counting loops hoist `List<T>.Count`, interface `Count`, and UIToolkit
+    `childCount` reads out of the condition (per-iteration property/interface dispatch, PR #73).
+    **Never hoist a `Length`/`Count` read when the body mutates that collection** - the inline
+    re-read is what makes the loop terminate. Traps and the measured `string.Length` result:
+    [hot-path-allocations](./skills/hot-path-allocations/SKILL.md).
 19. Comparison operators read left-to-right in ascending order: only `<`, `<=` and `==`. Never
     `>` or `>=` -- write `0 <= index` and `b < a`, not `index >= 0` or `a > b` (issue #51).
     Enforced by `npm --prefix tooling~ run lint:comparison-direction` (pre-commit + CI; `:fix`

@@ -213,7 +213,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 "<linker>",
             };
 
-            for (int i = 0; i < ordered.Count; )
+            int entryCount = ordered.Count;
+            for (int i = 0; i < entryCount; )
             {
                 PreservationEntry entry = ordered[i];
                 lines.Add(

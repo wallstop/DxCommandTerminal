@@ -4,6 +4,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     using System.Collections.Generic;
     using System.Text;
     using DataStructures;
+    using Helper;
     using UnityEngine;
 
     public sealed class CommandLog
@@ -68,8 +69,18 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 stackTrace = string.Empty;
             }
 
+            /*
+                Every source funnels here - Terminal.Log, the Unity log
+                callback, and direct callers - so this is the one place log
+                text is normalized. A clean message returns the same
+                reference and the write stays allocation-free.
+             */
             _version++;
-            LogItem log = new(type, message, stackTrace);
+            LogItem log = new(
+                type,
+                LogTextSanitizer.Sanitize(message),
+                LogTextSanitizer.Sanitize(stackTrace)
+            );
             _logs.Add(log);
             return true;
         }

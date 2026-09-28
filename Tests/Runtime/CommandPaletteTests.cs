@@ -917,6 +917,46 @@
         }
 
         [UnityTest]
+        public IEnumerator ErrorFeedbackEscapesTheTokenItQuotes()
+        {
+            /*
+                A shell error quotes the raw token the developer typed, and the
+                bar is the one surface that shows it without going through the
+                shared log funnel. A token carrying a bidi override must not
+                render as a reordered name here either.
+             */
+            yield return SpawnPalette();
+            Assert.IsTrue(
+                Terminal.Shell.AddCommand(
+                    CommandBuilder
+                        .Create("paletteamount")
+                        .Arg<int>("amount", spec => spec.Required().Range(1, 10))
+                        .Handler((context, arguments) => { }),
+                    out _
+                ),
+                "The typed command should register cleanly"
+            );
+
+            _palette.Open();
+            yield return null;
+            _palette._input.value = "paletteamount \u202E";
+            yield return null;
+
+            _palette.Submit();
+            yield return null;
+
+            StringAssert.Contains(
+                "\\u202E",
+                _palette._feedback.text,
+                "The quoted token must render as a visible escape"
+            );
+            Assert.IsFalse(
+                0 <= _palette._feedback.text.IndexOf("\u202E", StringComparison.Ordinal),
+                "No raw bidi override may reach the feedback label"
+            );
+        }
+
+        [UnityTest]
         public IEnumerator DownAfterOutputRunKeepsInputClean()
         {
             yield return SpawnPalette();

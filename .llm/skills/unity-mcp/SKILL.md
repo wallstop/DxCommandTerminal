@@ -172,6 +172,31 @@ capture runner's refusal gate.
   play-mode runs with the human present, and never as the session's last
   operation.
 
+## An eval is code no lane compiles, and a catch makes it fail open
+
+An expression eval'd into a host editor is not compiled by CI, not compiled by
+`compat:check`, and not covered by a node test that mocks the bridge. If it names
+an API that is not public, the eval **fails to compile**, and a surrounding
+`catch {}` turns that into silence - so the feature looks present, is covered by
+a green test against a mock, and does nothing on the host. Bugbot caught one in
+`unity:tests`: `UnityEditor.LogEntries.GetLogEntriesByType` is internal (CS0122),
+so the compile guard's promised "First error: ..." could never appear.
+
+- Verify each API against the live editor before relying on it: eval it and read
+  `diagnostics`. `typeof(X.Method)` is a bad probe (CS0426 - `typeof` takes a
+  type); call the thing, or reflect on the declaring type.
+- Watch for a chain of unfamiliar type names. `UnityEditor.LogEntries` plus
+  `UnityEditor.LogEntryType` was written from memory; `AssetDatabase.Refresh`
+  next to it is obviously public, and the contrast is the tell.
+- A `catch` around an eval must be justified as "the editor is busy", never as
+  "the API might not exist". If the value is optional, say so; if it is not
+  optional, do not read it. Unity exposes no public synchronous compile-error
+  API, so point at `compat:check` rather than an eval that cannot answer.
+- The pre-existing evals here are exercised every run and are sound:
+  `EditorUtility.scriptCompilationFailed`, the three `EditorApplication` flags,
+  and the `AssetDatabase.Refresh` + `CompilationPipeline.RequestScriptCompilation`
+  pair in `refreshScripts`. That is the bar for a new probe.
+
 ## Troubleshooting
 
 - `probe` unreachable: is the bridge running on the host (`npm run unity:mcp`)? Is
