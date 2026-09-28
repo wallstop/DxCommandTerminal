@@ -53,9 +53,9 @@ namespace WallstopStudios.DxCommandTerminal.Helper
                 return message;
             }
 
-            using CachedStringBuilder.Scope scope = CachedStringBuilder.Rent(message.Length + 16);
-            StringBuilder builder = scope.Builder;
             int length = message.Length;
+            using CachedStringBuilder.Scope scope = CachedStringBuilder.Rent(length + 16);
+            StringBuilder builder = scope.Builder;
             for (int i = 0; i < length; ++i)
             {
                 char c = message[i];

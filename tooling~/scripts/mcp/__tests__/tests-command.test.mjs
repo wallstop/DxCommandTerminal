@@ -1054,19 +1054,22 @@ test("a claim poll interval of zero cannot become a spin", async () => {
 // old code and reports it green - indistinguishable from a real pass in the
 // printed output. The guard is what separates the two.
 test("a failed script compilation refuses the leg instead of reporting the old assembly green", async () => {
-  const answers = [
-    { call: { content: [{ text: "true" }] } },
-    { call: { content: [{ text: "CS0103: The name 'X' does not exist" }] } }
-  ];
+  // One probe only: the message must not depend on a second read that Unity
+  // cannot answer (UnityEditor.LogEntries is internal, so that eval fails to
+  // compile and its catch would quietly yield an empty string).
   let probes = 0;
   await assert.rejects(
     assertCompilationSucceeded(
-      () => answers[Math.min(probes++, answers.length - 1)],
+      () => {
+        probes += 1;
+        return { call: { content: [{ text: "true" }] } };
+      },
       "editmode",
       Date.now() + 60_000
     ),
     /compilation failed/u
   );
+  assert.equal(probes, 1, "the refusal must not depend on a second, unavailable read");
 });
 
 test("a clean compilation lets the leg proceed without a second opinion", async () => {

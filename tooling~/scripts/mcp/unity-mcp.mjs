@@ -2319,6 +2319,12 @@ export async function waitForTestIdle(evalCall, deadline, now = () => Date.now()
     probe is asked over the same eval path the idle wait uses; a probe that
     times out on a busy editor is not treated as a failure, because the idle
     wait has already run.
+
+    The error text is NOT read from the editor: Unity exposes no public
+    synchronous API for it (`UnityEditor.LogEntries` is internal, so an eval
+    naming it fails to compile and the catch would swallow that into an empty
+    string - a diagnostic that only ever looks present). The message points at
+    the compat compile instead, which names the error in about a second.
  */
 export async function assertCompilationSucceeded(evalCall, leg, deadline) {
   const expression = "return UnityEditor.EditorUtility.scriptCompilationFailed;";
@@ -2336,25 +2342,11 @@ export async function assertCompilationSucceeded(evalCall, leg, deadline) {
   }
 
   if (failed) {
-    const log = await compilationErrorsQuietly(evalCall);
     fail(
       `The editor's last script compilation failed, so the ${leg} leg would run the ` +
-        "previous assembly and report it green. Fix the compile error and re-run." +
-        (log ? ` First error: ${log}` : "")
+        "previous assembly and report it green. `npm --prefix tooling~ run compat:check` " +
+        "names the error in about a second."
     );
-  }
-}
-
-async function compilationErrorsQuietly(evalCall) {
-  try {
-    const { call } = await evalCall(
-      "var __e = UnityEditor.LogEntries.GetLogEntriesByType(" +
-        "UnityEditor.LogEntryType.Error, 0); " +
-        "return __e.Length > 0 ? __e[0].message : null;"
-    );
-    return extractText(call) || "";
-  } catch {
-    return "";
   }
 }
 
