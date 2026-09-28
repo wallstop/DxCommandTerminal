@@ -32,35 +32,50 @@ namespace WallstopStudios.DxCommandTerminal.UI
         drops a leading space when the paste starts the value, where a run of
         whitespace separates nothing.
 
-        A control character is left in the value, which is a stated limit. It
-        cannot be shown in a single-line field, but the field is the
-        developer's own input: the character is the one they copied, it still
-        reaches the argument intact, and a command that prints it gets the
-        escape from the log funnel. Dropping it would lose their text and
-        escaping it here would change the command they pasted.
+        A control character that is not whitespace is left in the value,
+        which is a stated limit. It cannot be shown in a single-line field,
+        but the field is the developer's own input: the character is the one
+        they copied, it still reaches the argument intact, and a command
+        that prints it gets the escape from the log funnel. Dropping it would
+        lose their text and escaping it here would change the command they
+        pasted. (A control character that is also whitespace - a tab, a
+        newline - is the case above, and collapses.)
+
+        The clipboard is pasted whole, however large. Flatten copies it
+        through a pooled builder and the paste copies the result again, so a
+        very large clipboard costs a few multiples of its size in transient
+        memory and one frame's work. It is a paste, not a keystroke, and the
+        pooled builder above the retention ceiling is handed back to the GC
+        rather than pinned, so the cost does not stay.
      */
     internal static class TextFieldPaste
     {
         /*
             Returns true when a paste was applied, so the caller can consume
-            the key. Every other keystroke, and an empty or all-whitespace
-            clipboard, is left alone.
+            the key, and hands back the caret the paste left so a caller that
+            ranks against a caret can use the same one on every editor - 2021.3
+            exposes the caret getters only, so the field's own cursorIndex is
+            not an answer there. Every other keystroke, and an empty or
+            all-whitespace clipboard, is left alone with the caret at zero.
          */
-        public static bool TryApply(TextField field, KeyDownEvent evt)
+        public static bool TryApply(TextField field, KeyDownEvent evt, out int caret)
         {
             if (field == null || evt == null || evt.keyCode != KeyCode.V)
             {
+                caret = 0;
                 return false;
             }
 
             if (!evt.commandKey && !evt.ctrlKey)
             {
+                caret = 0;
                 return false;
             }
 
             string flattened = Flatten(GUIUtility.systemCopyBuffer);
             if (flattened.Length == 0)
             {
+                caret = 0;
                 return false;
             }
 
@@ -78,6 +93,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 flattened = flattened.TrimStart(' ');
                 if (flattened.Length == 0)
                 {
+                    caret = 0;
                     return false;
                 }
             }
@@ -92,8 +108,15 @@ namespace WallstopStudios.DxCommandTerminal.UI
              */
             field.value = value.Remove(start, end - start).Insert(start, flattened);
 
+            /*
+                Read back, not computed: a change handler that reverted the
+                field in the same dispatch (a frame a hotkey claimed) leaves
+                the old, shorter text here, and a caret past the end of it is
+                the out-of-range write TerminalUI.ApplyPendingCaret guards.
+             */
+            caret = Math.Min(start + flattened.Length, field.value.Length);
+
 #if UNITY_2022_1_OR_NEWER
-            int caret = start + flattened.Length;
             field.cursorIndex = caret;
             field.selectIndex = caret;
 #else

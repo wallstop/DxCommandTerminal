@@ -301,10 +301,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         /*
             The one definition of a token boundary. A token ends at any
             whitespace, not only at a space, so every caller splits a line the
-            same way: Tokenize below, CommandShell.TryEatArgument (production
-            execution and the public parse entry), the completion quoting and
-            replacement checks here, and TextFieldPaste.Flatten (which
-            collapses a run to the space this returns).
+            same way: Tokenize below, CommandShell.TryEatArgument (the public
+            parse entry, kept in step with production execution), the
+            completion quoting and replacement checks here, and
+            TextFieldPaste.Flatten (which collapses a run to the space this
+            returns).
          */
         internal static bool IsSeparator(char c)
         {

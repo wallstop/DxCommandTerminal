@@ -2334,7 +2334,7 @@
             _commandInput.RegisterCallback<KeyDownEvent, TerminalUI>(
                 static (evt, context) =>
                 {
-                    if (TextFieldPaste.TryApply(context._commandInput, evt))
+                    if (TextFieldPaste.TryApply(context._commandInput, evt, out _))
                     {
                         /*
                             Stopped, not just the value written: the key must

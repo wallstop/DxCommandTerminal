@@ -447,7 +447,7 @@ A completion candidate that contains whitespace is quoted rather than inserted b
 
 The clipboard is unavailable on tvOS, and a platform that will not answer without a user gesture (a browser clipboard API) may read empty. Neither is an error: the key is left alone, and anything the platform does with it still happens. Neither is measured here - the degradation is the design, not a fallback that failed.
 
-One limit: a control character in the copied text is left in the field. A single line cannot show it, so it is invisible while you are typing, and it reaches the argument as the exact character you copied. Dropping it would lose your text; escaping it there would change the command. A command that prints it gets the visible escape from the log.
+One limit: a control character that is not whitespace is left in the field. A single line cannot show it, so it is invisible while you are typing, and it reaches the argument as the exact character you copied. Dropping it would lose your text; escaping it there would change the command. A command that prints it gets the visible escape from the log.
 
 ## Typing wins over a character binding
 

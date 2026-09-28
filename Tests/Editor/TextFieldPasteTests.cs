@@ -127,7 +127,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             using KeyDownEvent paste = PasteKeyDown(EventModifiers.Control);
             Assert.IsTrue(
-                TextFieldPaste.TryApply(field, paste),
+                TextFieldPaste.TryApply(field, paste, out _),
                 $"Ctrl+V should paste '{clipboard}'"
             );
             Assert.AreEqual(expectedValue, field.value, "Pasted value");
@@ -145,7 +145,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             GUIUtility.systemCopyBuffer = "torch\npick";
 
             using KeyDownEvent paste = PasteKeyDown(EventModifiers.Control);
-            Assert.IsTrue(TextFieldPaste.TryApply(field, paste), "Ctrl+V should paste");
+            Assert.IsTrue(TextFieldPaste.TryApply(field, paste, out _), "Ctrl+V should paste");
             Assert.AreEqual("give torch pick 42", field.value, "The selection was replaced");
             Assert.AreEqual(15, field.cursorIndex, "Caret sits after the pasted text");
         }
@@ -161,7 +161,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             using KeyDownEvent paste = PasteKeyDown(EventModifiers.Control);
             Assert.IsFalse(
-                TextFieldPaste.TryApply(field, paste),
+                TextFieldPaste.TryApply(field, paste, out _),
                 "A leading whitespace run separates nothing, so there is no paste to apply"
             );
             Assert.AreEqual("give", field.value, "The field is untouched");
@@ -178,11 +178,66 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             using KeyDownEvent paste = PasteKeyDown(EventModifiers.Command);
             Assert.IsTrue(
-                TextFieldPaste.TryApply(field, paste),
+                TextFieldPaste.TryApply(field, paste, out int caret),
                 "A macOS Cmd+V pastes the same way"
             );
             Assert.AreEqual("give torch 42", field.value, "The selection was replaced");
-            Assert.AreEqual(10, field.cursorIndex, "Caret sits after the pasted text");
+            Assert.AreEqual(10, caret, "The reported caret is where the paste landed");
+            Assert.AreEqual(caret, field.cursorIndex, "The field was left on the same caret");
+        }
+
+        /*
+            The reported caret is the contract the quick-launch bar ranks
+            against, and it has to hold where the caret setters do not exist
+            (2021.3). A key that is not a paste reports zero, so a caller
+            cannot mistake a failed paste for a position.
+         */
+        [TestCase("give", 4, 4, "item 42", 12, Description = "At the end of the field")]
+        [TestCase("give 42", 4, 4, " item", 9, Description = "In the middle of the field")]
+        [TestCase("give item 42", 5, 9, "torch pick", 15, Description = "Over a selection")]
+        [TestCase("", 0, 0, "give\titem", 9, Description = "A pasted block, flattened")]
+        public void TheReportedCaretIsWhereThePasteLanded(
+            string value,
+            int selectIndex,
+            int cursorIndex,
+            string clipboard,
+            int expectedCaret
+        )
+        {
+            TextField field = new TextField();
+            field.value = value;
+            field.selectIndex = selectIndex;
+            field.cursorIndex = cursorIndex;
+            GUIUtility.systemCopyBuffer = clipboard;
+
+            using KeyDownEvent paste = PasteKeyDown(EventModifiers.Control);
+            Assert.IsTrue(
+                TextFieldPaste.TryApply(field, paste, out int caret),
+                "Ctrl+V should paste"
+            );
+            Assert.AreEqual(
+                expectedCaret,
+                caret,
+                $"The reported caret for '{value}' + '{clipboard}'"
+            );
+            Assert.AreEqual(expectedCaret, field.cursorIndex, "The field holds that caret too");
+        }
+
+        [Test]
+        public void AKeyThatIsNotAPasteReportsNoCaret()
+        {
+            TextField field = new TextField();
+            field.value = "give";
+            field.selectIndex = 4;
+            field.cursorIndex = 4;
+            GUIUtility.systemCopyBuffer = "item 42";
+
+            using KeyDownEvent key = PasteKeyDown(KeyCode.V, EventModifiers.None);
+            Assert.IsFalse(
+                TextFieldPaste.TryApply(field, key, out int caret),
+                "A plain V is not a paste"
+            );
+            Assert.AreEqual(0, caret, "A failed paste reports no position");
         }
 
         [TestCase(KeyCode.V, EventModifiers.None, Description = "A plain V types a V")]
@@ -204,7 +259,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             using KeyDownEvent key = PasteKeyDown(keyCode, modifiers);
             Assert.IsFalse(
-                TextFieldPaste.TryApply(field, key),
+                TextFieldPaste.TryApply(field, key, out _),
                 $"'{keyCode}' with {modifiers} is not a paste"
             );
             Assert.AreEqual("give", field.value, "The field is untouched");
@@ -221,7 +276,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             using KeyDownEvent paste = PasteKeyDown(EventModifiers.Control);
             Assert.IsFalse(
-                TextFieldPaste.TryApply(field, paste),
+                TextFieldPaste.TryApply(field, paste, out _),
                 "tvOS has no clipboard and a platform that will not answer reads empty; that is not a paste"
             );
             Assert.AreEqual("give", field.value, "The field is untouched");
@@ -235,11 +290,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             using KeyDownEvent paste = PasteKeyDown(EventModifiers.Control);
 
             Assert.IsFalse(
-                TextFieldPaste.TryApply(null, paste),
+                TextFieldPaste.TryApply(null, paste, out _),
                 "No field means nothing to paste into"
             );
             Assert.IsFalse(
-                TextFieldPaste.TryApply(field, null),
+                TextFieldPaste.TryApply(field, null, out _),
                 "No key means nothing was asked for"
             );
             Assert.AreEqual(string.Empty, field.value, "Neither call wrote the field");
@@ -261,7 +316,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             TextField field = new TextField();
             GUIUtility.systemCopyBuffer = clipboard;
             using KeyDownEvent paste = PasteKeyDown(EventModifiers.Control);
-            Assert.IsTrue(TextFieldPaste.TryApply(field, paste), "The paste still happens");
+            Assert.IsTrue(TextFieldPaste.TryApply(field, paste, out _), "The paste still happens");
             Assert.AreEqual(clipboard, field.value, "The copied text is what lands in the field");
         }
     }

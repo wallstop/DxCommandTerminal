@@ -38,8 +38,8 @@ a fallback that failed.
 
 ## Limits
 
-A control character in the copied text is left in the field. A single line
-cannot show it, so it is invisible while you type, and it reaches the
+A control character that is not whitespace is left in the field. A single
+line cannot show it, so it is invisible while you type, and it reaches the
 argument as the exact character you copied. Dropping it would lose your
 text; escaping it there would change the command. A command that prints it
 gets the visible escape from the log.

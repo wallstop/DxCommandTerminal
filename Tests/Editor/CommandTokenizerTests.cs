@@ -278,8 +278,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         /*
             The user-facing claim behind the whitespace rule, pinned on its
             own so it survives both implementations regressing together: a
-            pasted block is the arguments it reads as, and the token spans
-            still cover the raw text completion replaces.
+            pasted block is the arguments it reads as.
          */
         [TestCase("give item 42", 3, "give|item|42")]
         [TestCase("give\titem\t42", 3, "give|item|42")]
