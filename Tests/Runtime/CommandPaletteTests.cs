@@ -957,10 +957,15 @@
         public IEnumerator ControlledErrorKeepsThePaletteOpenWithTheErrorVisible()
         {
             yield return SpawnPalette();
+            int runs = 0;
             Assert.IsTrue(
                 Terminal.Shell.AddCommand(
                     "palettevalidate",
-                    _ => Terminal.Shell.IssueErrorMessage("palettevalidate: value out of range"),
+                    _ =>
+                    {
+                        ++runs;
+                        Terminal.Shell.IssueErrorMessage("palettevalidate: value out of range");
+                    },
                     help: "Reports a controlled error"
                 ),
                 "Sanity: the reporting command registers"
@@ -975,6 +980,7 @@
                 _palette.Submit(),
                 "A command that reported an error is not a successful submission"
             );
+            Assert.AreEqual(1, runs, "The command ran before it reported the error");
             Assert.IsTrue(_palette.IsOpen, "The error bar must survive the run");
             Assert.AreEqual(
                 DisplayStyle.Flex,
@@ -1007,7 +1013,7 @@
                 Terminal.Shell.AddCommand(
                     new CommandDefinition
                     {
-                        Name = "pickitem",
+                        Name = "rowescape",
                         Handler = (context, arguments) => { },
                         CompletionProvider = (
                             in CommandCompletionContext context,
@@ -1020,7 +1026,7 @@
 
             _palette.Open();
             yield return null;
-            _palette._input.value = "pickitem ";
+            _palette._input.value = "rowescape ";
             yield return null;
 
             Assert.AreEqual(1, _palette._matchNames.Count, "The candidate row exists");
@@ -1040,7 +1046,7 @@
             yield return null;
 
             Assert.AreEqual(
-                "pickitem torch\u202Eexe",
+                "rowescape torch\u202Eexe",
                 _palette._input.value,
                 "The applied candidate is the raw text the developer chose"
             );

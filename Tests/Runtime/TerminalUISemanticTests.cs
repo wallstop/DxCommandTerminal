@@ -492,13 +492,22 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
 
             /*
-                The caret starts at the head of the line the row is about to
-                replace, so the end position below can only hold if the row
-                placed it: a value write that lands the caret itself would
-                pass an assertion starting from anywhere else.
+                The line goes back to the two candidates and the click takes
+                the second row, so the applied text is not what the input
+                already held: a row applying the previous query's candidate
+                fails here. The caret starts at the head, so the end position
+                below can only hold if the row placed it.
              */
+            yield return SetInputText("zap");
+            yield return WaitForHintCount(2);
             yield return SetInputCaret(0);
-            _terminal.ApplyHint(0);
+            Assert.AreEqual(
+                0,
+                _terminal._commandInput.cursorIndex,
+                "Sanity: the caret starts at the head of the line"
+            );
+
+            _terminal.ApplyHint(1);
 
             Assert.AreEqual(
                 "zapt",
@@ -633,9 +642,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         /*
             A queued caret is applied on a later refresh pass, and editor
-            throttling can defer that for frames; the rig polls the live caret
-            and the queued position rather than assuming a frame. The queued
-            position is the invariant when a throttled panel applies nothing.
+            throttling can defer that for frames; the rig polls the live
+            caret and the queued position rather than assuming a frame. The
+            queued position is the invariant when a throttled panel applies
+            nothing, so what these tests pin is that the surface queues the
+            end of the line, not that a frame lands it.
          */
         private IEnumerator WaitForCaret(int expectedCaretIndex, string message)
         {
