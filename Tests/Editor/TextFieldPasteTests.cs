@@ -347,6 +347,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
             Assert.AreEqual(expectedValue, field.value, "The character is not split");
             Assert.AreEqual(expectedLanding, landed, "The paste landed where the caret is");
+            Assert.AreEqual(expectedCaret, field.cursorIndex, "The field holds that caret too");
         }
 
         /*

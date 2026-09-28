@@ -1678,14 +1678,8 @@
             }
 
 #if UNITY_2022_1_OR_NEWER
-            /*
-                Snapped against the value the field holds now: the queued
-                position is a code-unit offset, and writing it as one leaves
-                the caret inside a character.
-             */
-            int snapped = _commandInput.value.SnapToTextBoundary(index);
-            _commandInput.cursorIndex = snapped;
-            _commandInput.selectIndex = snapped;
+            _commandInput.cursorIndex = index;
+            _commandInput.selectIndex = index;
 #else
             /*
                 2021.3 exposes the caret getters only; once the field holds
@@ -2095,7 +2089,15 @@
                 .Remove(replacementStart, replacementLength)
                 .Insert(replacementStart, insertion);
             _tokenCompletionAppliedText = newInput;
-            _pendingCaretIndex = replacementStart + insertion.Length;
+            /*
+                Snapped here, where the position is an offset into the text
+                this write puts in the field. The field applies the value on its
+                own schedule, so the queued position is applied later and
+                against whatever the field holds then; snapping it there would
+                snap it against the old text, and the retry that re-asserts the
+                caret would hold it at the wrong place.
+             */
+            _pendingCaretIndex = newInput.SnapToTextBoundary(replacementStart + insertion.Length);
 
             _input.CommandText = newInput;
             _needsFocus = true;

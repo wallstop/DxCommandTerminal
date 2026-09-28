@@ -138,23 +138,48 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             the provider receives is the whole text in front of it and holds no
             half character, the caret the provider is told about is the
             character's own boundary, the replacement range still covers the
-            character whole so accepting a candidate cannot leave half of one
-            behind, and the completed line holds no half character either.
+            argument whole so accepting a candidate cannot leave half of one
+            behind, and the completed line holds no half character either. Two
+            rows put the character mid-argument, where the token in front of it
+            is not empty: without those, an implementation that floored to the
+            start of the argument would pass every row.
          */
-        [TestCase("give \ud83d\ude00 x", 6, 5, Description = "An emoji")]
-        [TestCase("give cafe\u0301 x", 9, 8, Description = "An accented letter")]
         [TestCase(
-            "give \ud83d\udc4d\ud87c\udffd x",
+            "give \ud83d\ude00 x",
+            6,
+            5,
+            Description = "An emoji at the start of the argument"
+        )]
+        [TestCase("give cafe\u0301 x", 9, 8, Description = "An accented letter mid-argument")]
+        [TestCase(
+            "give \ud83d\udc4d\ud83c\udffd x",
             7,
             5,
             Description = "An emoji with a skin tone"
         )]
-        [TestCase("give \ud87c\udde6\ud87c\udde7 x", 7, 5, Description = "A flag")]
+        [TestCase(
+            "give \ud83c\udde6\ud83c\udde7 x",
+            7,
+            5,
+            Description = "A flag at the start of the argument"
+        )]
         [TestCase(
             "give \ud83d\udc68\u200d\ud83d\udc69 x",
             7,
             5,
             Description = "A joined emoji sequence"
+        )]
+        [TestCase(
+            "give to\ud83d\ude00ken x",
+            8,
+            7,
+            Description = "An emoji after other text in the argument"
+        )]
+        [TestCase(
+            "give ca\u0301fety x",
+            7,
+            6,
+            Description = "An accent after other text in the argument"
         )]
         public void ACaretInsideACharacterCompletesTheWholeCharacter(
             string input,

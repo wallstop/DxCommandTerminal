@@ -11,9 +11,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             caret has to land on instead; every value was derived from the
             character's own code units, not from the implementation.
 
-            The rows cover the four shapes a developer types or pastes: a
-            surrogate pair (an emoji), a mark (an accented letter), a joined
-            sequence (a family emoji, a skin tone), and a flag's two letters.
+            The rows cover the shapes a developer types or pastes: a surrogate
+            pair (an emoji), a mark (an accented letter), a joined sequence (a
+            family emoji, a skin tone), a flag's two letters, and a
+            subdivision flag's invisible tag letters.
          */
         [TestCase("give item", 0, 0, Description = "The start of the value is a boundary")]
         [TestCase("give item", 5, 5, Description = "ASCII is already whole characters")]
@@ -53,12 +54,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Description = "Text after a family"
         )]
         [TestCase(
-            "\ud83d\udc4d\ud87c\udffd",
+            "\ud83d\udc4d\ud83c\udffd",
             2,
             0,
             Description = "Between an emoji and its skin tone"
         )]
-        [TestCase("\ud83d\udc4d\ud87c\udffd", 4, 4, Description = "After a skin tone")]
+        [TestCase("\ud83d\udc4d\ud83c\udffd", 4, 4, Description = "After a skin tone")]
         [TestCase(
             "\u2764\ufe0f",
             1,
@@ -66,25 +67,61 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Description = "Between a letter and its variation selector"
         )]
         [TestCase("\u2764\ufe0f", 2, 2, Description = "After a variation selector")]
-        [TestCase("\ud87c\udde6\ud87c\udde7 x", 2, 0, Description = "Between a flag's two letters")]
-        [TestCase("\ud87c\udde6\ud87c\udde7 x", 4, 4, Description = "After a flag")]
+        [TestCase("\ud83c\udde6\ud83c\udde7 x", 3, 0, Description = "Between a flag's two letters")]
+        [TestCase("\ud83c\udde6\ud83c\udde7 x", 4, 4, Description = "After a flag")]
         [TestCase(
-            "\ud87c\udde6\ud87c\udde7\ud87c\udde8",
-            6,
-            6,
+            "\ud83c\uddf5\ud83c\uddff x",
+            3,
+            0,
+            Description = "A flag whose letters are the last two of the alphabet"
+        )]
+        [TestCase(
+            "\ud83c\udde6\ud83c\udde7\ud83c\udde8",
+            5,
+            4,
+            Description = "Inside the second letter of a flag"
+        )]
+        [TestCase(
+            "\ud83c\udde6\ud83c\udde7\ud83c\udde8",
+            4,
+            4,
             Description = "A third letter starts a character"
         )]
         [TestCase(
-            "\ud87c\udde6\ud87c\udde7\ud87c\udde8\ud87c\udde9",
-            6,
+            "\ud83c\udde6\ud83c\udde7\ud83c\udde8\ud83c\udde9",
+            5,
             4,
-            Description = "Two flags: the second letter of the first is inside it"
+            Description = "Two flags: inside the second flag's first letter"
         )]
         [TestCase(
-            "\ud87c\udde6\ud87c\udde7\ud87c\udde8\ud87c\udde9",
+            "\ud83c\udde6\ud83c\udde7\ud83c\udde8\ud83c\udde9",
             8,
             8,
-            Description = "Two flags: between them is a boundary"
+            Description = "Two flags: after both"
+        )]
+        [TestCase(
+            "\ud83c\udff0\ud83c\udde6",
+            2,
+            2,
+            Description = "A castle is built from flag pieces but is not a flag letter"
+        )]
+        [TestCase(
+            "\ud83c\udff4\udb40\udc67\udb40\udc62",
+            3,
+            0,
+            Description = "Inside a subdivision flag's invisible tag letters"
+        )]
+        [TestCase(
+            "\ud83c\udff4\udb40\udc67\udb40\udc62",
+            2,
+            0,
+            Description = "A subdivision flag is one character, tag letters and all"
+        )]
+        [TestCase(
+            "\ud83c\udff4\udb40\udc67\udb40\udc62",
+            6,
+            6,
+            Description = "After a subdivision flag"
         )]
         [TestCase("a\u00adb", 1, 1, Description = "A soft hyphen is its own character")]
         [TestCase("\u1100\u1161", 1, 1, Description = "Hangul jamo are letters here")]
@@ -107,8 +144,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 character, which is the property the whole helper exists for.
             */
             const string value =
-                "give \ud83d\ude00 cafe\u0301 \ud83d\udc4d\ud87c\udffd "
-                + "\ud83d\udc68\u200d\ud83d\udc69 \ud87c\udde6\ud87c\udde7 x";
+                "give \ud83d\ude00 cafe\u0301 \ud83d\udc4d\ud83c\udffd \ud83c\udff4\udb40\udc67\udb40\udc62 "
+                + "\ud83d\udc68\u200d\ud83d\udc69 \ud83c\udde6\ud83c\udde7 x";
             for (int caret = 0; caret <= value.Length; ++caret)
             {
                 int snapped = value.SnapToTextBoundary(caret);

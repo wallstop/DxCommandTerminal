@@ -534,6 +534,15 @@
                 return;
             }
 
+            /*
+                Snapped here, not where the caret is queued: a queued position
+                can be waiting for a value write that has not landed, and
+                clamping it against the old value would move it. The field
+                holds the position now, so this is the one place a caret is
+                written and the one place it is snapped.
+             */
+            int snapped = _input.value.SnapToTextBoundary(index);
+
             if (_logCaretPasses)
             {
                 VisualElement focused =
@@ -543,14 +552,14 @@
                     : focused == _input || _input.Contains(focused) ? "input"
                     : focused.name;
                 Debug.Log(
-                    $"[CommandPaletteUI] caret pass frame={Time.frameCount} pending={index}"
+                    $"[CommandPaletteUI] caret pass frame={Time.frameCount} pending={snapped}"
                         + $" cursor={_input.cursorIndex} select={_input.selectIndex}"
                         + $" valueLength={_input.value.Length} focus='{focusOwner}'",
                     this
                 );
             }
 
-            if (_input.cursorIndex == index && _input.selectIndex == index)
+            if (_input.cursorIndex == snapped && _input.selectIndex == snapped)
             {
                 /*
                     The position held across a panel pass; once it has held
@@ -567,8 +576,8 @@
                  */
                 _caretStickPasses = 0;
 #if UNITY_2022_1_OR_NEWER
-                _input.cursorIndex = index;
-                _input.selectIndex = index;
+                _input.cursorIndex = snapped;
+                _input.selectIndex = snapped;
 #else
                 /*
                     2021.3 exposes the caret getters only; the engine owns
@@ -1299,17 +1308,7 @@
 
         private void QueueCaret(int? index)
         {
-            /*
-                The one place a caret is queued, so it is the one place the
-                caret is snapped: a position computed from the text is a
-                code-unit offset, and the field would then hold a caret inside
-                a character. A queued cancel is not a position and passes
-                through.
-             */
-            _pendingCaretIndex =
-                index is int caret && _input != null
-                    ? _input.value.SnapToTextBoundary(caret)
-                    : null;
+            _pendingCaretIndex = index;
             _caretStickPasses = 0;
         }
 
