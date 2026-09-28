@@ -174,8 +174,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         private static string[] FormatChoices(IReadOnlyList<T> values)
         {
-            string[] texts = new string[values.Count];
-            for (int i = 0; i < texts.Length; ++i)
+            int count = values.Count;
+            string[] texts = new string[count];
+            for (int i = 0; i < count; ++i)
             {
                 texts[i] = FormatValue(values[i]);
             }
@@ -393,8 +394,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
 
             Array values = Enum.GetValues(typeof(T));
-            T[] choices = new T[values.Length];
-            for (int i = 0; i < choices.Length; ++i)
+            int count = values.Length;
+            T[] choices = new T[count];
+            for (int i = 0; i < count; ++i)
             {
                 choices[i] = (T)values.GetValue(i);
             }
@@ -563,8 +565,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 array reaches the shared parsed-values buffer as one typed
                 hand-off at its own slot, like any single parsed value.
              */
-            T[] values = new T[Math.Max(0, arguments.Count - start)];
-            for (int i = 0; i < values.Length; ++i)
+            int count = Math.Max(0, arguments.Count - start);
+            T[] values = new T[count];
+            for (int i = 0; i < count; ++i)
             {
                 CommandArg input = arguments[start + i];
                 if (!TryParseValue(input, out values[i]))

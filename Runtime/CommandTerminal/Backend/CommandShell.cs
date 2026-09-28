@@ -1905,10 +1905,14 @@
             /*
                 Legacy handlers may retain their argument array, so each
                 invocation materializes a fresh one. The array is never
-                pooled or reused after the handler returns.
+                pooled or reused after the handler returns. The count is read
+                once and sizes both the array and the loop: two length
+                expressions are two chances to disagree about how many
+                arguments this dispatch carries.
              */
-            CommandArg[] materialized = new CommandArg[arguments.Count];
-            for (int i = 0; i < materialized.Length; ++i)
+            int count = arguments.Count;
+            CommandArg[] materialized = new CommandArg[count];
+            for (int i = 0; i < count; ++i)
             {
                 materialized[i] = arguments[i];
             }
