@@ -153,9 +153,10 @@ frontmatter validity, index freshness, and pointer-file delegation; see
     type (issue #50). Enforced by `npm --prefix tooling~ run lint:member-ordering` (pre-commit
     + CI; `:fix` is a permutation-only reorder that never crosses `#if` boundaries).
 21. Multi-line comments are block comments: two or more consecutive comment-only `//` lines
-    must be one `/* ... */` block; single `//` lines and `///` doc comments stay legal.
-    Enforced by `npm --prefix tooling~ run lint:multiline-comments` (pre-commit + CI; `:fix`
-    converts runs, refusing content that contains the block-comment close).
+    must be one `/* ... */` block; single `//` lines and `///` doc comments stay legal. Two
+    adjacent block comments whose words mostly repeat are one comment written twice - revise
+    in place, never stack. Enforced by `npm --prefix tooling~ run lint:multiline-comments`
+    (pre-commit + CI; `:fix` converts runs, not duplicates).
 22. No LINQ in production code (`Runtime/`, `Editor/`) - every operator allocates
     enumerators/closures and some copy whole sequences: no `using System.Linq`, no qualified
     `System.Linq.` calls, no static `Enumerable.` calls. Plain loops over the concrete
@@ -236,7 +237,8 @@ code comments, issues) uses Simplified Technical English: extremely short, simpl
 direct. A few sentences is the ceiling, not the target - cut before adding. PRs cover
 how (plus why/what): `Why` 1-2 sentences, `What` 3-6 one-line bullets, optional 1-3
 evidence lines, ~12 lines total. Commit bodies ~8 lines. No per-file tours, no process
-narration, no restated context. Code comments state only what the code cannot say.
+narration, no restated context. Code comments state only what the code cannot say, and
+a revised comment is edited in place - never stacked beside the stale one (rule 21).
 Enforced by `npm --prefix tooling~ run lint:pr-copy` and the pr-copy CI job
 (`tooling~/scripts/lint-pr-copy.mjs`: disclosure first line, section structure, line and
 bullet budgets; the Cursor Bugbot summary block is stripped before checking).

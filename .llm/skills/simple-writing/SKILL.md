@@ -20,6 +20,11 @@ before adding. A reader should get the point in seconds.
 4. Write for a reader who knows Unity/C# but not this repo's history.
 5. ASCII only. No em-dashes, smart quotes, or emoji.
 6. Length budgets are hard limits. Cut before adding. When in doubt, delete the line.
+7. **Revise a comment in place. Never add a second one above it.** A corrected block beside
+   the stale one leaves two statements of one rule, and the stale one still asserts the rule
+   as it was - a second place for it to be wrong, and the reader cannot tell which is
+   current. The same applies to a rule restated in a comment and in `.llm/context.md`: state
+   the reason once, at the point where it is not obvious, and link the rest.
 
 ## Structure by artifact
 
