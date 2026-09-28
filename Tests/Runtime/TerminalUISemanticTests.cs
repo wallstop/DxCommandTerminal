@@ -376,11 +376,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
 
             RunThroughInput("hist-caret");
-            yield return SetInputCaret(0);
+            yield return SetInputText("hist");
+            yield return SetInputCaret(1);
             Assert.AreEqual(
-                0,
+                1,
                 _terminal._commandInput.cursorIndex,
-                "Sanity: the caret starts mid-line, as it does after typing"
+                "Sanity: the caret sits mid-line, as it does while typing"
             );
 
             _terminal.HandlePrevious();
