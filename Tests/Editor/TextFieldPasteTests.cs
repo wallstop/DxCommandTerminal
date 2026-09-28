@@ -294,14 +294,17 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             the argument the command runs would carry it. The paste lands in
             front of the character instead, and the value stays whole.
 
-            The row is the caret the field reports, the position the paste lands
-            on, the pasted text, the value the field is left holding, and the
-            caret it reports back.
+            The row is the caret the field reports, the pasted text, the value
+            the field is left holding, and the caret it reports back. Every
+            expected value was re-derived against a model of the paste's
+            arithmetic rather than counted by hand, which is what caught two
+            wrong ones: a landing that was the insertion point rather than the
+            position after the pasted text, and a value that kept the letter
+            the caret moved in front of.
          */
         [TestCase(
             "give \ud83d\ude00 item",
             6,
-            5,
             "torch",
             "give torch\ud83d\ude00 item",
             10,
@@ -309,7 +312,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         )]
         [TestCase(
             "give \ud83d\ude00 item",
-            7,
             7,
             "torch",
             "give \ud83d\ude00torch item",
@@ -319,16 +321,41 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [TestCase(
             "give cafe\u0301 item",
             9,
-            8,
             "torch",
-            "give cafetorche\u0301 item",
+            "give caftorche\u0301 item",
             13,
             Description = "A caret before an accent pastes in front of it"
+        )]
+        /*
+            A clipboard that ends mid-sequence - a truncated emoji, whose
+            invisible joiner is followed by a character that joins with it -
+            leaves the caret at the end of what was pasted, which is inside
+            that sequence. Snapping it would floor it past the joiner and past
+            the character in front of it, before the text just pasted, so the
+            caret is left where the paste ended. Every read of a caret is
+            snapped, so the position a completion acts on is a character
+            boundary either way. Pinned so the trade cannot be reversed by
+            accident: a caret of 10 would become 7 here, and 8 would become 5.
+         */
+        [TestCase(
+            "give \ud83d\ude00 x",
+            7,
+            "\ud83d\udc68\u200d",
+            "give \ud83d\ude00\ud83d\udc68\u200d x",
+            10,
+            Description = "A clipboard ending in a joiner keeps the caret after it"
+        )]
+        [TestCase(
+            "give \ud83d\ude00",
+            5,
+            "\ud83d\udc68\u200d",
+            "give \ud83d\udc68\u200d\ud83d\ude00",
+            8,
+            Description = "A clipboard ending in a joiner keeps the caret before what joins it"
         )]
         public void APasteNeverSplitsACharacter(
             string value,
             int caret,
-            int expectedLanding,
             string clipboard,
             string expectedValue,
             int expectedCaret
@@ -346,7 +373,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 "Ctrl+V should paste"
             );
             Assert.AreEqual(expectedValue, field.value, "The character is not split");
-            Assert.AreEqual(expectedLanding, landed, "The paste landed where the caret is");
+            Assert.AreEqual(expectedCaret, landed, "The reported caret is after the pasted text");
             Assert.AreEqual(expectedCaret, field.cursorIndex, "The field holds that caret too");
         }
 

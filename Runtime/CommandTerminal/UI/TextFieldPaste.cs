@@ -132,6 +132,18 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 field in the same dispatch (a frame a hotkey claimed) leaves
                 the old, shorter text here, and a caret past the end of it is
                 the out-of-range write TerminalUI.ApplyPendingCaret guards.
+
+                Not snapped, and deliberately. The caret is the end of what was
+                just inserted, a position the developer can see, and the one
+                way it can be inside a character is a clipboard that ends
+                mid-sequence: a truncated emoji whose invisible joiner is
+                followed by a character that joins with it. Snapping then
+                floors the caret past the joiner and past the character in
+                front of it, which is before the text just pasted - measured,
+                a caret of 10 lands at 7 and one of 8 at 5. Every read of a
+                caret is snapped, so the position a completion acts on is a
+                character boundary either way; leaving this one alone keeps
+                the caret where the paste ended.
              */
             caret = Math.Min(start + flattened.Length, field.value.Length);
 
