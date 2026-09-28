@@ -7,6 +7,12 @@
     sources, interpolated holes, chars), and `//` inside block comments must all stay
     silent, or a sweep corrupts fixture data. The positive cases pin detection and the
     exact conversion shape the reviewer asked for.
+
+    Second rule: two adjacent block comments that restate each other are one comment
+    written twice, which is what happens when a comment is revised by adding a second
+    block instead of editing the first. Its negative cases carry the weight too - two
+    different comments, two `///` doc blocks, and a block comment inside a string
+    literal are all legitimately two things.
 */
 import test from "node:test";
 import assert from "node:assert";
@@ -21,7 +27,7 @@ const repoRoot = path.resolve(
   "../.."
 );
 const linterPath = path.join(repoRoot, "scripts", "lint-multiline-comments.mjs");
-const { commentRuns, planFix, applyFixes } = await import(
+const { commentRuns, planFix, applyFixes, duplicateBlockComments } = await import(
   pathToFileURL(linterPath).href
 );
 
@@ -234,5 +240,167 @@ test("cli: scanning nothing fails instead of reading as green", () => {
     assert.match(red.stderr, /checked nothing/);
   } finally {
     fs.rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+/* ------------------------------------------------------------------ *
+ * Duplicate block comments
+ * ------------------------------------------------------------------ */
+
+/** Two block comments that are genuinely one comment, written twice. Each must be caught. */
+const RESTATED = [
+  [
+    "an identical block",
+    `class A
+{
+    /*
+        Counting loop over a string, which is the one case rule 11 does not cover and
+        never covers: string.GetEnumerator returns a class, so foreach allocates one
+        enumerator per call and the measurement lives in hot-path-allocations.
+     */
+    /*
+        Counting loop over a string, which is the one case rule 11 does not cover and
+        never covers: string.GetEnumerator returns a class, so foreach allocates one
+        enumerator per call and the measurement lives in hot-path-allocations.
+     */
+    void M() { }
+}`,
+  ],
+  [
+    "a stale block under a corrected one",
+    `class A
+{
+    /*
+        a rule that the older comment states in the old words, about the sweep being
+        limited to hot paths only, and the numbers that came with the old statement
+     */
+    /*
+        a rule that the older comment states in the new words, about the sweep being
+        unlimited, and the numbers that came with the old statement
+     */
+    void M() { }
+}`,
+  ],
+];
+
+/** Two block comments that are two comments. Every one must stay silent. */
+const DISTINCT = [
+  ["two different comments on one member", `class A
+{
+    /* Why the caret is clamped: the panel re-clamps a programmatic write. */
+    /* How the clamp is derived: Math.Clamp against the current value length. */
+    void M() { }
+}`],
+
+  ["two doc comment blocks", `class A
+{
+    /// <summary>First member.</summary>
+    void A() { }
+
+    /// <summary>Second member, documented the same way.</summary>
+    void B() { }
+}`],
+
+  ["two identical blocks separated by code", `class A
+{
+    /* alpha beta gamma delta epsilon */
+    void A() { }
+
+    /* alpha beta gamma delta epsilon */
+    void B() { }
+}`],
+
+  ["two blocks in a string literal", `class A
+{
+    string s = "/* alpha beta gamma delta epsilon */ /* alpha beta gamma delta epsilon */";
+    void M() { }
+}`],
+
+  ["one block, no pair", `class A
+{
+    /* alpha beta gamma delta epsilon zeta eta theta */
+    void M() { }
+}`],
+
+  ["a block that is only punctuation and short words", `class A
+{
+    /* a b c */
+    /* a b c */
+    void M() { }
+}`],
+];
+
+test("restated block comments are caught", () => {
+  for (const [name, source] of RESTATED) {
+    const pairs = duplicateBlockComments(source);
+    assert.equal(pairs.length, 1, `${name} should report one pair`);
+    assert.ok(
+      pairs[0].overlap > 0.5,
+      `${name} should exceed the 0.5 threshold, got ${pairs[0].overlap}`
+    );
+    assert.ok(pairs[0].first.line < pairs[0].second.line, "the pair is in source order");
+  }
+});
+
+test("two distinct block comments stay silent", () => {
+  for (const [name, source] of DISTINCT) {
+    assert.equal(
+      duplicateBlockComments(source).length,
+      0,
+      `${name} should not be reported`
+    );
+  }
+});
+
+test("duplicate detection does not change the `//` run contract", () => {
+  const source = "// one\n// two\nclass A { }\n";
+  assert.equal(commentRuns(source).length, 1, "`//` runs are still detected");
+  assert.equal(
+    duplicateBlockComments(source).length,
+    0,
+    "`//` runs are not block comments"
+  );
+});
+
+test("the CLI reports duplicates and exits non-zero", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dup-comments-"));
+  try {
+    fs.writeFileSync(
+      path.join(dir, "A.cs"),
+      `class A
+{
+    /*
+        the same words appear in both of these blocks, which is what the rule is for and
+        why a sweep would have to read the overlap before reporting anything at all
+     */
+    /*
+        the same words appear in both of these blocks, which is what the rule is for and
+        why a sweep would have to read the overlap before reporting anything at all
+     */
+    void M() { }
+}`
+    );
+    const result = spawnSync(process.execPath, [linterPath], {
+      env: { ...process.env, MULTILINE_COMMENT_ROOTS: dir },
+      encoding: "utf8",
+    });
+    assert.equal(result.status, 1, "a duplicate fails the linter");
+    assert.match(result.stderr, /restate each other/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("an empty scan root fails rather than passing silently", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dup-empty-"));
+  try {
+    const result = spawnSync(process.execPath, [linterPath], {
+      env: { ...process.env, MULTILINE_COMMENT_ROOTS: dir },
+      encoding: "utf8",
+    });
+    assert.equal(result.status, 1, "an empty root is an error, not a pass");
+    assert.match(result.stderr, /checked nothing/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
   }
 });

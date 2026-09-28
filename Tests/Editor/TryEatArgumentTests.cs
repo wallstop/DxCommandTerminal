@@ -106,10 +106,18 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [TestCase(
             "hello\tworld",
             true,
-            "hello\tworld",
+            "hello",
             null,
             null,
-            Description = "Tab character is not a space delimiter"
+            Description = "A tab ends an unquoted argument, like a space"
+        )]
+        [TestCase(
+            "hello\nworld",
+            true,
+            "hello",
+            null,
+            null,
+            Description = "A pasted newline ends an unquoted argument"
         )]
         [TestCase(
             "\"quoted\"extra",
@@ -175,6 +183,18 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             "hello",
             "  world",
             Description = "Multiple spaces leaves remaining spaces minus one"
+        )]
+        [TestCase(
+            "hello\tworld",
+            "hello",
+            "world",
+            Description = "A tab is consumed as one separator, like a space"
+        )]
+        [TestCase(
+            "hello\nworld",
+            "hello",
+            "world",
+            Description = "A pasted newline is consumed as one separator"
         )]
         [TestCase(
             "\"quoted\"extra",

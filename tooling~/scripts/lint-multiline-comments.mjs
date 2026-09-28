@@ -13,11 +13,21 @@
     same literal scanner the comparison-direction linter uses, so a `//` inside any
     literal stays silent.
 
-    `--fix` rewrites each run as one block comment: `/*` opens at the run's indent, every
-    content line keeps its deeper indentation and gains a three-space base indent, and the
-    comment closes with a slash-asterisk marker at the run's indent column. A run whose
-    content contains that closing marker cannot be converted safely, so `--fix` refuses it
-    and the violation stays.
+    `--fix` rewrites each run as one block comment: the opener lands at the run's indent,
+    every content line keeps its deeper indentation and gains a three-space base indent,
+    and the comment closes at the run's indent column. A run whose content contains the
+    closing marker cannot be converted safely, so `--fix` refuses it and the violation
+    stays.
+
+    Second rule, one walk: two block comments separated by nothing but whitespace, whose
+    words overlap by more than half, are one comment written twice. The usual cause is
+    revising a comment by adding a corrected block above the stale one instead of editing
+    it, which leaves the older half asserting the rule as it was before the change - a
+    second statement of one rule is a second place for it to be wrong (PR #180 review). It
+    has no fix mode: which block survives is a judgement call, and the stale one is usually
+    the wrong one to keep, so the linter reports and a human deletes. The threshold is
+    Jaccard overlap on four-letter words, so a longer comment cannot score on volume and
+    two unrelated comments on one member stay silent.
 
     Exit codes: 0 = clean (or every fixable violation fixed), 1 = at least one violation
     remains.
@@ -48,6 +58,66 @@ const { consumeLiteral } = await import(
 
 /** Groups comment-only, non-doc `//` lines into consecutive-line runs of length 2 or more. */
 export function commentRuns(text) {
+  return groupRuns(scan(text).entries);
+}
+
+/*
+    Block comments that restate each other: adjacent (whitespace-only between them) with
+    more than half their words in common. Returned as pairs for the caller to report.
+ */
+export function duplicateBlockComments(text) {
+  const { blocks } = scan(text);
+  const pairs = [];
+  for (let i = 0; i + 1 < blocks.length; i++) {
+    const first = blocks[i];
+    const second = blocks[i + 1];
+    if (text.slice(first.end, second.start).trim() !== "") {
+      continue;
+    }
+    const overlap = wordOverlap(first.words, second.words);
+    if (overlap > 0.5) {
+      pairs.push({ first, second, overlap });
+    }
+  }
+  return pairs;
+}
+
+function significantWords(text) {
+  return new Set(text.toLowerCase().match(/[a-z]{4,}/g) ?? []);
+}
+
+/* Jaccard overlap: shared over union, so a longer comment cannot score on volume. */
+function wordOverlap(left, right) {
+  if (left.size === 0 || right.size === 0) {
+    return 0;
+  }
+  let shared = 0;
+  for (const word of left) {
+    if (right.has(word)) {
+      shared++;
+    }
+  }
+  return shared / (left.size + right.size - shared);
+}
+
+function groupRuns(entries) {
+  const runs = [];
+  for (const entry of entries) {
+    const previous = runs[runs.length - 1];
+    if (
+      previous &&
+      previous.entries[previous.entries.length - 1].line + 1 === entry.line
+    ) {
+      previous.entries.push(entry);
+    } else {
+      runs.push({ entries: [entry] });
+    }
+  }
+  return runs.filter((run) => 1 < run.entries.length);
+}
+
+/* One walk over the source, collecting comment-only `//` lines and block-comment spans. */
+function scan(text) {
   const lineStarts = [];
   for (let i = 0; i < text.length; i++) {
     if (text[i] === "\n") {
@@ -57,6 +127,7 @@ export function commentRuns(text) {
   lineStarts.unshift(0);
 
   const entries = [];
+  const blocks = [];
   let i = 0;
   let line = 0;
   const length = text.length;
@@ -72,8 +143,21 @@ export function commentRuns(text) {
       continue;
     }
     if (c === "/" && text[i + 1] === "*") {
+      const openLine = line;
       const end = text.indexOf("*/", i + 2);
       const stop = end < 0 ? length : end + 2;
+      /*
+          A `///` doc comment is exempt from both rules: it is XML doc input, so a pair of
+          them is two members documented, not one comment written twice.
+       */
+      if (!text.startsWith("///", i)) {
+        blocks.push({
+          line: openLine,
+          start: i,
+          end: stop,
+          words: significantWords(text.slice(i + 2, end < 0 ? length : end)),
+        });
+      }
       while (i < stop) {
         if (text[i] === "\n") {
           line++;
@@ -118,19 +202,7 @@ export function commentRuns(text) {
     i++;
   }
 
-  const runs = [];
-  for (const entry of entries) {
-    const previous = runs[runs.length - 1];
-    if (
-      previous &&
-      previous.entries[previous.entries.length - 1].line + 1 === entry.line
-    ) {
-      previous.entries.push(entry);
-    } else {
-      runs.push({ entries: [entry] });
-    }
-  }
-  return runs.filter((run) => 1 < run.entries.length);
+  return { entries, blocks };
 }
 
 /** Builds the block-comment replacement for one run, or undefined when it is unconvertible. */
@@ -237,6 +309,21 @@ function main() {
         converted += runs.filter((run) => planFix(text, run) !== undefined).length;
         fs.writeFileSync(file, updated);
       }
+    }
+  }
+
+  for (const file of files) {
+    const text = fs.readFileSync(file, "utf8");
+    const pairs = duplicateBlockComments(text);
+    if (pairs.length === 0) {
+      continue;
+    }
+    const relative = path.relative(REPO_ROOT, file);
+    for (const pair of pairs) {
+      violations++;
+      console.error(
+        `${relative}:${pair.first.line + 1}: two block comments restate each other (${Math.round(pair.overlap * 100)}% shared words); delete the stale one instead of adding a second`
+      );
     }
   }
 

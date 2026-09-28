@@ -26,6 +26,26 @@ Inside a builder handler, parsed values come typed and validated:
 `timescale` clamps rejection to a 0-10 range. Out-of-range or
 unparsable input stops the command with a descriptive shell error.
 
+## Separators
+
+Any whitespace character separates arguments, not only a space. A tab, a
+newline, or a non-breaking space ends an unquoted argument, so text that
+was not typed on one line - a pasted block, a copied log line - arrives as
+the arguments it reads as rather than as one token.
+
+A `$variable` is the exception, and by design: it is substituted after the
+split, so a value stored with `set-variable` keeps whatever whitespace it
+holds and arrives as one argument.
+
+Quote a value that must hold whitespace:
+
+```text
+set name "two words"
+```
+
+Both quote characters open a quoted argument, a quoted value keeps its
+whitespace, and an unmatched quote takes the rest of the line.
+
 ## Custom parsers
 
 Register a parser once for your own types; builder arguments and

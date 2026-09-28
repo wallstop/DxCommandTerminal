@@ -312,19 +312,23 @@
             }
             else
             {
-                // Unquoted argument: find the next space.
-                int spaceIndex = stringValue.IndexOf(' ');
-                if (spaceIndex < 0)
+                /*
+                    Unquoted argument: it ends at the next whitespace, not
+                    only at a space, so a tab or a newline from a pasted block
+                    or a log line splits into arguments instead of arriving as
+                    one. The same rule lives in CommandTokenizer, and the two
+                    have to agree or a command runs on different arguments
+                    than the one completion edited.
+                 */
+                int end = 0;
+                while (end < stringValue.Length && !CommandTokenizer.IsSeparator(stringValue[end]))
                 {
-                    arg = new CommandArg(stringValue);
-                    stringValue = string.Empty;
+                    ++end;
                 }
-                else
-                {
-                    string input = stringValue.Substring(0, spaceIndex);
-                    arg = new CommandArg(input);
-                    stringValue = stringValue.Substring(spaceIndex + 1);
-                }
+
+                arg = new CommandArg(stringValue.Substring(0, end));
+                stringValue =
+                    end < stringValue.Length ? stringValue.Substring(end + 1) : string.Empty;
             }
 
             return true;

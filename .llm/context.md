@@ -67,7 +67,7 @@ over the authenticated MCP bridge in `tooling~/scripts/mcp/unity-mcp.mjs` (see t
 [unity-mcp](./skills/unity-mcp/SKILL.md) and
 [capture-unity-state](./skills/capture-unity-state/SKILL.md) skills). Credentials
 live in gitignored `.env.local` (see `.env.example`); agent MCP configs are
-generated, never hand-edited; `npm test` runs the Node suite; `npm run preflight` = all gates parallel (~3-4s).
+generated, never hand-edited; `npm test` runs the Node suite; `npm run preflight` = all gates.
 
 ## Skills Reference
 
@@ -112,9 +112,11 @@ frontmatter validity, index freshness, and pointer-file delegation; see
    Editor and Tests.Runtime assemblies (`Runtime/AssemblyInfo.cs`).
 10. Annotate format-string methods with `[StringFormatMethod("...")]` (JetBrains) so callers get
     format checking.
-11. `foreach` over collections with value-typed enumerables (`List<T>`, arrays, structs).
-    Counting `for` only when the index is used, the collection is `IReadonlyList`, or the
-    count direction/skip matters. Convert last-element separator logic to a first/last flag.
+11. `foreach` over value-typed enumerables (`List<T>`, arrays, structs, spans); counting `for`
+    only when the index is used, the collection is `IReadonlyList`, or the direction/skip
+    matters. Last-element separator logic becomes a first/last flag. `string` is never one of
+    them: its enumerator is a class, so `foreach` allocates - counting loop in production,
+    `foreach` in tests. Facts: [hot-path-allocations](./skills/hot-path-allocations/SKILL.md).
 12. One top-level type (class/struct/enum/delegate) per file. Nested helper types are fine.
 13. Assign `out` parameters immediately before each `return`, per path; never blanket-assign at method entry - that
     defeats the compiler's definite-assignment bugcheck. Enforced by `npm --prefix tooling~ run lint:out-param-discipline` (pre-commit + CI, #119).
@@ -151,9 +153,10 @@ frontmatter validity, index freshness, and pointer-file delegation; see
     type (issue #50). Enforced by `npm --prefix tooling~ run lint:member-ordering` (pre-commit
     + CI; `:fix` is a permutation-only reorder that never crosses `#if` boundaries).
 21. Multi-line comments are block comments: two or more consecutive comment-only `//` lines
-    must be one `/* ... */` block; single `//` lines and `///` doc comments stay legal.
-    Enforced by `npm --prefix tooling~ run lint:multiline-comments` (pre-commit + CI; `:fix`
-    converts runs, refusing content that contains the block-comment close).
+    must be one `/* ... */` block; single `//` lines and `///` doc comments stay legal. Two
+    adjacent block comments whose words mostly repeat are one comment written twice - revise
+    in place, never stack. Enforced by `npm --prefix tooling~ run lint:multiline-comments`
+    (pre-commit + CI; `:fix` converts runs, not duplicates).
 22. No LINQ in production code (`Runtime/`, `Editor/`) - every operator allocates
     enumerators/closures and some copy whole sequences: no `using System.Linq`, no qualified
     `System.Linq.` calls, no static `Enumerable.` calls. Plain loops over the concrete
@@ -171,8 +174,8 @@ frontmatter validity, index freshness, and pointer-file delegation; see
     - Snapshot-then-mutate (clear all variables while iterating a dictionary) lives on the
       owning type with a cached buffer field (`CommandShell.ClearVariables`), not in
       command handlers that build throwaway lists.
-    - When converting LINQ, `foreach` over the concrete type (struct enumerator,
-      bounds-check elision); counting loops only where the index is genuinely used (rule 11).
+    - When converting LINQ, `foreach` over the concrete type (struct enumerator); a counting
+      loop only where the index is genuinely used, or over a `string` (rule 11).
 24. Enum state checks whitelist the valid states (`state is TerminalState.OpenSmall or
     TerminalState.OpenFull` via a helper like `TerminalUI.IsOpenState`), never blacklist
     (`!= Closed`) - `TerminalState`/`HintDisplayMode` carry an obsolete `Unknown = 0`
@@ -234,11 +237,11 @@ code comments, issues) uses Simplified Technical English: extremely short, simpl
 direct. A few sentences is the ceiling, not the target - cut before adding. PRs cover
 how (plus why/what): `Why` 1-2 sentences, `What` 3-6 one-line bullets, optional 1-3
 evidence lines, ~12 lines total. Commit bodies ~8 lines. No per-file tours, no process
-narration, no restated context. Code comments state only what the code cannot say.
-Enforced for PRs by `npm --prefix tooling~ run lint:pr-copy` and the pr-copy CI job
+narration, no restated context. Code comments state only what the code cannot say, and
+a revised comment is edited in place - never stacked beside the stale one (rule 21).
+Enforced by `npm --prefix tooling~ run lint:pr-copy` and the pr-copy CI job
 (`tooling~/scripts/lint-pr-copy.mjs`: disclosure first line, section structure, line and
 bullet budgets; the Cursor Bugbot summary block is stripped before checking).
-Check before opening or editing a PR.
 Details: [simple-writing](./skills/simple-writing/SKILL.md).
 
 ### CHANGELOG (user-facing only)
@@ -254,8 +257,8 @@ existing `Added/Changed/Fixed/Removed` buckets per the policy in the file header
 ### LLM Attribution (GitHub)
 
 LLM-generated comments, issues, PR descriptions, and reviews start with `DISCLOSURE: LLM-GENERATED TEXT` as the first line.
-Never auto-respond to outside contributors; summarize and wait for wallstop.
-Details: [llm-attribution](./skills/llm-attribution/SKILL.md).
+Never auto-respond to outside contributors; summarize and wait for wallstop. Review feedback lags the head
+(Bugbot names the commit it saw). Details: [llm-attribution](./skills/llm-attribution/SKILL.md).
 
 ### Argument Parsing (Quick Reference)
 
@@ -267,10 +270,9 @@ Details: [llm-attribution](./skills/llm-attribution/SKILL.md).
 
 ## Testing
 
-- Pure-logic suites are EditMode tests under `Tests/Editor/` (EditMode-safe screen in [run-terminal-tests](./skills/run-terminal-tests/SKILL.md));
-  UI/allocation/player-adjacent suites stay PlayMode under `Tests/Runtime/`; run via Unity Test Runner or `-runTests`.
-- Command-behavior tests are data-driven over the static facades; house style in `Tests/Editor/CommandArgTests.cs`
-  + `Tests/Runtime/CommandShellTests.cs`; see [run-terminal-tests](./skills/run-terminal-tests/SKILL.md) before writing tests.
+- Pure-logic suites are EditMode tests under `Tests/Editor/`; UI/allocation/player-adjacent suites
+  stay PlayMode under `Tests/Runtime/`. Command-behavior tests are data-driven over the facades.
+  House style and the EditMode-safe screen: [run-terminal-tests](./skills/run-terminal-tests/SKILL.md).
 
 ## Enforcement (LLM Context Hygiene)
 
@@ -282,9 +284,7 @@ Details: [llm-attribution](./skills/llm-attribution/SKILL.md).
 3. **Generated files are byte-stable**: UTF-8 without BOM, LF line endings, ordinal sorting, no
    timestamps. Never hand-edit `.llm/skills/index.md`.
 4. **Encoding overrides**: `.editorconfig` forces UTF-8 (no BOM) + LF for `.llm/**` and
-   `tooling~/**` regardless of the repo defaults for C# assets.
-5. `.editorconfig` charset/line-ending defaults for C# assets remain BOM/CRLF per repo
-   convention; only the LLM-context paths above are overridden.
+   `tooling~/**`, overriding the BOM/CRLF defaults C# assets keep per repo convention.
 
 ## Front-End Pointer Files
 

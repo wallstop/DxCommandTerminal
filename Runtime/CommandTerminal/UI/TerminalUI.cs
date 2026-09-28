@@ -2321,6 +2321,39 @@
                 useTrickleDown: TrickleDown.TrickleDown
             );
 
+            /*
+                A TextField owns no clipboard, so paste is a key the terminal
+                has to answer for. Trickle-down, because the focused element
+                is the field's own inner text input and the field's key
+                handling sits below this; a real keystroke therefore arrives
+                here before the field sees it. The callback is static and
+                captureless for the reason the change callback above states,
+                and the key is stopped only when a paste happened, so an
+                ordinary V types a V.
+             */
+            _commandInput.RegisterCallback<KeyDownEvent, TerminalUI>(
+                static (evt, context) =>
+                {
+                    if (TextFieldPaste.TryApply(context._commandInput, evt, out _))
+                    {
+                        /*
+                            Consumed the way the bar consumes, not just
+                            stopped: KeyEvents is the shared definition
+                            because the two surfaces used to differ here, and a
+                            key answered in one and only half-answered in the
+                            other reads as a flaky double action. The focused
+                            element below the field is a TextElement with its
+                            own paste handling, so letting the key continue
+                            would paste the raw clipboard a second time,
+                            newlines and all.
+                         */
+                        KeyEvents.Consume(context._commandInput, evt);
+                    }
+                },
+                userArgs: this,
+                useTrickleDown: TrickleDown.TrickleDown
+            );
+
             _inputContainer.Add(_commandInput);
             ResetTokenCompletion();
             _textInput = _commandInput.Q<VisualElement>("unity-text-input");
