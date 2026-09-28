@@ -947,6 +947,105 @@
             );
         }
 
+        /*
+            A command that ran and rejected its input through the error queue -
+            the only channel builder validation has - reported a failure the
+            bar has to show. RunCommand answers that the command ran, and the
+            bar closed over its own error, so the developer got nothing.
+         */
+        [UnityTest]
+        public IEnumerator ControlledErrorKeepsThePaletteOpenWithTheErrorVisible()
+        {
+            yield return SpawnPalette();
+            Assert.IsTrue(
+                Terminal.Shell.AddCommand(
+                    "palettevalidate",
+                    _ => Terminal.Shell.IssueErrorMessage("palettevalidate: value out of range"),
+                    help: "Reports a controlled error"
+                ),
+                "Sanity: the reporting command registers"
+            );
+
+            _palette.Open();
+            yield return null;
+            _palette._input.value = "palettevalidate 3";
+            yield return null;
+
+            Assert.IsFalse(
+                _palette.Submit(),
+                "A command that reported an error is not a successful submission"
+            );
+            Assert.IsTrue(_palette.IsOpen, "The error bar must survive the run");
+            Assert.AreEqual(
+                DisplayStyle.Flex,
+                _palette._feedback.style.display.value,
+                "The error bar is shown"
+            );
+            StringAssert.Contains(
+                "value out of range",
+                _palette._feedback.text,
+                "The controlled error must be visible"
+            );
+            Assert.AreEqual(
+                "palettevalidate 3",
+                _palette._input.value,
+                "The rejected line stays editable"
+            );
+        }
+
+        /*
+            A result row is a rendering path, not the log funnel: a candidate
+            arrives raw from a provider (a history line, a GameObject name), so
+            the row shows the escaped text and still applies the raw one.
+         */
+        [UnityTest]
+        public IEnumerator ResultRowEscapesWhatItRendersAndAppliesTheRawCandidate()
+        {
+            yield return SpawnPalette();
+            const string hostileCandidate = "torch\u202Eexe";
+            Assert.IsTrue(
+                Terminal.Shell.AddCommand(
+                    new CommandDefinition
+                    {
+                        Name = "pickitem",
+                        Handler = (context, arguments) => { },
+                        CompletionProvider = (
+                            in CommandCompletionContext context,
+                            List<CommandCompletion> results
+                        ) => results.Add(new CommandCompletion(hostileCandidate)),
+                    }
+                ),
+                "Sanity: the completion command registers"
+            );
+
+            _palette.Open();
+            yield return null;
+            _palette._input.value = "pickitem ";
+            yield return null;
+
+            Assert.AreEqual(1, _palette._rows.Count, "The candidate row exists");
+            Label rowLabel = _palette._rows[0].Q<Label>(name: "PaletteRowName");
+            Assert.That(rowLabel != null, "The row carries a name label");
+            StringAssert.Contains(
+                "\\u202E",
+                rowLabel.text,
+                "The row shows the escape, not the raw override"
+            );
+            Assert.That(
+                rowLabel.text.IndexOf('\u202E', StringComparison.Ordinal) < 0,
+                $"The row must hold no raw override: '{rowLabel.text}'"
+            );
+
+            _palette.RowActivated(0);
+            yield return null;
+
+            Assert.AreEqual(
+                "pickitem torch\u202Eexe",
+                _palette._input.value,
+                "The applied candidate is the raw text the developer chose"
+            );
+        }
+
         [UnityTest]
         public IEnumerator ErrorFeedbackEscapesTheTokenItQuotes()
         {

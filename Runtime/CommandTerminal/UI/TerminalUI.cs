@@ -257,6 +257,16 @@
         private readonly List<VisualElement> _autoCompleteChildren = new();
 
         /*
+            The candidate each drawn suggestion row carries, so a pass can
+            tell whether the bar still shows the buffer. A row is built once
+            and re-used, so a candidate set that changes without changing
+            count - one more keystroke in Always mode - left the previous
+            candidates on screen and let a click apply a candidate the
+            developer could not see.
+         */
+        private readonly List<string> _renderedHintCandidates = new();
+
+        /*
             Provider-based token completion state. Cycled the same way the
             history completion buffer is cycled; reset whenever the input
             changes or the terminal state resets.
@@ -1461,10 +1471,7 @@
                 return;
             }
 
-            _input.CommandText =
-                Terminal.History?.Previous(skipSameCommandsInHistory) ?? string.Empty;
-            ResetAutoComplete();
-            _needsFocus = true;
+            RecallHistoryLine(Terminal.History?.Previous(skipSameCommandsInHistory));
         }
 
         public void HandleNext()
@@ -1474,9 +1481,7 @@
                 return;
             }
 
-            _input.CommandText = Terminal.History?.Next(skipSameCommandsInHistory) ?? string.Empty;
-            ResetAutoComplete();
-            _needsFocus = true;
+            RecallHistoryLine(Terminal.History?.Next(skipSameCommandsInHistory));
         }
 
         public void Close()
@@ -1881,6 +1886,50 @@
             */
             ApplyPendingCaret();
             RefreshStateButtons();
+        }
+
+        /*
+            A click reads the candidate its row currently shows. The closure
+            used to capture that text when the row was built, so a candidate
+            the developer had not seen - the buffer moves under the bar
+            while it is open - was what the row applied. The queued caret
+            matches the palette: a row replaces the whole line, so the caret
+            belongs at its end.
+
+            Internal for test coverage of what a row applies (see
+            WallstopStudios.DxCommandTerminal.Tests.Runtime); Unity's
+            dispatcher drops synthetic pointer events, so the click itself is
+            driven at this level.
+         */
+        internal void ApplyHint(int index)
+        {
+            if (index < 0 || _renderedHintCandidates.Count <= index)
+            {
+                return;
+            }
+
+            string candidate = _renderedHintCandidates[index];
+            _pendingCaretIndex = candidate.Length;
+            _input.CommandText = candidate;
+            _lastCompletionIndex = index;
+            _needsFocus = true;
+        }
+
+        /*
+            A recalled line is a new value, so the caret belongs at its end.
+            FocusInput only writes a caret on a fresh focus, and the field was
+            already focused, so the caret stayed where the developer left it
+            and the next character landed in the middle of the line they had
+            just recalled. The queued position is the end of the recalled
+            text, which is a character boundary by definition.
+         */
+        private void RecallHistoryLine(string line)
+        {
+            string recalled = line ?? string.Empty;
+            _pendingCaretIndex = recalled.Length;
+            _input.CommandText = recalled;
+            ResetAutoComplete();
+            _needsFocus = true;
         }
 
         /*
@@ -2725,6 +2774,7 @@
                     _autoCompleteContainer.Clear();
                 }
 
+                _renderedHintCandidates.Clear();
                 _previousLastCompletionIndex = null;
                 return;
             }
@@ -2733,16 +2783,24 @@
             if (_lastKnownHintsClickable != makeHintsClickable)
             {
                 _autoCompleteContainer.Clear();
+                _renderedHintCandidates.Clear();
                 _lastKnownHintsClickable = makeHintsClickable;
             }
 
             int currentChildCount = _autoCompleteContainer.childCount;
 
-            bool dirty = _lastCompletionIndex != _previousLastCompletionIndex;
-            bool contentsChanged = currentChildCount != bufferLength;
+            /*
+                The bar is a view of the buffer, so a pass compares the rows
+                it drew against the buffer instead of inferring a change from
+                a child count and a selection index. In Always mode one more
+                keystroke swaps the candidates without changing their count,
+                and the bar then showed the previous keystroke's text.
+             */
+            bool contentsChanged =
+                currentChildCount != bufferLength || !RenderedCandidatesMatch(bufferLength);
+            bool dirty = contentsChanged || _lastCompletionIndex != _previousLastCompletionIndex;
             if (contentsChanged)
             {
-                dirty = true;
                 if (currentChildCount < bufferLength)
                 {
                     for (int i = currentChildCount; i < bufferLength; ++i)
@@ -2753,21 +2811,14 @@
                         if (makeHintsClickable)
                         {
                             int currentIndex = i;
-                            string currentHint = hint;
-                            Button hintButton = new(() =>
-                            {
-                                _input.CommandText = currentHint;
-                                _lastCompletionIndex = currentIndex;
-                                _needsFocus = true;
-                            })
-                            {
-                                text = hint,
-                            };
+                            Button hintButton = new();
+                            hintButton.clicked += () => ApplyHint(currentIndex);
+                            hintButton.text = LogTextSanitizer.Sanitize(hint);
                             hintElement = hintButton;
                         }
                         else
                         {
-                            Label hintText = new(hint);
+                            Label hintText = new(LogTextSanitizer.Sanitize(hint));
                             hintElement = hintText;
                         }
 
@@ -2801,19 +2852,21 @@
                 if (dirty)
                 {
                     int hintCount = _autoCompleteContainer.childCount;
-                    for (int i = 0; i < hintCount && i < bufferLength; ++i)
+                    int rowCount = hintCount < bufferLength ? hintCount : bufferLength;
+                    for (int i = 0; i < rowCount; ++i)
                     {
                         VisualElement hintElement = _autoCompleteContainer[i];
+                        string hintText = LogTextSanitizer.Sanitize(_lastCompletionBuffer[i]);
                         switch (hintElement)
                         {
                             case Button button:
-                                button.text = _lastCompletionBuffer[i];
+                                button.text = hintText;
                                 break;
                             case Label label:
-                                label.text = _lastCompletionBuffer[i];
+                                label.text = hintText;
                                 break;
                             case TextField textField:
-                                textField.value = _lastCompletionBuffer[i];
+                                textField.value = hintText;
                                 break;
                         }
 
@@ -2828,9 +2881,39 @@
             {
                 if (shouldUpdateCompletionIndex)
                 {
+                    _renderedHintCandidates.Clear();
+                    for (int i = 0; i < bufferLength; ++i)
+                    {
+                        _renderedHintCandidates.Add(_lastCompletionBuffer[i]);
+                    }
+
                     _previousLastCompletionIndex = _lastCompletionIndex;
                 }
             }
+        }
+
+        private bool RenderedCandidatesMatch(int bufferLength)
+        {
+            if (_renderedHintCandidates.Count != bufferLength)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < bufferLength; ++i)
+            {
+                if (
+                    !string.Equals(
+                        _renderedHintCandidates[i],
+                        _lastCompletionBuffer[i],
+                        StringComparison.Ordinal
+                    )
+                )
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         private void UpdateAutoCompleteView()

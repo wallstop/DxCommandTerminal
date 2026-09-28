@@ -352,6 +352,127 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
         }
 
+        /*
+            A recalled line is a new value, so its caret belongs at the end.
+            The field was already focused, so FocusInput wrote no caret and the
+            caret stayed where the developer left it: the next character landed
+            in the middle of the line they had just recalled. The rig parks the
+            caret mid-line first, which is the reported shape.
+         */
+        [UnityTest]
+        public IEnumerator HistoryRecallParksTheCaretAtTheEndOfTheRecalledLine()
+        {
+            yield return SpawnOpenTerminal();
+
+            Assert.IsTrue(
+                Terminal.Shell.AddCommand(
+                    "hist-caret",
+                    _ => { },
+                    minArgs: 0,
+                    maxArgs: 0,
+                    help: "test"
+                ),
+                "Sanity: the recalled command registers"
+            );
+
+            RunThroughInput("hist-caret");
+            yield return SetInputCaret(0);
+            Assert.AreEqual(
+                0,
+                _terminal._commandInput.cursorIndex,
+                "Sanity: the caret starts mid-line, as it does after typing"
+            );
+
+            _terminal.HandlePrevious();
+
+            Assert.AreEqual(
+                "hist-caret",
+                DefaultTerminalInput.Instance.CommandText,
+                "The recalled line loads"
+            );
+            yield return WaitForCaret(
+                "hist-caret".Length,
+                "A recalled line takes the caret to its end"
+            );
+        }
+
+        /*
+            HintDisplayMode.Always refills the bar on every keystroke. The bar
+            re-rendered on child count and selection only, so a candidate set
+            that changed without changing count - "zapo" narrowed to "zapt" -
+            left the previous candidate on screen, and the click closure
+            applied the text its row carried when the row was built.
+         */
+        [UnityTest]
+        public IEnumerator SuggestionBarFollowsTheCurrentCandidates()
+        {
+            yield return SpawnOpenTerminal();
+            _terminal.hintDisplayMode = HintDisplayMode.Always;
+
+            Assert.IsTrue(
+                Terminal.Shell.AddCommand("zapo", _ => { }, minArgs: 0, maxArgs: 0, help: "test"),
+                "Sanity: the first candidate registers"
+            );
+            Assert.IsTrue(
+                Terminal.Shell.AddCommand("zapt", _ => { }, minArgs: 0, maxArgs: 0, help: "test"),
+                "Sanity: the second candidate registers"
+            );
+
+            yield return SetInputText("zap");
+            yield return WaitForHintCount(2);
+            yield return SetInputText("zapo");
+            yield return WaitForHintCount(1);
+            yield return SetInputText("zapt");
+            yield return WaitForSingleHintText(
+                "zapt",
+                "The bar shows the candidate the current input resolves to"
+            );
+
+            _terminal.ApplyHint(0);
+
+            Assert.AreEqual(
+                "zapt",
+                DefaultTerminalInput.Instance.CommandText,
+                "A row applies the candidate it currently shows"
+            );
+            yield return WaitForCaret(
+                "zapt".Length,
+                "An applied row takes the caret to the end of the line"
+            );
+        }
+
+        /*
+            A hint row is a rendering path, not the log funnel: a candidate is
+            a history line, so the row shows the escaped text and still applies
+            the raw one.
+         */
+        [UnityTest]
+        public IEnumerator SuggestionRowEscapesWhatItRendersAndAppliesTheRawCandidate()
+        {
+            yield return SpawnOpenTerminal();
+            _terminal.hintDisplayMode = HintDisplayMode.Always;
+
+            Assert.IsTrue(
+                Terminal.Shell.AddCommand("uniarg", _ => { }, minArgs: 1, maxArgs: 1, help: "test"),
+                "Sanity: the argument command registers"
+            );
+            RunThroughInput("uniarg a\u202Eb");
+
+            yield return SetInputText("uniarg a");
+            yield return WaitForSingleHintText(
+                "uniarg a\\u202Eb",
+                "The row shows the escaped history line"
+            );
+
+            _terminal.ApplyHint(0);
+
+            Assert.AreEqual(
+                "uniarg a\u202Eb",
+                DefaultTerminalInput.Instance.CommandText,
+                "The applied candidate is the raw text the developer chose"
+            );
+        }
+
         private IEnumerator SpawnOpenTerminal()
         {
 #if UNITY_EDITOR
@@ -413,6 +534,104 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             _terminal._commandInput.value = text;
             yield return null;
+        }
+
+        /*
+            UITK clamps a programmatic caret write to the last laid-out text
+            length and can re-clamp it after it landed, so the placement
+            retries and polls for it to hold.
+         */
+        private IEnumerator SetInputCaret(int caretIndex)
+        {
+            for (int attempt = 0; attempt < 3; ++attempt)
+            {
+                _terminal._commandInput.cursorIndex = caretIndex;
+                _terminal._commandInput.selectIndex = caretIndex;
+
+                int frameBudget = 100;
+                while (0 < frameBudget-- && _terminal._commandInput.cursorIndex != caretIndex)
+                {
+                    yield return null;
+                }
+
+                if (_terminal._commandInput.cursorIndex == caretIndex)
+                {
+                    yield break;
+                }
+            }
+        }
+
+        /*
+            A queued caret is applied on a later refresh pass, and editor
+            throttling can defer that for frames; the rig polls the live caret
+            and the queued position rather than assuming a frame. The queued
+            position is the invariant when a throttled panel applies nothing.
+         */
+        private IEnumerator WaitForCaret(int expectedCaretIndex, string message)
+        {
+            int frameBudget = FrameBudget;
+            while (
+                0 < frameBudget--
+                && _terminal._commandInput.cursorIndex != expectedCaretIndex
+                && _terminal._pendingCaretIndex != expectedCaretIndex
+            )
+            {
+                yield return null;
+            }
+
+            Assert.IsTrue(
+                _terminal._commandInput.cursorIndex == expectedCaretIndex
+                    || _terminal._pendingCaretIndex == expectedCaretIndex,
+                $"{message}: cursor={_terminal._commandInput.cursorIndex}"
+                    + $" queued={_terminal._pendingCaretIndex}"
+            );
+        }
+
+        private IEnumerator WaitForHintCount(int expectedCount)
+        {
+            int frameBudget = FrameBudget;
+            while (0 < frameBudget-- && HintRowCount() != expectedCount)
+            {
+                yield return null;
+            }
+
+            Assert.AreEqual(
+                expectedCount,
+                HintRowCount(),
+                $"The bar must hold {expectedCount} rows for the current input"
+            );
+        }
+
+        private IEnumerator WaitForSingleHintText(string expectedText, string message)
+        {
+            int frameBudget = FrameBudget;
+            while (0 < frameBudget-- && !IsSingleHint(expectedText))
+            {
+                yield return null;
+            }
+
+            Assert.IsTrue(IsSingleHint(expectedText), message);
+        }
+
+        private int HintRowCount()
+        {
+            ScrollView hints = _terminal._autoCompleteContainer;
+            return hints == null ? 0 : hints.childCount;
+        }
+
+        private bool IsSingleHint(string expectedText)
+        {
+            ScrollView hints = _terminal._autoCompleteContainer;
+            if (hints == null || hints.childCount != 1)
+            {
+                return false;
+            }
+
+            return string.Equals(
+                (hints[0] as TextElement)?.text,
+                expectedText,
+                StringComparison.Ordinal
+            );
         }
 
         private IEnumerator WaitForFocusedInput(string message)

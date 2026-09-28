@@ -1827,29 +1827,13 @@
             }
 
             int errorCount = _errorMessages.Count;
-            if (command.handler != null)
+            try
             {
-                command.handler(context, new BorrowedCommandArguments(arguments));
+                InvokeCommand(command, context, arguments);
             }
-            else if (arguments is CommandArg[] ownedArguments)
+            catch (Exception exception)
             {
-                // Array callers dispatch their own array, as before.
-                command.proc?.Invoke(ownedArguments);
-            }
-            else
-            {
-                /*
-                   Legacy handlers may retain their argument array, so each
-                   invocation materializes a fresh one. The array is never
-                   pooled or reused after the handler returns.
-                */
-                CommandArg[] materialized = new CommandArg[arguments.Count];
-                for (int i = 0; i < materialized.Length; ++i)
-                {
-                    materialized[i] = arguments[i];
-                }
-
-                command.proc?.Invoke(materialized);
+                ReportCommandFailure(commandName, exception);
             }
 
             // Known command executed, respect addToHistory flag
@@ -1863,6 +1847,62 @@
             }
 
             return true;
+        }
+
+        /*
+            A developer's handler can throw, and the two channels answer
+            different questions. The error queue carries the line the log
+            shows and the palette shows in its error bar - what failed, with
+            no frames - and Debug.LogException keeps the frames where a
+            developer already looks for them: the Editor console and the
+            player log. The terminal log renders the message and not the
+            trace, so the trace cannot be the in-game record.
+         */
+        private void ReportCommandFailure(string commandName, Exception exception)
+        {
+            IssueErrorMessage(
+                $"Command '{commandName}' threw {exception.GetType().Name}: {exception.Message}"
+            );
+            Debug.LogException(exception);
+        }
+
+        /*
+            The three dispatch shapes a registered command can take, in one
+            place: the context-aware handler, an array caller dispatching its
+            own array, and a legacy proc that may retain its argument array
+            and so gets a fresh one per invocation.
+         */
+        private void InvokeCommand(
+            CommandInfo command,
+            CommandExecutionContext context,
+            IReadOnlyList<CommandArg> arguments
+        )
+        {
+            if (command.handler != null)
+            {
+                command.handler(context, new BorrowedCommandArguments(arguments));
+                return;
+            }
+
+            if (arguments is CommandArg[] ownedArguments)
+            {
+                // Array callers dispatch their own array, as before.
+                command.proc?.Invoke(ownedArguments);
+                return;
+            }
+
+            /*
+                Legacy handlers may retain their argument array, so each
+                invocation materializes a fresh one. The array is never
+                pooled or reused after the handler returns.
+             */
+            CommandArg[] materialized = new CommandArg[arguments.Count];
+            for (int i = 0; i < materialized.Length; ++i)
+            {
+                materialized[i] = arguments[i];
+            }
+
+            command.proc?.Invoke(materialized);
         }
 
         private string BuildHistoryLine(string commandName, IReadOnlyList<CommandArg> arguments)
