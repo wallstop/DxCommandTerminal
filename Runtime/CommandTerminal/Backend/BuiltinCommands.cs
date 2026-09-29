@@ -441,13 +441,15 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 command ran at all. The shell already accepts pre-parsed
                 arguments, so nothing has to round-trip through text here.
 
-                Two behaviours are kept, and both are measured rather than
-                assumed. Variable substitution happens when the outer line is
-                parsed, so `$name` is already a value by the time this handler
-                sees it and the timed command reads the same one it always
-                did. And the timed command's line is still pushed to history by
-                the same funnel that pushed it through the string path, so Up
-                recalls exactly what it recalled before.
+                Two behaviours follow from that, and both are measured rather
+                than assumed. `$name` is still substituted, and the timed
+                command's line still reaches history through the same funnel,
+                because substitution happens when the outer line is parsed and
+                `RunCommandCore` pushes in both paths. What does change is that
+                a stored value which is itself `$name` is no longer expanded a
+                second time: the old path re-tokenized, and this dispatches the
+                arguments the outer line already produced - which is what
+                "time X" means.
 
                 `args[0]` is the command being timed and the rest are its
                 arguments, so the tail is what runs. The tail is a fresh array
@@ -455,11 +457,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 because the shell hands that array to the timed handler
                 directly. One small array per `time` is the right trade - this
                 is a command a developer types, not a keystroke or a frame.
-
-                One substitution, not two. The old path flattened to a string
-                and re-tokenized it, so a stored value that was itself `$name`
-                was substituted a second time. This dispatches the arguments
-                the outer line already produced, which is what "time X" means.
              */
             CommandArg[] timed = new CommandArg[args.Length - 1];
             Array.Copy(args, 1, timed, 0, timed.Length);
