@@ -27,6 +27,20 @@
          */
         private const int MinimumLogWindowSize = 16;
 
+        /*
+            Log refreshes a queued search jump waits for the view to lay out
+            the line it is aiming at. The layout runs after the pass that
+            creates the line, so the first attempt has nothing to scroll to and
+            the second one does; a view that never lays out at all - a headless
+            editor, a window collapsed to nothing - is answered by dropping the
+            request rather than retrying it every pass forever.
+
+            Counted in refreshes rather than frames, because those are the only
+            ones that can act on it: a closed terminal runs no log refresh at
+            all, and a frame budget would never be spent while it stayed shut.
+         */
+        private const int FindScrollFrameBudget = 4;
+
         public static TerminalUI Instance { get; private set; }
 
         // Cache log callback to reduce allocations
@@ -61,6 +75,26 @@
             window height is still settling toward its target.
          */
         internal TerminalState State => _state;
+
+        /*
+            Internal for test coverage of the search's scroll state (see
+            WallstopStudios.DxCommandTerminal.Tests.Runtime).
+
+            A search queues a jump to its match and suppresses the
+            scroll-to-end that running a command asks for; `EnterCommand`
+            re-asserts that scroll after the handler returns, and whether the
+            search's suppression survived is invisible without a laid-out view -
+            which is exactly the gap that let the re-assert overwrite the jump
+            silently. The flags are the decision, and they read the same on a
+            host that lays out no panel.
+
+            The follower's own `Detached` is deliberately not exposed here: it
+            only flips when a scroll is actually placed, so on a host with no
+            layout it reads the same whether or not anything is wrong.
+         */
+        internal bool FindScrollQueued => _pendingFindScroll.HasValue;
+
+        internal bool WantsScrollToEnd => _needsScrollToEnd;
 
         [Header("Window")]
         [Range(0, 1)]
@@ -237,11 +271,41 @@
         private long? _lastSeenBufferVersion;
 
         /*
+            The search the developer set over the log view, and where in it
+            they are. Per terminal, not per session: it is a view of one
+            screen, and a second terminal sharing the log buffer is its own
+            view with its own reason to be reading a different part of it.
+         */
+        private readonly LogFilter _logFilter = new();
+
+        /*
+            A search asked for one of its matches to be brought into view, and
+            the log refreshes left to wait for that line to have a layout.
+
+            The match is held as its ordinal in the kept list rather than as the
+            child index it currently is, and the index is derived at apply time.
+            The ring rotates under a search that is left standing - every new
+            line moves it - so a cached index names a different match a frame
+            later, and a search that jumped to the wrong line is worse than one
+            that jumped to none.
+         */
+        private int? _pendingFindScroll;
+
+        private int _findScrollPasses;
+
+        /*
             The log window the frame reads, sized to the buffer's capacity and
             reused. RefreshLogs copies into it once so the count it lays out
             and the lines it renders are the same read.
          */
         private LogItem[] _logWindow = Array.Empty<LogItem>();
+
+        /*
+            The lines of that window a search keeps, in the same reused form.
+            Separate from the window so clearing a search redraws every line
+            without the buffer being read a second time.
+         */
+        private LogItem[] _filteredLogWindow = Array.Empty<LogItem>();
         private bool _paletteHeldSurface;
         private bool _needsInitialRefresh;
         private string _lastKnownCommandText;
@@ -1544,13 +1608,27 @@
 
                 _input.CommandText = string.Empty;
                 _needsFocus = true;
+
                 /*
                     Running a command is an explicit request for its output, so
                     the tail follows again even when the developer had scrolled
                     away to read an earlier one.
+
+                    A search is the exception, and this is the only site that
+                    can know it. The handler ran three lines above, and a
+                    search that queued a jump to its match asked for that line,
+                    not for the newest one. Re-attaching here overwrites the
+                    suppression the jump sets for itself, so the view scrolls
+                    to the end and the jump then either loses the race or
+                    spends its budget waiting for a layout that keeps moving.
+                    A developer watching that sees a search that filtered
+                    correctly and then ignored them.
                  */
-                _logTail.Attach();
-                _needsScrollToEnd = true;
+                if (!_pendingFindScroll.HasValue)
+                {
+                    _logTail.Attach();
+                    _needsScrollToEnd = true;
+                }
             }
             finally
             {
@@ -1807,6 +1885,14 @@
             _textInput = null;
             _stateButtonContainer = null;
             _lastCodeSyncedValue = null;
+
+            /*
+                The jump was aimed at a line in the tree that just went away.
+                A rebuild draws the filtered log from scratch, so keeping the
+                request would scroll the fresh view to whatever line took that
+                index.
+             */
+            DropFindScroll();
         }
 
         /*
@@ -1936,6 +2022,157 @@
             _pendingCaretIndex = candidate.Length;
             _lastCompletionIndex = index;
             _needsFocus = true;
+        }
+
+        /*
+            `find`: the log view keeps only the lines that hold the text, and
+            the first of them is brought into view.
+
+            The counts are read here rather than from the view's next pass,
+            because the command answers now and a count read a frame later
+            would describe a log that has moved on - and because a frame is
+            long enough for the log to gain a line the answer does not know
+            about.
+
+            The text is not repeated in the answer. The command echo directly
+            above it in the log already shows exactly what was searched for,
+            and a line that repeated it would match the search that produced
+            it: the next `find` of the same text would then report one more
+            match than the developer can count on screen, every time they ran
+            it.
+         */
+        internal void SetLogFilter(string query)
+        {
+            if (Terminal.Buffer == null)
+            {
+                /*
+                    No session means no log to search, and the facade getter
+                    legitimately reads null before the session exists and after
+                    a play-session reset. Reported rather than treated as "no
+                    matches", which would be an answer about a log that is not
+                    there.
+                 */
+                LogFindWarning("There is no log to search yet.");
+                return;
+            }
+
+            if (!_logFilter.SetQuery(query))
+            {
+                /*
+                    The search already in place is left alone, and so is any
+                    jump it had queued: a refused query is not a request to
+                    change what is on screen.
+                 */
+                LogFindWarning("Nothing to search for. clear-filter shows every log line again.");
+                return;
+            }
+
+            int matches = ReadRenderedLogWindow(Terminal.Buffer, out _);
+            if (matches < 1)
+            {
+                /*
+                    The search stays set. Dropping it here would mean a typo
+                    silently put the whole log back on screen, and the developer
+                    would have to type the search again to see that it had hit
+                    nothing.
+                 */
+                DropFindScroll();
+                LogFindWarning(
+                    "No log line matches the search. clear-filter shows every line again."
+                );
+                return;
+            }
+
+            QueueFindScroll();
+
+            /*
+                "of" counts the lines the search could have matched, not the
+                ones it did - so the total and the match count are not
+                interchangeable words here, and "matching log lines" on the
+                total would say the opposite of what the number means.
+             */
+            LogFindReply($"Showing {matches} of {_logFilter.TotalCount} log lines.");
+        }
+
+        /*
+            `find` with no argument, and F3: the next match, or the one before
+            it, wrapping.
+
+            The window is re-read first because the ring rotates under a search
+            that is left standing: the matches the developer is stepping
+            through are the ones the log holds now, not the ones it held when
+            they typed the search.
+         */
+        internal void StepLogFilter(bool forward)
+        {
+            if (!_logFilter.IsActive)
+            {
+                LogFindWarning("No search is set. find <text> sets one.");
+                return;
+            }
+
+            if (Terminal.Buffer == null)
+            {
+                /*
+                    The counts a step reports are the last ones read, and with
+                    no log there is nothing to step through - stepping anyway
+                    would answer "Match 7 of 20" for a log that holds nothing.
+                 */
+                LogFindWarning("There is no log to search yet.");
+                return;
+            }
+
+            ReadRenderedLogWindow(Terminal.Buffer, out _);
+            if (!(forward ? _logFilter.StepForward() : _logFilter.StepBackward()))
+            {
+                LogFindWarning("No log line matches the search.");
+                return;
+            }
+
+            QueueFindScroll();
+            LogFindReply($"Match {_logFilter.CurrentMatch} of {_logFilter.MatchCount}.");
+        }
+
+        internal void ClearLogFilter()
+        {
+            if (!_logFilter.IsActive)
+            {
+                LogFindReply("No search is set.");
+                return;
+            }
+
+            _logFilter.Clear();
+            DropFindScroll();
+            LogFindReply("Search cleared. The log shows every line again.");
+        }
+
+        /*
+            Every line the search writes, through one door.
+
+            A command that answers in the console writes ordinary log text, and
+            the search's answer is no different from any other until something
+            stops counting it. The words in it are ordinary words, so a query
+            that happened to be one of them - "search", "log", "clear-filter" -
+            matched the answer, and every repeat of the search added another
+            match. A search that hit nothing would then report a hit, which is
+            the one answer it must never give.
+
+            Registering the text is what keeps the count honest; the log type
+            cannot do it. A `Warning` is exactly what a developer is looking
+            for, and a `ShellMessage` is any `Terminal.Log` the game made. The
+            lines that are neither are the console's own, and there are only
+            ever a handful - one per command the developer ran.
+         */
+        private void LogFindReply(string message)
+        {
+            _logFilter.IgnoreOwnReply(message);
+            Terminal.Log(message);
+        }
+
+        private void LogFindWarning(string message)
+        {
+            _logFilter.IgnoreOwnReply(message);
+            Terminal.Log(TerminalLogType.Warning, message);
         }
 
         /*
@@ -2452,6 +2689,12 @@
                     if (context.TryScrollLog(evt))
                     {
                         KeyEvents.Consume(context._commandInput, evt);
+                        return;
+                    }
+
+                    if (context.TryStepLogFilter(evt))
+                    {
+                        KeyEvents.Consume(context._commandInput, evt);
                     }
                 },
                 userArgs: this,
@@ -2714,9 +2957,10 @@
                 read under it separately could describe two different moments.
                 The window is sized to the buffer's capacity, so it holds
                 every entry a read can return, and it is written once and
-                reused.
+                reused. A search narrows that read to the lines it keeps, and
+                the count the view lays out is the count it draws.
              */
-            int logCount = ReadLogWindow(buffer);
+            int logCount = ReadRenderedLogWindow(buffer, out LogItem[] rendered);
             if (content.childCount != logCount)
             {
                 dirty = true;
@@ -2744,7 +2988,7 @@
                 for (int i = 0; i < logCount && i < childCount; ++i)
                 {
                     VisualElement item = content[i];
-                    LogItem logItem = _logWindow[i];
+                    LogItem logItem = rendered[i];
                     switch (item)
                     {
                         case TextField logText:
@@ -2775,6 +3019,7 @@
             }
 
             _needsScrollToEnd |= ObserveLogTail(newLogs);
+            ApplyPendingFindScroll(content, logCount);
             return;
 
             static void SetupLogText(VisualElement logText, LogItem log)
@@ -2820,6 +3065,158 @@
             }
 
             return buffer.CopyTo(_logWindow);
+        }
+
+        /*
+            The lines the log view draws this pass: the buffer's window, or the
+            ones of it a search keeps. Hands back the array holding them and
+            how many there are, so the caller reads the count and the lines
+            from one place - a count from a filtered read and lines from the
+            unfiltered window would draw lines the count never promised.
+
+            No search means no second pass and no second array: the window is
+            already the answer, which is why the filtered array only ever grows
+            to the window's size.
+         */
+        private int ReadRenderedLogWindow(CommandLog buffer, out LogItem[] rendered)
+        {
+            if (buffer == null)
+            {
+                rendered = Array.Empty<LogItem>();
+                return 0;
+            }
+
+            int windowCount = ReadLogWindow(buffer);
+            if (!_logFilter.IsActive)
+            {
+                rendered = _logWindow;
+                return windowCount;
+            }
+
+            if (_filteredLogWindow.Length < _logWindow.Length)
+            {
+                _filteredLogWindow = new LogItem[_logWindow.Length];
+            }
+
+            rendered = _filteredLogWindow;
+            return _logFilter.Apply(_logWindow, windowCount, _filteredLogWindow);
+        }
+
+        /*
+            Records which match the next refreshes have to bring into view.
+
+            The ordinal, not a child index: the ring rotates under a search
+            that is left standing, and the kept list shifts with it, so an index
+            taken now names a different match a frame later.
+
+            The scroll-to-end a command run asks for is dropped here rather than
+            left to be re-armed. `EnterCommand` attaches the tail and sets the
+            flag, and `ObserveLogTail` puts it back on every pass the follower
+            is still following - so a jump that waited for a layout would be
+            undone by a scroll to the end on the pass in between, and the
+            developer would see the view go to the end and snap back.
+         */
+        private void QueueFindScroll()
+        {
+            int? match = _logFilter.CurrentMatch;
+            if (!match.HasValue)
+            {
+                return;
+            }
+
+            _pendingFindScroll = match;
+            _findScrollPasses = FindScrollFrameBudget;
+            _needsScrollToEnd = false;
+        }
+
+        /*
+            Forgets a queued jump, and the budget that was waiting for it. Every
+            site that ends a search's intent to scroll calls this, so a request
+            cannot outlive the decision that made it.
+         */
+        private void DropFindScroll()
+        {
+            _pendingFindScroll = null;
+            _findScrollPasses = 0;
+        }
+
+        /*
+            The match a search asked for, once the view can say where it is.
+
+            A child's position is a layout result, and the layout runs after the
+            pass that created the child: a search made this frame is aiming at
+            children this frame has only just added, so the first pass has
+            nothing to scroll to and the next one does. The request is dropped
+            rather than retried forever, because a view that never lays out at
+            all - a headless editor with no rendered view, a window collapsed
+            to nothing - would otherwise carry a request nothing can act on,
+            and a view that starts laying out much later would scroll to
+            whatever line then held that index.
+
+            The index is read from the ordinal here, not from the request: the
+            kept list can have shifted between the request and this pass, so a
+            cached index would name a different match than the one asked for.
+
+            `content` is the reconciled container and `logCount` how many
+            children it holds, so the index is in range by construction - the
+            check is the clamp, and a match the search no longer has ends the
+            request rather than scrolling somewhere arbitrary.
+         */
+        private void ApplyPendingFindScroll(VisualElement content, int logCount)
+        {
+            int? pending = _pendingFindScroll;
+            if (!pending.HasValue)
+            {
+                return;
+            }
+
+            int index = pending.GetValueOrDefault() - 1;
+            if (index < 0 || logCount <= index)
+            {
+                DropFindScroll();
+                return;
+            }
+
+            VisualElement match = content[index];
+            if (0f < match.layout.height)
+            {
+                DropFindScroll();
+                ScrollToLogLine(match);
+                return;
+            }
+
+            if (0 < _findScrollPasses)
+            {
+                --_findScrollPasses;
+                return;
+            }
+
+            DropFindScroll();
+        }
+
+        /*
+            Puts a line at the top of the log view, which is where a find puts
+            its hit, and detaches the tail: a developer who searched is reading
+            the line they found, and the output arriving next is not what they
+            asked for. Following again is Ctrl+End, or a search that lands on
+            the end.
+
+            The offset is the line's own position in the content, which is the
+            same space the scroller's value is in, and it is clamped to the
+            extent the scroller holds now - a content that grew after the
+            layout this read would otherwise leave the view past its end.
+         */
+        private void ScrollToLogLine(VisualElement line)
+        {
+            Scroller scroller = _logScrollView?.verticalScroller;
+            if (scroller == null)
+            {
+                return;
+            }
+
+            scroller.value = Math.Max(0f, Math.Min(line.layout.yMin, scroller.highValue));
+            _logTail.Detach(scroller.value, scroller.highValue);
+            _needsScrollToEnd = false;
         }
 
         /*
@@ -2915,6 +3312,29 @@
              */
             _logTail.Detach(scroller.value, scroller.highValue);
             _needsScrollToEnd = false;
+            return true;
+        }
+
+        /*
+            The same routing for a key that steps a search, and the same two
+            answers: a key with no search set is not the log's to answer and is
+            left alone, and a key the log answers is consumed so it does not
+            also reach the field it arrived through.
+         */
+        private bool TryStepLogFilter(KeyDownEvent evt)
+        {
+            bool forward = LogFindKeys.IsStepForward(evt.keyCode, evt.shiftKey);
+            if (!forward && !LogFindKeys.IsStepBackward(evt.keyCode, evt.shiftKey))
+            {
+                return false;
+            }
+
+            if (!_logFilter.IsActive)
+            {
+                return false;
+            }
+
+            StepLogFilter(forward);
             return true;
         }
 

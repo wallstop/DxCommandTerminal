@@ -479,9 +479,30 @@ The command line holds panel focus for as long as the console is open, so the te
 - **Page Up / Page Down** page the log by one viewport.
 - **Ctrl+Home** and **Ctrl+End** (Cmd on macOS) jump to its oldest and newest lines.
 
-Home and End without the modifier stay with the command line, where they move the caret as a text field should. Every other key is untouched - typing, history recall, completion, and closing work exactly as they did.
+Home and End without the modifier stay with the command line, where they move the caret as a text field should. Every other key is untouched - typing, history recall, completion, and closing work exactly as they did - except F3 and Shift+F3, which step a log search while one is set (see [Searching the log](#searching-the-log)).
 
 Paging back detaches the tail exactly as scrolling back does, so new output does not pull the view to the end while you are reading. Ctrl+End is the way back to following. A log that has not been laid out - a headless editor, or a view with no rendered Game view - has nothing to page through and stays where it is.
+
+## Searching the log
+
+The log holds the newest 256 lines by default and nothing else, so reaching one of them means reading past the rest. Two commands narrow the view and one steps through it:
+
+- `find NullRef` shows only the lines holding the text, and jumps to the first one.
+- `find` on its own steps to the next match, wrapping at the end; **F3** and **Shift+F3** do the same from the keyboard.
+- `clear-filter` shows every line again.
+
+Each reports what it did - `Showing 20 of 240 log lines.`, or `Match 3 of 80.` - so a search that hit nothing says so instead of leaving you looking at an empty log, and the search stays set so a typo does not silently put everything back. A query is the arguments joined back into one string, so `find "two words"` searches for two words. An empty query is refused and leaves the search you had alone. The count does not move because the search talked: its own answer is not one of the results, so the same search reports the same number however many times you run it.
+
+The search is over the text as the log shows it, so what you can see is what you can find, and it ignores case: `nullref` reaches `NullReferenceException`.
+
+Four limits worth knowing before you rely on it:
+
+- It does not find the commands you ran, or the console's own answers. Both surfaces echo the line you typed into the log, and a search that matched its own echo would report a hit for every query, including one that appears nowhere; the same goes for the line the search writes when it tells you what it found. Use `copy-log` for a transcript with your commands in it.
+- The query is only recorded as the `find` line in the log. Once that line rotates out of the buffer - or you run `clear-console` - nothing on screen says the view is filtered, and the query is gone. `clear-filter` is how you put the log back.
+- `clear-console` does not drop the search. The view goes empty until the next `clear-filter` or a new `find`.
+- F3 and Shift+F3 need the command line to hold focus, as the paging keys do, and the jump to a match needs a log view that has been laid out. A view with no rendered Game view filters but does not scroll.
+
+Binding a hotkey to `f3` fires that binding as well while a search is set; the terminal reads the key independently of your bindings.
 
 ## Typing wins over a character binding
 

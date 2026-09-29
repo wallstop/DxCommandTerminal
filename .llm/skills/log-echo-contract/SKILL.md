@@ -1,6 +1,6 @@
 ---
 name: log-echo-contract
-description: Preserve the DxCommandTerminal log echo contract - both console surfaces write the typed line into Terminal.Buffer as TerminalLogType.Input before a command handler runs, so a handler that reads the log sees its own echo as the newest entry. Covers OutputLength, why a fixed -1/-2 offset is wrong, why the palette and the copy commands filter differently, why the log view must still SHOW echoes, and the test-helper trap that hides all of it. Use when writing or reviewing a command that reads the log, when a command returns its own name or a command line instead of a message, when touching trace/copy-last/copy-log/CommandPaletteUI.CollectOutput, or when a log-reading test passes against code the product never runs.
+description: Preserve the DxCommandTerminal log echo contract - both console surfaces write the typed line into Terminal.Buffer as TerminalLogType.Input before a command handler runs, so a handler that reads the log sees its own echo as the newest entry, and a command that answers in the log writes console text that later readers must not count as output. Covers OutputLength, why a fixed -1/-2 offset is wrong, why the palette and the copy commands filter differently, why the log view must still SHOW echoes, why a search excludes the console's own replies by text rather than by type, why EnterCommand overwrites a handler's view state, and the test-helper traps that hide all of it. Use when writing or reviewing a command that reads or counts the log, when a command returns its own name or a command line instead of a message, when touching trace/copy-last/copy-log/find/clear-filter/CommandPaletteUI.CollectOutput, or when a log-reading test passes against code the product never runs.
 metadata:
   category: Feature
 ---
@@ -66,6 +66,74 @@ belongs on screen. The contract above is about reading the log programmatically
 for a result, not about what is displayed. Do not "fix" the view by filtering
 echoes out.
 
+## The console's own replies are not output either
+
+The other writer of non-game text is the console answering itself. A command
+that must answer in the log (`#186`) writes ordinary log text, and that text is
+in the window every later reader sees.
+
+This bit the log search: a query that happened to be a word in the search's own
+answer - `search`, `log`, `line`, `clear-filter` - matched the answer, so a
+search that hit nothing reported a hit and every repeat added another. The
+echo exclusion above does not help; a reply is a `Message` or a `Warning`, not
+an `Input`.
+
+**A search excludes the console's own lines by exact text, not by type.** The
+types belong to the game - a `Warning` is what the developer is looking for, and
+a `ShellMessage` is any `Terminal.Log` the game made - so no type means "the
+console said this". `LogFilter.IgnoreOwnReply` is called from the same door
+that logs (`TerminalUI.LogFindReply` / `LogFindWarning`), so a new reply cannot
+be added without registering it. Register the exact string that is logged: a
+message with format arguments reaches the log formatted and the filter holding
+the format, and the two stop being the same line.
+
+**Apply the exclusion to the denominator as well as the numerator.** Excluding
+a line from the matches but leaving it in the total reports "20 of 240" and then
+"20 of 241" on two runs of the same search. The matches hold; the number the
+developer reads moves because the search said something. `LogFilter.Apply` skips
+own replies before both counters for exactly this reason, and both halves are
+asserted separately, because checking only the matches passes the broken shape.
+
+Do not exclude the whole `Warning` type, and do not exclude trailing replies
+positionally - a positional exclusion makes the count depend on whether
+anything has been logged since, so the same search reports a different number
+on the frame the developer runs their next command.
+
+`copy-log` keeps console replies in its transcript on purpose (see the table
+above): a transcript wants the record of what you did. The difference is that
+`copy-log` reports no count the developer decides anything from, and the search
+does.
+
+## A handler's UI intent is overwritten by the code that ran it
+
+`TerminalUI.EnterCommand` re-attaches the log tail and asks for a scroll to the
+end **after** the handler returns, because running a command is a request for
+its output:
+
+```
+Terminal.Log(Input, text);  shell.RunCommand(text);   // <- the handler sets the view
+_logTail.Attach();  _needsScrollToEnd = true;         // <- and then overrides it
+```
+
+A handler whose whole purpose is where the view ends up has to survive that.
+`EnterCommand` skips the re-assert when a search jump is queued, and it is the
+only site that can know, so the decision belongs there.
+
+Two consequences for tests:
+
+- **Dispatch through `EnterCommand`, not the shell**, for anything about where
+  the view ends up. `shell.RunCommand` never re-attaches, so a test that uses
+  it cannot see this class of bug at all.
+- **Assert the state synchronously.** The jump is dropped once its budget runs
+  out, so a test that yields a frame or two before looking finds the flag
+  cleared on a *correct* build and passes straight over a broken one. Expose
+  the flag (`TerminalUI.FindScrollQueued`, `WantsScrollToEnd`) and read it in
+  the frame the call returns.
+
+Do not expose the follower's `Detached` for this: it only flips when a scroll
+is actually placed, so on a host with no laid-out view it reads the same whether
+or not anything is wrong.
+
 ## The test-helper trap (this is how the bug survived two review rounds)
 
 A test helper that calls `shell.RunCommand(line)` directly exercises a path the
@@ -98,6 +166,15 @@ When a command starts reading the log:
 3. Re-read the test helper. Does it echo?
 4. Check the other two consumers still agree: `CommandTrace`,
    `CommandPaletteUI.CollectOutput`, `TerminalUI.RefreshLogs`.
+
+When a command starts **counting** the log, or reading it to drive a view:
+
+5. Which of the lines in the window are the console's own? Echoes (`Input`) and
+   the command's own replies. A count that includes either is a number the
+   developer will act on and be wrong by - and a count that includes either in
+   only one of its two halves is the same defect wearing a pass.
+6. Does the handler's effect on the view survive the call that ran it? See
+   "A handler's UI intent is overwritten by the code that ran it".
 
 ## Related
 
