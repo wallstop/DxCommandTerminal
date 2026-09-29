@@ -78,7 +78,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
             _direction = 1;
 
-            /* One read: the loops below move _position, never the history. */
             int count = _history.Count;
             while (
                 skipSameCommands

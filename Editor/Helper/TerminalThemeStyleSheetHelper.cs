@@ -1,4 +1,4 @@
-namespace WallstopStudios.DxCommandTerminal.Editor.Helper
+﻿namespace WallstopStudios.DxCommandTerminal.Editor.Helper
 {
 #if UNITY_EDITOR
     using System;
@@ -73,8 +73,9 @@ namespace WallstopStudios.DxCommandTerminal.Editor.Helper
 
                 SortedSet<string> selectors = new(StringComparer.OrdinalIgnoreCase);
 
+                int contentLength = ussContent.Length;
                 int lastIndex = 0;
-                while (lastIndex < ussContent.Length)
+                while (lastIndex < contentLength)
                 {
                     int braceIndex = ussContent.IndexOf('{', lastIndex);
                     if (braceIndex < 0)
@@ -114,7 +115,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.Helper
                                 int nextObjectBraceIndex = ussContent.IndexOf('}', braceIndex + 1);
                                 if (nextObjectBraceIndex < 0)
                                 {
-                                    nextObjectBraceIndex = ussContent.Length;
+                                    nextObjectBraceIndex = contentLength;
                                 }
                                 string objectContents = ussContent.Substring(
                                     selectorStartIndex,
@@ -139,7 +140,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.Helper
                     }
 
                     int nextBraceIndex = ussContent.IndexOf('}', braceIndex + 1);
-                    lastIndex = nextBraceIndex < 0 ? ussContent.Length : nextBraceIndex + 1;
+                    lastIndex = nextBraceIndex < 0 ? contentLength : nextBraceIndex + 1;
                 }
 
                 string[] result = new string[selectors.Count];

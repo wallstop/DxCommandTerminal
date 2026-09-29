@@ -2674,9 +2674,9 @@
 
             /*
                 One read of the log count: the loops below add to and remove
-                from `content`, which is why its own childCount stays inline -
-                that re-read is what terminates them. The log list is only
-                read here, so its count is the same number throughout.
+                from `content`, so the `while` re-reads `content.childCount` in
+                its own condition and that re-read is what terminates it. The
+                log list is only read here, so its count is one number.
              */
             int logCount = logs.Count;
             if (content.childCount != logCount)

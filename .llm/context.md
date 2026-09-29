@@ -141,8 +141,8 @@ frontmatter validity, index freshness, and pointer-file delegation; see
     and its bound; reserve `Clone()` for an acceptable `object` return. Counting loops hoist
     `List<T>.Count`, interface `Count`, and UIToolkit `childCount` reads out of the condition
     (per-iteration property/interface dispatch, PR #73). **Never hoist a `Length`/`Count` read
-    when the body mutates that collection** - the inline re-read is what makes the loop
-    terminate. One read per method (a count has one source of truth), and the four exceptions
+    when the body changes that collection's count** - the inline re-read is what makes the loop
+    terminate. One read per method (a count has one source of truth), and the three exceptions
     to that: [hot-path-allocations](./skills/hot-path-allocations/SKILL.md).
 19. Comparison operators read left-to-right in ascending order: only `<`, `<=` and `==`. Never
     `>` or `>=` -- write `0 <= index` and `b < a`, not `index >= 0` or `a > b` (issue #51).

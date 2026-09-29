@@ -98,8 +98,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             int offset
         )
         {
-            object[] parsed = specs.Length == 0 ? NoValues : new object[specs.Length];
-            for (int i = 0; i < specs.Length; ++i)
+            int specCount = specs.Length;
+            object[] parsed = specCount == 0 ? NoValues : new object[specCount];
+            for (int i = 0; i < specCount; ++i)
             {
                 CommandArgument spec = specs[i];
                 if (spec.IsRemaining)
@@ -315,14 +316,18 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return;
             }
 
-            if (!route.HasRemaining && route.Specs.Length < available)
+            if (!route.HasRemaining)
             {
-                owner.IssueErrorMessage(
-                    $"'{route.FullPath}': expects at most {route.Specs.Length} argument"
-                        + (route.Specs.Length == 1 ? string.Empty : "s")
-                        + $"\n    -> Usage: {route.PathUsage}"
-                );
-                return;
+                int routeSpecCount = route.Specs.Length;
+                if (routeSpecCount < available)
+                {
+                    owner.IssueErrorMessage(
+                        $"'{route.FullPath}': expects at most {routeSpecCount} argument"
+                            + (routeSpecCount == 1 ? string.Empty : "s")
+                            + $"\n    -> Usage: {route.PathUsage}"
+                    );
+                    return;
+                }
             }
 
             RunTyped(
@@ -487,12 +492,13 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         )
         {
             EnsureArgumentNameAvailable(name);
-            if (0 < _arguments.Count && _arguments[_arguments.Count - 1].IsRemaining)
+            int argumentCount = _arguments.Count;
+            if (0 < argumentCount && _arguments[argumentCount - 1].IsRemaining)
             {
                 throw new CommandConfigurationException(
                     CommandConfigurationFailure.InvalidRemainingArgument,
                     $"Command '{Name}': argument '{name}' cannot follow the remaining "
-                        + $"argument '{_arguments[_arguments.Count - 1].Name}'; the remaining "
+                        + $"argument '{_arguments[argumentCount - 1].Name}'; the remaining "
                         + "argument consumes every trailing token.",
                     Name,
                     argumentName: name

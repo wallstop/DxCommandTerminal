@@ -1234,9 +1234,9 @@
                     }
                 }
 
-                if (writeIndex < results.Count)
+                if (writeIndex < resultCount)
                 {
-                    results.RemoveRange(writeIndex, results.Count - writeIndex);
+                    results.RemoveRange(writeIndex, resultCount - writeIndex);
                 }
 
                 return true;
