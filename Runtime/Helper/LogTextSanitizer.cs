@@ -12,14 +12,12 @@ namespace WallstopStudios.DxCommandTerminal.Helper
         noise or - worse - reads one way and copies out as another.
         "Admin<U+202E>exe" is the case that matters.
 
-        Four rendering paths never pass this funnel: the palette's error
-        bar, the terminal's suggestion bar, the palette's result rows, which
-        print a completion candidate - a history line, a GameObject name, a
-        description - and the package's own inspectors, which print theme
-        names, font names, command names, and asset paths into IMGUI
-        tooltips and popup labels. They call this too, so the same text reads
-        one way wherever a developer reads it. A row shows the escaped text
-        and still applies the raw one: the escape is for the reader, and the
+        Three rendering paths never pass this funnel: the palette's error
+        bar, the terminal's suggestion bar, and the palette's result rows,
+        which print a completion candidate - a history line, a GameObject
+        name, a description. They call this too, so the same text reads one
+        way wherever a developer reads it. A row shows the escaped text and
+        still applies the raw one: the escape is for the reader, and the
         command the developer runs is the text they chose.
 
         Escaping rather than stripping is the deliberate choice: dropping
@@ -119,26 +117,6 @@ namespace WallstopStudios.DxCommandTerminal.Helper
             }
 
             return builder.ToString();
-        }
-
-        /*
-            The display copy a popup shows. A popup returns an index and the
-            caller reads the name back out of the raw list, so the copy is a
-            separate array: refilled in place when its length already fits,
-            which is what keeps an editor that redraws every frame from
-            allocating one. The caller's own array is never written to.
-         */
-        public static void SanitizeInto(string[] names, ref string[] copy)
-        {
-            if (copy == null || copy.Length != names.Length)
-            {
-                copy = new string[names.Length];
-            }
-
-            for (int i = 0; i < names.Length; ++i)
-            {
-                copy[i] = Sanitize(names[i]);
-            }
         }
 
         /*
