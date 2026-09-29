@@ -1,5 +1,6 @@
 namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 {
+    using System;
     using System.Globalization;
     using Backend;
     using Helper;
@@ -224,7 +225,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             string[] fromNull = null;
             LogTextSanitizer.SanitizeInto(names, ref fromNull);
-            Assert.AreEqual(copy, fromNull, "A null copy is allocated, never the input");
+            Assert.AreEqual(
+                new[] { "Admin\\u202Eexe", "plain" },
+                fromNull,
+                "A null copy is allocated and filled from the caller's names"
+            );
             Assert.AreNotSame(names, fromNull, "The caller's array is never the copy");
         }
 

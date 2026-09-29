@@ -13,12 +13,18 @@ packs live under `Packs/`; add your own assets to extend either list.
 `list-themes` and `list-fonts` print every entry in the active packs.
 
 A font draws only the glyphs it carries, and a character it lacks shows a
-missing-glyph box. Most shipped fonts are Latin-only. Two carry more:
-`MPLUS1Code` has CJK and kana, in `Large` and both `Everything` packs, and
-`NanumGothicCoding` has Hangul and kana, in both `Everything` packs. Emoji
-coverage is a handful of characters at most, so an emoji shows a box. To see
-a script the font does not have, add a font that carries it to a pack and
-set that font. The console keeps the text whole either way.
+missing-glyph box. All 42 shipped families cover basic Latin. Two carry
+more, and `list-fonts` prints them by these names:
+
+- `MPLUS1Code-Regular` - CJK and kana. In `Large`, `Everything-Basic`, and
+  `Everything-All`.
+- `NanumGothicCoding-Regular` - Hangul and kana. In `Everything-Basic` and
+  `Everything-All`.
+
+Six families carry between one and five emoji between them, so an emoji
+usually shows a box. To see a script the font does not have, add a font
+that carries it to a pack and set that font. The console keeps the text
+whole either way.
 
 ## Switching at runtime
 

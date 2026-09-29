@@ -22,11 +22,19 @@
     2. A backstop for the popups, whose labels are escaped in the caching
        builder that fills them and are therefore not visible at the call.
 
-    Not covered, so a future reader is not misled: a label API other than
-    a GUIContent construction (a bare `GUILayout.Label($"... {name}")`), a
-    `tooltip` set through an object initializer, and a hole whose own
-    braces would need balancing. None of those exists in the package today;
-    widening the gate to them is a separate piece of work.
+    Rule 1 sees exactly one shape: a `GUIContent <name> = new(` or
+    `new GUIContent(` whose argument list holds an interpolated string. Not
+    seen, so a future reader is not misled: a tooltip assembled by
+    concatenation, a tooltip held in a local and passed as a variable, a
+    `GUIContent` bound by an object initializer or on a later line, an
+    expression-bodied factory, a label API other than a GUIContent
+    construction (a bare `GUILayout.Label($"... {name}")`), and a hole whose
+    own braces would need balancing. None of those exists in the package
+    today; widening the gate to them is a separate piece of work.
+
+    Rule 2 watches `EditorGUILayout.Popup` only - the call the three
+    inspectors use. `EditorGUI.Popup` and `EditorGUILayout.IntPopup` are
+    the same hazard and are not watched.
 
     The scanner has its own tests below: a gate that cannot fail is worse
     than no gate, and an earlier version of it walked only the top level of
@@ -172,12 +180,6 @@ function startsInside(spans, index) {
   return false;
 }
 
-/** The text a constructor call is given: from its open paren to its match. */
-function callArgumentText(text, openParen, literals) {
-  const close = callCloseParen(text, openParen, literals);
-  return close < 0 ? "" : text.slice(openParen + 1, close);
-}
-
 /** The index of the paren that closes the call opened at openParen. */
 function callCloseParen(text, openParen, literals) {
   let depth = 0;
@@ -298,7 +300,13 @@ function popupsWithoutASanitizer(text) {
 function codeText(text, literals, comments) {
   let result = "";
   let index = 0;
-  for (const span of [...comments, ...literals]) {
+  /*
+    Ordered by position, and the order matters: the two lists are collected in
+    separate passes, so concatenating them walks backwards the moment a
+    literal precedes a comment, and every region between is emitted twice -
+    comment text included, which is the one thing this function removes.
+   */
+  for (const span of [...comments, ...literals].sort((a, b) => a.start - b.start)) {
     result += text.slice(index, span.start);
     index = span.end;
   }
@@ -401,12 +409,22 @@ test("display text: the scanner is not fooled by the shapes around it", () => {
 });
 
 test("display text: the popup backstop is not satisfied by a mention", () => {
+  /*
+    The mentions sit between literals, which is the shape that breaks a
+    removal walk whose spans are not ordered: a comment before every literal
+    passes whether or not the walk is correct, so interleave them.
+   */
   assert.ok(
     popupsWithoutASanitizer(
-      ["// TODO: the labels should call LogTextSanitizer.Sanitize", "EditorGUILayout.Popup(0, names);"]
-        .join("\n")
+      [
+        'string a = "first";',
+        "// TODO: the labels should call LogTextSanitizer.Sanitize",
+        'string b = "second";',
+        "EditorGUILayout.Popup(0, names);",
+        "// end of file TODO"
+      ].join("\n")
     ),
-    "a mention in a comment is not a call"
+    "a mention in a comment is not a call, even between literals"
   );
   assert.ok(
     popupsWithoutASanitizer(['Debug.Log("LogTextSanitizer.Sanitize");', "EditorGUILayout.Popup(0, names);"].join("\n")),

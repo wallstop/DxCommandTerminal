@@ -615,7 +615,6 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
             return cached;
         }
 
-        /* Display-only: the index selects the pack, so the label escapes. */
         private static string[] PackNames(List<TerminalThemePack> themePacks)
         {
             return RefreshCache(
@@ -1543,7 +1542,6 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                         GUILayout.Label("Select Font:");
                     }
 
-                    /* The labels are the copy; fontKeys is what the lookup reads. */
                     string[] fontKeys = FontKeys();
                     int selectedFontKeyIndex = EditorGUILayout.Popup(
                         _fontKey.GetValueOrDefault(-1),
