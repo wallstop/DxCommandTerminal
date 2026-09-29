@@ -19,19 +19,26 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         private const int AverageFontNameCapacity = 32;
 
+        /*
+            What separates two copied lines. `Environment.NewLine` because that
+            is what the log itself uses to join a stack trace, and a developer
+            pasting a log is pasting a log.
+         */
+        private static readonly string LogCopySeparator = Environment.NewLine;
+
         private static readonly StringBuilder StringBuilder = new();
 
         /*
-            The window `trace` reads, sized to the log buffer's capacity and
-            reused. Per-thread: CommandShell.RunCommand is public, and the
-            log buffer is reachable from a thread the caller chose, so two
-            threads running `trace` must not write into one array. A thread's
-            first use allocates its own; with domain reload disabled it keeps
-            it across Play Mode sessions, which is one array per thread that
-            ever traced.
+            The window `trace` and `copy-log` read, sized to the log buffer's
+            capacity and reused. Per-thread: CommandShell.RunCommand is
+            public, and the log buffer is reachable from a thread the caller
+            chose, so two threads reading the log must not write into one
+            array. A thread's first use allocates its own; with domain reload
+            disabled it keeps it across Play Mode sessions, which is one array
+            per thread that ever read the log.
          */
         [ThreadStatic]
-        private static LogItem[] TraceWindow;
+        private static LogItem[] LogWindow;
 
         [RegisterCommand(
             isDefault: true,
@@ -327,6 +334,48 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         [RegisterCommand(
             isDefault: true,
+            Name = "copy-last",
+            Help = "Copy the most recent log line to the clipboard",
+            MaxArgCount = 0
+        )]
+        public static void CommandCopyLast(CommandArg[] args)
+        {
+            CopyLogLines(1);
+        }
+
+        [RegisterCommand(
+            isDefault: true,
+            Name = "copy-log",
+            Help = "Copy the last N log lines to the clipboard",
+            MaxArgCount = 1
+        )]
+        public static void CommandCopyLog(CommandArg[] args)
+        {
+            if (0 < args.Length)
+            {
+                if (!args[0].TryGet(out int lineCount))
+                {
+                    Terminal.Log(TerminalLogType.Warning, $"Invalid line count {args[0]}.");
+                    return;
+                }
+
+                if (lineCount < 1)
+                {
+                    Terminal.Log(TerminalLogType.Warning, "Line count must be at least 1.");
+                    return;
+                }
+
+                CopyLogLines(lineCount);
+                return;
+            }
+
+            /* No count is every buffered line: the gesture a developer makes
+               when they want the log itself, not a slice of it. */
+            CopyLogLines(int.MaxValue);
+        }
+
+        [RegisterCommand(
+            isDefault: true,
             Name = "help",
             Help = "Display help information about a command",
             MaxArgCount = 1
@@ -384,8 +433,27 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return;
             }
 
+            /*
+                The parsed arguments, not a flattened string re-tokenized. A
+                join of `contents` with single spaces drops `startQuote` and
+                `endQuote`, so `time set-variable greet "two words"` re-entered
+                the shell as three arguments and was rejected before the timed
+                command ran at all. The shell already accepts pre-parsed
+                arguments, so nothing has to round-trip through text here.
+
+                `args[0]` is the command being timed and the rest are its
+                arguments, so the tail is what runs. The slice is a fresh
+                array on purpose: the shell may hand the array to a handler
+                that keeps it, and a view over this one would alias the
+                arguments `time` itself was given. One small array per `time`
+                is the right trade - this is a command a developer types, not
+                a keystroke or a frame.
+             */
+            CommandArg[] timed = new CommandArg[args.Length - 1];
+            Array.Copy(args, 1, timed, 0, timed.Length);
+
             Stopwatch sw = Stopwatch.StartNew();
-            shell.RunCommand(JoinArguments(args));
+            shell.RunCommand(args[0].contents, timed);
             sw.Stop();
             Terminal.Log($"Time: {sw.ElapsedMilliseconds}ms");
         }
@@ -451,15 +519,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 index a different line than the count described. `trace` reads
                 the second-newest entry, so two slots is the floor.
              */
-            int capacity = buffer.Capacity;
-            LogItem[] window = TraceWindow;
-            if (window == null || window.Length < capacity)
-            {
-                window = new LogItem[Math.Max(capacity, 2)];
-                TraceWindow = window;
-            }
-
-            int logCount = buffer.CopyTo(window);
+            int logCount = ReadLogWindow(buffer, out LogItem[] window);
 
             if (logCount - 2 < 0)
             {
@@ -657,6 +717,105 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 #else
             UnityEngine.Application.Quit();
 #endif
+        }
+
+        /*
+            One consistent read of the buffer's visible window into a reused
+            array, returning how many entries it holds. Reading a count and
+            then indexing it separately is two moments: a background log
+            landing between them makes the second read a different line than
+            the first described, and a resize or a clear between them throws.
+         */
+        private static int ReadLogWindow(CommandLog buffer, out LogItem[] window)
+        {
+            int capacity = buffer.Capacity;
+            LogItem[] rented = LogWindow;
+            if (rented == null || rented.Length < capacity)
+            {
+                /* Two is the floor `trace` needs, and it is above zero. */
+                rented = new LogItem[Math.Max(capacity, 2)];
+                LogWindow = rented;
+            }
+
+            window = rented;
+            return buffer.CopyTo(rented);
+        }
+
+        /*
+            Copies the newest `lineCount` entries of the log to the clipboard
+            and answers in the console, which is where a developer running a
+            command in a device build is looking.
+
+            The messages are what the log view renders, so a copied line is the
+            line that was on screen. The stack trace is deliberately not
+            included: a copy of 256 lines would carry 256 traces, and `trace`
+            is already the way to read one.
+         */
+        private static void CopyLogLines(int lineCount)
+        {
+            CommandLog buffer = Terminal.Buffer;
+            if (buffer == null)
+            {
+                return;
+            }
+
+            int logCount = ReadLogWindow(buffer, out LogItem[] window);
+            if (logCount == 0)
+            {
+                Terminal.Log(TerminalLogType.Warning, "Nothing to copy: the log is empty.");
+                return;
+            }
+
+            int first = Math.Max(0, logCount - Math.Min(lineCount, logCount));
+            int copied = logCount - first;
+
+            using CachedStringBuilder.Scope scope = CachedStringBuilder.Rent(
+                MeasureCopyLength(window, first, logCount)
+            );
+            StringBuilder builder = scope.Builder;
+            for (int i = first; i < logCount; ++i)
+            {
+                if (first != i)
+                {
+                    builder.Append(LogCopySeparator);
+                }
+
+                builder.Append(window[i].message);
+            }
+
+            string text = builder.ToString();
+            if (!TerminalClipboard.TryWrite(text))
+            {
+                Terminal.Log(
+                    TerminalLogType.Warning,
+                    "The platform did not keep the text. tvOS has no clipboard, and a "
+                        + "browser clipboard may refuse without a user gesture."
+                );
+                return;
+            }
+
+            Terminal.Log(
+                copied == 1
+                    ? "Copied the most recent log line to the clipboard."
+                    : $"Copied {copied} log lines to the clipboard."
+            );
+        }
+
+        /*
+            What `CopyLogLines` is about to build, so the pooled builder is
+            rented once at the right size instead of growing into it. A log of
+            256 lines is a few kilobytes, well under the retention ceiling, so
+            the pooled buffer survives the next copy.
+         */
+        private static int MeasureCopyLength(LogItem[] window, int first, int logCount)
+        {
+            int length = (logCount - first - 1) * LogCopySeparator.Length;
+            for (int i = first; i < logCount; ++i)
+            {
+                length += window[i].message?.Length ?? 0;
+            }
+
+            return length;
         }
 
         private static string JoinArguments(CommandArg[] args, int start = 0)
