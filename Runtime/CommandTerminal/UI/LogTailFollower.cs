@@ -17,8 +17,11 @@ namespace WallstopStudios.DxCommandTerminal.UI
     {
         /*
             Slack between the scroller's value and its high value that still
-            reads as the end: the engine rounds a scroll to whole points, so
-            the pinned value can sit a fraction under the extent.
+            reads as the end. Both are floats read out of float layout, and a
+            scripted scroll can land a fraction under the extent, so an exact
+            comparison would detach the tail for no reason a developer could
+            see. A wheel notch is several points, so this is far below any
+            scroll they make.
          */
         public const float EndTolerance = 0.5f;
 
@@ -36,8 +39,16 @@ namespace WallstopStudios.DxCommandTerminal.UI
         {
             if (highValue - EndTolerance <= value)
             {
-                /* At the end, or nothing to scroll: following. */
+                /*
+                    At the end, or nothing to scroll: following, and the pin
+                    describes this position. Refreshing it here is what keeps
+                    a pin from outliving the extent it was taken at - a
+                    cleared log clamps the scroller to an empty view, and the
+                    old pin would then read the refilled view as a
+                    developer's scroll and detach the tail for good.
+                 */
                 Detached = false;
+                _pinned = value;
             }
             else if (_pinned.HasValue && value < _pinned.GetValueOrDefault())
             {
@@ -66,19 +77,13 @@ namespace WallstopStudios.DxCommandTerminal.UI
         }
 
         /*
-            A command the developer just ran is an explicit request for its
-            output. The pin goes with the detach: the view is still scrolled
-            up, and without dropping it the next pass would read the old
-            position as a developer's scroll and detach again.
+            Follow the tail again from a position the developer did not pick:
+            a command they just ran, whose output they asked for, or a log
+            view rebuilt from nothing. The pin goes with the detach, or the
+            view still parked where it was would read as their scroll on the
+            next pass.
          */
         public void Attach()
-        {
-            Detached = false;
-            _pinned = null;
-        }
-
-        /* A rebuilt log view starts empty, so no earlier pin describes it. */
-        public void Reset()
         {
             Detached = false;
             _pinned = null;

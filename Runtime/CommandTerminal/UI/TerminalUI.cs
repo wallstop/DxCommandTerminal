@@ -2281,7 +2281,7 @@
             _logScrollView.AddToClassList("log-scroll-view");
             _terminalContainer.Add(_logScrollView);
             /* A fresh view starts at zero, so no earlier pin describes it. */
-            _logTail.Reset();
+            _logTail.Attach();
 
             _autoCompleteContainer = new ScrollView(ScrollViewMode.Horizontal)
             {
@@ -2801,18 +2801,21 @@
         private void ScrollToEnd()
         {
             Scroller scroller = _logScrollView?.verticalScroller;
-            if (scroller == null || scroller.highValue <= 0f)
+            float highValue = scroller?.highValue ?? 0f;
+            if (highValue <= 0f)
             {
                 return;
             }
 
-            scroller.value = scroller.highValue;
+            scroller.value = highValue;
             /*
                 Read the value back rather than assuming the write landed on
                 the high value: the scroller clamps to the extent it holds
                 now, and that clamped number is what the next pass compares
                 against to tell a developer's scroll from the layout pass that
-                grows the content after this pin.
+                grows the content after this pin. The scroller may have
+                reassigned it, so the read is not a repeated read of one
+                source.
              */
             _logTail.Pin(scroller.value);
         }

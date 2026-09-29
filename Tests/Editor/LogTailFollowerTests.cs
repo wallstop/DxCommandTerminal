@@ -5,16 +5,19 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     using UI;
 
     /*
-        The log view follows new output until the developer scrolls away, and
-        follows again when they scroll back. The halves fail separately, so
-        each is pinned on its own:
+        The log view follows new output into view until the developer scrolls
+        away, and follows again when they scroll back. The halves fail
+        separately, so each is pinned on its own:
 
-        - the trigger is the buffer version, not the view's child count. A
-          ring buffer holds its count once full, so a child-count trigger
-          stops following exactly when a session starts logging
-          continuously, which is the normal case in Play Mode.
-        - a pin is not read back as a developer's scroll when the layout pass
-          after it grows the content.
+        - a pin the layout grew past is re-pinned, not read back as a
+          developer's scroll. The layout that grows the extent runs after the
+          write, so the value is still the pin when the extent has moved on.
+        - a pin cannot outlive the extent it was taken at, or a cleared and
+          refilled log reads as a developer's scroll and the tail never comes
+          back.
+
+        Wiring the buffer version to `newLogs` is the terminal's job and
+        lives in TerminalUILogTailTests; this file is the decision.
 
         Every test drives `Observe` and the `Pin` that follows a request, the
         order the terminal uses, so a pass that asks for a pin ends holding
@@ -81,13 +84,16 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 The view has held a full buffer's worth of children for a
                 while, so every one of these passes rotates the ring without
                 changing the child count - the state a Play Mode session
-                reaches in seconds with Unity log forwarding on.
+                reaches in seconds with Unity log forwarding on. The extent
+                grows on some of them, which is the half a child-count
+                trigger cannot answer: uniform lines leave the content height
+                alone, and a line taller than the one it replaced does not.
              */
             LogTailFollower follower = AttachedFollower();
             (float, float, bool)[] passes = new (float, float, bool)[40];
             for (int i = 0; i < passes.Length; ++i)
             {
-                passes[i] = (Extent, Extent, true);
+                passes[i] = (Extent, Extent + (i % 3 == 0 ? 40f : 0f), true);
             }
 
             List<bool> requests = Drive(ref follower, passes);
@@ -164,6 +170,50 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         [Test]
+        public void AClearedViewFollowsOnceItRefills()
+        {
+            /*
+                `clear-console` removes every child, so the scroller clamps to
+                an empty view and the old pin would outlive the extent it was
+                taken at. Refilling past the viewport then reads as a
+                developer's scroll and the tail never comes back.
+             */
+            LogTailFollower follower = AttachedFollower();
+            follower.Observe(0f, 0f, true);
+
+            Assert.That(
+                follower.Observe(0f, Extent / 5f, true),
+                Is.True,
+                "A view emptied and refilled is not a developer's scroll on the old one"
+            );
+        }
+
+        [Test]
+        public void AReattachedTailStillDetachesOnTheNextScrollAway()
+        {
+            /*
+                Re-attaching by scrolling to the end takes no pin - there is
+                nothing to show - so a pin taken against a smaller extent can
+                still be the one the next scroll is measured against.
+             */
+            LogTailFollower follower = new();
+            follower.Observe(Extent / 2f, Extent / 2f, true);
+            follower.Pin(Extent / 2f);
+
+            Assert.That(
+                follower.Observe(Extent, Extent, false),
+                Is.False,
+                "Reaching the end with nothing new logs takes no pin"
+            );
+            Assert.That(
+                follower.Observe(Extent - 100f, Extent, true),
+                Is.False,
+                "A re-attached tail detaches on the developer's next scroll away"
+            );
+            Assert.That(follower.Detached, Is.True);
+        }
+
+        [Test]
         public void RunningACommandReattachesADetachedTail()
         {
             LogTailFollower follower = AttachedFollower();
@@ -177,13 +227,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         [Test]
-        public void AResetDropsAPinThatDescribesAnEarlierView()
+        public void ANewViewDropsAPinThatDescribesAnEarlierOne()
         {
             LogTailFollower follower = AttachedFollower();
             follower.Observe(Extent - 200f, Extent, true);
             Assert.That(follower.Detached, Is.True);
 
-            follower.Reset();
+            follower.Attach();
 
             Assert.That(follower.Detached, Is.False, "A rebuilt view follows its output");
             Assert.That(

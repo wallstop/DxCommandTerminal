@@ -51,7 +51,7 @@ Check out the latest [Releases](https://github.com/wallstop/DxCommandTerminal/re
 5. Resolve the latest `com.wallstop-studios.dxcommandterminal`
 
 ## From Source
-Grab a copy of this repo (either `git clone` or [download a zip of the source](https://github.com/wallstop/DxCommandTerminal/archive/refs/heads/master.zip)) and copy the contents to your project's `Assets` folder.
+Grab a copy of this repo (either `git clone` or [download a zip of the source](https://github.com/wallstop/DxCommandTerminal/archive/refs/heads/master.zip)) and add it to your project as a local package (`Window > Package Manager > + > Add package from disk...`, then pick this folder's `package.json`). Copying folders into `Assets` also works, but every folder in `package.json`'s `files` list has to come across: `Runtime` holds the code, `Packs` the theme and font packs, and `Styles` the theme sheet the panel settings reference. See [Install](Documentation~/install.md) for the Package Manager route.
 
 ## Improvements Over Baseline
 - [Enhanced Auto-Complete + Hint system + styling](#hints)
@@ -125,7 +125,7 @@ Command Terminal is based on [an implementation by Jonathan Blow](https://youtu.
 
 ## Usage
 
-Copy the contents of `Runtime` to your Assets folder. Attach a `TerminalUI` Component to a game object. The console window can be toggled with a hotkey (default is backtick), and another hotkey can be used to toggle the full size window (default is shift+backtick). While the console is open those keys type their characters instead - see [Typing wins over a character binding](#typing-wins-over-a-character-binding) - and Escape closes it.
+Add a `TerminalUI` component to a game object. The console window can be toggled with a hotkey (default is backtick), and another hotkey can be used to toggle the full size window (default is shift+backtick). While the console is open those keys type their characters instead - see [Typing wins over a character binding](#typing-wins-over-a-character-binding) - and Escape closes it.
 
 Enter `help` in the console to view all available commands, use the up and down arrow keys to traverse the command history, and the tab key to autocomplete commands.
 

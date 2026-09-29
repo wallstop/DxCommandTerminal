@@ -21,7 +21,7 @@ In the console:
 > log-terminal $level
 Main
 
-> set-variable greet Hello World!
+> set-variable greet "Hello World!"
 Variable 'greet' set to 'Hello World!' successfully.
 
 > log-terminal $greet
@@ -32,13 +32,12 @@ Variable 'greet' is set to 'Hello World!'.
 Variable 'level' is set to 'Main'.
 ```
 
-`set-variable` takes exactly two arguments, so a value with spaces in it has to be
-quoted: `set-variable greet "Hello World!"`.
+`set-variable` takes exactly two arguments, so a value with spaces in it has to be quoted.
 
 ### Run a command:
 
 ```csharp
-Terminal.Shell.RunCommand("set-variable greet Hello World!");
+Terminal.Shell.RunCommand("set-variable greet \"Hello World!\"");
 ```
 
 ### Log without adding to Unity debug logs:

@@ -89,9 +89,29 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             yield return SpawnOpenTerminal();
             yield return FillTheLog();
+            yield return WaitForLogAtEnd("A burst of output leaves the view at its end");
 
             Terminal.Log("arrived after the buffer was full");
             yield return WaitForLogAtEnd("A log that rotates a full buffer is followed");
+
+            /*
+                A line taller than the one it replaced grows the extent with no
+                child added or removed, which is the whole reason the trigger
+                is the buffer version. The label is the last child, so the
+                content the developer is looking at is asserted too.
+             */
+            Terminal.Log(
+                "a long line that wraps across several rows so the content grows: "
+                    + "0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ the quick brown fox jumps over "
+                    + "the lazy dog and keeps going so the log view has to break it into "
+                    + "multiple rendered rows"
+            );
+            yield return WaitForLogAtEnd("A line taller than the one it replaced is followed");
+            Assert.That(
+                LastLogLabel().text,
+                Does.Contain("multiple rendered rows"),
+                "The wrapped line is the one in view at the end"
+            );
         }
 
         [UnityTest]
@@ -99,9 +119,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             yield return SpawnOpenTerminal();
             yield return FillTheLog();
+            yield return WaitForLogAtEnd("The fill leaves the view at its end");
 
             Scroller scroller = LogScroller();
             float parked = (scroller.lowValue + scroller.value) / 2f;
+            Assert.That(
+                parked,
+                Is.GreaterThan(scroller.lowValue),
+                "The fill really overflowed the view, so a scroll away has somewhere to go"
+            );
             scroller.value = parked;
             yield return WaitForLogValue(parked, "The developer's scroll landed");
 
@@ -119,6 +145,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             yield return SpawnOpenTerminal();
             yield return FillTheLog();
+            yield return WaitForLogAtEnd("The fill leaves the view at its end");
 
             Scroller scroller = LogScroller();
             scroller.value = (scroller.lowValue + scroller.value) / 2f;
@@ -136,6 +163,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             yield return SpawnOpenTerminal();
             yield return FillTheLog();
+            yield return WaitForLogAtEnd("The fill leaves the view at its end");
 
             Scroller scroller = LogScroller();
             float parked = (scroller.lowValue + scroller.value) / 2f;
@@ -147,13 +175,26 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return WaitForLogAtEnd("The output of the command just run is shown");
         }
 
-        private Scroller LogScroller()
+        private ScrollView LogView()
         {
             ScrollView logView =
                 _terminal._uiDocument.rootVisualElement.Q("LogScrollView") as ScrollView;
             Assert.That(logView, Is.Not.Null, "The log scroll view exists on an open terminal");
+            return logView;
+        }
+
+        private Scroller LogScroller()
+        {
+            ScrollView logView = LogView();
             Assert.That(logView.verticalScroller, Is.Not.Null, "It exposes a vertical scroller");
             return logView.verticalScroller;
+        }
+
+        private Label LastLogLabel()
+        {
+            VisualElement content = LogView().contentContainer;
+            Assert.That(0 < content.childCount, Is.True, "The log view holds labels");
+            return (Label)content[content.childCount - 1];
         }
 
         private IEnumerator WaitForLogAtEnd(string message)
@@ -213,7 +254,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             _terminal.SetState(TerminalState.OpenFull);
 
-            /* SetState flags a command as issued for the current frame. */
+            /*
+                Two frames, not one: SetState flags a command as issued for
+                the current frame, and the state frame can land after that
+                frame's own LateUpdate, so the pass that clears the flag is
+                the frame after the one that set it.
+             */
+            yield return null;
             yield return null;
 
             int frameBudget = 600;
