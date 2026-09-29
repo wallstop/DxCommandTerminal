@@ -112,7 +112,7 @@ Planned improvements:
 - Ensure working in Mobile builds
 - Smarter auto complete
 - Ensure HTML color coding works
-- More parsing (Bounds, Matrix4x4, Plane, Ray, BoundsInt, Pose, LayerMask, Color32)
+- More parsing (Matrix4x4, Pose, LayerMask, Color32)
 - More documentation
 
 ---
@@ -125,7 +125,7 @@ Command Terminal is based on [an implementation by Jonathan Blow](https://youtu.
 
 ## Usage
 
-Copy the contents from [CommandTerminal](./CommandTerminal) to your Assets folder. Attach a `Terminal` Component to a game object. The console window can be toggled with a hotkey (default is backtick), and another hotkey can be used to toggle the full size window (default is shift+backtick). While the console is open those keys type their characters instead - see [Typing wins over a character binding](#typing-wins-over-a-character-binding) - and Escape closes it.
+Copy the contents of `Runtime` to your Assets folder. Attach a `TerminalUI` Component to a game object. The console window can be toggled with a hotkey (default is backtick), and another hotkey can be used to toggle the full size window (default is shift+backtick). While the console is open those keys type their characters instead - see [Typing wins over a character binding](#typing-wins-over-a-character-binding) - and Escape closes it.
 
 Enter `help` in the console to view all available commands, use the up and down arrow keys to traverse the command history, and the tab key to autocomplete commands.
 
@@ -300,6 +300,10 @@ Assert.IsFalse(arg.TryGet(out int invalidInt)); // Failed to parse
 - Guid
 - DateTime
 - DateTimeOffset
+- TimeSpan
+- BigInteger
+- Version
+- IPAddress
 - Enums
 
 **Unity Types**:
@@ -311,7 +315,15 @@ Assert.IsFalse(arg.TryGet(out int invalidInt)); // Failed to parse
 - Vector3Int
 - Rect
 - RectInt
+- RectOffset
 - Color
+- Bounds
+- BoundsInt
+- Plane
+- Ray
+
+**Other**:
+- `System.Numerics.Complex`
 
 In addition to parsing values directly, `TryGet` will automatically attempt to match `public static` or `public const` named fields. For example, all of the following will parse as doubles:
 
@@ -475,7 +487,7 @@ You can also use `PlayerInput` or similar to bind InputActions to all available 
 - `EnterCommand`: Takes the current buffer and attempts to execute it as a command + parameters.
 
 ## Note
-If using PlayerInput to bind to the above controls, you will need to uncheck `Use Hotkeys` under the `Hotkeys` header in the Terminal script.
+The package's inspector disables the polled `TerminalKeyboardController` for you the moment a `PlayerInput` is added to the same GameObject, so the two input paths never both fire. If you add the `PlayerInput` at runtime, remove the polled controller yourself.
 
 When InputActions are not bound, there is an order of precedence for input checking. It is:
 - Close
@@ -508,7 +520,7 @@ IDisposable handle = CommandShell.IncludeDiscoveryAssembly(myPluginAssembly);
 The returned handle removes the assembly from discovery on `Dispose`. A registration made after commands registered applies on the next registration cycle (after `ClearCustomCommands`/`ClearAutoRegisteredCommands` re-runs readiness), the same as discovery providers. The default path never walks every assembly in the domain.
 
 # Hints
-AutoComplete has gotten a major upgrade in this fork. Completion is now not only case-insensitive, but it will now also search (unique) commands that have been executed, ignoring any irrelevant input. Pressing the complete key multiple times now selects available options in a persistent fashion. Completion can be walked both forward and backwards. Results are now presented in a new UI that intelligently adapts to screen space and current selection position. When completion is no longer relevant, the UI is disabled. However, you can opt to always show the available commands by toggling the new `Display Hints` option in the Terminal configuration. There are also several new theming options for hints, with controls over the currently selected hint v unselected hints.
+AutoComplete has gotten a major upgrade in this fork. Completion is now not only case-insensitive, but it will now also search (unique) commands that have been executed, ignoring any irrelevant input. Pressing the complete key multiple times now selects available options in a persistent fashion. Completion can be walked both forward and backwards. Results are now presented in a new UI that intelligently adapts to screen space and current selection position. When completion is no longer relevant, the UI is disabled. However, you can opt to always show the available commands by setting `Hint Display Mode` to `Always` in the Terminal configuration. Hint colors come from the terminal's stylesheet chain, so they follow the active theme.
 
 ![png](https://raw.githubusercontent.com/wallstop/DxCommandTerminal/master/Media/AutoComplete.png)
 

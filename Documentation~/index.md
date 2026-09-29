@@ -12,5 +12,9 @@ completion. Unity 2021.3 or newer, MIT licensed.
 - [Paste](paste.md) - Ctrl+V on both console surfaces.
 - [Lifetime](lifecycle.md) - shell ownership, register/dispose, discovery timing.
 - [Quick-launch bar](palette.md) - the launcher-style command bar.
+- [Themes and fonts](theming.md) - theme packs, font packs, and what a font can draw.
+- [Source-generated registration](generator.md) - how the command catalog is emitted.
+- [Performance](performance.md) - the measured claims and the gates behind them.
+- [Migrating from Command Terminal](migration.md) - what changed for an existing project.
 - [API Reference](xref:WallstopStudios.DxCommandTerminal.Backend.Terminal) -
   generated from the Runtime sources.

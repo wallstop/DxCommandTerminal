@@ -18,28 +18,27 @@ Terminal.Shell.SetVariable("level", SceneManager.GetActiveScene().name);
 In the console:
 
 ```
-> print $level
+> log-terminal $level
 Main
 
-> set greet Hello World!
-> print $greet
+> set-variable greet Hello World!
+Variable 'greet' set to 'Hello World!' successfully.
+
+> log-terminal $greet
 Hello World!
 
-> set
-LEVEL  : Main
-GREET  : Hello World!
+> list-variables
+Variable 'greet' is set to 'Hello World!'.
+Variable 'level' is set to 'Main'.
 ```
 
-### Add words to autocomplete:
-
-```csharp
-Terminal.Autocomplete.Register("foo");
-```
+`set-variable` takes exactly two arguments, so a value with spaces in it has to be
+quoted: `set-variable greet "Hello World!"`.
 
 ### Run a command:
 
 ```csharp
-Terminal.Shell.RunCommand("print Hello World!"));
+Terminal.Shell.RunCommand("set-variable greet Hello World!");
 ```
 
 ### Log without adding to Unity debug logs:
@@ -58,8 +57,10 @@ Terminal.Buffer.Clear();
 
 ```csharp
 Terminal.History.Clear();     // Clear history
-Terminal.History.Push("foo"); // Add item to history
+Terminal.History.Push("foo", success: true, errorFree: true); // Add item to history
 
-string a = Terminal.History.Next();     // Get next item
-string b = Terminal.History.Previous(); // Get previous item
+string a = Terminal.History.Next(skipSameCommands: false);     // Get next item
+string b = Terminal.History.Previous(skipSameCommands: false); // Get previous item
 ```
+
+`Next` and `Previous` take no optional parameters; both arguments are required.

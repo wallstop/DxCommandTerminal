@@ -12,6 +12,8 @@
       href: arguments.md
     - name: Completion
       href: completion.md
+    - name: Paste
+      href: paste.md
     - name: Lifetime
       href: lifecycle.md
     - name: Quick-launch bar

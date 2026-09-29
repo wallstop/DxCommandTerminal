@@ -46,13 +46,16 @@ snapped either way.
 
 ## Engine-backed values
 
-Scene objects, layers, and tags complete through the opt-in
-`SceneObjectArgumentAdapter<T>` (`GameObject`, `Component`, and
-component subclasses): `.RawParser(adapter.TryParse)
+Scene objects complete through the opt-in `SceneObjectArgumentAdapter<T>`,
+which takes a `GameObject`, a `Component`, or a component subclass and
+throws for anything else: `.RawParser(adapter.TryParse)
 .Choices(adapter.GetChoices, adapter.FormatChoice)` - see
-`SceneObjectCommands` in the imported samples. Completions stay
-suggestions; execution validates again and reports a shell error on a
-miss.
+`SceneObjectCommands` in the imported samples. Layers and tags are not
+object names, so the adapter does not cover them; a choice list built
+from `LayerMask.LayerToName` or live `GameObject.tag` is a plain
+dynamic choice - see `ObjectFilterCommands` in the samples.
+Completions stay suggestions; execution validates again and reports a
+shell error on a miss.
 
 ## Where next
 
