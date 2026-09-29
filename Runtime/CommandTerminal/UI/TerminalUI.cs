@@ -76,6 +76,26 @@
          */
         internal TerminalState State => _state;
 
+        /*
+            Internal for test coverage of the search's scroll state (see
+            WallstopStudios.DxCommandTerminal.Tests.Runtime).
+
+            A search queues a jump to its match and suppresses the
+            scroll-to-end that running a command asks for; `EnterCommand`
+            re-asserts that scroll after the handler returns, and whether the
+            search's suppression survived is invisible without a laid-out view -
+            which is exactly the gap that let the re-assert overwrite the jump
+            silently. The flags are the decision, and they read the same on a
+            host that lays out no panel.
+
+            The follower's own `Detached` is deliberately not exposed here: it
+            only flips when a scroll is actually placed, so on a host with no
+            layout it reads the same whether or not anything is wrong.
+         */
+        internal bool FindScrollQueued => _pendingFindScroll.HasValue;
+
+        internal bool WantsScrollToEnd => _needsScrollToEnd;
+
         [Header("Window")]
         [Range(0, 1)]
         public float maxHeight = 0.7f;
@@ -1588,13 +1608,27 @@
 
                 _input.CommandText = string.Empty;
                 _needsFocus = true;
+
                 /*
                     Running a command is an explicit request for its output, so
                     the tail follows again even when the developer had scrolled
                     away to read an earlier one.
+
+                    A search is the exception, and this is the only site that
+                    can know it. The handler ran three lines above, and a
+                    search that queued a jump to its match asked for that line,
+                    not for the newest one. Re-attaching here overwrites the
+                    suppression the jump sets for itself, so the view scrolls
+                    to the end and the jump then either loses the race or
+                    spends its budget waiting for a layout that keeps moving.
+                    A developer watching that sees a search that filtered
+                    correctly and then ignored them.
                  */
-                _logTail.Attach();
-                _needsScrollToEnd = true;
+                if (!_pendingFindScroll.HasValue)
+                {
+                    _logTail.Attach();
+                    _needsScrollToEnd = true;
+                }
             }
             finally
             {
@@ -2018,7 +2052,7 @@
                     matches", which would be an answer about a log that is not
                     there.
                  */
-                Terminal.Log(TerminalLogType.Warning, "There is no log to search yet.");
+                LogFindWarning("There is no log to search yet.");
                 return;
             }
 
@@ -2029,10 +2063,7 @@
                     jump it had queued: a refused query is not a request to
                     change what is on screen.
                  */
-                Terminal.Log(
-                    TerminalLogType.Warning,
-                    "Nothing to search for. clear-filter shows every log line again."
-                );
+                LogFindWarning("Nothing to search for. clear-filter shows every log line again.");
                 return;
             }
 
@@ -2046,8 +2077,7 @@
                     nothing.
                  */
                 DropFindScroll();
-                Terminal.Log(
-                    TerminalLogType.Warning,
+                LogFindWarning(
                     "No log line matches the search. clear-filter shows every line again."
                 );
                 return;
@@ -2061,7 +2091,7 @@
                 interchangeable words here, and "matching log lines" on the
                 total would say the opposite of what the number means.
              */
-            Terminal.Log($"Showing {matches} of {_logFilter.TotalCount} log lines.");
+            LogFindReply($"Showing {matches} of {_logFilter.TotalCount} log lines.");
         }
 
         /*
@@ -2077,7 +2107,7 @@
         {
             if (!_logFilter.IsActive)
             {
-                Terminal.Log(TerminalLogType.Warning, "No search is set. find <text> sets one.");
+                LogFindWarning("No search is set. find <text> sets one.");
                 return;
             }
 
@@ -2088,32 +2118,61 @@
                     no log there is nothing to step through - stepping anyway
                     would answer "Match 7 of 20" for a log that holds nothing.
                  */
-                Terminal.Log(TerminalLogType.Warning, "There is no log to search yet.");
+                LogFindWarning("There is no log to search yet.");
                 return;
             }
 
             ReadRenderedLogWindow(Terminal.Buffer, out _);
             if (!(forward ? _logFilter.StepForward() : _logFilter.StepBackward()))
             {
-                Terminal.Log(TerminalLogType.Warning, "No log line matches the search.");
+                LogFindWarning("No log line matches the search.");
                 return;
             }
 
             QueueFindScroll();
-            Terminal.Log($"Match {_logFilter.CurrentMatch} of {_logFilter.MatchCount}.");
+            LogFindReply($"Match {_logFilter.CurrentMatch} of {_logFilter.MatchCount}.");
         }
 
         internal void ClearLogFilter()
         {
             if (!_logFilter.IsActive)
             {
-                Terminal.Log("No search is set.");
+                LogFindReply("No search is set.");
                 return;
             }
 
             _logFilter.Clear();
             DropFindScroll();
-            Terminal.Log("Search cleared. The log shows every line again.");
+            LogFindReply("Search cleared. The log shows every line again.");
+        }
+
+        /*
+            Every line the search writes, through one door.
+
+            A command that answers in the console writes ordinary log text, and
+            the search's answer is no different from any other until something
+            stops counting it. The words in it are ordinary words, so a query
+            that happened to be one of them - "search", "log", "clear-filter" -
+            matched the answer, and every repeat of the search added another
+            match. A search that hit nothing would then report a hit, which is
+            the one answer it must never give.
+
+            Registering the text is what keeps the count honest; the log type
+            cannot do it. A `Warning` is exactly what a developer is looking
+            for, and a `ShellMessage` is any `Terminal.Log` the game made. The
+            lines that are neither are the console's own, and there are only
+            ever a handful - one per command the developer ran.
+         */
+        private void LogFindReply(string message)
+        {
+            _logFilter.IgnoreOwnReply(message);
+            Terminal.Log(message);
+        }
+
+        private void LogFindWarning(string message)
+        {
+            _logFilter.IgnoreOwnReply(message);
+            Terminal.Log(TerminalLogType.Warning, message);
         }
 
         /*

@@ -1,6 +1,7 @@
 namespace WallstopStudios.DxCommandTerminal.UI
 {
     using System;
+    using System.Collections.Generic;
     using Backend;
 
     /*
@@ -38,6 +39,26 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         /* One-based, so the number a developer reads is the number reported. */
         public int? CurrentMatch { get; private set; }
+
+        /*
+            The console's own answers about the search, which are not results.
+
+            Every command has to answer in the console, and the answer is
+            ordinary log text. A search that answered into its own results
+            would be searching its own sentences: the words in them are
+            ordinary words, so a query that happens to be one of them -
+            "search", "log", "line", "clear-filter" - matched the answer, and
+            every repeat of the search added another match. A search that hit
+            nothing then reported a hit, which is the one answer it must never
+            give.
+
+            By exact text rather than by type, because the types belong to the
+            game: a `Warning` is what the developer is looking for, and a
+            `ShellMessage` is any `Terminal.Log` the game made. The search's
+            own lines are neither, and there are only ever a handful - one per
+            command the developer ran.
+         */
+        private readonly HashSet<string> _ownReplies = new(StringComparer.Ordinal);
 
         /*
             Whether a line survives the search. The message is never null -
@@ -85,6 +106,21 @@ namespace WallstopStudios.DxCommandTerminal.UI
         private static bool IsSearchable(LogItem item)
         {
             return item.type != TerminalLogType.Input;
+        }
+
+        /*
+            Registers the text of a line the search is about to write, so
+            `Apply` will not count it. The caller logs exactly the string it
+            registers: a message carrying format arguments would reach the log
+            formatted and the filter holding the format, and the two would
+            stop being the same line.
+         */
+        public void IgnoreOwnReply(string message)
+        {
+            if (!string.IsNullOrEmpty(message))
+            {
+                _ownReplies.Add(message);
+            }
         }
 
         /*
@@ -174,7 +210,11 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 }
 
                 ++searchable;
-                if (kept < destination.Length && Matches(item, query))
+                if (
+                    kept < destination.Length
+                    && !_ownReplies.Contains(item.message)
+                    && Matches(item, query)
+                )
                 {
                     destination[kept] = item;
                     ++kept;
