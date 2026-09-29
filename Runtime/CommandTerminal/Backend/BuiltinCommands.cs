@@ -21,6 +21,13 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         private static readonly StringBuilder StringBuilder = new();
 
+        /*
+            The window `trace` reads, sized to the log buffer's capacity and
+            reused. Commands run on the main thread, so one shared array is
+            enough.
+         */
+        private static LogItem[] TraceWindow = new LogItem[2];
+
         [RegisterCommand(
             isDefault: true,
             Name = "list-themes",
@@ -433,7 +440,18 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return;
             }
 
-            int logCount = buffer.Logs.Count;
+            /*
+                One consistent read of the window: a background log landing
+                between the count and the entry would make the second read
+                index a different line than the count described.
+             */
+            int capacity = buffer.Capacity;
+            if (TraceWindow.Length < capacity)
+            {
+                TraceWindow = new LogItem[Math.Max(capacity, 2)];
+            }
+
+            int logCount = buffer.CopyTo(TraceWindow);
 
             if (logCount - 2 < 0)
             {
@@ -441,7 +459,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return;
             }
 
-            LogItem logItem = buffer.Logs[logCount - 2];
+            LogItem logItem = TraceWindow[logCount - 2];
 
             if (string.IsNullOrWhiteSpace(logItem.stackTrace))
             {

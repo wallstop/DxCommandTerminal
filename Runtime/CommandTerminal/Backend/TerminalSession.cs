@@ -75,8 +75,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
                 if (!Buffer.ignoredLogTypes.SetEquals(config.IgnoredLogTypes ?? EmptyLogTypes))
                 {
-                    Buffer.ignoredLogTypes.Clear();
-                    Buffer.ignoredLogTypes.UnionWith(config.IgnoredLogTypes ?? EmptyLogTypes);
+                    Buffer.SetIgnoredLogTypes(config.IgnoredLogTypes ?? EmptyLogTypes);
                 }
             }
 

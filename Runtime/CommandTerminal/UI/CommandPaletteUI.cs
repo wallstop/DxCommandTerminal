@@ -40,6 +40,12 @@
             eight long lines still overflow.
          */
         private const int MaxOutputCharacters = 512;
+
+        /*
+            Floor for the reused output window, so a session whose log buffer
+            is at capacity zero still has somewhere to copy into.
+         */
+        private const int MinimumOutputWindow = 16;
         private const string PaletteFooterName = "PaletteFooter";
         private const string RowName = "PaletteRow";
         private const string RowNameLabel = "PaletteRowName";
@@ -163,6 +169,13 @@
         private bool _lastRunProducedOutput;
         private VisualElement _previousFocus;
         private readonly List<string> _outputLines = new();
+
+        /*
+            The log window a run collects from, sized to the buffer's capacity
+            and reused, so CollectOutput reads one consistent view without
+            allocating per run.
+         */
+        private LogItem[] _outputWindow = Array.Empty<LogItem>();
 
         public static void CloseActive()
         {
@@ -1419,12 +1432,24 @@
                 return _outputLines;
             }
 
-            IReadOnlyList<LogItem> logs = buffer.Logs;
-            int logCount = logs.Count;
+            /*
+                One consistent read: a background thread's log can land between
+                the count and the entries, and a command run must not collect a
+                window that never existed. `added` can exceed the live count
+                when a run logged more than the buffer holds, so the start
+                clamps the same way it did before.
+             */
+            int capacity = buffer.Capacity;
+            if (_outputWindow.Length < capacity)
+            {
+                _outputWindow = new LogItem[Mathf.Max(capacity, MinimumOutputWindow)];
+            }
+
+            int logCount = buffer.CopyTo(_outputWindow);
             int first = Mathf.Max(0, logCount - added);
             for (int index = first; index < logCount; ++index)
             {
-                LogItem log = logs[index];
+                LogItem log = _outputWindow[index];
                 if (log.type == TerminalLogType.Input)
                 {
                     continue;

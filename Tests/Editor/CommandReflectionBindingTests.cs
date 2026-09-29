@@ -4,9 +4,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     using System.Collections.Generic;
     using System.Reflection;
     using System.Reflection.Emit;
+    using System.Text.RegularExpressions;
     using Attributes;
     using Backend;
     using NUnit.Framework;
+    using UnityEngine;
+    using UnityEngine.TestTools;
 
     /*
         Binding behavior of reflection-discovered commands (the compatibility
@@ -315,11 +318,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 Compatibility pins for signatures the current scripting
                 backend binds despite being degenerate declarations: both
                 register through the deferred binder exactly as the eager
-                binder did. Running the open-generic holder's command throws
-                the backend's not-fully-instantiated error the same way the
-                eager path did - dispatch does not contain handler failures.
-                The abstract static is never invoked here; invoking an
-                abstract delegate is undefined.
+                binder did. Invoking the open-generic holder's command still
+                fails the way the eager path did - the backend rejects a
+                not-fully-instantiated generic - but dispatch now contains
+                handler failures and reports them through the error queue
+                (issue #186), so the failure is a queued line rather than an
+                exception out of RunCommand. The abstract static is never
+                invoked here; invoking an abstract delegate is undefined.
              */
             Register(GenericHolderAssembly);
             Register(AbstractAssembly);
@@ -334,9 +339,36 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 shell.Commands.ContainsKey(GenericHolderCommandName),
                 "A bindable command in an open generic type must stay registered"
             );
-            Assert.Throws<InvalidOperationException>(
-                () => shell.RunCommand(GenericHolderCommandName),
-                "Invoking an open-generic holder's command surfaces the backend error, as before"
+
+            /*
+                A contained failure still goes to Unity's logger, which is
+                where a developer reads the frames (#186), so the log is
+                expected rather than unexpected.
+             */
+            LogAssert.Expect(LogType.Exception, new Regex("not fully instantiated"));
+
+            Assert.IsTrue(
+                shell.RunCommand(GenericHolderCommandName),
+                "The command dispatches; the failure is the handler's, not dispatch's"
+            );
+
+            bool reported = false;
+            while (shell.TryConsumeErrorMessage(out string errorMessage))
+            {
+                if (
+                    errorMessage != null
+                    && errorMessage.Contains(GenericHolderCommandName, StringComparison.Ordinal)
+                    && errorMessage.Contains("threw", StringComparison.Ordinal)
+                )
+                {
+                    reported = true;
+                    break;
+                }
+            }
+
+            Assert.IsTrue(
+                reported,
+                $"A contained handler failure must be queued for {GenericHolderCommandName}"
             );
             Assert.IsTrue(
                 shell.Commands.ContainsKey(AbstractCommandName),

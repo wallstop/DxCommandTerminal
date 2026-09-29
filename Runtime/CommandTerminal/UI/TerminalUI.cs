@@ -21,6 +21,12 @@
     {
         private const string TerminalRootName = "TerminalRoot";
 
+        /*
+            Floor for the reused log window, so a terminal whose buffer starts
+            at capacity zero still has somewhere to copy into.
+         */
+        private const int InitialLogWindowSize = 16;
+
         public static TerminalUI Instance { get; private set; }
 
         // Cache log callback to reduce allocations
@@ -229,6 +235,13 @@
         private bool _needsScrollToEnd;
         private LogTailFollower _logTail;
         private long? _lastSeenBufferVersion;
+
+        /*
+            The log window the frame reads, sized to the buffer's capacity and
+            reused. RefreshLogs copies into it once so the count it lays out
+            and the lines it renders are the same read.
+         */
+        private LogItem[] _logWindow = Array.Empty<LogItem>();
         private bool _paletteHeldSurface;
         private bool _needsInitialRefresh;
         private string _lastKnownCommandText;
@@ -2667,8 +2680,7 @@
                 guarded local instead of re-deriving nullability per access.
              */
             CommandLog buffer = Terminal.Buffer;
-            IReadOnlyList<LogItem> logs = buffer?.Logs;
-            if (logs == null)
+            if (buffer == null)
             {
                 return;
             }
@@ -2683,12 +2695,14 @@
             bool dirty = newLogs;
 
             /*
-                One read of the log count: the loops below add to and remove
-                from `content`, so the `while` re-reads `content.childCount` in
-                its own condition and that re-read is what terminates it. The
-                log list is only read here, so its count is one number.
+                One consistent read of the whole window, not a count followed
+                by a per-line index: a background thread's Debug.Log arrives
+                through the same buffer this reads, and a count and the lines
+                read under it separately could describe two different moments.
+                The snapshot is sized to the capacity, which the count never
+                exceeds, so it is written once and reused.
              */
-            int logCount = logs.Count;
+            int logCount = ReadLogWindow(buffer);
             if (content.childCount != logCount)
             {
                 dirty = true;
@@ -2716,25 +2730,23 @@
                 for (int i = 0; i < logCount && i < childCount; ++i)
                 {
                     VisualElement item = content[i];
+                    LogItem logItem = _logWindow[i];
                     switch (item)
                     {
                         case TextField logText:
                         {
-                            LogItem logItem = logs[i];
                             SetupLogText(logText, logItem);
                             logText.value = logItem.message;
                             break;
                         }
                         case Label logLabel:
                         {
-                            LogItem logItem = logs[i];
                             SetupLogText(logLabel, logItem);
                             logLabel.text = logItem.message;
                             break;
                         }
                         case Button button:
                         {
-                            LogItem logItem = logs[i];
                             SetupLogText(button, logItem);
                             button.text = logItem.message;
                             break;
@@ -2777,6 +2789,23 @@
                     log.type == TerminalLogType.Input
                 );
             }
+        }
+
+        /*
+            Copies the buffer's visible window into the reused array and
+            returns how many entries it holds. The array grows with the
+            buffer's capacity and never shrinks, so a terminal whose log
+            buffer is resized reallocates once rather than per frame.
+         */
+        private int ReadLogWindow(CommandLog buffer)
+        {
+            int capacity = buffer.Capacity;
+            if (_logWindow.Length < capacity)
+            {
+                _logWindow = new LogItem[Math.Max(capacity, InitialLogWindowSize)];
+            }
+
+            return buffer.CopyTo(_logWindow);
         }
 
         /*
