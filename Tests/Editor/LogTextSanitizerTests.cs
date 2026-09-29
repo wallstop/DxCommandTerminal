@@ -192,6 +192,36 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         [Test]
+        public void ADisplayCopyIsItsOwnArrayAndRefillsInPlace()
+        {
+            /*
+                A popup shows this copy while the index it returns selects the
+                name the caller still holds, so the copy must be a separate
+                array, and an inspector that redraws every frame must be able
+                to refill it without a second allocation.
+             */
+            string[] names = { "Admin\u202Eexe", "plain" };
+            string[] copy = null;
+            LogTextSanitizer.SanitizeInto(names, ref copy);
+            Assert.AreEqual(new[] { "Admin\\u202Eexe", "plain" }, copy, "Both names escape");
+            Assert.AreEqual(
+                "Admin\u202Eexe",
+                names[0],
+                "The caller's own name stays raw: the popup index selects it"
+            );
+            Assert.AreSame("plain", copy[1], "A clean name passes through by reference");
+
+            LogTextSanitizer.SanitizeInto(new[] { "one", "two", "three" }, ref copy);
+            Assert.AreEqual(3, copy.Length, "A different length needs a new array");
+            Assert.AreEqual(new[] { "one", "two", "three" }, copy, "The refill holds every name");
+
+            string[] refilled = copy;
+            LogTextSanitizer.SanitizeInto(new[] { "four", "five", "six" }, ref copy);
+            Assert.AreSame(refilled, copy, "A same-length refill must not reallocate");
+            Assert.AreEqual("four", copy[0], "A refill replaces the contents");
+        }
+
+        [Test]
         public void NothingIsTruncated()
         {
             /*
