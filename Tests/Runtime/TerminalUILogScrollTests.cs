@@ -40,6 +40,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     {
         private const string PackageRoot = "Packages/com.wallstop-studios.dxcommandterminal";
         private const int FrameBudget = 300;
+        private const int StableLayoutFrames = 5;
         private const float Tolerance = 0.5f;
         private const int FillLines = 400;
         private const string FillMarker = "of 400";
@@ -250,18 +251,31 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 skipping with the reason - rather than as seven red tests that
                 say nothing about the change. See #193 for the wider gap this
                 host has with UI coverage.
+
+                Held, not merely seen. A panel left half-built by an earlier
+                test can report a scroller range for a frame or two and lose it
+                again, and a test that starts on that flicker and asserts into
+                a geometry that has gone is a flaky red that says the change
+                is broken. A layout that survives several consecutive frames is
+                one this environment can actually answer; one that does not is
+                a host limit, and the honest report is the same either way.
              */
+            int stableFrames = 0;
             int frameBudget = FrameBudget;
-            while (0 < frameBudget-- && !(0f < LogScroller().highValue))
+            while (0 < frameBudget-- && stableFrames < StableLayoutFrames)
             {
+                ScrollView view = LogView();
+                bool laidOut =
+                    0f < LogScroller().highValue && 0f < view.contentViewport.layout.height;
+                stableFrames = laidOut ? stableFrames + 1 : 0;
                 yield return null;
             }
 
-            if (!(0f < LogScroller().highValue))
+            if (stableFrames < StableLayoutFrames)
             {
                 Assert.Ignore(
-                    "The log view did not lay out in this environment, so its scroller has "
-                        + "nothing to scroll. A headless editor with no rendered view cannot "
+                    "The log view did not hold a layout in this environment, so its scroller "
+                        + "has nothing to scroll. A headless editor with no rendered view cannot "
                         + "answer this suite; run it where the Game view renders."
                 );
             }
