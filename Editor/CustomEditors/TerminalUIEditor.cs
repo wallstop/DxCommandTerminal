@@ -615,10 +615,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
             return cached;
         }
 
-        /*
-            Display-only: the popup returns an index and the value is read
-            back out of the source list, so these carry the escaped name.
-         */
+        /* Display-only: the index selects the pack, so the label escapes. */
         private static string[] PackNames(List<TerminalThemePack> themePacks)
         {
             return RefreshCache(
@@ -679,7 +676,9 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
 
             Two arrays, not one: a key is both the text the popup prints and
             the key the font dictionaries are read by, so the popup gets the
-            escaped copy and the lookup keeps the raw one.
+            escaped copy and the lookup keeps the raw one. A same-length
+            change of contents is a pre-existing limit of the count stamp,
+            and it hits both arrays equally.
          */
         private static string[] RefreshKeyCache(
             ICollection<string> keys,
@@ -1544,6 +1543,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                         GUILayout.Label("Select Font:");
                     }
 
+                    /* The labels are the copy; fontKeys is what the lookup reads. */
                     string[] fontKeys = FontKeys();
                     int selectedFontKeyIndex = EditorGUILayout.Popup(
                         _fontKey.GetValueOrDefault(-1),

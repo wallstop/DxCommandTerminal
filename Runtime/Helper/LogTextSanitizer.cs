@@ -12,15 +12,19 @@ namespace WallstopStudios.DxCommandTerminal.Helper
         noise or - worse - reads one way and copies out as another.
         "Admin<U+202E>exe" is the case that matters.
 
-        Four rendering paths never pass this funnel: the palette's error
+        Four rendering paths do not pass the log funnel: the palette's error
         bar, the terminal's suggestion bar, the palette's result rows, which
         print a completion candidate - a history line, a GameObject name, a
         description - and the package's own inspectors, which print theme
         names, font names, command names, and asset paths into IMGUI
         tooltips and popup labels. They call this too, so the same text reads
-        one way wherever a developer reads it. A row shows the escaped text
-        and still applies the raw one: the escape is for the reader, and the
-        command the developer runs is the text they chose.
+        one way wherever a developer reads it.
+
+        The rule those paths share: a name printed for a reader is escaped,
+        and the value the developer acts on is the raw one. A row shows the
+        escaped text and still applies the raw text; a popup shows an escaped
+        label and its index still selects the raw name. The escape is for the
+        reader, and the command that runs is the text they chose.
 
         Escaping rather than stripping is the deliberate choice: dropping
         the override would show "Adminexe", a name that looks legitimate and
@@ -122,11 +126,11 @@ namespace WallstopStudios.DxCommandTerminal.Helper
         }
 
         /*
-            The display copy a popup shows. A popup returns an index and the
-            caller reads the name back out of the raw list, so the copy is a
-            separate array: refilled in place when its length already fits,
-            which is what keeps an editor that redraws every frame from
-            allocating one. The caller's own array is never written to.
+            Fills the display copy a popup shows, refilled in place when its
+            length already fits: that is what keeps an inspector redrawing
+            every frame from allocating one array per frame. The caller's
+            array is never written to, and `names` is never null - every
+            caller owns a `new string[count]`.
          */
         public static void SanitizeInto(string[] names, ref string[] copy)
         {

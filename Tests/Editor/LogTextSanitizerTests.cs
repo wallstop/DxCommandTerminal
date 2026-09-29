@@ -201,7 +201,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 to refill it without a second allocation.
              */
             string[] names = { "Admin\u202Eexe", "plain" };
-            string[] copy = null;
+
+            /* Both production callers start here, not from null. */
+            string[] copy = Array.Empty<string>();
             LogTextSanitizer.SanitizeInto(names, ref copy);
             Assert.AreEqual(new[] { "Admin\\u202Eexe", "plain" }, copy, "Both names escape");
             Assert.AreEqual(
@@ -219,6 +221,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             LogTextSanitizer.SanitizeInto(new[] { "four", "five", "six" }, ref copy);
             Assert.AreSame(refilled, copy, "A same-length refill must not reallocate");
             Assert.AreEqual("four", copy[0], "A refill replaces the contents");
+
+            string[] fromNull = null;
+            LogTextSanitizer.SanitizeInto(names, ref fromNull);
+            Assert.AreEqual(copy, fromNull, "A null copy is allocated, never the input");
+            Assert.AreNotSame(names, fromNull, "The caller's array is never the copy");
         }
 
         [Test]

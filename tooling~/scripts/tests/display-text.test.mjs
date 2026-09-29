@@ -11,13 +11,22 @@
 
     Two rules, deliberately different in strength:
 
-    1. Precise. Every hole of an interpolated string inside a GUIContent
-       construction must be a LogTextSanitizer.Sanitize call. A tooltip
-       that names a theme, a font, a command, or an asset path has to
-       escape it; a tooltip made of the package's own words is not a
-       finding.
+    1. Precise, and the one that carries weight. Every hole of an
+       interpolated string inside a GUIContent construction must be a
+       LogTextSanitizer.Sanitize call: a tooltip that names a theme, a
+       font, a command, or an asset path has to escape it, and a tooltip
+       made of the package's own words is not a finding. Read from the
+       source, not run, so it also reads the shapes Unity would never
+       execute - an editor-only branch, a platform-guarded line. What it
+       does not cover is stated below rather than assumed.
     2. A backstop for the popups, whose labels are escaped in the caching
        builder that fills them and are therefore not visible at the call.
+
+    Not covered, so a future reader is not misled: a label API other than
+    a GUIContent construction (a bare `GUILayout.Label($"... {name}")`), a
+    `tooltip` set through an object initializer, and a hole whose own
+    braces would need balancing. None of those exists in the package today;
+    widening the gate to them is a separate piece of work.
 
     The scanner has its own tests below: a gate that cannot fail is worse
     than no gate, and an earlier version of it walked only the top level of
@@ -30,7 +39,10 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
-const SANITIZER = "LogTextSanitizer.Sanitize";
+/* The call, with its paren: a prefix test would accept a same-named sibling. */
+const SANITIZE_CALL = "LogTextSanitizer.Sanitize(";
+/* The backstop only asks whether the file reaches the sanitizer at all. */
+const SANITIZER = "LogTextSanitizer.";
 
 /** Every shipped C# file that can print a name. Tests and tooling are exempt. */
 function shippedCSharpFiles() {
@@ -132,11 +144,11 @@ function classify(text) {
         ++index;
       }
 
-      literals.push({
-        start,
-        end: index,
-        interpolated: !verbatim && text[start - 1] === "$"
-      });
+      const interpolated =
+        !verbatim && text[start - 1] === "$"
+          ? true
+          : verbatim && text[start - 1] === "@" && text[start - 2] === "$";
+      literals.push({ start, end: index, interpolated, verbatim });
       continue;
     }
 
@@ -208,7 +220,14 @@ function interpolationHoles(source, literals) {
       continue;
     }
 
-    for (const match of source.slice(literal.start, literal.end).matchAll(/\{([^{}]*)\}/g)) {
+    const text = source.slice(literal.start, literal.end);
+    /*
+        A verbatim interpolated string doubles a literal brace, so "{{x}}" is
+        the text {x} and not a hole. Blank the doubled pairs before looking
+        for holes, or every one of them reads as an unescaped name.
+     */
+    const body = literal.verbatim ? text.replace(/\{\{|\}\}/g, "  ") : text;
+    for (const match of body.matchAll(/\{([^{}]*)\}/g)) {
       holes.push({ hole: match[1].trim(), offset: literal.start + match.index });
     }
   }
@@ -245,7 +264,7 @@ function unescapedTooltipNames(text) {
       .filter((literal) => literal.start > openParen && literal.end <= closeParen)
       .map((literal) => ({ ...literal, start: literal.start - openParen, end: literal.end - openParen }));
     for (const { hole, offset } of interpolationHoles(argumentText, argumentLiterals)) {
-      if (!hole.startsWith(SANITIZER)) {
+      if (!hole.startsWith(SANITIZE_CALL)) {
         findings.push(`line ${lineOf(text, openParen + offset)}: ${hole}`);
       }
     }
@@ -265,7 +284,26 @@ function unescapedTooltipNames(text) {
     raw one, and it does not claim to.
  */
 function popupsWithoutASanitizer(text) {
-  return text.includes("EditorGUILayout.Popup(") && !text.includes(SANITIZER);
+  const { literals, comments } = classify(text);
+  const code = codeText(text, literals, comments);
+  return code.includes("EditorGUILayout.Popup(") && !code.includes(SANITIZER);
+}
+
+/*
+    The file's own code, with every comment and string literal removed: a
+    backstop satisfied by a TODO or a Debug.Log of the sanitizer's own name
+    is not a backstop, and a mention in either is the cheapest way to write
+    one by accident.
+ */
+function codeText(text, literals, comments) {
+  let result = "";
+  let index = 0;
+  for (const span of [...comments, ...literals]) {
+    result += text.slice(index, span.start);
+    index = span.end;
+  }
+
+  return result + text.slice(index);
 }
 
 test("display text: a tooltip escapes every name it interpolates", () => {
@@ -291,7 +329,7 @@ test("display text: an inspector that pops up names reaches the sanitizer", () =
     const text = fs.readFileSync(file, "utf8");
     if (popupsWithoutASanitizer(text)) {
       findings.push(
-        `${path.relative(repoRoot, file)} pops up project names and never calls ${SANITIZER}`
+        `${path.relative(repoRoot, file)} pops up project names and never reaches ${SANITIZER}`
       );
     }
   }
@@ -320,10 +358,12 @@ test("display text: the scanner names a raw tooltip hole", () => {
       "a raw name in a tooltip must be reported, wrapped or on one line"
     );
   }
-});test("display text: the scanner accepts an escaped tooltip hole", () => {
+});
+
+test("display text: the scanner accepts an escaped tooltip hole", () => {
   const shapes = [
-    [`GUIContent tip = new("Set Theme", $"Will set {${SANITIZER}(theme)}");`],
-    ["GUIContent tip = new(", '    "Set Theme",', `    $"Will set {${SANITIZER}(theme)}"`, ");"]
+    [`GUIContent tip = new("Set Theme", $"Will set {${SANITIZE_CALL}theme)}");`],
+    ["GUIContent tip = new(", '    "Set Theme",', `    $"Will set {${SANITIZE_CALL}theme)}"`, ");"]
   ];
   for (const lines of shapes) {
     assert.deepEqual(unescapedTooltipNames(lines.join("\n")), []);
@@ -352,4 +392,36 @@ test("display text: the scanner is not fooled by the shapes around it", () => {
   for (const source of sources.slice(1)) {
     assert.deepEqual(unescapedTooltipNames(source.join("\n")), [], source.join("\n"));
   }
+
+  assert.deepEqual(
+    unescapedTooltipNames([`GUIContent tip = new("a", $@"literal {{theme}} text");`].join("\n")),
+    [],
+    'a doubled brace in a verbatim string is literal text, not a hole: {theme}'
+  );
+});
+
+test("display text: the popup backstop is not satisfied by a mention", () => {
+  assert.ok(
+    popupsWithoutASanitizer(
+      ["// TODO: the labels should call LogTextSanitizer.Sanitize", "EditorGUILayout.Popup(0, names);"]
+        .join("\n")
+    ),
+    "a mention in a comment is not a call"
+  );
+  assert.ok(
+    popupsWithoutASanitizer(['Debug.Log("LogTextSanitizer.Sanitize");', "EditorGUILayout.Popup(0, names);"].join("\n")),
+    "a mention in a string literal is not a call"
+  );
+  assert.ok(
+    !popupsWithoutASanitizer(
+      [
+        "private static void Draw(string[] names, ref string[] labels)",
+        "{",
+        "    LogTextSanitizer.SanitizeInto(names, ref labels);",
+        "    EditorGUILayout.Popup(0, labels);",
+        "}"
+      ].join("\n")
+    ),
+    "a real call in code satisfies the backstop"
+  );
 });
