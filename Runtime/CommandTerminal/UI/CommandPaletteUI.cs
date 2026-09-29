@@ -42,8 +42,8 @@
         private const int MaxOutputCharacters = 512;
 
         /*
-            Floor for the reused output window, so a session whose log buffer
-            is at capacity zero still has somewhere to copy into.
+            Floor for the reused output window, so a small configured log
+            buffer does not reallocate on every capacity change around it.
          */
         private const int MinimumOutputWindow = 16;
         private const string PaletteFooterName = "PaletteFooter";

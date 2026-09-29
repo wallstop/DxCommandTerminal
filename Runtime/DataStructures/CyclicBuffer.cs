@@ -184,9 +184,14 @@ namespace WallstopStudios.DxCommandTerminal.DataStructures
             Copies the visible window oldest-first into a caller-owned array
             and returns how many entries it wrote, so one read pass is one
             consistent view instead of a count followed by independent
-            per-entry reads that a concurrent write could move underneath. A
-            destination shorter than the window truncates; sizing it to
-            Capacity always fits, because Count never exceeds it.
+            per-entry reads that a concurrent write could move underneath.
+
+            A destination shorter than the window truncates to its oldest
+            entries. Sizing from a Capacity read taken in the same lock would
+            always fit, but Capacity is its own read, so a caller that sizes
+            and then copies can have the buffer grow in between; copy into a
+            buffer that already has room for the largest capacity the session
+            is configured for.
          */
         internal int CopyTo(T[] destination)
         {

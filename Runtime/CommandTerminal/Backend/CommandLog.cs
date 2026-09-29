@@ -93,29 +93,35 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 {
                     return false;
                 }
+            }
 
-                if (!CapturesStackTrace(type))
-                {
-                    stackTrace = string.Empty;
-                }
+            /*
+                Sanitizing walks the whole message and, for anything needing
+                an escape, rents a process-global string builder. It reads only
+                its arguments, so it runs outside the lock: holding the ring
+                across two string walks would let a worker thread's large stack
+                trace stall the terminal's next frame for its duration, and a
+                clean message returns the same reference, so the write itself
+                stays allocation-free.
 
+                Every source funnels here - Terminal.Log, the Unity log
+                callback, and direct callers - so this is the one place log
+                text is normalized.
+             */
+            LogItem log = new(
+                type,
+                LogTextSanitizer.Sanitize(message),
+                CapturesStackTrace(type) ? LogTextSanitizer.Sanitize(stackTrace) : string.Empty
+            );
+
+            lock (_logs.SyncRoot)
+            {
                 /*
-                    Every source funnels here - Terminal.Log, the Unity log
-                    callback, and direct callers - so this is the one place log
-                    text is normalized. A clean message returns the same
-                    reference and the write stays allocation-free.
-
                     The version bump and the ring write share this lock, so a
-                    reader never sees a version claiming an entry the ring
-                    does not hold. An entry a later writer overwrote is gone,
-                    as it was before: the version is a change signal, not a
-                    receipt.
+                    reader never sees a version claiming an entry the ring does
+                    not hold. An entry a later writer overwrote is gone, as it
+                    was before: the version is a change signal, not a receipt.
                  */
-                LogItem log = new(
-                    type,
-                    LogTextSanitizer.Sanitize(message),
-                    LogTextSanitizer.Sanitize(stackTrace)
-                );
                 Interlocked.Increment(ref _version);
                 _logs.Add(log);
             }

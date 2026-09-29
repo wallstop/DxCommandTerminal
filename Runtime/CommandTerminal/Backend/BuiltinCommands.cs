@@ -23,10 +23,12 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         /*
             The window `trace` reads, sized to the log buffer's capacity and
-            reused. Commands run on the main thread, so one shared array is
-            enough.
+            reused. Not static: CommandShell.RunCommand is public, and the
+            rest of this fix is about the log being reachable from a thread
+            the caller chose, so the buffer is per-thread rather than shared.
          */
-        private static LogItem[] TraceWindow = new LogItem[2];
+        [ThreadStatic]
+        private static LogItem[] TraceWindow;
 
         [RegisterCommand(
             isDefault: true,
@@ -443,15 +445,18 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             /*
                 One consistent read of the window: a background log landing
                 between the count and the entry would make the second read
-                index a different line than the count described.
+                index a different line than the count described. `trace` reads
+                the second-newest entry, so two slots is the floor.
              */
             int capacity = buffer.Capacity;
-            if (TraceWindow.Length < capacity)
+            LogItem[] window = TraceWindow;
+            if (window == null || window.Length < capacity)
             {
-                TraceWindow = new LogItem[Math.Max(capacity, 2)];
+                window = new LogItem[Math.Max(capacity, 2)];
+                TraceWindow = window;
             }
 
-            int logCount = buffer.CopyTo(TraceWindow);
+            int logCount = buffer.CopyTo(window);
 
             if (logCount - 2 < 0)
             {
@@ -459,7 +464,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return;
             }
 
-            LogItem logItem = TraceWindow[logCount - 2];
+            LogItem logItem = window[logCount - 2];
 
             if (string.IsNullOrWhiteSpace(logItem.stackTrace))
             {

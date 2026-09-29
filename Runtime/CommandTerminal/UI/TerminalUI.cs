@@ -22,10 +22,10 @@
         private const string TerminalRootName = "TerminalRoot";
 
         /*
-            Floor for the reused log window, so a terminal whose buffer starts
-            at capacity zero still has somewhere to copy into.
+            Floor for the reused log window, so a small configured buffer does
+            not reallocate on every capacity change around it.
          */
-        private const int InitialLogWindowSize = 16;
+        private const int MinimumLogWindowSize = 16;
 
         public static TerminalUI Instance { get; private set; }
 
@@ -2802,7 +2802,7 @@
             int capacity = buffer.Capacity;
             if (_logWindow.Length < capacity)
             {
-                _logWindow = new LogItem[Math.Max(capacity, InitialLogWindowSize)];
+                _logWindow = new LogItem[Math.Max(capacity, MinimumLogWindowSize)];
             }
 
             return buffer.CopyTo(_logWindow);

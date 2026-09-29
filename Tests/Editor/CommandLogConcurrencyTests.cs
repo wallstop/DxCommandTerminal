@@ -21,8 +21,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         private const int TraceIterations = 20_000;
 
-        private const string FillPrefix = "fill-";
-
         private static readonly string[] Messages =
         {
             "alpha",
@@ -68,14 +66,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             return thread;
         }
 
-        private static void Fill(CommandLog log, int count)
-        {
-            for (int i = 0; i < count; ++i)
-            {
-                log.HandleLog($"{FillPrefix}{i}", string.Empty, TerminalLogType.Message);
-            }
-        }
-
         private static void ReadEveryEntry(CommandLog log)
         {
             IReadOnlyList<LogItem> logs = log.Logs;
@@ -88,11 +78,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         private static bool WasWritten(string message)
         {
-            if (message.StartsWith(FillPrefix, StringComparison.Ordinal))
-            {
-                return true;
-            }
-
             foreach (string candidate in Messages)
             {
                 if (string.Equals(candidate, message, StringComparison.Ordinal))
@@ -102,6 +87,38 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             }
 
             return false;
+        }
+
+        /* The last `keep` of `count` writes, as the messages a caller wrote. */
+        private static string[] Last(string prefix, int count, int keep)
+        {
+            int first = Math.Max(0, count - keep);
+            string[] expected = new string[count - first];
+            for (int i = first; i < count; ++i)
+            {
+                expected[i - first] = $"{prefix}{i}";
+            }
+
+            return expected;
+        }
+
+        private static void Write(CommandLog log, string prefix, int count)
+        {
+            for (int i = 0; i < count; ++i)
+            {
+                Assert.IsTrue(
+                    log.HandleLog($"{prefix}{i}", string.Empty, TerminalLogType.Message),
+                    "Sanity: every write must land"
+                );
+            }
+        }
+
+        private static string[] Join(string[] first, string[] second)
+        {
+            string[] joined = new string[first.Length + second.Length];
+            Array.Copy(first, joined, first.Length);
+            Array.Copy(second, 0, joined, first.Length, second.Length);
+            return joined;
         }
 
         /*
@@ -328,13 +345,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void ResizeAndClearDuringAFloodLeaveAReadableWindow()
         {
             CommandLog log = new(Capacity);
-            Fill(log, Capacity);
 
             using ManualResetEventSlim start = new(false);
             using ManualResetEventSlim done = new(false);
 
             Thread writer = StartFlood(log, start, WriterIterations, Messages, _ => { }, done);
 
+            // Hoisted: the buffer is only ever sized down and back up, so the array never has to grow.
+            LogItem[] window = new LogItem[Capacity];
+            int reconfigured = 0;
             try
             {
                 while (!done.IsSet)
@@ -343,15 +362,21 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     log.Resize(capacity);
                     log.Clear();
                     log.Resize(Capacity);
+                    ++reconfigured;
 
-                    LogItem[] window = new LogItem[Capacity];
                     int count = log.CopyTo(window);
+
+                    /*
+                        Every entry has to be one the writer actually wrote.
+                        A window assembled from a half-applied resize holds
+                        nothing, a default entry, or a slot from before the
+                        clear, and only real entries satisfy this.
+                     */
                     for (int i = 0; i < count; ++i)
                     {
-                        Assert.That(
-                            window[i].message,
-                            Is.Not.Null,
-                            "A resized or cleared window must still be readable"
+                        Assert.IsTrue(
+                            WasWritten(window[i].message),
+                            $"A reconfigured window held an entry no writer produced: '{window[i].message}'"
                         );
                     }
                 }
@@ -360,6 +385,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             {
                 writer.Join();
             }
+
+            Assert.That(0 < reconfigured, "Sanity: the reconfiguration loop must have run");
         }
 
         /*
@@ -375,7 +402,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void ResizeToTheSameCapacityThenWritingStaysReadable()
         {
             CommandLog log = new(4);
-            Fill(log, 4);
+            for (int i = 0; i < 4; ++i)
+            {
+                log.HandleLog($"fill-{i}", string.Empty, TerminalLogType.Message);
+            }
+
             Assert.AreEqual(4, log.Logs.Count, "Sanity: the ring must start full");
 
             log.Resize(log.Capacity);
@@ -388,39 +419,55 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 );
             }
 
-            AssertSnapshotMatchesIndexer(log, "same-capacity resize then writes");
+            AssertWindowIs(log, Last("after-resize-", 8, 4), "same-capacity resize then writes");
         }
 
         /*
-            The snapshot is the read primitive the terminal's per-frame refresh
-            uses: one count and the entries that count describes, taken
-            together. It has to agree with the indexer, including after the ring
-            wraps and after a resize.
+            The visible window across every state the ring can be in. Each
+            stage states the messages that must be showing, oldest first, so
+            a write position that lands outside the buffer shows up as a
+            rotated window rather than as a snapshot that disagrees with the
+            indexer - which is the comparison the previous version made, and
+            it could not fail.
          */
         [Test]
-        public void SnapshotMatchesTheIndexerAcrossWrapAndResize()
+        public void TheWindowIsTheLastWrittenEntriesAcrossEveryState()
         {
             CommandLog log = new(4);
-            AssertSnapshotMatchesIndexer(log, "empty");
+            AssertWindowIs(log, Array.Empty<string>(), "empty");
 
-            Fill(log, 4);
-            AssertSnapshotMatchesIndexer(log, "exactly full");
+            Write(log, "a", 4);
+            AssertWindowIs(log, Last("a", 4, 4), "exactly full");
 
-            for (int i = 0; i < 6; ++i)
-            {
-                log.HandleLog($"wrap-{i}", string.Empty, TerminalLogType.Message);
-            }
-
-            AssertSnapshotMatchesIndexer(log, "wrapped");
+            Write(log, "b", 6);
+            AssertWindowIs(log, Last("b", 6, 4), "wrapped");
 
             log.Resize(8);
-            AssertSnapshotMatchesIndexer(log, "grown");
+            AssertWindowIs(log, Last("b", 6, 4), "grown keeps what it had");
+
+            // Growing leaves the 4 wrapped entries and gives the ring 4 free slots.
+            Write(log, "c", 4);
+            AssertWindowIs(log, Join(Last("b", 6, 4), Last("c", 4, 4)), "grown holds more");
 
             log.Resize(2);
-            AssertSnapshotMatchesIndexer(log, "shrunk");
+            AssertWindowIs(
+                log,
+                new[] { "b2", "b3" },
+                "shrunk keeps the oldest entries still showing"
+            );
+
+            log.Resize(0);
+            AssertWindowIs(log, Array.Empty<string>(), "zero capacity holds nothing");
+
+            Write(log, "d", 3);
+            AssertWindowIs(log, Array.Empty<string>(), "writes to a zero buffer are dropped");
+
+            log.Resize(4);
+            Write(log, "e", 2);
+            AssertWindowIs(log, Last("e", 2, 4), "writes land again after regrowth");
 
             log.Clear();
-            AssertSnapshotMatchesIndexer(log, "cleared");
+            AssertWindowIs(log, Array.Empty<string>(), "cleared");
         }
 
         /*
@@ -471,30 +518,29 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
          */
         private bool ContainsOnly(string reduced, string marker)
         {
-            string expected = $"GamePlay:{marker}Frame()";
-            if (!string.Equals(reduced, expected, StringComparison.Ordinal))
-            {
-                return false;
-            }
-
-            return true;
+            return string.Equals(reduced, $"GamePlay:{marker}Frame()", StringComparison.Ordinal);
         }
 
-        private void AssertSnapshotMatchesIndexer(CommandLog log, string stage)
+        /*
+            The window the buffer shows has to be exactly the last
+            min(written, capacity) messages that were written, oldest first.
+            Comparing a snapshot against the indexer cannot fail - both call
+            the same helper under the same lock - so this states the expected
+            content instead. It is what catches a write position that lands
+            outside the buffer: the entries come back rotated.
+         */
+        private void AssertWindowIs(CommandLog log, IReadOnlyList<string> expected, string stage)
         {
-            LogItem[] snapshot = new LogItem[Math.Max(1, log.Capacity)];
-            int count = log.CopyTo(snapshot);
+            int count = expected.Count;
+            Assert.AreEqual(count, log.Logs.Count, $"Entry count ({stage})");
 
-            IReadOnlyList<LogItem> logs = log.Logs;
-            Assert.AreEqual(logs.Count, count, $"The snapshot count is the buffer count ({stage})");
+            LogItem[] snapshot = new LogItem[Math.Max(1, log.Capacity)];
+            int copied = log.CopyTo(snapshot);
+            Assert.AreEqual(count, copied, $"Snapshot count ({stage})");
 
             for (int i = 0; i < count; ++i)
             {
-                Assert.AreEqual(
-                    logs[i].message,
-                    snapshot[i].message,
-                    $"The snapshot must match the indexer at {i} ({stage})"
-                );
+                Assert.AreEqual(expected[i], snapshot[i].message, $"Window order at {i} ({stage})");
             }
         }
     }
