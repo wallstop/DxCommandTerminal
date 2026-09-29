@@ -461,6 +461,28 @@ The clipboard is unavailable on tvOS, and a platform that will not answer withou
 
 One limit: a control character that is not whitespace is left in the field. A single line cannot show it, so it is invisible while you are typing, and it reaches the argument as the exact character you copied. Dropping it would lose your text; escaping it there would change the command. A command that prints it gets the visible escape from the log.
 
+## Copying out of the console
+
+The log view is the only place a message, a command echo, or a failing value ever appears, so two commands put it on the system clipboard:
+
+- `copy-last` copies the newest line.
+- `copy-log` copies every buffered line; `copy-log 20` copies the last 20.
+
+A copied line is the line the log shows, so the stack trace is not included - `trace` is how you read one, and copying 256 lines does not carry 256 traces. Each command answers in the console like every other one: an empty log, a log with no text in it, a count that is not a number, and a count below one are each reported rather than ignored.
+
+A clipboard write is a request a platform can decline. tvOS has no clipboard, and a browser clipboard may refuse without a user gesture, so the write is read back and compared and a copy that did not happen says so instead of silently doing nothing. The read-back is not an acknowledgement: copying the same window twice reports success whether or not the second write landed, and a browser that accepts the write asynchronously can read back the old value.
+
+## Reading the log with the keyboard
+
+The command line holds panel focus for as long as the console is open, so the terminal routes these to the log itself:
+
+- **Page Up / Page Down** page the log by one viewport.
+- **Ctrl+Home** and **Ctrl+End** (Cmd on macOS) jump to its oldest and newest lines.
+
+Home and End without the modifier stay with the command line, where they move the caret as a text field should. Every other key is untouched - typing, history recall, completion, and closing work exactly as they did.
+
+Paging back detaches the tail exactly as scrolling back does, so new output does not pull the view to the end while you are reading. Ctrl+End is the way back to following. A log that has not been laid out - a headless editor, or a view with no rendered Game view - has nothing to page through and stays where it is.
+
 ## Typing wins over a character binding
 
 A binding that presses a character key is left to the field being typed into. While the command line or the palette search bar has focus, pressing the key types the character and does not run the binding - so with the defaults `` ` `` (toggle) and `` #` `` (full), those characters are typeable and the console key no longer closes an open console.
