@@ -227,6 +227,7 @@
         private bool _started;
         private bool _needsFocus;
         private bool _needsScrollToEnd;
+        private LogTailFollower _logTail;
         private long? _lastSeenBufferVersion;
         private bool _paletteHeldSurface;
         private bool _needsInitialRefresh;
@@ -1530,6 +1531,12 @@
 
                 _input.CommandText = string.Empty;
                 _needsFocus = true;
+                /*
+                    Running a command is an explicit request for its output, so
+                    the tail follows again even when the developer had scrolled
+                    away to read an earlier one.
+                 */
+                _logTail.Attach();
                 _needsScrollToEnd = true;
             }
             finally
@@ -2273,6 +2280,8 @@
             _logScrollView.name = "LogScrollView";
             _logScrollView.AddToClassList("log-scroll-view");
             _terminalContainer.Add(_logScrollView);
+            /* A fresh view starts at zero, so no earlier pin describes it. */
+            _logTail.Reset();
 
             _autoCompleteContainer = new ScrollView(ScrollViewMode.Horizontal)
             {
@@ -2670,7 +2679,8 @@
             }
 
             VisualElement content = _logScrollView.contentContainer;
-            bool dirty = _lastSeenBufferVersion != buffer.Version;
+            bool newLogs = _lastSeenBufferVersion != buffer.Version;
+            bool dirty = newLogs;
 
             /*
                 One read of the log count: the loops below add to and remove
@@ -2698,8 +2708,6 @@
                         content.RemoveAt(i);
                     }
                 }
-
-                _needsScrollToEnd = true;
             }
 
             if (dirty)
@@ -2739,6 +2747,8 @@
                     _lastSeenBufferVersion = buffer.Version;
                 }
             }
+
+            _needsScrollToEnd |= ObserveLogTail(newLogs);
             return;
 
             static void SetupLogText(VisualElement logText, LogItem log)
@@ -2769,12 +2779,42 @@
             }
         }
 
+        /*
+            New output scrolls into view only while the log view is at its own
+            end. A developer who scrolls up reads at their own pace, and
+            scrolling back to the end follows again. The child count cannot
+            answer this: a full ring buffer holds its count, so a child-count
+            trigger stops following exactly when a session starts logging
+            continuously.
+         */
+        private bool ObserveLogTail(bool newLogs)
+        {
+            Scroller scroller = _logScrollView?.verticalScroller;
+            if (scroller == null)
+            {
+                return false;
+            }
+
+            return _logTail.Observe(scroller.value, scroller.highValue, newLogs);
+        }
+
         private void ScrollToEnd()
         {
-            if (0 < _logScrollView?.verticalScroller.highValue)
+            Scroller scroller = _logScrollView?.verticalScroller;
+            if (scroller == null || scroller.highValue <= 0f)
             {
-                _logScrollView.verticalScroller.value = _logScrollView.verticalScroller.highValue;
+                return;
             }
+
+            scroller.value = scroller.highValue;
+            /*
+                Read the value back rather than assuming the write landed on
+                the high value: the scroller clamps to the extent it holds
+                now, and that clamped number is what the next pass compares
+                against to tell a developer's scroll from the layout pass that
+                grows the content after this pin.
+             */
+            _logTail.Pin(scroller.value);
         }
 
         private void RefreshAutoCompleteHints()
