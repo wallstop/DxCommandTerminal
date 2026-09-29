@@ -148,7 +148,6 @@ namespace WallstopStudios.DxCommandTerminal.DataStructures
 
             lock (SyncRoot)
             {
-                int oldCapacity = _capacity;
                 _capacity = newCapacity;
                 _buffer.Shift(-_position);
                 if (newCapacity < _buffer.Count)
@@ -156,8 +155,19 @@ namespace WallstopStudios.DxCommandTerminal.DataStructures
                     _buffer.RemoveRange(newCapacity, _buffer.Count - newCapacity);
                 }
 
-                _position =
-                    newCapacity < oldCapacity && newCapacity <= _buffer.Count ? 0 : _buffer.Count;
+                /*
+                    The write position is the slot the next Add fills, so it
+                    is a slot index into the backing list and never past its
+                    end. Deriving it from _buffer.Count alone put it one past
+                    the last slot whenever the ring was already full, and the
+                    next Add then took the "list is full" branch and grew the
+                    list past the capacity - after which the index arithmetic
+                    ran off the end of it. Resizing to the capacity a full
+                    ring already has reached that, with no thread involved.
+                    Capacity 0 has no slot to write, which Add already
+                    handles, so it parks at 0.
+                 */
+                _position = _capacity == 0 ? 0 : _buffer.Count % _capacity;
                 _count = Math.Min(newCapacity, _count);
             }
         }

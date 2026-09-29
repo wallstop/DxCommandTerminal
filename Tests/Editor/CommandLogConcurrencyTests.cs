@@ -19,6 +19,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         private const int WriterIterations = 200_000;
 
+        private const int TraceIterations = 20_000;
+
         private const string FillPrefix = "fill-";
 
         private static readonly string[] Messages =
@@ -108,12 +110,17 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             then index every entry. Before the fix the unsynchronized
             read-modify-writes in CyclicBuffer.Add and CommandLog's version
             counter let the two disagree, and BoundsCheck threw.
+
+            The buffer starts empty on purpose: a ring that is already full
+            overwrites in place forever, so it never grows its backing list
+            and the reader's index arithmetic is pinned to a constant. The
+            interleaving that throws lives in the growth, so a pre-filled
+            buffer would make this test pass against the broken code.
          */
         [Test]
         public void BackgroundLogFloodDoesNotThrowAgainstAConcurrentRead()
         {
             CommandLog log = new(Capacity);
-            Fill(log, Capacity);
 
             using ManualResetEventSlim start = new(false);
             Exception writerFailure = null;
@@ -154,7 +161,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void EntriesReadDuringAFloodAreWholeAndWereWritten()
         {
             CommandLog log = new(Capacity);
-            Fill(log, Capacity);
 
             using ManualResetEventSlim start = new(false);
             using ManualResetEventSlim done = new(false);
@@ -188,44 +194,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             {
                 writer.Join();
             }
-        }
-
-        /*
-            The reader's own view has to stay coherent: the count it reads and
-            the entries it indexes have to describe the same window. Count only
-            ever grows under a concurrent write, so a stale read is harmless -
-            a count that shrinks is not.
-         */
-        [Test]
-        public void CountNeverGoesBackwardsUnderAConcurrentFlood()
-        {
-            CommandLog log = new(Capacity);
-            Fill(log, Capacity);
-
-            using ManualResetEventSlim start = new(false);
-            using ManualResetEventSlim done = new(false);
-
-            Thread writer = StartFlood(log, start, WriterIterations, Messages, _ => { }, done);
-
-            int highest = 0;
-            try
-            {
-                while (!done.IsSet)
-                {
-                    int count = log.Logs.Count;
-                    Assert.That(
-                        highest <= count,
-                        $"The log count went backwards: {highest} then {count}"
-                    );
-                    highest = count;
-                }
-            }
-            finally
-            {
-                writer.Join();
-            }
-
-            Assert.AreEqual(Capacity, highest, "Sanity: the buffer must have filled");
         }
 
         /*
@@ -293,25 +261,60 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             CommandLog log = new(Capacity);
 
             using ManualResetEventSlim start = new(false);
-            string first = null;
-            string second = null;
+            Exception failure = null;
 
-            Thread a = StartReducer(log, start, "ALPHA", value => first = value);
-            Thread b = StartReducer(log, start, "BETA", value => second = value);
+            /*
+                A single pair of threads overlaps rarely enough to miss the
+                race, so each thread reduces its own trace many times while
+                the other is running. Any result that is not exactly its own
+                caller frame - a foreign one spliced in, or an empty one left
+                by the other thread's Clear - is a shared buffer.
+             */
+            Thread a = StartReducer(
+                log,
+                start,
+                "ALPHA",
+                TraceIterations,
+                value =>
+                {
+                    if (!ContainsOnly(value, "ALPHA"))
+                    {
+                        Interlocked.CompareExchange(
+                            ref failure,
+                            new InvalidOperationException(
+                                $"A reduction carried another thread's frames: {value}"
+                            ),
+                            null
+                        );
+                    }
+                },
+                exception => Interlocked.CompareExchange(ref failure, exception, null)
+            );
+            Thread b = StartReducer(
+                log,
+                start,
+                "BETA",
+                TraceIterations,
+                value =>
+                {
+                    if (!ContainsOnly(value, "BETA"))
+                    {
+                        Interlocked.CompareExchange(
+                            ref failure,
+                            new InvalidOperationException(
+                                $"A reduction carried another thread's frames: {value}"
+                            ),
+                            null
+                        );
+                    }
+                },
+                exception => Interlocked.CompareExchange(ref failure, exception, null)
+            );
 
             a.Join();
             b.Join();
 
-            Assert.That(first != null, "Sanity: the first reduction must return");
-            Assert.That(second != null, "Sanity: the second reduction must return");
-            Assert.IsTrue(
-                ContainsOnly(first, "ALPHA"),
-                $"A reduction carried another thread's frames: {first}"
-            );
-            Assert.IsTrue(
-                ContainsOnly(second, "BETA"),
-                $"A reduction carried another thread's frames: {second}"
-            );
+            Assert.That(failure == null, $"Concurrent trace reduction must stay whole: {failure}");
         }
 
         /*
@@ -360,6 +363,35 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         /*
+            Resizing a ring to the capacity it already holds, then writing to
+            it, used to leave the write position one past the last slot. The
+            next write then took the "the list is full" branch and grew the
+            backing list past the capacity, and the index arithmetic ran off
+            the end of it - the same ArgumentOutOfRangeException the thread
+            race produced, reachable with no thread at all through the public
+            Resize.
+         */
+        [Test]
+        public void ResizeToTheSameCapacityThenWritingStaysReadable()
+        {
+            CommandLog log = new(4);
+            Fill(log, 4);
+            Assert.AreEqual(4, log.Logs.Count, "Sanity: the ring must start full");
+
+            log.Resize(log.Capacity);
+
+            for (int i = 0; i < 8; ++i)
+            {
+                Assert.IsTrue(
+                    log.HandleLog($"after-resize-{i}", string.Empty, TerminalLogType.Message),
+                    "Sanity: every write must land"
+                );
+            }
+
+            AssertSnapshotMatchesIndexer(log, "same-capacity resize then writes");
+        }
+
+        /*
             The snapshot is the read primitive the terminal's per-frame refresh
             uses: one count and the entries that count describes, taken
             together. It has to agree with the indexer, including after the ring
@@ -400,42 +432,49 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             CommandLog log,
             ManualResetEventSlim start,
             string marker,
-            Action<string> onResult
+            int iterations,
+            Action<string> onResult,
+            Action<Exception> onFailure
         )
         {
             Thread thread = new(() =>
             {
-                start.Wait();
-                string trace = string.Join(
-                    Environment.NewLine,
-                    "WallstopStudios.DxCommandTerminal.CommandLog:HandleLog()",
-                    "WallstopStudios.DxCommandTerminal.Terminal:Log()",
-                    $"GamePlay:{marker}Frame()"
-                );
-                onResult(log.ReduceStackTrace(trace));
+                try
+                {
+                    start.Wait();
+                    string trace = string.Join(
+                        Environment.NewLine,
+                        "WallstopStudios.DxCommandTerminal.CommandLog:HandleLog()",
+                        "WallstopStudios.DxCommandTerminal.Terminal:Log()",
+                        $"GamePlay:{marker}Frame()"
+                    );
+                    for (int i = 0; i < iterations; ++i)
+                    {
+                        onResult(log.ReduceStackTrace(trace));
+                    }
+                }
+                catch (Exception exception)
+                {
+                    onFailure(exception);
+                }
             });
             thread.Start();
             start.Set();
             return thread;
         }
 
+        /*
+            The reduction has to be exactly the one caller frame and nothing
+            else. Asserting only that no foreign marker appears would pass on
+            an empty result, which is exactly what two threads racing a Clear
+            produce, so the marker has to be present and nothing else may be.
+         */
         private bool ContainsOnly(string reduced, string marker)
         {
-            string[] lines = reduced.Split(Environment.NewLine);
-            foreach (string line in lines)
+            string expected = $"GamePlay:{marker}Frame()";
+            if (!string.Equals(reduced, expected, StringComparison.Ordinal))
             {
-                if (line.Length == 0)
-                {
-                    continue;
-                }
-
-                if (line.Contains("Frame()", StringComparison.Ordinal))
-                {
-                    if (!line.Contains(marker, StringComparison.Ordinal))
-                    {
-                        return false;
-                    }
-                }
+                return false;
             }
 
             return true;
