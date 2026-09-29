@@ -33,10 +33,13 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
         private static string[] _themeDisplayNames;
         private static bool _fontKeyCacheStale = true;
         private static string[] _fontKeyCache = Array.Empty<string>();
+        private static string[] _fontKeyLabels = Array.Empty<string>();
         private static bool _secondFontKeyCacheStale = true;
         private static string[] _secondFontKeyCache = Array.Empty<string>();
+        private static string[] _secondFontKeyLabels = Array.Empty<string>();
 
         private int _commandIndex;
+        private string[] _ignorableCommandLabels = Array.Empty<string>();
         private TerminalUI _lastSeen;
 
         private readonly HashSet<string> _allCommands = new(StringComparer.OrdinalIgnoreCase);
@@ -612,11 +615,15 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
             return cached;
         }
 
+        /*
+            Display-only: the popup returns an index and the value is read
+            back out of the source list, so these carry the escaped name.
+         */
         private static string[] PackNames(List<TerminalThemePack> themePacks)
         {
             return RefreshCache(
                 themePacks,
-                static pack => pack.name,
+                static pack => LogTextSanitizer.Sanitize(pack.name),
                 ref _themePackNamesSource,
                 ref _themePackNames
             );
@@ -626,7 +633,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
         {
             return RefreshCache(
                 fontPacks,
-                static pack => pack.name,
+                static pack => LogTextSanitizer.Sanitize(pack.name),
                 ref _fontPackNamesSource,
                 ref _fontPackNames
             );
@@ -644,7 +651,8 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
 
         /*
             Strips the "-theme"/"theme-" markers only when present, so clean
-            names never allocate a replacement string.
+            names never allocate a replacement string, and escapes the result
+            for the popup that prints it.
          */
         private static string FriendlyThemeName(string themeName)
         {
@@ -653,12 +661,14 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                 || themeName.Contains("theme-", StringComparison.OrdinalIgnoreCase)
             )
             {
-                return themeName
-                    .Replace("-theme", string.Empty, StringComparison.OrdinalIgnoreCase)
-                    .Replace("theme-", string.Empty, StringComparison.OrdinalIgnoreCase);
+                return LogTextSanitizer.Sanitize(
+                    themeName
+                        .Replace("-theme", string.Empty, StringComparison.OrdinalIgnoreCase)
+                        .Replace("theme-", string.Empty, StringComparison.OrdinalIgnoreCase)
+                );
             }
 
-            return themeName;
+            return LogTextSanitizer.Sanitize(themeName);
         }
 
         /*
@@ -666,12 +676,17 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
             view, so the caller decides when its contents may have changed
             (force) and otherwise the cache holds on reference + count.
             Rebuilds use ICollection<string>.CopyTo, the bulk operation.
+
+            Two arrays, not one: a key is both the text the popup prints and
+            the key the font dictionaries are read by, so the popup gets the
+            escaped copy and the lookup keeps the raw one.
          */
         private static string[] RefreshKeyCache(
             ICollection<string> keys,
             bool force,
             ref bool stale,
-            ref string[] cached
+            ref string[] cached,
+            ref string[] labels
         )
         {
             if (!force && !stale && cached.Length == keys.Count)
@@ -681,6 +696,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
 
             string[] rebuilt = new string[keys.Count];
             keys.CopyTo(rebuilt, 0);
+            LogTextSanitizer.SanitizeInto(rebuilt, ref labels);
             stale = false;
             return cached = rebuilt;
         }
@@ -762,7 +778,8 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                 _fontsByPrefix.Keys,
                 force: false,
                 ref _fontKeyCacheStale,
-                ref _fontKeyCache
+                ref _fontKeyCache,
+                ref _fontKeyLabels
             );
         }
 
@@ -772,7 +789,8 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                 availableFonts.Keys,
                 force: _fontKeyCacheStale,
                 ref _secondFontKeyCacheStale,
-                ref _secondFontKeyCache
+                ref _secondFontKeyCache,
+                ref _secondFontKeyLabels
             );
         }
 
@@ -1337,7 +1355,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                         string selectedTheme = terminal._themePack._themeNames[themeIndex];
                         GUIContent setThemeContent = new(
                             "Set Theme",
-                            $"Will set the current theme to {selectedTheme}"
+                            $"Will set the current theme to {LogTextSanitizer.Sanitize(selectedTheme)}"
                         );
                         bool clicked = !string.Equals(
                             selectedTheme,
@@ -1418,22 +1436,23 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
             {
                 string[] ignorableCommands = new string[_intermediateResults.Count];
                 _intermediateResults.CopyTo(ignorableCommands, 0);
+                LogTextSanitizer.SanitizeInto(ignorableCommands, ref _ignorableCommandLabels);
 
                 EditorGUILayout.BeginHorizontal();
                 try
                 {
-                    _commandIndex = EditorGUILayout.Popup(_commandIndex, ignorableCommands);
+                    _commandIndex = EditorGUILayout.Popup(_commandIndex, _ignorableCommandLabels);
 
                     if (0 <= _commandIndex && _commandIndex < ignorableCommands.Length)
                     {
+                        string ignorableCommand = ignorableCommands[_commandIndex];
                         GUIContent ignoreContent = new(
                             "Ignore Command",
-                            $"Ignores the {ignorableCommands[_commandIndex]} command"
+                            $"Ignores the {LogTextSanitizer.Sanitize(ignorableCommand)} command"
                         );
                         if (GUILayout.Button(ignoreContent))
                         {
-                            string command = ignorableCommands[_commandIndex];
-                            terminal._disabledCommands.Add(command);
+                            terminal._disabledCommands.Add(ignorableCommand);
                             anyChanged = true;
                         }
                     }
@@ -1528,7 +1547,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                     string[] fontKeys = FontKeys();
                     int selectedFontKeyIndex = EditorGUILayout.Popup(
                         _fontKey.GetValueOrDefault(-1),
-                        fontKeys
+                        _fontKeyLabels
                     );
                     _fontKey = selectedFontKeyIndex < 0 ? null : selectedFontKeyIndex;
 
@@ -1556,7 +1575,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                             {
                                 int selectedSecondFontKeyIndex = EditorGUILayout.Popup(
                                     _secondFontKey.GetValueOrDefault(-1),
-                                    secondFontKeys
+                                    _secondFontKeyLabels
                                 );
                                 _secondFontKey =
                                     selectedSecondFontKeyIndex < 0
@@ -1592,7 +1611,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                         {
                             GUIContent setFontContent = new(
                                 "Set Font",
-                                $"Update the terminal's font to {selectedFont.name}"
+                                $"Update the terminal's font to {LogTextSanitizer.Sanitize(selectedFont.name)}"
                             );
                             bool clicked =
                                 selectedFont != terminal._persistedFont

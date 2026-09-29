@@ -164,7 +164,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
 
                 GUIContent loadFromCurrentDirectoryContent = new(
                     "Load From Current Directory",
-                    $"Loads all fonts from '{assetPath}'"
+                    $"Loads all fonts from '{LogTextSanitizer.Sanitize(assetPath)}'"
                 );
 
                 if (GUILayout.Button(loadFromCurrentDirectoryContent))
