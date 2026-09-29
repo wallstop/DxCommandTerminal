@@ -9,6 +9,8 @@ DxCommandTerminal is a Unity package. It supports Unity 2021.3 and newer.
 - Tarball: download `com.wallstop-studios.dxcommandterminal-*.tgz` from the
   repository's [Releases](https://github.com/wallstop/DxCommandTerminal/releases)
   page, then `+ > Add package from tarball`.
+- Local checkout: `+ > Add package from disk...`, then pick the
+  `package.json` in a clone of this repository.
 
 ## Open the terminal
 

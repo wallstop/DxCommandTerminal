@@ -26,6 +26,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     public sealed class LogTailFollowerTests
     {
         private const float Extent = 1000f;
+        private const int FillPasses = 40;
 
         private static LogTailFollower AttachedFollower()
         {
@@ -83,22 +84,23 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             /*
                 The view has held a full buffer's worth of children for a
                 while, so every one of these passes rotates the ring without
-                changing the child count - the state a Play Mode session
-                reaches in seconds with Unity log forwarding on. The extent
-                grows on some of them, which is the half a child-count
-                trigger cannot answer: uniform lines leave the content height
-                alone, and a line taller than the one it replaced does not.
+                adding or removing a child. The last pass is the half a
+                child-count trigger cannot answer at all: the extent grew
+                after the pin, nothing new was logged, and the view still has
+                to reach the new end.
              */
             LogTailFollower follower = AttachedFollower();
-            (float, float, bool)[] passes = new (float, float, bool)[40];
-            for (int i = 0; i < passes.Length; ++i)
+            (float, float, bool)[] passes = new (float, float, bool)[41];
+            for (int i = 0; i < FillPasses; ++i)
             {
-                passes[i] = (Extent, Extent + (i % 3 == 0 ? 40f : 0f), true);
+                passes[i] = (Extent, Extent, true);
             }
+
+            passes[FillPasses] = (Extent, Extent + 40f, false);
 
             List<bool> requests = Drive(ref follower, passes);
 
-            Assert.That(requests, Has.Count.EqualTo(40));
+            Assert.That(requests, Has.Count.EqualTo(passes.Length));
             AssertEveryRequest(requests, true, "A saturated log still follows new output");
             Assert.That(follower.Detached, Is.False);
         }
@@ -173,10 +175,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void AClearedViewFollowsOnceItRefills()
         {
             /*
-                `clear-console` removes every child, so the scroller clamps to
-                an empty view and the old pin would outlive the extent it was
-                taken at. Refilling past the viewport then reads as a
-                developer's scroll and the tail never comes back.
+                The log view empties with no command in between - a direct
+                `Terminal.Buffer.Clear()`, or the quick-launch bar - so the pin
+                from the last full view is still set when the next fill
+                arrives. A pin that outlived its extent would read that fill
+                as a developer's scroll and detach the tail for good.
              */
             LogTailFollower follower = AttachedFollower();
             follower.Observe(0f, 0f, true);
@@ -192,9 +195,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void AReattachedTailStillDetachesOnTheNextScrollAway()
         {
             /*
-                Re-attaching by scrolling to the end takes no pin - there is
-                nothing to show - so a pin taken against a smaller extent can
-                still be the one the next scroll is measured against.
+                Re-attaching by scrolling to the end takes the pin the end
+                position gives it, not the one from before, so the next scroll
+                away is measured against where the developer is now.
              */
             LogTailFollower follower = new();
             follower.Observe(Extent / 2f, Extent / 2f, true);
@@ -203,7 +206,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.That(
                 follower.Observe(Extent, Extent, false),
                 Is.False,
-                "Reaching the end with nothing new logs takes no pin"
+                "Reaching the end with nothing new logs needs no re-pin"
             );
             Assert.That(
                 follower.Observe(Extent - 100f, Extent, true),

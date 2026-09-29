@@ -51,7 +51,7 @@ Check out the latest [Releases](https://github.com/wallstop/DxCommandTerminal/re
 5. Resolve the latest `com.wallstop-studios.dxcommandterminal`
 
 ## From Source
-Grab a copy of this repo (either `git clone` or [download a zip of the source](https://github.com/wallstop/DxCommandTerminal/archive/refs/heads/master.zip)) and add it to your project as a local package (`Window > Package Manager > + > Add package from disk...`, then pick this folder's `package.json`). Copying folders into `Assets` also works, but every folder in `package.json`'s `files` list has to come across: `Runtime` holds the code, `Packs` the theme and font packs, and `Styles` the theme sheet the panel settings reference. See [Install](Documentation~/install.md) for the Package Manager route.
+Grab a copy of this repo (either `git clone` or [download a zip of the source](https://github.com/wallstop/DxCommandTerminal/archive/refs/heads/master.zip)) and add it to your project as a local package: `Window > Package Manager > + > Add package from disk...`, then pick this folder's `package.json`. Copying folders into `Assets` also works, but they all have to come across: `Runtime` (the code), `Editor` (the custom inspectors, and the `Assets > Create` menu the theme-authoring flow uses), `Packs` (the theme and font packs, which reference the `.ttf` assets in `Fonts` by GUID, so a pack without `Fonts` is a pack of missing references), `Styles` (the sheet the panel settings point at), and `Fonts`. `Samples~` is optional. See [Install](Documentation~/install.md) for the Package Manager routes.
 
 ## Improvements Over Baseline
 - [Enhanced Auto-Complete + Hint system + styling](#hints)
@@ -487,7 +487,7 @@ You can also use `PlayerInput` or similar to bind InputActions to all available 
 - `EnterCommand`: Takes the current buffer and attempts to execute it as a command + parameters.
 
 ## Note
-The package's inspector disables the polled `TerminalKeyboardController` for you the moment a `PlayerInput` is added to the same GameObject, so the two input paths never both fire. If you add the `PlayerInput` at runtime, remove the polled controller yourself.
+The package's inspector disables the polled `TerminalKeyboardController` for you when a `PlayerInput` is added to a GameObject that already has a `TerminalUI`, so the two input paths do not both fire. Add the `TerminalUI` first. If you add the `PlayerInput` at runtime, remove the polled controller yourself.
 
 When InputActions are not bound, there is an order of precedence for input checking. It is:
 - Close

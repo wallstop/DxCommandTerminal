@@ -1,5 +1,6 @@
 namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 {
+    using System;
     using System.Collections;
     using System.Globalization;
     using Backend;
@@ -26,10 +27,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         overflows, and every line after the 256th rotates the ring without
         changing the view's child count.
 
-        Every poll waits for the view to hold a position rather than a frame:
-        the pin is written on LateUpdate and the layout that grows the extent
-        runs after it, so a scroll settles across frames (see the
-        run-terminal-tests skill).
+        Every poll waits for a value to hold rather than a frame: the pin is
+        written on LateUpdate and the layout that grows the extent runs after
+        it, so a scroll settles across frames (see the run-terminal-tests
+        skill). The end-of-log poll also requires the last label to carry the
+        line the test just logged, so it cannot succeed on the state the
+        previous line left behind.
      */
     public sealed class TerminalUILogTailTests
     {
@@ -37,6 +40,16 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private const int FrameBudget = 300;
         private const float Tolerance = 0.5f;
         private const int FillLines = 400;
+        private const string FillMarker = "of 400";
+        private const string WrapMarker = "multiple rendered rows";
+        private const string ProbeName = "log-tail-probe";
+        private const string ProbeLine = "log tail probe output";
+
+        private static readonly string WrappingLine =
+            "a long line that wraps across several rows so the content grows: "
+                + "0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ the quick brown fox jumps over "
+                + "the lazy dog and keeps going so the log view has to break it into "
+                + WrapMarker;
 
         private TerminalUI _terminal;
         private GameObject _terminalObject;
@@ -89,73 +102,84 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             yield return SpawnOpenTerminal();
             yield return FillTheLog();
-            yield return WaitForLogAtEnd("A burst of output leaves the view at its end");
+            yield return WaitForLogAtEnd(
+                FillMarker,
+                "A burst of output leaves the view at its end"
+            );
 
             Terminal.Log("arrived after the buffer was full");
-            yield return WaitForLogAtEnd("A log that rotates a full buffer is followed");
+            yield return WaitForLogAtEnd(
+                "arrived after the buffer was full",
+                "A log that rotates a full buffer is followed"
+            );
 
             /*
                 A line taller than the one it replaced grows the extent with no
                 child added or removed, which is the whole reason the trigger
-                is the buffer version. The label is the last child, so the
-                content the developer is looking at is asserted too.
+                is the buffer version. The extent is compared before and after,
+                so the test fails if the line turns out not to wrap.
              */
-            Terminal.Log(
-                "a long line that wraps across several rows so the content grows: "
-                    + "0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ the quick brown fox jumps over "
-                    + "the lazy dog and keeps going so the log view has to break it into "
-                    + "multiple rendered rows"
+            float extentBefore = LogScroller().highValue;
+            Terminal.Log(WrappingLine);
+            yield return WaitForLogAtEnd(
+                WrapMarker,
+                "A line taller than the one it replaced is followed"
             );
-            yield return WaitForLogAtEnd("A line taller than the one it replaced is followed");
             Assert.That(
-                LastLogLabel().text,
-                Does.Contain("multiple rendered rows"),
-                "The wrapped line is the one in view at the end"
+                LogScroller().highValue,
+                Is.GreaterThan(extentBefore),
+                "The wrapping line really did make the log content taller"
             );
         }
 
         [UnityTest]
         public IEnumerator AScrolledUpViewIsLeftWhereTheDeveloperPutIt()
-        {
-            yield return SpawnOpenTerminal();
-            yield return FillTheLog();
-            yield return WaitForLogAtEnd("The fill leaves the view at its end");
+            {
+                yield return SpawnOpenTerminal();
+                yield return FillTheLog();
+                yield return WaitForLogAtEnd(FillMarker, "The fill leaves the view at its end");
 
-            Scroller scroller = LogScroller();
-            float parked = (scroller.lowValue + scroller.value) / 2f;
-            Assert.That(
-                parked,
-                Is.GreaterThan(scroller.lowValue),
-                "The fill really overflowed the view, so a scroll away has somewhere to go"
-            );
-            scroller.value = parked;
-            yield return WaitForLogValue(parked, "The developer's scroll landed");
+                Scroller scroller = LogScroller();
+                float parked = (scroller.lowValue + scroller.value) / 2f;
+                Assert.That(
+                    parked,
+                    Is.GreaterThan(scroller.lowValue),
+                    "The fill really overflowed the view, so a scroll away has somewhere to go"
+                );
+                scroller.value = parked;
+                yield return WaitForLogValue(parked, "The developer's scroll landed");
 
-            Terminal.Log("arrived while parked");
-            yield return Settle();
-            Assert.That(
-                scroller.value,
-                Is.EqualTo(parked).Within(Tolerance),
-                "Output that arrives at a scrolled-up view does not yank it to the end"
-            );
-        }
+                Terminal.Log("arrived while parked");
+                yield return Settle();
+                Assert.That(
+                    scroller.value,
+                    Is.EqualTo(parked).Within(Tolerance),
+                    "Output that arrives at a scrolled-up view does not yank it to the end"
+                );
+            }
 
         [UnityTest]
         public IEnumerator ScrollingBackToTheEndFollowsAgain()
         {
             yield return SpawnOpenTerminal();
             yield return FillTheLog();
-            yield return WaitForLogAtEnd("The fill leaves the view at its end");
+            yield return WaitForLogAtEnd(FillMarker, "The fill leaves the view at its end");
 
             Scroller scroller = LogScroller();
             scroller.value = (scroller.lowValue + scroller.value) / 2f;
             yield return null;
 
             scroller.value = scroller.highValue;
-            yield return WaitForLogAtEnd("Reaching the end re-attaches the tail");
+            yield return WaitForLogAtEnd(
+                FillMarker,
+                "Reaching the end re-attaches the tail"
+            );
 
             Terminal.Log("arrived after re-attaching");
-            yield return WaitForLogAtEnd("A re-attached tail follows the next line");
+            yield return WaitForLogAtEnd(
+                "arrived after re-attaching",
+                "A re-attached tail follows the next line"
+            );
         }
 
         [UnityTest]
@@ -163,16 +187,30 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             yield return SpawnOpenTerminal();
             yield return FillTheLog();
-            yield return WaitForLogAtEnd("The fill leaves the view at its end");
+            yield return WaitForLogAtEnd(FillMarker, "The fill leaves the view at its end");
 
             Scroller scroller = LogScroller();
             float parked = (scroller.lowValue + scroller.value) / 2f;
             scroller.value = parked;
             yield return WaitForLogValue(parked, "The developer's scroll landed");
 
-            DefaultTerminalInput.Instance.CommandText = "help";
+            Assert.IsTrue(
+                Terminal.Shell.AddCommand(
+                    ProbeName,
+                    _ => Terminal.Log(ProbeLine),
+                    minArgs: 0,
+                    maxArgs: 0,
+                    help: "Log tail probe"
+                ),
+                "The probe command registers"
+            );
+
+            DefaultTerminalInput.Instance.CommandText = ProbeName;
             _terminal.EnterCommand();
-            yield return WaitForLogAtEnd("The output of the command just run is shown");
+            yield return WaitForLogAtEnd(
+                ProbeLine,
+                "The output of the command just run is shown"
+            );
         }
 
         private ScrollView LogView()
@@ -190,20 +228,35 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             return logView.verticalScroller;
         }
 
-        private Label LastLogLabel()
+        private string LastLogText()
         {
             VisualElement content = LogView().contentContainer;
-            Assert.That(0 < content.childCount, Is.True, "The log view holds labels");
-            return (Label)content[content.childCount - 1];
+            if (0 == content.childCount)
+            {
+                return string.Empty;
+            }
+
+            return (content[content.childCount - 1] as Label)?.text ?? string.Empty;
         }
 
-        private IEnumerator WaitForLogAtEnd(string message)
+        /*
+            The poll takes the text the last label must carry as well as the
+            scroll position. A position-only poll can succeed on the frame the
+            log call was made, before any LateUpdate folded the new line into
+            the view, and would then assert against the previous line - so it
+            would pass for a view that never followed anything.
+         */
+        private IEnumerator WaitForLogAtEnd(string expectedLastLine, string message)
         {
             int frameBudget = FrameBudget;
             while (0 < frameBudget--)
             {
                 Scroller scroller = LogScroller();
-                if (0f < scroller.highValue && scroller.highValue - Tolerance <= scroller.value)
+                if (
+                    0f < scroller.highValue
+                    && scroller.highValue - scroller.value < Tolerance
+                    && LastLogText().Contains(expectedLastLine, StringComparison.Ordinal)
+                )
                 {
                     break;
                 }
@@ -218,6 +271,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 "The log content overflows the view so the scroller engages"
             );
             Assert.That(settled.highValue - settled.value, Is.LessThan(Tolerance), message);
+            Assert.That(
+                LastLogText(),
+                Does.Contain(expectedLastLine),
+                $"The log line '{expectedLastLine}' is the one in view at the end"
+            );
         }
 
         private IEnumerator WaitForLogValue(float expected, string message)
