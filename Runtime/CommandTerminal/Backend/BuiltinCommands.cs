@@ -374,6 +374,57 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             CopyLogLines(int.MaxValue);
         }
 
+        /*
+            `find` is the answer to a log too long to read: it hides every line
+            that does not hold the text, and takes the developer to the first
+            one. The count it reports is the answer to "did my search hit",
+            which a view showing some lines cannot give.
+
+            The query is the arguments as one string, so a quoted argument
+            reaches the search whole - the same rule `log` follows, and the
+            reason `find "two words"` searches for two words.
+         */
+        [RegisterCommand(
+            isDefault: true,
+            Name = "find",
+            Help = "Show only the log lines that contain the text, then the next match on a repeat"
+        )]
+        public static void CommandFind(CommandArg[] args)
+        {
+            TerminalUI terminal = TerminalUI.Instance;
+            if (terminal == null)
+            {
+                Terminal.Log(TerminalLogType.Warning, "No Terminal UI found.");
+                return;
+            }
+
+            if (args.Length == 0)
+            {
+                terminal.StepLogFilter(forward: true);
+                return;
+            }
+
+            terminal.SetLogFilter(JoinArguments(args));
+        }
+
+        [RegisterCommand(
+            isDefault: true,
+            Name = "clear-filter",
+            Help = "Show every log line again, dropping a find",
+            MaxArgCount = 0
+        )]
+        public static void CommandClearFilter(CommandArg[] args)
+        {
+            TerminalUI terminal = TerminalUI.Instance;
+            if (terminal == null)
+            {
+                Terminal.Log(TerminalLogType.Warning, "No Terminal UI found.");
+                return;
+            }
+
+            terminal.ClearLogFilter();
+        }
+
         [RegisterCommand(
             isDefault: true,
             Name = "help",
