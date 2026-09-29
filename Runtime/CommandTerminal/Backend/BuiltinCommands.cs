@@ -23,9 +23,12 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         /*
             The window `trace` reads, sized to the log buffer's capacity and
-            reused. Not static: CommandShell.RunCommand is public, and the
-            rest of this fix is about the log being reachable from a thread
-            the caller chose, so the buffer is per-thread rather than shared.
+            reused. Per-thread: CommandShell.RunCommand is public, and the
+            log buffer is reachable from a thread the caller chose, so two
+            threads running `trace` must not write into one array. A thread's
+            first use allocates its own; with domain reload disabled it keeps
+            it across Play Mode sessions, which is one array per thread that
+            ever traced.
          */
         [ThreadStatic]
         private static LogItem[] TraceWindow;

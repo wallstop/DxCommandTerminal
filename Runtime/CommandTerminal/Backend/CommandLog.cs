@@ -154,6 +154,22 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         }
 
         /*
+            Copies the visible window, oldest first, into a caller-owned array
+            and returns how many entries it wrote. One call is one consistent
+            view; reading Logs counts and then indexes as two separate reads,
+            which a background log or a resize can move underneath. A
+            destination shorter than the window truncates to its oldest
+            entries, so size it for the largest buffer the session configures.
+         */
+        public int CopyTo(LogItem[] destination)
+        {
+            lock (_logs.SyncRoot)
+            {
+                return _logs.CopyTo(destination);
+            }
+        }
+
+        /*
             Replaces the ignore filter as one step. Clear followed by UnionWith
             is two, and a logging thread reading the set between them sees a
             filter that is briefly empty - it would capture types the
@@ -165,21 +181,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             {
                 ignoredLogTypes.Clear();
                 ignoredLogTypes.UnionWith(types ?? Array.Empty<TerminalLogType>());
-            }
-        }
-
-        /*
-            Copies the visible window into a caller-owned array and returns how
-            many entries it wrote. One call is one consistent view: a count read
-            and the entries indexed under it separately could be moved
-            underneath by a background log, which is the read side of the
-            thread race this buffer is guarded against.
-         */
-        internal int CopyTo(LogItem[] destination)
-        {
-            lock (_logs.SyncRoot)
-            {
-                return _logs.CopyTo(destination);
             }
         }
 

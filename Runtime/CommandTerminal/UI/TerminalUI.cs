@@ -2699,8 +2699,9 @@
                 by a per-line index: a background thread's Debug.Log arrives
                 through the same buffer this reads, and a count and the lines
                 read under it separately could describe two different moments.
-                The snapshot is sized to the capacity, which the count never
-                exceeds, so it is written once and reused.
+                The window is sized to the buffer's capacity, so it holds
+                every entry a read can return, and it is written once and
+                reused.
              */
             int logCount = ReadLogWindow(buffer);
             if (content.childCount != logCount)

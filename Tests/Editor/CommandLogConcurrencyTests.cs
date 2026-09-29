@@ -140,6 +140,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             CommandLog log = new(Capacity);
 
             using ManualResetEventSlim start = new(false);
+            using ManualResetEventSlim done = new(false);
             Exception writerFailure = null;
 
             Thread writer = StartFlood(
@@ -149,13 +150,25 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 Messages,
                 exception =>
                 {
-                    writerFailure = exception;
-                }
+                    Interlocked.CompareExchange(ref writerFailure, exception, null);
+                },
+                done
             );
 
+            /*
+                The read runs until the writer finishes, not once. A single
+                pass overlaps the flood for microseconds, which can end before
+                the writer's first growth, and the growth is the only state
+                that races.
+             */
+            int passes = 0;
             try
             {
-                ReadEveryEntry(log);
+                while (!done.IsSet)
+                {
+                    ReadEveryEntry(log);
+                    ++passes;
+                }
             }
             finally
             {
@@ -166,6 +179,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 writerFailure == null,
                 $"Background log writes must not throw: {writerFailure}"
             );
+            Assert.That(0 < passes, "Sanity: the reader must have raced the writer");
         }
 
         /*
@@ -181,8 +195,16 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             using ManualResetEventSlim start = new(false);
             using ManualResetEventSlim done = new(false);
+            Exception writerFailure = null;
 
-            Thread writer = StartFlood(log, start, WriterIterations, Messages, _ => { }, done);
+            Thread writer = StartFlood(
+                log,
+                start,
+                WriterIterations,
+                Messages,
+                exception => Interlocked.CompareExchange(ref writerFailure, exception, null),
+                done
+            );
 
             try
             {
@@ -211,6 +233,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             {
                 writer.Join();
             }
+
+            Assert.That(
+                writerFailure == null,
+                $"Background log writes must not throw: {writerFailure}"
+            );
         }
 
         /*
@@ -349,7 +376,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             using ManualResetEventSlim start = new(false);
             using ManualResetEventSlim done = new(false);
 
-            Thread writer = StartFlood(log, start, WriterIterations, Messages, _ => { }, done);
+            Exception writerFailure = null;
+            Thread writer = StartFlood(
+                log,
+                start,
+                WriterIterations,
+                Messages,
+                exception => Interlocked.CompareExchange(ref writerFailure, exception, null),
+                done
+            );
 
             // Hoisted: the buffer is only ever sized down and back up, so the array never has to grow.
             LogItem[] window = new LogItem[Capacity];
@@ -387,6 +422,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             }
 
             Assert.That(0 < reconfigured, "Sanity: the reconfiguration loop must have run");
+            Assert.That(
+                writerFailure == null,
+                $"Background log writes must not throw: {writerFailure}"
+            );
         }
 
         /*
