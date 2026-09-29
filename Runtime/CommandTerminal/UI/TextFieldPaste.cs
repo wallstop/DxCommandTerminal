@@ -17,13 +17,14 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         The clipboard read is the one cross-version public path,
         GUIUtility.systemCopyBuffer (UnityEngine.IMGUIModule, always
-        referenced by an assembly with engine references). It is not
-        universal: tvOS has no clipboard, and a platform that needs a user
-        gesture before it will answer - a browser clipboard API, as on
-        WebGL - may read empty. An empty answer is the detection, and the
-        key is left unconsumed so the platform keeps whatever it does with
-        it. Neither case is measured here; the degradation is the design,
-        not a fallback that failed.
+        referenced by an assembly with engine references), and TerminalClipboard
+        is where that name is written down, so the paste and the copy paths
+        cannot drift onto different ones. It is not universal: tvOS has no
+        clipboard, and a platform that needs a user gesture before it will
+        answer - a browser clipboard API, as on WebGL - may read empty. An
+        empty answer is the detection, and the key is left unconsumed so the
+        platform keeps whatever it does with it. Neither case is measured
+        here; the degradation is the design, not a fallback that failed.
 
         A pasted block is not typed input, and it must not arrive as one. A
         stack trace is newlines, a log line is tabs, the field is single-line
@@ -73,7 +74,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
                 return false;
             }
 
-            string flattened = Flatten(GUIUtility.systemCopyBuffer);
+            string flattened = Flatten(TerminalClipboard.Read());
             if (flattened.Length == 0)
             {
                 caret = 0;

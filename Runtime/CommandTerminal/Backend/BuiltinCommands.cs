@@ -441,6 +441,14 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 command ran at all. The shell already accepts pre-parsed
                 arguments, so nothing has to round-trip through text here.
 
+                Two behaviours are kept, and both are measured rather than
+                assumed. Variable substitution happens when the outer line is
+                parsed, so `$name` is already a value by the time this handler
+                sees it and the timed command reads the same one it always
+                did. And the timed command's line is still pushed to history by
+                the same funnel that pushed it through the string path, so Up
+                recalls exactly what it recalled before.
+
                 `args[0]` is the command being timed and the rest are its
                 arguments, so the tail is what runs. The slice is a fresh
                 array on purpose: the shell may hand the array to a handler
@@ -784,6 +792,19 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
 
             string text = builder.ToString();
+            if (string.IsNullOrEmpty(text))
+            {
+                /*
+                    Every line in the window is empty. That is a log with
+                    nothing in it to copy, which is a different thing from a
+                    platform declining a copy, and telling a developer their
+                    platform refused when the text was never written is the
+                    one answer this command must not give wrongly.
+                 */
+                Terminal.Log(TerminalLogType.Warning, "Nothing to copy: the log holds no text.");
+                return;
+            }
+
             if (!TerminalClipboard.TryWrite(text))
             {
                 Terminal.Log(

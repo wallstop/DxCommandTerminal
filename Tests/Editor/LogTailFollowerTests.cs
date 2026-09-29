@@ -156,6 +156,81 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         [Test]
+        public void APageInsideTheAttachWindowIsStillTheDevelopersScroll()
+        {
+            /*
+                The keyboard paging path calls `Detach` with the position the
+                developer chose, and that is what makes the window safe. A page
+                taken before the terminal's first pin has no pin to be "below",
+                so without it the very next pass would read the page as output
+                and snap the view straight back to the end.
+             */
+            LogTailFollower follower = new();
+            follower.Attach();
+            follower.Detach(Extent - 400f);
+
+            bool request = follower.Observe(Extent - 400f, Extent, true);
+
+            Assert.That(
+                request,
+                Is.False,
+                "A page taken inside the attach window must not ask for a pin that undoes it"
+            );
+            Assert.That(follower.Detached, Is.True);
+        }
+
+        [Test]
+        public void ADetachedPositionSurvivesThePinANewViewWouldOtherwiseGive()
+        {
+            LogTailFollower follower = new();
+            follower.Attach();
+            follower.Detach(Extent - 400f);
+
+            /* Content grows under the parked view, which is what would
+               otherwise re-pin it: the extent moved and the value is below it. */
+            bool request = follower.Observe(Extent - 400f, Extent + 500f, true);
+
+            Assert.That(request, Is.False, "Output under a parked view does not pull it down");
+            Assert.That(follower.Detached, Is.True);
+        }
+
+        [Test]
+        public void LandingAtTheEndAfterADetachFollowsAgain()
+        {
+            LogTailFollower follower = new();
+            follower.Attach();
+            follower.Detach(Extent - 400f);
+
+            follower.Observe(Extent, Extent, false);
+
+            Assert.That(
+                follower.Detached,
+                Is.False,
+                "Reaching the end is the way back to following, whichever key did it"
+            );
+        }
+
+        [Test]
+        public void AFollowerThatHasNotBeenMovedFollowsAViewItHasNotSeenTheEndOf()
+        {
+            /*
+                The other side of the contract `Detach` exists to keep: a
+                follower nobody has told about a scroll still follows. Reading a
+                fresh view's zero position as a developer's scroll would detach
+                every log the moment it opened, so the inference in `Observe`
+                stays tied to a pin and nothing else.
+             */
+            LogTailFollower follower = new();
+
+            Assert.That(
+                follower.Observe(0f, Extent, true),
+                Is.True,
+                "A view nobody has scrolled takes new output"
+            );
+            Assert.That(follower.Detached, Is.False);
+        }
+
+        [Test]
         public void ADetachedTailIgnoresOutputThatArrivesWhileDetached()
         {
             LogTailFollower follower = AttachedFollower();

@@ -88,5 +88,25 @@ namespace WallstopStudios.DxCommandTerminal.UI
             Detached = false;
             _pinned = null;
         }
+
+        /*
+            A scroll the developer made, at the position they left it. This is
+            the one move `Observe` cannot infer on its own, and the reason is
+            the window above: `Attach` clears the pin, and a developer who
+            pages back before the terminal's next pin has landed has no pin to
+            be "below". The comparison in `Observe` needs one, so the caller
+            that knows this was a scroll supplies it, and the pin is dropped
+            so nothing re-pins the view over the position it was put at.
+
+            Pinned, not null: a value equal to the pin is how the next pass
+            tells "the developer parked it here" from "the terminal is still
+            following", which is the same distinction the detached flag makes
+            and the reason both are set together.
+         */
+        public void Detach(float value)
+        {
+            Detached = true;
+            _pinned = value;
+        }
     }
 }

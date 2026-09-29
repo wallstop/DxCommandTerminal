@@ -126,12 +126,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return FillTheLog();
             yield return WaitForLogAtEnd(FillMarker, "The log follows its own output to the end");
 
-            yield return SendKey(KeyCode.PageUp);
-            float paged = LogScroller().value;
-            yield return WaitForLogValue(
-                paged,
+            yield return PageAwayFromTheEnd(
                 "The page is where the developer put it before anything else happens"
             );
+            float paged = LogScroller().value;
 
             Terminal.Log(LateLine);
             yield return null;
@@ -152,6 +150,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return WaitForLogAtEnd(FillMarker, "The log follows its own output to the end");
 
             yield return SendKey(KeyCode.PageUp);
+            yield return PageAwayFromTheEnd(
+                "Ctrl+End is only meaningful if the first page actually parked the view"
+            );
+            float paged = LogScroller().value;
             Terminal.Log(LateLine);
             yield return null;
 
@@ -159,7 +161,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             yield return WaitForLogAtEnd(
                 LateLine,
-                "Command+End is the way back to the tail, and the line logged while parked is the one it lands on"
+                "Ctrl+End is the way back to the tail, and the line logged while parked is the one it lands on"
             );
         }
 
@@ -185,9 +187,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return FillTheLog();
             yield return WaitForLogAtEnd(FillMarker, "The log follows its own output to the end");
 
-            yield return SendKey(KeyCode.PageUp);
+            yield return PageAwayFromTheEnd(
+                "A negative test means nothing unless the log was parked to begin with"
+            );
             float paged = LogScroller().value;
-            yield return WaitForLogValue(paged, "The log is parked where the developer left it");
 
             yield return SendKey(KeyCode.DownArrow);
 
@@ -205,9 +208,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return FillTheLog();
             yield return WaitForLogAtEnd(FillMarker, "The log follows its own output to the end");
 
-            yield return SendKey(KeyCode.PageUp);
+            yield return PageAwayFromTheEnd(
+                "A negative test means nothing unless the log was parked to begin with"
+            );
             float paged = LogScroller().value;
-            yield return WaitForLogValue(paged, "The log is parked where the developer left it");
 
             yield return SendKey(KeyCode.Home);
 
@@ -215,6 +219,34 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 LogScroller().value,
                 Is.EqualTo(paged).Within(Tolerance),
                 "A bare Home moves the caret in a one-line field, which is what a developer editing a command expects"
+            );
+        }
+
+        /*
+            Paginates the log and waits for the view to actually leave the end.
+            Every negative test - "this key is not the log's" - has to start
+            from a view that is parked, or it passes just as well with the whole
+            feature removed, because a log that never moved has nothing left
+            to move. The caller reads the settled position from the scroller
+            afterwards, which is where the value this poll waited for lives.
+         */
+        private IEnumerator PageAwayFromTheEnd(string message)
+        {
+            float atEnd = LogScroller().value;
+            yield return SendKey(KeyCode.PageUp);
+
+            int frameBudget = FrameBudget;
+            while (0 < frameBudget-- && Tolerance < LogScroller().highValue - LogScroller().value)
+            {
+                yield return null;
+            }
+
+            Scroller scroller = LogScroller();
+            Assert.That(scroller.highValue - scroller.value, Is.GreaterThan(Tolerance), message);
+            Assert.That(
+                scroller.value,
+                Is.LessThan(atEnd),
+                "The page moved the view up rather than leaving it where it was"
             );
         }
 

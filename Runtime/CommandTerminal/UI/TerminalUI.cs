@@ -2858,11 +2858,12 @@
         private bool TryScrollLog(KeyDownEvent evt)
         {
             /*
-                Both flags, for the reason the paste path checks both: the
-                command modifier is a different flag from Control on the
-                editors that have both, and a developer reaching the log with
-                Ctrl on Windows has to get there as surely as one with Cmd on
-                macOS.
+                Both flags, for the reason the paste path checks both: which
+                flag a command modifier arrives in is a per-editor detail
+                (Command on macOS, Control elsewhere, and a Windows key can
+                arrive as Command as well), and a developer who reaches the log
+                with the key their platform calls the command key has to get
+                there whichever flag it arrived in.
              */
             if (
                 !LogScrollKeys.TryResolve(
@@ -2900,19 +2901,17 @@
             scroller.value = target;
 
             /*
-                No pin here, and that is load-bearing. The follower's pin is
-                wherever the terminal last left the view, which for a log that
-                was following is the end, and a move below it already reads as
-                the developer's own scroll and detaches the tail. Pinning to
-                the new value instead would make the position equal the pin,
-                and `value < _pinned` would no longer hold - so the tail would
-                never detach and the next pass would scroll the view straight
-                back to the end, which is the opposite of what was asked for.
-
-                What a scroll does have to beat is a pin the terminal has not
-                spent yet: running a command sets one, and it would land on
-                the next pass and undo the scroll the developer just made.
+                The developer's scroll, said so. The follower infers one from a
+                position below the pin it already holds, but running a command
+                calls `Attach`, which clears that pin, and the pin lands a
+                frame later - so a page taken in that window would have
+                nothing to be below and the very next pass would read it as
+                output and snap the view back to the end. `Detach` is what
+                closes the window, and it is also why this does not simply pin
+                the new value: a pin records where the terminal left the view,
+                and this position is one the developer chose.
              */
+            _logTail.Detach(scroller.value);
             _needsScrollToEnd = false;
             return true;
         }

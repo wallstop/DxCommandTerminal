@@ -3,6 +3,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     using System;
     using System.Collections.Generic;
     using System.Globalization;
+    using System.Linq;
     using Backend;
     using NUnit.Framework;
     using UI;
@@ -158,6 +159,49 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         [Test]
+        public void TimeStillSubstitutesAVariable()
+        {
+            /*
+                The documented idiom: a value stored by `set-variable` and
+                reached with `$name` on a later line. Substitution happens when
+                the outer line is parsed, so the timed command has to see the
+                value the same way it would have through the string path.
+             */
+            Run("set-variable greet \"Hello World!\"");
+
+            string error = Run("time log-terminal $greet");
+
+            Assert.That(error, Is.Null, $"`time` must run the substituted line: {error}");
+            Assert.That(
+                Contains(Newest(3), "Hello World!"),
+                Is.True,
+                "`time` must not hand the timed command the literal `$greet`"
+            );
+        }
+
+        [Test]
+        public void TimeDoesNotAddTheTimedCommandToHistoryASecondTime()
+        {
+            Run("time log-terminal once");
+
+            string[] history = _history.GetHistory(true, true).ToArray();
+
+            Assert.That(
+                history,
+                Does.Contain("time log-terminal once"),
+                "The line the developer typed is in history"
+            );
+            int timedEntries = history.Count(line =>
+                string.Equals(line, "log-terminal once", StringComparison.Ordinal)
+            );
+            Assert.That(
+                timedEntries,
+                Is.LessThanOrEqualTo(1),
+                "The timed command's line must not be a second history entry the developer never typed"
+            );
+        }
+
+        [Test]
         public void CopyLastPutsTheNewestLineOnTheClipboard()
         {
             Run("log-terminal first");
@@ -222,12 +266,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void CopyLogRejectsACountItCannotRead()
         {
+            string untouched = GUIUtility.systemCopyBuffer;
             Run("log-terminal alpha");
             Run("copy-log not-a-number");
 
             Assert.That(
                 GUIUtility.systemCopyBuffer,
-                Is.Not.EqualTo("alpha"),
+                Is.EqualTo(untouched),
                 "A count that does not parse must not fall through to copying everything"
             );
             Assert.That(
@@ -240,12 +285,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void CopyLogRejectsAZeroCount()
         {
+            string untouched = GUIUtility.systemCopyBuffer;
             Run("log-terminal alpha");
             Run("copy-log 0");
 
             Assert.That(
                 GUIUtility.systemCopyBuffer,
-                Is.Not.EqualTo("alpha"),
+                Is.EqualTo(untouched),
                 "`copy-log 0` copies nothing rather than everything"
             );
             Assert.That(
@@ -265,6 +311,33 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 Is.True,
                 "An empty log is a report, not a silent no-op"
             );
+        }
+
+        [Test]
+        public void ALogOfEmptyLinesIsNotReportedAsAClipboardRefusal()
+        {
+            /*
+                The distinction the whole report exists to make. A log whose
+                lines are empty has nothing to copy, which is not the same
+                failure as a platform that declined a copy, and answering the
+                second for the first sends a developer looking at their OS.
+             */
+            _buffer.HandleLog(string.Empty, TerminalLogType.Message);
+            string untouched = GUIUtility.systemCopyBuffer;
+
+            Run("copy-last");
+
+            Assert.That(
+                Contains(Newest(2), "Nothing to copy: the log holds no text."),
+                Is.True,
+                "An empty line is not a platform that refused the copy"
+            );
+            Assert.That(
+                Contains(Newest(2), "did not keep the text"),
+                Is.False,
+                "The refusal message is reserved for a platform that declined"
+            );
+            Assert.That(GUIUtility.systemCopyBuffer, Is.EqualTo(untouched));
         }
 
         [Test]

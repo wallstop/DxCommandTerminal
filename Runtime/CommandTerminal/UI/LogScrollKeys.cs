@@ -15,9 +15,9 @@ namespace WallstopStudios.DxCommandTerminal.UI
         What the log does not take is as much of the rule as what it does.
         Home and End move the caret in a text field, and a developer editing
         the command they are about to run needs that, so plain Home and End
-        stay with the field and the log is reached with Ctrl (or Cmd) held -
-        the same chord that means "the whole document" everywhere else. Page Up
-        and Page Down are free: a one-line field has nothing to page.
+        stay with the field and the log is reached with the platform's command
+        modifier held - Ctrl on Windows and Linux, Cmd on macOS. Page Up and
+        Page Down are free: a one-line field has nothing to page.
 
         A key the log does not want resolves to None and is left alone, which
         is what keeps typing, history recall, completion, and closing working

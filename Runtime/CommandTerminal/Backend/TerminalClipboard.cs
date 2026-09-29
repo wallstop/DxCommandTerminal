@@ -18,16 +18,17 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         and one that dropped it does not, which is what makes a refused copy
         reportable instead of silent.
 
-        The read-back is the platform's copy, so it is what the paste direction
-        then pastes. That is a second read, not a stored value, so a platform
-        that answers reads are still answered by the platform and not by this
-        class.
+        What that evidence cannot distinguish is a platform that already held
+        exactly this text: copying the same window twice reports success the
+        second time whether or not the second write landed. It is the only
+        portable signal there is, and the report is worded as "the platform did
+        not keep what was written" rather than as a guarantee.
 
-        A limit worth stating: on a browser, a clipboard that accepts the write
-        synchronously but drops it before the paste is not something this can
-        see. The report is "the platform did not keep what was written", not
-        "the copy is now on the system clipboard", and the callers word it that
-        way.
+        A limit worth stating: the clipboard is a main-thread engine API. The
+        read side has always been driven from a key handler, but a write from
+        `CommandShell.RunCommand` can be driven off the main thread by a caller
+        that chose to. The copy commands answer on whatever thread ran them,
+        which is the shell's existing contract rather than one this changes.
      */
     internal static class TerminalClipboard
     {
