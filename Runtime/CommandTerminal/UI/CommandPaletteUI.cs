@@ -961,9 +961,9 @@
 
         private void RefreshRows()
         {
-            EnsureRowCapacity(_matchNames.Count);
-            CommandShell shell = Terminal.Shell;
             int matchCount = _matchNames.Count;
+            EnsureRowCapacity(matchCount);
+            CommandShell shell = Terminal.Shell;
             for (int index = 0; index < matchCount; ++index)
             {
                 VisualElement row = _rows[index];
@@ -995,7 +995,7 @@
                     : LogTextSanitizer.Sanitize(help);
             }
 
-            int excessRowStart = _matchNames.Count;
+            int excessRowStart = matchCount;
             int rowCount = _rows.Count;
             for (int index = excessRowStart; index < rowCount; ++index)
             {
@@ -1123,13 +1123,14 @@
                 the inserted token like the terminal's token completion.
              */
             _input.SetValueWithoutNotify(newInput);
-            int caretIndex = replacementStart + insertion.Length;
+            int insertionLength = insertion.Length;
+            int caretIndex = replacementStart + insertionLength;
             QueueCaret(caretIndex);
             int completionCaret = caretIndex;
             if (
-                1 < insertion.Length
+                1 < insertionLength
                 && CommandArg.Quotes.Contains(insertion[0])
-                && insertion[insertion.Length - 1] == insertion[0]
+                && insertion[insertionLength - 1] == insertion[0]
             )
             {
                 --completionCaret;

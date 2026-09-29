@@ -141,8 +141,9 @@ frontmatter validity, index freshness, and pointer-file delegation; see
     and its bound; reserve `Clone()` for an acceptable `object` return. Counting loops hoist
     `List<T>.Count`, interface `Count`, and UIToolkit `childCount` reads out of the condition
     (per-iteration property/interface dispatch, PR #73). **Never hoist a `Length`/`Count` read
-    when the body mutates that collection** - the inline re-read is what makes the loop
-    terminate. Traps: [hot-path-allocations](./skills/hot-path-allocations/SKILL.md).
+    when the body changes that collection's count** - the inline re-read is what makes the loop
+    terminate. One read per method (a count has one source of truth), and the three exceptions
+    to that: [hot-path-allocations](./skills/hot-path-allocations/SKILL.md).
 19. Comparison operators read left-to-right in ascending order: only `<`, `<=` and `==`. Never
     `>` or `>=` -- write `0 <= index` and `b < a`, not `index >= 0` or `a > b` (issue #51).
     Enforced by `npm --prefix tooling~ run lint:comparison-direction` (pre-commit + CI; `:fix`
@@ -228,7 +229,7 @@ frontmatter validity, index freshness, and pointer-file delegation; see
 - Completion providers always receive a context scoped to the command's own arguments:
   `ActiveArgumentIndex`/`PrecedingArguments` are relative to that command, and the router shifts them per
   routing level (`CommandCompletionContext.ForSubcommand`). Never hand a provider a parent-shifted context.
-- Details: [register-terminal-command](./skills/register-terminal-command/SKILL.md).
+  Details: [register-terminal-command](./skills/register-terminal-command/SKILL.md).
 
 ### User-Facing Copy (STE)
 
@@ -248,11 +249,10 @@ Details: [simple-writing](./skills/simple-writing/SKILL.md).
 
 `CHANGELOG.md` records only changes a package consumer can observe: public API and
 serialized-data changes, behavior changes, fixes, install-size or console-output changes.
-Internal work (refactors, tooling, style enforcement, linters, measurement, CI lanes)
-stays out, and so do internal numbers (timings, allocation counts, test tallies) - those
-live in PR descriptions, issues, and `progress/` logs. If a user cannot observe the
-difference, it does not belong in the changelog; new `Unreleased` entries keep the
-existing `Added/Changed/Fixed/Removed` buckets per the policy in the file header.
+Internal work (refactors, tooling, style enforcement, linters, measurement, CI lanes) stays
+out, and so do internal numbers - those live in PR descriptions, issues, and `progress/`
+logs. If a user cannot observe the difference it does not belong in the changelog; new
+`Unreleased` entries keep the existing buckets per the policy in the file header.
 
 ### LLM Attribution (GitHub)
 

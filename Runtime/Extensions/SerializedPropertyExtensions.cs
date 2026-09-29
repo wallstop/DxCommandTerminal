@@ -176,7 +176,8 @@ namespace WallstopStudios.DxCommandTerminal.Extensions
             FieldInfo enclosingField = null;
 
             // Traverse the path but stop at the second-to-last field
-            for (int i = 0; i < pathParts.Length - 1; ++i)
+            int partCount = pathParts.Length;
+            for (int i = 0; i < partCount - 1; ++i)
             {
                 string fieldName = pathParts[i];
 
@@ -184,7 +185,7 @@ namespace WallstopStudios.DxCommandTerminal.Extensions
                 {
                     // Move to "data[i]"
                     ++i;
-                    if (pathParts.Length <= i)
+                    if (partCount <= i)
                     {
                         break;
                     }
@@ -206,7 +207,7 @@ namespace WallstopStudios.DxCommandTerminal.Extensions
                 }
 
                 // Move deeper but stop before the last property in the path
-                if (i < pathParts.Length - 2)
+                if (i < partCount - 2)
                 {
                     obj = enclosingField.GetValue(obj);
                     type = enclosingField.FieldType;

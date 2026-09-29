@@ -1,5 +1,6 @@
 namespace WallstopStudios.DxCommandTerminal.Helper
 {
+    using System;
     using System.Globalization;
     using System.Text;
 
@@ -12,13 +13,19 @@ namespace WallstopStudios.DxCommandTerminal.Helper
         noise or - worse - reads one way and copies out as another.
         "Admin<U+202E>exe" is the case that matters.
 
-        Three rendering paths never pass this funnel: the palette's error
-        bar, the terminal's suggestion bar, and the palette's result rows,
-        which print a completion candidate - a history line, a GameObject
-        name, a description. They call this too, so the same text reads one
-        way wherever a developer reads it. A row shows the escaped text and
-        still applies the raw one: the escape is for the reader, and the
-        command the developer runs is the text they chose.
+        Four rendering paths do not come through the log funnel, and each
+        calls this itself so the same text reads one way wherever a developer
+        reads it: the palette's error bar, the terminal's suggestion bar, the
+        palette's result rows - which print a completion candidate, a history
+        line, a GameObject name, a description - and the package's own
+        inspectors, which print theme names, font names, command names, and
+        asset paths into IMGUI tooltips and popup labels.
+
+        The rule those four share: a name printed for a reader is escaped and
+        the value the developer acts on is raw. A row shows the escaped text
+        and still applies the raw one; a popup shows an escaped label and its
+        index still selects the raw name. The escape is for the reader, and
+        the command that runs is the text they chose.
 
         Escaping rather than stripping is the deliberate choice: dropping
         the override would show "Adminexe", a name that looks legitimate and
@@ -117,6 +124,30 @@ namespace WallstopStudios.DxCommandTerminal.Helper
             }
 
             return builder.ToString();
+        }
+
+        /*
+            Fills the display copy a popup shows, refilled in place when its
+            length already fits: that is what keeps an inspector redrawing
+            every frame from allocating one array per frame. One read of the
+            length sizes the allocation and the loop - the loop body writes
+            `copy`, never `names`, so the re-read that terminates a mutating
+            loop is not needed here. `names` is never null (every caller owns
+            a `new string[count]`), and passing one array as both arguments
+            is harmless: each element is read before it is written.
+         */
+        public static void SanitizeInto(string[] names, ref string[] copy)
+        {
+            int length = names.Length;
+            if (copy == null || copy.Length != length)
+            {
+                copy = length == 0 ? Array.Empty<string>() : new string[length];
+            }
+
+            for (int i = 0; i < length; ++i)
+            {
+                copy[i] = Sanitize(names[i]);
+            }
         }
 
         /*

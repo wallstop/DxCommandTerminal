@@ -80,7 +80,9 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
 
         internal static string Emit(List<CommandModel> commands, bool preserveCatalog)
         {
-            int capacity = BaseCapacityEstimate + PerCommandCapacityEstimate * commands.Count;
+            /* One read: emitting never adds to or removes from the list. */
+            int commandCount = commands.Count;
+            int capacity = BaseCapacityEstimate + PerCommandCapacityEstimate * commandCount;
             StringBuilder builder = RentBuilder(capacity);
             bool needsUnboundFinder = false;
 
@@ -148,7 +150,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                 .Append(EntryListType)
                 .AppendLine(" entries = new " + EntryListType + "();");
 
-            for (int i = 0; i < commands.Count; i++)
+            for (int i = 0; i < commandCount; i++)
             {
                 EmitCommand(builder, i, commands[i]);
             }
@@ -162,7 +164,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                 EmitUnboundMethodFinder(builder);
             }
 
-            for (int i = 0; i < commands.Count; i++)
+            for (int i = 0; i < commandCount; i++)
             {
                 CommandModel command = commands[i];
                 if (command.HasValidSignature && !command.DirectlyBindable)

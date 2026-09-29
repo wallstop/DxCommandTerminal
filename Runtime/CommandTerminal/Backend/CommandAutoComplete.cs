@@ -75,17 +75,17 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         {
             int writeIndex = 0;
             int readIndex = 0;
-            while (readIndex < words.Count)
+            /*
+                One read, and the inner loop reuses it: the collapse overwrites
+                elements and reads, and only the RemoveRange below changes the
+                count - so the re-read that terminates a loop is not what bounds
+                this one.
+             */
+            int wordCount = words.Count;
+            while (readIndex < wordCount)
             {
                 string representative = words[readIndex];
                 int runEnd = readIndex + 1;
-                /*
-                    The outer loop rewrites entries, so its Count read must
-                    stay inline - hoisting it would pin a stale length. This
-                    inner loop only reads, and it runs once per entry, so its
-                    Count is hoisted.
-                 */
-                int wordCount = words.Count;
                 while (runEnd < wordCount)
                 {
                     string candidate = words[runEnd];

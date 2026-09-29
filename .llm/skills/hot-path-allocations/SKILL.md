@@ -116,28 +116,50 @@ first-inserted-wins for case-variant duplicates.
 
 - Hoist `List<T>.Count`, interface `Count`, and UIToolkit `childCount` out of a counting
   loop's condition: those are property or interface reads, re-dispatched per iteration.
-- **Never hoist a `Length`/`Count` read when the loop body mutates that collection.** The
-  inline re-read is what makes the loop terminate; a hoisted value pins a stale count. Three
-  in-repo loops are traps that read like hoistable candidates, and all three are commented
-  as such: `CommandShell`'s provider and scan-assembly removals (`RemoveAt` in the body),
-  `CommandAutoComplete.CollapseCaseInsensitiveDuplicates`' outer rewrite loop
-  (`words[writeIndex] = ...` in the body - its *inner* read loop is safe and is hoisted), and
-  `TerminalUI`'s `while (content.childCount < logs.Count)`, which appends the labels it is
-  counting. Hoisting any of them is a bug, not an optimization.
-- **One count per copy, and it is the one the allocation used.**
-  `new CommandArg[arguments.Count]` followed by
-  `for (int i = 0; i < materialized.Length; ++i)` states the same count twice,
-  in two expressions that can drift: change the allocation - a subrange, a
-  clamped size, a filter - and the copy silently under-runs instead of
-  failing. Hoist it and let it size both, the way
-  `BorrowedCommandArguments.ToArray` already does. This is a drift rule, not a
-  speed one, and it is a review rule rather than a lint rule: a token-level
-  linter cannot see that two expressions name the same count.
+- **Never hoist a `Length`/`Count` read when the loop body changes that collection's
+  COUNT.** Overwriting an element (`words[writeIndex] = ...`) is not a change of count; only
+  an add, a remove, or a clear is. The inline re-read is what makes such a loop terminate, so
+  a hoisted value pins a stale count. Three in-repo loops are traps that read like hoistable
+  candidates: `CyclicBuffer.Resize`'s `RemoveRange`, the `Fix Invalid Fonts` `RemoveAt` loop
+  in `TerminalFontPackEditor`, and `TerminalUI`'s `while (content.childCount < logCount)`,
+  which appends the labels it is counting. Hoisting any of them is a bug, not an optimization.
+  `KebabCase`'s trailing `builder.Length -= 1` is a fourth, in a `while` that shrinks the
+  buffer it reads. `CollapseCaseInsensitiveDuplicates` used to be listed here on the same
+  wrong reasoning - its outer loop only overwrites elements - and was hoisted once that was
+  corrected, so treat an inherited justification as a claim to verify, not as a fact.
+- **One read per method, so a count has one source of truth.** A `Length`/`Count` read
+  three or more times in one method states one number in three places, and they can
+  drift: change the allocation - a subrange, a clamped size, a filter - and the loop
+  bound silently under-runs instead of failing. Read it once into a local and let it
+  size the allocation and the bound, the way `BorrowedCommandArguments.ToArray` and
+  `LogTextSanitizer.SanitizeInto` do. This is a **drift rule, not a speed one**, and it
+  is a review rule rather than a lint rule: a token-level linter cannot see that three
+  expressions name the same count.
+- **Two reasons a second read is a different number, and both leave the reads alone.** A
+  reviewer who hoists either introduces a bug:
+  1. The loop body changes that collection's count (the rule above).
+  2. The variable is reassigned between the reads, so they are genuinely different
+     values - `TextFieldPaste.TryApply`'s second read is the post-trim `flattened`, and
+     the `_history.Count` in `CommandHistoryTests` follows a `Push` that changed it.
+- **A test is a third kind of "do not touch", for a different reason.** The count is what
+  the assertions compare: either the repetition IS the assertion
+  (`CountReflectsNumberOfEntries` reads `history.Count` once per push, with a different
+  expected value each time - hoisting passes vacuously) or the bound is the subject under
+  test. Either way a hoist changes what is being checked. Do not sweep tests mechanically.
+- **Sweep for it, then classify every hit, and never inherit a classification.** Three or
+  more reads of one `X.Length`/`X.Count` in a method body, across `Runtime/`, `Editor/`,
+  `Tests/`, `Samples~`, `Generator~`, is a hand-reviewable list. The tally is not the
+  deliverable and should not be quoted: the first sweep that quoted one classified 9 of 22
+  sites as hoistable and called the rest traps, and a second, independent sweep of the same
+  rule found 11 more hoistable sites in the same files - including one 65 lines below a site
+  the first sweep had already hoisted, and a site the first sweep had excused by believing
+  an inherited comment. Write the per-site decision, not the count.
 - Hoisting `string.Length`/`array.Length` is a **measured wash, not a win**: with tiered JIT
   disabled the inline and hoisted forms were identical at the median (0.00%, n=2000 x 7
   interleaved reps, 13- and 200-char workloads). The JIT already hoists the load; the
   "bounds-check elision" rationale that used to sit in context.md rule 18 was never real.
-  Write whichever form reads clearly and keep one form per type.
+  Write whichever form reads clearly - except where the one-read rule above applies, which
+  wins.
 
 ## Probe methodology (allocation tests)
 
@@ -182,5 +204,7 @@ first-inserted-wins for case-variant duplicates.
 - Shared rented buffer? Lease-guarded slots + evict oversized on return.
 - New mutation site on a snapshotted collection? Bump the version.
 - New copy or fill loop? One count, read once, sizing the allocation and the bound.
+- New method that reads one count three or more times? One read, unless the loop mutates
+  that collection, the variable is reassigned, or it is a test (see Loop bounds).
 - New allocation test? Warm first; pin through `AllocationAssertions`.
 - New lambda argument on a memoization/registration path? Captureless means `static`.

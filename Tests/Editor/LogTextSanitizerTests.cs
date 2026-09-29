@@ -1,5 +1,6 @@
 namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 {
+    using System;
     using System.Globalization;
     using Backend;
     using Helper;
@@ -189,6 +190,47 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 LogTextSanitizer.Sanitize(once),
                 "A sanitized message re-entering the funnel must return the same reference"
             );
+        }
+
+        [Test]
+        public void ADisplayCopyIsItsOwnArrayAndRefillsInPlace()
+        {
+            /*
+                A popup shows this copy while the index it returns selects the
+                name the caller still holds, so the copy must be a separate
+                array, and an inspector that redraws every frame must be able
+                to refill it without a second allocation.
+             */
+            string[] names = { "Admin\u202Eexe", "plain" };
+
+            /* Both production callers start here, not from null. */
+            string[] copy = Array.Empty<string>();
+            LogTextSanitizer.SanitizeInto(names, ref copy);
+            Assert.AreEqual(new[] { "Admin\\u202Eexe", "plain" }, copy, "Both names escape");
+            Assert.AreEqual(
+                "Admin\u202Eexe",
+                names[0],
+                "The caller's own name stays raw: the popup index selects it"
+            );
+            Assert.AreSame("plain", copy[1], "A clean name passes through by reference");
+
+            LogTextSanitizer.SanitizeInto(new[] { "one", "two", "three" }, ref copy);
+            Assert.AreEqual(3, copy.Length, "A different length needs a new array");
+            Assert.AreEqual(new[] { "one", "two", "three" }, copy, "The refill holds every name");
+
+            string[] refilled = copy;
+            LogTextSanitizer.SanitizeInto(new[] { "four", "five", "six" }, ref copy);
+            Assert.AreSame(refilled, copy, "A same-length refill must not reallocate");
+            Assert.AreEqual("four", copy[0], "A refill replaces the contents");
+
+            string[] fromNull = null;
+            LogTextSanitizer.SanitizeInto(names, ref fromNull);
+            Assert.AreEqual(
+                new[] { "Admin\\u202Eexe", "plain" },
+                fromNull,
+                "A null copy is allocated and filled from the caller's names"
+            );
+            Assert.AreNotSame(names, fromNull, "The caller's array is never the copy");
         }
 
         [Test]

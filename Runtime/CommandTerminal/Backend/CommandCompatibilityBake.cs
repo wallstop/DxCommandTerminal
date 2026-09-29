@@ -220,7 +220,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 lines.Add(
                     $"  <assembly fullname=\"{SecurityElement.Escape(entry.AssemblyName)}\" ignoreIfMissing=\"1\">"
                 );
-                for (; i < ordered.Count; )
+                for (; i < entryCount; )
                 {
                     if (!IsSameAssembly(ordered[i], entry.AssemblyName))
                     {
@@ -232,7 +232,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                         $"    <type fullname=\"{SecurityElement.Escape(ToLinkerTypeName(typeEntry.TypeFullName))}\" preserve=\"nothing\">"
                     );
                     string lastMethodName = null;
-                    for (; i < ordered.Count; ++i)
+                    for (; i < entryCount; ++i)
                     {
                         if (
                             !IsSameAssembly(ordered[i], entry.AssemblyName)
