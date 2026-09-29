@@ -159,15 +159,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void APageInsideTheAttachWindowIsStillTheDevelopersScroll()
         {
             /*
-                The keyboard paging path calls `Detach` with the position the
-                developer chose, and that is what makes the window safe. A page
-                taken before the terminal's first pin has no pin to be "below",
-                so without it the very next pass would read the page as output
-                and snap the view straight back to the end.
+                The keyboard paging path calls `Detach`, and that is what makes
+                the window safe. A page taken before the terminal's first pin
+                has no pin to be "below", so without it the very next pass
+                would read the page as output and snap the view back to the
+                end.
              */
             LogTailFollower follower = new();
             follower.Attach();
-            follower.Detach(Extent - 400f);
+            follower.Detach(Extent - 400f, Extent);
 
             bool request = follower.Observe(Extent - 400f, Extent, true);
 
@@ -180,11 +180,54 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         [Test]
+        public void AScrollThatLandsOnTheEndIsFollowingNotADetach()
+        {
+            /*
+                The freeze this prevents, and the gesture that caused it is the
+                ordinary one: catching up on a log that is still growing. The
+                last Page Down of a sweep lands on the end, and by then the
+                extent has usually moved again between the key and the pass
+                that reads it. Detaching there left the view pinned a line
+                short of a growing end, which is the one state a log can sit
+                in that nothing recovers it from.
+             */
+            LogTailFollower follower = AttachedFollower();
+
+            follower.Detach(Extent, Extent);
+            bool request = follower.Observe(Extent, Extent + 20f, true);
+
+            Assert.That(
+                follower.Detached,
+                Is.False,
+                "A developer who paged down to the bottom wants to follow again"
+            );
+            Assert.That(
+                request,
+                Is.True,
+                "The end grew after the key, so the view has to be taken to the new one"
+            );
+        }
+
+        [Test]
+        public void AParkOnePageFromTheEndStillDetaches()
+        {
+            LogTailFollower follower = AttachedFollower();
+
+            follower.Detach(Extent - 200f, Extent);
+
+            Assert.That(
+                follower.Detached,
+                Is.True,
+                "Everything short of the end is the developer having scrolled away"
+            );
+        }
+
+        [Test]
         public void ADetachedPositionSurvivesThePinANewViewWouldOtherwiseGive()
         {
             LogTailFollower follower = new();
             follower.Attach();
-            follower.Detach(Extent - 400f);
+            follower.Detach(Extent - 400f, Extent);
 
             /* Content grows under the parked view, which is what would
                otherwise re-pin it: the extent moved and the value is below it. */
@@ -199,7 +242,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             LogTailFollower follower = new();
             follower.Attach();
-            follower.Detach(Extent - 400f);
+            follower.Detach(Extent - 400f, Extent);
 
             follower.Observe(Extent, Extent, false);
 

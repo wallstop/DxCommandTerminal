@@ -45,6 +45,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private const int FillLines = 400;
         private const string FillMarker = "of 400";
         private const string LateLine = "logged after the developer paged back";
+        private const string ParkedLine = "logged while the log was parked";
+        private const string FollowedLine = "logged after the log started following again";
 
         private TerminalUI _terminal;
         private GameObject _terminalObject;
@@ -149,19 +151,25 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return FillTheLog();
             yield return WaitForLogAtEnd(FillMarker, "The log follows its own output to the end");
 
-            yield return SendKey(KeyCode.PageUp);
             yield return PageAwayFromTheEnd(
-                "Ctrl+End is only meaningful if the first page actually parked the view"
+                "Ctrl+End is only meaningful if the page actually parked the view"
             );
-            float paged = LogScroller().value;
-            Terminal.Log(LateLine);
-            yield return null;
 
             yield return SendKey(KeyCode.End, EventModifiers.Command);
+            yield return WaitForLogAtEnd(ParkedLine, "Ctrl+End is the way back to the tail");
+
+            /*
+                Logged after the key, not before. A line that was already in the
+                buffer when Ctrl+End arrived is at the end whether or not the
+                key did anything, so it cannot tell a developer that following
+                resumed - only a line that arrives afterwards can, and it can
+                only arrive on screen if the view is following again.
+             */
+            Terminal.Log(FollowedLine);
 
             yield return WaitForLogAtEnd(
-                LateLine,
-                "Ctrl+End is the way back to the tail, and the line logged while parked is the one it lands on"
+                FollowedLine,
+                "After Ctrl+End the view follows new output again, which is what it is for"
             );
         }
 
@@ -177,6 +185,46 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return WaitForLogValue(
                 expected: 0f,
                 message: "Command+Home reaches the oldest line the buffer still holds"
+            );
+        }
+
+        [UnityTest]
+        public IEnumerator PagingDownToTheBottomLeavesTheLogFollowing()
+        {
+            /*
+                The gesture that found the freeze: catching up on a log that is
+                still growing. The last Page Down lands on the end, and by then
+                the extent has usually moved again between the key and the pass
+                that reads it. Recording a detach there left the view a line
+                short of a growing end, which nothing recovers it from - the log
+                simply stops scrolling.
+             */
+            yield return SpawnOpenTerminal();
+            yield return FillTheLog();
+            yield return WaitForLogAtEnd(FillMarker, "The log follows its own output to the end");
+
+            int frameBudget = FrameBudget;
+            while (0 < frameBudget--)
+            {
+                Scroller scroller = LogScroller();
+                if (Tolerance < scroller.highValue - scroller.value)
+                {
+                    yield return SendKey(KeyCode.PageDown);
+                }
+                else
+                {
+                    break;
+                }
+
+                yield return null;
+            }
+
+            yield return SendKey(KeyCode.PageDown);
+            Terminal.Log(ParkedLine);
+
+            yield return WaitForLogAtEnd(
+                ParkedLine,
+                "A Page Down that reaches the end leaves the view following, not parked one line short"
             );
         }
 

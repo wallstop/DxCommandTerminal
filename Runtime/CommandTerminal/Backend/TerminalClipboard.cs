@@ -20,9 +20,12 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         What that evidence cannot distinguish is a platform that already held
         exactly this text: copying the same window twice reports success the
-        second time whether or not the second write landed. It is the only
-        portable signal there is, and the report is worded as "the platform did
-        not keep what was written" rather than as a guarantee.
+        second time whether or not the second write landed. Nor is a read-back
+        an acknowledgement. A browser clipboard is promise-based, so the
+        read-back can run before the write lands, and a copy that did succeed
+        reads back as the old value - a false negative on a working platform,
+        reported as "the platform did not keep what was written" rather than as
+        a guarantee. It is the only portable signal there is.
 
         A limit worth stating: the clipboard is a main-thread engine API. The
         read side has always been driven from a key handler, but a write from

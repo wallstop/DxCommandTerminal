@@ -450,12 +450,16 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 recalls exactly what it recalled before.
 
                 `args[0]` is the command being timed and the rest are its
-                arguments, so the tail is what runs. The slice is a fresh
-                array on purpose: the shell may hand the array to a handler
-                that keeps it, and a view over this one would alias the
-                arguments `time` itself was given. One small array per `time`
-                is the right trade - this is a command a developer types, not
-                a keystroke or a frame.
+                arguments, so the tail is what runs. The tail is a fresh array
+                because slicing one out of a `CommandArg[]` is a copy, and
+                because the shell hands that array to the timed handler
+                directly. One small array per `time` is the right trade - this
+                is a command a developer types, not a keystroke or a frame.
+
+                One substitution, not two. The old path flattened to a string
+                and re-tokenized it, so a stored value that was itself `$name`
+                was substituted a second time. This dispatches the arguments
+                the outer line already produced, which is what "time X" means.
              */
             CommandArg[] timed = new CommandArg[args.Length - 1];
             Array.Copy(args, 1, timed, 0, timed.Length);
@@ -733,6 +737,15 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             then indexing it separately is two moments: a background log
             landing between them makes the second read a different line than
             the first described, and a resize or a clear between them throws.
+
+            The capacity is read outside the buffer's lock, so a resize from
+            another thread in that window can leave the destination shorter
+            than the window and `CopyTo` truncates to the oldest entries. The
+            array is grown to the largest capacity seen so that a resize to a
+            *smaller* size cannot be what a later read trips over, and a
+            caller that has to be exact about the newest entries reads the
+            window at the capacity it just saw. `trace` shares the same
+            exposure; neither widens it.
          */
         private static int ReadLogWindow(CommandLog buffer, out LogItem[] window)
         {
@@ -781,6 +794,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 MeasureCopyLength(window, first, logCount)
             );
             StringBuilder builder = scope.Builder;
+            bool hasText = false;
             for (int i = first; i < logCount; ++i)
             {
                 if (first != i)
@@ -788,24 +802,30 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                     builder.Append(LogCopySeparator);
                 }
 
-                builder.Append(window[i].message);
+                string message = window[i].message;
+                hasText |= 0 < message.Length;
+                builder.Append(message);
             }
 
-            string text = builder.ToString();
-            if (string.IsNullOrEmpty(text))
+            /*
+                Whether the lines held text, not whether the joined string did.
+                The separators are written whatever the lines say, so two empty
+                lines still join to one newline, and asking about the string
+                would report a successful copy of a single character.
+             */
+            if (!hasText)
             {
                 /*
-                    Every line in the window is empty. That is a log with
-                    nothing in it to copy, which is a different thing from a
-                    platform declining a copy, and telling a developer their
-                    platform refused when the text was never written is the
-                    one answer this command must not give wrongly.
+                    A log with nothing in it to copy, which is a different
+                    thing from a platform declining a copy. Telling a developer
+                    their platform refused when the text was never written is
+                    the one answer this command must not give wrongly.
                  */
                 Terminal.Log(TerminalLogType.Warning, "Nothing to copy: the log holds no text.");
                 return;
             }
 
-            if (!TerminalClipboard.TryWrite(text))
+            if (!TerminalClipboard.TryWrite(builder.ToString()))
             {
                 Terminal.Log(
                     TerminalLogType.Warning,

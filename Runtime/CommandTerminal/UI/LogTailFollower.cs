@@ -90,23 +90,34 @@ namespace WallstopStudios.DxCommandTerminal.UI
         }
 
         /*
-            A scroll the developer made, at the position they left it. This is
-            the one move `Observe` cannot infer on its own, and the reason is
-            the window above: `Attach` clears the pin, and a developer who
+            A scroll the developer made, from the terminal that placed it. This
+            is the one move `Observe` cannot infer on its own, and the reason
+            is the window above: `Attach` clears the pin, and a developer who
             pages back before the terminal's next pin has landed has no pin to
-            be "below". The comparison in `Observe` needs one, so the caller
-            that knows this was a scroll supplies it, and the pin is dropped
-            so nothing re-pins the view over the position it was put at.
+            be "below". The caller is the only thing that knows this was a
+            scroll, so it says so.
 
-            Pinned, not null: a value equal to the pin is how the next pass
-            tells "the developer parked it here" from "the terminal is still
-            following", which is the same distinction the detached flag makes
-            and the reason both are set together.
+            The position and the extent are read back so the end rule stays
+            here, where the tolerance lives, rather than being restated at
+            every call site. A scroll that lands on the end is not a scroll
+            away from it: the developer paged down to the bottom and wants to
+            follow, and recording a detach there would freeze the view a line
+            short of an end that is still growing - the last press of a
+            catch-up sweep is exactly the press that did it.
+
+            No pin is written. The flag is the whole signal, and a pin here
+            would outlive the extent it described without anything reading it:
+            the branch that compares against it can only set a flag this
+            method has already set.
          */
-        public void Detach(float value)
+        public void Detach(float value, float highValue)
         {
+            if (highValue - EndTolerance <= value)
+            {
+                return;
+            }
+
             Detached = true;
-            _pinned = value;
         }
     }
 }

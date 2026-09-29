@@ -180,7 +180,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         [Test]
-        public void TimeDoesNotAddTheTimedCommandToHistoryASecondTime()
+        public void TimeStillPushesTheTimedCommandToHistoryExactlyOnce()
         {
             Run("time log-terminal once");
 
@@ -191,13 +191,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 Does.Contain("time log-terminal once"),
                 "The line the developer typed is in history"
             );
-            int timedEntries = history.Count(line =>
-                string.Equals(line, "log-terminal once", StringComparison.Ordinal)
-            );
             Assert.That(
-                timedEntries,
-                Is.LessThanOrEqualTo(1),
-                "The timed command's line must not be a second history entry the developer never typed"
+                history.Count(line =>
+                    string.Equals(line, "log-terminal once", StringComparison.Ordinal)
+                ),
+                Is.EqualTo(1),
+                "The timed command's own line reaches history once, through the same "
+                    + "funnel the string path used, so Up recalls exactly what it did before"
             );
         }
 
@@ -321,16 +321,22 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 lines are empty has nothing to copy, which is not the same
                 failure as a platform that declined a copy, and answering the
                 second for the first sends a developer looking at their OS.
+
+                Two lines, because the separators are written whatever the lines
+                say: two empty lines still join to one newline, so asking
+                whether the copied text was empty called this a successful copy
+                of a single character.
              */
+            _buffer.HandleLog(string.Empty, TerminalLogType.Message);
             _buffer.HandleLog(string.Empty, TerminalLogType.Message);
             string untouched = GUIUtility.systemCopyBuffer;
 
-            Run("copy-last");
+            Run("copy-log 2");
 
             Assert.That(
                 Contains(Newest(2), "Nothing to copy: the log holds no text."),
                 Is.True,
-                "An empty line is not a platform that refused the copy"
+                "Empty lines are not a platform that refused the copy"
             );
             Assert.That(
                 Contains(Newest(2), "did not keep the text"),
@@ -338,6 +344,22 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 "The refusal message is reserved for a platform that declined"
             );
             Assert.That(GUIUtility.systemCopyBuffer, Is.EqualTo(untouched));
+        }
+
+        [Test]
+        public void AnEmptyLineAmongRealOnesIsStillCopied()
+        {
+            Run("log-terminal alpha");
+            _buffer.HandleLog(string.Empty, TerminalLogType.Message);
+            Run("log-terminal beta");
+
+            Run("copy-log 3");
+
+            Assert.That(
+                GUIUtility.systemCopyBuffer,
+                Does.Contain("alpha").And.Contain("beta"),
+                "One empty line is a line like any other; the count is what was asked for"
+            );
         }
 
         [Test]

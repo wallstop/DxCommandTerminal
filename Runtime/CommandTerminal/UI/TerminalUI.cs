@@ -2907,11 +2907,13 @@
                 frame later - so a page taken in that window would have
                 nothing to be below and the very next pass would read it as
                 output and snap the view back to the end. `Detach` is what
-                closes the window, and it is also why this does not simply pin
-                the new value: a pin records where the terminal left the view,
-                and this position is one the developer chose.
+                closes that window, and it decides for itself whether the key
+                actually left the view away from its end: a scroll that lands
+                on the end is a developer paged down to the bottom, and
+                recording a detach there would freeze the view a line short of
+                an end that is still growing.
              */
-            _logTail.Detach(scroller.value);
+            _logTail.Detach(scroller.value, scroller.highValue);
             _needsScrollToEnd = false;
             return true;
         }
