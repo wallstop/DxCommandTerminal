@@ -491,13 +491,13 @@ The log holds the newest 256 lines by default and nothing else, so reaching one 
 - `find` on its own steps to the next match, wrapping at the end; **F3** and **Shift+F3** do the same from the keyboard.
 - `clear-filter` shows every line again.
 
-Each reports what it did - `Showing 20 of 240 log lines.`, or `Match 3 of 80.` - so a search that hit nothing says so instead of leaving you looking at an empty log, and the search stays set so a typo does not silently put everything back. A query is the arguments joined back into one string, so `find "two words"` searches for two words. An empty query is refused and leaves the search you had alone.
+Each reports what it did - `Showing 20 of 240 log lines.`, or `Match 3 of 80.` - so a search that hit nothing says so instead of leaving you looking at an empty log, and the search stays set so a typo does not silently put everything back. A query is the arguments joined back into one string, so `find "two words"` searches for two words. An empty query is refused and leaves the search you had alone. The count does not move because the search talked: its own answer is not one of the results, so the same search reports the same number however many times you run it.
 
 The search is over the text as the log shows it, so what you can see is what you can find, and it ignores case: `nullref` reaches `NullReferenceException`.
 
 Four limits worth knowing before you rely on it:
 
-- It does not find the commands you ran. Both surfaces echo the line you typed into the log, and a search that matched its own echo would report a hit for every query, including one that appears nowhere. Use `copy-log` for a transcript with your commands in it.
+- It does not find the commands you ran, or the console's own answers. Both surfaces echo the line you typed into the log, and a search that matched its own echo would report a hit for every query, including one that appears nowhere; the same goes for the line the search writes when it tells you what it found. Use `copy-log` for a transcript with your commands in it.
 - The query is only recorded as the `find` line in the log. Once that line rotates out of the buffer - or you run `clear-console` - nothing on screen says the view is filtered, and the query is gone. `clear-filter` is how you put the log back.
 - `clear-console` does not drop the search. The view goes empty until the next `clear-filter` or a new `find`.
 - F3 and Shift+F3 need the command line to hold focus, as the paging keys do, and the jump to a match needs a log view that has been laid out. A view with no rendered Game view filters but does not scroll.

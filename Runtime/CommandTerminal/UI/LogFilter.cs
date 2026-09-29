@@ -1,6 +1,7 @@
 namespace WallstopStudios.DxCommandTerminal.UI
 {
     using System;
+    using System.Collections.Generic;
     using Backend;
 
     /*
@@ -38,6 +39,26 @@ namespace WallstopStudios.DxCommandTerminal.UI
 
         /* One-based, so the number a developer reads is the number reported. */
         public int? CurrentMatch { get; private set; }
+
+        /*
+            The console's own answers about the search, which are not results.
+
+            Every command has to answer in the console, and the answer is
+            ordinary log text. A search that answered into its own results
+            would be searching its own sentences: the words in them are
+            ordinary words, so a query that happens to be one of them -
+            "search", "log", "line", "clear-filter" - matched the answer, and
+            every repeat of the search added another match. A search that hit
+            nothing then reported a hit, which is the one answer it must never
+            give.
+
+            By exact text rather than by type, because the types belong to the
+            game: a `Warning` is what the developer is looking for, and a
+            `ShellMessage` is any `Terminal.Log` the game made. The search's
+            own lines are neither, and there are only ever a handful - one per
+            command the developer ran.
+         */
+        private readonly HashSet<string> _ownReplies = new(StringComparer.Ordinal);
 
         /*
             Whether a line survives the search. The message is never null -
@@ -85,6 +106,21 @@ namespace WallstopStudios.DxCommandTerminal.UI
         private static bool IsSearchable(LogItem item)
         {
             return item.type != TerminalLogType.Input;
+        }
+
+        /*
+            Registers the text of a line the search is about to write, so
+            `Apply` will not count it. The caller logs exactly the string it
+            registers: a message carrying format arguments would reach the log
+            formatted and the filter holding the format, and the two would
+            stop being the same line.
+         */
+        public void IgnoreOwnReply(string message)
+        {
+            if (!string.IsNullOrEmpty(message))
+            {
+                _ownReplies.Add(message);
+            }
         }
 
         /*
@@ -151,11 +187,15 @@ namespace WallstopStudios.DxCommandTerminal.UI
             string query = Query;
 
             /*
-                Two counters, one pass. `searchable` is the denominator the
-                developer reads, and it is every line the search could have
-                matched: an echo is excluded from the matches, so counting it
-                here would report "20 of 61" beside a rule that says 61 lines
-                were never candidates.
+                Two counters, one pass, and the same exclusion from both.
+
+                `searchable` is the denominator the developer reads: the lines
+                the search could have matched. A console reply is not one of
+                them, because the rule below rejects it - so counting it here
+                would report "20 of 241" and then "20 of 242" on two runs of
+                the same search, a number that moved because the search said
+                something. A count the developer uses to decide whether their
+                query is real has to be the same number every time.
 
                 The loop runs to the end of the window even once the
                 destination is full, because a truncated `kept` with a complete
@@ -168,7 +208,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             for (int i = 0; i < searchableEnd; ++i)
             {
                 LogItem item = window[i];
-                if (!IsSearchable(item))
+                if (!IsSearchable(item) || _ownReplies.Contains(item.message))
                 {
                     continue;
                 }

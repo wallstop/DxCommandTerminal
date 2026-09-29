@@ -381,6 +381,121 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         [UnityTest]
+        public IEnumerator TheReportedCountIsTheSameEveryTimeTheSameSearchRuns()
+        {
+            /*
+                The finding this pins, and the second half of the same one. The
+                search's own answer was excluded from the matches but still
+                counted in the total, so every run added one to the
+                denominator: "20 of 240", then "20 of 241", then "20 of 242".
+                The matches held and the number the developer reads did not,
+                and a count that moves when nothing else did is the same
+                failure as a count that never settles.
+
+                Three runs, because the first is the one that would pass either
+                way - the defect needs a second answer to count.
+             */
+            yield return SpawnOpenTerminal();
+            yield return FillTheLog();
+
+            yield return RunThroughConsole("find " + HitMarker);
+            yield return WaitForLastLogLine("of 240 log lines", "The first run reports a count");
+
+            yield return RunThroughConsole("find " + HitMarker);
+            yield return WaitForLastLogLine(
+                "of 240 log lines",
+                "The second run reports the same count, so the first answer is in neither half"
+            );
+
+            yield return RunThroughConsole("find " + HitMarker);
+            yield return WaitForLastLogLine(
+                "of 240 log lines",
+                "The third run too, so neither answer moved the number"
+            );
+        }
+
+        [UnityTest]
+        public IEnumerator ASearchSurvivesTheCommandThatRanIt()
+        {
+            /*
+                The finding this pins: `EnterCommand` re-attaches the tail and
+                asks for a scroll to the end AFTER the handler returns, because
+                running a command is a request for its output. A search handler
+                queues a jump to its match, and the attach overwrote it - so
+                the view went to the end and the jump either lost the race or
+                spent its budget waiting for a layout that kept moving.
+
+                Driven through `EnterCommand` rather than the shell, because the
+                shell never re-attaches and so cannot see this at all.
+
+                Asserted synchronously, in the frame `EnterCommand` returns,
+                and that is not a shortcut. The jump is dropped once its budget
+                runs out - four refreshes with no layout - so a test that
+                waited a frame or two to look would find the flag cleared on a
+                correct build and pass straight over a broken one. The decision
+                is made inside that call and nowhere else, so this is the only
+                moment it is observable - on any host, laid out or not, which
+                is what a state no view can show has to be.
+             */
+            yield return SpawnOpenTerminal();
+            yield return FillTheLog();
+
+            DefaultTerminalInput.Instance.CommandText = "find " + HitMarker;
+            _terminal.EnterCommand();
+
+            Assert.That(
+                _terminal.FindScrollQueued,
+                Is.True,
+                "The jump the search queued survived the run that queued it"
+            );
+            Assert.That(
+                _terminal.WantsScrollToEnd,
+                Is.False,
+                "The run did not re-assert a scroll to the end over the search's jump"
+            );
+        }
+
+        [UnityTest]
+        public IEnumerator ASearchNeverCountsItsOwnAnswer()
+        {
+            /*
+                The second finding. A search that hit nothing answers in the
+                log, and the answer is ordinary text - so a query that happens
+                to be a word in it, "search" here, matched the answer. The
+                search reported a hit for a string that appears nowhere, and
+                each repeat of the search added another.
+
+                The query is chosen to be a word the answer really contains, so
+                this fails whenever the exclusion is removed, and it is the
+                answer's own words that make it collide - not the query.
+             */
+            yield return SpawnOpenTerminal();
+            yield return FillTheLog();
+
+            yield return RunThroughConsole("find search");
+            yield return WaitForLastLogLine(
+                "No log line matches",
+                "Nothing in the log holds the word the search looked for"
+            );
+            yield return Settle();
+
+            Assert.That(
+                DrawnText(),
+                Is.Empty,
+                "The answer to a search that hit nothing is not itself a result"
+            );
+
+            yield return RunThroughConsole("find");
+            yield return Settle();
+
+            Assert.That(
+                LastLogText(),
+                Does.Contain("No log line matches"),
+                "A repeat of the search does not find the answer the first one wrote"
+            );
+        }
+
+        [UnityTest]
         public IEnumerator ASearchScrollsToItsFirstMatch()
         {
             yield return SpawnOpenTerminal();
@@ -584,6 +699,25 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 _terminal._uiDocument.rootVisualElement.Q("LogScrollView") as ScrollView;
             Assert.That(logView, Is.Not.Null, "The log scroll view exists on an open terminal");
             return logView;
+        }
+
+        /*
+            The same command through the real funnel, `EnterCommand` and all.
+
+            `EnterCommand` re-attaches the log tail after the handler returns,
+            because running a command is a request for its output. That runs
+            AFTER anything the handler set up, so a handler whose whole point
+            is where the view ends up has to survive the code that called it -
+            and only this path exercises that ordering. Every other test here
+            dispatches through the shell, which never re-attaches, so none of
+            them can see it.
+         */
+        private IEnumerator RunThroughConsole(string line)
+        {
+            DefaultTerminalInput.Instance.CommandText = line;
+            _terminal.EnterCommand();
+            yield return null;
+            yield return null;
         }
 
         private VisualElement LogContent()
