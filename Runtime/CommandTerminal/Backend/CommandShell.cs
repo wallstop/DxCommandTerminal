@@ -274,7 +274,9 @@
         public static bool TryEatArgument(ref string stringValue, out CommandArg arg)
         {
             stringValue = stringValue.TrimStart();
-            if (stringValue.Length == 0)
+            /* One read: stringValue is reassigned only after the last use. */
+            int length = stringValue.Length;
+            if (length == 0)
             {
                 arg = default;
                 return false;
@@ -286,7 +288,7 @@
                 int closingQuoteIndex = -1;
 
                 // Find the matching closing quote.
-                for (int i = 1; i < stringValue.Length; ++i)
+                for (int i = 1; i < length; ++i)
                 {
                     if (stringValue[i] == firstChar)
                     {
@@ -322,14 +324,13 @@
                     than the one completion edited.
                  */
                 int end = 0;
-                while (end < stringValue.Length && !CommandTokenizer.IsSeparator(stringValue[end]))
+                while (end < length && !CommandTokenizer.IsSeparator(stringValue[end]))
                 {
                     ++end;
                 }
 
                 arg = new CommandArg(stringValue.Substring(0, end));
-                stringValue =
-                    end < stringValue.Length ? stringValue.Substring(end + 1) : string.Empty;
+                stringValue = end < length ? stringValue.Substring(end + 1) : string.Empty;
             }
 
             return true;

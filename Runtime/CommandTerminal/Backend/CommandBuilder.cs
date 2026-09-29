@@ -165,14 +165,15 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         private static string BuildUsageHint(string name, CommandArgument[] specs)
         {
-            if (specs.Length == 0)
+            int specCount = specs.Length;
+            if (specCount == 0)
             {
                 return name;
             }
 
-            StringBuilder builder = new(name.Length + 16 * specs.Length);
+            StringBuilder builder = new(name.Length + 16 * specCount);
             builder.Append(name);
-            for (int i = 0; i < specs.Length; ++i)
+            for (int i = 0; i < specCount; ++i)
             {
                 builder.Append(' ');
                 specs[i].AppendUsage(builder);

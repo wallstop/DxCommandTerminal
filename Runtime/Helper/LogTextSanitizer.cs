@@ -129,19 +129,22 @@ namespace WallstopStudios.DxCommandTerminal.Helper
         /*
             Fills the display copy a popup shows, refilled in place when its
             length already fits: that is what keeps an inspector redrawing
-            every frame from allocating one array per frame. `names` is never
-            null - every caller owns a `new string[count]` - and passing the
-            same array as both arguments is harmless, because each element is
-            read before it is written.
+            every frame from allocating one array per frame. One read of the
+            length sizes the allocation and the loop - the loop body writes
+            `copy`, never `names`, so the re-read that terminates a mutating
+            loop is not needed here. `names` is never null (every caller owns
+            a `new string[count]`), and passing one array as both arguments
+            is harmless: each element is read before it is written.
          */
         public static void SanitizeInto(string[] names, ref string[] copy)
         {
-            if (copy == null || copy.Length != names.Length)
+            int length = names.Length;
+            if (copy == null || copy.Length != length)
             {
-                copy = names.Length == 0 ? Array.Empty<string>() : new string[names.Length];
+                copy = length == 0 ? Array.Empty<string>() : new string[length];
             }
 
-            for (int i = 0; i < names.Length; ++i)
+            for (int i = 0; i < length; ++i)
             {
                 copy[i] = Sanitize(names[i]);
             }

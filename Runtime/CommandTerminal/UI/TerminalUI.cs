@@ -2081,17 +2081,22 @@
             {
                 _tokenCompletions.Clear();
                 _tokenCompletions.AddRange(_tokenCompletionsTemp);
-                _tokenCompletionIndex = searchForward ? 0 : _tokenCompletions.Count - 1;
+            }
+
+            /* One read, after the refill: the cycling below cannot change it. */
+            int completionCount = _tokenCompletions.Count;
+            if (!equivalent)
+            {
+                _tokenCompletionIndex = searchForward ? 0 : completionCount - 1;
             }
             else if (searchForward)
             {
-                _tokenCompletionIndex = (_tokenCompletionIndex.Value + 1) % _tokenCompletions.Count;
+                _tokenCompletionIndex = (_tokenCompletionIndex.Value + 1) % completionCount;
             }
             else
             {
                 _tokenCompletionIndex =
-                    (_tokenCompletionIndex.Value - 1 + _tokenCompletions.Count)
-                    % _tokenCompletions.Count;
+                    (_tokenCompletionIndex.Value - 1 + completionCount) % completionCount;
             }
 
             ApplyTokenCompletion(_tokenCompletions[_tokenCompletionIndex.Value]);
@@ -2666,21 +2671,28 @@
 
             VisualElement content = _logScrollView.contentContainer;
             bool dirty = _lastSeenBufferVersion != buffer.Version;
-            if (content.childCount != logs.Count)
+
+            /*
+                One read of the log count: the loops below add to and remove
+                from `content`, which is why its own childCount stays inline -
+                that re-read is what terminates them. The log list is only
+                read here, so its count is the same number throughout.
+             */
+            int logCount = logs.Count;
+            if (content.childCount != logCount)
             {
                 dirty = true;
-                if (content.childCount < logs.Count)
+                if (content.childCount < logCount)
                 {
-                    while (content.childCount < logs.Count)
+                    while (content.childCount < logCount)
                     {
                         Label logText = new();
                         logText.AddToClassList("terminal-output-label");
                         content.Add(logText);
                     }
                 }
-                else if (logs.Count < content.childCount)
+                else if (logCount < content.childCount)
                 {
-                    int logCount = logs.Count;
                     for (int i = content.childCount - 1; logCount <= i; --i)
                     {
                         content.RemoveAt(i);
@@ -2692,7 +2704,6 @@
 
             if (dirty)
             {
-                int logCount = logs.Count;
                 int childCount = content.childCount;
                 for (int i = 0; i < logCount && i < childCount; ++i)
                 {
@@ -2723,7 +2734,7 @@
                     }
                 }
 
-                if (logs.Count == content.childCount)
+                if (logCount == content.childCount)
                 {
                     _lastSeenBufferVersion = buffer.Version;
                 }

@@ -152,11 +152,14 @@ function classify(text) {
         ++index;
       }
 
-      const interpolated =
-        !verbatim && text[start - 1] === "$"
-          ? true
-          : verbatim && text[start - 1] === "@" && text[start - 2] === "$";
-      literals.push({ start, end: index, interpolated, verbatim });
+      /*
+        `$@` is a verbatim interpolated string and `@` is a verbatim one that
+        is not, and `start` indexes the `@` in both cases - so the character
+        that decides is the one immediately before it. Reading a second
+        character back instead matches nothing, and every `$@"...{x}"` hole
+        then goes unreported.
+       */
+      literals.push({ start, end: index, interpolated: text[start - 1] === "$", verbatim });
       continue;
     }
 
@@ -401,10 +404,23 @@ test("display text: the scanner is not fooled by the shapes around it", () => {
     assert.deepEqual(unescapedTooltipNames(source.join("\n")), [], source.join("\n"));
   }
 
+});
+
+test("display text: a verbatim interpolated tooltip is read, and its doubled brace is not a hole", () => {
   assert.deepEqual(
-    unescapedTooltipNames([`GUIContent tip = new("a", $@"literal {{theme}} text");`].join("\n")),
+    unescapedTooltipNames([`GUIContent tip = new("a", $@"Will set {name} now");`].join("\n")),
+    ["line 1: name"],
+    "a $@ hole is a hole: not seeing it is a false negative, not a clean file"
+  );
+  assert.deepEqual(
+    unescapedTooltipNames([`GUIContent tip = new("a", $@"literal {{name}} text");`].join("\n")),
     [],
-    'a doubled brace in a verbatim string is literal text, not a hole: {theme}'
+    "a doubled brace in a verbatim string is literal text, not a hole: {name}"
+  );
+  assert.deepEqual(
+    unescapedTooltipNames([`GUIContent tip = new("a", $@"Will set {${SANITIZE_CALL}name)}");`].join("\n")),
+    [],
+    "an escaped hole in a verbatim string is still escaped"
   );
 });
 

@@ -37,19 +37,22 @@ namespace WallstopStudios.DxCommandTerminal.Helper
 
             lock (GrowthGate)
             {
-                if (slot < _slots.Length)
+                /* One read: the lock holds, and only the write below moves it. */
+                T[] slots = _slots;
+                int currentLength = slots.Length;
+                if (slot < currentLength)
                 {
                     return;
                 }
 
-                int capacity = _slots.Length * 2;
+                int capacity = currentLength * 2;
                 while (capacity <= slot)
                 {
                     capacity *= 2;
                 }
 
                 T[] grown = new T[capacity];
-                Array.Copy(_slots, grown, _slots.Length);
+                Array.Copy(slots, grown, currentLength);
                 Volatile.Write(ref _slots, grown);
             }
         }

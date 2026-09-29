@@ -164,12 +164,13 @@ namespace WallstopStudios.DxCommandTerminal.Themes
                 return "unnamed-theme";
             }
 
-            using CachedStringBuilder.Scope scope = new(value.Length + 16);
+            int length = value.Length;
+            using CachedStringBuilder.Scope scope = new(length + 16);
             StringBuilder builder = scope.Builder;
             bool previousWasBoundary = true;
 
             /* Counting, not foreach: a string's enumerator is a class (rule 11). */
-            for (int i = 0; i < value.Length; ++i)
+            for (int i = 0; i < length; ++i)
             {
                 char c = value[i];
                 if (char.IsUpper(c))
