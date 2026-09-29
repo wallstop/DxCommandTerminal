@@ -2421,6 +2421,13 @@
                 captureless for the reason the change callback above states,
                 and the key is stopped only when a paste happened, so an
                 ordinary V types a V.
+
+                The log is answered here for the same reason. The command line
+                holds panel focus for as long as the console is open, so the
+                keys that scroll the log never reach the log view; routing
+                them is the terminal's job, and it is the same trickle-down
+                callback so the two answers cannot disagree about what
+                "consumed" means.
              */
             _commandInput.RegisterCallback<KeyDownEvent, TerminalUI>(
                 static (evt, context) =>
@@ -2438,6 +2445,12 @@
                             would paste the raw clipboard a second time,
                             newlines and all.
                          */
+                        KeyEvents.Consume(context._commandInput, evt);
+                        return;
+                    }
+
+                    if (context.TryScrollLog(evt))
+                    {
                         KeyEvents.Consume(context._commandInput, evt);
                     }
                 },
@@ -2826,6 +2839,82 @@
             }
 
             return _logTail.Observe(scroller.value, scroller.highValue, newLogs);
+        }
+
+        /*
+            Moves the log for a key that arrived at the command field, because
+            the command line holds panel focus for as long as the console is
+            open. False means the key was not the log's to answer and the
+            caller leaves it alone, so typing, history recall, completion, and
+            closing are untouched.
+
+            A key the log answers detaches the tail, which is what makes the
+            scroll a first-class state: a developer paging back to read an
+            error is not yanked to the newest line by the next frame's output.
+            The follower learns that from the scroller's own value on the next
+            pass, so all this has to do is place the value and clear a tail
+            pin that has not been spent yet.
+         */
+        private bool TryScrollLog(KeyDownEvent evt)
+        {
+            /*
+                Both flags, for the reason the paste path checks both: the
+                command modifier is a different flag from Control on the
+                editors that have both, and a developer reaching the log with
+                Ctrl on Windows has to get there as surely as one with Cmd on
+                macOS.
+             */
+            if (
+                !LogScrollKeys.TryResolve(
+                    evt.keyCode,
+                    evt.commandKey || evt.ctrlKey,
+                    out LogScrollIntent intent
+                )
+            )
+            {
+                return false;
+            }
+
+            Scroller scroller = _logScrollView?.verticalScroller;
+            if (scroller == null)
+            {
+                return false;
+            }
+
+            /*
+                The extent the log actually shows, which is the page. Neither
+                Scroller nor ScrollView exposes a page size on Unity 2021.3,
+                the oldest editor this package supports, so it is read from the
+                content viewport's laid-out rectangle - a Rect, whose height is
+                a float on every supported version. A zero height is a log
+                that has not been laid out, where there is nothing to page
+                through and the clamp leaves the view where it is.
+             */
+            float target = LogScrollKeys.Target(
+                intent,
+                scroller.value,
+                scroller.highValue,
+                _logScrollView.contentViewport.layout.height
+            );
+
+            scroller.value = target;
+
+            /*
+                No pin here, and that is load-bearing. The follower's pin is
+                wherever the terminal last left the view, which for a log that
+                was following is the end, and a move below it already reads as
+                the developer's own scroll and detaches the tail. Pinning to
+                the new value instead would make the position equal the pin,
+                and `value < _pinned` would no longer hold - so the tail would
+                never detach and the next pass would scroll the view straight
+                back to the end, which is the opposite of what was asked for.
+
+                What a scroll does have to beat is a pin the terminal has not
+                spent yet: running a command sets one, and it would land on
+                the next pass and undo the scroll the developer just made.
+             */
+            _needsScrollToEnd = false;
+            return true;
         }
 
         private void ScrollToEnd()

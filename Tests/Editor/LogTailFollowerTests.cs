@@ -117,6 +117,45 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         [Test]
+        public void RepeatedScrollsStayDetachedBecauseThePinStaysAtTheEnd()
+        {
+            /*
+                The keyboard paging path places the scroller and pins nothing:
+                the pin the terminal holds is the end, and every page below it
+                has to read as the developer's own scroll. This is the rule
+                that path leans on, and pinning to the new position instead
+                would make the position equal the pin, which is the state a
+                developer cannot reach.
+             */
+            LogTailFollower follower = AttachedFollower();
+
+            for (int page = 1; page <= 5; ++page)
+            {
+                float scrolled = Extent - (200f * page);
+                bool request = follower.Observe(scrolled, Extent, false);
+
+                Assert.That(
+                    request,
+                    Is.False,
+                    $"Page {page} must not ask for a pin, or the view snaps back to the end"
+                );
+                Assert.That(follower.Detached, Is.True, $"Page {page} detaches the tail");
+            }
+        }
+
+        [Test]
+        public void PagingBackToTheEndReattachesTheTail()
+        {
+            LogTailFollower follower = AttachedFollower();
+            follower.Observe(Extent - 400f, Extent, false);
+
+            bool request = follower.Observe(Extent, Extent, false);
+
+            Assert.That(follower.Detached, Is.False, "Landing at the end follows again");
+            Assert.That(request, Is.False, "The view is already where the pin would put it");
+        }
+
+        [Test]
         public void ADetachedTailIgnoresOutputThatArrivesWhileDetached()
         {
             LogTailFollower follower = AttachedFollower();
