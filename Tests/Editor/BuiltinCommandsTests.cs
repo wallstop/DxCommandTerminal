@@ -302,9 +302,72 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         [Test]
+        public void CopyLastTakesTheLineAboveTheEchoOfTheCommandAskingForIt()
+        {
+            /*
+                The bug this file's `Run` helper hid. The console echoes the
+                typed line as `Input` before any handler runs, so from a real
+                console the newest entry is "copy-last" itself, and copying the
+                newest entry copied the word back at the developer instead of
+                the error they were reaching for.
+             */
+            Run("log-terminal the error line");
+            Run("copy-last");
+
+            Assert.That(
+                GUIUtility.systemCopyBuffer,
+                Is.EqualTo("the error line"),
+                "`copy-last` copies the line above its own echo, not the echo"
+            );
+        }
+
+        [Test]
+        public void CopyLogDoesNotPutTheCommandAskingForItOnTheClipboard()
+        {
+            Run("log-terminal alpha");
+            Run("log-terminal beta");
+            Run("copy-log 2");
+
+            string[] copied = GUIUtility.systemCopyBuffer.Split(LogCopySeparator);
+
+            Assert.That(
+                copied,
+                Has.None.EqualTo("copy-log 2"),
+                "A paste must not open with the keystroke that produced it"
+            );
+            Assert.That(
+                copied,
+                Is.EqualTo(new[] { "log-terminal beta", "beta" }),
+                "`copy-log 2` takes the two entries above the echo, and they are the ones the developer saw last"
+            );
+        }
+
+        [Test]
+        public void CopyLogKeepsTheCommandsYouRanInTheTranscript()
+        {
+            /*
+                The other half of the rule, so it is not "drop every echo". A
+                bug report wants to show what was typed as much as what came
+                back, so only the echoes at the newest end are the ones the
+                developer has already in front of them.
+             */
+            Run("log-terminal alpha");
+            Run("log-terminal beta");
+            Run("copy-log");
+
+            Assert.That(
+                GUIUtility.systemCopyBuffer,
+                Does.Contain("log-terminal alpha"),
+                "An earlier command echo is part of the log and stays in the transcript"
+            );
+        }
+
+        [Test]
         public void CopyingAnEmptyLogReportsNothingToCopy()
         {
-            Run("copy-last");
+            /* Dispatched rather than echoed, so the log really is empty:
+               `Run` writes the typed line into it before dispatching. */
+            _shell.RunCommand("copy-last");
 
             Assert.That(
                 Contains(Newest(1), "Nothing to copy: the log is empty."),
@@ -352,13 +415,32 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Run("log-terminal alpha");
             _buffer.HandleLog(string.Empty, TerminalLogType.Message);
             Run("log-terminal beta");
-
             Run("copy-log 3");
 
+            string[] copied = GUIUtility.systemCopyBuffer.Split(LogCopySeparator);
+
             Assert.That(
-                GUIUtility.systemCopyBuffer,
-                Does.Contain("alpha").And.Contain("beta"),
-                "One empty line is a line like any other; the count is what was asked for"
+                copied.Length,
+                Is.EqualTo(3),
+                "A blank line is a line like any other, so it takes a slot of the count"
+            );
+            Assert.That(
+                copied,
+                Is.EqualTo(new[] { string.Empty, "log-terminal beta", "beta" }),
+                "The three entries above the echo, blank one included"
+            );
+        }
+
+        [Test]
+        public void ALogOfNothingButCommandsSaysSoRatherThanCopyingOne()
+        {
+            Run("no-op");
+            Run("copy-last");
+
+            Assert.That(
+                Contains(Newest(2), "Nothing to copy: the log holds no output, only commands."),
+                Is.True,
+                "The only entries are command echoes, and copying one would hand the developer their own keystroke"
             );
         }
 
@@ -375,8 +457,18 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
         }
 
+        /*
+            Runs a line the way the console does: the typed line is echoed into
+            the log as `Input` first, then dispatched. The echo is not a detail
+            of the UI - `EnterCommand` and the palette both write it before any
+            handler runs - and a helper that skipped it exercised a path the
+            product never takes. `copy-last` was broken for exactly this
+            reason: with no echo in the window, the text it copied looked
+            right, and from the console it copied the word "copy-last".
+         */
         private string Run(string line)
         {
+            Terminal.Log(TerminalLogType.Input, line);
             _shell.RunCommand(line);
             return _shell.TryConsumeErrorMessage(out string error) ? error : null;
         }

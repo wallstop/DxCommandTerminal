@@ -523,20 +523,23 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
 
             /*
-                One consistent read of the window: a background log landing
-                between the count and the entry would make the second read
-                index a different line than the count described. `trace` reads
-                the second-newest entry, so two slots is the floor.
+                One consistent read of the window, and the newest entry that is
+                not the echo of this command. `OutputLength` is what makes that
+                second part true: the console echoed `trace` itself before this
+                handler ran, so the newest entry is always the command, and
+                reading a fixed one back - the second-newest - also handed back a
+                command echo whenever the command above this one said nothing.
              */
             int logCount = ReadLogWindow(buffer, out LogItem[] window);
+            int previous = OutputLength(window, logCount) - 1;
 
-            if (logCount - 2 < 0)
+            if (previous < 0)
             {
                 Terminal.Log(TerminalLogType.Warning, "Nothing to trace.");
                 return;
             }
 
-            LogItem logItem = window[logCount - 2];
+            LogItem logItem = window[previous];
 
             if (string.IsNullOrWhiteSpace(logItem.stackTrace))
             {
@@ -729,6 +732,38 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         }
 
         /*
+            How much of the window is output, with the command echoes at its
+            newest end left off.
+
+            Both surfaces that run a command echo the typed line into the log
+            as `Input` before the handler is reached, so the newest entries
+            are the commands that produced them and not anything said. A
+            built-in that reads "the newest line" without this returns the
+            word the developer just typed - `copy-last` returned "copy-last".
+            The palette already applies the same rule when it collects output
+            to show.
+
+            Only the newest end is walked. A command echo further back is a
+            command the developer ran, and a transcript of a session wants
+            those as much as the output; what it does not want is the
+            keystroke that is producing the transcript.
+
+            Returns the count of entries that are not trailing echoes, so the
+            caller's output is `window[0..usable)` and the entries past it are
+            the echoes.
+         */
+        private static int OutputLength(LogItem[] window, int logCount)
+        {
+            int usable = logCount;
+            while (0 < usable && window[usable - 1].type == TerminalLogType.Input)
+            {
+                --usable;
+            }
+
+            return usable;
+        }
+
+        /*
             One consistent read of the buffer's visible window into a reused
             array, returning how many entries it holds. Reading a count and
             then indexing it separately is two moments: a background log
@@ -778,21 +813,27 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
 
             int logCount = ReadLogWindow(buffer, out LogItem[] window);
-            if (logCount == 0)
+            int usable = OutputLength(window, logCount);
+            if (usable == 0)
             {
-                Terminal.Log(TerminalLogType.Warning, "Nothing to copy: the log is empty.");
+                Terminal.Log(
+                    TerminalLogType.Warning,
+                    logCount == 0
+                        ? "Nothing to copy: the log is empty."
+                        : "Nothing to copy: the log holds no output, only commands."
+                );
                 return;
             }
 
-            int first = Math.Max(0, logCount - Math.Min(lineCount, logCount));
-            int copied = logCount - first;
+            int first = Math.Max(0, usable - Math.Min(lineCount, usable));
+            int copied = usable - first;
 
             using CachedStringBuilder.Scope scope = CachedStringBuilder.Rent(
-                MeasureCopyLength(window, first, logCount)
+                MeasureCopyLength(window, first, usable)
             );
             StringBuilder builder = scope.Builder;
             bool hasText = false;
-            for (int i = first; i < logCount; ++i)
+            for (int i = first; i < usable; ++i)
             {
                 if (first != i)
                 {
