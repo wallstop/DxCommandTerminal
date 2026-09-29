@@ -87,6 +87,13 @@ be added without registering it. Register the exact string that is logged: a
 message with format arguments reaches the log formatted and the filter holding
 the format, and the two stop being the same line.
 
+**Apply the exclusion to the denominator as well as the numerator.** Excluding
+a line from the matches but leaving it in the total reports "20 of 240" and then
+"20 of 241" on two runs of the same search. The matches hold; the number the
+developer reads moves because the search said something. `LogFilter.Apply` skips
+own replies before both counters for exactly this reason, and both halves are
+asserted separately, because checking only the matches passes the broken shape.
+
 Do not exclude the whole `Warning` type, and do not exclude trailing replies
 positionally - a positional exclusion makes the count depend on whether
 anything has been logged since, so the same search reports a different number
@@ -164,7 +171,8 @@ When a command starts **counting** the log, or reading it to drive a view:
 
 5. Which of the lines in the window are the console's own? Echoes (`Input`) and
    the command's own replies. A count that includes either is a number the
-   developer will act on and be wrong by.
+   developer will act on and be wrong by - and a count that includes either in
+   only one of its two halves is the same defect wearing a pass.
 6. Does the handler's effect on the view survive the call that ran it? See
    "A handler's UI intent is overwritten by the code that ran it".
 

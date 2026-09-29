@@ -379,6 +379,46 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         [Test]
+        public void TheSearchsOwnAnswersAreInNeitherHalfOfTheCount()
+        {
+            /*
+                The exclusion has to cover the total as well as the matches. A
+                line dropped from the matches but kept in the denominator
+                reports "20 of 241" and then "20 of 242" on two runs of the
+                same search: the matches hold, and the number the developer
+                reads moves because the search said something.
+             */
+            LogFilter filter = new();
+            filter.IgnoreOwnReply("Showing 20 of 3 log lines.");
+            Assert.That(filter.SetQuery("hit"), Is.True);
+
+            LogItem[] first =
+            {
+                new LogItem(TerminalLogType.Message, "hit one", string.Empty),
+                new LogItem(TerminalLogType.Message, "miss", string.Empty),
+                new LogItem(TerminalLogType.Message, "hit two", string.Empty),
+            };
+            int firstKept = filter.Apply(first, first.Length, new LogItem[first.Length]);
+            int firstTotal = filter.TotalCount;
+
+            LogItem[] second =
+            {
+                new LogItem(TerminalLogType.Message, "hit one", string.Empty),
+                new LogItem(TerminalLogType.Message, "miss", string.Empty),
+                new LogItem(TerminalLogType.Message, "hit two", string.Empty),
+                new LogItem(TerminalLogType.Message, "Showing 20 of 3 log lines.", string.Empty),
+            };
+            int secondKept = filter.Apply(second, second.Length, new LogItem[second.Length]);
+
+            Assert.That(secondKept, Is.EqualTo(firstKept), "The answer is not a match");
+            Assert.That(
+                filter.TotalCount,
+                Is.EqualTo(firstTotal),
+                "And it is not a line the search ranged over either"
+            );
+        }
+
+        [Test]
         public void AnUnfilteredFilterKeepsTheWholeWindow()
         {
             /*

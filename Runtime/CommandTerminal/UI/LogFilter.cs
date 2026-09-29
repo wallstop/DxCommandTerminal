@@ -187,11 +187,15 @@ namespace WallstopStudios.DxCommandTerminal.UI
             string query = Query;
 
             /*
-                Two counters, one pass. `searchable` is the denominator the
-                developer reads, and it is every line the search could have
-                matched: an echo is excluded from the matches, so counting it
-                here would report "20 of 61" beside a rule that says 61 lines
-                were never candidates.
+                Two counters, one pass, and the same exclusion from both.
+
+                `searchable` is the denominator the developer reads: the lines
+                the search could have matched. A console reply is not one of
+                them, because the rule below rejects it - so counting it here
+                would report "20 of 241" and then "20 of 242" on two runs of
+                the same search, a number that moved because the search said
+                something. A count the developer uses to decide whether their
+                query is real has to be the same number every time.
 
                 The loop runs to the end of the window even once the
                 destination is full, because a truncated `kept` with a complete
@@ -204,17 +208,13 @@ namespace WallstopStudios.DxCommandTerminal.UI
             for (int i = 0; i < searchableEnd; ++i)
             {
                 LogItem item = window[i];
-                if (!IsSearchable(item))
+                if (!IsSearchable(item) || _ownReplies.Contains(item.message))
                 {
                     continue;
                 }
 
                 ++searchable;
-                if (
-                    kept < destination.Length
-                    && !_ownReplies.Contains(item.message)
-                    && Matches(item, query)
-                )
+                if (kept < destination.Length && Matches(item, query))
                 {
                     destination[kept] = item;
                     ++kept;

@@ -381,6 +381,40 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         [UnityTest]
+        public IEnumerator TheReportedCountIsTheSameEveryTimeTheSameSearchRuns()
+        {
+            /*
+                The finding this pins, and the second half of the same one. The
+                search's own answer was excluded from the matches but still
+                counted in the total, so every run added one to the
+                denominator: "20 of 240", then "20 of 241", then "20 of 242".
+                The matches held and the number the developer reads did not,
+                and a count that moves when nothing else did is the same
+                failure as a count that never settles.
+
+                Three runs, because the first is the one that would pass either
+                way - the defect needs a second answer to count.
+             */
+            yield return SpawnOpenTerminal();
+            yield return FillTheLog();
+
+            yield return RunThroughConsole("find " + HitMarker);
+            yield return WaitForLastLogLine("of 240 log lines", "The first run reports a count");
+
+            yield return RunThroughConsole("find " + HitMarker);
+            yield return WaitForLastLogLine(
+                "of 240 log lines",
+                "The second run reports the same count, so the first answer is in neither half"
+            );
+
+            yield return RunThroughConsole("find " + HitMarker);
+            yield return WaitForLastLogLine(
+                "of 240 log lines",
+                "The third run too, so neither answer moved the number"
+            );
+        }
+
+        [UnityTest]
         public IEnumerator ASearchSurvivesTheCommandThatRanIt()
         {
             /*
