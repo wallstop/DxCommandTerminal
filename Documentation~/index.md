@@ -10,6 +10,7 @@ completion. Unity 2021.3 or newer, MIT licensed.
 - [Typed arguments](arguments.md) - parsing, validation, custom parsers.
 - [Completion](completion.md) - static, dynamic, and engine-backed choices.
 - [Paste](paste.md) - Ctrl+V on both console surfaces.
+- [Undo](undo.md) - Ctrl+Z and Ctrl+Shift+Z on both console surfaces.
 - [Lifetime](lifecycle.md) - shell ownership, register/dispose, discovery timing.
 - [Quick-launch bar](palette.md) - the launcher-style command bar.
 - [Themes and fonts](theming.md) - theme packs, font packs, and what a font can draw.

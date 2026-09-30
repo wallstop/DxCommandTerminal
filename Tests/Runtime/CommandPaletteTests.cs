@@ -402,6 +402,116 @@
             );
         }
 
+        /*
+            The bar's half of the command line's undo, and the reason the
+            feature is not terminal-only: the bar's search field had no history
+            either, and a developer who mistypes a command name in the launcher
+            has nowhere to take it back to.
+
+            Driven through the bar's own routing rather than a key sent at the
+            root, for the reason the terminal's undo suite gives: a host that
+            does not route synthetic keys cannot tell "the key never arrived"
+            from "the routing is broken", so a delivery-based test goes red for
+            an environment fact while measuring nothing.
+         */
+        [UnityTest]
+        public IEnumerator UndoTakesTheQueryBackToTheStateBeforeTheLastKeystroke()
+        {
+            yield return SpawnPalette();
+            _palette.Open();
+            yield return null;
+
+            _palette._input.value = "palettep";
+            yield return null;
+            _palette._input.value = "palettepin";
+            yield return null;
+
+            yield return SendHistoryKey(KeyCode.Z, EventModifiers.Control);
+
+            Assert.AreEqual(
+                "palettep",
+                _palette._input.value,
+                "One Ctrl+Z drops the character that was typed"
+            );
+        }
+
+        /*
+            A Tab applied by the bar is a value write of its own, recorded
+            through SetInputValue rather than on a change event - a write that
+            notifies nothing is invisible to OnInputChanged, so without this the
+            applied candidate would be a state the stack had never seen and the
+            first undo would step over it.
+         */
+        [UnityTest]
+        public IEnumerator UndoTakesBackTheCandidateTabApplied()
+        {
+            yield return SpawnPalette();
+            Assert.IsTrue(
+                Terminal.Shell.AddCommand(
+                    "paletteundo",
+                    _ => { },
+                    minArgs: 0,
+                    maxArgs: 0,
+                    help: "test"
+                ),
+                "Sanity: the candidate command registers"
+            );
+
+            _palette.Open();
+            yield return null;
+
+            _palette._input.value = "paletteun";
+            yield return null;
+            int frameBudget = FrameBudget;
+            while (0 < frameBudget-- && !_palette.TryGetSelected(out _))
+            {
+                yield return null;
+            }
+
+            Assert.IsTrue(
+                _palette.TryGetSelected(out string selected),
+                "The query matches the registered command"
+            );
+            Assert.AreEqual("paletteundo", selected, "And the match is the command name");
+
+            _palette.ApplySelected();
+            yield return null;
+            Assert.AreEqual(
+                "paletteundo",
+                _palette._input.value,
+                "Sanity: the applied candidate is on the field"
+            );
+
+            yield return SendHistoryKey(KeyCode.Z, EventModifiers.Control);
+
+            Assert.AreEqual(
+                "paletteun",
+                _palette._input.value,
+                "The undo returned to the query the application replaced"
+            );
+        }
+
+        [UnityTest]
+        public IEnumerator ZWithoutTheCommandModifierLeavesTheQueryAlone()
+        {
+            yield return SpawnPalette();
+            _palette.Open();
+            yield return null;
+
+            _palette._input.value = "palettep";
+            yield return null;
+            _palette._input.value = "palettepin";
+            yield return null;
+
+            yield return SendHistoryKey(KeyCode.Z, EventModifiers.None);
+
+            Assert.AreEqual(
+                "palettepin",
+                _palette._input.value,
+                "A bare Z is not claimed, so the query is where it was"
+            );
+        }
+
         [UnityTest]
         public IEnumerator TypedQueryRanksPrefixesOverSubsequences()
         {
@@ -2037,6 +2147,24 @@
                 _palette._uiDocument.rootVisualElement.focusController.focusedElement,
                 message
             );
+        }
+
+        /*
+            The bar's own routing, called directly rather than through a key
+            sent at the root: a host that does not route synthetic keys cannot
+            tell "the key never arrived" from "the routing is broken", so a
+            delivery-based test goes red for an environment fact while measuring
+            nothing.
+         */
+        private IEnumerator SendHistoryKey(KeyCode keyCode, EventModifiers modifiers)
+        {
+            using (KeyDownEvent key = KeyDownEvent.GetPooled('\0', keyCode, modifiers))
+            {
+                _palette.TryApplyHistoryKey(key);
+            }
+
+            yield return null;
+            yield return null;
         }
 
         /*

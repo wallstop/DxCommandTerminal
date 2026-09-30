@@ -377,6 +377,14 @@
         internal int? _pendingCaretIndex;
         private ITerminalInput _input;
 
+        /*
+            The command line's own history. A TextField has none, so this is
+            the whole of Ctrl+Z; see TextFieldUndo for why the surface hands
+            the stack the field's current text on every key instead of
+            announcing its own writes.
+         */
+        private readonly TextFieldUndo _commandUndo = new();
+
         public TerminalUI()
         {
 #if UNITY_EDITOR
@@ -1887,6 +1895,13 @@
             _lastCodeSyncedValue = null;
 
             /*
+                The stack described the field that just went away, so a rebuild
+                that kept it would answer an undo with a line from before the
+                console was closed.
+             */
+            _commandUndo.Clear();
+
+            /*
                 The jump was aimed at a line in the tree that just went away.
                 A rebuild draws the filtered log from scratch, so keeping the
                 request would scroll the fresh view to whatever line took that
@@ -2147,6 +2162,53 @@
         }
 
         /*
+            The routing a key that walks the line's own history gets, and the
+            same two answers the log keys give: a key this does not own is left
+            alone, and a key it does own is consumed so it does not also reach
+            the field it arrived through.
+
+            The stack is handed the command text rather than the field's value,
+            because the abstraction is what the terminal reads and what the
+            value write below pushes back out; on a frame where the field has
+            not caught up, the two are different strings and the field's would
+            undo a state the command line never held.
+
+            Internal for test coverage: a host that does not route synthetic
+            keys to the field can still drive the routing directly, so the
+            behaviour is measured rather than reported as an environment limit.
+         */
+        internal bool TryApplyHistoryKey(KeyDownEvent evt)
+        {
+            if (_input == null || _commandInput == null)
+            {
+                return false;
+            }
+
+            bool commandOrCtrl = evt.commandKey || evt.ctrlKey;
+            bool forward = TextFieldUndo.IsRedo(evt.keyCode, commandOrCtrl, evt.shiftKey);
+            if (!forward && !TextFieldUndo.IsUndo(evt.keyCode, commandOrCtrl, evt.shiftKey))
+            {
+                return false;
+            }
+
+            if (
+                !_commandUndo.Step(
+                    _input.CommandText,
+                    _commandInput.cursorIndex,
+                    forward,
+                    out string text,
+                    out int caret
+                )
+            )
+            {
+                return false;
+            }
+
+            SetCommandTextFromCode(text, caret);
+            return true;
+        }
+
+        /*
             Every line the search writes, through one door.
 
             A command that answers in the console writes ordinary log text, and
@@ -2176,23 +2238,37 @@
         }
 
         /*
-            A recalled line is a new value, so the caret belongs at its end.
-            FocusInput only writes a caret on a fresh focus, and the field was
-            already focused, so the caret stayed where the developer left it
-            and the next character landed in the middle of the line they had
-            just recalled. The end of the recalled text is a character
-            boundary by definition, and the position is queued after the
-            completion reset, which retires any pending caret of its own.
-            2022.1 and newer write it; 2021.3 has no caret setter, and its
-            engine places the caret after the value lands.
+            The one write the two callers that replace the whole line share: a
+            recalled history line, and an undone edit. The caret is the
+            caller's, because a recall ends at the end of the line it recalled
+            and an undo ends where the caret was when the state it undoes
+            began. A recalled line belongs at its end because FocusInput only
+            writes a caret on a fresh focus, and the field was already
+            focused, so the caret stayed where the developer left it and the
+            next character landed in the middle of the line they had just
+            recalled.
+
+            It goes through the input abstraction like every other
+            programmatic write, so the field, the completion state, and the
+            abstraction cannot disagree. The caret is queued after the
+            completion reset, which retires a pending caret of its own, and
+            through the path that retries, because a value write makes the text
+            element re-run its own caret reset afterwards. 2022.1 and newer
+            write it; 2021.3 has no caret setter, and its engine places the
+            caret at the end after the value lands.
          */
+        private void SetCommandTextFromCode(string text, int caret)
+        {
+            _input.CommandText = text;
+            ResetAutoComplete();
+            _pendingCaretIndex = text.SnapToTextBoundary(caret);
+            _needsFocus = true;
+        }
+
         private void RecallHistoryLine(string line)
         {
             string recalled = line ?? string.Empty;
-            _input.CommandText = recalled;
-            ResetAutoComplete();
-            _pendingCaretIndex = recalled.Length;
-            _needsFocus = true;
+            SetCommandTextFromCode(recalled, recalled.Length);
         }
 
         /*
@@ -2608,11 +2684,34 @@
                             context._lastCodeSyncedValue = context._input.CommandText;
                             context._commandInput.value = context._input.CommandText;
                         }
+
+                        /*
+                            The field now holds the code's value, and the code's
+                            value is a state the field held. Recorded here
+                            because the nested change event this write
+                            dispatches re-enters this same branch, which stops
+                            before the recording below can see it.
+                         */
+                        context._commandUndo.Observe(
+                            context._input.CommandText,
+                            context._commandInput.cursorIndex
+                        );
                         evt.StopPropagation();
                         return;
                     }
 
                     context._input.CommandText = evt.newValue;
+
+                    /*
+                        The one recording point for the command line. Every
+                        text that reaches the field - a keystroke, a paste, a
+                        value write the terminal made - arrives here, so the
+                        stack is a step behind the line rather than a step
+                        behind the last history key. Without it the first
+                        Ctrl+Z would empty a line the developer had typed
+                        rather than taking one keystroke back.
+                     */
+                    context._commandUndo.Observe(evt.newValue, context._commandInput.cursorIndex);
 
                     bool echoFromCode = context._isCommandFromCode;
                     if (
@@ -2669,6 +2768,20 @@
             _commandInput.RegisterCallback<KeyDownEvent, TerminalUI>(
                 static (evt, context) =>
                 {
+                    /*
+                        History before paste and before the log keys, because
+                        it is the one key a developer reaches for while
+                        looking at the line rather than at the log. It is
+                        answered by the same callback and consumed the same
+                        way, so a key handled here can never also reach the
+                        field below.
+                     */
+                    if (context.TryApplyHistoryKey(evt))
+                    {
+                        KeyEvents.Consume(context._commandInput, evt);
+                        return;
+                    }
+
                     if (TextFieldPaste.TryApply(context._commandInput, evt, out _))
                     {
                         /*

@@ -146,6 +146,14 @@
         internal int? _pendingCaretIndex;
         internal int _caretStickPasses;
 
+        /*
+            The search field's own history. A TextField has none, so this is
+            the whole of Ctrl+Z; see TextFieldUndo for why the surface hands
+            the stack the field's current text on every key instead of
+            announcing its own writes.
+         */
+        private readonly TextFieldUndo _inputUndo = new();
+
         [SerializeField]
         private Font _font;
         private VisualElement _panel;
@@ -325,6 +333,13 @@
              */
             _uiDocument.rootVisualElement.style.height = new StyleLength(StyleKeyword.Auto);
             _input.SetValueWithoutNotify(string.Empty);
+            /*
+                The bar opens on an empty field, so the query a developer's
+                last session typed is not one they can undo back into: a bar
+                that reopened holding their old query and a full history would
+                answer a key they pressed to clear it.
+             */
+            _inputUndo.Clear();
             _paletteRoot.style.display = DisplayStyle.Flex;
             _isOpen = true;
             SetQuery(string.Empty);
@@ -604,6 +619,53 @@
             {
                 QueueCaret(null);
             }
+        }
+
+        /*
+            The same two answers the terminal gives a history key: a key this
+            does not own is left alone, and a key it does own is consumed so it
+            does not also reach the field it arrived through.
+
+            The value is written without notifying, so the rows are re-ranked
+            from the restored query here - OnInputChanged would have ranked
+            them against a caret the write has not placed yet, which is the
+            reason the paste path above re-derives for the same reason.
+
+            Internal for test coverage: a host that does not route synthetic
+            keys to the field can still drive the routing directly, so the
+            behaviour is measured rather than reported as an environment limit.
+         */
+        internal bool TryApplyHistoryKey(KeyDownEvent evt)
+        {
+            if (_input == null)
+            {
+                return false;
+            }
+
+            bool commandOrCtrl = evt.commandKey || evt.ctrlKey;
+            bool forward = TextFieldUndo.IsRedo(evt.keyCode, commandOrCtrl, evt.shiftKey);
+            if (!forward && !TextFieldUndo.IsUndo(evt.keyCode, commandOrCtrl, evt.shiftKey))
+            {
+                return false;
+            }
+
+            if (
+                !_inputUndo.Step(
+                    _input.value,
+                    _input.cursorIndex,
+                    forward,
+                    out string text,
+                    out int caret
+                )
+            )
+            {
+                return false;
+            }
+
+            _input.SetValueWithoutNotify(text);
+            QueueCaret(caret);
+            RefreshQuery(text, caret);
+            return true;
         }
 
         private void RefreshQuery(string query, int caretIndex)
@@ -1139,6 +1201,7 @@
             int insertionLength = insertion.Length;
             int caretIndex = replacementStart + insertionLength;
             QueueCaret(caretIndex);
+            _inputUndo.Observe(newInput, caretIndex);
             int completionCaret = caretIndex;
             if (
                 1 < insertionLength
@@ -1211,6 +1274,21 @@
             }
 
             /*
+                History first, for the reason the terminal answers it first:
+                it is the key a developer reaches for while looking at the
+                query rather than at the rows under it. It writes the value
+                without notifying, so the query is re-derived here rather than
+                from a change event, and the caret is the one the state
+                carried - an append or a middle edit both land where the
+                developer was typing.
+             */
+            if (TryApplyHistoryKey(evt))
+            {
+                KeyEvents.Consume(_paletteRoot, evt);
+                return;
+            }
+
+            /*
                 Pasted before the switch, and consumed the way every other
                 handled key is. The query is then re-derived from the caret
                 the paste left, not from the field: the value write fires
@@ -1273,6 +1351,14 @@
             int caret = updated.StartsWith(previous, StringComparison.Ordinal)
                 ? updated.Length
                 : _input.cursorIndex;
+            /*
+                The developer's own edit, and the one place it is recorded. The
+                bar's own writes ride SetInputValue and the completion path, so
+                between the two every state the field holds is a state the
+                stack has seen, and an undo steps one back rather than over
+                whatever the bar wrote last.
+             */
+            _inputUndo.Observe(updated, caret);
             RefreshQuery(updated, caret);
         }
 
@@ -1314,16 +1400,27 @@
             SetInputValue(selected);
         }
 
+        /*
+            The one write for every value this surface sets itself: a row
+            applied, a selected name displayed, a cleared field.
+
+            A value change makes the text element re-run its own caret reset
+            after this call, and that reset can land after this frame's
+            LateUpdate write, so the write is retried until it holds for two
+            consecutive passes (ApplyPendingCaret).
+
+            The stack is told here because SetValueWithoutNotify fires no
+            change event, and OnInputChanged is where a developer's own edits
+            are recorded: without this the terminal's own writes would be
+            states the stack never saw, and an undo would step over them. The
+            caret recorded is the one this call queues, because that is where
+            the field is going, not where it happened to be.
+         */
         private void SetInputValue(string value)
         {
-            /*
-                A value change makes the text element re-run its own caret
-                reset after this call, and that reset can land after this
-                frame's LateUpdate write, so the write is retried until it
-                holds for two consecutive passes (ApplyPendingCaret).
-             */
             _input.SetValueWithoutNotify(value);
             QueueCaret(value.Length);
+            _inputUndo.Observe(value, value.Length);
         }
 
         private void QueueCaret(int? index)
