@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+## [1.0.1] - 2026-10-02
+
 ### Added
 
 - Ctrl+Z and Ctrl+Shift+Z undo and redo the command line, on both console surfaces. Until now
