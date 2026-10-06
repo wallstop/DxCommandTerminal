@@ -134,7 +134,13 @@ test("workflow structure: automatic tag handoff depends on successful tagging", 
   assert.match(handoff, /uses: \.\/\.github\/workflows\/release.yml/);
   assert.match(handoff, /tag: \$\{\{ needs.tag.outputs.tag \}\}/);
   assert.match(handoff, /expected_sha: \$\{\{ github.sha \}\}/);
-  assert.match(handoff, /dry_run: false/);
+  assert.match(handoff, /dry_run: \$\{\{ vars.RELEASE_PUBLISH_ENABLED != 'true' \}\}/);
+  const dryRun = handoff.match(/dry_run: (.+)/)[1];
+  for (const value of ["", "false", "TRUE", "true"]) {
+    assert.strictEqual(runInNewContext(dryRun.replace(/^\$\{\{ | \}\}$/g, ""), {
+      vars: { RELEASE_PUBLISH_ENABLED: value }
+    }), value !== "true");
+  }
   for (const action of ["tag", "noop", "warn", "fail", ""]) {
     assert.strictEqual(enabled(handoff, { needs: { tag: { outputs: { action } } } }), action === "tag");
   }
@@ -560,4 +566,67 @@ test("CLI publish-gate compares downloaded tarball bytes before emitting skip ou
   fs.unlinkSync(out);
   assert.throws(() => mockedCli(args, JSON.stringify(integrity), process.platform === "win32" ? "npm.cmd" : "npm", npmArgs));
   assert.strictEqual(fs.existsSync(out), false);
+});
+
+
+test("publish readiness checks run before release mutations", () => {
+  const prepare = job(readWorkflow("release-prepare.yml"), "prepare");
+  assert.ok(prepare.indexOf("check-environment") !== -1);
+  assert.ok(prepare.indexOf("check-environment") < prepare.indexOf("- name: Prepare release files"));
+  const tag = job(tagWorkflow, "tag");
+  assert.ok(tag.indexOf("check-environment") !== -1);
+  assert.ok(tag.indexOf("check-environment") < tag.indexOf("- name: Push the annotated tag"));
+  const verify = job(publishWorkflow, "verify");
+  assert.ok(verify.indexOf("check-environment") !== -1);
+  assert.ok(verify.indexOf("check-environment") < verify.indexOf("- name: Verify tag, package.json"));
+});
+
+test("release environment validation rejects absent approvals and unrestricted branches", async () => {
+  const { checkReleaseEnvironment } = await import(pathToFileURL(releaseCli).href);
+  const calls = [];
+  const environment = {
+    protection_rules: [{ type: "required_reviewers", prevent_self_review: true, reviewers: [{ type: "User", reviewer: { id: 1 } }] }],
+    deployment_branch_policy: { protected_branches: false, custom_branch_policies: true }
+  };
+  const policies = { branch_policies: [{ name: "master", type: "branch" }] };
+  const invoke = (env = environment, branches = policies) => checkReleaseEnvironment({ repository: "wallstop/DxCommandTerminal" }, {
+    exec: (command, args) => {
+      calls.push([command, ...args]);
+      return JSON.stringify(args[1].endsWith("deployment-branch-policies?per_page=100") ? branches : env);
+    }
+  });
+  invoke();
+  assert.strictEqual(calls.length, 2);
+  for (const env of [{}, { ...environment, protection_rules: [] },
+    { ...environment, deployment_branch_policy: null },
+    { ...environment, protection_rules: [{ type: "required_reviewers", reviewers: [] }] },
+    { ...environment, protection_rules: [{ ...environment.protection_rules[0], prevent_self_review: false }] }]) {
+    assert.throws(() => invoke(env), /release environment/);
+  }
+  for (const branches of [{ branch_policies: [] }, { branch_policies: [{ name: "*", type: "branch" }] },
+    { branch_policies: [{ name: "master", type: "tag" }] },
+    { branch_policies: [...policies.branch_policies, { name: "dev", type: "branch" }] }]) {
+    assert.throws(() => invoke(environment, branches), /release environment/);
+  }
+  assert.throws(() => checkReleaseEnvironment({ repository: "wallstop/DxCommandTerminal" }, {
+    exec: () => { throw new Error("404"); }
+  }), /Cannot read release environment/);
+});
+
+
+test("prepare blocks missing opt-in before checking the environment", { skip: process.platform === "win32" }, () => {
+  const script = shellScript(job(readWorkflow("release-prepare.yml"), "prepare"), "Check publishing readiness");
+  for (const value of ["", "false", "TRUE", "true"]) {
+    const invoke = () => execFileSync("bash", ["-e", "-c", `node() { printf 'environment checked\\n'; };\n${script}`], {
+      encoding: "utf8", stdio: "pipe",
+      env: { ...process.env, RELEASE_ENABLED: value, GITHUB_REPOSITORY: "wallstop/DxCommandTerminal" }
+    });
+    if (value === "true") {
+      assert.strictEqual(invoke(), "environment checked\n");
+    } else {
+      assert.throws(invoke, (error) => error.status === 1 && !String(error.stdout).includes("environment checked"));
+    }
+  }
+  const triggers = readWorkflow("release-prepare.yml").split("\nconcurrency:")[0];
+  assert.match(triggers, /dry_run:[\s\S]*default: true/);
 });

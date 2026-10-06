@@ -275,6 +275,34 @@ function registryIntegrity(name, version, exec) {
   return integrity;
 }
 
+function checkReleaseEnvironment(options, deps = {}) {
+  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(options.repository ?? "")) {
+    throw new Error("expected --repository owner/repo");
+  }
+  const endpoint = `repos/${options.repository}/environments/release`;
+  const read = (endpoint) => {
+    try {
+      return JSON.parse((deps.exec ?? execFileSync)("gh", ["api", endpoint], {
+        encoding: "utf8", stdio: ["ignore", "pipe", "pipe"]
+      }));
+    } catch {
+      throw new Error("Cannot read release environment; create it and check GitHub API access (see tooling~/docs/release-runbook.md)");
+    }
+  };
+  const environment = read(endpoint);
+  const approval = environment.protection_rules?.find((rule) => rule.type === "required_reviewers");
+  if (!approval?.reviewers?.length || approval.prevent_self_review !== true) {
+    throw new Error("release environment needs required reviewers and prevent self-review");
+  }
+  if (environment.deployment_branch_policy?.custom_branch_policies !== true) {
+    throw new Error("release environment must allow only the master branch via a custom deployment policy");
+  }
+  const policies = read(`${endpoint}/deployment-branch-policies?per_page=100`).branch_policies;
+  if (!Array.isArray(policies) || policies.length !== 1 || policies[0].name !== "master" || policies[0].type !== "branch") {
+    throw new Error("release environment must contain exactly one branch policy: master");
+  }
+}
+
 function verifyRemoteTag(options, deps = {}) {
   if (!/^v/.test(options.tag ?? "") || parseVersion(options.tag.slice(1)) === null ||
       !/^[a-f0-9]{40}$/.test(options.sha ?? "")) {
@@ -428,7 +456,8 @@ const USAGE =
   "       node release.mjs notes --version X.Y.Z --changelog <path> [--output <path>] " +
   "[--github-output <path>]\n" +
   "       node release.mjs publish-gate --name <package> --version X.Y.Z --artifact <tgz> [--github-output <path>]\n" +
-  "       node release.mjs verify-remote-tag --tag vX.Y.Z --sha <commit>";
+  "       node release.mjs verify-remote-tag --tag vX.Y.Z --sha <commit>\n" +
+  "       node release.mjs check-environment --repository owner/repo";
 
 function runVerifyRelease(argv) {
   const options = parseOptionArgs(argv, VERIFY_OPTIONS, VERIFY_FLAGS);
@@ -513,6 +542,9 @@ function main() {
       runVerifyCandidate(rest);
     } else if (command === "notes") {
       runNotes(rest);
+    } else if (command === "check-environment") {
+      checkReleaseEnvironment(parseOptionArgs(rest, { "--repository": "repository" }));
+      console.log("[release] release environment approvals and master branch policy verified; npm trust still needs maintainer confirmation");
     } else if (command === "verify-remote-tag") {
       verifyRemoteTag(parseOptionArgs(rest, { "--tag": "tag", "--sha": "sha" }));
     } else if (command === "publish-gate") {
@@ -536,6 +568,7 @@ if (isMain) {
 
 export {
   FALLBACK_COMMANDS,
+  checkReleaseEnvironment,
   distTagFor,
   evaluatePublishGate,
   evaluateTagGate,
