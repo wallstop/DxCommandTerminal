@@ -28,10 +28,16 @@ versions publish to npm's `next` dist-tag; stable versions to `latest`.
 - **Release approval.** Create the `release` environment with required maintainer
   reviewers, prevent self-review, and allow only `master` deployments. Do this before
   merging a release PR. YAML references do not configure protection rules.
-  **Blocked:** review found this environment absent; no remote settings were changed.
+  Use a custom deployment branch policy containing only branch `master`.
+  The prepare, tag, and publish workflows verify these settings before publishing.
+  Check them locally with:
+  `node tooling~/scripts/release/release.mjs check-environment --repository wallstop/DxCommandTerminal`.
 - **Publish opt-in.** Leave repository variable `RELEASE_PUBLISH_ENABLED` unset until
   a maintainer verifies the environment, npm trust, tag protections, and hosted acceptance.
-  Only exact `true` enables publishing. This is a manual prerequisite confirmation,
+  Only exact `true` enables publishing. Without it, automatic release tags run an
+  artifact-only rehearsal and report that no package was published. Creating a
+  release PR requires opt-in; dry-run preparation remains available.
+  This is a manual prerequisite confirmation,
   not an API audit; remove it before changing or removing those protections.
 - **Tag protection.** Protect version tags against updates and deletion. Remote SHA
   checks run before npm and each Release mutation, but cannot make separate API calls atomic.
@@ -40,6 +46,10 @@ versions publish to npm's `next` dist-tag; stable versions to `latest`.
   for `release-tag.yml` for automatic tags: npm validates the calling workflow, not
   the reusable callee. Both need direct `npm publish` permission. Keep OIDC enabled;
   do not add an npm token fallback. These settings need maintainer verification.
+  Select **Allow npm publish** for each publisher. New publisher configurations
+  can default to staged publishing, which this pipeline does not use.
+  Node 24 supplies a compatible npm CLI (trusted publishing requires npm >=11.5.1).
+  See [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/).
 
 ## Preparing a release
 
@@ -70,7 +80,8 @@ Failures at this stage are all fail-closed:
 
 Tag pushes alone do not start this workflow. A successful auto-tag job calls it
 explicitly with the tag and expected merge SHA. Manual runs use workflow ref `master`
-and default to `dry_run: true`. Publishing requires an existing version tag; rehearsal
+and default to `dry_run: true`. Automatic calls also rehearse until repository
+opt-in is exact `true`. Publishing requires an existing version tag; rehearsal
 can instead select a branch or commit. Other repositories and workflow refs are rejected.
 All downstream checkouts use the verified commit SHA.
 
@@ -144,11 +155,18 @@ Publishing stays disabled until the maintainer opts in.
 - **Tag failed after the merge** (`Release Tag` job red): the changelog/package state on
   `master` is already correct - use the manual fallback commands, or re-run the failed
   workflow run (the tag step is idempotent; an existing tag no-ops).
-- **Publish failed after the tag**: rerun failed jobs on the original workflow SHA.
+- **Publish failed after the tag**: complete setup, then rerun failed jobs on the
+  original workflow SHA.
   A new manual publish is allowed only while the selected tag matches `master`'s event
   SHA. Never move a tag to satisfy this check. Approval and opt-in remain required.
   Rerunning all tag jobs no-ops on existing tags and does not call publishing.
   npm skips identical bytes only; Release assets are replaced only in publish mode.
+- **Manual publish rejected with no tag**: set `tag=v<package-version>`, leave
+  `candidate_ref` blank, and set `dry_run=false`. Keep workflow ref `master`.
+  A rehearsal succeeds without these publish inputs but does not publish.
+- **Workflow fixes have advanced master past an unpublished tag**: prepare a new
+  version from the fixed tree. Do not move the old tag or bypass the provenance
+  SHA check. The new tag and workflow event must identify the same commit.
 
 ## Reviewing and merging the release PR
 

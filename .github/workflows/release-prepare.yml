@@ -30,7 +30,7 @@ on:
       dry_run:
         description: Print the prepared diff without writing or pushing
         type: boolean
-        default: false
+        default: true
 
 # One preparation at a time: two concurrent runs would race for the same
 # Unreleased content.
@@ -63,6 +63,15 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
+
+      - name: Check publishing readiness
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ENABLED: ${{ vars.RELEASE_PUBLISH_ENABLED }}
+        run: |
+          test "$RELEASE_ENABLED" = "true" || { echo "::error::Complete release setup and set RELEASE_PUBLISH_ENABLED=true before creating a release PR. Use dry_run=true to rehearse."; exit 1; }
+          node tooling~/scripts/release/release.mjs check-environment --repository "$GITHUB_REPOSITORY"
 
       - name: Install tooling dependencies
         run: npm --prefix tooling~ install --no-audit --no-fund

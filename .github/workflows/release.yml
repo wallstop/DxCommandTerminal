@@ -57,7 +57,7 @@ jobs:
             echo "ref=refs/tags/$TAG" >> "$GITHUB_OUTPUT"
           else
             if [ "$DRY_RUN" != "true" ] || [ "$GITHUB_EVENT_NAME" != "workflow_dispatch" ]; then
-              echo "::error::A tag is required except for manual artifact-only rehearsal"; exit 1;
+              echo "::error::Publishing requires tag=v<package-version> and no candidate_ref. Select dry_run=true for artifact-only rehearsal"; exit 1;
             fi
             ref=${CANDIDATE_REF:-master}
             if [[ ! "$ref" =~ ^[a-f0-9]{40}$ ]]; then
@@ -97,6 +97,12 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
+
+      - name: Check publishing readiness
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node tooling~/scripts/release/release.mjs check-environment --repository "$GITHUB_REPOSITORY"
 
       - name: Verify tag, package.json, and changelog agreement
         id: verify
