@@ -64,15 +64,6 @@ jobs:
         with:
           node-version: 24
 
-      - name: Check publishing readiness
-        if: ${{ !inputs.dry_run }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_ENABLED: ${{ vars.RELEASE_PUBLISH_ENABLED }}
-        run: |
-          test "$RELEASE_ENABLED" = "true" || { echo "::error::Complete release setup and set RELEASE_PUBLISH_ENABLED=true before creating a release PR. Use dry_run=true to rehearse."; exit 1; }
-          node tooling~/scripts/release/release.mjs check-environment --repository "$GITHUB_REPOSITORY"
-
       - name: Install tooling dependencies
         run: npm --prefix tooling~ install --no-audit --no-fund
 

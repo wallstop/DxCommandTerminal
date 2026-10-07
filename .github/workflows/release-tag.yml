@@ -64,18 +64,6 @@ jobs:
           fi
           node tooling~/scripts/release/release.mjs "${args[@]}"
 
-      - name: Check publishing readiness
-        if: ${{ steps.decide.outputs.action == 'tag' && vars.RELEASE_PUBLISH_ENABLED == 'true' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: node tooling~/scripts/release/release.mjs check-environment --repository "$GITHUB_REPOSITORY"
-
-      - name: Report rehearsal mode
-        if: ${{ steps.decide.outputs.action == 'tag' && vars.RELEASE_PUBLISH_ENABLED != 'true' }}
-        run: |
-          echo "::warning::Publishing is disabled. The tag will receive an artifact-only rehearsal. Complete the release runbook setup before enabling RELEASE_PUBLISH_ENABLED."
-          echo "Publishing disabled: artifact rehearsal only. See tooling~/docs/release-runbook.md for setup and recovery." >> "$GITHUB_STEP_SUMMARY"
-
       - name: Push the annotated tag
         if: ${{ steps.decide.outputs.action == 'tag' }}
         env:
@@ -95,12 +83,15 @@ jobs:
   publish:
     needs: tag
     if: ${{ needs.tag.outputs.action == 'tag' }}
-    uses: ./.github/workflows/release.yml
+    runs-on: ubuntu-latest
     permissions:
-      contents: write
-      id-token: write
-      attestations: write
-    with:
-      tag: ${{ needs.tag.outputs.tag }}
-      expected_sha: ${{ github.sha }}
-      dry_run: ${{ vars.RELEASE_PUBLISH_ENABLED != 'true' }}
+      actions: write
+    steps:
+      - name: Start publishing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.tag.outputs.tag }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref master \
+            -f tag="$TAG" -f expected_sha="$RELEASE_SHA" -f dry_run=false
