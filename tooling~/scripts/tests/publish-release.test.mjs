@@ -119,11 +119,11 @@ test("workflow structure: rehearsal excludes all Release, npm, and attestation w
   assert.doesNotMatch(job(publishWorkflow, "github-release"), /always\(\)|cancelled\(\)|result == 'skipped'/);
 });
 
-test("workflow structure: publishing depends on npm success and references the release environment", () => {
+test("workflow structure: publishing depends on npm success without environment approval", () => {
   assert.match(job(publishWorkflow, "publish-npm"), /needs: \[verify, validate, unitypackage, attest\]/);
   assert.match(job(publishWorkflow, "github-release"), /needs: \[verify, validate, unitypackage, publish-npm\]/);
   for (const name of ["publish-npm", "github-release"]) {
-    assert.match(job(publishWorkflow, name), /environment: release/);
+    assert.doesNotMatch(job(publishWorkflow, name), /environment:/);
   }
 });
 
@@ -134,13 +134,7 @@ test("workflow structure: automatic tag handoff depends on successful tagging", 
   assert.match(handoff, /uses: \.\/\.github\/workflows\/release.yml/);
   assert.match(handoff, /tag: \$\{\{ needs.tag.outputs.tag \}\}/);
   assert.match(handoff, /expected_sha: \$\{\{ github.sha \}\}/);
-  assert.match(handoff, /dry_run: \$\{\{ vars.RELEASE_PUBLISH_ENABLED != 'true' \}\}/);
-  const dryRun = handoff.match(/dry_run: (.+)/)[1];
-  for (const value of ["", "false", "TRUE", "true"]) {
-    assert.strictEqual(runInNewContext(dryRun.replace(/^\$\{\{ | \}\}$/g, ""), {
-      vars: { RELEASE_PUBLISH_ENABLED: value }
-    }), value !== "true");
-  }
+  assert.match(handoff, /dry_run: false/);
   for (const action of ["tag", "noop", "warn", "fail", ""]) {
     assert.strictEqual(enabled(handoff, { needs: { tag: { outputs: { action } } } }), action === "tag");
   }
@@ -164,7 +158,7 @@ test("workflow structure: default-branch guard and immutable checkouts", () => {
 });
 
 test("workflow structure: remote checks precede npm and all Release mutations", () => {
-  assert.strictEqual(publishWorkflow.match(/verify-remote-tag --tag "\$TAG" --sha "\$GITHUB_SHA"/g)?.length, 4);
+  assert.strictEqual(publishWorkflow.match(/verify-remote-tag --tag "\$TAG" --sha "\$RELEASE_SHA"/g)?.length, 4);
   assert.match(job(publishWorkflow, "publish-npm"), /verify-remote-tag[\s\S]*npm publish/);
   assert.match(job(publishWorkflow, "publish-npm"), /--artifact "com.wallstop-studios.dxcommandterminal-\$\{version\}.tgz"/);
   assert.match(job(publishWorkflow, "github-release"), /args=\(--verify-tag --draft/);
@@ -212,28 +206,22 @@ test("workflow structure: an existing Release is reused on re-run, never re-crea
   );
 });
 
-test("workflow shell prerequisite fails closed without opt-in or matching provenance SHA", { skip: process.platform === "win32" }, () => {
+test("handoff pins automatic source while manual recovery accepts an older tag", { skip: process.platform === "win32" }, () => {
   const verify = job(publishWorkflow, "verify");
-  assert.match(verify, /RELEASE_ENABLED: \$\{\{ vars.RELEASE_PUBLISH_ENABLED \}\}/);
-  assert.match(verify, /DRY_RUN: \$\{\{ inputs.dry_run \}\}/);
-  const script = shellScript(job(publishWorkflow, "verify"));
+  assert.doesNotMatch(verify, /RELEASE_ENABLED|RELEASE_PUBLISH_ENABLED/);
+  const script = shellScript(verify);
   const sha = "a".repeat(40);
-  for (const [dryRun, enabled, eventSha, expected, succeeds] of [
-    ["true", "", "b".repeat(40), "", true],
-    ["true", "", "b".repeat(40), sha, true],
-    ["true", "", sha, "b".repeat(40), false],
-    ["false", "", sha, "", false],
-    ["false", "false", sha, "", false],
-    ["false", "TRUE", sha, "", false],
-    ["false", "true", "b".repeat(40), "", false],
-    ["false", "true", sha, "b".repeat(40), false],
-    ["false", "true", sha, sha, true]
+  for (const [eventSha, expected, succeeds] of [
+    [sha, sha, true],
+    ["b".repeat(40), "", true],
+    ["b".repeat(40), sha, true],
+    [sha, "b".repeat(40), false]
   ]) {
-    const out = path.join(tempRoot("prerequisite"), "output");
+    const out = path.join(tempRoot("handoff"), "output");
     const invoke = () => execFileSync("bash", ["-e", "-c", `git() { printf '%s\\n' "$BUILD_SHA"; };\n${script}`], {
       encoding: "utf8", stdio: "pipe",
       env: { ...process.env, BUILD_SHA: sha, GITHUB_SHA: eventSha, EXPECTED_SHA: expected,
-        DRY_RUN: dryRun, RELEASE_ENABLED: enabled, GITHUB_OUTPUT: out }
+        GITHUB_OUTPUT: out }
     });
     if (succeeds) {
       invoke();
@@ -569,64 +557,17 @@ test("CLI publish-gate compares downloaded tarball bytes before emitting skip ou
 });
 
 
-test("publish readiness checks run before release mutations", () => {
-  const prepare = job(readWorkflow("release-prepare.yml"), "prepare");
-  assert.ok(prepare.indexOf("check-environment") !== -1);
-  assert.ok(prepare.indexOf("check-environment") < prepare.indexOf("- name: Prepare release files"));
-  const tag = job(tagWorkflow, "tag");
-  assert.ok(tag.indexOf("check-environment") !== -1);
-  assert.ok(tag.indexOf("check-environment") < tag.indexOf("- name: Push the annotated tag"));
-  const verify = job(publishWorkflow, "verify");
-  assert.ok(verify.indexOf("check-environment") !== -1);
-  assert.ok(verify.indexOf("check-environment") < verify.indexOf("- name: Verify tag, package.json"));
+test("release flows have no opt-in switch or environment gate", () => {
+  for (const name of ["release.yml", "release-tag.yml", "release-prepare.yml"]) {
+    assert.doesNotMatch(readWorkflow(name), /RELEASE_PUBLISH_ENABLED|RELEASE_ENABLED|environment: release|check-environment/);
+  }
+  for (const name of ["publish-npm", "github-release"]) {
+    assert.match(job(publishWorkflow, name), /RELEASE_SHA: \$\{\{ needs.verify.outputs.sha \}\}/);
+  }
 });
 
-test("release environment validation rejects absent approvals and unrestricted branches", async () => {
-  const { checkReleaseEnvironment } = await import(pathToFileURL(releaseCli).href);
-  const calls = [];
-  const environment = {
-    protection_rules: [{ type: "required_reviewers", prevent_self_review: true, reviewers: [{ type: "User", reviewer: { id: 1 } }] }],
-    deployment_branch_policy: { protected_branches: false, custom_branch_policies: true }
-  };
-  const policies = { branch_policies: [{ name: "master", type: "branch" }] };
-  const invoke = (env = environment, branches = policies) => checkReleaseEnvironment({ repository: "wallstop/DxCommandTerminal" }, {
-    exec: (command, args) => {
-      calls.push([command, ...args]);
-      return JSON.stringify(args[1].endsWith("deployment-branch-policies?per_page=100") ? branches : env);
-    }
-  });
-  invoke();
-  assert.strictEqual(calls.length, 2);
-  for (const env of [{}, { ...environment, protection_rules: [] },
-    { ...environment, deployment_branch_policy: null },
-    { ...environment, protection_rules: [{ type: "required_reviewers", reviewers: [] }] },
-    { ...environment, protection_rules: [{ ...environment.protection_rules[0], prevent_self_review: false }] }]) {
-    assert.throws(() => invoke(env), /release environment/);
-  }
-  for (const branches of [{ branch_policies: [] }, { branch_policies: [{ name: "*", type: "branch" }] },
-    { branch_policies: [{ name: "master", type: "tag" }] },
-    { branch_policies: [...policies.branch_policies, { name: "dev", type: "branch" }] }]) {
-    assert.throws(() => invoke(environment, branches), /release environment/);
-  }
-  assert.throws(() => checkReleaseEnvironment({ repository: "wallstop/DxCommandTerminal" }, {
-    exec: () => { throw new Error("404"); }
-  }), /Cannot read release environment/);
-});
-
-
-test("prepare blocks missing opt-in before checking the environment", { skip: process.platform === "win32" }, () => {
-  const script = shellScript(job(readWorkflow("release-prepare.yml"), "prepare"), "Check publishing readiness");
-  for (const value of ["", "false", "TRUE", "true"]) {
-    const invoke = () => execFileSync("bash", ["-e", "-c", `node() { printf 'environment checked\\n'; };\n${script}`], {
-      encoding: "utf8", stdio: "pipe",
-      env: { ...process.env, RELEASE_ENABLED: value, GITHUB_REPOSITORY: "wallstop/DxCommandTerminal" }
-    });
-    if (value === "true") {
-      assert.strictEqual(invoke(), "environment checked\n");
-    } else {
-      assert.throws(invoke, (error) => error.status === 1 && !String(error.stdout).includes("environment checked"));
-    }
-  }
-  const triggers = readWorkflow("release-prepare.yml").split("\nconcurrency:")[0];
-  assert.match(triggers, /dry_run:[\s\S]*default: true/);
+test("npm checks the downloaded artifact checksum before publication", () => {
+  const publish = job(publishWorkflow, "publish-npm");
+  const checksum = publish.indexOf("sha256sum --check");
+  assert.ok(checksum !== -1 && checksum < publish.indexOf("npm publish"));
 });

@@ -82,15 +82,9 @@ jobs:
         id: commit
         env:
           EXPECTED_SHA: ${{ inputs.expected_sha }}
-          DRY_RUN: ${{ inputs.dry_run }}
-          RELEASE_ENABLED: ${{ vars.RELEASE_PUBLISH_ENABLED }}
         run: |
           sha=$(git rev-parse HEAD)
           test -z "$EXPECTED_SHA" || test "$sha" = "$EXPECTED_SHA"
-          if [ "$DRY_RUN" != "true" ]; then
-            test "$RELEASE_ENABLED" = "true" || { echo "::error::Publishing disabled: maintainer prerequisites not confirmed"; exit 1; }
-            test "$sha" = "$GITHUB_SHA" || { echo "::error::Publish commit must match workflow provenance SHA"; exit 1; }
-          fi
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
       - name: Setup Node
@@ -98,11 +92,12 @@ jobs:
         with:
           node-version: 24
 
-      - name: Check publishing readiness
-        if: ${{ !inputs.dry_run }}
+      - name: Record release source
         env:
-          GH_TOKEN: ${{ github.token }}
-        run: node tooling~/scripts/release/release.mjs check-environment --repository "$GITHUB_REPOSITORY"
+          RELEASE_SHA: ${{ steps.commit.outputs.sha }}
+        run: |
+          echo "Package source: $RELEASE_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "Build workflow revision: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Verify tag, package.json, and changelog agreement
         id: verify
@@ -209,7 +204,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: [validate, unitypackage]
     if: ${{ !inputs.dry_run }}
-    environment: release
     permissions:
       contents: read
       id-token: write
@@ -231,12 +225,13 @@ jobs:
   publish-npm:
     name: publish (npm ${{ needs.verify.outputs.dist-tag }})
     runs-on: ubuntu-latest
-    environment: release
     needs: [verify, validate, unitypackage, attest]
     if: ${{ !inputs.dry_run }}
     permissions:
       contents: read
       id-token: write
+    env:
+      RELEASE_SHA: ${{ needs.verify.outputs.sha }}
     steps:
       - name: Checkout the tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -255,6 +250,9 @@ jobs:
         with:
           name: npm-tarball
 
+      - name: Verify tarball checksum
+        run: sha256sum --check "com.wallstop-studios.dxcommandterminal-${{ needs.verify.outputs.version }}.tgz.sha256"
+
       - name: Decide whether to publish
         id: gate
         run: |
@@ -265,7 +263,7 @@ jobs:
             --artifact "com.wallstop-studios.dxcommandterminal-${version}.tgz" --github-output "$GITHUB_OUTPUT"
 
       - name: Verify remote tag before npm
-        run: node tooling~/scripts/release/release.mjs verify-remote-tag --tag "$TAG" --sha "$GITHUB_SHA"
+        run: node tooling~/scripts/release/release.mjs verify-remote-tag --tag "$TAG" --sha "$RELEASE_SHA"
 
       - name: Publish to npm
         if: ${{ steps.gate.outputs.publish == 'true' }}
@@ -277,11 +275,12 @@ jobs:
   github-release:
     name: github-release (draft, then publish)
     runs-on: ubuntu-latest
-    environment: release
     needs: [verify, validate, unitypackage, publish-npm]
     if: ${{ !inputs.dry_run }}
     permissions:
       contents: write
+    env:
+      RELEASE_SHA: ${{ needs.verify.outputs.sha }}
     steps:
       - name: Checkout the tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -323,7 +322,7 @@ jobs:
           # instead of failing the re-run. Prerelease versions (dist-tag
           # next) must never become GitHub "Latest", so they carry
           # --prerelease explicitly (gh does not infer it from the tag).
-          node tooling~/scripts/release/release.mjs verify-remote-tag --tag "$TAG" --sha "$GITHUB_SHA"
+          node tooling~/scripts/release/release.mjs verify-remote-tag --tag "$TAG" --sha "$RELEASE_SHA"
           args=(--verify-tag --draft --title "DxCommandTerminal ${{ needs.verify.outputs.version }}" --notes-file release-notes.md)
           if [ "${{ needs.verify.outputs.dist-tag }}" = "next" ]; then
             args+=(--prerelease)
@@ -337,7 +336,7 @@ jobs:
         run: |
           version=${{ needs.verify.outputs.version }}
           prefix="com.wallstop-studios.dxcommandterminal-${version}"
-          node tooling~/scripts/release/release.mjs verify-remote-tag --tag "$TAG" --sha "$GITHUB_SHA"
+          node tooling~/scripts/release/release.mjs verify-remote-tag --tag "$TAG" --sha "$RELEASE_SHA"
           gh release upload "$TAG" --clobber \
             "$prefix.tgz" "$prefix.tgz.sha256" \
             "$prefix.unitypackage" "$prefix.unitypackage.sha256"
@@ -348,5 +347,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          node tooling~/scripts/release/release.mjs verify-remote-tag --tag "$TAG" --sha "$GITHUB_SHA"
+          node tooling~/scripts/release/release.mjs verify-remote-tag --tag "$TAG" --sha "$RELEASE_SHA"
           gh release edit "$TAG" --draft=false

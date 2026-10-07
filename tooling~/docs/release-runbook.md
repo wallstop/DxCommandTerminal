@@ -1,303 +1,112 @@
 # Release Runbook
 
-How to cut a DxCommandTerminal release with the automated pipeline (T14, issue #85).
-Everything here is Unity-free: no step provisions a Unity editor or license, and every
-distributable is produced from plain repository content.
+Release PRs on `master` publish automatically after tagging. There is no repository
+opt-in switch or release environment approval. Merge the reviewed release PR to
+publish; use `dry_run=true` for an artifact-only rehearsal.
 
-## Pipeline overview
+## Pipeline
 
-| Stage | Trigger | Workflow | What it does |
-| --- | --- | --- | --- |
-| Prepare | Manual dispatch (`Release Prepare`) | `.github/workflows/release-prepare.yml` | Rewrites `package.json`, rotates `CHANGELOG.md`'s `## Unreleased` content under a dated `## [X.Y.Z] - date` heading, opens the `release/vX.Y.Z` PR |
-| Tag | Push to `master` touching `package.json` | `.github/workflows/release-tag.yml` | Pushes the annotated `vX.Y.Z` tag when the squash-merge subject is `release: vX.Y.Z` |
-| Publish | Explicit call after auto-tagging, or manual dispatch from `master` | `.github/workflows/release.yml` | Verifies tag/package/changelog agreement, builds artifacts, then attests and publishes only with `dry_run: false` |
+| Stage | Trigger | Result |
+| --- | --- | --- |
+| Prepare | Manual `Release Prepare` dispatch | Updates the version and changelog and opens a release PR |
+| Tag | Release merge touching `package.json` | Pushes annotated `v<version>` and calls publishing explicitly |
+| Publish | Automatic tag handoff or manual `Release Publish` dispatch | Packs npm, exports Unity, checksums and attests both, publishes npm, then publishes a GitHub Release |
 
-Versions are full semver including prerelease identifiers (`1.0.0-rc25.0`). Release tags
-carry a `v` prefix (`v1.0.0-rc26.0`); the historical unprefixed tags (`1.0.0-rc25.0`)
-predate the pipeline, and the tag gate treats both forms as already-released. Prerelease
-versions publish to npm's `next` dist-tag; stable versions to `latest`.
+The pipeline needs no Unity editor or license. The repository exporter builds the
+`.unitypackage` from the shipped files and their Unity metadata.
 
-## One-time setup
+## One-time npm setup
 
-- **`RELEASE_PAT` secret (optional).** PRs created with the default `GITHUB_TOKEN` do not
-  re-trigger CI on the release branch. The prepare job already runs the full Node tooling
-  suite on the exact tree it pushes, so this only affects per-PR check displays. To get
-  CI runs on release PRs, add a fine-grained PAT with `contents: write` +
-  `pull-requests: write` as the `RELEASE_PAT` secret; the workflow uses it when present
-  and falls back to `GITHUB_TOKEN` otherwise.
-- **Release approval.** Create the `release` environment with required maintainer
-  reviewers, prevent self-review, and allow only `master` deployments. Do this before
-  merging a release PR. YAML references do not configure protection rules.
-  Use a custom deployment branch policy containing only branch `master`.
-  The prepare, tag, and publish workflows verify these settings before publishing.
-  Check them locally with:
-  `node tooling~/scripts/release/release.mjs check-environment --repository wallstop/DxCommandTerminal`.
-- **Publish opt-in.** Leave repository variable `RELEASE_PUBLISH_ENABLED` unset until
-  a maintainer verifies the environment, npm trust, tag protections, and hosted acceptance.
-  Only exact `true` enables publishing. Without it, automatic release tags run an
-  artifact-only rehearsal and report that no package was published. Creating a
-  release PR requires opt-in; dry-run preparation remains available.
-  This is a manual prerequisite confirmation,
-  not an API audit; remove it before changing or removing those protections.
-- **Tag protection.** Protect version tags against updates and deletion. Remote SHA
-  checks run before npm and each Release mutation, but cannot make separate API calls atomic.
-- **npm Trusted Publishing.** Register `wallstop/DxCommandTerminal` with environment
-  `release` and workflow `release.yml` for manual publishing. Add a separate publisher
-  for `release-tag.yml` for automatic tags: npm validates the calling workflow, not
-  the reusable callee. Both need direct `npm publish` permission. Keep OIDC enabled;
-  do not add an npm token fallback. These settings need maintainer verification.
-  Select **Allow npm publish** for each publisher. New publisher configurations
-  can default to staged publishing, which this pipeline does not use.
-  Node 24 supplies a compatible npm CLI (trusted publishing requires npm >=11.5.1).
-  See [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/).
+On the npm package settings page, add GitHub trusted publishers with:
 
-## Preparing a release
+- Owner: `wallstop`
+- Repository: `DxCommandTerminal`
+- Workflow: `release.yml` for manual recovery; `release-tag.yml` for automatic releases
+- Environment: leave blank
+- Allowed action: enable direct `npm publish`
 
-1. Confirm `master` is green and `CHANGELOG.md`'s `## Unreleased` section carries the
-   user-facing entries for this release (internal/tooling work stays out per the
-   changelog policy at the top of the file).
-2. Actions → **Release Prepare** → **Run workflow** (default branch):
-   - `bump` — `patch`/`minor`/`major`; ignored when a version is given. A prerelease
-     version bumps to stable (`1.0.0-rc25.0` + patch → `1.0.1`).
-   - `version` — explicit version, e.g. `1.0.0-rc26.0`; use this to iterate the rc
-     series.
-   - `dry_run` — **run this first.** It prints the exact prepared diff (package.json
-     version field + changelog rotation) and writes nothing, and still fails fast when
-     the `vX.Y.Z` tag or `release/vX.Y.Z` branch already exists.
-3. Review the dry-run diff, then dispatch again with `dry_run` unchecked. The job runs
-   the Node tooling suite on the prepared tree, pushes `release/vX.Y.Z`, and opens a PR
-   titled `release: vX.Y.Z` containing a checklist and the changelog excerpt.
+Both workflows need their own publisher because npm checks the calling workflow.
+Node 24 supplies a compatible npm CLI. Authentication uses OIDC with no npm token.
+See [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/).
 
-Failures at this stage are all fail-closed:
+`RELEASE_PAT` is optional. The prepare workflow uses it when present and otherwise
+uses `GITHUB_TOKEN`. The prepared tree runs the Node suite before its PR is opened.
+GitHub can require approval for CI on a PR created by `GITHUB_TOKEN`.
 
-- `## Unreleased` missing or empty → nothing to release; fix the changelog first.
-- `refs/tags/vX.Y.Z`, `refs/heads/release/vX.Y.Z`, or the remote-tracking
-  `refs/remotes/origin/release/vX.Y.Z` (what a CI checkout actually sees) exists →
-  delete the stale ref or pick another version.
-- Invalid version / bump choice → fix the input.
+## Prepare and publish
 
-## The publish flow (Release Publish)
+1. Check that `master` CI passes and `## Unreleased` contains user-facing changes.
+2. Run **Release Prepare** from `master` with `dry_run=true`. Choose a bump or an
+   explicit semver version. Empty notes and conflicting tags or branches fail.
+3. Review the diff. Run again with `dry_run=false` to open the release PR.
+4. Review the version, changelog, and checks. Squash-merge with subject
+   `release: v<version>`. GitHub's ` (#N)` suffix is accepted.
+5. **Release Tag** pushes the annotated tag and calls **Release Publish**. A tag
+   push alone does not start publishing, so bot-created tags need no extra token.
 
-Tag pushes alone do not start this workflow. A successful auto-tag job calls it
-explicitly with the tag and expected merge SHA. Manual runs use workflow ref `master`
-and default to `dry_run: true`. Automatic calls also rehearse until repository
-opt-in is exact `true`. Publishing requires an existing version tag; rehearsal
-can instead select a branch or commit. Other repositories and workflow refs are rejected.
-All downstream checkouts use the verified commit SHA.
+Stable versions publish to npm `latest`; prereleases publish to `next` and remain
+GitHub prereleases. Historical unprefixed version tags count as already released.
 
-1. **verify** - requires non-empty dated notes for the checked-out package version.
-   Tag runs also require tag/package agreement. Publishing requires opt-in and tag SHA
-   equal to the workflow event SHA, including manual runs. Automatic handoffs check the merge SHA.
-2. **validate** and **unitypackage** - read-only package validation, packing/export,
-   checksums, and Actions artifact uploads. Missing or empty artifacts fail the run.
-3. **attest** - publish-only build provenance, behind the `release` environment.
-4. **publish-npm** - publish-only OIDC, behind the same environment. An existing npm
-   version is skipped only when its SHA-512 `dist.integrity` matches the tarball.
-   Missing integrity, different bytes, and registry failures block publication.
-   New versions use `next` for prereleases and `latest` for stable.
-5. **github-release** - publish-only, behind the same environment and npm success.
-   Creates or reuses a Release, uploads four assets, then publishes the draft.
-   Explicit publishing still replaces existing assets with `--clobber`; review reruns.
+## Recover an existing tag
 
-### Rehearsing a release (no publish)
+From `master`, dispatch **Release Publish** with:
 
-The implemented rehearsal path runs only `verify`, `validate`, and `unitypackage`.
-It writes Actions artifacts, not npm packages, attestations, or GitHub Releases.
-Existing draft and published Releases are not queried or changed.
+- `tag`: the existing tag, such as `v1.0.1`
+- `candidate_ref`: blank
+- `dry_run`: `false`
 
-**Hosted acceptance recorded (2026-09-17, #93), master `8b4b080`:**
+The current workflow can publish an older tag. It resolves that tag once and pins
+all source checkouts to its commit SHA. Automatic handoffs also require the tag to
+match the release merge SHA. Remote tag checks before npm and each GitHub Release
+write reject a deleted or moved tag. Never move a tag to repair a workflow.
 
-- Release Publish dispatch (`candidate_ref=master`, `dry_run=true`),
-  run [35286189817](https://github.com/wallstop/DxCommandTerminal/actions/runs/35286189817):
-  verify, validate, and unitypackage green; attest, publish-npm, and
-  github-release skipped; Actions artifacts npm-tarball 6,733,112 bytes and
-  unitypackage 6,884,682 bytes; the local export of the same tree reproduces the
-  unitypackage byte-identically (sha256 `39ddeef6d0d3475112b1c2e5a10b1f4fa1ba93a0bfe766355d784f5109cdb1e1`).
-  No tag, Release, npm version, or environment changed.
-- Release Prepare dry-run (`bump=patch`),
-  run [35286977879](https://github.com/wallstop/DxCommandTerminal/actions/runs/35286977879):
-  printed the exact prepared diff (`1.0.0-rc25.0` -> `1.0.1` plus the Unreleased
-  rotation) and ran the Node tooling suite (334/334) on the prepared tree;
-  nothing written, nothing pushed.
+The run summary records both the package source commit and the workflow revision.
+Provenance identifies the workflow execution; a recovery workflow revision can
+be newer than the package source tag.
 
-#### Candidate contract
+The tag, `package.json` version, and dated non-empty changelog section must agree.
+Both artifacts must build before publishing starts. npm checks the downloaded
+checksum and skips an existing version only when its SHA-512 integrity matches.
+Registry errors or different bytes fail. GitHub reuses an existing Release,
+uploads the four assets, checks their count, and publishes the draft after npm
+succeeds. Explicit reruns replace Release assets with `--clobber`.
 
-- Select workflow ref `master`, keep `dry_run: true`, and leave `tag` blank.
-- `candidate_ref` accepts a branch name, `refs/heads/...`, or a full lowercase commit SHA.
-  Blank selects `master`. Other values are branch names, not abbreviated SHAs or revision expressions.
-- Prefer a reviewed full SHA for repeatable evidence. A branch resolves once at checkout;
-  every build uses that resolved SHA. Workflow event SHA can differ only for rehearsal.
-- The candidate must contain current tooling, a valid package version, and its non-empty
-  dated changelog section. Existing versions are allowed; Unreleased is not substituted.
-- Candidate mode is manual-only. Publishing with a candidate, no tag, or both inputs fails
-  before checkout. Reusable publishing still requires `tag` and `expected_sha`.
-- No version, changelog, tag, registry, or Release mutation occurs in candidate verification.
-  Artifacts are rehearsal bytes, not evidence that an existing release has identical bytes.
+After a partial failure, prefer **Re-run failed jobs** to reuse the original build
+artifacts. A complete rerun rebuilds them; changes to the Node/npm toolchain can
+change compressed bytes and cause the registry integrity check to reject a skip.
 
-Local verification without any tag or publication:
+If a prepare run failed after pushing its branch, resolve the leftover
+`release/v<version>` branch before retrying. If tagging failed before the push,
+rerun the tag job. Rerunning all tag jobs over an existing tag is a no-op; use the
+manual publish dispatch for recovery.
+
+## Artifact-only rehearsal
+
+Dispatch **Release Publish** from `master` with `dry_run=true` and either an
+existing `tag` or a `candidate_ref` branch/full lowercase commit SHA. Leave both
+blank to rehearse `master`. The candidate needs a valid version and dated notes.
+Tag and candidate inputs are mutually exclusive.
+
+Rehearsals build and upload both artifacts. They skip npm publishing, attestations,
+and GitHub Release writes. Existing tags and Releases are unchanged.
+
+## Local checks
 
 ```sh
-node tooling~/scripts/release/release.mjs verify-candidate --dry-run \
-  --version "$(node -p "require('./package.json').version")" --changelog CHANGELOG.md
+npm run release:prepare -- --bump patch --dry-run
+npm run package:validate
+npm run package:export -- --out /tmp/release.unitypackage
+npm --prefix tooling~ run package:import-drill -- \
+  --artifact /tmp/release.unitypackage --unity '<path to Unity editor>'
 ```
 
-A rehearsal record lists: the selected ref, resolved build SHA, workflow event SHA,
-run URL, skipped write jobs, both artifact hashes, and unchanged public asset IDs/hashes.
-Do not enable publishing or create tags to gather this evidence. Tag-mode verification
-still requires exact `v<package-version>` agreement; `v*-candidate` labels do not bypass it.
-Publishing stays disabled until the maintainer opts in.
+The import drill creates a clean scratch project, imports with the Unity CLI,
+waits for compilation, and checks all entries, GUIDs, and shipped assemblies.
+It never imports into the live project. Failures keep logs and a manifest under
+`.artifacts/import-drill/`; successful runs delete the scratch project.
 
-### Re-running after a partial failure
+## Maintenance
 
-- **Prepare failed midway** (files rewritten, PR not opened): delete the local/ref
-  leftovers, revert the push if any, fix the cause, and dispatch again; the script
-  refuses to run while `release/vX.Y.Z` exists.
-- **Tag failed after the merge** (`Release Tag` job red): the changelog/package state on
-  `master` is already correct - use the manual fallback commands, or re-run the failed
-  workflow run (the tag step is idempotent; an existing tag no-ops).
-- **Publish failed after the tag**: complete setup, then rerun failed jobs on the
-  original workflow SHA.
-  A new manual publish is allowed only while the selected tag matches `master`'s event
-  SHA. Never move a tag to satisfy this check. Approval and opt-in remain required.
-  Rerunning all tag jobs no-ops on existing tags and does not call publishing.
-  npm skips identical bytes only; Release assets are replaced only in publish mode.
-- **Manual publish rejected with no tag**: set `tag=v<package-version>`, leave
-  `candidate_ref` blank, and set `dry_run=false`. Keep workflow ref `master`.
-  A rehearsal succeeds without these publish inputs but does not publish.
-- **Workflow fixes have advanced master past an unpublished tag**: prepare a new
-  version from the fixed tree. Do not move the old tag or bypass the provenance
-  SHA check. The new tag and workflow event must identify the same commit.
-
-## Reviewing and merging the release PR
-
-1. Read the changelog excerpt in the PR body (user-facing entries only).
-2. Confirm the version.
-3. **Squash-merge with the default subject** `release: vX.Y.Z`. GitHub appends ` (#N)`;
-   the tag gate accepts that suffix. Any other subject will not auto-tag.
-
-## Auto-tagging behavior
-
-`Release Tag` fires on the `master` push that the squash-merge creates:
-
-| Push | Behavior |
-| --- | --- |
-| Subject `release: vX.Y.Z` (+ ` (#N)`) and `## [X.Y.Z] - date` heading present | Annotated tag `vX.Y.Z` pushed |
-| Tag `vX.Y.Z` (or the historical unprefixed `X.Y.Z`) already exists | Silent no-op |
-| Release subject but no matching changelog heading | **Fails closed** (workflow fails; fix the changelog or re-tag manually) |
-| Subject names a *different* release (`release: vOTHER`) | `::warning::` with manual fallback commands when the current version's heading exists; silent no-op otherwise |
-| Changelog documents `X.Y.Z` but the subject is not a release subject | `::warning::` with manual fallback commands; no tag pushed |
-| Ordinary `package.json` push | Silent no-op |
-
-Manual tag fallback (also printed by the warning; tagging alone does not publish):
-
-```sh
-git tag -a vX.Y.Z -m "DxCommandTerminal X.Y.Z"
-git push origin vX.Y.Z
-```
-
-## Local tooling
-
-The same logic runs locally without CI:
-
-```sh
-npm run release:prepare -- --bump patch --dry-run   # or: -- --version 1.0.0-rc26.0 --dry-run
-npm run release:prepare -- --version 1.0.0-rc26.0   # rewrites package.json + CHANGELOG.md
-npm run release:gate -- --version X --subject S [--tag-exists]
-```
-
-The release CLI (`tooling~/scripts/release/release.mjs`) and the pure versioning module
-(`tooling~/scripts/release/versioning.mjs`) are contract-tested in
-`tooling~/scripts/tests/` and run in CI on every PR (node-tests lane). The publish-flow
-subcommands (`verify-release`, `notes`, `publish-gate`) share that coverage; the PR-copy
-linter (`npm --prefix tooling~ run lint:pr-copy`) enforces the STE PR structure.
-
-## The .unitypackage import drill (local, maintainer-run)
-
-T13's release gate: import the actual release artifact into a clean throwaway
-Unity project and verify it compiles there. CI never imports Unity packages;
-this runs on a machine with the local Unity license and network access. The scratch project's
-manifest pulls the production Input System dependency. The consumer drill also installs
-`com.unity.test-framework` on purpose to cover the #149 warm-cache headless condition.
-
-**Never import the artifact into the live maintainer project via the editor or
-the MCP bridge.** The first drill (session-025) did exactly that:
-`AssetDatabase.ImportPackage` popped a modal dialog against the live project,
-the main thread blocked, and the editor has been unreachable from the bridge
-ever since. The drill tool avoids the whole failure mode: batch mode, a
-scratch project, a non-interactive import, a hard timeout, and a separate
-process.
-
-```sh
-npm run package:export --prefix tooling~ -- --out /tmp/drill.unitypackage
-npm run package:import-drill --prefix tooling~ -- \
-  --artifact /tmp/drill.unitypackage \
-  --unity "<path to Unity editor binary>"   # e.g. .../6000.4.6f1/Editor/Unity.exe
-```
-
-The tool probes `<unity> -version`, scaffolds a scratch project under
-`.artifacts/import-drill/`, imports the artifact in phase 1 through Unity's
-documented CLI argument (`-batchmode -nographics -quit -importPackage`), then
-waits out the triggered compilation in phase 2 (a generated settle driver via
-`-executeMethod` exits only after `isCompiling`/`isUpdating` clear), then
-validates the result on disk:
-
-**Why the CLI argument, not `AssetDatabase.ImportPackage`?** Measured on Unity
-6000.4.6f1 (session-034): in batch mode the API silently no-ops the ENTIRE
-package - no error, no log, exit 0 - whenever any entry's `pathname` targets
-`Packages/`, which every entry of the release artifact does. The CLI argument
-imports the same artifact completely (all entries land, UPM registers the
-embedded package, all shipped assemblies compile). If a future import regresses
-to importing nothing with exit 0 and an empty final refresh, suspect this
-behavior first.
-
-Validation then checks, on disk:
-
-- every artifact entry exists at `<project>/<pathname>` with a `.meta` whose
-  GUID matches the artifact's GUID directory;
-- analyzer payload metas keep the `RoslynAnalyzer` label;
-- every imported `.asmdef` compiled to `Library/ScriptAssemblies/<name>.dll`
-  (dependency resolution and compilation in one check);
-- the Unity log carries no compiler errors or analyzer-failure diagnostics
-  (`CS8032`, `CS8784`, `CS8785`, `CS9057`, `AD0001`), even when Unity exits 0.
-
-The drill proves the generator payload imports with its label and that the
-package compiles with it present; it does not execute the generator.
-Generator behavior stays gated by the Unity-free generator suite and the
-payload byte-compare in CI.
-
-**Hosted acceptance recorded (2026-09-17, #85), master `8b4b080`:** the drill
-imported the exact hosted-rehearsal unitypackage bytes (sha256
-`39ddeef6d0d3475112b1c2e5a10b1f4fa1ba93a0bfe766355d784f5109cdb1e1`) into a
-scratch project on Unity 6000.4.6f1: all 472 entries landed at
-`Packages/com.wallstop-studios.dxcommandterminal`, UPM registered the embedded
-package, all three shipped assemblies compiled to `Library/ScriptAssemblies`,
-validation passed 1427/1427 checks, both Unity runs exited 0, and the logs
-carried no compiler or analyzer diagnostics. The two-phase CLI import is the
-first drill flow verified against a live editor; the scratch project was
-removed on success and the manifest (with the analyzer-label and compile
-checks) stayed under `.artifacts/import-drill/20260917T234821847/` on the
-drill host.
-
-A clean run deletes the scratch project and writes a manifest (environment,
-SHA-256, per-check results) under `.artifacts/import-drill/`. Any failure
-after Unity launches keeps the project, the Unity log, and the manifest for
-diagnosis and exits non-zero; pre-flight failures (corrupt artifact, bad
-editor path, non-empty `--project`) fail before anything is scaffolded.
-`--keep` keeps the scratch project even on success; `--timeout-minutes`
-overrides the 20-minute default.
-
-If the editor from the first drill is still wedged (the bridge times out on
-every call): dismiss the modal import dialog by hand, delete
-`Assets/DxTerminalUnityPackageDrill`, and refresh assets (issue #85).
-
-## Security notes
-
-- Every workflow pins action SHAs, requests minimal per-job permissions, and sets
-  `persist-credentials: false`; pushes go through `gh auth setup-git`'s credential
-  helper, so no token ever lands in a push URL that a failed push could echo into the
-  public job log.
-- No workflow provisions a Unity editor, consumes a license seat, or references
-  third-party Unity packaging tooling; the `.unitypackage` comes from this repository's
-  own exporter (`tooling~/scripts/release/export-unitypackage.mjs`).
-- The release CLI validates the tag/branch/PR name components from the semver grammar,
-  so no field can smuggle shell or ref syntax.
+Run the release contract tests through `npm test` when changing these workflows.
+Keep immutable action SHA pins, minimal job permissions, and
+`persist-credentials=false`. Git pushes use the GitHub credential helper.
