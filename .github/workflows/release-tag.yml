@@ -83,12 +83,15 @@ jobs:
   publish:
     needs: tag
     if: ${{ needs.tag.outputs.action == 'tag' }}
-    uses: ./.github/workflows/release.yml
+    runs-on: ubuntu-latest
     permissions:
-      contents: write
-      id-token: write
-      attestations: write
-    with:
-      tag: ${{ needs.tag.outputs.tag }}
-      expected_sha: ${{ github.sha }}
-      dry_run: false
+      actions: write
+    steps:
+      - name: Start publishing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.tag.outputs.tag }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref master \
+            -f tag="$TAG" -f expected_sha="$RELEASE_SHA" -f dry_run=false

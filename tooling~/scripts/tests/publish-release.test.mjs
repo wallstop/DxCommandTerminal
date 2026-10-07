@@ -95,13 +95,10 @@ function enabled(text, context) {
   return runInNewContext(condition(text).replace(/^\$\{\{ | \}\}$/g, ""), context, { timeout: 100 });
 }
 
-test("workflow structure: no tag-push trigger and both entry points default to rehearsal", () => {
+test("workflow structure: one dispatch entry point defaults to rehearsal", () => {
   const triggers = publishWorkflow.split("\nconcurrency:")[0];
-  assert.doesNotMatch(triggers, /^  push:/m);
-  for (const entry of ["workflow_call", "workflow_dispatch"]) {
-    const block = triggers.split(`  ${entry}:`)[1].split(/\n  \w+:/)[0];
-    assert.match(block, /dry_run:[\s\S]*?default: true/);
-  }
+  assert.doesNotMatch(triggers, /^  (push|workflow_call):/m);
+  assert.match(triggers.split("  workflow_dispatch:")[1], /dry_run:[\s\S]*?default: true/);
 });
 
 test("workflow structure: rehearsal excludes all Release, npm, and attestation writer jobs", () => {
@@ -131,17 +128,16 @@ test("workflow structure: automatic tag handoff depends on successful tagging", 
   const handoff = job(tagWorkflow, "publish");
   assert.match(handoff, /needs: tag/);
   assert.strictEqual(condition(handoff), "${{ needs.tag.outputs.action == 'tag' }}");
-  assert.match(handoff, /uses: \.\/\.github\/workflows\/release.yml/);
-  assert.match(handoff, /tag: \$\{\{ needs.tag.outputs.tag \}\}/);
-  assert.match(handoff, /expected_sha: \$\{\{ github.sha \}\}/);
-  assert.match(handoff, /dry_run: false/);
+  assert.match(handoff, /gh workflow run release.yml/);
+  assert.match(handoff, /TAG: \$\{\{ needs.tag.outputs.tag \}\}/);
+  assert.match(handoff, /RELEASE_SHA: \$\{\{ github.sha \}\}/);
+  assert.match(handoff, /-f dry_run=false/);
   for (const action of ["tag", "noop", "warn", "fail", ""]) {
     assert.strictEqual(enabled(handoff, { needs: { tag: { outputs: { action } } } }), action === "tag");
   }
   assert.doesNotMatch(handoff, /always\(\)|continue-on-error|secrets: inherit/);
-  for (const permission of ["contents", "id-token", "attestations"]) {
-    assert.match(handoff, new RegExp(`${permission}: write`));
-  }
+  assert.match(handoff, /actions: write/);
+  assert.doesNotMatch(handoff, /contents: write|id-token: write|attestations: write/);
   assert.match(job(tagWorkflow, "tag"), /action: \$\{\{ steps.decide.outputs.action \}\}/);
   assert.match(job(tagWorkflow, "tag"), /tag: \$\{\{ steps.decide.outputs.tag \}\}/);
 });
@@ -570,4 +566,15 @@ test("npm checks the downloaded artifact checksum before publication", () => {
   const publish = job(publishWorkflow, "publish-npm");
   const checksum = publish.indexOf("sha256sum --check");
   assert.ok(checksum !== -1 && checksum < publish.indexOf("npm publish"));
+});
+
+test("automatic dispatch passes the pinned tag and merge SHA to the single publisher", { skip: process.platform === "win32" }, () => {
+  const script = shellScript(job(tagWorkflow, "publish"), "Start publishing");
+  const sha = "a".repeat(40);
+  const output = execFileSync("bash", ["-e", "-c", `gh() { printf '%s\\n' "$@"; };\n${script}`], {
+    encoding: "utf8", stdio: "pipe",
+    env: { ...process.env, TAG: "v1.0.1", RELEASE_SHA: sha, GITHUB_REPOSITORY: "wallstop/DxCommandTerminal" }
+  });
+  assert.deepStrictEqual(output.trim().split("\n"), ["workflow", "run", "release.yml", "--repo",
+    "wallstop/DxCommandTerminal", "--ref", "master", "-f", "tag=v1.0.1", "-f", `expected_sha=${sha}`, "-f", "dry_run=false"]);
 });

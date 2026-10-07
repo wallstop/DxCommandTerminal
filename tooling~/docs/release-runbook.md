@@ -9,7 +9,7 @@ publish; use `dry_run=true` for an artifact-only rehearsal.
 | Stage | Trigger | Result |
 | --- | --- | --- |
 | Prepare | Manual `Release Prepare` dispatch | Updates the version and changelog and opens a release PR |
-| Tag | Release merge touching `package.json` | Pushes annotated `v<version>` and calls publishing explicitly |
+| Tag | Release merge touching `package.json` | Pushes annotated `v<version>` and dispatches publishing explicitly |
 | Publish | Automatic tag handoff or manual `Release Publish` dispatch | Packs npm, exports Unity, checksums and attests both, publishes npm, then publishes a GitHub Release |
 
 The pipeline needs no Unity editor or license. The repository exporter builds the
@@ -21,11 +21,13 @@ On the npm package settings page, add GitHub trusted publishers with:
 
 - Owner: `wallstop`
 - Repository: `DxCommandTerminal`
-- Workflow: `release.yml` for manual recovery; `release-tag.yml` for automatic releases
+- Workflow: `release.yml` for both automatic releases and manual recovery
 - Environment: leave blank
 - Allowed action: enable direct `npm publish`
 
-Both workflows need their own publisher because npm checks the calling workflow.
+Automatic tagging dispatches `release.yml` as a separate workflow run. Both paths
+use the same npm identity, so only one trusted publisher is needed. GitHub permits
+`workflow_dispatch` from `GITHUB_TOKEN`; the dispatch job requests `actions: write`.
 Node 24 supplies a compatible npm CLI. Authentication uses OIDC with no npm token.
 See [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/).
 
@@ -41,7 +43,7 @@ GitHub can require approval for CI on a PR created by `GITHUB_TOKEN`.
 3. Review the diff. Run again with `dry_run=false` to open the release PR.
 4. Review the version, changelog, and checks. Squash-merge with subject
    `release: v<version>`. GitHub's ` (#N)` suffix is accepted.
-5. **Release Tag** pushes the annotated tag and calls **Release Publish**. A tag
+5. **Release Tag** pushes the annotated tag and dispatches **Release Publish**. A tag
    push alone does not start publishing, so bot-created tags need no extra token.
 
 Stable versions publish to npm `latest`; prereleases publish to `next` and remain

@@ -1,21 +1,14 @@
 name: Release Publish
 
 on:
-  workflow_call:
-    inputs:
-      tag:
-        type: string
-        required: true
-      expected_sha:
-        type: string
-        required: true
-      dry_run:
-        type: boolean
-        default: true
   workflow_dispatch:
     inputs:
       tag:
         description: Existing version tag (required for publishing; omit for candidate rehearsal)
+        type: string
+        required: false
+      expected_sha:
+        description: Optional source commit assertion (automatic tagging supplies the merge SHA)
         type: string
         required: false
       candidate_ref:
