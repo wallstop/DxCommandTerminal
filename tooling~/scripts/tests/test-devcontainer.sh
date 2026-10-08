@@ -191,7 +191,7 @@ run_lifecycle() {
         HOME="${LIFECYCLE_ROOT}/home" WORKSPACE_FOLDER="${LIFECYCLE_ROOT}" \
         PATH="${LIFECYCLE_ROOT}/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
         env -u ZAI_API_KEY -u Z_AI_API_KEY -u ZHIPU_API_KEY -u OPENROUTER_API_KEY \
-        -u GITHUB_TOKEN -u GH_TOKEN -u GITHUB_PERSONAL_ACCESS_TOKEN -u GITHUB_PAT \
+        -u GITHUB_TOKEN -u GH_TOKEN -u GITHUB_PERSONAL_ACCESS_TOKEN -u GITHUB_PAT -u GITHUB_MCP_PAT \
         -u UNITY_MCP_BEARER_TOKEN -u AI_BACKENDS_REPO_ROOT \
         -u DXT_WORKSPACE_ROOT -u DXT_ENV_AUTOLOAD_DISABLED -u DXT_ENV_AUTOLOAD_ACTIVE \
         -u BASH_ENV \
@@ -214,6 +214,10 @@ assert_contains "${LIFECYCLE_ROOT}/service-token.txt" 'GITHUB=github-file-key' \
     "post-start normalizes the GitHub alias"
 assert_contains "${LIFECYCLE_ROOT}/service-token.txt" 'ZAI=zai-file-key' \
     "post-start normalizes the Z.AI alias"
+printf '%s\n' 'GITHUB_MCP_PAT=github-mcp-key' > "${LIFECYCLE_ROOT}/.env.local"
+run_lifecycle --attach
+assert_contains "${LIFECYCLE_ROOT}/service-token.txt" 'GITHUB=github-mcp-key' \
+    "post-start normalizes the GITHUB_MCP_PAT alias"
 printf '%s\n' 'UNITY_MCP_BEARER_TOKEN=rotated-token' 'Z_AI_API_KEY=zai-file-key' \
     'GITHUB_PERSONAL_ACCESS_TOKEN=github-file-key' > "${LIFECYCLE_ROOT}/.env.local"
 run_lifecycle --attach
@@ -286,7 +290,7 @@ grep -Fqx '# >>> dxcommandterminal .env.local autoload >>>' \
 leaked="$(HOME="${LIFECYCLE_ROOT}/home" \
     PATH="${LIFECYCLE_ROOT}/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
     env -u ZAI_API_KEY -u Z_AI_API_KEY -u ZHIPU_API_KEY -u GITHUB_TOKEN \
-    -u GH_TOKEN -u GITHUB_PERSONAL_ACCESS_TOKEN -u GITHUB_PAT \
+    -u GH_TOKEN -u GITHUB_PERSONAL_ACCESS_TOKEN -u GITHUB_PAT -u GITHUB_MCP_PAT \
     -u UNITY_MCP_BEARER_TOKEN -u DXT_WORKSPACE_ROOT \
     bash -c '. "$HOME/.bashrc"; env | grep -cE "^(ZAI_API_KEY|GITHUB_TOKEN)=" || true')"
 [[ "${leaked}" == "0" ]] \
