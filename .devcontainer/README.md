@@ -99,7 +99,7 @@ Logs for the background refresh: `/tmp/dxt-agent-cli-refresh.log`.
 `.env.local` (gitignored) is the preferred source; process environment wins over
 the file; empty forwarded variables never hide file values. Supported aliases:
 
-- GitHub: `GITHUB_TOKEN`, `GH_TOKEN`, `GITHUB_PERSONAL_ACCESS_TOKEN`, `GITHUB_PAT`
+- GitHub: `GITHUB_TOKEN`, `GH_TOKEN`, `GITHUB_PERSONAL_ACCESS_TOKEN`, `GITHUB_PAT`, `GITHUB_MCP_PAT`
 - Z.AI: `Z_AI_API_KEY`, `ZAI_API_KEY`
 - OpenRouter: `OPENROUTER_API_KEY`
 - Unity bridge: `UNITY_PROJECT_PATH`, `UNITY_PROJECT_CONTAINER_PATH`, `UNITY_MCP_BRIDGE_PORT`, `UNITY_MCP_BEARER_TOKEN`
@@ -137,8 +137,10 @@ covers a Play Mode suite over the bridge. Generated OpenCode credentials use
 `{env:NAME}` references; they are not written into the config. It also
 converts existing v1 MCP and skill fields without replacing explicit values.
 Session `share` stays `disabled` so transcripts never sync to a public URL.
-OpenCode references canonical `GITHUB_TOKEN` and `ZAI_API_KEY` names. Evaluate
-`ai-backends.sh env` before starting OpenCode outside the devcontainer.
+OpenCode references the variable that supplied each credential: the accepted
+alias itself when it supplied the value, else the canonical `GITHUB_TOKEN` /
+`ZAI_API_KEY` names. Evaluate `ai-backends.sh env` before starting OpenCode
+outside the devcontainer.
 After editing `.env.local`, run
 `npm run unity:mcp:configure -- --offline` and restart the agents' MCP
 connections.

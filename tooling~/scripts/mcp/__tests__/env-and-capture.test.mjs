@@ -39,6 +39,45 @@ test("github token aliases resolve in documented order with env beating file", (
   assert.equal(localFirst.githubToken, "gh", "alias order applies within .env.local too");
 });
 
+test("GITHUB_MCP_PAT is an accepted github token alias", () => {
+  assert.equal(
+    resolveOptions({}, { GITHUB_MCP_PAT: "from-env" }, {}, "/tmp").githubToken,
+    "from-env"
+  );
+  assert.equal(
+    resolveOptions({}, {}, { GITHUB_MCP_PAT: "from-file" }, "/tmp").githubToken,
+    "from-file"
+  );
+  // Canonical-first within a source: an explicit canonical key beats the alias.
+  assert.equal(
+    resolveOptions(
+      {},
+      {},
+      { GITHUB_TOKEN: "canonical", GITHUB_MCP_PAT: "alias" },
+      "/tmp"
+    ).githubToken,
+    "canonical"
+  );
+});
+
+test("githubTokenSource names the variable that supplied the token", () => {
+  assert.equal(
+    resolveOptions({}, { GITHUB_MCP_PAT: "from-env" }, {}, "/tmp").githubTokenSource,
+    "GITHUB_MCP_PAT"
+  );
+  assert.equal(
+    resolveOptions({}, {}, { GH_TOKEN: "from-file" }, "/tmp").githubTokenSource,
+    "GH_TOKEN"
+  );
+  assert.equal(
+    resolveOptions({}, { GITHUB_TOKEN: "from-env" }, { GITHUB_PAT: "from-file" }, "/tmp")
+      .githubTokenSource,
+    "GITHUB_TOKEN",
+    "process environment beats .env.local for the source name too"
+  );
+  assert.equal(resolveOptions({}, {}, {}, "/tmp").githubTokenSource, undefined);
+});
+
 test("z.ai key aliases resolve with env beating file", () => {
   assert.equal(
     resolveOptions({}, { ZAI_API_KEY: "e1" }, { Z_AI_API_KEY: "f1" }, "/tmp").zaiToken,
@@ -48,6 +87,19 @@ test("z.ai key aliases resolve with env beating file", () => {
     resolveOptions({}, {}, { Z_AI_API_KEY: "f2" }, "/tmp").zaiToken,
     "f2"
   );
+});
+
+test("zaiTokenSource names the variable that supplied the key", () => {
+  assert.equal(
+    resolveOptions({}, { ZAI_API_KEY: "e1" }, { Z_AI_API_KEY: "f1" }, "/tmp").zaiTokenSource,
+    "ZAI_API_KEY",
+    "process environment beats .env.local for the source name too"
+  );
+  assert.equal(
+    resolveOptions({}, {}, { Z_AI_API_KEY: "f2" }, "/tmp").zaiTokenSource,
+    "Z_AI_API_KEY"
+  );
+  assert.equal(resolveOptions({}, {}, {}, "/tmp").zaiTokenSource, undefined);
 });
 
 test("host and container project paths remain separate", () => {

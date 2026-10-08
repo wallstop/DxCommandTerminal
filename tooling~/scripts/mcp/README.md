@@ -34,7 +34,19 @@ that follows would otherwise land before it starts.
 - The bridge binds `0.0.0.0` and defaults to a **deterministic per-project port**:
   FNV-1a of the resolved project path mapped into `27100..27999`. Several editors
   on one host never collide as long as each project has its own path. Override
-  with `UNITY_MCP_BRIDGE_PORT` or `--port`.
+  with `UNITY_MCP_BRIDGE_PORT` or `--port`. The path spelling is normalized before
+  hashing (`\` -> `/`, drive letter kept root-anchored, lowercased), so the host
+  (`C:\Code\Game`) and a POSIX container (`C:/Code/Game`) derive the same port; a
+  plain `path.resolve` on a drive path inside a POSIX container prepends the cwd
+  and made container-side `configure`/`probe` aim at the wrong port.
+- Conflicts heal by port source. A flag or process-environment port is binding
+  intent: it fails fast on conflict. A `.env.local` or project-derived port that
+  is busy (and not a live bridge, which is reported instead of duplicated) moves
+  to the next free port in the range and persists the choice as
+  `UNITY_MCP_BRIDGE_PORT` in `.env.local`, so every later configure and client
+  reads the port the bridge actually bound. A port held on `127.0.0.1` counts as
+  busy even for a `0.0.0.0` bind: Windows accepts that bind, but the loopback
+  listener would shadow the bridge.
 - Discovery probes, in order: the project port, `9020`, `9003`, across
   `host.docker.internal`, `127.0.0.1`, WSL nameservers, and Linux gateways.
   `--host`/`--port` restrict probing to one endpoint; `--no-discover` skips fallbacks.
@@ -46,8 +58,9 @@ that follows would otherwise land before it starts.
 
 `.env.local` at the repository root, parsed as data (never sourced). Process env
 beats the file; empty env vars are ignored. Aliases: `GITHUB_TOKEN`, `GH_TOKEN`,
-`GITHUB_PERSONAL_ACCESS_TOKEN`, `GITHUB_PAT`; `Z_AI_API_KEY`, `ZAI_API_KEY`;
-`UNITY_PROJECT_PATH`, `UNITY_PROJECT_CONTAINER_PATH`, `UNITY_MCP_BEARER_TOKEN`.
+`GITHUB_PERSONAL_ACCESS_TOKEN`, `GITHUB_PAT`, `GITHUB_MCP_PAT`; `Z_AI_API_KEY`,
+`ZAI_API_KEY`; `UNITY_PROJECT_PATH`, `UNITY_PROJECT_CONTAINER_PATH`,
+`UNITY_MCP_BEARER_TOKEN`.
 `UNITY_PROJECT_PATH` stays the host identity the bridge needs for the port and
 the capture output path. `UNITY_PROJECT_CONTAINER_PATH` (container only) is the
 project directory this process can read and write, used to install the capture
@@ -71,10 +84,13 @@ before anything is written. OpenCode receives the published schema, native v2
 `mcp.servers` entries, a 30-second catalog timeout, a 300-second execution
 timeout, Code Mode, and the shared `.llm/skills` catalog. The execution timeout
 is raised because a Play Mode suite over this bridge outlasts the 30-second
-default. Generated OpenCode credentials use `{env:NAME}` references.
-`GITHUB_TOKEN` and `ZAI_API_KEY` are the canonical names; the devcontainer
-lifecycle and interactive shell normalize accepted aliases before OpenCode
-starts, and `configure` names any reference it cannot resolve. Existing v1 MCP
+default. Generated OpenCode credentials use `{env:NAME}` references, naming the
+variable that supplied each credential: the accepted alias itself
+(`GITHUB_MCP_PAT`, `Z_AI_API_KEY`) when it supplied the value, else the canonical
+name. The devcontainer lifecycle and interactive shell normalize accepted
+aliases before OpenCode starts, and `configure` names any reference it cannot
+resolve, plus a loud hint when the github server would be written without any
+token. Existing v1 MCP
 fields and skill sources convert in place. The catalog also includes `context7`
 (library docs, `@upstash/context7-mcp`). Z.AI remote servers go through
 `mcp-remote` for Codex only (its HTTP client rejects Z.AI's empty 200s on
