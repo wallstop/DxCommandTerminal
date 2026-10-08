@@ -21,6 +21,9 @@ opencode.jsonc
 # committing them would trip the orphan-meta half of the meta lint (issue #39)
 opencode.jsonc.meta
 node_modules.meta
+# Unity also stubs a meta next to the gitignored npm lockfile when an install
+# runs at the package root (see the npm section above)
+package-lock.json.meta
 .codex/
 .cursor/mcp.json
 .copilot/
