@@ -103,6 +103,7 @@ test("every claim the reporter wrote decodes to the result the run describes", (
               skipped: expected.skipped,
               inconclusive: expected.inconclusive,
               failedNames: expected.names,
+              failedWhy: expected.whys ?? [],
               failedMore: expected.failedMore
             }
           },

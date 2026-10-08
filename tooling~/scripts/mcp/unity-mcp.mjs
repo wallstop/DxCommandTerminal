@@ -3035,7 +3035,7 @@ export function newRunToken(label, now = Date.now()) {
  *
  *   running  token=<owner|none> mode=<mode> started=<o>
  *   pass=<n> fail=<n> skipped=<n> inconclusive=<n> duration=<s> token=<owner|none> mode=<mode> finished=<o>
- *           [failed-names=<a,b,c> [failed-more=<n>]]
+ *           [failed-names=<a,b,c> [failed-why=<w1,w2,...>] [failed-more=<n>]]
  *   did-not-run token=<owner|none> mode=<mode> reason=<free text>
  *
  * `total` is summed here rather than reported by the editor, so the summary
@@ -3101,6 +3101,7 @@ export function parseRunClaim(text) {
       silent "none failed".
    */
   const names = readFailureNames(fields.get("failed-names"));
+  const whys = readFailureWhys(fields.get("failed-why"));
   const more = Number(fields.get("failed-more"));
   const counted = /^\d+$/u.test(String(fields.get("failed-more") ?? "").trim())
     ? Math.min(more, Math.max(0, failed - names.length))
@@ -3116,6 +3117,11 @@ export function parseRunClaim(text) {
       skipped,
       inconclusive,
       failedNames: names,
+      // Paired with failedNames by position, so the reader can say why each
+      // named failure failed. A claim from a reporter older than this field,
+      // or a failure that carried no message, has no entry here: the honest
+      // answer, never an invented one.
+      failedWhy: whys.slice(0, names.length),
       failedMore: counted
     }
   };
@@ -3141,6 +3147,30 @@ function readFailureNames(value) {
     }
   }
   return names;
+}
+
+/*
+    The failure messages paired with the failed test names. Unlike the names,
+    the positions are the contract: an empty slot is a failure that carried no
+    message, and dropping it would slide every later message onto the wrong
+    name. A message is already the first line of the NUnit message, so a slot
+    decodes to one printable line or to nothing.
+ */
+function readFailureWhys(value) {
+  if (value === undefined || value === "") return [];
+  const whys = [];
+  for (const part of value.split(",")) {
+    if (part.length === 0) {
+      whys.push("");
+      continue;
+    }
+    try {
+      whys.push(decodeURIComponent(part));
+    } catch {
+      whys.push(part);
+    }
+  }
+  return whys;
 }
 
 function readClaimFile(claimPath) {
@@ -3462,15 +3492,22 @@ function printableName(name) {
 }
 
 /**
- * One indented line per reported name, then one line for the failures the
+ * One indented line per reported name - then the message that says why it
+ * failed, when the run carried one - then one line for the failures the
  * editor's cap left unnamed. No deduplication: a parameterized test that failed
  * on several cases has several names, and the reader's only other count is the
  * `fail=` counter.
  */
 function failureNameLines(summary) {
   const names = summary?.failedNames ?? [];
+  const whys = summary?.failedWhy ?? [];
   const more = Number(summary?.failedMore ?? 0);
-  const lines = names.map((name) => `\n  failed: ${printableName(name)}`);
+  const lines = names.map((name, index) => {
+    const why = whys[index];
+    const reason =
+      typeof why === "string" && 0 < why.length ? `\n    why: ${printableName(why)}` : "";
+    return `\n  failed: ${printableName(name)}${reason}`;
+  });
   if (0 < more) {
     lines.push(`\n  ... and ${more} more the cap did not list`);
   } else if (0 < Number(summary?.failed ?? 0) && names.length === 0) {

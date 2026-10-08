@@ -143,6 +143,7 @@ namespace UnityEditor.TestTools.TestRunner.Api
         string FullName { get; }
         ITestAdaptor Test { get; }
         TestStatus TestStatus { get; }
+        string Message { get; }
         double Duration { get; }
         int PassCount { get; }
         int FailCount { get; }

@@ -82,6 +82,7 @@ namespace DxTerminalDevTools
                 RunWithAThrowingResultTree(callbacks, expectations);
                 RunEveryPrintableAsciiCharacter(callbacks, expectations);
                 RunCharactersOutsideAscii(callbacks, expectations);
+                RunMessagesThatNeedEncoding(callbacks, expectations);
                 WriteJson(args[0], expectations);
             }
             catch (Exception exception)
@@ -435,6 +436,80 @@ namespace DxTerminalDevTools
         }
 
         /*
+            The messages a red run carries, and the shapes that break a naive
+            encoder: a newline moves the message into the stack trace the claim
+            does not want, a comma and an equals sign are the claim's own list
+            and key/value syntax, a space and a percent are the field and escape
+            syntax, non-ASCII arrives as UTF-8 bytes, and the empty message is
+            the slot that keeps name and message paired by position. The long
+            message is the cap: the claim carries its head, because the
+            expectation it failed is what the reader needs.
+         */
+        private static void RunMessagesThatNeedEncoding(
+            ICallbacks callbacks,
+            List<ClaimExpectation> expectations
+        )
+        {
+            string longBody = new('x', 400);
+            (string Name, string Message)[] cases =
+            {
+                ($"{Fixture}.Multiline", "Expected: 0 < extent\nBut was: 0.0\n  at Stack"),
+                ($"{Fixture}.CarriesCarriage", "Expected: one\r\nBut was: two"),
+                ($"{Fixture}.ListDelimiter", "Expected: 'a,b' But was: 'a b'"),
+                ($"{Fixture}.KeyDelimiter", "Expected: a=b But was: a b"),
+                ($"{Fixture}.SpaceMessage", "Expected: 'two words' But was: 'two'"),
+                ($"{Fixture}.PercentMessage", "Expected: 100% But was: 50%"),
+                ($"{Fixture}.NonAscii", "Expected: 'grün \u00E9' But was: 'grun e'"),
+                ($"{Fixture}.EmptyMessage", null),
+                ($"{Fixture}.Punctuated", "Expected: 1! 2? 3; <4> |5| {6} \"7\" '8'"),
+                ($"{Fixture}.LongMessage", "Expected: " + longBody),
+            };
+
+            List<string> names = new();
+            List<string> whys = new();
+            List<FakeTest> children = new();
+            foreach ((string name, string message) in cases)
+            {
+                names.Add(name);
+                whys.Add(Normalized(message));
+                children.Add(Failed(name, message));
+            }
+
+            Request("grammar-why");
+            StartRun(callbacks, "grammar-why");
+            callbacks.RunFinished(Root(failed: names.Count, children: children));
+            expectations.Add(
+                Finished(
+                    "failure messages the encoder must survive",
+                    "grammar-why",
+                    names.ToArray(),
+                    failed: names.Count,
+                    whys: whys.ToArray()
+                )
+            );
+        }
+
+        /// <summary>
+        /// The message the claim carries: the first line, trimmed, cut at the
+        /// cap. Restated here because an expectation states the result the
+        /// reporter must produce - and a cap that changes on one side only
+        /// fails this file, which is the pin.
+        /// </summary>
+        private static string Normalized(string message)
+        {
+            if (string.IsNullOrEmpty(message))
+            {
+                return string.Empty;
+            }
+
+            int cut = message.IndexOfAny(new[] { '\n', '\r' });
+            string line = 0 <= cut ? message.Substring(0, cut) : message;
+            line = line.Trim();
+            const int cap = 160;
+            return cap < line.Length ? line.Substring(0, cap) : line;
+        }
+
+        /*
             Start a run and check the acknowledgement. The caller waits for the
             running line and gives up on a grace period when it does not arrive,
             so a claim it cannot see is a false diagnosis rather than a slow
@@ -485,7 +560,8 @@ namespace DxTerminalDevTools
             int failed = 0,
             int skipped = 0,
             int more = 0,
-            string mode = "EditMode"
+            string mode = "EditMode",
+            string[] whys = null
         )
         {
             return new ClaimExpectation
@@ -501,7 +577,30 @@ namespace DxTerminalDevTools
                 FailedMore = more,
                 Duration = ResultDuration,
                 Names = names,
+                /*
+                    The default failure's message, once per named failure: every
+                    run built through Failed(name) carries it, so the ordinary
+                    red run states its whys without each case repeating it. A
+                    case that fails with other messages passes them here.
+                 */
+                Whys = whys ?? NamesAsWhys(names),
             };
+        }
+
+        /// <summary>
+        /// The default message once per name, in the order the names were
+        /// reported. A name is never reported without a slot here, even when the
+        /// failure carried no message: the empty string is the slot.
+        /// </summary>
+        private static string[] NamesAsWhys(string[] names)
+        {
+            string[] whys = new string[names.Length];
+            for (int index = 0; index < whys.Length; ++index)
+            {
+                whys[index] = DefaultFailureMessage;
+            }
+
+            return whys;
         }
 
         private static ClaimExpectation Refused(string label, string token, string reason)
@@ -575,11 +674,15 @@ namespace DxTerminalDevTools
         /*
             A failed test case, and a failed fixture. Two shapes, because the
             reporter treats them differently: the fixture is walked and never
-            named, the case inside it is.
+            named, the case inside it is. The message is what NUnit puts in the
+            result the editor hands back, and the one every default failure
+            carries, so the ordinary red run has a why to report.
          */
-        private static FakeTest Failed(string name)
+        private const string DefaultFailureMessage = "Expected: True But was: False";
+
+        private static FakeTest Failed(string name, string message = DefaultFailureMessage)
         {
-            return new FakeTest(name, TestStatus.Failed);
+            return new FakeTest(name, TestStatus.Failed, message: message);
         }
 
         private static FakeTest FailedFixture(string name, List<FakeTest> children)
@@ -627,6 +730,8 @@ namespace DxTerminalDevTools
 
             public TestStatus TestStatus { get; }
 
+            public string Message { get; }
+
             public double Duration => ResultDuration;
 
             public int PassCount { get; }
@@ -663,7 +768,8 @@ namespace DxTerminalDevTools
                 int passed = 0,
                 int failed = 0,
                 int skipped = 0,
-                int inconclusive = 0
+                int inconclusive = 0,
+                string message = null
             )
             {
                 FullName = fullName;
@@ -674,6 +780,7 @@ namespace DxTerminalDevTools
                 FailCount = failed;
                 SkipCount = skipped;
                 InconclusiveCount = inconclusive;
+                Message = message;
                 _hasTest = hasTest;
                 _throwsOnChildren = throwsOnChildren;
                 _children = children ?? new List<FakeTest>();
@@ -726,6 +833,8 @@ namespace DxTerminalDevTools
             public double Duration { get; init; }
 
             public string[] Names { get; init; }
+
+            public string[] Whys { get; init; }
         }
     }
 }
