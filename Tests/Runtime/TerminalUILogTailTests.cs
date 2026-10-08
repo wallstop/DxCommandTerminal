@@ -47,9 +47,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         private static readonly string WrappingLine =
             "a long line that wraps across several rows so the content grows: "
-                + "0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ the quick brown fox jumps over "
-                + "the lazy dog and keeps going so the log view has to break it into "
-                + WrapMarker;
+            + "0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ the quick brown fox jumps over "
+            + "the lazy dog and keeps going so the log view has to break it into "
+            + WrapMarker;
 
         private TerminalUI _terminal;
         private GameObject _terminalObject;
@@ -134,29 +134,29 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         [UnityTest]
         public IEnumerator AScrolledUpViewIsLeftWhereTheDeveloperPutIt()
-            {
-                yield return SpawnOpenTerminal();
-                yield return FillTheLog();
-                yield return WaitForLogAtEnd(FillMarker, "The fill leaves the view at its end");
+        {
+            yield return SpawnOpenTerminal();
+            yield return FillTheLog();
+            yield return WaitForLogAtEnd(FillMarker, "The fill leaves the view at its end");
 
-                Scroller scroller = LogScroller();
-                float parked = (scroller.lowValue + scroller.value) / 2f;
-                Assert.That(
-                    parked,
-                    Is.GreaterThan(scroller.lowValue),
-                    "The fill really overflowed the view, so a scroll away has somewhere to go"
-                );
-                scroller.value = parked;
-                yield return WaitForLogValue(parked, "The developer's scroll landed");
+            Scroller scroller = LogScroller();
+            float parked = (scroller.lowValue + scroller.value) / 2f;
+            Assert.That(
+                parked,
+                Is.GreaterThan(scroller.lowValue),
+                "The fill really overflowed the view, so a scroll away has somewhere to go"
+            );
+            scroller.value = parked;
+            yield return WaitForLogValue(parked, "The developer's scroll landed");
 
-                Terminal.Log("arrived while parked");
-                yield return Settle();
-                Assert.That(
-                    scroller.value,
-                    Is.EqualTo(parked).Within(Tolerance),
-                    "Output that arrives at a scrolled-up view does not yank it to the end"
-                );
-            }
+            Terminal.Log("arrived while parked");
+            yield return Settle();
+            Assert.That(
+                scroller.value,
+                Is.EqualTo(parked).Within(Tolerance),
+                "Output that arrives at a scrolled-up view does not yank it to the end"
+            );
+        }
 
         [UnityTest]
         public IEnumerator ScrollingBackToTheEndFollowsAgain()
@@ -170,10 +170,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return null;
 
             scroller.value = scroller.highValue;
-            yield return WaitForLogAtEnd(
-                FillMarker,
-                "Reaching the end re-attaches the tail"
-            );
+            yield return WaitForLogAtEnd(FillMarker, "Reaching the end re-attaches the tail");
 
             Terminal.Log("arrived after re-attaching");
             yield return WaitForLogAtEnd(
@@ -207,10 +204,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             DefaultTerminalInput.Instance.CommandText = ProbeName;
             _terminal.EnterCommand();
-            yield return WaitForLogAtEnd(
-                ProbeLine,
-                "The output of the command just run is shown"
-            );
+            yield return WaitForLogAtEnd(ProbeLine, "The output of the command just run is shown");
         }
 
         private ScrollView LogView()
