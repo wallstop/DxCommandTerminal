@@ -46,16 +46,17 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         /*
             A live, filtered view of the history: MoveNext reads one entry
-            per step under the ring's lock, so a Push, a Clear, or a Resize
-            during the caller's iteration is visible from that step on, and
-            no step can tear an entry or throw. One view per filter
-            combination is cached on the owner and the enumerator is a
-            struct, so a steady-state foreach allocates nothing (the
-            completion query walks this on every keystroke); a caller that
-            needs the window frozen at one instant copies it instead -
-            CopyHistory is that read. The concrete return is what keeps the
-            foreach allocation-free: declared as IEnumerable<string>, the
-            struct enumerator would box on every GetEnumerator.
+            per step under the ring's lock, so no step can tear an entry or
+            throw, and a Push, a Clear, or a Resize during the caller's
+            iteration is visible from that step on - on a full ring, that
+            push overwrites the oldest entry, so a walk in progress can
+            skip past it. One view per filter combination is cached on the
+            owner and the enumerator is a struct, so a steady-state
+            foreach allocates nothing; a caller that needs the window
+            frozen at one instant copies it instead - CopyHistory is that
+            read. The concrete return is what keeps the foreach
+            allocation-free: declared as IEnumerable<string>, the struct
+            enumerator would box on every GetEnumerator.
          */
         public HistoryView GetHistory(bool onlySuccess, bool onlyErrorFree)
         {
@@ -193,10 +194,12 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         }
 
         /*
-            The cached enumerable behind GetHistory. Stateless beyond its
-            filters: every GetEnumerator hands back a fresh struct
-            enumerator, so concurrent or nested enumerations of one view
-            never share a position.
+            The cached enumerable behind GetHistory. Public because it is
+            GetHistory's return type; constructing one is internal, so the
+            only instances are the owner's per-filter cache. Stateless
+            beyond its filters: every GetEnumerator hands back a fresh
+            struct enumerator, so concurrent or nested enumerations of one
+            view never share a position.
          */
         public sealed class HistoryView : IEnumerable<string>
         {
@@ -204,7 +207,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             private readonly bool _onlySuccess;
             private readonly bool _onlyErrorFree;
 
-            public HistoryView(CommandHistory history, bool onlySuccess, bool onlyErrorFree)
+            internal HistoryView(CommandHistory history, bool onlySuccess, bool onlyErrorFree)
             {
                 _history = history;
                 _onlySuccess = onlySuccess;
@@ -231,7 +234,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         {
             public string Current => _current;
 
-            object IEnumerator.Current => _current;
+            object IEnumerator.Current => Current;
 
             private readonly CyclicBuffer<(string text, bool? success, bool? errorFree)> _history;
             private readonly bool _onlySuccess;

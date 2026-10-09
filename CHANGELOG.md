@@ -11,7 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 
 - Deprecate `CommandLog.Logs`: read the log with `CommandLog.CopyTo`, `Count`, or `TryGetLast`, which cannot throw when the log changes mid-read.
-- Make `CommandHistory.GetHistory` allocation-free: it returns a live, filtered view, and `CopyHistory` copies the window when a caller needs it frozen.
+- Make `CommandHistory.GetHistory` allocation-free: it returns a live, filtered `CommandHistory.HistoryView` instead of a copied snapshot, and `CopyHistory` copies the window when a caller needs it frozen.
 
 ### Fixed
 
