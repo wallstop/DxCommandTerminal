@@ -10,6 +10,7 @@ import {
   awaitRunResult,
   isSessionCapError,
   newRunToken,
+  openRunReporter,
   parseRunClaim,
   parseTestStatus,
   readSummaryKey,
@@ -23,6 +24,8 @@ import {
   waitForTestIdle
 } from "../unity-mcp.mjs";
 import path from "node:path";
+import fs from "node:fs";
+import os from "node:os";
 
 test("test run options default to the full suite with the standard deadline", () => {
   assert.deepEqual(resolveTestRunOptions({}), {
@@ -123,6 +126,7 @@ test("a result block names its failures, and says so when it cannot", () => {
         failed: 12,
         skipped: 0,
         failedNames: ["Ns.A.One", "Ns.A.Two"],
+        failedWhy: [],
         failedMore: 10
       },
       "Tests: 12 total, 0 passed, 12 failed, 0 skipped.\n"
@@ -152,6 +156,26 @@ test("a result block names its failures, and says so when it cannot", () => {
         + "  failed: Ns.A.One\\u000A  Tests: 1 total, 1 passed, 0 failed, 0 skipped.\n"
         + "  failed: Ns.A\\u202E\\uFEFFB\n"
         + "  failed: Ns.A\\u2028  Tests: 9 total, 9 passed, 0 failed, 0 skipped."
+    ],
+    // A message is the part that turns a red run into a diagnosis, so it prints
+    // under the name it belongs to, positionally paired. An empty slot - a
+    // failure that carried no message - prints no why line, rather than a blank
+    // one that reads as a message of empty text.
+    [
+      {
+        total: 3,
+        passed: 0,
+        failed: 3,
+        skipped: 0,
+        failedNames: ["Ns.A.One", "Ns.A.Two", "Ns.A.Three"],
+        failedWhy: ["Expected: 0 < extent But was: 0.0", "", "Expected: 'a b' But was: 'a'"]
+      },
+      "Tests: 3 total, 0 passed, 3 failed, 0 skipped.\n"
+        + "  failed: Ns.A.One\n"
+        + "    why: Expected: 0 < extent But was: 0.0\n"
+        + "  failed: Ns.A.Two\n"
+        + "  failed: Ns.A.Three\n"
+        + "    why: Expected: 'a b' But was: 'a'"
     ],
     // A red run the editor named nothing says so, instead of printing the
     // counters alone - which is the output this whole change replaced.
@@ -483,6 +507,7 @@ test("claim decoding is data-driven over the three states and the torn cases", (
           skipped: 0,
           inconclusive: 0,
           failedNames: [],
+          failedWhy: [],
           failedMore: 0
         }
       }
@@ -499,6 +524,7 @@ test("claim decoding is data-driven over the three states and the torn cases", (
           skipped: 1,
           inconclusive: 4,
           failedNames: [],
+          failedWhy: [],
           failedMore: 0
         }
       }
@@ -519,6 +545,7 @@ test("claim decoding is data-driven over the three states and the torn cases", (
           skipped: 0,
           inconclusive: 0,
           failedNames: ["Ns.A.One", "Ns.B.Two(System.Int32)"],
+          failedWhy: [],
           failedMore: 0
         }
       }
@@ -539,6 +566,7 @@ test("claim decoding is data-driven over the three states and the torn cases", (
           skipped: 0,
           inconclusive: 0,
           failedNames: ['Ns.M.Case("a b")', 'Ns.M.Case("a,b")', 'Ns.M.Case("a=b")'],
+          failedWhy: [],
           failedMore: 0
         }
       }
@@ -558,6 +586,7 @@ test("claim decoding is data-driven over the three states and the torn cases", (
           skipped: 0,
           inconclusive: 0,
           failedNames: ["Ns.M.Case(100%)", "Ns.M.Case(%ZZ)"],
+          failedWhy: [],
           failedMore: 0
         }
       }
@@ -578,6 +607,7 @@ test("claim decoding is data-driven over the three states and the torn cases", (
           skipped: 0,
           inconclusive: 0,
           failedNames: ["Ns.M.Case(\u2003)", "Ns.M.Case(é)"],
+          failedWhy: [],
           failedMore: 0
         }
       }
@@ -609,6 +639,7 @@ test("claim decoding is data-driven over the three states and the torn cases", (
             "Ns.C.Nine",
             "Ns.C.Ten"
           ],
+          failedWhy: [],
           failedMore: 2
         }
       }
@@ -628,6 +659,7 @@ test("claim decoding is data-driven over the three states and the torn cases", (
           skipped: 0,
           inconclusive: 0,
           failedNames: ["Ns.C.One"],
+          failedWhy: [],
           failedMore: 0
         }
       }
@@ -644,6 +676,7 @@ test("claim decoding is data-driven over the three states and the torn cases", (
           skipped: 0,
           inconclusive: 0,
           failedNames: ["Ns.C.One"],
+          failedWhy: [],
           failedMore: 0
         }
       }
@@ -660,6 +693,7 @@ test("claim decoding is data-driven over the three states and the torn cases", (
           skipped: 0,
           inconclusive: 0,
           failedNames: ["Ns.C.One"],
+          failedWhy: [],
           failedMore: 0
         }
       }
@@ -678,6 +712,30 @@ test("claim decoding is data-driven over the three states and the torn cases", (
           skipped: 0,
           inconclusive: 0,
           failedNames: ["Ns.C.One", "Ns.C.Two"],
+          failedWhy: [],
+          failedMore: 0
+        }
+      }
+    ],
+    // Messages pair with their names by position: an empty slot is a failure
+    // that carried no message, and dropping it would slide every later message
+    // onto the wrong name. Whys beyond the named failures are a claim the
+    // editor never writes and are cut, not printed.
+    [
+      "pass=0 fail=3 token=t-19 failed-names=Ns.C.One,Ns.C.Two,Ns.C.Three"
+        + " failed-why=Expected%3A%20True%20But%20was%3A%20False,,Expected%3A%205"
+        + " failed-more=0",
+      "finished",
+      "t-19",
+      {
+        summary: {
+          total: 3,
+          passed: 0,
+          failed: 3,
+          skipped: 0,
+          inconclusive: 0,
+          failedNames: ["Ns.C.One", "Ns.C.Two", "Ns.C.Three"],
+          failedWhy: ["Expected: True But was: False", "", "Expected: 5"],
           failedMore: 0
         }
       }
@@ -697,6 +755,7 @@ test("claim decoding is data-driven over the three states and the torn cases", (
           skipped: 0,
           inconclusive: 0,
           failedNames: [],
+          failedWhy: [],
           failedMore: 0
         }
       }
@@ -1100,4 +1159,59 @@ test("a compile probe that does not answer is not treated as a failure", async (
     "editmode",
     Date.now() + 60_000
   );
+});
+
+function reporterProbeAnswer(inside) {
+  return { call: { content: [{ text: JSON.stringify({ success: true, result: inside }) }] } };
+}
+
+test("the run reporter survives a probe that races an editor reload", async () => {
+  // The probe is one eval, and an eval that lands while the editor reloads a
+  // domain times out. Falling back on that read the last red run without its
+  // names while the claim carried them, so the probe is retried once before
+  // the fallback is taken. A probe the editor answered false is a real
+  // absence: no retry, straight to the fallback.
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), "dxt-reporter-probe-"));
+  // The claim root lives under the package when the project carries it, which
+  // is the layout every real run here uses; create it so the paths under test
+  // are the ones production resolves.
+  const packageRoot = path.join(
+    project,
+    "Packages",
+    "com.wallstop-studios.dxcommandterminal"
+  );
+  fs.mkdirSync(packageRoot, { recursive: true });
+  try {
+    let probes = 0;
+    const paths = await openRunReporter(
+      { projectContainerPath: project },
+      () => {
+        probes += 1;
+        if (probes === 1) throw new Error("Main thread operation timed out after 5000ms");
+        return reporterProbeAnswer(true);
+      }
+    );
+    assert.equal(probes, 2, "a failed probe is retried once");
+    assert.equal(
+      paths.request,
+      path.join(packageRoot, ".artifacts", "unity-state", RUN_REQUEST_FILE)
+    );
+    assert.equal(
+      paths.claim,
+      path.join(packageRoot, ".artifacts", "unity-state", RUN_CLAIM_FILE)
+    );
+
+    let falseProbes = 0;
+    const absent = await openRunReporter(
+      { projectContainerPath: project },
+      () => {
+        falseProbes += 1;
+        return reporterProbeAnswer(false);
+      }
+    );
+    assert.equal(falseProbes, 1, "an editor-answered false is the whole answer, so it is asked once");
+    assert.equal(absent, null, "no reporter in the editor means no claim path");
+  } finally {
+    fs.rmSync(project, { recursive: true, force: true });
+  }
 });

@@ -7,12 +7,12 @@
 
     Claim grammar (one line, space separated, first token decides the state):
       running  token=<owner|none> mode=<PlayMode|EditMode> started=<o>
-      pass=<n> fail=<n> skipped=<n> inconclusive=<n> duration=<s> token=<owner|none> mode=<mode> finished=<o> [failed-names=<a,b,c> [failed-more=<n>]]
+      pass=<n> fail=<n> skipped=<n> inconclusive=<n> duration=<s> token=<owner|none> mode=<mode> finished=<o> [failed-names=<a,b,c> [failed-why=<w1,w2,...>] [failed-more=<n>]]
       did-not-run token=<owner|none> mode=<mode> reason=<free text>
 
     The reader needs token, mode, the four counters, reason, and, on a red run, the
-    failed names. The timestamps and the duration are for whoever reads the file
-    after a failed run.
+    failed names and why each failed. The timestamps and the duration are for
+    whoever reads the file after a failed run.
 
     failed-names is the full name of every failed test case, up to the cap,
     comma separated, and percent-encoded: every UTF-8 byte outside
@@ -23,6 +23,14 @@
     claim is byte-for-byte what it was before. failed-more carries how many
     failures the cap left unnamed: a separate field, so no consumer can read the
     cap as a test name.
+
+    failed-why is the first line of each named failure's message, under the
+    same cap and in the same order as failed-names, so the reader pairs the
+    two positionally. A failure with no message leaves an empty slot between
+    commas, which is what keeps name and message from sliding out of
+    alignment. A red run that names its failures but not why they failed sends
+    the reader back to the editor console, which a run occupies - so the
+    message is the part that turns a red run into a diagnosis.
 
     This file is compiled and driven without Unity by `npm run mcp:grammar`
     (tooling~/scripts/mcp/grammar), which decodes the claims it writes with the
@@ -61,6 +69,15 @@ namespace DxTerminalDevTools
         /// list: the count comes from the `fail=` counter either way.
         /// </summary>
         private const int MaxReportedFailures = 10;
+
+        /// <summary>
+        /// Characters of one failure message the claim carries: the first line
+        /// of the NUnit message, cut here before encoding so a verbose assert
+        /// cannot turn the one-line claim into a document. A message cut at the
+        /// cap still names the expectation it failed, which is what the reader
+        /// needs; the full text stays in the editor's own results.
+        /// </summary>
+        private const int MaxFailureMessageLength = 160;
 
         /// <summary>
         /// Between two names. A comma, because a test name may contain every
@@ -235,14 +252,23 @@ namespace DxTerminalDevTools
         }
 
         /// <summary>
-        /// Full name of every failed test case, in tree order, up to the cap: a
-        /// fully red suite must not allocate a name per failure to report ten.
+        /// Full name and first message line of every failed test case, in tree
+        /// order, up to the cap: a fully red suite must not allocate a name per
+        /// failure to report ten.
         ///
         /// A suite is never reported, only walked. A childless failed node is
         /// still a suite, and reporting it would name the fixture where the
         /// reader looks for a test.
+        ///
+        /// The two lists stay parallel: the reader pairs a message with the name
+        /// it belongs to by position, so a failure with no message has to leave
+        /// an empty slot rather than let the rest of the list slide forward.
         /// </summary>
-        private static void CollectFailedNames(ITestResultAdaptor result, List<string> names)
+        private static void CollectFailures(
+            ITestResultAdaptor result,
+            List<string> names,
+            List<string> messages
+        )
         {
             if (MaxReportedFailures <= names.Count)
             {
@@ -253,7 +279,7 @@ namespace DxTerminalDevTools
             {
                 foreach (ITestResultAdaptor child in result.Children)
                 {
-                    CollectFailedNames(child, names);
+                    CollectFailures(child, names, messages);
                 }
                 return;
             }
@@ -266,46 +292,86 @@ namespace DxTerminalDevTools
             if (result.TestStatus == TestStatus.Failed && !string.IsNullOrEmpty(result.FullName))
             {
                 names.Add(result.FullName);
+                messages.Add(FirstMessageLine(result.Message));
             }
         }
 
         /// <summary>
-        /// The claim fields for the failed names and for the failures they do not
-        /// name, or an empty string when the run named nothing. The remainder is
-        /// its own field so no consumer can mistake the cap for a test called
-        /// "+7", and so the two counts never have to be inferred from each other.
+        /// The first line of the failure's message, cut to the cap: an NUnit
+        /// message leads with the expectation that failed and continues into a
+        /// stack trace, and the claim wants the expectation. Empty when the
+        /// failure carries no message at all, which the reader renders as no
+        /// line rather than as a blank one.
         /// </summary>
-        private static string FailureNamesField(List<string> names, int failed)
+        private static string FirstMessageLine(string message)
+        {
+            if (string.IsNullOrEmpty(message))
+            {
+                return string.Empty;
+            }
+
+            string line = message;
+            for (int index = 0; index < message.Length; ++index)
+            {
+                if (message[index] == '\n' || message[index] == '\r')
+                {
+                    line = message.Substring(0, index);
+                    break;
+                }
+            }
+
+            line = line.Trim();
+            return MaxFailureMessageLength < line.Length
+                ? line.Substring(0, MaxFailureMessageLength)
+                : line;
+        }
+
+        /// <summary>
+        /// The claim fields for the failed names, the messages that pair with
+        /// them, and the failures the cap leaves unnamed - or an empty string
+        /// when the run named nothing. The remainder is its own field so no
+        /// consumer can mistake the cap for a test called "+7", and so the two
+        /// counts never have to be inferred from each other.
+        /// </summary>
+        private static string FailureFields(
+            List<string> names,
+            List<string> messages,
+            int failed
+        )
         {
             if (names.Count == 0)
             {
                 return string.Empty;
             }
 
-            StringBuilder builder = new();
+            StringBuilder namesBuilder = new();
+            StringBuilder messageBuilder = new();
             for (int index = 0; index < names.Count; ++index)
             {
                 if (0 < index)
                 {
-                    builder.Append(FailureSeparator);
+                    namesBuilder.Append(FailureSeparator);
+                    messageBuilder.Append(FailureSeparator);
                 }
 
-                builder.Append(EncodeName(names[index]));
+                namesBuilder.Append(EncodeText(names[index], AllowedNameCharacter));
+                messageBuilder.Append(EncodeText(messages[index], AllowedMessageCharacter));
             }
 
             int unnamed = Math.Max(0, failed - names.Count);
             if (0 < unnamed)
             {
-                builder
+                namesBuilder
                     .Append(" failed-more=")
                     .Append(unnamed.ToString(CultureInfo.InvariantCulture));
             }
 
-            return " failed-names=" + builder;
+            return " failed-names=" + namesBuilder
+                + " failed-why=" + messageBuilder;
         }
 
         /// <summary>
-        /// Percent-encode the name's UTF-8 bytes, so the reader's decode is a
+        /// Percent-encode the text's UTF-8 bytes, so the reader's decode is a
         /// split followed by a percent-decode and every byte a name is made of
         /// comes back. Replacing the reserved characters instead would make three
         /// cases of one parameterized test - ("a b"), ("a,b"), ("a=b") - collapse
@@ -320,8 +386,18 @@ namespace DxTerminalDevTools
         /// </summary>
         private static string EncodeName(string name)
         {
-            StringBuilder builder = new(name.Length);
-            foreach (byte value in Encoding.UTF8.GetBytes(name))
+            return EncodeText(name, AllowedNameCharacter);
+        }
+
+        /// <summary>
+        /// The one encoder, over an allowlist: names and messages reserve the
+        /// same three delimiters but accept different punctuation, and both are
+        /// percent-encoded the same way so the reader needs one decode.
+        /// </summary>
+        private static string EncodeText(string text, Func<char, bool> allowed)
+        {
+            StringBuilder builder = new(text.Length);
+            foreach (byte value in Encoding.UTF8.GetBytes(text))
             {
                 /*
                     The cast is only ever compared against ASCII, so a byte of
@@ -329,7 +405,7 @@ namespace DxTerminalDevTools
                     escaped - which is what keeps an encoded name pure ASCII.
                 */
                 char character = (char)value;
-                if (AllowedNameCharacter(character))
+                if (allowed(character))
                 {
                     builder.Append(character);
                 }
@@ -355,6 +431,26 @@ namespace DxTerminalDevTools
             }
 
             return character is '.' or '(' or ')' or '[' or ']' or '_';
+        }
+
+        /// <summary>
+        /// What a message may carry raw: the name characters plus the
+        /// punctuation an assert message is written in. Space, comma, equals,
+        /// and percent are still excluded - they are the claim's field, list,
+        /// key/value, and escape syntax - and every byte outside this set
+        /// travels as %XX, so the message survives the line it rides in.
+        /// </summary>
+        private static bool AllowedMessageCharacter(char character)
+        {
+            if (AllowedNameCharacter(character))
+            {
+                return true;
+            }
+
+            return character
+                is ':' or ';' or '!' or '?' or '-' or '+' or '*' or '/'
+                    or '<' or '>' or '|' or '~' or '^' or '$' or '#' or '@' or '&'
+                    or '\'' or '"' or '{' or '}';
         }
 
         /// <summary>
@@ -415,16 +511,17 @@ namespace DxTerminalDevTools
                 /* Walked only when the run failed, so a green run walks nothing
                    and its claim is the line it was before. The walk reads a tree
                    this code does not own, and an exception here would cost the
-                   whole claim - the counters included - so the names are the one
-                   part of the line that degrades instead. */
+                   whole claim - the counters included - so the names and the
+                   messages are the one part of the line that degrades instead. */
                 List<string> failedNames = new();
-                string names = string.Empty;
+                List<string> failureMessages = new();
+                string fields = string.Empty;
                 if (0 < failed)
                 {
                     try
                     {
-                        CollectFailedNames(result, failedNames);
-                        names = FailureNamesField(failedNames, failed);
+                        CollectFailures(result, failedNames, failureMessages);
+                        fields = FailureFields(failedNames, failureMessages, failed);
                     }
                     catch (Exception exception)
                     {
@@ -438,7 +535,7 @@ namespace DxTerminalDevTools
                     $"pass={passed} fail={failed} skipped={skipped} inconclusive={inconclusive} "
                         + $"duration={Seconds(result.Duration)} token={Reported(_token)} "
                         + $"mode={_mode} finished={UtcNow()}"
-                        + names
+                        + fields
                 );
             }
 

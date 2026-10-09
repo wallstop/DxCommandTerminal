@@ -38,6 +38,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     {
         private const string PackageRoot = "Packages/com.wallstop-studios.dxcommandterminal";
         private const int FrameBudget = 300;
+        private const int StableLayoutFrames = 5;
         private const float Tolerance = 0.5f;
         private const int FillLines = 400;
         private const string FillMarker = "of 400";
@@ -47,28 +48,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         private static readonly string WrappingLine =
             "a long line that wraps across several rows so the content grows: "
-                + "0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ the quick brown fox jumps over "
-                + "the lazy dog and keeps going so the log view has to break it into "
-                + WrapMarker;
+            + "0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ the quick brown fox jumps over "
+            + "the lazy dog and keeps going so the log view has to break it into "
+            + WrapMarker;
 
         private TerminalUI _terminal;
         private GameObject _terminalObject;
         private PanelSettings _panelSettings;
-
-        private static IEnumerator FillTheLog()
-        {
-            for (int line = 1; line <= FillLines; ++line)
-            {
-                Terminal.Log(
-                    "fill "
-                        + line.ToString(CultureInfo.InvariantCulture)
-                        + " of "
-                        + FillLines.ToString(CultureInfo.InvariantCulture)
-                );
-            }
-
-            yield return null;
-        }
 
         private static IEnumerator Settle()
         {
@@ -134,29 +120,29 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         [UnityTest]
         public IEnumerator AScrolledUpViewIsLeftWhereTheDeveloperPutIt()
-            {
-                yield return SpawnOpenTerminal();
-                yield return FillTheLog();
-                yield return WaitForLogAtEnd(FillMarker, "The fill leaves the view at its end");
+        {
+            yield return SpawnOpenTerminal();
+            yield return FillTheLog();
+            yield return WaitForLogAtEnd(FillMarker, "The fill leaves the view at its end");
 
-                Scroller scroller = LogScroller();
-                float parked = (scroller.lowValue + scroller.value) / 2f;
-                Assert.That(
-                    parked,
-                    Is.GreaterThan(scroller.lowValue),
-                    "The fill really overflowed the view, so a scroll away has somewhere to go"
-                );
-                scroller.value = parked;
-                yield return WaitForLogValue(parked, "The developer's scroll landed");
+            Scroller scroller = LogScroller();
+            float parked = (scroller.lowValue + scroller.value) / 2f;
+            Assert.That(
+                parked,
+                Is.GreaterThan(scroller.lowValue),
+                "The fill really overflowed the view, so a scroll away has somewhere to go"
+            );
+            scroller.value = parked;
+            yield return WaitForLogValue(parked, "The developer's scroll landed");
 
-                Terminal.Log("arrived while parked");
-                yield return Settle();
-                Assert.That(
-                    scroller.value,
-                    Is.EqualTo(parked).Within(Tolerance),
-                    "Output that arrives at a scrolled-up view does not yank it to the end"
-                );
-            }
+            Terminal.Log("arrived while parked");
+            yield return Settle();
+            Assert.That(
+                scroller.value,
+                Is.EqualTo(parked).Within(Tolerance),
+                "Output that arrives at a scrolled-up view does not yank it to the end"
+            );
+        }
 
         [UnityTest]
         public IEnumerator ScrollingBackToTheEndFollowsAgain()
@@ -170,10 +156,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return null;
 
             scroller.value = scroller.highValue;
-            yield return WaitForLogAtEnd(
-                FillMarker,
-                "Reaching the end re-attaches the tail"
-            );
+            yield return WaitForLogAtEnd(FillMarker, "Reaching the end re-attaches the tail");
 
             Terminal.Log("arrived after re-attaching");
             yield return WaitForLogAtEnd(
@@ -207,10 +190,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             DefaultTerminalInput.Instance.CommandText = ProbeName;
             _terminal.EnterCommand();
-            yield return WaitForLogAtEnd(
-                ProbeLine,
-                "The output of the command just run is shown"
-            );
+            yield return WaitForLogAtEnd(ProbeLine, "The output of the command just run is shown");
         }
 
         private ScrollView LogView()
@@ -246,6 +226,57 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             the view, and would then assert against the previous line - so it
             would pass for a view that never followed anything.
          */
+        private IEnumerator FillTheLog()
+        {
+            for (int line = 1; line <= FillLines; ++line)
+            {
+                Terminal.Log(
+                    "fill "
+                        + line.ToString(CultureInfo.InvariantCulture)
+                        + " of "
+                        + FillLines.ToString(CultureInfo.InvariantCulture)
+                );
+            }
+
+            yield return null;
+
+            /*
+                A scroller with no high value is a log view the panel never laid
+                out, which is what a headless editor with no rendered view
+                gives: the content exists, the geometry does not, and every
+                test here would fail on "The log content overflows the view so
+                the scroller engages" - a zero the environment produced, not
+                the tail. That is a host limit, not a defect, so it is reported
+                as one, the same gate the scroll suite skips on (see #193 for
+                the wider gap this host has with UI coverage).
+
+                Held, not merely seen, for the reason the scroll suite holds
+                its gate: a panel left half-built by an earlier test can report
+                a range for a frame or two and lose it again, and a layout that
+                survives several consecutive frames is one this environment can
+                actually answer.
+             */
+            int stableFrames = 0;
+            int frameBudget = FrameBudget;
+            while (0 < frameBudget-- && stableFrames < StableLayoutFrames)
+            {
+                ScrollView view = LogView();
+                bool laidOut =
+                    0f < LogScroller().highValue && 0f < view.contentViewport.layout.height;
+                stableFrames = laidOut ? stableFrames + 1 : 0;
+                yield return null;
+            }
+
+            if (stableFrames < StableLayoutFrames)
+            {
+                Assert.Ignore(
+                    "The log view did not hold a layout in this environment, so its scroller "
+                        + "has nothing to follow. A headless editor with no rendered view cannot "
+                        + "answer this suite; run it where the Game view renders."
+                );
+            }
+        }
+
         private IEnumerator WaitForLogAtEnd(string expectedLastLine, string message)
         {
             int frameBudget = FrameBudget;

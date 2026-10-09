@@ -26,9 +26,19 @@ Unity runs on the host; agents (in the devcontainer or on the host) reach it thr
 The bridge defaults to a deterministic port in `27100..27999` derived from the
 resolved `UNITY_PROJECT_PATH` (FNV-1a hash). Multiple open editors therefore never
 collide as long as each project has its own path. Discovery probes the project port
-first, then `9020`, then `9003`. Override a collision with `UNITY_MCP_BRIDGE_PORT`.
-The bridge is authenticated (`UNITY_MCP_BEARER_TOKEN`, minted into `.env.local`
-automatically); `GET /healthz` is the only unauthenticated endpoint.
+first, then `9020`, then `9003`. The bridge is authenticated
+(`UNITY_MCP_BEARER_TOKEN`, minted into `.env.local` automatically); `GET /healthz`
+is the only unauthenticated endpoint.
+
+Conflict policy: a live bridge already on the port is reported and the start
+becomes a no-op (exit 0) instead of spawning a duplicate. A busy port from
+`.env.local` or the project hash heals: the bridge takes the next free port in
+the range and persists it as `UNITY_MCP_BRIDGE_PORT` in `.env.local`, so later
+`configure` runs and clients read the bound port. A `--port` flag or
+process-environment `UNITY_MCP_BRIDGE_PORT` is binding intent and fails fast
+instead of moving. A port held on `127.0.0.1` counts as busy even for a
+`0.0.0.0` bind (Windows accepts that bind, then the loopback listener shadows
+the bridge).
 
 ## Multi-editor and multi-checkout rules
 
@@ -47,7 +57,10 @@ One transaction writes seven configs with rollback and mode 0600: `.mcp.json`
 (Claude), `.codex/config.toml`, `opencode.jsonc`, `.nanocoder/mcp.json`,
 `.vscode/mcp.json`, `.cursor/mcp.json`, `.copilot/mcp-config.json`. All are
 gitignored. Servers: `unity-mcp`, `github` (remote, PAT from
-`GITHUB_TOKEN`/`GH_TOKEN`/`GITHUB_PERSONAL_ACCESS_TOKEN`/`GITHUB_PAT`), `git`,
+`GITHUB_TOKEN`/`GH_TOKEN`/`GITHUB_PERSONAL_ACCESS_TOKEN`/`GITHUB_PAT`/
+`GITHUB_MCP_PAT`; OpenCode references the alias that supplied the value, and
+`ai-backends.sh env` exports that alias so the `{env:NAME}` lookup resolves
+outside the devcontainer too), `git`,
 `fetch`, `context7` (library docs), and when a Z.AI key exists (`Z_AI_API_KEY` or `ZAI_API_KEY`):
 `web-search-prime`, `web-reader`, `zread`, `zai-mcp-server` (vision). No key -> the
 four Z.AI entries are removed. A running bridge that rejected the token aborts

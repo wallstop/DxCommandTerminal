@@ -6,6 +6,7 @@ import path from "node:path";
 import {
   configure,
   clientConfigPaths,
+  githubCredentialHint,
   mergeCodexToml,
   prepareJsonServers,
   stripJsonComments,
@@ -18,6 +19,10 @@ import {
 const BEARER = "a".repeat(64);
 const ZAI_KEY = "z".repeat(48);
 const ENDPOINT = { host: "host.docker.internal", port: 9020, endpointPath: "/mcp" };
+
+function paths(repoRoot) {
+  return clientConfigPaths(repoRoot);
+}
 
 function tempRepo(initial = {}) {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "dxt-repo-"));
@@ -63,6 +68,70 @@ test("OpenCode credential references are reported when only aliases are set", ()
     unresolvedOpenCodeVariables({ githubToken: undefined, zaiToken: undefined }, {}),
     ["UNITY_MCP_BEARER_TOKEN"]
   );
+});
+
+test("OpenCode references the variable that actually supplied the github token", () => {
+  const alias = { githubToken: "gh-token-123", githubTokenSource: "GITHUB_MCP_PAT" };
+  const canonical = { UNITY_MCP_BEARER_TOKEN: BEARER, GITHUB_MCP_PAT: "gh-token-123" };
+  assert.deepEqual(unresolvedOpenCodeVariables(alias, canonical), []);
+  assert.deepEqual(
+    unresolvedOpenCodeVariables(alias, { UNITY_MCP_BEARER_TOKEN: BEARER }),
+    ["GITHUB_MCP_PAT"],
+    "the alias name is reported when it is not exported, not the canonical name"
+  );
+  // Without a tracked source the canonical name is referenced, as before.
+  assert.deepEqual(
+    unresolvedOpenCodeVariables({ githubToken: "gh-token-123" }, canonical),
+    ["GITHUB_TOKEN"]
+  );
+});
+
+test("OpenCode references the variable that actually supplied the z.ai key", () => {
+  const alias = { zaiToken: ZAI_KEY, zaiTokenSource: "Z_AI_API_KEY" };
+  const values = { UNITY_MCP_BEARER_TOKEN: BEARER, Z_AI_API_KEY: ZAI_KEY };
+  assert.deepEqual(unresolvedOpenCodeVariables(alias, values), []);
+  assert.deepEqual(
+    unresolvedOpenCodeVariables(alias, { UNITY_MCP_BEARER_TOKEN: BEARER }),
+    ["Z_AI_API_KEY"],
+    "the alias name is reported when it is not exported, not the canonical name"
+  );
+  // Without a tracked source the canonical name is referenced, as before.
+  assert.deepEqual(
+    unresolvedOpenCodeVariables({ zaiToken: ZAI_KEY }, values),
+    ["ZAI_API_KEY"]
+  );
+});
+
+test("github server without a token gets a loud hint instead of silent 401s", () => {
+  assert.equal(githubCredentialHint({ githubToken: "gh-token-123" }), null);
+  const hint = githubCredentialHint({ githubToken: undefined });
+  assert.match(hint, /401/);
+  assert.match(hint, /GITHUB_TOKEN/);
+  assert.match(hint, /GITHUB_MCP_PAT/);
+});
+
+test("configure writes the github token source into OpenCode headers", () => {
+  const repoRoot = tempRepo();
+  try {
+    const { written } = configure(
+      options(repoRoot, { githubTokenSource: "GITHUB_MCP_PAT" }),
+      ENDPOINT
+    );
+    assert.equal(written.length, 7);
+    const openCode = JSON.parse(
+      stripJsonComments(fs.readFileSync(paths(repoRoot).openCode, "utf8"))
+    );
+    assert.equal(
+      openCode.mcp.servers["github"].headers.Authorization,
+      "Bearer {env:GITHUB_MCP_PAT}",
+      "OpenCode resolves {env:NAME} against its own environment, so the alias must be referenced"
+    );
+    // Other clients embed the literal token and are unaffected by the source.
+    const claude = JSON.parse(fs.readFileSync(paths(repoRoot).claudeCode, "utf8"));
+    assert.equal(claude.mcpServers["github"].headers.Authorization, "Bearer gh-token-123");
+  } finally {
+    fs.rmSync(repoRoot, { recursive: true, force: true });
+  }
 });
 
 test("configure writes every client schema with the unity endpoint", () => {

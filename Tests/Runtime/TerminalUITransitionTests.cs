@@ -852,6 +852,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             protected override bool TextInputOwnsFocus => FocusOverride ?? base.TextInputOwnsFocus;
 
             public string PressedHotkey;
+
+            [System.NonSerialized]
             public bool? FocusOverride;
 
             public void DriveUpdate()

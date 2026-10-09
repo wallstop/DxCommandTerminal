@@ -23,6 +23,31 @@ const dependency = (name) =>
       })
     ).href
   );
+let mcpDependencies;
+try {
+  mcpDependencies = await Promise.all(
+    [
+      "@modelcontextprotocol/sdk/client/index.js",
+      "@modelcontextprotocol/sdk/client/streamableHttp.js",
+      "@modelcontextprotocol/sdk/server/index.js",
+      "@modelcontextprotocol/sdk/server/streamableHttp.js",
+      "@modelcontextprotocol/sdk/types.js",
+      "smol-toml",
+      "jsonc-parser"
+    ].map(dependency)
+  );
+} catch (error) {
+  if (error?.code === "MODULE_NOT_FOUND") {
+    // A bare MODULE_NOT_FOUND stack gives no hint that the npm project lives
+    // under tooling~, so say the fix outright (fresh hosts hit this first).
+    console.error(
+      `[unity-mcp] Missing tooling dependency: ${error.message.split("\n")[0]}\n` +
+        "Install the tooling dependencies, then retry: npm --prefix tooling~ install"
+    );
+    process.exit(1);
+  }
+  throw error;
+}
 const [
   { Client },
   { StreamableHTTPClientTransport, StreamableHTTPError },
@@ -31,17 +56,7 @@ const [
   { isInitializeRequest, McpError },
   { parse: parseToml, stringify: stringifyToml },
   { parse: parseJsonc }
-] = await Promise.all(
-  [
-    "@modelcontextprotocol/sdk/client/index.js",
-    "@modelcontextprotocol/sdk/client/streamableHttp.js",
-    "@modelcontextprotocol/sdk/server/index.js",
-    "@modelcontextprotocol/sdk/server/streamableHttp.js",
-    "@modelcontextprotocol/sdk/types.js",
-    "smol-toml",
-    "jsonc-parser"
-  ].map(dependency)
-);
+] = mcpDependencies;
 // T11 baseline compare: pure stdlib, no dynamic dependencies.
 import {
   compareScenario,
@@ -77,11 +92,47 @@ export const FALLBACK_HOSTS = Object.freeze(["host.docker.internal", "127.0.0.1"
 // owns one port in this range, so hosts with several open editors never collide and
 // discovery can find this checkout's bridge without a shared registry file.
 export const PROJECT_PORT_RANGE = Object.freeze({ base: 27100, size: 900 });
+// Windows drive-letter ("C:/...") and UNC ("//server/...") paths are absolute on
+// every platform. The platform resolve() must not see them: on POSIX it reads
+// "C:/Game" as relative, prepends the working directory, and the container then
+// derives a different project port than the Windows host bridge binds. Collapse
+// "." and ".." segments ourselves instead; determinism is the contract.
+function isForeignAbsolute(slashed) {
+  return /^[a-zA-Z]:\//.test(slashed) || slashed.startsWith("//");
+}
+function collapseSegments(slashed) {
+  /*
+      A UNC path keeps its double slash: "//server/share" names a share, and
+      collapsing the empty segments to one "/" would read it back as a
+      drive-rooted path on Windows and as a nonexistent local directory in the
+      container - existsSync, cwd, and --project-path would all miss. More than
+      two leading slashes collapse into the two-slash prefix, which is the one
+      spelling every consumer agrees on.
+   */
+  const prefix = slashed.startsWith("//") ? "//" : slashed.startsWith("/") ? "/" : "";
+  const segments = [];
+  for (const segment of slashed.split("/")) {
+    if (!segment || segment === ".") continue;
+    if (segment === ".." && segments.length > 0 && segments[segments.length - 1] !== "..") {
+      segments.pop();
+      continue;
+    }
+    segments.push(segment);
+  }
+  return `${prefix}${segments.join("/")}`;
+}
+// Resolve a project path into a canonical, platform-independent spelling: Windows
+// paths keep their drive root as "C:/..." everywhere, POSIX paths keep resolve()
+// semantics (including cwd-relative inputs).
+export function resolveProjectPath(projectPath) {
+  if (projectPath === undefined || projectPath === null || projectPath === "") return undefined;
+  const slashed = String(projectPath).trim().replace(/\\/g, "/");
+  if (isForeignAbsolute(slashed)) return collapseSegments(slashed);
+  return path.resolve(slashed);
+}
 export function projectPort(projectPath) {
   if (!projectPath) return null;
-  const normalized = path
-    .resolve(String(projectPath))
-    .replace(/\\/g, "/")
+  const normalized = resolveProjectPath(projectPath)
     .replace(/\/+$/, "")
     .toLowerCase();
   // FNV-1a 32-bit over the UTF-8 bytes of the normalized absolute path.
@@ -273,11 +324,45 @@ function validateToken(value) {
   }
   return value;
 }
+// Canonical name first, then accepted aliases. Order is part of the contract:
+// process environment beats .env.local, and within one source the earlier key
+// wins (see the alias-order test). GITHUB_MCP_PAT is accepted because existing
+// .env.local files already carry it.
+const GITHUB_TOKEN_KEYS = Object.freeze([
+  "GITHUB_TOKEN",
+  "GH_TOKEN",
+  "GITHUB_PERSONAL_ACCESS_TOKEN",
+  "GITHUB_PAT",
+  "GITHUB_MCP_PAT"
+]);
 function githubToken(environment, local) {
-  const keys = ["GITHUB_TOKEN", "GH_TOKEN", "GITHUB_PERSONAL_ACCESS_TOKEN", "GITHUB_PAT"];
-  const value = first(...keys.map((key) => environment[key]), ...keys.map((key) => local[key]));
+  const value = first(
+    ...GITHUB_TOKEN_KEYS.map((key) => environment[key]),
+    ...GITHUB_TOKEN_KEYS.map((key) => local[key])
+  );
   if (value?.length > 1_024) fail("GitHub token must not exceed 1024 characters");
   return value === undefined ? value : validateText(value, "GitHub token");
+}
+// The name OpenCode must reference: a {env:NAME} header resolves only when that
+// exact name is exported, so an alias-supplied token must reference the alias.
+function githubTokenSource(environment, local) {
+  for (const key of GITHUB_TOKEN_KEYS) {
+    if (environment[key]) return key;
+  }
+  for (const key of GITHUB_TOKEN_KEYS) {
+    if (local[key]) return key;
+  }
+  return undefined;
+}
+const ZAI_TOKEN_KEYS = Object.freeze(["Z_AI_API_KEY", "ZAI_API_KEY"]);
+function zaiTokenSource(environment, local) {
+  for (const key of ZAI_TOKEN_KEYS) {
+    if (environment[key]) return key;
+  }
+  for (const key of ZAI_TOKEN_KEYS) {
+    if (local[key]) return key;
+  }
+  return undefined;
 }
 // Host project paths are validated only by bridge; they do not exist in the container.
 export function resolveOptions(args, environment = process.env, localValues, repoRoot = REPO_ROOT) {
@@ -291,6 +376,14 @@ export function resolveOptions(args, environment = process.env, localValues, rep
   };
   const explicitHost = first(args.host, environment[ENV_KEYS.host], local[ENV_KEYS.host]);
   const explicitPort = first(args.port, environment[ENV_KEYS.port], local[ENV_KEYS.port]);
+  const portSource =
+    explicitPort === undefined
+      ? "derived"
+      : args.port === explicitPort
+        ? "flag"
+        : environment[ENV_KEYS.port] === explicitPort
+          ? "env"
+          : "local";
   const projectPath = first(
     args.project,
     environment[ENV_KEYS.projectPath],
@@ -314,8 +407,9 @@ export function resolveOptions(args, environment = process.env, localValues, rep
     explicitHost: explicitHost === undefined ? undefined : validateHost(explicitHost),
     port: integer(derivedPort, "Port", 1, 65_535),
     explicitPort: explicitPort === undefined ? undefined : integer(explicitPort, "Port", 1, 65_535),
+    portSource,
     endpointPath: validateEndpointPath(get("path", "endpointPath", DEFAULTS.endpointPath)),
-    projectPath: projectPath === undefined ? undefined : path.resolve(projectPath),
+    projectPath: resolveProjectPath(projectPath),
     projectContainerPath:
       projectContainerPath === undefined ? undefined : path.resolve(projectContainerPath),
     backend: get("backend", "backend", "cli"),
@@ -334,12 +428,12 @@ export function resolveOptions(args, environment = process.env, localValues, rep
     bearerToken: validateToken(get("token", "bearerToken", undefined)),
     bearerTokenFromArgument: args.token !== undefined,
     githubToken: githubToken(environment, local),
+    githubTokenSource: githubTokenSource(environment, local),
     zaiToken: first(
-      environment.Z_AI_API_KEY,
-      environment.ZAI_API_KEY,
-      local.Z_AI_API_KEY,
-      local.ZAI_API_KEY
+      ...ZAI_TOKEN_KEYS.map((key) => environment[key]),
+      ...ZAI_TOKEN_KEYS.map((key) => local[key])
     ),
+    zaiTokenSource: zaiTokenSource(environment, local),
     offline: args.offline === true,
     discover: args["no-discover"] !== true,
     noInstall: args["no-install"] === true,
@@ -840,18 +934,28 @@ export function transactionalWrite(writes, beforeCommit = () => {}) {
   return changed.map(([filePath]) => filePath);
 }
 
-function persistBearerToken(repoRoot, token) {
+// Upsert one KEY=value line in .env.local, preserving all other content and an
+// optional `export ` prefix. Returns true when the file changed.
+function persistEnvValue(repoRoot, key, value) {
   const envPath = path.join(repoRoot, ".env.local");
-  if (readLocalEnv(repoRoot)[ENV_KEYS.bearerToken] === token) return;
+  if (readLocalEnv(repoRoot)[key] === value) return false;
   const current = fs.existsSync(envPath) ? fs.readFileSync(envPath, "utf8") : "";
-  const pattern = /^(\uFEFF?[ \t]*(?:export[ \t]+)?UNITY_MCP_BEARER_TOKEN[ \t]*=)[^\r\n]*/gm;
-  const updated = current.replace(pattern, `$1${token}`);
+  const pattern = new RegExp(
+    `^(\\uFEFF?[ \\t]*(?:export[ \\t]+)?${key}[ \\t]*=)[^\\r\\n]*`,
+    "gm"
+  );
+  const updated = current.replace(pattern, `$1${value}`);
   if (updated !== current) {
     atomicWrite(envPath, updated);
-    return;
+    return true;
   }
   const prefix = current && !current.endsWith("\n") ? "\n" : "";
-  atomicWrite(envPath, `${current}${prefix}${ENV_KEYS.bearerToken}=${token}\n`);
+  atomicWrite(envPath, `${current}${prefix}${key}=${value}\n`);
+  return true;
+}
+
+function persistBearerToken(repoRoot, token) {
+  persistEnvValue(repoRoot, ENV_KEYS.bearerToken, token);
 }
 
 function ensureBearerToken(options) {
@@ -1084,30 +1188,56 @@ const OPEN_CODE_TOKEN_ENV = Object.freeze({
 });
 export { ZAI_SERVERS };
 
-function openCodeAuthHeaders(name, token) {
+function resolveOpenCodeTokenEnv(name, options) {
+  // An alias-supplied token must be referenced by its own name: OpenCode
+  // resolves {env:NAME} against its process environment, and only the exported
+  // alias exists there (the devcontainer autoload exports every .env.local key).
+  if (name === "github" && options.githubTokenSource) return options.githubTokenSource;
+  if (ZAI_SERVERS.includes(name) && options.zaiTokenSource) return options.zaiTokenSource;
+  return OPEN_CODE_TOKEN_ENV[name];
+}
+
+function openCodeAuthHeaders(name, token, options) {
   if (!token) return undefined;
-  const variable = OPEN_CODE_TOKEN_ENV[name];
+  const variable = resolveOpenCodeTokenEnv(name, options);
   if (!variable) fail(`No OpenCode environment variable is defined for ${name}`);
   return { Authorization: `Bearer {env:${variable}}` };
 }
 
-function openCodeLocalEnvironment(environment) {
+function openCodeLocalEnvironment(environment, options) {
   if (!environment) return undefined;
   const result = { ...environment };
-  if (result.Z_AI_API_KEY) result.Z_AI_API_KEY = "{env:ZAI_API_KEY}";
+  if (result.Z_AI_API_KEY) {
+    result.Z_AI_API_KEY = `{env:${options?.zaiTokenSource ?? "ZAI_API_KEY"}}`;
+  }
   return result;
 }
 
 /*
     A {env:NAME} reference resolves only when that exact name is exported. An
-    accepted alias (Z_AI_API_KEY, GITHUB_PAT) would otherwise leave OpenCode
-    sending an empty header and failing at request time.
+    accepted alias (Z_AI_API_KEY, GITHUB_MCP_PAT) must be referenced by its own
+    exported name, which resolveOpenCodeTokenEnv handles for github and the
+    Z.AI servers.
 */
 export function unresolvedOpenCodeVariables(options, values) {
   const referenced = [OPEN_CODE_TOKEN_ENV["unity-mcp"]];
-  if (options.githubToken) referenced.push(OPEN_CODE_TOKEN_ENV.github);
-  if (options.zaiToken) referenced.push(OPEN_CODE_TOKEN_ENV["web-search-prime"]);
+  if (options.githubToken) {
+    referenced.push(options.githubTokenSource ?? OPEN_CODE_TOKEN_ENV.github);
+  }
+  if (options.zaiToken) {
+    referenced.push(options.zaiTokenSource ?? OPEN_CODE_TOKEN_ENV["web-search-prime"]);
+  }
   return [...new Set(referenced)].filter((variable) => !values[variable]);
+}
+
+// A github entry without credentials always answers 401; say so at configure
+// time instead of leaving the failure to every frontend.
+export function githubCredentialHint(options) {
+  if (options.githubToken) return null;
+  return (
+    "github MCP server is written without credentials; it fails with 401 until a " +
+    `token is set (${GITHUB_TOKEN_KEYS.join(", ")}).`
+  );
 }
 
 function warnOnUnresolvedOpenCodeReferences(options) {
@@ -1115,10 +1245,13 @@ function warnOnUnresolvedOpenCodeReferences(options) {
     ...readLocalEnv(options.repoRoot),
     ...process.env
   });
-  if (missing.length === 0) return;
-  console.warn(
-    `[unity-mcp] OpenCode reads ${missing.join(", ")}. Export the listed names (ai-backends.sh env does) or those servers fail to authenticate.`
-  );
+  if (missing.length > 0) {
+    console.warn(
+      `[unity-mcp] OpenCode reads ${missing.join(", ")}. Export the listed names (ai-backends.sh env does) or those servers fail to authenticate.`
+    );
+  }
+  const githubHint = githubCredentialHint(options);
+  if (githubHint) console.warn(`[unity-mcp] ${githubHint}`);
 }
 
 // One catalog, rendered in each client's documented schema.
@@ -1147,7 +1280,7 @@ function clientServers(kind, options, url) {
   return Object.fromEntries(
     Object.entries(catalog).map(([name, { url, token, command, args, env }]) => {
       const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-      const openCodeHeaders = kind === "openCode" ? openCodeAuthHeaders(name, token) : undefined;
+      const openCodeHeaders = kind === "openCode" ? openCodeAuthHeaders(name, token, options) : undefined;
       let config;
       if (kind === "codex") {
         // ZAI returns an empty 200 without Content-Type for initialized notifications.
@@ -1175,7 +1308,7 @@ function clientServers(kind, options, url) {
           : {
               type: "local",
               command: [command, ...args],
-              ...(env ? { environment: openCodeLocalEnvironment(env) } : {})
+              ...(env ? { environment: openCodeLocalEnvironment(env, options) } : {})
             };
         Object.assign(config, {
           codemode: true,
@@ -1276,15 +1409,129 @@ export function buildRelayArgs(projectPath) {
   return ["--mcp", "--project-path", path.resolve(projectPath)];
 }
 
+// Binding 0.0.0.0 when a specific interface (measured on Windows: 127.0.0.1)
+// already holds the port succeeds without EADDRINUSE, but the specific
+// listener keeps receiving those connections and shadows the bridge. The
+// frontends reach the bridge over loopback, so a bind that covers loopback
+// must also find the port free on 127.0.0.1.
+const LOOPBACK_HOST = /(?:^localhost$|^127\.\d+\.\d+\.\d+$|^::1$)/i;
 export async function assertPortAvailable(port, host = DEFAULTS.bindHost) {
-  await new Promise((resolve, reject) => {
-    const server = net.createServer();
-    server.unref();
-    server.once("error", (error) =>
-      reject(new Error(`Port ${port} is unavailable on ${host}: ${error.message}`))
-    );
-    server.listen({ port, host, exclusive: true }, () => server.close(resolve));
+  const hosts = [host];
+  const coversLoopback = host === "0.0.0.0" || host === "::" || LOOPBACK_HOST.test(host);
+  if (coversLoopback && host !== "127.0.0.1") hosts.push("127.0.0.1");
+  for (const probeHost of hosts) {
+    await new Promise((resolve, reject) => {
+      const server = net.createServer();
+      server.unref();
+      server.once("error", (error) =>
+        reject(new Error(`Port ${port} is unavailable on ${probeHost}: ${error.message}`))
+      );
+      server.listen({ port, host: probeHost, exclusive: true }, () => server.close(resolve));
+    });
+  }
+}
+
+// GET /healthz is the only unauthenticated bridge endpoint, so a 200 there
+// identifies a live bridge without credentials. Probed over loopback because
+// the default bind host (0.0.0.0) is not itself dialable. The timer settles
+// the probe even when a raw socket occupant never answers: measured on this
+// host, request.destroy() after a timeout emits no error event to hook.
+function probeBridgeHealth(port, timeoutMs = 1_000) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(value);
+    };
+    const request = http.get({ host: "127.0.0.1", port, path: "/healthz" }, (response) => {
+      response.resume();
+      finish(response.statusCode === 200);
+    });
+    request.once("error", () => finish(false));
+    const timer = setTimeout(() => {
+      request.destroy();
+      finish(false);
+    }, timeoutMs);
+    timer.unref();
   });
+}
+
+function portInRange(port) {
+  return (
+    Number.isInteger(port) &&
+    port >= PROJECT_PORT_RANGE.base &&
+    port < PROJECT_PORT_RANGE.base + PROJECT_PORT_RANGE.size
+  );
+}
+
+// First port at or after `start` that `isTaken` rejects, inside the project
+// range. Async predicate so callers can probe real sockets; null when the
+// range is exhausted.
+export async function nextProjectPort(startPort, isTaken, range = PROJECT_PORT_RANGE) {
+  const end = range.base + range.size - 1;
+  const first = Math.max(Math.min(startPort, end), range.base);
+  for (let port = first; port <= end; port += 1) {
+    if (!(await isTaken(port))) return port;
+  }
+  return null;
+}
+
+// Resolve the port this bridge will bind. Policy:
+// - a live bridge on the port wins: report it instead of spawning a duplicate
+//   (also keeps service-manager restart loops from crash-spinning);
+// - an operator-supplied port (flag, or UNITY_MCP_BRIDGE_PORT from the process
+//   environment) is binding intent and fails fast on conflict;
+// - a .env.local or project-derived port heals: it moves to the next free port
+//   in the project range and persists the choice so every later configure and
+//   client reads the port the bridge actually bound.
+async function resolveBridgeBind(options) {
+  let conflict;
+  try {
+    await assertPortAvailable(options.port, options.bindHost);
+  } catch (error) {
+    conflict = error;
+  }
+  if (!conflict) return { port: options.port };
+  if (await probeBridgeHealth(options.port)) {
+    return {
+      alreadyRunning: true,
+      port: options.port,
+      url: endpointUrl({
+        host: options.host ?? DEFAULTS.host,
+        port: options.port,
+        endpointPath: options.endpointPath ?? DEFAULTS.endpointPath
+      })
+    };
+  }
+  const healable = portInRange(options.port) && ["local", "derived"].includes(options.portSource);
+  if (!healable) {
+    throw new Error(
+      `${conflict.message}. Nothing was moved: free the port or stop the process holding it, ` +
+        `or set ${ENV_KEYS.port} to a free port.`
+    );
+  }
+  const moved = await nextProjectPort(options.port, async (port) => {
+    try {
+      await assertPortAvailable(port, options.bindHost);
+      return false;
+    } catch {
+      return true;
+    }
+  });
+  if (moved === null) {
+    throw new Error(
+      `${conflict.message}. No free port remains in ` +
+        `${PROJECT_PORT_RANGE.base}..${PROJECT_PORT_RANGE.base + PROJECT_PORT_RANGE.size - 1}.`
+    );
+  }
+  persistEnvValue(options.repoRoot, ENV_KEYS.port, String(moved));
+  console.log(
+    `Port ${options.port} was busy on ${options.bindHost}; binding ${moved} instead ` +
+      `and persisting ${ENV_KEYS.port}=${moved} in .env.local so clients agree.`
+  );
+  return { port: moved, movedFrom: options.port };
 }
 
 function authorized(request, token) {
@@ -1371,7 +1618,9 @@ export async function startBridge(inputOptions, runtime = {}) {
     options.backend === "relay"
       ? findRelay(options.relayPath, runtime.relayRuntime)
       : (options.cliPath ?? "unity");
-  await assertPortAvailable(options.port, options.bindHost);
+  const bind = await resolveBridgeBind(options);
+  if (bind.alreadyRunning) return bind;
+  options.port = bind.port;
 
   const maxSessions = options.maxSessions ?? DEFAULTS.maxSessions;
   const bodyTimeout = Math.min(options.sessionTimeout ?? Infinity, DEFAULTS.bodyTimeout);
@@ -1741,6 +1990,10 @@ export async function runConfigure(options, runtime = {}) {
 
 export async function runBridge(options) {
   const running = await startBridge(options);
+  if (running.alreadyRunning) {
+    console.log(`Unity MCP bridge already running at ${running.url}; nothing to start.`);
+    return;
+  }
   console.log(`Unity project: ${running.options.projectPath}`);
   console.log(
     `Unity MCP bridge: http://${running.options.bindHost}:${running.options.port}${running.options.endpointPath} (bearer authentication required)`
@@ -2790,7 +3043,7 @@ export function newRunToken(label, now = Date.now()) {
  *
  *   running  token=<owner|none> mode=<mode> started=<o>
  *   pass=<n> fail=<n> skipped=<n> inconclusive=<n> duration=<s> token=<owner|none> mode=<mode> finished=<o>
- *           [failed-names=<a,b,c> [failed-more=<n>]]
+ *           [failed-names=<a,b,c> [failed-why=<w1,w2,...>] [failed-more=<n>]]
  *   did-not-run token=<owner|none> mode=<mode> reason=<free text>
  *
  * `total` is summed here rather than reported by the editor, so the summary
@@ -2856,6 +3109,7 @@ export function parseRunClaim(text) {
       silent "none failed".
    */
   const names = readFailureNames(fields.get("failed-names"));
+  const whys = readFailureWhys(fields.get("failed-why"));
   const more = Number(fields.get("failed-more"));
   const counted = /^\d+$/u.test(String(fields.get("failed-more") ?? "").trim())
     ? Math.min(more, Math.max(0, failed - names.length))
@@ -2871,6 +3125,11 @@ export function parseRunClaim(text) {
       skipped,
       inconclusive,
       failedNames: names,
+      // Paired with failedNames by position, so the reader can say why each
+      // named failure failed. A claim from a reporter older than this field,
+      // or a failure that carried no message, has no entry here: the honest
+      // answer, never an invented one.
+      failedWhy: whys.slice(0, names.length),
       failedMore: counted
     }
   };
@@ -2896,6 +3155,30 @@ function readFailureNames(value) {
     }
   }
   return names;
+}
+
+/*
+    The failure messages paired with the failed test names. Unlike the names,
+    the positions are the contract: an empty slot is a failure that carried no
+    message, and dropping it would slide every later message onto the wrong
+    name. A message is already the first line of the NUnit message, so a slot
+    decodes to one printable line or to nothing.
+ */
+function readFailureWhys(value) {
+  if (value === undefined || value === "") return [];
+  const whys = [];
+  for (const part of value.split(",")) {
+    if (part.length === 0) {
+      whys.push("");
+      continue;
+    }
+    try {
+      whys.push(decodeURIComponent(part));
+    } catch {
+      whys.push(part);
+    }
+  }
+  return whys;
 }
 
 function readClaimFile(claimPath) {
@@ -3047,14 +3330,27 @@ async function noTestsMatchedSummary(client, signal, initial) {
  * no reporter, no local project, an unwritable directory) means the fallback,
  * never a failed command.
  */
-async function openRunReporter(options, evalCall) {
+export async function openRunReporter(options, evalCall) {
   const localProjectPath = options.projectContainerPath ?? options.projectPath;
   if (localProjectPath === undefined || !fs.existsSync(localProjectPath)) return null;
   let installed = false;
   try {
     const { call } = await evalCall(RUN_REPORTER_PROBE);
     installed = evalAnswerIsTrue(extractText(call));
-  } catch {}
+  } catch {
+    /*
+        A probe that lands while the editor reloads (a compile the previous leg
+        triggered) times out and reads as "no reporter", and the run then falls
+        back to the nameless bridge path with the claim machinery sitting right
+        there. One retry after a short wait covers the reload window; a probe
+        the editor answered with false is a real absence and is not retried.
+     */
+    await new Promise((resolve) => setTimeout(resolve, 5_000));
+    try {
+      const { call } = await evalCall(RUN_REPORTER_PROBE);
+      installed = evalAnswerIsTrue(extractText(call));
+    } catch {}
+  }
   const root = captureArtifactRoot(localProjectPath, localProjectPath);
   // The request has to be written before every run, so the directory is created
   // if this project never captured, and a read-only one is a fallback rather
@@ -3217,15 +3513,22 @@ function printableName(name) {
 }
 
 /**
- * One indented line per reported name, then one line for the failures the
+ * One indented line per reported name - then the message that says why it
+ * failed, when the run carried one - then one line for the failures the
  * editor's cap left unnamed. No deduplication: a parameterized test that failed
  * on several cases has several names, and the reader's only other count is the
  * `fail=` counter.
  */
 function failureNameLines(summary) {
   const names = summary?.failedNames ?? [];
+  const whys = summary?.failedWhy ?? [];
   const more = Number(summary?.failedMore ?? 0);
-  const lines = names.map((name) => `\n  failed: ${printableName(name)}`);
+  const lines = names.map((name, index) => {
+    const why = whys[index];
+    const reason =
+      typeof why === "string" && 0 < why.length ? `\n    why: ${printableName(why)}` : "";
+    return `\n  failed: ${printableName(name)}${reason}`;
+  });
   if (0 < more) {
     lines.push(`\n  ... and ${more} more the cap did not list`);
   } else if (0 < Number(summary?.failed ?? 0) && names.length === 0) {
