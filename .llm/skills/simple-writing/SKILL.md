@@ -32,6 +32,7 @@ before adding. A reader should get the point in seconds.
 | --- | --- | --- |
 | PR title | Imperative, <= 72 chars. "Add X", "Fix Y". | 1 line |
 | PR description | `**Why:**` 1-2 sentences. `**What:**` one-line bullets (3-6). Optional `**How we know:**` 1-3 plain evidence lines. Omit a section that adds nothing. | <= ~12 lines |
+| CHANGELOG entry | One sentence, imperative verb, user-visible effect first. No mechanism, no root cause, no measurements; the commit body carries those. | 1 sentence |
 | Commit subject | Imperative, <= 72 chars, no trailing period. | 1 line |
 | Commit body | `Why` 1-2 sentences, then `What changed` one-line bullets (2-5). Optional one-line `How we know`. Wrap at ~72 chars. | <= ~8 lines |
 | Review comments | 1-3 sentences. Say what to change and why. | 3 lines |
@@ -44,6 +45,9 @@ tours, no process narration (review rounds, sub-agents, commits list), no
 restated context already in linked issues or PLAN. Numbers only as evidence
 lines. LLM-posted GitHub text keeps the `DISCLOSURE: LLM-GENERATED TEXT` first
 line (see llm-attribution); it does not count against the budget.
+
+Reference for these shapes: unity-helpers' `ship-changes` skill (MIT) - pull
+request title and body template, and the one-sentence CHANGELOG rule.
 
 ## Enforcement (PRs)
 
