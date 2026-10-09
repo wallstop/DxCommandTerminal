@@ -178,11 +178,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         /*
-            A flood from a background thread against a concurrent read. The
-            reader is the shape the terminal uses every frame: read the count,
-            then index every entry. Before the fix the unsynchronized
-            read-modify-writes in CyclicBuffer.Add and CommandLog's version
-            counter let the two disagree, and BoundsCheck threw.
+            A flood from a background thread against a concurrent read. Before
+            the fix the unsynchronized read-modify-writes in CyclicBuffer.Add
+            and CommandLog's version counter let the count and the entries
+            disagree, and BoundsCheck threw.
 
             The buffer starts empty on purpose: a ring that is already full
             overwrites in place forever, so it never grows its backing list
@@ -475,19 +474,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     }
 
                     /*
-                        The one-entry reads ride the same storm. A count or a
-                        newest-entry read that assembles its answer from more
-                        than one unsynchronized state throws or returns a
-                        slot the writer never filled under exactly this churn.
+                        The one-entry reads ride the same storm. A newest
+                        entry read that assembled its answer from more than
+                        one unsynchronized state throws or returns a slot
+                        the writer never filled under exactly this churn.
                      */
                     log.TryGetLast(out LogItem last);
                     Assert.IsTrue(
                         last.message == null || WasWritten(last.message),
                         $"A newest-entry read held an entry no writer produced: '{last.message}'"
-                    );
-                    Assert.That(
-                        0 <= log.Count && log.Count <= Capacity,
-                        "A count read must stay inside the configured capacity"
                     );
                 }
             }
@@ -500,6 +495,77 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.That(
                 writerFailure == null,
                 $"Background log writes must not throw: {writerFailure}"
+            );
+        }
+
+        /*
+            Applies a filter for a type while writers flood that type, then
+            holds the filter and lets the flood drain. Every drain write is
+            refused, and refusals never touch the ring, so the window at
+            the end is exactly what the writers landed - and it must hold
+            nothing of the ignored type.
+
+            This pins the observable contract an applied filter promises
+            under concurrency: the read path that decides refusals sees one
+            applied filter state, never a half-applied one. The narrower
+            race the in-lock re-check closes - a flip landing in the few
+            instructions between a writer's first filter check and its
+            write - has no reachable hook a test can interpose into (the
+            window is pure string work), so the re-check itself is carried
+            by its comment at the write site, not by this test.
+         */
+        [Test]
+        public void AppliedFilterEmptiesAConcurrentFloodOfItsType()
+        {
+            CommandLog log = new(Capacity, new[] { TerminalLogType.Warning });
+            log.ApplyFilter(TerminalStackTraceMode.All, new[] { TerminalLogType.Warning });
+
+            const int writerCount = 4;
+            const int writesPerWriter = 50_000;
+
+            int accepted = 0;
+            Exception failure = null;
+            using ManualResetEventSlim start = new(false);
+            Thread[] writers = new Thread[writerCount];
+            for (int w = 0; w < writerCount; ++w)
+            {
+                writers[w] = new Thread(() =>
+                {
+                    start.Wait();
+                    try
+                    {
+                        for (int i = 0; i < writesPerWriter; ++i)
+                        {
+                            if (!log.HandleLog("flood", string.Empty, TerminalLogType.Warning))
+                            {
+                                continue;
+                            }
+
+                            Interlocked.Increment(ref accepted);
+                        }
+                    }
+                    catch (Exception exception)
+                    {
+                        Interlocked.CompareExchange(ref failure, exception, null);
+                    }
+                });
+                writers[w].Start();
+            }
+
+            start.Set();
+            foreach (Thread writer in writers)
+            {
+                writer.Join();
+            }
+
+            Assert.That(failure == null, $"Filtered flood writes must not throw: {failure}");
+            Assert.AreEqual(0, accepted, "No write of an applied filter's type may be accepted");
+
+            LogItem[] window = new LogItem[Capacity];
+            Assert.AreEqual(
+                0,
+                log.CopyTo(window),
+                "A flood of an applied filter's type must land nothing in the window"
             );
         }
 

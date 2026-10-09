@@ -214,11 +214,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         /*
-            GetHistory hands back one consistent snapshot of its call, not a
-            live view of the ring. A Push during the caller's iteration shows
-            up in the next history read, never in the running one - the live
-            enumerator would carry the mid-iteration push into the same
-            pass, because its MoveNext re-reads the ring's count per step.
+            GetHistory hands back one consistent snapshot taken at the call,
+            not a live view of the ring. A Push after the call - before the
+            first entry is read, or during the iteration - shows up in the
+            next history read, never in the running one. The live enumerator
+            carried both into the same pass, because its MoveNext re-read
+            the ring's count per step.
          */
         [Test]
         public void GetHistoryIsASnapshotOfItsCall()
@@ -228,16 +229,16 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             history.Push("beta", true, true);
 
             using IEnumerator<string> snapshot = history.GetHistory(false, false).GetEnumerator();
-            Assert.IsTrue(snapshot.MoveNext(), "Sanity: the first entry must be there");
-            Assert.AreEqual("alpha", snapshot.Current);
 
             history.Push("gamma", true, true);
 
+            Assert.IsTrue(snapshot.MoveNext(), "Sanity: the first entry must be there");
+            Assert.AreEqual("alpha", snapshot.Current);
             Assert.IsTrue(snapshot.MoveNext());
             Assert.AreEqual(
                 "beta",
                 snapshot.Current,
-                "A push during iteration must not enter the running snapshot"
+                "A push after the call must not enter the snapshot, even before enumeration starts"
             );
             Assert.IsFalse(snapshot.MoveNext(), "The snapshot holds exactly what its call copied");
 

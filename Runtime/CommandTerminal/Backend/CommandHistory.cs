@@ -36,20 +36,14 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             _history = new CyclicBuffer<(string text, bool? success, bool? errorFree)>(capacity);
         }
 
-        /*
-            One consistent snapshot of the visible window, filtered. The
-            window is copied under one lock, so an Add, a Clear, or a Resize
-            during the caller's iteration cannot repeat or skip entries the
-            way a live enumeration can; the cost is one array per call,
-            which a diagnostics surface pays gladly. The copy is sized from
-            a Count read: history writes and resizes are main-thread only,
-            so the count cannot move between the read and the copy.
-         */
-        public IEnumerable<string> GetHistory(bool onlySuccess, bool onlyErrorFree)
+        private static IEnumerable<string> HistoryWindow(
+            (string text, bool? success, bool? errorFree)[] window,
+            int count,
+            bool onlySuccess,
+            bool onlyErrorFree
+        )
         {
-            var window = new (string text, bool? success, bool? errorFree)[_history.Count];
-            _history.CopyTo(window);
-            for (int i = 0; i < window.Length; ++i)
+            for (int i = 0; i < count; ++i)
             {
                 if (onlySuccess && window[i].success != true)
                 {
@@ -63,6 +57,28 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
                 yield return window[i].text;
             }
+        }
+
+        /*
+            One consistent snapshot of the visible window, filtered, copied
+            at the moment of the call. A Push, a Clear, or a Resize later in
+            the caller's iteration - or between the call and the first entry
+            it reads - lands in the next history read instead of repeating or
+            skipping entries the way a live enumeration can; the cost is one
+            array per call, which a diagnostics surface pays gladly. The
+            copy is bounded by the count CopyTo reports, so a window that
+            shrank between the sizing read and the copy yields exactly what
+            the ring holds, never a default entry.
+         */
+        public IEnumerable<string> GetHistory(bool onlySuccess, bool onlyErrorFree)
+        {
+            (string text, bool? success, bool? errorFree)[] window = new (
+                string text,
+                bool? success,
+                bool? errorFree
+            )[_history.Count];
+            int copied = _history.CopyTo(window);
+            return HistoryWindow(window, copied, onlySuccess, onlyErrorFree);
         }
 
         public void Resize(int newCapacity)
@@ -162,10 +178,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             Fills a caller-owned buffer without allocating: the completion
             hot path walks the history on every keystroke-driven query, so it
             must not pay for enumerators or iterator state machines. The
-            window is copied under one lock into a member array that only
-            grows when the history does, so a steady-state sweep is one lock
-            acquisition and zero allocation, and a Push mid-sweep cannot
-            repeat or skip entries.
+            window is copied under the ring's lock into a member array that
+            only grows when the history does, so a steady-state sweep adds
+            no allocation and two locked reads where the enumerator took
+            one per entry, and a Push mid-sweep cannot repeat or skip
+            entries.
          */
         internal void CopyHistory(bool onlySuccess, bool onlyErrorFree, List<string> results)
         {

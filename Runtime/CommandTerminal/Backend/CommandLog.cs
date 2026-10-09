@@ -161,7 +161,14 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                     The filter is re-checked in the critical section that
                     owns the write, so the final decision is atomic with the
                     version bump and the ring write: an entry the filter
-                    drops can no more land than it can half-land.
+                    drops can no more land than it can half-land. The window
+                    this closes - a filter change landing between the cheap
+                    check above and this lock - is a few instructions of
+                    pure string work with no reachable hook, so no test can
+                    interpose there; the concurrent-filter storm in
+                    CommandLogConcurrencyTests pins the observable contract
+                    (an applied filter empties the flood) and the rest is
+                    this paragraph.
                  */
                 if (_ignoredLogTypes.Contains(type))
                 {

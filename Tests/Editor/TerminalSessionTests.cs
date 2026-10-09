@@ -216,7 +216,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         [Test]
-        public void ApplyLandsModeAndFilterInOneStep()
+        public void ApplyLandsModeAndFilterChangesTogether()
         {
             TerminalSession session = new();
             session.Apply(Config(stackTraceMode: TerminalStackTraceMode.All), force: true);
