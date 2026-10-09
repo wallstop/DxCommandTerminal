@@ -101,7 +101,15 @@ function isForeignAbsolute(slashed) {
   return /^[a-zA-Z]:\//.test(slashed) || slashed.startsWith("//");
 }
 function collapseSegments(slashed) {
-  const absolute = slashed.startsWith("/");
+  /*
+      A UNC path keeps its double slash: "//server/share" names a share, and
+      collapsing the empty segments to one "/" would read it back as a
+      drive-rooted path on Windows and as a nonexistent local directory in the
+      container - existsSync, cwd, and --project-path would all miss. More than
+      two leading slashes collapse into the two-slash prefix, which is the one
+      spelling every consumer agrees on.
+   */
+  const prefix = slashed.startsWith("//") ? "//" : slashed.startsWith("/") ? "/" : "";
   const segments = [];
   for (const segment of slashed.split("/")) {
     if (!segment || segment === ".") continue;
@@ -111,7 +119,7 @@ function collapseSegments(slashed) {
     }
     segments.push(segment);
   }
-  return `${absolute ? "/" : ""}${segments.join("/")}`;
+  return `${prefix}${segments.join("/")}`;
 }
 // Resolve a project path into a canonical, platform-independent spelling: Windows
 // paths keep their drive root as "C:/..." everywhere, POSIX paths keep resolve()

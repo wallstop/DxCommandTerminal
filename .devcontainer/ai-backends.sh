@@ -102,6 +102,40 @@ find_credential() {
     return 1
 }
 
+# Resolves the first non-empty value for the given keys, exactly as
+# find_credential does, and additionally names the key that supplied it in the
+# variable named by the second argument. Consumers that must export the value
+# under the name it was found under (OpenCode resolves {env:NAME} against the
+# exact key, so an alias-supplied credential has to travel under its own name)
+# use this; value-only readers keep find_credential. The two output arguments
+# are namerefs: an assignment through one writes the caller's variable, local
+# or not, which a printf -v on the bare name would not.
+resolve_credential_source() {
+    # The nameref targets must not collide with this function's own locals: a
+    # ref named like a local here resolves to that local, and the caller's
+    # variable never sees the value.
+    local -n __resolved_value="$1"
+    local -n __resolved_source="$2"
+    shift 2
+    local candidate_key candidate_value
+    for candidate_key in "$@"; do
+        candidate_value="$(printenv "${candidate_key}" || true)"
+        if [ -n "${candidate_value}" ]; then
+            __resolved_value="${candidate_value}"
+            __resolved_source="${candidate_key}"
+            return 0
+        fi
+    done
+    for candidate_key in "$@"; do
+        if candidate_value="$(env_local_value "${candidate_key}")"; then
+            __resolved_value="${candidate_value}"
+            __resolved_source="${candidate_key}"
+            return 0
+        fi
+    done
+    return 1
+}
+
 resolve_zai_key() {
     local zai_key
     if zai_key="$(find_credential ZAI_API_KEY Z_AI_API_KEY)"; then
@@ -513,13 +547,21 @@ launch_claude_openrouter() {
 # output is safe to eval: values are single-quoted with embedded quotes escaped.
 print_env_exports() {
     emit_export() {
-        local canonical="$1" value escaped
+        local canonical="$1" value="" supplier="" escaped
         shift
-        if ! value="$(find_credential "$@")"; then
+        if ! resolve_credential_source value supplier "$@"; then
             return 0
         fi
         escaped="$(printf '%s' "${value}" | sed "s/'/'\\\\''/g")"
         printf "export %s='%s'\n" "${canonical}" "${escaped}"
+        if [ -n "${supplier}" ] && [ "${supplier}" != "${canonical}" ]; then
+            # OpenCode configs reference the key that supplied the value
+            # ({env:GITHUB_MCP_PAT}, {env:Z_AI_API_KEY}), and a {env:NAME}
+            # lookup resolves only when that exact name is exported - so an
+            # alias-supplied credential travels under its own name too, not
+            # just under the canonical one.
+            printf "export %s='%s'\n" "${supplier}" "${escaped}"
+        fi
     }
     emit_export ZAI_API_KEY ZAI_API_KEY Z_AI_API_KEY
     # Native opencode's built-in "Z.AI Coding Plan" provider reads ZHIPU_API_KEY.
@@ -546,7 +588,10 @@ The ordinary `codex` and `claude` commands retain their native backends.
 the environment or the checkout's .env.local (never sourced, parsed as data):
 ZAI_API_KEY, ZHIPU_API_KEY (for native opencode's Z.AI Coding Plan provider),
 OPENROUTER_API_KEY, GITHUB_TOKEN (from any GitHub alias), UNITY_MCP_BEARER_TOKEN,
-and UNITY_PROJECT_PATH. Native tools can pick the credentials up with:
+and UNITY_PROJECT_PATH. A credential an alias supplied is exported under the
+alias's own name as well, because generated OpenCode configs reference that
+name ({env:GITHUB_MCP_PAT}, {env:Z_AI_API_KEY}) and the lookup resolves only
+against the exact exported key. Native tools can pick the credentials up with:
 eval "$(bash .devcontainer/ai-backends.sh env)".
 
 Z.ai backends: set ZAI_API_KEY (or Z_AI_API_KEY) in the environment or the

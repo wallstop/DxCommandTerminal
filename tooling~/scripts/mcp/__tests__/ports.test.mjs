@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { projectPort, resolveProjectPorts, resolveOptions, parseArgs } from "../unity-mcp.mjs";
+import { projectPort, resolveProjectPorts, resolveProjectPath, resolveOptions, parseArgs } from "../unity-mcp.mjs";
 
 test("projectPort is deterministic across calls and path spellings", () => {
   const direct = projectPort("/Users/dev/Code/Proj");
@@ -69,6 +69,24 @@ test("projectPort treats UNC spellings as one project", () => {
   const direct = projectPort("//server/share/Proj");
   assert.equal(projectPort("\\\\server\\share\\Proj"), direct);
   assert.equal(projectPort("//server/share/Proj/"), direct);
+});
+
+test("resolveProjectPath keeps the UNC prefix a share", () => {
+  // Collapsing the empty segments once turned "//server/share/Proj" into
+  // "/server/share/Proj": a drive-rooted spelling on Windows and a nonexistent
+  // local directory in the container, so existsSync, cwd, and --project-path
+  // all missed. The double slash is what names the share.
+  assert.equal(resolveProjectPath("//server/share/Proj"), "//server/share/Proj");
+  assert.equal(resolveProjectPath("\\\\server\\share\\Proj"), "//server/share/Proj");
+  assert.equal(resolveProjectPath("//server/share/Proj/"), "//server/share/Proj");
+  assert.equal(resolveProjectPath("///server/share"), "//server/share");
+  assert.equal(
+    resolveProjectPath("//server/share/./Proj/../Nested"),
+    "//server/share/Nested",
+    "segment collapse still applies inside the share"
+  );
+  // POSIX absolute paths keep their single slash and resolve() semantics.
+  assert.equal(resolveProjectPath("/home/dev/Proj"), path.resolve("/home/dev/Proj"));
 });
 
 test("projectPort keeps the live host bridge port for the checked-out project", () => {

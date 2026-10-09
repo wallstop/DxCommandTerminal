@@ -218,6 +218,28 @@ printf '%s\n' 'GITHUB_MCP_PAT=github-mcp-key' > "${LIFECYCLE_ROOT}/.env.local"
 run_lifecycle --attach
 assert_contains "${LIFECYCLE_ROOT}/service-token.txt" 'GITHUB=github-mcp-key' \
     "post-start normalizes the GITHUB_MCP_PAT alias"
+
+# `env` must export a credential under the alias that supplied it as well as
+# the canonical name: generated OpenCode configs reference the alias
+# ({env:GITHUB_MCP_PAT}, {env:Z_AI_API_KEY}), and a {env:NAME} lookup resolves
+# only when that exact name is exported. Exporting the canonical name alone
+# left every alias-referencing server authenticating with an empty header.
+printf '%s\n' 'GITHUB_MCP_PAT=github-mcp-key' 'Z_AI_API_KEY=zai-underscore-key' \
+    > "${LIFECYCLE_ROOT}/.env.local"
+env -u GITHUB_TOKEN -u GH_TOKEN -u GITHUB_PERSONAL_ACCESS_TOKEN -u GITHUB_PAT \
+    -u GITHUB_MCP_PAT -u ZAI_API_KEY -u Z_AI_API_KEY -u ZHIPU_API_KEY \
+    -u OPENROUTER_API_KEY AI_BACKENDS_REPO_ROOT="${LIFECYCLE_ROOT}" \
+    bash "${LIFECYCLE_ROOT}/.devcontainer/ai-backends.sh" env \
+    > "${LIFECYCLE_ROOT}/env-exports.txt"
+assert_contains "${LIFECYCLE_ROOT}/env-exports.txt" "export GITHUB_TOKEN='github-mcp-key'" \
+    "env exports the canonical GitHub name"
+assert_contains "${LIFECYCLE_ROOT}/env-exports.txt" "export GITHUB_MCP_PAT='github-mcp-key'" \
+    "env exports the supplying GitHub alias itself"
+assert_contains "${LIFECYCLE_ROOT}/env-exports.txt" "export ZAI_API_KEY='zai-underscore-key'" \
+    "env exports the canonical Z.AI name"
+assert_contains "${LIFECYCLE_ROOT}/env-exports.txt" "export Z_AI_API_KEY='zai-underscore-key'" \
+    "env exports the supplying Z.AI alias itself"
+
 printf '%s\n' 'UNITY_MCP_BEARER_TOKEN=rotated-token' 'Z_AI_API_KEY=zai-file-key' \
     'GITHUB_PERSONAL_ACCESS_TOKEN=github-file-key' > "${LIFECYCLE_ROOT}/.env.local"
 run_lifecycle --attach

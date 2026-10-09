@@ -139,8 +139,8 @@ converts existing v1 MCP and skill fields without replacing explicit values.
 Session `share` stays `disabled` so transcripts never sync to a public URL.
 OpenCode references the variable that supplied each credential: the accepted
 alias itself when it supplied the value, else the canonical `GITHUB_TOKEN` /
-`ZAI_API_KEY` names. Evaluate `ai-backends.sh env` before starting OpenCode
-outside the devcontainer.
+`ZAI_API_KEY` names. `ai-backends.sh env` exports that supplying name as well
+as the canonical one, so `{env:NAME}` resolves outside the devcontainer too.
 After editing `.env.local`, run
 `npm run unity:mcp:configure -- --offline` and restart the agents' MCP
 connections.

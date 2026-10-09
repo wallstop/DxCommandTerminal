@@ -58,7 +58,9 @@ One transaction writes seven configs with rollback and mode 0600: `.mcp.json`
 `.vscode/mcp.json`, `.cursor/mcp.json`, `.copilot/mcp-config.json`. All are
 gitignored. Servers: `unity-mcp`, `github` (remote, PAT from
 `GITHUB_TOKEN`/`GH_TOKEN`/`GITHUB_PERSONAL_ACCESS_TOKEN`/`GITHUB_PAT`/
-`GITHUB_MCP_PAT`; OpenCode references the alias that supplied the value), `git`,
+`GITHUB_MCP_PAT`; OpenCode references the alias that supplied the value, and
+`ai-backends.sh env` exports that alias so the `{env:NAME}` lookup resolves
+outside the devcontainer too), `git`,
 `fetch`, `context7` (library docs), and when a Z.AI key exists (`Z_AI_API_KEY` or `ZAI_API_KEY`):
 `web-search-prime`, `web-reader`, `zread`, `zai-mcp-server` (vision). No key -> the
 four Z.AI entries are removed. A running bridge that rejected the token aborts
