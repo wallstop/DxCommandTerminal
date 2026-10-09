@@ -3322,14 +3322,27 @@ async function noTestsMatchedSummary(client, signal, initial) {
  * no reporter, no local project, an unwritable directory) means the fallback,
  * never a failed command.
  */
-async function openRunReporter(options, evalCall) {
+export async function openRunReporter(options, evalCall) {
   const localProjectPath = options.projectContainerPath ?? options.projectPath;
   if (localProjectPath === undefined || !fs.existsSync(localProjectPath)) return null;
   let installed = false;
   try {
     const { call } = await evalCall(RUN_REPORTER_PROBE);
     installed = evalAnswerIsTrue(extractText(call));
-  } catch {}
+  } catch {
+    /*
+        A probe that lands while the editor reloads (a compile the previous leg
+        triggered) times out and reads as "no reporter", and the run then falls
+        back to the nameless bridge path with the claim machinery sitting right
+        there. One retry after a short wait covers the reload window; a probe
+        the editor answered with false is a real absence and is not retried.
+     */
+    await new Promise((resolve) => setTimeout(resolve, 5_000));
+    try {
+      const { call } = await evalCall(RUN_REPORTER_PROBE);
+      installed = evalAnswerIsTrue(extractText(call));
+    } catch {}
+  }
   const root = captureArtifactRoot(localProjectPath, localProjectPath);
   // The request has to be written before every run, so the directory is created
   // if this project never captured, and a read-only one is a fallback rather

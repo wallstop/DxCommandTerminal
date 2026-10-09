@@ -10,6 +10,7 @@ import {
   awaitRunResult,
   isSessionCapError,
   newRunToken,
+  openRunReporter,
   parseRunClaim,
   parseTestStatus,
   readSummaryKey,
@@ -23,6 +24,8 @@ import {
   waitForTestIdle
 } from "../unity-mcp.mjs";
 import path from "node:path";
+import fs from "node:fs";
+import os from "node:os";
 
 test("test run options default to the full suite with the standard deadline", () => {
   assert.deepEqual(resolveTestRunOptions({}), {
@@ -1156,4 +1159,59 @@ test("a compile probe that does not answer is not treated as a failure", async (
     "editmode",
     Date.now() + 60_000
   );
+});
+
+function reporterProbeAnswer(inside) {
+  return { call: { content: [{ text: JSON.stringify({ success: true, result: inside }) }] } };
+}
+
+test("the run reporter survives a probe that races an editor reload", async () => {
+  // The probe is one eval, and an eval that lands while the editor reloads a
+  // domain times out. Falling back on that read the last red run without its
+  // names while the claim carried them, so the probe is retried once before
+  // the fallback is taken. A probe the editor answered false is a real
+  // absence: no retry, straight to the fallback.
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), "dxt-reporter-probe-"));
+  // The claim root lives under the package when the project carries it, which
+  // is the layout every real run here uses; create it so the paths under test
+  // are the ones production resolves.
+  const packageRoot = path.join(
+    project,
+    "Packages",
+    "com.wallstop-studios.dxcommandterminal"
+  );
+  fs.mkdirSync(packageRoot, { recursive: true });
+  try {
+    let probes = 0;
+    const paths = await openRunReporter(
+      { projectContainerPath: project },
+      () => {
+        probes += 1;
+        if (probes === 1) throw new Error("Main thread operation timed out after 5000ms");
+        return reporterProbeAnswer(true);
+      }
+    );
+    assert.equal(probes, 2, "a failed probe is retried once");
+    assert.equal(
+      paths.request,
+      path.join(packageRoot, ".artifacts", "unity-state", RUN_REQUEST_FILE)
+    );
+    assert.equal(
+      paths.claim,
+      path.join(packageRoot, ".artifacts", "unity-state", RUN_CLAIM_FILE)
+    );
+
+    let falseProbes = 0;
+    const absent = await openRunReporter(
+      { projectContainerPath: project },
+      () => {
+        falseProbes += 1;
+        return reporterProbeAnswer(false);
+      }
+    );
+    assert.equal(falseProbes, 1, "an editor-answered false is the whole answer, so it is asked once");
+    assert.equal(absent, null, "no reporter in the editor means no claim path");
+  } finally {
+    fs.rmSync(project, { recursive: true, force: true });
+  }
 });
