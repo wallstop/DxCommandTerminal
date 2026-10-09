@@ -88,7 +88,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 copied.Length,
                 Is.EqualTo(expected.Length),
                 $"{because} (line count: {copied.Length}; clipboard: "
-                    + $"{DescribeClipboard(string.Join("\n", copied))})"
+                    + $"{DescribeClipboard(string.Join(LogCopySeparator, copied))})"
             );
             for (int i = 0; i < expected.Length && i < copied.Length; ++i)
             {
