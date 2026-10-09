@@ -10,13 +10,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
-- Deprecate `CommandLog.Logs`: read the log with `CommandLog.CopyTo`, `Count`, or `TryGetLast`, which cannot throw when the log changes mid-read.
-- Make `CommandHistory.GetHistory` allocation-free: it returns a live, filtered `CommandHistory.HistoryView` instead of a copied snapshot, and `CopyHistory` copies the window when a caller needs it frozen.
+- Deprecate `CommandLog.Logs` in favor of the safe `CopyTo`, `Count`, and `TryGetLast` reads.
+- Make `CommandHistory.GetHistory` return an allocation-free live view of the history.
 
 ### Fixed
 
-- Fix a race that let one ignored log entry land when the ignore filter changed mid-write.
-- Make `CommandLog` own its ignore filter and stack-trace mode; configure the session through `TerminalUI` or `TerminalSettings` instead of `Terminal.Buffer`, so logging threads never see a half-applied configuration.
+- Fix ignored log entries landing when the ignore filter changed mid-write.
+- Make `CommandLog` own the ignore filter and stack-trace mode, configured through `TerminalUI` or `TerminalSettings`.
 
 ## [1.0.1] - 2026-10-02
 

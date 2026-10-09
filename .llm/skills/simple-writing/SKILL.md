@@ -31,8 +31,8 @@ before adding. A reader should get the point in seconds.
 | Artifact | Structure | Budget |
 | --- | --- | --- |
 | PR title | Imperative, <= 72 chars. "Add X", "Fix Y". | 1 line |
-| PR description | `**Why:**` 1-2 sentences. `**What:**` one-line bullets (3-6). Optional `**How we know:**` 1-3 plain evidence lines. Omit a section that adds nothing. | <= ~12 lines |
-| CHANGELOG entry | One sentence, imperative verb, user-visible effect first. No mechanism, no root cause, no measurements; the commit body carries those. | 1 sentence |
+| PR description | `**Why:**` the problem, one sentence, plus the `Closes #N` line. `**What:**` one-line bullets (3-6, <= 12 words each) - the how. Nothing else: test lists, CI results, measurements, and review narration go in the commit body or the linked issue. | <= ~10 lines |
+| CHANGELOG entry | One sentence, <= 300 chars. Start with the section's verb (`Add`, `Fix`); lead with the user-visible effect, not the mechanism. No root cause, no process detail. | 1 sentence |
 | Commit subject | Imperative, <= 72 chars, no trailing period. | 1 line |
 | Commit body | `Why` 1-2 sentences, then `What changed` one-line bullets (2-5). Optional one-line `How we know`. Wrap at ~72 chars. | <= ~8 lines |
 | Review comments | 1-3 sentences. Say what to change and why. | 3 lines |
@@ -46,8 +46,24 @@ restated context already in linked issues or PLAN. Numbers only as evidence
 lines. LLM-posted GitHub text keeps the `DISCLOSURE: LLM-GENERATED TEXT` first
 line (see llm-attribution); it does not count against the budget.
 
-Reference for these shapes: unity-helpers' `ship-changes` skill (MIT) - pull
-request title and body template, and the one-sentence CHANGELOG rule.
+The whole PR body, per the enforced lint - this shape, nothing added:
+
+```
+DISCLOSURE: LLM-GENERATED TEXT
+
+**Why:**
+<the problem, one sentence>
+Closes #N
+
+**What:**
+
+- <one change, one line, <= 12 words>
+- <three to six bullets>
+```
+
+Reference for these shapes: unity-helpers' `ship-changes` and
+`update-documentation` skills (MIT) - the pull request template and the
+one-sentence CHANGELOG rule.
 
 ## Enforcement (PRs)
 
