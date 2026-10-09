@@ -29,9 +29,21 @@
 
         private static readonly string[] InventoryItems = { "pickaxe", "torch", "torch pick" };
 
+        private static readonly TerminalLogType[] AllLogTypes =
+        {
+            TerminalLogType.Error,
+            TerminalLogType.Assert,
+            TerminalLogType.Warning,
+            TerminalLogType.Exception,
+            TerminalLogType.Message,
+            TerminalLogType.Input,
+            TerminalLogType.ShellMessage,
+        };
+
         private CommandPaletteUI _palette;
         private GameObject _paletteObject;
         private GameObject _terminalObject;
+
         private PanelSettings _panelSettings;
         private TerminalUI _sharedTerminal;
         private GameObject _extraPaletteObject;
@@ -1990,8 +2002,14 @@
                 Terminal.Buffer.Capacity,
                 "The first enabled palette owns the bootstrap configuration"
             );
-            Assert.IsTrue(
-                Terminal.Buffer.GetIgnoredLogTypes().Length == 0,
+            bool anyIgnored = false;
+            foreach (TerminalLogType type in AllLogTypes)
+            {
+                anyIgnored |= Terminal.Buffer.IsIgnored(type);
+            }
+
+            Assert.IsFalse(
+                anyIgnored,
                 "The second palette's settings must not leak into the session"
             );
         }

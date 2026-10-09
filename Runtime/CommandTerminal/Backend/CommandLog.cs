@@ -263,21 +263,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         }
 
         /*
-            A snapshot of the ignore filter, copied under the ring's lock, so
-            a diagnostic reader sees one applied state instead of a set a
-            concurrent apply is mid-way through replacing.
-         */
-        internal TerminalLogType[] GetIgnoredLogTypes()
-        {
-            lock (_logs.SyncRoot)
-            {
-                TerminalLogType[] snapshot = new TerminalLogType[_ignoredLogTypes.Count];
-                _ignoredLogTypes.CopyTo(snapshot);
-                return snapshot;
-            }
-        }
-
-        /*
             Replaces the stack-trace mode and the ignore filter as one step
             under the ring's lock. Clear followed by UnionWith is two states,
             and a logging thread reading the set between them sees a filter

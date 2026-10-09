@@ -1,6 +1,7 @@
 namespace WallstopStudios.DxCommandTerminal.Backend
 {
     using System;
+    using System.Collections;
     using System.Collections.Generic;
     using DataStructures;
 
@@ -17,6 +18,13 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             when the history grows. Main-thread only, like the history.
          */
         private (string text, bool? success, bool? errorFree)[] _window;
+
+        /*
+            One cached view per filter combination, indexed by the two
+            filter bits. Created on first use, so steady-state GetHistory
+            calls allocate nothing.
+         */
+        private readonly HistoryView[] _views = new HistoryView[4];
 
         /*
             Commands already shown during the current traversal direction. Next
@@ -36,49 +44,23 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             _history = new CyclicBuffer<(string text, bool? success, bool? errorFree)>(capacity);
         }
 
-        private static IEnumerable<string> HistoryWindow(
-            (string text, bool? success, bool? errorFree)[] window,
-            int count,
-            bool onlySuccess,
-            bool onlyErrorFree
-        )
-        {
-            for (int i = 0; i < count; ++i)
-            {
-                if (onlySuccess && window[i].success != true)
-                {
-                    continue;
-                }
-
-                if (onlyErrorFree && window[i].errorFree != true)
-                {
-                    continue;
-                }
-
-                yield return window[i].text;
-            }
-        }
-
         /*
-            One consistent snapshot of the visible window, filtered, copied
-            at the moment of the call. A Push, a Clear, or a Resize later in
-            the caller's iteration - or between the call and the first entry
-            it reads - lands in the next history read instead of repeating or
-            skipping entries the way a live enumeration can; the cost is one
-            array per call, which a diagnostics surface pays gladly. The
-            copy is bounded by the count CopyTo reports, so a window that
-            shrank between the sizing read and the copy yields exactly what
-            the ring holds, never a default entry.
+            A live, filtered view of the history: MoveNext reads one entry
+            per step under the ring's lock, so a Push, a Clear, or a Resize
+            during the caller's iteration is visible from that step on, and
+            no step can tear an entry or throw. One view per filter
+            combination is cached on the owner and the enumerator is a
+            struct, so a steady-state foreach allocates nothing (the
+            completion query walks this on every keystroke); a caller that
+            needs the window frozen at one instant copies it instead -
+            CopyHistory is that read. The concrete return is what keeps the
+            foreach allocation-free: declared as IEnumerable<string>, the
+            struct enumerator would box on every GetEnumerator.
          */
-        public IEnumerable<string> GetHistory(bool onlySuccess, bool onlyErrorFree)
+        public HistoryView GetHistory(bool onlySuccess, bool onlyErrorFree)
         {
-            (string text, bool? success, bool? errorFree)[] window = new (
-                string text,
-                bool? success,
-                bool? errorFree
-            )[_history.Count];
-            int copied = _history.CopyTo(window);
-            return HistoryWindow(window, copied, onlySuccess, onlyErrorFree);
+            int index = (onlySuccess ? 1 : 0) | (onlyErrorFree ? 2 : 0);
+            return _views[index] ??= new HistoryView(this, onlySuccess, onlyErrorFree);
         }
 
         public void Resize(int newCapacity)
@@ -208,6 +190,102 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
                 results.Add(_window[i].text);
             }
+        }
+
+        /*
+            The cached enumerable behind GetHistory. Stateless beyond its
+            filters: every GetEnumerator hands back a fresh struct
+            enumerator, so concurrent or nested enumerations of one view
+            never share a position.
+         */
+        public sealed class HistoryView : IEnumerable<string>
+        {
+            private readonly CommandHistory _history;
+            private readonly bool _onlySuccess;
+            private readonly bool _onlyErrorFree;
+
+            public HistoryView(CommandHistory history, bool onlySuccess, bool onlyErrorFree)
+            {
+                _history = history;
+                _onlySuccess = onlySuccess;
+                _onlyErrorFree = onlyErrorFree;
+            }
+
+            public HistoryEnumerator GetEnumerator()
+            {
+                return new HistoryEnumerator(_history._history, _onlySuccess, _onlyErrorFree);
+            }
+
+            IEnumerator<string> IEnumerable<string>.GetEnumerator()
+            {
+                return GetEnumerator();
+            }
+
+            IEnumerator IEnumerable.GetEnumerator()
+            {
+                return GetEnumerator();
+            }
+        }
+
+        public struct HistoryEnumerator : IEnumerator<string>
+        {
+            public string Current => _current;
+
+            object IEnumerator.Current => _current;
+
+            private readonly CyclicBuffer<(string text, bool? success, bool? errorFree)> _history;
+            private readonly bool _onlySuccess;
+            private readonly bool _onlyErrorFree;
+
+            private int _index;
+            private string _current;
+
+            internal HistoryEnumerator(
+                CyclicBuffer<(string text, bool? success, bool? errorFree)> history,
+                bool onlySuccess,
+                bool onlyErrorFree
+            )
+            {
+                _history = history;
+                _onlySuccess = onlySuccess;
+                _onlyErrorFree = onlyErrorFree;
+                _index = -1;
+                _current = null;
+            }
+
+            public bool MoveNext()
+            {
+                lock (_history.SyncRoot)
+                {
+                    while (++_index < _history.Count)
+                    {
+                        (string text, bool? success, bool? errorFree) entry = _history[_index];
+                        if (_onlySuccess && entry.success != true)
+                        {
+                            continue;
+                        }
+
+                        if (_onlyErrorFree && entry.errorFree != true)
+                        {
+                            continue;
+                        }
+
+                        _current = entry.text;
+                        return true;
+                    }
+
+                    _current = null;
+                    return false;
+                }
+            }
+
+            public void Reset()
+            {
+                _index = -1;
+                _current = null;
+            }
+
+            public void Dispose() { }
         }
     }
 }

@@ -18,6 +18,17 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         private static readonly string[] NewlineSeparators = { "\r\n", "\n", "\r" };
 
+        private static readonly TerminalLogType[] AllLogTypes =
+        {
+            TerminalLogType.Error,
+            TerminalLogType.Assert,
+            TerminalLogType.Warning,
+            TerminalLogType.Exception,
+            TerminalLogType.Message,
+            TerminalLogType.Input,
+            TerminalLogType.ShellMessage,
+        };
+
         private static readonly string JoinSeparator = Environment.NewLine;
 
         private CommandLog _log;
@@ -296,11 +307,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 log.StackTraceMode,
                 "ApplyFilter replaces the stack-trace mode"
             );
-            CollectionAssert.AreEquivalent(
-                new[] { TerminalLogType.Error, TerminalLogType.Warning },
-                log.GetIgnoredLogTypes(),
-                "The snapshot must name exactly the ignored types"
-            );
+            foreach (TerminalLogType type in AllLogTypes)
+            {
+                Assert.AreEqual(
+                    type is TerminalLogType.Error or TerminalLogType.Warning,
+                    log.IsIgnored(type),
+                    $"IsIgnored({type}) must match the applied filter"
+                );
+            }
             Assert.IsTrue(
                 log.IsIgnored(TerminalLogType.Error),
                 "ApplyFilter's filter must be visible to the read path"

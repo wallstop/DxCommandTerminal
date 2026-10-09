@@ -214,39 +214,38 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         /*
-            GetHistory hands back one consistent snapshot taken at the call,
-            not a live view of the ring. A Push after the call - before the
-            first entry is read, or during the iteration - shows up in the
-            next history read, never in the running one. The live enumerator
-            carried both into the same pass, because its MoveNext re-read
-            the ring's count per step.
+            GetHistory hands back a live, filtered view of the history: a
+            Push that lands during the caller's iteration is visible from
+            that step on. The view is cached per filter combination, so
+            steady-state enumeration allocates nothing (pinned by the
+            allocation tripwire in StandardOperationsAllocationTests); a
+            caller that needs the window frozen at one instant copies it
+            instead - CopyHistory is that read.
          */
         [Test]
-        public void GetHistoryIsASnapshotOfItsCall()
+        public void GetHistoryIsALiveFilteredView()
         {
             CommandHistory history = new(8);
             history.Push("alpha", true, true);
             history.Push("beta", true, true);
 
-            using IEnumerator<string> snapshot = history.GetHistory(false, false).GetEnumerator();
+            using IEnumerator<string> view = history.GetHistory(false, false).GetEnumerator();
+
+            Assert.IsTrue(view.MoveNext(), "Sanity: the first entry must be there");
+            Assert.AreEqual("alpha", view.Current);
 
             history.Push("gamma", true, true);
 
-            Assert.IsTrue(snapshot.MoveNext(), "Sanity: the first entry must be there");
-            Assert.AreEqual("alpha", snapshot.Current);
-            Assert.IsTrue(snapshot.MoveNext());
-            Assert.AreEqual(
-                "beta",
-                snapshot.Current,
-                "A push after the call must not enter the snapshot, even before enumeration starts"
-            );
-            Assert.IsFalse(snapshot.MoveNext(), "The snapshot holds exactly what its call copied");
+            Assert.IsTrue(view.MoveNext());
+            Assert.AreEqual("beta", view.Current, "Order stays oldest first");
+            Assert.IsTrue(view.MoveNext(), "A live view carries a push that lands mid-iteration");
+            Assert.AreEqual("gamma", view.Current);
+            Assert.IsFalse(view.MoveNext(), "The view ends when the history ends");
 
-            string[] next = history.GetHistory(false, false).ToArray();
-            Assert.AreEqual(
-                new[] { "alpha", "beta", "gamma" },
-                next,
-                "The next read sees the push"
+            history.Clear();
+            Assert.IsFalse(
+                history.GetHistory(false, false).GetEnumerator().MoveNext(),
+                "A cleared history enumerates nothing"
             );
         }
 

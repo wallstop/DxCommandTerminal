@@ -16,6 +16,17 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             .Select(tuple => tuple.attribute.Name)
             .ToArray();
 
+        private static readonly TerminalLogType[] AllLogTypes =
+        {
+            TerminalLogType.Error,
+            TerminalLogType.Assert,
+            TerminalLogType.Warning,
+            TerminalLogType.Exception,
+            TerminalLogType.Message,
+            TerminalLogType.Input,
+            TerminalLogType.ShellMessage,
+        };
+
         private CommandLog _originalBuffer;
         private CommandShell _originalShell;
         private CommandHistory _originalHistory;
@@ -238,11 +249,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Assert.AreSame(buffer, session.Buffer, "Buffer should be reused when syncing config");
             Assert.AreEqual(TerminalStackTraceMode.Disabled, buffer.StackTraceMode);
-            CollectionAssert.AreEquivalent(
-                new[] { TerminalLogType.Warning },
-                buffer.GetIgnoredLogTypes(),
-                "The applied filter must replace the old one whole"
-            );
+            foreach (TerminalLogType type in AllLogTypes)
+            {
+                Assert.AreEqual(
+                    type == TerminalLogType.Warning,
+                    buffer.IsIgnored(type),
+                    $"The applied filter must replace the old one whole (IsIgnored({type}))"
+                );
+            }
         }
 
         [Test]
