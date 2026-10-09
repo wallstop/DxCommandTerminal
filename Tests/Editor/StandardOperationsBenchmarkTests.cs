@@ -223,7 +223,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Assert.AreEqual(
                 LogCapacity,
-                _log.Logs.Count,
+                _log.Count,
                 "Sanity: every measured write must land in the wrapped buffer"
             );
             LogScale("log-write", "stackTrace=true", withStack);
@@ -466,7 +466,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         private OperationReport MeasureWithMode(TerminalStackTraceMode mode)
         {
-            _log.stackTraceMode = mode;
+            _log.StackTraceMode = mode;
             try
             {
                 FillLogToCapacity();
@@ -477,7 +477,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             }
             finally
             {
-                _log.stackTraceMode = TerminalStackTraceMode.All;
+                _log.StackTraceMode = TerminalStackTraceMode.All;
             }
         }
 

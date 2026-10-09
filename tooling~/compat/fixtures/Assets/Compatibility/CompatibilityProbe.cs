@@ -176,9 +176,11 @@ namespace DxCommandTerminal.T13.Compatibility.Tests
 
         private static bool ContainsLog(CommandLog buffer, string expected)
         {
-            for (int index = 0; index < buffer.Logs.Count; ++index)
+            LogItem[] window = new LogItem[buffer.Capacity];
+            int count = buffer.CopyTo(window);
+            for (int index = 0; index < count; ++index)
             {
-                if (string.Equals(buffer.Logs[index].message, expected, StringComparison.Ordinal))
+                if (string.Equals(window[index].message, expected, StringComparison.Ordinal))
                 {
                     return true;
                 }

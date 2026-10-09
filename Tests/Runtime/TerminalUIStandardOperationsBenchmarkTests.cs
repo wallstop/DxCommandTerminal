@@ -379,10 +379,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 },
                 DefaultSampleCount
             );
-            IReadOnlyList<LogItem> logs = Terminal.Buffer.Logs;
+            LogItem[] logs = new LogItem[Terminal.Buffer.Capacity];
+            int loggedCount = Terminal.Buffer.CopyTo(logs);
             Assert.AreEqual(
                 $"bench live {logSequence - 1}",
-                logs[logs.Count - 1].message,
+                logs[loggedCount - 1].message,
                 "Sanity: every measured write must land in the buffer"
             );
             LogScale("ui-refresh-logsync", "state=open adds=1/pass", logSync);

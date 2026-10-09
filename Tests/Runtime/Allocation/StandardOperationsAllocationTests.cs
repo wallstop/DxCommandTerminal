@@ -88,7 +88,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
             );
             Assert.AreEqual(
                 LogCapacity,
-                _log.Logs.Count,
+                _log.Count,
                 "Sanity: the write must land in the wrapped buffer"
             );
         }
@@ -112,16 +112,17 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
         [Test]
         public void LogWriteInDisabledModeIsAllocationFree()
         {
-            _log.stackTraceMode = TerminalStackTraceMode.Disabled;
+            _log.StackTraceMode = TerminalStackTraceMode.Disabled;
             FillLogToCapacity();
 
             AllocationAssertions.AssertZeroAllocations(
                 "log write (stack-trace mode Disabled)",
                 () => _log.HandleLog("bench message", TerminalLogType.ShellMessage)
             );
+            _log.TryGetLast(out LogItem stored);
             Assert.AreEqual(
                 string.Empty,
-                _log.Logs[_log.Logs.Count - 1].stackTrace,
+                stored.stackTrace,
                 "Sanity: mode Disabled must store no trace"
             );
         }
@@ -129,7 +130,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
         [Test]
         public void RoutineLogWriteInErrorsAndWarningsModeIsAllocationFree()
         {
-            _log.stackTraceMode = TerminalStackTraceMode.ErrorsAndWarnings;
+            _log.StackTraceMode = TerminalStackTraceMode.ErrorsAndWarnings;
             FillLogToCapacity();
 
             AllocationAssertions.AssertZeroAllocations(
@@ -159,6 +160,43 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
                 () => _shell.RunCommand("bench-cmd 5")
             );
             Assert.Less(0, _history.Count, "Sanity: execution must push history");
+        }
+
+        /*
+            The review that reshaped GetHistory: a history read must not
+            pay a per-call window copy. The view is cached per filter
+            combination and enumerates through a struct enumerator, so a
+            steady-state walk - including the GetHistory call itself -
+            allocates nothing.
+         */
+        [Test]
+        public void HistoryEnumerationIsAllocationFree()
+        {
+            for (int i = 0; i < 8; ++i)
+            {
+                _history.Push($"bench history {i}", true, true);
+            }
+
+            AllocationAssertions.AssertZeroAllocations(
+                "history enumeration (GetHistory)",
+                () =>
+                {
+                    foreach (
+                        string text in _history.GetHistory(onlySuccess: true, onlyErrorFree: false)
+                    )
+                    {
+                        if (string.IsNullOrEmpty(text))
+                        {
+                            break;
+                        }
+                    }
+                }
+            );
+            Assert.LessOrEqual(
+                8,
+                _history.Count,
+                "Sanity: the pushed entries must be in the history"
+            );
         }
 
         private void FillLogToCapacity()

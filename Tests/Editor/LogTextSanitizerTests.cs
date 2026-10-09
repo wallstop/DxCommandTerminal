@@ -258,7 +258,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 log.HandleLog("Admin\u202Eexe", string.Empty, TerminalLogType.Message),
                 "Sanity: the write must land"
             );
-            LogItem stored = log.Logs[log.Logs.Count - 1];
+            log.TryGetLast(out LogItem stored);
             Assert.AreEqual(
                 "Admin\\u202Eexe",
                 stored.message,
@@ -269,12 +269,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void TheStackTraceIsNormalizedToo()
         {
-            CommandLog log = new(4) { stackTraceMode = TerminalStackTraceMode.All };
+            CommandLog log = new(4) { StackTraceMode = TerminalStackTraceMode.All };
             Assert.IsTrue(
                 log.HandleLog("boom", "at Frame\u202E()", TerminalLogType.Error),
                 "Sanity: the write must land"
             );
-            LogItem stored = log.Logs[log.Logs.Count - 1];
+            log.TryGetLast(out LogItem stored);
             Assert.AreEqual(
                 "at Frame\\u202E()",
                 stored.stackTrace,

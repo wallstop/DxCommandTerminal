@@ -18,6 +18,17 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         private static readonly string[] NewlineSeparators = { "\r\n", "\n", "\r" };
 
+        private static readonly TerminalLogType[] AllLogTypes =
+        {
+            TerminalLogType.Error,
+            TerminalLogType.Assert,
+            TerminalLogType.Warning,
+            TerminalLogType.Exception,
+            TerminalLogType.Message,
+            TerminalLogType.Input,
+            TerminalLogType.ShellMessage,
+        };
+
         private static readonly string JoinSeparator = Environment.NewLine;
 
         private CommandLog _log;
@@ -202,13 +213,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             bool expectedCapture
         )
         {
-            CommandLog log = new(16) { stackTraceMode = mode };
+            CommandLog log = new(16) { StackTraceMode = mode };
 
             Assert.IsTrue(
                 log.HandleLog("extraction", type),
                 "Sanity: the extraction write must land"
             );
-            LogItem extracted = log.Logs[log.Logs.Count - 1];
+            log.TryGetLast(out LogItem extracted);
             Assert.AreEqual(
                 expectedCapture,
                 !string.IsNullOrEmpty(extracted.stackTrace),
@@ -216,7 +227,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
 
             log.HandleLog("supplied", "frame-at-call-site", type);
-            LogItem supplied = log.Logs[log.Logs.Count - 1];
+            log.TryGetLast(out LogItem supplied);
             Assert.AreEqual(
                 expectedCapture ? "frame-at-call-site" : string.Empty,
                 supplied.stackTrace,
@@ -229,14 +240,84 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             Assert.AreEqual(
                 TerminalStackTraceMode.All,
-                _log.stackTraceMode,
+                _log.StackTraceMode,
                 "Buffers created without an explicit mode must keep the capture-all behavior"
             );
             _log.HandleLog("traced", TerminalLogType.ShellMessage);
+            _log.TryGetLast(out LogItem stored);
             Assert.AreNotEqual(
                 string.Empty,
-                _log.Logs[_log.Logs.Count - 1].stackTrace,
+                stored.stackTrace,
                 "Default buffers must capture traces exactly as before"
+            );
+        }
+
+        [Test]
+        public void TryGetLastAndCountReadOneConsistentState()
+        {
+            CommandLog log = new(4);
+            Assert.AreEqual(0, log.Count, "An empty window shows no entries");
+            Assert.IsFalse(
+                log.TryGetLast(out LogItem empty),
+                "TryGetLast on an empty window reports nothing"
+            );
+            Assert.AreEqual(default, empty.message, "The out entry is default on a miss");
+
+            log.HandleLog("first", string.Empty, TerminalLogType.Message);
+            Assert.IsTrue(log.TryGetLast(out LogItem single), "Sanity: the write must land");
+            Assert.AreEqual("first", single.message, "The newest entry of a one-entry window");
+
+            for (int i = 0; i < 4; ++i)
+            {
+                log.HandleLog($"wrap-{i}", string.Empty, TerminalLogType.Message);
+            }
+
+            Assert.AreEqual(4, log.Count, "A full window holds exactly its capacity");
+            Assert.IsTrue(log.TryGetLast(out LogItem wrapped));
+            Assert.AreEqual("wrap-3", wrapped.message, "The newest entry after a wrap");
+
+            log.Clear();
+            Assert.AreEqual(0, log.Count, "A cleared window shows no entries");
+            Assert.IsFalse(log.TryGetLast(out _), "TryGetLast after a clear reports nothing");
+        }
+
+        [Test]
+        public void FilterReadsReflectTheAppliedFilter()
+        {
+            CommandLog log = new(8, new[] { TerminalLogType.Warning });
+            Assert.IsTrue(
+                log.IsIgnored(TerminalLogType.Warning),
+                "The constructor's filter must be applied"
+            );
+            Assert.IsFalse(log.IsIgnored(TerminalLogType.Error), "Untouched types stay readable");
+
+            Assert.IsFalse(
+                log.HandleLog("dropped", string.Empty, TerminalLogType.Warning),
+                "An ignored type's write is refused"
+            );
+            Assert.AreEqual(0, log.Count, "A refused write lands nothing");
+
+            log.ApplyFilter(
+                TerminalStackTraceMode.Disabled,
+                new[] { TerminalLogType.Error, TerminalLogType.Warning }
+            );
+
+            Assert.AreEqual(
+                TerminalStackTraceMode.Disabled,
+                log.StackTraceMode,
+                "ApplyFilter replaces the stack-trace mode"
+            );
+            foreach (TerminalLogType type in AllLogTypes)
+            {
+                Assert.AreEqual(
+                    type is TerminalLogType.Error or TerminalLogType.Warning,
+                    log.IsIgnored(type),
+                    $"IsIgnored({type}) must match the applied filter"
+                );
+            }
+            Assert.IsTrue(
+                log.IsIgnored(TerminalLogType.Error),
+                "ApplyFilter's filter must be visible to the read path"
             );
         }
     }

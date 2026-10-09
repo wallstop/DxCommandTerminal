@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Changed
+
+- Deprecate `CommandLog.Logs` in favor of the safe `CopyTo`, `Count`, and `TryGetLast` reads.
+- Make `CommandHistory.GetHistory` return an allocation-free live view of the history.
+
+### Fixed
+
+- Fix ignored log entries landing when the ignore filter changed mid-write.
+- Make `CommandLog` own the ignore filter and stack-trace mode, configured through `TerminalUI` or `TerminalSettings`.
+
 ## [1.0.1] - 2026-10-02
 
 ### Added

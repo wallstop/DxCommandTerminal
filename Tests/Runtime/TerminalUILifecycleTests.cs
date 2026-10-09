@@ -449,7 +449,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     "The history keeps its configured size with no terminal alive"
                 );
                 Assert.IsTrue(
-                    Terminal.Buffer.ignoredLogTypes.Contains(TerminalLogType.Warning),
+                    Terminal.Buffer.IsIgnored(TerminalLogType.Warning),
                     "The ignored log types survive the scene change"
                 );
                 Assert.IsFalse(
@@ -504,10 +504,16 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     "Manual registrations survive into the next scene's terminal"
                 );
                 bool carried = false;
-                foreach (LogItem entry in Terminal.Buffer.Logs)
+                LogItem[] window = new LogItem[Terminal.Buffer.Capacity];
+                int copied = Terminal.Buffer.CopyTo(window);
+                for (int i = 0; i < copied; ++i)
                 {
                     if (
-                        string.Equals(entry.message, "after-scene-change", StringComparison.Ordinal)
+                        string.Equals(
+                            window[i].message,
+                            "after-scene-change",
+                            StringComparison.Ordinal
+                        )
                     )
                     {
                         carried = true;
@@ -590,7 +596,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 Assert.AreNotSame(bufferA, Terminal.Buffer, "The reset recreates the buffer");
                 Assert.AreEqual(
                     0,
-                    Terminal.Buffer.Logs.Count,
+                    Terminal.Buffer.Count,
                     "The reset wipes the previous scene's buffer contents"
                 );
                 Assert.AreEqual(
@@ -917,9 +923,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return null;
 
             bool forwarded = false;
-            foreach (LogItem entry in Terminal.Buffer.Logs)
+            LogItem[] window = new LogItem[Terminal.Buffer.Capacity];
+            int copied = Terminal.Buffer.CopyTo(window);
+            for (int i = 0; i < copied; ++i)
             {
-                if (string.Equals(entry.message, "unity-forwarded", StringComparison.Ordinal))
+                if (string.Equals(window[i].message, "unity-forwarded", StringComparison.Ordinal))
                 {
                     forwarded = true;
                     break;
@@ -1041,7 +1049,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             CommandHistory history = Terminal.History;
             CommandShell shell = Terminal.Shell;
             CommandAutoComplete autoComplete = Terminal.AutoComplete;
-            int bufferCountBefore = buffer.Logs.Count;
+            int bufferCountBefore = buffer.Count;
             string[] historyBefore = history
                 .GetHistory(onlySuccess: true, onlyErrorFree: true)
                 .ToArray();
@@ -1062,7 +1070,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
             Assert.AreEqual(
                 bufferCountBefore,
-                buffer.Logs.Count,
+                buffer.Count,
                 "Buffer contents survive the disable/enable cycle"
             );
             Assert.IsTrue(
@@ -1071,7 +1079,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
             Assert.AreEqual(
                 bufferCountBefore + 1,
-                buffer.Logs.Count,
+                buffer.Count,
                 "The manual command's output lands in the preserved buffer"
             );
             string[] historyAfter = history
@@ -1186,11 +1194,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 Terminal.Log("still-logging"),
                 "Logging keeps working with no commands registered"
             );
-            Assert.AreEqual(
-                1,
-                Terminal.Buffer.Logs.Count,
-                "The logged message landed in the buffer"
-            );
+            Assert.AreEqual(1, Terminal.Buffer.Count, "The logged message landed in the buffer");
             List<string> completions = new();
             Terminal.AutoComplete.Complete("he", completions);
             Assert.IsEmpty(
@@ -1217,11 +1221,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 logs between the pre-Start write and Start, so the entry is
                 the newest one.
              */
-            IReadOnlyList<LogItem> logs = Terminal.Buffer.Logs;
-            Assert.AreNotEqual(0, logs.Count, "Sanity: the pre-Start log exists");
+            Assert.IsTrue(
+                Terminal.Buffer.TryGetLast(out LogItem newest),
+                "Sanity: the pre-Start log exists"
+            );
             Assert.AreEqual(
                 "before-start",
-                logs[logs.Count - 1].message,
+                newest.message,
                 "A pre-Start log survives Start when resetStateOnInit is off"
             );
         }
@@ -1232,7 +1238,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return LogBeforeStartAndAwaitStart(resetStateOnInit: true);
             Assert.AreEqual(
                 0,
-                Terminal.Buffer.Logs.Count,
+                Terminal.Buffer.Count,
                 "Start's forced reset wipes a pre-Start log when resetStateOnInit is set"
             );
         }

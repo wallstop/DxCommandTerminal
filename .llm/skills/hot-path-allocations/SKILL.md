@@ -13,6 +13,14 @@ them on a new runtime.
 
 ## What allocates on Unity's Mono
 
+- **`foreach` over a value whose compile-time type is `IEnumerable<T>` boxes a struct
+  enumerator.** The compiler emits the interface `GetEnumerator()` call, and a struct
+  returned through it is boxed per walk. Declare the concrete enumerable type -
+  `public HistoryView GetHistory(...)` with a cached view and a struct enumerator, not
+  `IEnumerable<string>` - so `foreach` binds the struct's own `GetEnumerator()` statically.
+  This is the PR #209 review reshape of `CommandHistory.GetHistory`: the snapshot-array
+  shape allocated an O(capacity) array plus an iterator per call; the cached view
+  allocates nothing per call or per walk.
 - **`string` is not a value-typed enumerable, so `foreach` over one always allocates.**
   `string.GetEnumerator()` returns `System.CharEnumerator`, a class - verified by reflection
   (`typeof(string).GetMethod("GetEnumerator").ReturnType.IsValueType == false`, alongside
@@ -199,6 +207,11 @@ first-inserted-wins for case-variant duplicates.
 ## Sweep checklist for a new hot path
 
 - A member collection can own it? Prefer that over any shared pool.
+- New public accessor that copies or snapshots per call? That is O(capacity) allocation
+  every call - prefer a cached view object with a struct enumerator, or a caller-filled
+  `CopyTo`.
+- New enumerable-returning API? Declare the concrete view type; an `IEnumerable`-typed
+  return boxes a struct enumerator in every `foreach` (first fact above).
 - Enumerating a sorted collection per call? Snapshot + version (above).
 - Building strings per call? `CachedStringBuilder.Rent` (context.md rule 23).
 - Shared rented buffer? Lease-guarded slots + evict oversized on return.

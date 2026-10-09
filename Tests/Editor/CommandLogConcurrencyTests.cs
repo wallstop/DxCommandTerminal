@@ -4,6 +4,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     using System.Collections.Generic;
     using System.Threading;
     using Backend;
+    using DataStructures;
     using NUnit.Framework;
 
     /*
@@ -28,6 +29,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             "gamma with a longer body to walk",
             "delta",
         };
+
+        /*
+            Reused read window for the flood readers, hoisted because the
+            readers never resize the buffer past Capacity.
+         */
+        private static readonly LogItem[] FloodWindow = new LogItem[Capacity];
 
         private static Thread StartFlood(
             CommandLog log,
@@ -66,13 +73,62 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             return thread;
         }
 
+        /*
+            Drives the ring directly, the surface whose live-view contract
+            the enumeration test pins: writes land from a background thread
+            the way Unity's threaded log callback delivers them.
+         */
+        private static Thread StartBufferFlood(
+            CyclicBuffer<LogItem> buffer,
+            ManualResetEventSlim start,
+            int iterations,
+            Action<Exception> onFailure,
+            ManualResetEventSlim done
+        )
+        {
+            Thread thread = new(() =>
+            {
+                start.Wait();
+                try
+                {
+                    for (int i = 0; i < iterations; ++i)
+                    {
+                        buffer.Add(
+                            new LogItem(
+                                TerminalLogType.Message,
+                                Messages[i % Messages.Length],
+                                string.Empty
+                            )
+                        );
+                    }
+                }
+                catch (Exception exception)
+                {
+                    onFailure(exception);
+                }
+                finally
+                {
+                    done?.Set();
+                }
+            });
+            thread.Start();
+            start.Set();
+            return thread;
+        }
+
+        /*
+            The read runs the shape the terminal uses every frame: one CopyTo
+            into a reused window, then the copy is walked. Before the fix the
+            unsynchronized read-modify-writes in CyclicBuffer.Add and
+            CommandLog's version counter let the count and the entries
+            disagree, and BoundsCheck threw.
+         */
         private static void ReadEveryEntry(CommandLog log)
         {
-            IReadOnlyList<LogItem> logs = log.Logs;
-            int count = logs.Count;
+            int count = log.CopyTo(FloodWindow);
             for (int i = 0; i < count; ++i)
             {
-                Assert.That(logs[i].message, Is.Not.Null, "Sanity: the read must land");
+                Assert.That(FloodWindow[i].message, Is.Not.Null, "Sanity: the read must land");
             }
         }
 
@@ -122,11 +178,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         /*
-            A flood from a background thread against a concurrent read. The
-            reader is the shape the terminal uses every frame: read the count,
-            then index every entry. Before the fix the unsynchronized
-            read-modify-writes in CyclicBuffer.Add and CommandLog's version
-            counter let the two disagree, and BoundsCheck threw.
+            A flood from a background thread against a concurrent read. Before
+            the fix the unsynchronized read-modify-writes in CyclicBuffer.Add
+            and CommandLog's version counter let the count and the entries
+            disagree, and BoundsCheck threw.
 
             The buffer starts empty on purpose: a ring that is already full
             overwrites in place forever, so it never grows its backing list
@@ -187,21 +242,24 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             wrote, in a whole state. A read torn across a write is not a
             cosmetic glitch: the terminal renders the message and the trace
             as one line, so a half-updated item is a line that never existed.
+
+            This drives the ring's enumerator directly, because that is the
+            surface it documents: a live view that can repeat or skip under a
+            concurrent write, but never yield a torn entry or throw.
          */
         [Test]
-        public void EntriesReadDuringAFloodAreWholeAndWereWritten()
+        public void EnumerationUnderAFloodYieldsOnlyWholeWrittenEntries()
         {
-            CommandLog log = new(Capacity);
+            CyclicBuffer<LogItem> buffer = new(Capacity);
 
             using ManualResetEventSlim start = new(false);
             using ManualResetEventSlim done = new(false);
             Exception writerFailure = null;
 
-            Thread writer = StartFlood(
-                log,
+            Thread writer = StartBufferFlood(
+                buffer,
                 start,
                 WriterIterations,
-                Messages,
                 exception => Interlocked.CompareExchange(ref writerFailure, exception, null),
                 done
             );
@@ -210,7 +268,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             {
                 while (!done.IsSet)
                 {
-                    foreach (LogItem entry in log.Logs)
+                    foreach (LogItem entry in buffer)
                     {
                         Assert.AreEqual(
                             TerminalLogType.Message,
@@ -414,6 +472,18 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                             $"A reconfigured window held an entry no writer produced: '{window[i].message}'"
                         );
                     }
+
+                    /*
+                        The one-entry reads ride the same storm. A newest
+                        entry read that assembled its answer from more than
+                        one unsynchronized state throws or returns a slot
+                        the writer never filled under exactly this churn.
+                     */
+                    log.TryGetLast(out LogItem last);
+                    Assert.IsTrue(
+                        last.message == null || WasWritten(last.message),
+                        $"A newest-entry read held an entry no writer produced: '{last.message}'"
+                    );
                 }
             }
             finally
@@ -425,6 +495,77 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.That(
                 writerFailure == null,
                 $"Background log writes must not throw: {writerFailure}"
+            );
+        }
+
+        /*
+            Applies a filter for a type while writers flood that type, then
+            holds the filter and lets the flood drain. Every drain write is
+            refused, and refusals never touch the ring, so the window at
+            the end is exactly what the writers landed - and it must hold
+            nothing of the ignored type.
+
+            This pins the observable contract an applied filter promises
+            under concurrency: the read path that decides refusals sees one
+            applied filter state, never a half-applied one. The narrower
+            race the in-lock re-check closes - a flip landing in the few
+            instructions between a writer's first filter check and its
+            write - has no reachable hook a test can interpose into (the
+            window is pure string work), so the re-check itself is carried
+            by its comment at the write site, not by this test.
+         */
+        [Test]
+        public void AppliedFilterEmptiesAConcurrentFloodOfItsType()
+        {
+            CommandLog log = new(Capacity, new[] { TerminalLogType.Warning });
+            log.ApplyFilter(TerminalStackTraceMode.All, new[] { TerminalLogType.Warning });
+
+            const int writerCount = 4;
+            const int writesPerWriter = 50_000;
+
+            int accepted = 0;
+            Exception failure = null;
+            using ManualResetEventSlim start = new(false);
+            Thread[] writers = new Thread[writerCount];
+            for (int w = 0; w < writerCount; ++w)
+            {
+                writers[w] = new Thread(() =>
+                {
+                    start.Wait();
+                    try
+                    {
+                        for (int i = 0; i < writesPerWriter; ++i)
+                        {
+                            if (!log.HandleLog("flood", string.Empty, TerminalLogType.Warning))
+                            {
+                                continue;
+                            }
+
+                            Interlocked.Increment(ref accepted);
+                        }
+                    }
+                    catch (Exception exception)
+                    {
+                        Interlocked.CompareExchange(ref failure, exception, null);
+                    }
+                });
+                writers[w].Start();
+            }
+
+            start.Set();
+            foreach (Thread writer in writers)
+            {
+                writer.Join();
+            }
+
+            Assert.That(failure == null, $"Filtered flood writes must not throw: {failure}");
+            Assert.AreEqual(0, accepted, "No write of an applied filter's type may be accepted");
+
+            LogItem[] window = new LogItem[Capacity];
+            Assert.AreEqual(
+                0,
+                log.CopyTo(window),
+                "A flood of an applied filter's type must land nothing in the window"
             );
         }
 
@@ -446,7 +587,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 log.HandleLog($"fill-{i}", string.Empty, TerminalLogType.Message);
             }
 
-            Assert.AreEqual(4, log.Logs.Count, "Sanity: the ring must start full");
+            Assert.AreEqual(4, log.Count, "Sanity: the ring must start full");
 
             log.Resize(log.Capacity);
 
@@ -571,7 +712,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private void AssertWindowIs(CommandLog log, IReadOnlyList<string> expected, string stage)
         {
             int count = expected.Count;
-            Assert.AreEqual(count, log.Logs.Count, $"Entry count ({stage})");
+            Assert.AreEqual(count, log.Count, $"Entry count ({stage})");
 
             LogItem[] snapshot = new LogItem[Math.Max(1, log.Capacity)];
             int copied = log.CopyTo(snapshot);

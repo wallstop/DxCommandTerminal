@@ -16,6 +16,17 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             .Select(tuple => tuple.attribute.Name)
             .ToArray();
 
+        private static readonly TerminalLogType[] AllLogTypes =
+        {
+            TerminalLogType.Error,
+            TerminalLogType.Assert,
+            TerminalLogType.Warning,
+            TerminalLogType.Exception,
+            TerminalLogType.Message,
+            TerminalLogType.Input,
+            TerminalLogType.ShellMessage,
+        };
+
         private CommandLog _originalBuffer;
         private CommandShell _originalShell;
         private CommandHistory _originalHistory;
@@ -160,7 +171,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 buffer.HandleLog("dropped", TerminalLogType.Error),
                 "Sanity: an ignored type must be dropped while configured"
             );
-            Assert.AreEqual(0, buffer.Logs.Count);
+            Assert.AreEqual(0, buffer.Count);
 
             session.Apply(Config(ignoredLogTypes: new[] { TerminalLogType.Warning }), force: false);
 
@@ -185,23 +196,25 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 buffer.HandleLog("traced", TerminalLogType.ShellMessage),
                 "Sanity: the traced write must land"
             );
+            buffer.TryGetLast(out LogItem traced);
             Assert.AreNotEqual(
                 string.Empty,
-                buffer.Logs[buffer.Logs.Count - 1].stackTrace,
+                traced.stackTrace,
                 "Sanity: mode All must capture a trace"
             );
 
             session.Apply(Config(stackTraceMode: TerminalStackTraceMode.Disabled), force: false);
 
             Assert.AreSame(buffer, session.Buffer, "Buffer should be reused when syncing mode");
-            Assert.AreEqual(TerminalStackTraceMode.Disabled, buffer.stackTraceMode);
+            Assert.AreEqual(TerminalStackTraceMode.Disabled, buffer.StackTraceMode);
             Assert.IsTrue(
                 buffer.HandleLog("untraced", TerminalLogType.ShellMessage),
                 "Sanity: the untraced write must land"
             );
+            buffer.TryGetLast(out LogItem untraced);
             Assert.AreEqual(
                 string.Empty,
-                buffer.Logs[buffer.Logs.Count - 1].stackTrace,
+                untraced.stackTrace,
                 "Mode Disabled applied through resync must store no trace"
             );
 
@@ -210,7 +223,40 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 force: false
             );
 
-            Assert.AreEqual(TerminalStackTraceMode.ErrorsAndWarnings, buffer.stackTraceMode);
+            Assert.AreEqual(TerminalStackTraceMode.ErrorsAndWarnings, buffer.StackTraceMode);
+        }
+
+        [Test]
+        public void ApplyLandsModeAndFilterChangesTogether()
+        {
+            TerminalSession session = new();
+            session.Apply(Config(stackTraceMode: TerminalStackTraceMode.All), force: true);
+            CommandLog buffer = session.Buffer;
+
+            /*
+                One apply carries both changes. The two reads the old shape
+                made outside the lock (SetEquals on the filter, then the
+                replace) are gone: whatever a logging thread sees after the
+                apply is one applied configuration, never a half of two.
+             */
+            session.Apply(
+                Config(
+                    stackTraceMode: TerminalStackTraceMode.Disabled,
+                    ignoredLogTypes: new[] { TerminalLogType.Warning }
+                ),
+                force: false
+            );
+
+            Assert.AreSame(buffer, session.Buffer, "Buffer should be reused when syncing config");
+            Assert.AreEqual(TerminalStackTraceMode.Disabled, buffer.StackTraceMode);
+            foreach (TerminalLogType type in AllLogTypes)
+            {
+                Assert.AreEqual(
+                    type == TerminalLogType.Warning,
+                    buffer.IsIgnored(type),
+                    $"The applied filter must replace the old one whole (IsIgnored({type}))"
+                );
+            }
         }
 
         [Test]
@@ -340,7 +386,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
             Assert.AreEqual(
                 0,
-                session.Buffer.Logs.Count,
+                session.Buffer.Count,
                 "A recreated buffer must not retain the previous buffer's logs"
             );
         }
