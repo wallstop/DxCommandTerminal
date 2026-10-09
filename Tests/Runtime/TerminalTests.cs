@@ -112,7 +112,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreEqual(terminalType, (TerminalLogType)unityType);
             CommandLog log = new(4, new[] { terminalType });
             Assert.IsFalse(log.HandleLog("ignored", string.Empty, (TerminalLogType)unityType));
-            Assert.IsEmpty(log.Logs);
+            Assert.AreEqual(0, log.Count, "An ignored type's write must land nothing");
         }
 
         [TestCase(TerminalLogType.Input, 5)]

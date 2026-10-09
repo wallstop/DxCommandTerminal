@@ -97,6 +97,13 @@ namespace WallstopStudios.DxCommandTerminal.DataStructures
             }
         }
 
+        /*
+            Returns a live view, not a snapshot: MoveNext re-reads the count
+            under the lock on every step, so a concurrent write can make one
+            enumeration repeat or skip entries, though it can never tear one
+            or throw. CopyTo is the consistent read; enumerate only paths
+            that tolerate a moving window.
+         */
         public CyclicBufferEnumerator GetEnumerator()
         {
             return new CyclicBufferEnumerator(this);

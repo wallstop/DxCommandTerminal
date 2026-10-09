@@ -1938,7 +1938,7 @@
                 "The palette must not resize a session it does not own"
             );
             Assert.IsTrue(
-                Terminal.Buffer.ignoredLogTypes.Contains(TerminalLogType.Warning),
+                Terminal.Buffer.IsIgnored(TerminalLogType.Warning),
                 "The palette must not touch the configured log filters"
             );
             Assert.IsFalse(
@@ -1991,7 +1991,7 @@
                 "The first enabled palette owns the bootstrap configuration"
             );
             Assert.IsTrue(
-                Terminal.Buffer.ignoredLogTypes.Count == 0,
+                Terminal.Buffer.GetIgnoredLogTypes().Length == 0,
                 "The second palette's settings must not leak into the session"
             );
         }

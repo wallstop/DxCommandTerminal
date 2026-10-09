@@ -37,7 +37,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             _originalAutoComplete = Terminal.AutoComplete;
             _originalStackTraceMode =
                 Terminal.Buffer != null
-                    ? Terminal.Buffer.stackTraceMode
+                    ? Terminal.Buffer.StackTraceMode
                     : TerminalStackTraceMode.All;
         }
 
@@ -50,7 +50,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Terminal.AutoComplete = _originalAutoComplete;
             if (Terminal.Buffer != null)
             {
-                Terminal.Buffer.stackTraceMode = _originalStackTraceMode;
+                Terminal.Buffer.StackTraceMode = _originalStackTraceMode;
             }
 
             foreach (GameObject spawned in _spawned)
@@ -147,7 +147,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
             Assert.AreEqual(
                 TerminalStackTraceMode.Disabled,
-                Terminal.Buffer.stackTraceMode,
+                Terminal.Buffer.StackTraceMode,
                 "The asset's stack-trace mode reaches the shared session buffer"
             );
             Assert.AreEqual(

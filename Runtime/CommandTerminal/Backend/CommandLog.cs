@@ -14,8 +14,28 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         private static readonly string JoinSeparator = Environment.NewLine;
 
+        /*
+            The obsolete read shape: a consumer reads Count and then indexes
+            as two separate reads, and a log written from another thread - or
+            a Clear or a shrinking Resize on the same one - can move the
+            window between them, which misses entries or throws. The surface
+            stays functional; CopyTo is the supported read and every in-repo
+            reader uses it.
+         */
+        [Obsolete(
+            "Count-then-index over the live ring can throw under a concurrent log, clear, or resize."
+                + " Copy the window with CopyTo for a one-call consistent read."
+        )]
         public IReadOnlyList<LogItem> Logs => _logs;
         public int Capacity => _logs.Capacity;
+
+        /*
+            How many entries the visible window holds, read under the ring's
+            lock. A diagnostic count, not a CopyTo sizing contract: the
+            window can grow between this read and a copy, so size a
+            destination for the largest capacity the session configures.
+         */
+        public int Count => _logs.Count;
 
         /*
             The version is what tells a reader that output arrived, and the
@@ -27,14 +47,21 @@ namespace WallstopStudios.DxCommandTerminal.Backend
          */
         public long Version => Interlocked.Read(ref _version);
 
-        public readonly HashSet<TerminalLogType> ignoredLogTypes;
-
         /*
             Which entries capture a caller stack trace. All keeps the
             pre-existing behavior; ErrorsAndWarnings and Disabled skip Unity's
             ExtractStackTrace for routine entries, the dominant per-log cost.
+
+            A cost knob, not a correctness guard: a write reads it once to
+            decide whether that entry pays extraction, so a mode that lands
+            mid-write only changes what the next entry pays. The change that
+            has to be atomic with the ignore filter goes through ApplyFilter.
          */
-        public TerminalStackTraceMode stackTraceMode = TerminalStackTraceMode.All;
+        internal TerminalStackTraceMode StackTraceMode
+        {
+            get => _stackTraceMode;
+            set => _stackTraceMode = value;
+        }
 
         /*
             HandleLog runs on the caller's thread - Unity's threaded log
@@ -46,6 +73,13 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             nesting the two would order them for no gain.
          */
         private readonly CyclicBuffer<LogItem> _logs;
+
+        /*
+            The ignore filter, guarded by the ring's lock: the write path
+            reads it inside the critical section that owns the write, and
+            every change goes through ApplyFilter under the same lock.
+         */
+        private readonly HashSet<TerminalLogType> _ignoredLogTypes;
 
         /*
             Member buffer for stack-trace reduction: one per log, reused per
@@ -61,10 +95,12 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         private long _version;
 
+        private TerminalStackTraceMode _stackTraceMode = TerminalStackTraceMode.All;
+
         public CommandLog(int maxItems, IEnumerable<TerminalLogType> ignoredLogTypes = null)
         {
             _logs = new CyclicBuffer<LogItem>(maxItems);
-            this.ignoredLogTypes = new HashSet<TerminalLogType>(
+            _ignoredLogTypes = new HashSet<TerminalLogType>(
                 ignoredLogTypes ?? Array.Empty<TerminalLogType>()
             );
         }
@@ -87,12 +123,17 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         public bool HandleLog(string message, string stackTrace, TerminalLogType type)
         {
-            lock (_logs.SyncRoot)
+            /*
+                The cheap rejection first, so an ignored type pays a set
+                lookup and never a sanitize walk. The check runs again inside
+                the write's critical section below, which is what closes the
+                slip-through: between the two locks a filter change could
+                land, and the old two-read shape then wrote one entry the
+                filter was already dropping.
+             */
+            if (IsIgnored(type))
             {
-                if (ignoredLogTypes.Contains(type))
-                {
-                    return false;
-                }
+                return false;
             }
 
             /*
@@ -116,6 +157,17 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
             lock (_logs.SyncRoot)
             {
+                /*
+                    The filter is re-checked in the critical section that
+                    owns the write, so the final decision is atomic with the
+                    version bump and the ring write: an entry the filter
+                    drops can no more land than it can half-land.
+                 */
+                if (_ignoredLogTypes.Contains(type))
+                {
+                    return false;
+                }
+
                 /*
                     The version bump and the ring write share this lock, so a
                     reader never sees a version claiming an entry the ring does
@@ -154,6 +206,28 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         }
 
         /*
+            Copies the newest entry as one consistent read. False when the
+            window is empty. The read never throws: the count, the bounds,
+            and the entry come out of one critical section, which is what a
+            count-then-index read over Logs cannot promise.
+         */
+        public bool TryGetLast(out LogItem last)
+        {
+            lock (_logs.SyncRoot)
+            {
+                int count = _logs.Count;
+                if (count == 0)
+                {
+                    last = default;
+                    return false;
+                }
+
+                last = _logs[count - 1];
+                return true;
+            }
+        }
+
+        /*
             Copies the visible window, oldest first, into a caller-owned array
             and returns how many entries it wrote. One call is one consistent
             view; reading Logs counts and then indexes as two separate reads,
@@ -170,17 +244,47 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         }
 
         /*
-            Replaces the ignore filter as one step. Clear followed by UnionWith
-            is two, and a logging thread reading the set between them sees a
-            filter that is briefly empty - it would capture types the
-            developer asked to drop.
+            Whether the filter drops this type. The read shares the ring's
+            lock, so it cannot see a half-applied filter.
          */
-        internal void SetIgnoredLogTypes(IReadOnlyList<TerminalLogType> types)
+        internal bool IsIgnored(TerminalLogType type)
         {
             lock (_logs.SyncRoot)
             {
-                ignoredLogTypes.Clear();
-                ignoredLogTypes.UnionWith(types ?? Array.Empty<TerminalLogType>());
+                return _ignoredLogTypes.Contains(type);
+            }
+        }
+
+        /*
+            A snapshot of the ignore filter, copied under the ring's lock, so
+            a diagnostic reader sees one applied state instead of a set a
+            concurrent apply is mid-way through replacing.
+         */
+        internal TerminalLogType[] GetIgnoredLogTypes()
+        {
+            lock (_logs.SyncRoot)
+            {
+                TerminalLogType[] snapshot = new TerminalLogType[_ignoredLogTypes.Count];
+                _ignoredLogTypes.CopyTo(snapshot);
+                return snapshot;
+            }
+        }
+
+        /*
+            Replaces the stack-trace mode and the ignore filter as one step
+            under the ring's lock. Clear followed by UnionWith is two states,
+            and a logging thread reading the set between them sees a filter
+            that is briefly empty - it would capture types the developer
+            asked to drop. Owning both here is what lets the class claim the
+            ring lock guards them.
+         */
+        internal void ApplyFilter(TerminalStackTraceMode mode, IReadOnlyList<TerminalLogType> types)
+        {
+            lock (_logs.SyncRoot)
+            {
+                _stackTraceMode = mode;
+                _ignoredLogTypes.Clear();
+                _ignoredLogTypes.UnionWith(types ?? Array.Empty<TerminalLogType>());
             }
         }
 
@@ -275,7 +379,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
          */
         private bool CapturesStackTrace(TerminalLogType type)
         {
-            switch (stackTraceMode)
+            switch (_stackTraceMode)
             {
                 case TerminalStackTraceMode.Disabled:
                     return false;

@@ -36,8 +36,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         private static void AssertLogContains(TerminalLogType type, string fragment, string message)
         {
-            IReadOnlyList<LogItem> logs = Terminal.Buffer.Logs;
-            for (int index = 0; index < logs.Count; ++index)
+            LogItem[] logs = new LogItem[Terminal.Buffer.Capacity];
+            int count = Terminal.Buffer.CopyTo(logs);
+            for (int index = 0; index < count; ++index)
             {
                 LogItem item = logs[index];
                 if (
@@ -51,7 +52,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Assert.Fail(
                 $"{message}: no {type} entry containing '{fragment}' in "
-                    + $"{logs.Count} buffer entries"
+                    + $"{count} buffer entries"
             );
         }
 

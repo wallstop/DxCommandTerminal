@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Changed
+
+- Reading the console's log through `CommandLog.Logs` is obsolete. The surface still works, but it reads a count and then indexes as two separate reads, so a log landing from another thread - or a `Clear` or a shrinking `Resize` on the same thread - can move the window between them and make the read miss entries or throw. `CommandLog.CopyTo(LogItem[])` stays the supported whole-window read and is now what every in-package reader uses, and two new one-shot reads cover the shapes count-then-index served: `CommandLog.Count` reports how many entries the visible window holds, and `CommandLog.TryGetLast(out LogItem)` copies the newest entry, both under one lock, and neither can throw.
+- `CommandHistory.GetHistory` returns one consistent snapshot of its call. The history was enumerated live, one locked step at a time, so a `Push`, a `Clear`, or a `Resize` during the caller's iteration could repeat or skip entries; the window is now copied under one lock before the first entry is handed out, and a push during iteration shows up in the next read instead of the running one. The completion sweep keeps its zero-allocation contract and now costs one lock acquisition per sweep instead of one per history entry.
+
+### Fixed
+
+- Changing a session's ignored log types can no longer let one ignored entry through. The ignore check and the log write took the buffer's lock separately, so a filter change landing between the two wrote an entry the filter was already dropping; the write now re-checks the filter inside the critical section that owns it, at no cost to entries the filter accepts.
+- `CommandLog` now owns its ignore filter and stack-trace mode instead of exposing them as public mutable fields nothing guarded. The filter changes only as one whole set under the same lock the write path reads it, and `TerminalSession.Apply` replaces the filter and the mode as one step, so a logging thread never sees a half-applied configuration. Code that wrote `Terminal.Buffer.stackTraceMode` or mutated `Terminal.Buffer.ignoredLogTypes` directly moves to the session's apply path; diagnostics read `IsIgnored(TerminalLogType)` and the `GetIgnoredLogTypes()` snapshot instead.
+
 ## [1.0.1] - 2026-10-02
 
 ### Added

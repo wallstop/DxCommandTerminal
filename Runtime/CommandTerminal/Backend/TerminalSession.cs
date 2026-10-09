@@ -27,8 +27,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         /// </summary>
         public static TerminalSession Current { get; } = new();
 
-        private static readonly TerminalLogType[] EmptyLogTypes = Array.Empty<TerminalLogType>();
-
         private static readonly string[] EmptyStrings = Array.Empty<string>();
 
         public CommandLog Buffer { get; internal set; }
@@ -58,7 +56,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             {
                 Buffer = new CommandLog(logBufferSize, config.IgnoredLogTypes)
                 {
-                    stackTraceMode = config.StackTraceMode,
+                    StackTraceMode = config.StackTraceMode,
                 };
             }
             else
@@ -68,15 +66,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                     Buffer.Resize(logBufferSize);
                 }
 
-                if (Buffer.stackTraceMode != config.StackTraceMode)
-                {
-                    Buffer.stackTraceMode = config.StackTraceMode;
-                }
-
-                if (!Buffer.ignoredLogTypes.SetEquals(config.IgnoredLogTypes ?? EmptyLogTypes))
-                {
-                    Buffer.SetIgnoredLogTypes(config.IgnoredLogTypes ?? EmptyLogTypes);
-                }
+                Buffer.ApplyFilter(config.StackTraceMode, config.IgnoredLogTypes);
             }
 
             int historyBufferSize = Mathf.Max(0, config.HistoryBufferSize);
