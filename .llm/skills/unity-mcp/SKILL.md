@@ -40,6 +40,14 @@ instead of moving. A port held on `127.0.0.1` counts as busy even for a
 `0.0.0.0` bind (Windows accepts that bind, then the loopback listener shadows
 the bridge).
 
+Path canonicalization contract: `resolveProjectPath` never hands a foreign
+absolute path to the platform `resolve()` - POSIX reads `C:/Game` as relative,
+prepends the cwd, and the container then derives a different port than the host
+bridge binds. Prefixes that carry meaning survive the collapse: a Windows drive
+stays `C:/...`, and a UNC share keeps its double slash (`//server/share`), which
+one-slash collapse would turn into a drive-rooted path that `existsSync`, cwd,
+and `--project-path` all miss.
+
 ## Multi-editor and multi-checkout rules
 
 - One bridge per project path. Each checkout sets its own `UNITY_PROJECT_PATH` in

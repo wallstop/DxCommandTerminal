@@ -39,9 +39,26 @@ Consequences that have each caused a real failure:
    sets `DXT_ENV_AUTOLOAD_DISABLED=1` and `BASH_ENV=/dev/null` so a child agent
    cannot re-import the keys its launcher is about to replace.
 4. **Generated MCP configs reference `{env:NAME}`; they never contain a literal
-   token.** `configure` warns and names any reference it cannot resolve, so a user
-   holding only an alias learns the canonical name instead of failing at request
-   time.
+   token.** `configure` warns and names any reference it cannot resolve, so a
+   missing export fails loudly at configure time, not at request time.
+5. **Every producer of the credential environment must export the same name
+   set.** OpenCode references the alias that supplied the value
+   (`{env:GITHUB_MCP_PAT}`), and a `{env:NAME}` lookup resolves only when that
+   exact name is exported. The devcontainer autoload exports every `.env.local`
+   key by name; `ai-backends.sh env` must do the same - it emits the canonical
+   name first and the supplying alias beside it. Adding an accepted alias means
+   touching both producers and their contract test in one change.
+
+## Bash pitfalls that have silently broken this directory
+
+- `printf -v "$name"` assigns in the *callee's* scope. A helper that receives
+  an output variable name must use a nameref (`local -n ref="$1"`) to write the
+  caller's variable - `printf -v` reads as an upvar and is not one. Under
+  `set -u` the caller's variable then reads as unbound and the whole command
+  dies with its stderr swallowed (`2>/dev/null` on the autoload path).
+- A nameref must not share a name with a local of its own function: a ref named
+  like a local resolves to that local, the caller's variable stays empty, and
+  nothing errors. Name the refs and the working locals apart.
 
 ## Fail-closed readiness
 
