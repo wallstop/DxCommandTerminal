@@ -58,8 +58,7 @@ Grab a copy of this repo (either `git clone` or [download a zip of the source](h
 - Fixed Input handling bugs related to [WebGL](#web-gl)
 - Fully integrated with Unity's [new Input System](#new-input-system)
 - Fully [configurable and bindable controls](#hotkeys) for every action
-- [Paste](#copy-cut-and-paste) on both the command line and the quick-launch bar, with a pasted block split into the arguments it reads as
-- [Copy and cut](#copy-cut-and-paste) on both surfaces: Ctrl+C / Ctrl+X take the selected command-line or query text to the system clipboard
+- [Paste](#paste) on both the command line and the quick-launch bar, with a pasted block split into the arguments it reads as
 - Add ability to ignore commands that have been annotated with `RegisterCommandAttribute`. In this way, your terminals can ignore any built-in commands, for cleanliness. A custom editor has been added to provide users with the ability to identify what commands are available to ignore, and selectively ignore them.
 - Add ability to ignore certain (or all) log levels, such that unwanted logs do not clutter terminal output
 - Add ability to optionally have Unity log messages routed to the terminal, default on, but can be turned off
@@ -448,13 +447,9 @@ Keyboard hotkey bindings are now intelligent as they can be about shift key inte
 
 The only combination keys that are supported without using custom bindings via the new Input System are `shift+<binding>`.
 
-## Copy, cut, and paste
+## Paste
 
 Both surfaces accept Ctrl+V (Cmd+V on macOS). A UI Toolkit text field has no clipboard of its own, so the terminal answers the key itself: it reads the system clipboard and writes the result into the field you are typing into, replacing the current selection.
-
-Ctrl+C and Ctrl+X (Cmd+C / Cmd+X on macOS) take the selected text out the same way: the exact span you selected, verbatim, onto the system clipboard. A cut also removes the span from the field, and it lands as a user edit for the same reason a paste does - the command text is read from that edit, and the palette re-ranks its rows against the caret the cut left. With nothing selected the keys do nothing.
-
-A clipboard that will not keep the text - tvOS has none, and a platform that wants a user gesture may refuse the write - is a refusal the package can detect: the copy reports nothing happened, and a cut leaves your selection in the field rather than deleting text the clipboard never took.
 
 A pasted block arrives as the arguments it reads as. Every run of whitespace - newlines from a copied stack trace, tabs from a copied log line, the trailing newline of a copied command - collapses to the single space that separates arguments, so `give item 42` pastes as three arguments instead of one token holding two newlines. A run at the start of the field separates nothing and is dropped.
 

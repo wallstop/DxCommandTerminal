@@ -848,7 +848,7 @@ test("the reader parses the real exporter artifact", async () => {
   const exporter = await import(
     pathToFileURL(path.join(path.dirname(drillScript), "export-unitypackage.mjs")).href
   );
-  const { buffer } = exporter.exportUnityPackage({ packageRoot: path.resolve(toolingRoot, ".."), out: "", cache: true });
+  const { buffer } = exporter.exportUnityPackage({ packageRoot: path.resolve(toolingRoot, ".."), out: "" });
   const artifact = listArtifact(buffer);
   assert.strictEqual(artifact.root, "Packages/com.wallstop-studios.dxcommandterminal");
   assert.ok(artifact.assets.length > 300, "the real artifact must carry the full production tree");

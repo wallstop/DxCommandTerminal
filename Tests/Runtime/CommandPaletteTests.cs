@@ -925,55 +925,6 @@
             }
         }
 
-        /*
-            A cut is a copy plus a user edit: the span leaves for the
-            clipboard, and the bar re-derives the rows against the caret the
-            cut left - the same re-rank a paste gets, because the query text
-            changed the same way. A copy answers without touching the query.
-         */
-        [UnityTest]
-        public IEnumerator CtrlXCutsTheSelectedSpanAndReranksTheBar()
-        {
-            yield return SpawnPalette();
-            RegisterSpawnItemCommand();
-
-            string originalClipboard = GUIUtility.systemCopyBuffer;
-            try
-            {
-                _palette.Open();
-                yield return null;
-
-                yield return SetQueryWithCaret("spawnitem torch 1", 14, 10);
-
-                yield return SendKeyDown(KeyCode.X, EventModifiers.Control);
-
-                Assert.AreEqual(
-                    "torc",
-                    GUIUtility.systemCopyBuffer,
-                    "The cut span reached the system clipboard"
-                );
-                Assert.AreEqual(
-                    "spawnitem h 1",
-                    _palette._input.value,
-                    "The cut span is gone from the query"
-                );
-                Assert.IsTrue(
-                    _palette._completionMode,
-                    "The cut re-ranks the bar against the caret it left"
-                );
-                Assert.AreEqual(
-                    10,
-                    _palette._completionContext.ReplacementStart,
-                    "The re-rank must act on the token the cut caret sits in, "
-                        + "not the token a stale caret was in"
-                );
-            }
-            finally
-            {
-                GUIUtility.systemCopyBuffer = originalClipboard;
-            }
-        }
-
         [UnityTest]
         public IEnumerator ToggleFlipsOpenStateAndFiresEvents()
         {
