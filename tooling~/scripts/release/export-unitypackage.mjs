@@ -131,25 +131,25 @@ function sha256Hex(buffer) {
 }
 
 function artifactCacheKey(packageRoot) {
+  let revision;
+  let status;
   try {
-    const revision = execFileSync("git", ["rev-parse", "HEAD"], {
+    revision = execFileSync("git", ["rev-parse", "HEAD"], {
       cwd: packageRoot,
       encoding: "utf8"
     }).trim();
-    if (!/^[0-9a-f]{40}$/u.test(revision)) {
-      return null;
-    }
-    const status = execFileSync("git", ["status", "--porcelain"], {
+    status = execFileSync("git", ["status", "--porcelain"], {
       cwd: packageRoot,
       encoding: "utf8"
     });
-    if (status.length !== 0) {
-      return null;
-    }
-    return sha256Hex(`${revision}\n${cachedExporterSourceSha256}\n${process.version}\n`);
   } catch {
+    /* No git, no revision, no key: the caller exports fresh. */
     return null;
   }
+  if (!/^[0-9a-f]{40}$/u.test(revision) || status.length !== 0) {
+    return null;
+  }
+  return sha256Hex(`${revision}\n${EXPORTER_SOURCE_SHA256}\n${process.version}\n`);
 }
 
 function cachedArtifactPaths(packageRoot, key) {
