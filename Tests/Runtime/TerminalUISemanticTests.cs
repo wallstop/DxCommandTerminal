@@ -588,6 +588,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             _terminal.resetStateOnInit = true;
             _terminal.easeOutTime = 0f;
             _terminal.easeInTime = 0f;
+            /*
+                Injected before activation and read at OnEnable. Holds only
+                while _settings is null: ApplySharedSettings overwrites the
+                field from the settings asset when one is assigned.
+             */
             _terminal._logUnityMessages = logUnityMessages;
             _terminal._themePack = LoadAsset<TerminalThemePack>("Packs/Themes/Medium.asset");
             _terminal._fontPack = LoadAsset<TerminalFontPack>("Packs/Fonts/Medium.asset");

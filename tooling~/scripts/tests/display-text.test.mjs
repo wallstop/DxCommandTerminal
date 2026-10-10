@@ -47,8 +47,9 @@
     LogTextSanitizer.Sanitize, and so must the one call that prints
     developer-typed text without interpolating it: the `log` command's
     JoinArguments. Not seen, so not covered: a message assembled into a
-    local before the call, and Debug.LogException, whose message belongs to
-    the exception object rather than to this package.
+    local before the call, a Debug.LogFormat (none exists in the package,
+    and the rule's regex does not match it), and Debug.LogException, whose
+    message belongs to the exception object rather than to this package.
 
     The scanner has its own tests below: a gate that cannot fail is worse
     than no gate, and an earlier version of it walked only the top level of
@@ -676,7 +677,9 @@ test("display text: the hole the scanner cannot see is wrapped by hand", () => {
   /*
     A `string.Join(", ", ...)` hole holds a quote, which ends the literal
     scan early, so rule 3 never reports the call (issue #213). Pin the one
-    site that uses the shape until the scanner can read it.
+    site that uses the shape until the scanner can read it, and hold it to
+    rule 3's own bar: the whole message argument wrapped, not just a
+    sanitizer mention at the front.
   */
   const file = path.join(repoRoot, "Runtime/CommandTerminal/Input/TerminalKeyboardController.cs");
   const text = fs.readFileSync(file, "utf8");
@@ -684,9 +687,21 @@ test("display text: the hole the scanner cannot see is wrapped by hand", () => {
   assert.ok(message >= 0, "the control-order warning moved; repoint this pin");
   const call = text.lastIndexOf("Debug.LogWarning(", message);
   assert.ok(call >= 0, "the control-order warning moved; repoint this pin");
-  const openParen = call + "Debug.LogWarning(".length;
+  const openParen = call + "Debug.LogWarning(".length - 1;
+  const { literals } = classify(text);
+  const closeParen = callCloseParen(text, openParen, literals);
+  assert.ok(closeParen >= 0, "the call's parens must balance for this pin to read it");
+  const [argumentStart, argumentEnd] = firstArgumentSpan(text, openParen, closeParen, literals);
+  const argumentText = text.slice(argumentStart, argumentEnd);
+  const argumentLiterals = literals
+    .filter((literal) => literal.start >= argumentStart && literal.end <= argumentEnd)
+    .map((literal) => ({
+      ...literal,
+      start: literal.start - argumentStart,
+      end: literal.end - argumentStart,
+    }));
   assert.ok(
-    text.slice(openParen).trimStart().startsWith(SANITIZE_CALL),
-    "rule 3 cannot see this call, so its wrap is pinned here"
+    isWrappedInSanitize(argumentText, argumentLiterals),
+    "rule 3 cannot see this call, so the pin holds it to rule 3's own bar"
   );
 });
