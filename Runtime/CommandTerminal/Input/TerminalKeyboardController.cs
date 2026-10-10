@@ -300,14 +300,22 @@
             return IsHotkeyActive(nextHotkey);
         }
 
+        /*
+            The console key is reserved by the surface it opens: the stroke
+            that opens must be the stroke that closes (#218), so the toggle
+            checks skip the typed-text hold and read the key every frame. The
+            binding's character is the cost of the reservation, not a dropped
+            edit - a toggle that fires while the command line holds focus
+            closes the terminal, and the close clears the line.
+         */
         protected virtual bool IsToggleFullPressed()
         {
-            return IsHotkeyActive(toggleFullHotkey);
+            return IsHotkeyDown(toggleFullHotkey);
         }
 
         protected virtual bool IsToggleSmallPressed()
         {
-            return IsHotkeyActive(toggleHotkey);
+            return IsHotkeyDown(toggleHotkey);
         }
 
         protected virtual bool IsCompleteBackwardPressed()

@@ -25,17 +25,19 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         driven by a keyboard character key belongs to the console field
         holding focus, while a key that types no character, a control that is
         not a keyboard key, and the same character key with no focused field
-        all run as they always have.
+        all run as they always have. The two toggle messages sit outside the
+        rule (#218): their key is reserved, so they run whatever holds focus.
 
         The rig drives the real path: a PlayerInput with the default
         SendMessages behavior sends the real On* messages from real queued
         key events, and every action records the control that performed it.
-        The sweep binds all eight messages to the character key at once, so a
-        message that is held back is one that arrived and was deferred, not
-        one that never fired. The staged text is a prefix of a registered
-        command, so Enter would run it, completion would extend it, and
-        history navigation would replace it: each deferred message would show
-        up in the terminal state, the run count, or the staged text.
+        The sweep binds every non-toggle message to the character key at
+        once, so a message that is held back is one that arrived and was
+        deferred, not one that never fired. The staged text is a prefix of a
+        registered command, so Enter would run it, completion would extend
+        it, and history navigation would replace it: each deferred message
+        would show up in the terminal state, the run count, or the staged
+        text.
      */
     public sealed class TerminalPlayerInputControllerTests
     {
@@ -224,10 +226,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         /*
-            A Ctrl chord inserts no character, so it stays a live hotkey: the
-            control names the key, and the modifier lives in the live keyboard
-            state, which is what this row pins. A player that binds Ctrl+[ or
-            Ctrl+` to a message keeps that binding working.
+            A Ctrl chord inserts no character, so it stays a live hotkey under
+            the typing rule: the control names the key, and the modifier
+            lives in the live keyboard state, which is what this row pins. A
+            game that binds Ctrl+[ or Ctrl+` to a non-toggle message keeps
+            that binding working while the user types.
          */
         [UnityTest]
         public IEnumerator CtrlChordMessageStillActsWhileTyping()
@@ -235,7 +238,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return SpawnTerminal(open: true);
             yield return WaitForFocusedInput("Sanity: the command field holds panel focus");
 
-            Bind("ToggleSmall", CharacterKeyPath);
+            Bind("Close", CharacterKeyPath);
 
             InputSystem.QueueStateEvent(Keyboard.current, default(KeyboardState));
             InputSystem.QueueStateEvent(
@@ -249,9 +252,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 Is.EqualTo(new[] { "backquote" }),
                 "Sanity: the chord's key performed its action"
             );
-            Assert.AreEqual(
-                TerminalState.OpenSmall,
-                _terminal.State,
+            Assert.IsTrue(
+                _terminal.IsClosed,
                 "A Ctrl chord inserts no character, so it must keep running its message while the field has focus"
             );
         }
@@ -272,10 +274,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         /*
-            The shipped default toggle binding is a character, so pressing
-            the console key from a PlayerInput action is a text edit: while
-            the command field owns focus the key belongs to the field and no
-            routed message runs.
+            The typing rule covers the non-toggle messages: bound all at once
+            to a character key, each arrives (the control sweep proves it) and
+            each is deferred, so the staged text, the state, and the run count
+            all survive. The toggles are not in the sweep: their key is
+            reserved, and running them here would close the surface the other
+            messages are being held over.
          */
         [UnityTest]
         public IEnumerator CharacterKeyMessagesAreLeftToTheFocusedField()
@@ -296,7 +300,18 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
 
             List<string> routedMessages = RoutedMessages();
+            List<string> deferredMessages = new();
             foreach (string message in routedMessages)
+            {
+                if (message == "ToggleSmall" || message == "ToggleFull")
+                {
+                    continue;
+                }
+
+                deferredMessages.Add(message);
+            }
+
+            foreach (string message in deferredMessages)
             {
                 Bind(message, CharacterKeyPath);
             }
@@ -307,8 +322,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Assert.That(
                 _performedControls.Count,
-                Is.EqualTo(routedMessages.Count),
-                "Sanity: every routed message reached the controller before the rule was applied"
+                Is.EqualTo(deferredMessages.Count),
+                "Sanity: every deferred message reached the controller before the rule was applied"
             );
             Assert.That(
                 _performedControls,
@@ -335,7 +350,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         /*
             The control: the queue reaches the poll, the action fires, and a
             key that types no character still runs its message while the
-            field has focus.
+            field has focus. The message is a non-toggle, so this pins the
+            typing rule itself, which toggles sit outside (#218).
          */
         [UnityTest]
         public IEnumerator NonTypingKeyMessageStillActsWhileTyping()
@@ -343,7 +359,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return SpawnTerminal(open: true);
             yield return WaitForFocusedInput("Sanity: the command field holds panel focus");
 
-            Bind("ToggleSmall", NonTypingKeyPath);
+            Bind("Close", NonTypingKeyPath);
 
             PressKey(Key.Escape);
             yield return Settle();
@@ -353,9 +369,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 Is.EqualTo(new[] { "escape" }),
                 "Sanity: the escape action performed on the key that types no character"
             );
-            Assert.AreEqual(
-                TerminalState.OpenSmall,
-                _terminal.State,
+            Assert.IsTrue(
+                _terminal.IsClosed,
                 "A key that types no character must keep running its message while the field has focus"
             );
         }
@@ -374,14 +389,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return SpawnTerminal(open: true);
             yield return WaitForFocusedInput("Sanity: the command field holds panel focus");
 
-            InputAction toggle = _asset.FindAction("ToggleSmall");
-            toggle
+            InputAction close = _asset.FindAction("Close");
+            close
                 .AddCompositeBinding("1DAxis")
                 .With("Negative", "<Keyboard>/backquote")
                 .With("Positive", "<Keyboard>/escape");
-            toggle.performed += OnActionPerformed;
-            toggle.Enable();
-            _actions.Add(toggle);
+            close.performed += OnActionPerformed;
+            close.Enable();
+            _actions.Add(close);
 
             PressKey(Key.Escape);
             yield return Settle();
@@ -390,14 +405,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 Is.EqualTo(new[] { "escape" }),
                 "Sanity: the composite performed on the key that types no character"
             );
-            Assert.AreEqual(
-                TerminalState.OpenSmall,
-                _terminal.State,
+            Assert.IsTrue(
+                _terminal.IsClosed,
                 "A composite driven by the key that types no character must run its message"
             );
 
-            _terminal.ToggleSmall();
-            yield return null;
+            _terminal.SetState(TerminalState.OpenSmall);
+            yield return WaitForFocusedInput("Sanity: the field takes focus again");
             _performedControls.Clear();
             PressCharacterKey();
             yield return Settle();
@@ -414,11 +428,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         /*
-            A message sent by hand runs as it always has: no action performed
-            it, so there is no control to classify, and a game that calls the
-            handler from its own input code must not lose it. A character key
-            is bound in this test, so the state change can only come from the
-            character path - there is no key press to defer.
+            A message sent by hand runs as it always has: the live gate is the
+            only gate a toggle answers, and a hand-sent message clears it the
+            same way a real action does. A character key is bound in this
+            test, so the state change can only come from the handler call -
+            there is no key press to classify.
          */
         [UnityTest]
         public IEnumerator HandSentMessageStillRunsWhileTyping()
@@ -447,8 +461,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         /*
-            The console key still opens a closed console: the rule defers a
-            character key only while a console field owns focus.
+            The console key still opens a closed console: the typing rule
+            defers a character key only while a console field owns focus, and
+            a toggle is outside the rule entirely (#218).
          */
         [UnityTest]
         public IEnumerator CharacterKeyMessageActsWithNoFieldFocused()
@@ -473,15 +488,44 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         /*
-            A Value action sends a message on the press and again on the
-            release, and the release still names the key, so the rule covers
-            both halves of a character binding. On a key that types no
-            character both run, and a toggle opens the console and closes it
-            again - which is why the README says to bind a message to a Button
-            action. Both halves are measured here rather than asserted in prose.
+            The toggle key is reserved (#218): a character-bound ToggleSmall
+            runs while the command field owns focus, where every non-toggle
+            message on the same key is deferred. From full, the small toggle
+            shrinks the surface - the visible answer that the message ran.
          */
         [UnityTest]
-        public IEnumerator ValueActionDefersBothHalvesOfACharacterBindingAndRunsBothOfANonTypingOne()
+        public IEnumerator CharacterToggleMessageRunsWhileTheInputOwnsFocus()
+        {
+            yield return SpawnTerminal(open: true);
+            yield return WaitForFocusedInput("Sanity: the command field holds panel focus");
+
+            Bind("ToggleSmall", CharacterKeyPath);
+            PressCharacterKey();
+            yield return Settle();
+
+            Assert.That(
+                _performedControls,
+                Is.EqualTo(new[] { "backquote" }),
+                "Sanity: the action performed on the keyboard key"
+            );
+            Assert.AreEqual(
+                TerminalState.OpenSmall,
+                _terminal.State,
+                "A character-bound toggle must run while the field has focus"
+            );
+        }
+
+        /*
+            A Value action sends a message on the press and again on the
+            release, and the release still names the key. On a key that types
+            no character both halves run, and on a character binding a toggle
+            now runs both halves too (#218): the press closes the console and
+            the release opens it again - which is why the README says to bind
+            a message to a Button action. Both halves are measured here rather
+            than asserted in prose.
+         */
+        [UnityTest]
+        public IEnumerator ValueActionRunsBothHalvesOfAToggleBinding()
         {
             ActionType = InputActionType.Value;
             yield return SpawnTerminal(open: true);
@@ -509,12 +553,17 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Bind("ToggleFull", CharacterKeyPath);
             PressCharacterKey();
             yield return Settle();
+            Assert.IsTrue(
+                _terminal.IsClosed,
+                "A character-bound toggle runs its press half while the field has focus (#218)"
+            );
+
             ReleaseKeys();
             yield return Settle();
             Assert.AreEqual(
                 TerminalState.OpenFull,
                 _terminal.State,
-                "Both halves of a character binding must be deferred, so a Value action cannot close the console"
+                "The release half runs too, so a Value-bound toggle undoes itself"
             );
         }
 

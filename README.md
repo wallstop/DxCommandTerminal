@@ -125,7 +125,7 @@ Command Terminal is based on [an implementation by Jonathan Blow](https://youtu.
 
 ## Usage
 
-Add a `TerminalUI` component to a game object. The console window can be toggled with a hotkey (default is backtick), and another hotkey can be used to toggle the full size window (default is shift+backtick). While the console is open those keys type their characters instead - see [Typing wins over a character binding](#typing-wins-over-a-character-binding) - and Escape closes it.
+Add a `TerminalUI` component to a game object. The console window can be toggled with a hotkey (default is backtick), and another hotkey can be used to toggle the full size window (default is shift+backtick); the same key both opens and closes, even while the command line has focus - see [Typing wins over a character binding, except the toggles](#typing-wins-over-a-character-binding-except-the-toggles). Escape closes it.
 
 Enter `help` in the console to view all available commands, use the up and down arrow keys to traverse the command history, and the tab key to autocomplete commands.
 
@@ -504,17 +504,19 @@ Four limits worth knowing before you rely on it:
 
 Binding a hotkey to `f3` fires that binding as well while a search is set; the terminal reads the key independently of your bindings.
 
-## Typing wins over a character binding
+## Typing wins over a character binding, except the toggles
 
-A binding that presses a character key is left to the field being typed into. While the command line or the palette search bar has focus, pressing the key types the character and does not run the binding - so with the defaults `` ` `` (toggle) and `` #` `` (full), those characters are typeable and the console key no longer closes an open console.
+A binding that presses a character key is left to the field being typed into. While the command line or the palette search bar has focus, pressing the key types the character and does not run the binding.
 
-Bindings that press no character keep working while you type: navigation and editing keys (arrows, Home, End, PageUp/PageDown, Enter, Tab, Escape, Backspace, Insert, Delete), function keys, modifiers, lock and media keys, and mouse or joystick buttons - plus any `ctrl+` chord. `TerminalKeyboardController` only reads `shift+` and `ctrl+`; a `cmd+`/`super+`/`alt+` prefix is not parsed, so such a binding never fires.
+The toggle bindings are the exception: the console key is reserved by the surface it opens. `` ` `` (toggle) and `` #` `` (full) open and close their surface every press, even while a field has focus - the stroke that opens the console is the stroke that closes it. The cost of the reservation is the character: a toggle press that closes the console clears the line, so nothing typed survives it. If you need to type a backtick into a command, bind the toggles to keys that press no character (a function key, or any `ctrl+` chord).
+
+All other bindings that press no character keep working while you type: navigation and editing keys (arrows, Home, End, PageUp/PageDown, Enter, Tab, Escape, Backspace, Insert, Delete), function keys, modifiers, lock and media keys, and mouse or joystick buttons - plus any `ctrl+` chord. `TerminalKeyboardController` only reads `shift+` and `ctrl+`; a `cmd+`/`super+`/`alt+` prefix is not parsed, so such a binding never fires.
 
 Keep `closeHotkey` on a key that presses no character (Escape by default): a character bound to it cannot close the terminal while the field has focus. Escape, or any `ctrl+` chord, closes from inside.
 
-`PlayerInput` messages follow the same rule. The console asks the action which control performed it, so a `ToggleSmall` action bound to a character key leaves that character to the field instead of closing the console. The control that fired decides, not the action's binding list: a gamepad button, a mouse button, a `ctrl+` chord, and a composite driven by any of those all keep working while you type.
+`PlayerInput` messages follow the same rule. The console asks the action which control performed it, so a `HandlePrevious` action bound to a character key leaves that character to the field instead of running. `ToggleSmall` and `ToggleFull` sit outside the rule: they run whatever holds focus, matching the polled console key. The control that fired decides for everything else, not the action's binding list: a gamepad button, a mouse button, a `ctrl+` chord, and a composite driven by any of those all keep working while you type.
 
-Bind a message to a `Button` action. A `Value` action also sends a message when the key is released: the rule covers both halves of a character binding, but on a key that types no character both run, and a toggle opens the console and immediately closes it again. A message sent by hand, or one whose action the asset cannot resolve, runs as it always has.
+Bind a message to a `Button` action. A `Value` action also sends a message when the key is released: the rule covers both halves of a character binding, and a toggle on either kind of key runs both halves, so a Value-bound toggle opens the console and immediately closes it again. A message sent by hand, or one whose action the asset cannot resolve, runs as it always has.
 
 # New Input System
 DxCommandTerminal is now fully integrated with Unity's new Input System, if it is found in the project and enabled. 
