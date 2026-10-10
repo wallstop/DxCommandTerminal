@@ -426,13 +426,17 @@
             {
                 case <= 0:
                     Debug.LogError(
-                        $"Invalid buffer size '{_logBufferSize}', must be greater than zero. Defaulting to 0 (empty buffer).",
+                        LogTextSanitizer.Sanitize(
+                            $"Invalid buffer size '{_logBufferSize}', must be greater than zero. Defaulting to 0 (empty buffer)."
+                        ),
                         this
                     );
                     break;
                 case < 10:
                     Debug.LogWarning(
-                        $"Unsupported buffer size '{_logBufferSize}', recommended size is > 10.",
+                        LogTextSanitizer.Sanitize(
+                            $"Unsupported buffer size '{_logBufferSize}', recommended size is > 10."
+                        ),
                         this
                     );
                     break;
@@ -442,13 +446,17 @@
             {
                 case <= 0:
                     Debug.LogError(
-                        $"Invalid buffer size '{_historyBufferSize}', must be greater than zero. Defaulting to 0 (empty buffer).",
+                        LogTextSanitizer.Sanitize(
+                            $"Invalid buffer size '{_historyBufferSize}', must be greater than zero. Defaulting to 0 (empty buffer)."
+                        ),
                         this
                     );
                     break;
                 case < 10:
                     Debug.LogWarning(
-                        $"Unsupported buffer size '{_historyBufferSize}', recommended size is > 10.",
+                        LogTextSanitizer.Sanitize(
+                            $"Unsupported buffer size '{_historyBufferSize}', recommended size is > 10."
+                        ),
                         this
                     );
                     break;
@@ -533,7 +541,9 @@
                     else
                     {
                         Debug.LogWarning(
-                            $"Failed to track/find window property {propertyName}, updates to this property will be ignored.",
+                            LogTextSanitizer.Sanitize(
+                                $"Failed to track/find window property {propertyName}, updates to this property will be ignored."
+                            ),
                             this
                         );
                     }
@@ -1388,9 +1398,11 @@
             if (currentFont != font)
             {
                 Debug.Log(
-                    currentFont == null
-                        ? $"Setting font to {font.name}."
-                        : $"Changing font from {currentFont.name} to {font.name}.",
+                    LogTextSanitizer.Sanitize(
+                        currentFont == null
+                            ? $"Setting font to {font.name}."
+                            : $"Changing font from {currentFont.name} to {font.name}."
+                    ),
                     this
                 );
             }
@@ -1452,7 +1464,12 @@
             _runtimeTheme = validatedTheme;
             if (!string.Equals(currentTheme, friendlyThemeName, StringComparison.OrdinalIgnoreCase))
             {
-                Debug.Log($"Changing theme from {currentTheme} to {friendlyThemeName}.", this);
+                Debug.Log(
+                    LogTextSanitizer.Sanitize(
+                        $"Changing theme from {currentTheme} to {friendlyThemeName}."
+                    ),
+                    this
+                );
             }
 
             if (persist)
@@ -2898,7 +2915,9 @@
                 if (_persistedTheme != null)
                 {
                     Debug.LogWarning(
-                        $"Persisted theme '{_persistedTheme}' not found in the pack, defaulting to '{_runtimeTheme}'.",
+                        LogTextSanitizer.Sanitize(
+                            $"Persisted theme '{_persistedTheme}' not found in the pack, defaulting to '{_runtimeTheme}'."
+                        ),
                         this
                     );
                 }

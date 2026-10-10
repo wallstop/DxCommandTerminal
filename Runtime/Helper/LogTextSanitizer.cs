@@ -19,7 +19,12 @@ namespace WallstopStudios.DxCommandTerminal.Helper
         palette's result rows - which print a completion candidate, a history
         line, a GameObject name, a description - and the package's own
         inspectors, which print theme names, font names, command names, and
-        asset paths into IMGUI tooltips and popup labels.
+        asset paths into IMGUI tooltips and popup labels. A fifth family
+        wraps the whole message: the package's own Debug.Log calls, whose
+        sink is Unity's Console window and the player log, which show the
+        message the package handed them before this funnel ever runs. The
+        gate in tooling~/scripts/tests/display-text.test.mjs holds all of
+        these open.
 
         The rule those four share: a name printed for a reader is escaped and
         the value the developer acts on is raw. A row shows the escaped text

@@ -556,7 +556,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         [RegisterCommand(isDefault: true, Name = "log", Help = "Output message via Debug.Log")]
         public static void CommandLog(CommandArg[] args)
         {
-            UnityEngine.Debug.Log(JoinArguments(args));
+            UnityEngine.Debug.Log(LogTextSanitizer.Sanitize(JoinArguments(args)));
         }
 
         [RegisterCommand(

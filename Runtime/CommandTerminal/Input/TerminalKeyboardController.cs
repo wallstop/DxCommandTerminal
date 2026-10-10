@@ -2,6 +2,7 @@
 {
     using System;
     using System.Collections.Generic;
+    using Helper;
     using UI;
     using UnityEngine;
 
@@ -372,8 +373,10 @@
             if (missingControls != null)
             {
                 Debug.LogWarning(
-                    $"Control Order is missing the following controls: [{string.Join(", ", missingControls)}]. "
-                        + "Input for these will not be handled. Is this intentional?",
+                    LogTextSanitizer.Sanitize(
+                        $"Control Order is missing the following controls: [{string.Join(", ", missingControls)}]. "
+                            + "Input for these will not be handled. Is this intentional?"
+                    ),
                     this
                 );
             }

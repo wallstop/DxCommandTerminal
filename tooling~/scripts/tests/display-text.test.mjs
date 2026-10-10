@@ -36,6 +36,21 @@
     inspectors use. `EditorGUI.Popup` and `EditorGUILayout.IntPopup` are
     the same hazard and are not watched.
 
+    Rule 3 covers the package's own Debug.Log-family calls. Their sink is
+    Unity's Console window and the player log, which show the message the
+    package handed them before the in-game funnel ever sees it, so the call
+    site is where the escape has to happen. A message built by
+    interpolation is display text end to end - there is no raw value the
+    reader acts on - so the rule wraps the whole message, the same shape the
+    funnel sanitizes in CommandLog.HandleLog. A Debug.Log whose message
+    argument holds an interpolated string must be wrapped in
+    LogTextSanitizer.Sanitize, and so must the one call that prints
+    developer-typed text without interpolating it: the `log` command's
+    JoinArguments. Not seen, so not covered: a message assembled into a
+    local before the call, a Debug.LogFormat (none exists in the package,
+    and the rule's regex does not match it), and Debug.LogException, whose
+    message belongs to the exception object rather than to this package.
+
     The scanner has its own tests below: a gate that cannot fail is worse
     than no gate, and an earlier version of it walked only the top level of
     each root and passed on the very sinks it was written for.
@@ -317,6 +332,117 @@ function codeText(text, literals, comments) {
   return result + text.slice(index);
 }
 
+/*
+    Rule 3's subject: the Debug.Log-family calls whose sink is Unity's
+    Console window and the player log. `\b` matches the tail of
+    `UnityEngine.Debug.` too, which is the shape the `log` command uses.
+ */
+const DEBUG_LOG_CALL = /\bDebug\.(?:Log|LogError|LogWarning)\s*\(/g;
+/* The one message built without interpolation that still prints caller-typed text. */
+const JOIN_ARGUMENTS_CALL = /^(?:UnityEngine\.)?JoinArguments\s*\(/;
+
+/** A copy of text with every comment span blanked to spaces, length kept. */
+function blankComments(text, comments) {
+  const characters = text.split("");
+  for (const span of comments) {
+    for (let index = span.start; index < span.end; ++index) {
+      if (characters[index] !== "\n") {
+        characters[index] = " ";
+      }
+    }
+  }
+
+  return characters.join("");
+}
+
+/** The [start, end) of a call's first argument: to its top-level comma or closing paren. */
+function firstArgumentSpan(text, openParen, closeParen, literals) {
+  let depth = 0;
+  let literal = 0;
+  for (let index = openParen + 1; index < closeParen; ++index) {
+    while (literal < literals.length && literals[literal].start < index) {
+      ++literal;
+    }
+
+    if (literal < literals.length && literals[literal].start === index) {
+      index = literals[literal].end - 1;
+      continue;
+    }
+
+    const character = text[index];
+    if (character === "(") {
+      ++depth;
+    } else if (character === ")") {
+      --depth;
+    } else if (character === "," && depth === 0) {
+      return [openParen + 1, index];
+    }
+  }
+
+  return [openParen + 1, closeParen];
+}
+
+/** True when the argument is exactly a Sanitize call around one expression. */
+function isWrappedInSanitize(argumentText, argumentLiterals) {
+  const leading = argumentText.length - argumentText.trimStart().length;
+  if (!argumentText.startsWith(SANITIZE_CALL, leading)) {
+    return false;
+  }
+
+  const trailing = argumentText.length - argumentText.trimEnd().length;
+  if (argumentText[argumentText.length - trailing - 1] !== ")") {
+    return false;
+  }
+
+  /*
+      The walk reads the untrimmed text, so literal offsets stay valid; only
+      the open paren's offset accounts for the leading whitespace.
+   */
+  const openParen = leading + SANITIZE_CALL.length - 1;
+  const closeParen = callCloseParen(argumentText, openParen, argumentLiterals);
+  return closeParen === argumentText.length - trailing - 1;
+}
+
+/** Every Debug.Log-family message the rule requires wrapped, as "line: what". */
+function unwrappedDebugLogMessages(text) {
+  const { literals, comments } = classify(text);
+  const code = blankComments(text, comments);
+  const findings = [];
+  for (const match of code.matchAll(DEBUG_LOG_CALL)) {
+    if (startsInside(literals, match.index)) {
+      continue;
+    }
+
+    const openParen = match.index + match[0].length - 1;
+    const closeParen = callCloseParen(code, openParen, literals);
+    if (closeParen < 0) {
+      continue;
+    }
+
+    const [argumentStart, argumentEnd] = firstArgumentSpan(code, openParen, closeParen, literals);
+    const argumentText = code.slice(argumentStart, argumentEnd);
+    const argumentLiterals = literals
+      .filter((literal) => literal.start >= argumentStart && literal.end <= argumentEnd)
+      .map((literal) => ({
+        ...literal,
+        start: literal.start - argumentStart,
+        end: literal.end - argumentStart,
+      }));
+    const holes = interpolationHoles(argumentText, argumentLiterals);
+    const printsCallerText = JOIN_ARGUMENTS_CALL.test(argumentText.trim());
+    if (holes.length === 0 && !printsCallerText) {
+      continue;
+    }
+
+    if (!isWrappedInSanitize(argumentText, argumentLiterals)) {
+      const what = printsCallerText ? "JoinArguments output" : holes.map((hole) => hole.hole).join(", ");
+      findings.push(`line ${lineOf(text, openParen)}: ${what}`);
+    }
+  }
+
+  return findings;
+}
+
 test("display text: a tooltip escapes every name it interpolates", () => {
   const findings = [];
   for (const file of shippedCSharpFiles()) {
@@ -346,6 +472,23 @@ test("display text: an inspector that pops up names reaches the sanitizer", () =
   }
 
   assert.deepEqual(findings, [], findings.join("\n"));
+});
+
+test("display text: a Debug.Log message built by interpolation is wrapped in the sanitizer", () => {
+  const findings = [];
+  for (const file of shippedCSharpFiles()) {
+    const text = fs.readFileSync(file, "utf8");
+    for (const finding of unwrappedDebugLogMessages(text)) {
+      findings.push(`${path.relative(repoRoot, file)} ${finding}`);
+    }
+  }
+
+  assert.deepEqual(
+    findings,
+    [],
+    "Unity's Console shows the message the package handed it, before the in-game funnel runs:\n" +
+      findings.join("\n")
+  );
 });
 
 test("display text: the scanner names a raw tooltip hole", () => {
@@ -457,5 +600,108 @@ test("display text: the popup backstop is not satisfied by a mention", () => {
       ].join("\n")
     ),
     "a real call in code satisfies the backstop"
+  );
+});
+
+test("display text: the Debug.Log rule names a raw interpolated message", () => {
+  const sources = [
+    ['Debug.Log($"Will set the theme to {theme}.", this);', "theme"],
+    ['UnityEngine.Debug.Log($"count {count} ms");', "count"],
+    ['Debug.LogWarning($"assembly {assemblyName} failed");', "assemblyName"]
+  ];
+  for (const [source, hole] of sources) {
+    assert.deepEqual(unwrappedDebugLogMessages(source), [`line 1: ${hole}`], source);
+  }
+
+  const multiline = ["Debug.LogWarning(", '    $"assembly {assemblyName} failed"', ");"].join("\n");
+  assert.deepEqual(unwrappedDebugLogMessages(multiline), ["line 1: assemblyName"], multiline);
+});
+
+test("display text: the Debug.Log rule accepts a wrapped or constant message", () => {
+  const passing = [
+    'Debug.Log(LogTextSanitizer.Sanitize($"Will set {theme}."), this);',
+    [
+      "Debug.LogWarning(",
+      '    LogTextSanitizer.Sanitize($"[Dx] assembly {name} failed"\n        + $" ({reason})"),',
+      "    this",
+      ");"
+    ].join("\n"),
+    'Debug.Log(LogTextSanitizer.Sanitize(currentFont == null ? $"a {font.name}" : $"b {font.name}"), this);',
+    'Debug.LogError("Cannot set null font.", this);',
+    "Debug.Log(message);",
+    'Debug.LogFormat("legacy {0}", name);',
+    "Debug.DrawLine(a, b);",
+    'Logger.Debug.Log($"not Unity\'s Debug");'
+  ];
+  for (const source of passing) {
+    assert.deepEqual(unwrappedDebugLogMessages(source), [], source);
+  }
+});
+
+test("display text: the Debug.Log rule covers the log command's JoinArguments output", () => {
+  assert.deepEqual(
+    unwrappedDebugLogMessages("UnityEngine.Debug.Log(JoinArguments(args));"),
+    ["line 1: JoinArguments output"],
+    "developer-typed text reaches Unity's Console through the log command unwrapped"
+  );
+  assert.deepEqual(
+    unwrappedDebugLogMessages("UnityEngine.Debug.Log(LogTextSanitizer.Sanitize(JoinArguments(args)));"),
+    []
+  );
+  assert.deepEqual(
+    unwrappedDebugLogMessages("UnityEngine.Debug.Log(SomeOther(JoinArguments(args)));"),
+    [],
+    "only a message argument that starts with JoinArguments is the log command's shape"
+  );
+});
+
+test("display text: the Debug.Log rule ignores the shapes around it", () => {
+  const immune = [
+    '// Debug.Log($"raw {name} in a line comment");',
+    '/* Debug.Log($"raw {name} in a block comment"); */',
+    'var s = "Debug.Log($\\"raw {name} in a string\\");";'
+  ];
+  for (const source of immune) {
+    assert.deepEqual(unwrappedDebugLogMessages(source), [], source);
+  }
+
+  const followedByComment = [
+    "Debug.Log(",
+    '    LogTextSanitizer.Sanitize($"theme {theme} set"),',
+    "    this);"
+  ].join("\n");
+  assert.deepEqual(unwrappedDebugLogMessages(followedByComment), [], followedByComment);
+});
+
+test("display text: the hole the scanner cannot see is wrapped by hand", () => {
+  /*
+    A `string.Join(", ", ...)` hole holds a quote, which ends the literal
+    scan early, so rule 3 never reports the call (issue #213). Pin the one
+    site that uses the shape until the scanner can read it, and hold it to
+    rule 3's own bar: the whole message argument wrapped, not just a
+    sanitizer mention at the front.
+  */
+  const file = path.join(repoRoot, "Runtime/CommandTerminal/Input/TerminalKeyboardController.cs");
+  const text = fs.readFileSync(file, "utf8");
+  const message = text.indexOf("Control Order is missing");
+  assert.ok(message >= 0, "the control-order warning moved; repoint this pin");
+  const call = text.lastIndexOf("Debug.LogWarning(", message);
+  assert.ok(call >= 0, "the control-order warning moved; repoint this pin");
+  const openParen = call + "Debug.LogWarning(".length - 1;
+  const { literals } = classify(text);
+  const closeParen = callCloseParen(text, openParen, literals);
+  assert.ok(closeParen >= 0, "the call's parens must balance for this pin to read it");
+  const [argumentStart, argumentEnd] = firstArgumentSpan(text, openParen, closeParen, literals);
+  const argumentText = text.slice(argumentStart, argumentEnd);
+  const argumentLiterals = literals
+    .filter((literal) => literal.start >= argumentStart && literal.end <= argumentEnd)
+    .map((literal) => ({
+      ...literal,
+      start: literal.start - argumentStart,
+      end: literal.end - argumentStart,
+    }));
+  assert.ok(
+    isWrappedInSanitize(argumentText, argumentLiterals),
+    "rule 3 cannot see this call, so the pin holds it to rule 3's own bar"
   );
 });

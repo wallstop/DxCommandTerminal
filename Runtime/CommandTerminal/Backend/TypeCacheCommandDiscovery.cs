@@ -6,6 +6,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     using System.Reflection;
     using System.Runtime.CompilerServices;
     using Attributes;
+    using Helper;
     using UnityEditor;
     using Debug = UnityEngine.Debug;
 
@@ -106,9 +107,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             catch (Exception e)
             {
                 Debug.LogWarning(
-                    $"[DxCommandTerminal] TypeCache command discovery failed for assembly "
-                        + $"{assembly.GetName().Name}: {e.Message}; discovery continues "
-                        + $"by reflection"
+                    LogTextSanitizer.Sanitize(
+                        $"[DxCommandTerminal] TypeCache command discovery failed for assembly "
+                            + $"{assembly.GetName().Name}: {e.Message}; discovery continues "
+                            + $"by reflection"
+                    )
                 );
                 return TypeCacheSnapshot.Unknown;
             }

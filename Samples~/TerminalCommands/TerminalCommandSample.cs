@@ -2,6 +2,7 @@ namespace WallstopStudios.DxCommandTerminal.Samples
 {
     using System.Collections.Generic;
     using Backend;
+    using Helper;
     using UnityEngine;
 
     /*
@@ -39,9 +40,11 @@ namespace WallstopStudios.DxCommandTerminal.Samples
             if (Terminal.Shell == null)
             {
                 Debug.LogError(
-                    $"{GetType().Name} enabled before any TerminalUI; commands were not "
-                        + "registered. Keep the component in a scene with a TerminalUI, or "
-                        + "register from Start instead.",
+                    LogTextSanitizer.Sanitize(
+                        $"{GetType().Name} enabled before any TerminalUI; commands were not "
+                            + "registered. Keep the component in a scene with a TerminalUI, or "
+                            + "register from Start instead."
+                    ),
                     this
                 );
                 return;
