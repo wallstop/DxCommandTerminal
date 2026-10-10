@@ -182,7 +182,25 @@ function packagedInputPaths(packageRoot, files) {
   return [...inputs].sort();
 }
 
+/*
+    Per-process constant, like the packaged list: the packaged inputs, this
+    module's source, and the node version do not change under a running
+    test, and each caller process would otherwise re-stat the walk.
+ */
+const ARTIFACT_KEY_CACHE = new Map();
+
 function artifactCacheKey(packageRoot) {
+  const resolved = path.resolve(packageRoot);
+  const cached = ARTIFACT_KEY_CACHE.get(resolved);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const key = computeArtifactCacheKey(resolved);
+  ARTIFACT_KEY_CACHE.set(resolved, key);
+  return key;
+}
+
+function computeArtifactCacheKey(packageRoot) {
   let manifest;
   try {
     manifest = JSON.parse(fs.readFileSync(path.join(packageRoot, "package.json"), "utf8"));
