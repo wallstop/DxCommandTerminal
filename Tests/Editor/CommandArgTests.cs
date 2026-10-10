@@ -269,6 +269,18 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.IsTrue(arg.TryGet(out value));
             Assert.AreEqual(double.MaxValue, value);
 
+            /*
+                The overflow contract the Unity-free lane answers on: a
+                literal too large for the type is not a number, whatever a
+                runtime's parser does with it. Mirrors the float pins; the
+                literals are strings because a constant that overflows the
+                type cannot exist.
+             */
+            arg = new CommandArg("1.7976931348623159e+308");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+            arg = new CommandArg("-1.7976931348623159e+308");
+            Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
+
             arg = new CommandArg(System.Guid.NewGuid().ToString());
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
             arg = new CommandArg("false");

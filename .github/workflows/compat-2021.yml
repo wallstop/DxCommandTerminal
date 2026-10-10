@@ -13,6 +13,9 @@ name: Compat 2021
 #   fixtures under NUnitLite against declared Unity stand-ins - so a test
 #   that cannot compile, or an engine-independent assertion that cannot
 #   pass, fails the job instead of landing green until some editor runs.
+#   One blind spot, stated: `#if UNITY_EDITOR` regions compile in no lane
+#   here (the pin has no UnityEditor assemblies); guarded test code is
+#   editor-answered only.
 #
 # One job, not two: both legs share the checkout, the SDK, and the NuGet
 # cache, and each adds seconds on top of a sub-minute lane. Warnings are

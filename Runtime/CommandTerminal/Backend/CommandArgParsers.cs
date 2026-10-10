@@ -681,13 +681,14 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             A numeric literal too large for the type parses to an infinity
             with a true answer on .NET Core 3.0+ runtimes, while the Unity
             runtime this package ships on answers false to the same
-            literal. The named spellings ("Infinity", "PositiveInfinity",
-            "NaN", and friends) parse on every runtime, so the only
-            cross-runtime divergence is an overflowed literal - the input
-            starts with a number, not a letter. Rejecting it keeps the
-            parser's answer identical on every runtime an argument can be
-            read on, which is what the float and double round-trip
-            contracts pin.
+            literal. The non-numeric spellings resolve without the numeric
+            parser - `Infinity` and `NaN` parse on every runtime, and
+            `PositiveInfinity`/`NegativeInfinity` answer through the
+            named-constant path in CommandArg - so the only cross-runtime
+            divergence is an overflowed literal: the input starts with a
+            number, not a letter. Rejecting it keeps the parser's answer
+            identical on every runtime an argument can be read on, which
+            is what the float and double round-trip contracts pin.
          */
         private static bool IsOverflowedLiteral(string input, double parsed)
         {

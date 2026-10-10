@@ -348,9 +348,7 @@ namespace UnityEngine
 
         private static void Record(string level, object message)
         {
-            string text = $"[{level}] {message}";
-            Records.Add(text);
-            Application.RaiseLog(text, string.Empty, LogType.Log);
+            Records.Add($"[{level}] {message}");
         }
     }
 
@@ -455,7 +453,7 @@ namespace UnityEngine
 
     public static class Mathf
     {
-        public const float Epsilon = 1e-6f;
+        public const float Epsilon = float.Epsilon;
 
         public static int Max(int a, int b) => a >= b ? a : b;
 
@@ -498,63 +496,27 @@ namespace UnityEngine
 
     public static class Application
     {
+        /*
+            The host models an EditMode session: the editor is the runtime
+            (isEditor answers as it does in the editor), nothing is playing,
+            and no TerminalUI surface exists - which is the same null-Instance
+            state the fixtures that drive built-in commands target.
+         */
         public static bool isPlaying => false;
 
-        public static bool isEditor => false;
+        public static bool isEditor => true;
 
         public static string dataPath => string.Empty;
 
         public static string persistentDataPath => string.Empty;
 
-        private static LogCallback _logMessageReceived;
-
-        private static LogCallback _logMessageReceivedThreaded;
-
-        public static event LogCallback logMessageReceived
-        {
-            add => _logMessageReceived += value;
-            remove => _logMessageReceived -= value;
-        }
-
-        public static event LogCallback logMessageReceivedThreaded
-        {
-            add => _logMessageReceivedThreaded += value;
-            remove => _logMessageReceivedThreaded -= value;
-        }
-
-        /*
-            The engine raises these from every Debug record; the stub does
-            the same, so a subscriber sees what the console would have.
-         */
-        internal static void RaiseLog(string condition, string stackTrace, LogType type)
-        {
-            _logMessageReceived?.Invoke(condition, stackTrace, type);
-            _logMessageReceivedThreaded?.Invoke(condition, stackTrace, type);
-        }
-
-        public delegate void LogCallback(string condition, string stackTrace, LogType type);
-
         public static void Quit() { }
-    }
-
-    public static class Screen
-    {
-        public static int width => 0;
-
-        public static int height => 0;
     }
 
     public static class Time
     {
-        public static float time => 0f;
-
+        /* `time` reads the scale so a substituted variable can carry it. */
         public static float timeScale { get; set; } = 1f;
-
-        public static float unscaledDeltaTime => 0f;
-
-        public static float deltaTime => 0f;
-
-        public static int frameCount => 0;
     }
 
     public static class Input
@@ -1334,85 +1296,6 @@ namespace UnityEngine
         public static bool operator ==(Quaternion a, Quaternion b) => a.Equals(b);
 
         public static bool operator !=(Quaternion a, Quaternion b) => !a.Equals(b);
-    }
-
-    public static class JsonUtility
-    {
-        /*
-            The engine serializes [SerializeField] fields of primitives,
-            strings, and containers of them, and so does this stand-in,
-            over System.Text.Json with field reflection. Round-trip
-            identity for the shapes the fixtures use is the contract; a
-            field the engine would not serialize is out of scope here.
-         */
-        public static string ToJson(object obj) =>
-            System.Text.Json.JsonSerializer.Serialize(
-                obj,
-                new System.Text.Json.JsonSerializerOptions
-                {
-                    IncludeFields = true,
-                    WriteIndented = false,
-                }
-            );
-
-        public static T FromJson<T>(string json) =>
-            System.Text.Json.JsonSerializer.Deserialize<T>(
-                json,
-                new System.Text.Json.JsonSerializerOptions { IncludeFields = true }
-            );
-    }
-
-    public static class PlayerPrefs
-    {
-        private static readonly Dictionary<string, string> Values =
-            new Dictionary<string, string>();
-
-        public static void SetString(string key, string value) => Values[key] = value;
-
-        public static string GetString(string key) =>
-            Values.TryGetValue(key, out string value) ? value : "";
-
-        public static string GetString(string key, string defaultValue) =>
-            Values.TryGetValue(key, out string value) ? value : defaultValue;
-
-        public static void SetInt(string key, int value) =>
-            Values[key] = value.ToString(CultureInfo.InvariantCulture);
-
-        public static int GetInt(string key) => GetInt(key, 0);
-
-        public static int GetInt(string key, int defaultValue) =>
-            Values.TryGetValue(key, out string value) && int.TryParse(value, out int parsed)
-                ? parsed
-                : defaultValue;
-
-        public static void SetFloat(string key, float value) =>
-            Values[key] = value.ToString(CultureInfo.InvariantCulture);
-
-        public static float GetFloat(string key) => GetFloat(key, 0f);
-
-        public static float GetFloat(string key, float defaultValue) =>
-            Values.TryGetValue(key, out string value) && float.TryParse(value, out float parsed)
-                ? parsed
-                : defaultValue;
-
-        public static bool HasKey(string key) => Values.ContainsKey(key);
-
-        public static void DeleteKey(string key) => Values.Remove(key);
-
-        public static void DeleteAll() => Values.Clear();
-
-        public static void Save() { }
-    }
-
-    public static class Random
-    {
-        private static readonly System.Random Rng = new System.Random(12345);
-
-        public static int Range(int minInclusive, int maxExclusive) =>
-            Rng.Next(minInclusive, maxExclusive);
-
-        public static float Range(float minInclusive, float maxInclusive) =>
-            (float)((Rng.NextDouble() * (maxInclusive - (double)minInclusive)) + minInclusive);
     }
 
     /*

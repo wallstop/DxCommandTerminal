@@ -12,6 +12,13 @@
     for the members the suite calls. The stub is compile-only: the two
     files that call LogAssert run on a live editor, never here.
 
+    Stated limit: `#if UNITY_EDITOR` regions compile nowhere in CI - the
+    pin carries no UnityEditor assemblies, and the host deliberately
+    leaves UNITY_EDITOR undefined. The guarded test code (the discovery
+    fixtures' Reflection.Emit rig, the inclusion tests' editor-only
+    cases) is editor-answered only; the compile tripwire covers
+    unguarded code.
+
     Execution of the engine-independent fixtures is testhost/'s job;
     this project only answers "does it compile against 2021.3".
 

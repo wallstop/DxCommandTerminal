@@ -53,6 +53,8 @@ tooling~/compat/testhost/bin/
 tooling~/compat/testhost/obj/
 tooling~/compat/testhost/TestResult.xml
 tooling~/TestResult.xml
+/TestResult.xml
+/TestResult.xml.meta
 
 # Local preflight result cache
 tooling~/scripts/.preflight-cache/
