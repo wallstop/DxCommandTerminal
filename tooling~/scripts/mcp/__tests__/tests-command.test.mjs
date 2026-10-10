@@ -969,9 +969,73 @@ test("did-not-run ends the wait with its reason, and an in-flight claim does not
       clock += ms;
     }
   });
-  assert.equal(inFlight.state, "no-claim", "a run in flight waits out the deadline");
-  assert.match(inFlight.detail, /wrote no claim for this run/u, inFlight.detail);
+  assert.equal(
+    inFlight.state,
+    "running-at-deadline",
+    "a run in flight waits out the deadline, then names the claim it saw"
+  );
+  assert.match(
+    inFlight.detail,
+    /acknowledged but never reported finished/u,
+    inFlight.detail
+  );
   assert.equal(clock, 4_000);
+});
+
+test("our running claim at the deadline names the start it carried", async () => {
+  // The stuck-run shape behind issue #207: the editor acknowledged the run and
+  // was cancelled out from under it while wedged, so the finish callback never
+  // ran and the claim stays `running` forever. The honest answer at the
+  // deadline carries the claim's own start timestamp, not "no claim" - the
+  // claim exists, and the next diagnosis starts from it, not from nothing.
+  let clock = 0;
+  const outcome = await awaitRunClaim({
+    claim: "claim",
+    token: "t-1",
+    requestedAt: 0,
+    deadline: 4_000,
+    read: () =>
+      "running token=t-1 mode=PlayMode started=2026-10-09T23:49:49.0892067Z",
+    now: () => clock,
+    sleep: async (ms) => {
+      clock += ms;
+    }
+  });
+
+  assert.equal(outcome.state, "running-at-deadline");
+  assert.match(
+    outcome.detail,
+    /acknowledged at 2026-10-09T23:49:49\.0892067Z but never reported finished/u,
+    outcome.detail
+  );
+  assert.equal(clock, 4_000);
+});
+
+test("a running claim overwritten by another run's line still names ours", async () => {
+  // A second agent's run can take the claim file between two polls. The latch
+  // stays: this run's finish line was never observed, so the answer stays
+  // "acknowledged, never finished" and names the takeover instead of reading
+  // as if this run never started.
+  let clock = 0;
+  const outcome = await awaitRunClaim({
+    claim: "claim",
+    token: "t-1",
+    requestedAt: 0,
+    deadline: 2_000,
+    pollIntervalMs: 100,
+    read: () =>
+      clock < 1_000
+        ? "running token=t-1 mode=PlayMode started=2026-10-09T23:49:49.0892067Z"
+        : "running token=t-2 mode=PlayMode started=2026-10-09T23:50:59.0000000Z",
+    now: () => clock,
+    sleep: async (ms) => {
+      clock += ms;
+    }
+  });
+
+  assert.equal(outcome.state, "running-at-deadline");
+  assert.match(outcome.detail, /acknowledged at 2026-10-09T23:49:49\.0892067Z/u, outcome.detail);
+  assert.match(outcome.detail, /now belongs to another run/u, outcome.detail);
 });
 
 test("an unattributed refusal is the editor's diagnosis, not a wait", async () => {
