@@ -108,21 +108,25 @@ function packagedList(packageRoot) {
 }
 
 /*
-    The exported artifact is a pure function of three things: the checkout's
-    packaged content, this module's archive logic, and the npm allowlist
-    engine. A test that needs the real artifact used to pay the whole build
-    every time - one `npm pack` spawn plus a read of every packaged file -
-    and one `npm test` run paid five of those builds across its parallel
-    test processes. The disk cache answers a clean tree from
-    `.artifacts/export-cache/` instead.
+    The exported artifact is a pure function of the checkout's packaged
+    content, this module's archive logic, and the npm allowlist engine. A
+    test that needs the real artifact used to pay the whole build every
+    time - one `npm pack` spawn plus a read of every packaged file - and
+    one `npm test` run paid five of those builds across its parallel test
+    processes. The disk cache answers from `.artifacts/export-cache/`
+    instead.
 
-    The key is <git revision> + <this module's source hash> + <node version>,
-    so a new commit, an exporter edit, or a toolchain change re-exports. A
-    dirty tree keys to nothing and always exports fresh: `git status
-    --porcelain` sees tracked edits and untracked files, but not the content
-    of a gitignored file that npm would still ship, so only a clean tree is
-    provably the revision its name claims. The release flow never passes
-    `cache: true`; freshness there is the contract the cache borrows from.
+    The key hashes the INPUTS, not the tree's cleanliness: a stat
+    signature (size, mtimes, inode) over every file that could ship -
+    git-tracked files plus a walk of the `files` allowlist entries, which
+    also covers untracked additions - plus package.json itself, this
+    module's source, and the node (npm) version. Editing a test, a doc, or
+    tooling keeps the key and answers from the cache; editing anything
+    packaged changes a stat and re-exports. A stat collision without a
+    content change would need a same-size write that preserves mtime and
+    inode, and the recorded digest still gates whatever the entry hands
+    back. The release flow never passes `cache: true`; freshness there is
+    the contract the cache borrows from.
  */
 const EXPORTER_SOURCE_SHA256 = sha256Hex(fs.readFileSync(fileURLToPath(import.meta.url)));
 
@@ -130,26 +134,79 @@ function sha256Hex(buffer) {
   return crypto.createHash("sha256").update(buffer).digest("hex");
 }
 
+/*
+    Every path that could change the shipped artifact: a walk of the
+    package.json `files` entries (literal paths and directories). The walk
+    reads the filesystem, so an untracked new asset invalidates too.
+    Negated entries cannot change the artifact and are skipped. Entries
+    with glob characters are not walked - this package ships literal
+    paths; a future glob degrades to package.json-hash invalidation only,
+    which is a stale-key risk on its matched files and no worse than the
+    pre-cache behavior.
+ */
+function packagedInputPaths(packageRoot, files) {
+  const inputs = new Set();
+  const visit = (relative, absolute) => {
+    let entries;
+    try {
+      entries = fs.readdirSync(absolute, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const childRelative = `${relative}/${entry.name}`;
+      if (entry.isDirectory()) {
+        visit(childRelative, path.join(absolute, entry.name));
+      } else if (entry.isFile()) {
+        inputs.add(childRelative);
+      }
+    }
+  };
+  for (const entry of files) {
+    if (entry.startsWith("!") || entry.includes("*")) {
+      continue;
+    }
+    const absolute = path.join(packageRoot, entry);
+    let stat;
+    try {
+      stat = fs.statSync(absolute);
+    } catch {
+      continue;
+    }
+    if (stat.isDirectory()) {
+      visit(entry, absolute);
+    } else {
+      inputs.add(entry);
+    }
+  }
+  return [...inputs].sort();
+}
+
 function artifactCacheKey(packageRoot) {
-  let revision;
-  let status;
+  let manifest;
   try {
-    revision = execFileSync("git", ["rev-parse", "HEAD"], {
-      cwd: packageRoot,
-      encoding: "utf8"
-    }).trim();
-    status = execFileSync("git", ["status", "--porcelain"], {
-      cwd: packageRoot,
-      encoding: "utf8"
-    });
+    manifest = JSON.parse(fs.readFileSync(path.join(packageRoot, "package.json"), "utf8"));
   } catch {
-    /* No git, no revision, no key: the caller exports fresh. */
     return null;
   }
-  if (!/^[0-9a-f]{40}$/u.test(revision) || status.length !== 0) {
-    return null;
+  const paths = packagedInputPaths(packageRoot, manifest.files ?? []);
+  const signature = [];
+  for (const relative of paths) {
+    let stat;
+    try {
+      stat = fs.statSync(path.join(packageRoot, relative));
+    } catch {
+      /* Vanished between the walk and the stat: the next run sees it. */
+      continue;
+    }
+    signature.push(`${relative}\u0000${stat.size}\u0000${stat.mtimeMs}`);
   }
-  return sha256Hex(`${revision}\n${EXPORTER_SOURCE_SHA256}\n${process.version}\n`);
+  return sha256Hex(
+    `${sha256Hex(fs.readFileSync(path.join(packageRoot, "package.json")))}\n`
+    + `${sha256Hex(signature.join("\n"))}\n`
+    + `${EXPORTER_SOURCE_SHA256}\n`
+    + `${process.version}\n`
+  );
 }
 
 function cachedArtifactPaths(packageRoot, key) {
@@ -220,8 +277,50 @@ function writeCachedArtifact(packageRoot, key, result) {
     fs.writeFileSync(temporaryMeta, `${JSON.stringify(meta)}\n`);
     fs.renameSync(temporaryBuffer, paths.buffer);
     fs.renameSync(temporaryMeta, paths.meta);
+    pruneCachedArtifacts(packageRoot, key);
   } catch {
     /* The cache is an accelerator, never a dependency. */
+  }
+}
+
+/*
+    Keeps the newest few entries and best-effort removes the rest: every
+    packaged change writes a ~7 MB pair, and nothing reads an old key
+    again. Racing processes may delete an entry another is about to read;
+    a miss re-exports, which is the behavior the race replaced.
+ */
+function pruneCachedArtifacts(packageRoot, keepKey) {
+  const directory = path.join(packageRoot, ".artifacts", "export-cache");
+  let names;
+  try {
+    names = fs.readdirSync(directory);
+  } catch {
+    return;
+  }
+  const entries = [];
+  for (const name of names) {
+    if (!name.endsWith(".unitypackage")) {
+      continue;
+    }
+    const key = name.slice(0, -".unitypackage".length);
+    if (key === keepKey) {
+      continue;
+    }
+    try {
+      entries.push({ key, mtimeMs: fs.statSync(path.join(directory, name)).mtimeMs });
+    } catch {
+      /* Vanished mid-prune: nothing to do. */
+    }
+  }
+  entries.sort((left, right) => right.mtimeMs - left.mtimeMs);
+  for (const entry of entries.slice(3)) {
+    for (const suffix of [".unitypackage", ".json"]) {
+      try {
+        fs.rmSync(path.join(directory, `${entry.key}${suffix}`), { force: true });
+      } catch {
+        /* Best effort; a leftover entry only costs disk. */
+      }
+    }
   }
 }
 
@@ -497,4 +596,4 @@ if (isMain) {
   main();
 }
 
-export { collectAssets, exportUnityPackage, gzipDeterministic, packagedList, resolveRootPrefix, buildTar, artifactCacheKey };
+export { collectAssets, exportUnityPackage, gzipDeterministic, packagedList, resolveRootPrefix, buildTar, artifactCacheKey, readCachedArtifact };
