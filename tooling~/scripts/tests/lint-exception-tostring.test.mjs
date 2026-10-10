@@ -54,6 +54,16 @@ const EXEMPT = [
   ],
 
   [
+    ".Message quoted inside a Debug.Log call's own string argument",
+    'Debug.LogError("To diagnose, inspect ex.Message in your handler.");',
+  ],
+
+  [
+    ".Message quoted in a second argument while a hole carries the exception",
+    'Debug.LogError(LogTextSanitizer.Sanitize($"why {e}" + " see ex.Message"));',
+  ],
+
+  [
     ".Message inside a nested string in a hole is data, and the hole's own code is code",
     'Debug.Log(LogTextSanitizer.Sanitize($"wrapped {LogTextSanitizer.Sanitize(e)} tail"));',
   ],
@@ -106,6 +116,11 @@ const VIOLATIONS = [
     "an unwrapped log call is not an escape",
     'Debug.Log($"provider failed: {provider.Message}");',
     "provider.Message"
+  ],
+  [
+    "a chained exception member inside a hole",
+    'Debug.LogError($"rethrow lost: {ex.InnerException.Message}");',
+    "ex.InnerException.Message"
   ]
 ];
 

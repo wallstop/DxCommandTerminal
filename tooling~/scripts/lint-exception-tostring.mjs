@@ -20,7 +20,11 @@
     scanner (tooling~/scripts/lib/csharp-interpolation.mjs), so a `.Message`
     inside a comment or a plain string cannot trip the rule, and one inside
     an interpolation hole - the shape that carries it to the Console - is
-    always seen.
+    always seen. Stated limit: a plain string NESTED inside a hole (e.g.
+    `{config["ex.Message"]}`) is hole text to the scanner and will read as a
+    violation; write such a lookup without the word `.Message` in the key,
+    because the gate cannot tell it from a member access without tracking
+    nested literal spans.
 
     There is no `--fix` on purpose: choosing where the full exception reads
     well is a per-call decision, not a mechanical rewrite.
@@ -39,14 +43,13 @@ const SCAN_ROOTS = process.env.EXCEPTION_TOSTRING_ROOTS
   ? process.env.EXCEPTION_TOSTRING_ROOTS.split(path.delimiter).filter(Boolean)
   : ["Runtime", "Editor"];
 
-const { blankComments, callCloseParen, classify, firstArgumentSpan, lineOf, startsInside } =
-  await import(
-    pathToFileURL(path.join(REPO_ROOT, "tooling~", "scripts", "lib", "csharp-interpolation.mjs")).href
-  );
+const { blankComments, callCloseParen, classify, lineOf, startsInside } = await import(
+  pathToFileURL(path.join(REPO_ROOT, "tooling~", "scripts", "lib", "csharp-interpolation.mjs")).href
+);
 
 /* `\b` matches the tail of `UnityEngine.Debug.` too. LogException already takes the exception. */
 const DEBUG_LOG_CALL = /\bDebug\.(?:Log|LogWarning|LogError)\s*\(/g;
-const MEMBER_MESSAGE = /(?<![\w.])\w+\.Message\b/g;
+const MEMBER_MESSAGE = /(?<![\w.])\w+(?:\.\w+)*\.Message\b/g;
 
 /**
  * One-based line numbers whose code text puts an `x.Message` inside a
@@ -67,7 +70,13 @@ export function exceptionMessageViolations(rawText) {
       continue;
     }
 
-    for (const candidate of code.slice(openParen, closeParen).matchAll(MEMBER_MESSAGE)) {
+    /*
+        Literal text is data, hole text is code: blank each literal span
+        except its recorded hole spans, so a `.Message` inside a quoted
+        sentence cannot trip the rule while a hole's expression always can.
+     */
+    const argumentText = blankLiteralText(code.slice(openParen, closeParen), literals, openParen);
+    for (const candidate of argumentText.matchAll(MEMBER_MESSAGE)) {
       violations.push({
         line: lineOf(rawText, openParen + candidate.index),
         text: candidate[0],
@@ -76,6 +85,31 @@ export function exceptionMessageViolations(rawText) {
   }
 
   return violations;
+}
+
+/** The span's text with literal contents blanked, hole spans kept. */
+function blankLiteralText(span, literals, openParen) {
+  const characters = span.split("");
+  for (const literal of literals) {
+    if (literal.start < openParen || literal.end > openParen + span.length) {
+      continue;
+    }
+
+    const holeSpans = literal.interpolated
+      ? literal.holes.filter((hole) => hole.start >= literal.start && hole.end <= literal.end)
+      : [];
+    for (let index = literal.start; index < literal.end; ++index) {
+      if (holeSpans.some((hole) => hole.start <= index && index < hole.end)) {
+        continue;
+      }
+
+      if (characters[index - openParen] !== "\n") {
+        characters[index - openParen] = " ";
+      }
+    }
+  }
+
+  return characters.join("");
 }
 
 function listFiles(root) {

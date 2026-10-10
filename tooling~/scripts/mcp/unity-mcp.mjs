@@ -2057,14 +2057,14 @@ export function captureScriptSourcePath(repoRoot = REPO_ROOT) {
 }
 
 export function captureInstallTarget(projectPath, target = CAPTURE_TARGET_NAME) {
-  return path.join(path.resolve(projectPath), "Assets", "Editor", target);
+  return path.join(resolveProjectPath(projectPath), "Assets", "Editor", target);
 }
 
 export function captureArtifactRoot(projectPath, layoutPath = projectPath) {
-  const project = path.resolve(projectPath);
+  const project = resolveProjectPath(projectPath);
   // The package probe needs a locally visible root: a host path does not exist
   // in a container, which would silently select the Library fallback.
-  const packageRoot = path.join(path.resolve(layoutPath), "Packages", CAPTURE_PACKAGE_NAME);
+  const packageRoot = path.join(resolveProjectPath(layoutPath), "Packages", CAPTURE_PACKAGE_NAME);
   return fs.existsSync(packageRoot)
     ? path.join(project, "Packages", CAPTURE_PACKAGE_NAME, ".artifacts", "unity-state")
     : path.join(project, "Library", "DxTerminalStateCapture");
@@ -2125,6 +2125,11 @@ export function evalResultText(text) {
  * without raising a tool error, so the failure text must be surfaced
  * explicitly or capture failures become deadline timeouts. Returns the
  * failure message, or null when the answer is not a failed envelope.
+ *
+ * Framing note: the Pipeline-generation bridge raises a thrown envelope as a
+ * tool error (isError), which callFirstWorking's transient check reads; the
+ * non-error framing below is the older backend's, where an envelope answer
+ * flows to the caller's assertEvalAnswer.
  */
 export function evalFailure(text) {
   const parsed = parseEnvelope(text);
@@ -2293,19 +2298,120 @@ function reconnectingSession(connect) {
   };
 }
 
-/** Beta backend tool schemas drift; try each documented argument shape until one answers. */
-async function callFirstWorking(client, candidates, signal) {
-  const tried = [];
-  for (const candidate of candidates) {
-    try {
-      const call = await client.callTool(candidate, undefined, { signal });
-      if (call.isError) throw new Error(extractText(call).slice(0, 200) || "tool reported an error");
-      return { candidate, call };
-    } catch (error) {
-      tried.push(`${candidate.name}: ${error.message}`);
+/*
+    The editor serves tool calls on its main thread, so a request that lands
+    during a compile or a domain reload comes back as a busy signal - the
+    bridge answers 400 "Main thread operation timed out", resets the
+    connection, refuses the relay port, or returns a Runtime Error envelope
+    from code that threw mid-reload. None of those is a schema mismatch: the
+    same call answers once the editor is free. What IS a schema mismatch is
+    the bridge's own parameter-validation and command-not-found answers -
+    deterministic, so the variant is dropped and the next shape is tried.
+
+    The first capture runs against the Pipeline-generation bridge failed
+    exactly here (issue #211): one busy window burned every variant, and the
+    loud refusal quoted a missing-'code' answer from the wrong-schema variant
+    next door, which read as an eval schema mismatch. The schema was right;
+    the editor was reloading.
+ */
+const TRANSIENT_TOOL_ERROR = [
+  /main thread operation timed out/i,
+  // Observed live: "Failed to execute command 'eval': Connection reset by server".
+  /connection reset/i,
+  /econnreset/i,
+  // undici's whole message for a socket that died mid-request is "terminated";
+  // anchored, so "Unterminated string literal" (a permanent compile error)
+  // never reads as a busy editor.
+  /^terminated$/i,
+  /socket hang up/i,
+  /cannot connect to .*pipeline server/i
+];
+
+function transientToolErrorMessage(message) {
+  return TRANSIENT_TOOL_ERROR.some((pattern) => pattern.test(message));
+}
+
+/*
+    A thrown failure envelope with empty diagnostics is a runtime throw - the
+    eval'd code dying mid-reload is the observed case - so it is transient.
+    Diagnostics mean the code itself cannot compile; retrying repeats them.
+ */
+function transientEnvelopeFailure(text) {
+  const parsed = parseEnvelope(text);
+  if (parsed === null || parsed.success !== false) return false;
+  const diagnostics = Array.isArray(parsed.diagnostics) ? parsed.diagnostics : [];
+  return diagnostics.length === 0;
+}
+
+const TOOL_VERDICT = Object.freeze({ ANSWERED: 0, SCHEMA: 1, TRANSIENT: 2 });
+
+async function attemptToolCall(client, candidate, signal) {
+  let call;
+  try {
+    call = await client.callTool(candidate, undefined, { signal });
+  } catch (error) {
+    const message = error?.message ?? String(error);
+    return transientToolErrorMessage(message)
+      ? { verdict: TOOL_VERDICT.TRANSIENT, message }
+      : { verdict: TOOL_VERDICT.SCHEMA, message };
+  }
+
+  const text = extractText(call);
+  if (call.isError) {
+    const message = text.slice(0, 200) || "tool reported an error";
+    const transient = transientToolErrorMessage(message) || transientEnvelopeFailure(text);
+    return transient
+      ? { verdict: TOOL_VERDICT.TRANSIENT, message }
+      : { verdict: TOOL_VERDICT.SCHEMA, message };
+  }
+
+  return { verdict: TOOL_VERDICT.ANSWERED, call };
+}
+
+/**
+ * Beta backend tool schemas drift; try each documented argument shape until
+ * one answers. A busy editor is waited out until the deadline (the command's,
+ * or 30 s when the caller has none) instead of ending the command; a variant
+ * the bridge rejects outright never gets a second round. The final refusal
+ * names every variant and what it answered, so a genuine schema drift reads
+ * as one instead of hiding inside a busy window's noise.
+ */
+export async function callFirstWorking(client, candidates, signal, options = {}) {
+  const now = options.now ?? (() => Date.now());
+  const pause = options.pause ?? (() => new Promise((resolve) => setTimeout(resolve, 2_000)));
+  const deadline = options.deadline ?? now() + 30_000;
+  const pending = candidates.map((candidate) => ({ candidate }));
+  const schemaAnswers = [];
+  const transientAnswers = [];
+
+  while (pending.length > 0 && now() < deadline) {
+    let sawTransient = false;
+    for (let index = 0; index < pending.length && !sawTransient; ) {
+      const { candidate } = pending[index];
+      const attempt = await attemptToolCall(client, candidate, signal);
+      if (attempt.verdict === TOOL_VERDICT.ANSWERED) {
+        return { candidate, call: attempt.call };
+      }
+
+      const recorded = `${candidate.name}: ${attempt.message}`;
+      if (attempt.verdict === TOOL_VERDICT.TRANSIENT) {
+        transientAnswers.push(recorded);
+        sawTransient = true;
+        break;
+      }
+
+      schemaAnswers.push(recorded);
+      pending.splice(index, 1);
+    }
+
+    if (sawTransient && now() < deadline) {
+      await pause();
     }
   }
-  fail(`No backend tool variant answered. Tried:\n  ${tried.join("\n  ")}`);
+
+  fail(
+    `No backend tool variant answered. Tried:\n  ${[...schemaAnswers, ...transientAnswers].join("\n  ")}`
+  );
 }
 
 function extractText(call) {
@@ -2357,7 +2463,8 @@ export async function runCapture(options, runtime = {}) {
           { name: "Unity_RunCommand", arguments: { Command: expression } },
           { name: "Unity_RunCommand", arguments: { command: expression } }
         ],
-        signal
+        signal,
+        { deadline }
       );
 
     // Install through the container bind mount when one is configured. The
@@ -2774,7 +2881,8 @@ export async function runT4Capture(options, runtime = {}) {
           { name: "eval", arguments: { code: expression } },
           { name: "eval", arguments: { expression } }
         ],
-        signal
+        signal,
+        { deadline }
       );
 
     await waitForEditorIdle(evalCall, deadline);
@@ -2814,7 +2922,8 @@ export async function runT4Capture(options, runtime = {}) {
           arguments: { mode: "playmode", filter: T4_TEST_FILTER }
         }
       ],
-      signal
+      signal,
+      { deadline }
     );
     log(options, "debug", `run_tests via ${runTests.candidate.name}`);
 
@@ -3358,7 +3467,15 @@ async function noTestsMatchedSummary(client, signal, initial) {
   const candidates = [initial];
   try {
     candidates.push(
-      extractText((await callFirstWorking(client, [{ name: "test_status", arguments: {} }], signal)).call)
+      extractText(
+        (
+          await callFirstWorking(client, [{ name: "test_status", arguments: {} }], signal, {
+            // Best effort by contract: this poll's answer is optional, so it
+            // must not sit out a whole busy window inside a swallowed catch.
+            deadline: Date.now() + 5_000
+          })
+        ).call
+      )
     );
   } catch {}
 
@@ -3659,15 +3776,25 @@ export async function runUnityTests(options, runtime = {}) {
         cover every leg: sized for one leg it fires before the per-leg deadlines
         and a slow first suite still starves the second one.
      */
-    const signal = AbortSignal.timeout(sessionSignalBudgetMs(runTimeout, legs.length));
-    const evalCall = (expression) =>
+    const sessionBudgetMs = sessionSignalBudgetMs(runTimeout, legs.length);
+    const signal = AbortSignal.timeout(sessionBudgetMs);
+    /*
+        Every eval rides the CURRENT leg's deadline, not a fresh slice of the
+        session budget: a busy window inside one leg must not eat the next
+        leg's room, and the mid-run quiet wait needs its callers' refusals to
+        stay short (it polls test_status between attempts, and those polls are
+        what record a run as seen in flight).
+     */
+    let legDeadline = Date.now();
+    const evalCall = (expression, window = {}) =>
       callFirstWorking(
         client,
         [
           { name: "eval", arguments: { code: expression } },
           { name: "eval", arguments: { expression } }
         ],
-        signal
+        signal,
+        { deadline: window.deadline ?? legDeadline }
       );
 
     const summaries = [];
@@ -3681,7 +3808,7 @@ export async function runUnityTests(options, runtime = {}) {
           Each leg gets its own deadline: the flag reads as how long a run may
           take, and a slow first suite must not starve the second one.
        */
-      const legDeadline = Date.now() + runTimeout;
+      legDeadline = Date.now() + runTimeout;
       if (signal.aborted) {
         fail(
           `The run timeout (${runTimeout} ms per leg) is spent after `
@@ -3745,7 +3872,13 @@ async function pollTestStatus(client, signal, attempts = 5) {
   for (let attempt = 0; attempt < attempts; ++attempt) {
     try {
       return extractText(
-        (await callFirstWorking(client, [{ name: "test_status", arguments: {} }], signal)).call
+        (
+          await callFirstWorking(client, [{ name: "test_status", arguments: {} }], signal, {
+            // A short window per attempt: this poll has its own retry loop, and
+            // the command's freshness check needs a status answer promptly.
+            deadline: Date.now() + 5_000
+          })
+        ).call
       );
     } catch (error) {
       lastFailure = error;
@@ -3760,15 +3893,21 @@ async function pollTestStatus(client, signal, attempts = 5) {
 /*
     The mid-run variant of the idle wait: the editor being busy is the expected
     state while a run winds down, so a stalled answer ends the wait instead of
-    failing the command.
+    failing the command. The probe rides a SHORT window and a refusal returns
+    quietly, because the status poll that follows each attempt is what records
+    a run as seen in flight - a probe that blocked until the editor freed would
+    skip the in-flight polls and a second identical green run would read as
+    stale (found by Cursor Bugbot on PR #216).
  */
-async function waitForTestIdleQuietly(client, evalCall, deadline) {
+export async function waitForTestIdleQuietly(client, evalCall, deadline) {
   const expression =
     "return (UnityEditor.EditorApplication.isCompiling || UnityEditor.EditorApplication.isUpdating || UnityEditor.EditorApplication.isPlayingOrWillChangePlaymode);";
   for (let attempt = 0; attempt < 30; ++attempt) {
     if (Date.now() >= deadline) return;
     try {
-      const { call } = await evalCall(expression);
+      const { call } = await evalCall(expression, {
+        deadline: Math.min(Date.now() + 5_000, deadline)
+      });
       if (evalAnswerIsFalse(extractText(call))) return;
     } catch {
       return;
@@ -3954,7 +4093,8 @@ async function runTestLeg(client, signal, leg, filter, deadline, reporter = null
         arguments: filter === "" ? { mode: leg } : { mode: leg, filter }
       }
     ],
-    signal
+    signal,
+    { deadline }
   );
 
   const { summary, detail } = await awaitTestRunResult({
