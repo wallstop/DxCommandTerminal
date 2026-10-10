@@ -1,14 +1,28 @@
 name: Compat 2021
 
-# Member-level 2021.3 compile tripwire (issue #136). The docs build's
-# docfx extraction only surfaces missing types (CS0246); this lane
-# compiles the real Runtime sources against the same pinned UnityEngine
-# 2021.3.33 reference assemblies, so any member or API absent from the
-# oldest supported editor fails outright (CS1061 and friends). Warnings
-# are errors; the csproj documents the one define it sets and the
-# serialized-field warnings Unity assigns outside C#. Split out of
-# tooling-tests so only Runtime/tooling-compat changes run it - same
-# coverage, fewer jobs per run.
+# Two Unity-free compile-and-run lanes in one job (issues #136, #193),
+# under the name the lane has always had so required checks keep matching:
+#
+# - runtime-2021.3.csproj compiles the real Runtime sources against the
+#   pinned UnityEngine 2021.3.33 reference assemblies, so any member or
+#   API absent from the oldest supported editor fails outright (the
+#   member-level tripwire the docs build cannot see; it only surfaces
+#   missing types).
+# - tests-2021.3.csproj compiles Runtime plus every Tests/Editor source
+#   against the same assemblies, and testhost runs the engine-independent
+#   fixtures under NUnitLite against declared Unity stand-ins - so a test
+#   that cannot compile, or an engine-independent assertion that cannot
+#   pass, fails the job instead of landing green until some editor runs.
+#   One blind spot, stated: `#if UNITY_EDITOR` regions compile in no lane
+#   here (the pin has no UnityEditor assemblies); guarded test code is
+#   editor-answered only.
+#
+# One job, not two: both legs share the checkout, the SDK, and the NuGet
+# cache, and each adds seconds on top of a sub-minute lane. Warnings are
+# errors in both projects; no Unity is provisioned and no license is
+# consumed. Path filters: Runtime/tooling-compat changes rebuild the
+# runtime lane; Tests/Editor and Generator~ changes rebuild and rerun the
+# test lane.
 on:
   push:
     branches:
@@ -16,6 +30,8 @@ on:
       - main
     paths:
       - "Runtime/**"
+      - "Tests/Editor/**"
+      - "Generator~/**"
       - "tooling~/compat/**"
       - "tooling~/package.json"
       - "package.json"
@@ -26,6 +42,8 @@ on:
   pull_request:
     paths:
       - "Runtime/**"
+      - "Tests/Editor/**"
+      - "Generator~/**"
       - "tooling~/compat/**"
       - "tooling~/package.json"
       - "package.json"
@@ -45,6 +63,9 @@ jobs:
   compat-2021:
     name: compat-2021
     runs-on: ubuntu-latest
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -58,8 +79,11 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-compat-${{ hashFiles('tooling~/compat/runtime-2021.3.csproj') }}
+          key: ${{ runner.os }}-nuget-compat-${{ hashFiles('tooling~/compat/runtime-2021.3.csproj', 'tooling~/compat/tests-2021.3.csproj', 'tooling~/compat/testhost/testhost.csproj', 'Generator~/WallstopStudios.DxCommandTerminal.SourceGenerators/*.csproj') }}
           restore-keys: ${{ runner.os }}-nuget-compat-
 
       - name: Compile Runtime against 2021.3
         run: npm run compat:check
+
+      - name: Compile and run Tests/Editor without Unity
+        run: npm run test:editor

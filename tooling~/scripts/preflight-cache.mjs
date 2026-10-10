@@ -15,7 +15,7 @@ const CHECKOUT_ID = (() => {
     return REPO_ROOT;
   }
 })();
-const CACHE_DISABLED_CHECKS = new Set(["compat-check"]);
+const CACHE_DISABLED_CHECKS = new Set(["compat-check", "test-editor"]);
 const CACHE_PATH_KEYS = new Set([
   "COMPARISON_DIRECTION_ROOTS",
   "NESTED_TYPE_PLACEMENT_ROOTS",

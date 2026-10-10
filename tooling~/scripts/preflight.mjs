@@ -149,6 +149,14 @@ export function buildChecks() {
       ]
     },
     { name: "compat-check", command: "npm --prefix tooling~ run compat:check" },
+    {
+      // Not cached, same as compat-check: both are dotnet builds whose
+      // input surface is the whole tree, and the lane is seconds. A
+      // cached key over that surface either hashes everything or goes
+      // stale; neither is worth it.
+      name: "test-editor",
+      command: "npm --prefix tooling~ run test:editor"
+    },
     csharpCheck(
       "lint-comparison-direction",
       "node tooling~/scripts/lint-comparison-direction.mjs",

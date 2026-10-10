@@ -67,6 +67,7 @@ test("buildChecks: unique names, non-empty commands, expected canaries", () => {
     "package-validate",
     "docs-guides",
     "compat-check",
+    "test-editor",
     "lint-linq-production",
     "lint-docs-catalog"
   ];
@@ -74,7 +75,7 @@ test("buildChecks: unique names, non-empty commands, expected canaries", () => {
     assert.ok(names.includes(name), `expected check '${name}' in the default set`);
   }
   for (const check of checks) {
-    if (check.name !== "compat-check") {
+    if (check.name !== "compat-check" && check.name !== "test-editor") {
       assert.equal(check.cacheRuntimeEnvironment, true, `${check.name} must key inherited runtime state`);
     }
   }

@@ -13,21 +13,51 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     /// </summary>
     public static class CommandArgParsers
     {
-        public static bool Float(string input, out float parsed) =>
-            float.TryParse(
-                input,
-                NumberStyles.Float | NumberStyles.AllowThousands,
-                CultureInfo.InvariantCulture,
-                out parsed
-            );
+        public static bool Float(string input, out float parsed)
+        {
+            if (
+                !float.TryParse(
+                    input,
+                    NumberStyles.Float | NumberStyles.AllowThousands,
+                    CultureInfo.InvariantCulture,
+                    out parsed
+                )
+            )
+            {
+                return false;
+            }
 
-        public static bool Double(string input, out double parsed) =>
-            double.TryParse(
-                input,
-                NumberStyles.Float | NumberStyles.AllowThousands,
-                CultureInfo.InvariantCulture,
-                out parsed
-            );
+            if (IsOverflowedLiteral(input, parsed))
+            {
+                parsed = 0f;
+                return false;
+            }
+
+            return true;
+        }
+
+        public static bool Double(string input, out double parsed)
+        {
+            if (
+                !double.TryParse(
+                    input,
+                    NumberStyles.Float | NumberStyles.AllowThousands,
+                    CultureInfo.InvariantCulture,
+                    out parsed
+                )
+            )
+            {
+                return false;
+            }
+
+            if (IsOverflowedLiteral(input, parsed))
+            {
+                parsed = 0d;
+                return false;
+            }
+
+            return true;
+        }
 
         public static bool Decimal(string input, out decimal parsed) =>
             decimal.TryParse(input, NumberStyles.Number, CultureInfo.InvariantCulture, out parsed);
@@ -645,6 +675,40 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
             split = null;
             return false;
+        }
+
+        /*
+            A numeric literal too large for the type parses to an infinity
+            with a true answer on .NET Core 3.0+ runtimes, while the Unity
+            runtime this package ships on answers false to the same
+            literal. The non-numeric spellings resolve without the numeric
+            parser - `Infinity` and `NaN` parse on every runtime, and
+            `PositiveInfinity`/`NegativeInfinity` answer through the
+            named-constant path in CommandArg - so the only cross-runtime
+            divergence is an overflowed literal: the input starts with a
+            number, not a letter. Rejecting it keeps the parser's answer
+            identical on every runtime an argument can be read on, which
+            is what the float and double round-trip contracts pin.
+         */
+        private static bool IsOverflowedLiteral(string input, double parsed)
+        {
+            if (!double.IsInfinity(parsed))
+            {
+                return false;
+            }
+
+            int index = 0;
+            while (index < input.Length && char.IsWhiteSpace(input[index]))
+            {
+                ++index;
+            }
+
+            if (index < input.Length && (input[index] == '+' || input[index] == '-'))
+            {
+                ++index;
+            }
+
+            return index < input.Length && (char.IsDigit(input[index]) || input[index] == '.');
         }
     }
 }

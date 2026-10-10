@@ -1,0 +1,127 @@
+<!--
+    Unity-free execution host for the engine-independent Tests/Editor
+    fixtures (issue #193). tests-2021.3.csproj proves every Tests/Editor
+    file compiles against the pinned 2021.3.33 assemblies; this project
+    proves the engine-independent fixtures also *pass* - a red assertion
+    fails the job, so a broken test cannot land green (the #192 class).
+
+    How it works: the selected Runtime sources, the selected Tests/Editor
+    sources, and UnityStubs.cs compile into one assembly that never
+    references a real UnityEngine binary - the same stand-in pattern the
+    claim-grammar job (tooling~/scripts/mcp/grammar) uses for
+    DxTerminalStateCapture. UnityStubs implements only the surface the
+    included sources name, and implements the behaviors fixtures pin -
+    the caret setters, the system clipboard, the Debug log family -
+    genuinely. Nothing here replaces the engine: fixtures that need one
+    are excluded by name below, with the reason, and the live-editor
+    suite answers them.
+
+    Defines: UNITY_2022_1_OR_NEWER selects the caret-setter branches the
+    stub implements (2021.3's getters-only engine placement has no
+    Unity-free answer); ENABLE_LEGACY_INPUT_MANAGER is the same project
+    profile runtime-2021.3.csproj pins. UNITY_EDITOR is deliberately not
+    defined, so discovery exercises the reflection path, not
+    UnityEditor.TypeCache.
+
+    Run via `npm run test:editor` (builds tests-2021.3.csproj first: the
+    compile gate is the reason this host exists).
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <!-- The CI runner pins SDK 9.0.306; a local SDK 10+ runs the host on
+         its own runtime through this roll-forward. -->
+    <RollForward>LatestMajor</RollForward>
+    <LangVersion>9.0</LangVersion>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <NoWarn>$(NoWarn);NU1701;CS0649;CS0169;CS0414</NoWarn>
+    <DefineConstants>$(DefineConstants);UNITY_2022_1_OR_NEWER;ENABLE_LEGACY_INPUT_MANAGER</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="NUnit" Version="3.14.0" />
+    <PackageReference Include="NUnitLite" Version="3.14.0" />
+    <!-- The command catalog source generator, the same way Unity runs it:
+         as a Roslyn analyzer over this compilation. Without it the
+         generated catalog is absent and the catalog/discovery fixtures
+         would correctly report a missing catalog - a harness gap, not a
+         product answer. -->
+    <ProjectReference
+        Include="../../../Generator~/WallstopStudios.DxCommandTerminal.SourceGenerators/WallstopStudios.DxCommandTerminal.SourceGenerators.csproj"
+        OutputItemType="Analyzer"
+        ReferenceOutputAssembly="false"
+    />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Runtime, minus the analyzer project and the UI surfaces. The
+         excluded files share one of two stated reasons: they are UI
+         Toolkit (or UI-attached) surfaces the stub would have to become
+         UI Toolkit to compile, or they name a type an excluded surface
+         owns. No engine-independent fixture references any of them; the
+         live-editor PlayMode suite is what exercises them.
+         - UI/TerminalUI.cs, UI/CommandPaletteUI.cs: the two console
+           surfaces.
+         - UI/KeyEvents.cs: shared key helper used only by those two.
+         - Themes/TerminalThemePack.cs, Themes/TerminalFontPack.cs:
+           UIElements/Font asset payloads.
+         - Input/TerminalKeyboardController.cs,
+           Persistence/TerminalThemePersister.cs,
+           Persistence/TerminalThemeConfigurations.cs: reference
+           TerminalUI.
+         Everything else - the backend, settings, theme assets, input
+         helpers, discovery - compiles against the stub. -->
+    <Compile Include="../../../Runtime/**/*.cs" Exclude="../../../Runtime/Analyzers/**" />
+    <Compile Remove="../../../Runtime/CommandTerminal/UI/TerminalUI.cs" />
+    <Compile Remove="../../../Runtime/CommandTerminal/UI/CommandPaletteUI.cs" />
+    <Compile Remove="../../../Runtime/CommandTerminal/UI/KeyEvents.cs" />
+    <Compile Remove="../../../Runtime/CommandTerminal/Themes/TerminalThemePack.cs" />
+    <Compile Remove="../../../Runtime/CommandTerminal/Themes/TerminalFontPack.cs" />
+    <Compile Remove="../../../Runtime/CommandTerminal/Input/TerminalKeyboardController.cs" />
+    <Compile Remove="../../../Runtime/CommandTerminal/Persistence/TerminalThemePersister.cs" />
+    <Compile Remove="../../../Runtime/CommandTerminal/Persistence/TerminalThemeConfigurations.cs" />
+    <!-- SceneObjectArgumentAdapter resolves scene objects by name and type,
+         which is a live-scene question; the excluded scaling tests are its
+         only in-repo callers, and the live-editor suite answers it. -->
+    <Compile Remove="../../../Runtime/CommandTerminal/Backend/SceneObjectArgumentAdapter.cs" />
+
+    <!-- Tests/Editor, minus the fixtures that need a live editor, each
+         for a stated reason:
+         - CommandCompletionTests, CommandReflectionBindingTests: assert
+           through LogAssert, the editor's own log pump; the stub cannot
+           stand in for what it asserts against.
+         - CommandDiscoveryScalingTests, StandardOperationsBenchmarkTests:
+           wall-clock tripwires with host-pinned budgets (cold 40 ms,
+           warm median 8 ms); a shared CI runner cannot answer them and
+           the plan's measurement rules keep timing claims on the pinned
+           host.
+         Everything else runs here. A new fixture lands in the run set by
+         default; moving a file out of the exclusion list above is the
+         whole widening step. -->
+    <Compile Include="../../../Tests/Editor/**/*.cs" />
+    <Compile Remove="../../../Tests/Editor/CommandCompletionTests.cs" />
+    <Compile Remove="../../../Tests/Editor/CommandReflectionBindingTests.cs" />
+    <Compile Remove="../../../Tests/Editor/CommandDiscoveryScalingTests.cs" />
+    <Compile Remove="../../../Tests/Editor/StandardOperationsBenchmarkTests.cs" />
+    <!-- LogTextSanitizerTests: 4 of its 15 methods drive
+         CommandPaletteUI.ClampOutputLength, which needs a live
+         UnityEngine.Object - the exact limit the scratch harness in the
+         issue hit. The host cannot stand in for the palette, so the file
+         runs on the live editor only; the compile gate still compiles it.
+         - CommandDiscoveryProviderTests: its providers serve a
+           Reflection.Emit dynamic assembly the fixture creates only under
+           UNITY_EDITOR (players do not support Reflection.Emit), and the
+           host deliberately does not define UNITY_EDITOR - discovery
+           must exercise the reflection path. Without the define the rig
+           is null and every case reds on the harness, not the product;
+           the live editor runs the file.
+         Everything else runs here. A new fixture lands in the run set by
+         default; moving a file out of the exclusion list above is the
+         whole widening step. -->
+    <Compile Remove="../../../Tests/Editor/LogTextSanitizerTests.cs" />
+    <Compile Remove="../../../Tests/Editor/CommandDiscoveryProviderTests.cs" />
+    <Compile Include="UnityStubs.cs" />
+    <Compile Include="Program.cs" />
+  </ItemGroup>
+</Project>
