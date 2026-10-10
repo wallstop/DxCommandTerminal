@@ -1,0 +1,44 @@
+<!--
+    Tests/Editor compile tripwire (issue #193). No CI lane compiled
+    Tests/Editor, so a test that could not compile (a missing using, a
+    renamed member) landed green until a live editor ran it. This project
+    compiles the real Runtime sources plus every Tests/Editor source
+    against the same pinned UnityEngine 2021.3.33 reference assemblies
+    the package minimum (and runtime-2021.3.csproj) pins, so a broken
+    test fails the build outright.
+
+    UnityEngine.TestRunner (LogAssert) is not part of the
+    UnityEngine.Modules package; tests/LogAssertCompileStub.cs stands in
+    for the members the suite calls. The stub is compile-only: the two
+    files that call LogAssert run on a live editor, never here.
+
+    Execution of the engine-independent fixtures is testhost/'s job;
+    this project only answers "does it compile against 2021.3".
+
+    Run via `dotnet build tooling~/compat/tests-2021.3.csproj`, or as
+    part of `npm run test:editor`.
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!--
+        CS0649/CS0169/CS0414: Unity assigns serialized fields outside C#, so
+        a Unity-free compile sees them as never assigned/used.
+    -->
+    <NoWarn>$(NoWarn);NU1701;CS0649;CS0169;CS0414</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="UnityEngine.Modules" Version="2021.3.33" />
+    <PackageReference Include="NUnit" Version="3.14.0" />
+    <Compile Include="../../Runtime/**/*.cs" Exclude="../../Runtime/Analyzers/**" />
+    <Compile Include="../../Tests/Editor/**/*.cs" />
+    <Compile Include="tests/LogAssertCompileStub.cs" />
+  </ItemGroup>
+  <PropertyGroup>
+    <DefineConstants>$(DefineConstants);ENABLE_LEGACY_INPUT_MANAGER</DefineConstants>
+  </PropertyGroup>
+</Project>
