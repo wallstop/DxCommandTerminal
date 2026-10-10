@@ -3,6 +3,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     using System;
     using System.Collections.Generic;
     using System.Diagnostics;
+    using System.Threading;
     using Backend;
     using NUnit.Framework;
     using UnityEngine;
@@ -19,6 +20,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         are environment-specific and are not the plan's numeric gates. All
         windows are warmed steady state. Allocation claims live in the
         allocation suite, never here.
+
+        The contended log rows are the per-write and per-frame read costs of
+        the locked ring while a background thread logs - the cost issue #197's
+        synchronization added, which the single-threaded log-write rows cannot
+        state. The writer side is one aggregate over its whole flood and says
+        so; the read side is the same warmed distribution as every other row.
     */
     public sealed class StandardOperationsBenchmarkTests
     {
@@ -239,6 +246,121 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             OperationReport none = MeasureWithMode(TerminalStackTraceMode.Disabled);
             LogScale("log-write", "mode=ErrorsAndWarnings type=ShellMessage", errorsAndWarnings);
             LogScale("log-write", "mode=Disabled type=ShellMessage", none);
+        }
+
+        /*
+            The locked ring under its production shape: a background thread
+            logging while the main thread reads the window, which is the frame
+            loop issue #197 protects. Three numbers on one warmed ring:
+
+            - log-read, no writer: the per-frame CopyTo cost the lock itself
+              adds when nobody contends.
+            - log-read-under-flood: the same read while a writer keeps taking
+              the lock - the contention the terminal accepts every frame a
+              worker logs.
+            - log-write-under-flood: one aggregate over the writer's whole
+              flood, the per-write cost a log call pays under that contention.
+              It is a total divided by a count, not a distribution, and the
+              line says so.
+         */
+        [Test]
+        public void MeasuresContendedLogWriteAndRead()
+        {
+            FillLogToCapacity();
+
+            LogItem[] window = new LogItem[LogCapacity];
+            Assert.AreEqual(
+                LogCapacity,
+                _log.CopyTo(window),
+                "Sanity: the read must copy the full wrapped window"
+            );
+
+            OperationReport uncontendedRead = Measure(
+                () => _log.CopyTo(window),
+                DefaultSampleCount
+            );
+            LogScale("log-read", $"window={LogCapacity} writer=none", uncontendedRead);
+
+            const int batch = 2_000;
+            const int batches = 100;
+            using ManualResetEventSlim floodStarted = new(false);
+            Exception writerFailure = null;
+            long writes = 0;
+            double writerMilliseconds = 0;
+
+            Thread writer = new(() =>
+            {
+                long total = 0;
+                Stopwatch stopwatch = Stopwatch.StartNew();
+                try
+                {
+                    for (int i = 0; i < batches; ++i)
+                    {
+                        for (int j = 0; j < batch; ++j)
+                        {
+                            _log.HandleLog(
+                                "bench message",
+                                string.Empty,
+                                TerminalLogType.ShellMessage
+                            );
+                        }
+
+                        total += batch;
+                        floodStarted.Set();
+                    }
+                }
+                catch (Exception exception)
+                {
+                    writerFailure = exception;
+                }
+                finally
+                {
+                    stopwatch.Stop();
+                    writes = total;
+                    writerMilliseconds = stopwatch.Elapsed.TotalMilliseconds;
+                }
+            })
+            {
+                Name = "bench-log-flood",
+                IsBackground = true,
+            };
+
+            /*
+                The read is sampled once the writer signals its first batch.
+                The gate proves overlap began, not that it holds for the whole
+                window - a preempted main thread can sample a quiet stretch of
+                the flood - so the row is evidence of the contended shape, not
+                a per-sample contention guarantee. If the signal never comes,
+                the writer is joined and the surfaced failure names what the
+                flood thread threw.
+             */
+            writer.Start();
+            bool floodStartedInTime = floodStarted.Wait(10_000);
+            OperationReport contendedRead;
+            try
+            {
+                Assert.IsTrue(
+                    floodStartedInTime,
+                    "Sanity: the flood must start before the contended read is "
+                        + $"sampled (flood failure: {writerFailure})"
+                );
+                contendedRead = Measure(() => _log.CopyTo(window), DefaultSampleCount);
+            }
+            finally
+            {
+                writer.Join();
+            }
+
+            Assert.That(writerFailure == null, $"Contended writes must not throw: {writerFailure}");
+            Assert.AreEqual(batch * batches, writes, "Sanity: the flood must run every batch");
+
+            LogScale("log-read-under-flood", $"window={LogCapacity}", contendedRead);
+            double perWriteMicroseconds = writerMilliseconds * 1000.0 / writes;
+            Debug.Log(
+                $"[DxCommandTerminal][Scale] op=log-write-under-flood aggregate=total/n "
+                    + $"writes={writes} totalMs={writerMilliseconds:F3} "
+                    + $"perWriteUs={perWriteMicroseconds:F4}"
+            );
         }
 
         [Test]

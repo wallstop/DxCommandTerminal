@@ -3067,7 +3067,17 @@ export function parseRunClaim(text) {
   // and never "another run's claim" that would suppress the start grace.
   const token = fields.get("token") ?? null;
   if (token === null || token === "") return { state: "unreadable", token: null };
-  if (head === "running") return { state: "running", token, mode: fields.get("mode") ?? null };
+  if (head === "running") {
+    return {
+      state: "running",
+      token,
+      mode: fields.get("mode") ?? null,
+      // The start timestamp a running claim carries. It is what lets a reader
+      // say "acknowledged at T, never reported finished" instead of guessing
+      // between a long capture leg and an editor that can no longer report.
+      started: fields.get("started") ?? null
+    };
+  }
   if (head === "did-not-run") {
     // The reason is the rest of the line, so it stays readable English; a
     // refusal with no reason text is still a refusal.
@@ -3227,6 +3237,16 @@ function assertClaimMode(mode, expected) {
  * A missing claim path or token is refused here instead of reading as "no claim
  * yet": a wiring mistake must never look like patience.
  *
+ * When the deadline passes while this run's own claim still says `running`, the
+ * answer is `running-at-deadline`, not `no-claim`: the editor acknowledged this
+ * run and never reported it finished. That is the shape of a run cancelled out
+ * of a wedged editor (issue #207) - the main thread is stuck inside a test, so
+ * no callback, the finish callback included, can run to write the claim. A
+ * cancelled-but-responsive editor does reach the finish callback and reports a
+ * terminal claim, so a claim still running at the deadline names the wedged
+ * editor instead of sending the next diagnosis after a line that was never
+ * missing.
+ *
  * `now` and `sleep` cover this loop only.
  */
 export async function awaitRunClaim({
@@ -3249,6 +3269,18 @@ export async function awaitRunClaim({
   const requested = requestedAt ?? now();
   let started = false;
   let sawForeign = false;
+
+  /*
+      Whether this run's claim was ever seen in the running state, and the
+      `started=` value it carried then. The deadline uses the pair to tell "the
+      editor never acknowledged this run" from "it acknowledged the run and
+      never finished it". The latch is deliberately sticky: a finish line for
+      this token was never observed, so later lines from other runs do not
+      turn the answer back into "no claim" - they are named in the detail
+      instead.
+   */
+  let oursRunning = false;
+  let oursRunningStartedAt = null;
   let text = read(claim);
   for (;;) {
     const observed = parseRunClaim(text);
@@ -3270,6 +3302,10 @@ export async function awaitRunClaim({
       if (observed.state === "refused") {
         return { state: "refused", reason: observed.reason };
       }
+      if (observed.state === "running") {
+        oursRunning = true;
+        oursRunningStartedAt = observed.started;
+      }
     } else if (observed.state === "refused" && observed.token === RUN_UNATTRIBUTED_TOKEN) {
       // The editor found no request at all: the two sides disagree about the
       // claim directory, or a run nobody requested is in flight. Its own reason
@@ -3287,6 +3323,18 @@ export async function awaitRunClaim({
     }
     const remainingMs = deadline - now();
     if (remainingMs <= 0) {
+      if (oursRunning) {
+        return {
+          state: "running-at-deadline",
+          detail:
+            "this run's claim was acknowledged"
+              + (oursRunningStartedAt ? ` at ${oursRunningStartedAt}` : "")
+              + " but never reported finished"
+              + (sawForeign
+                ? "; the claim on disk now belongs to another run"
+                : "")
+        };
+      }
       return {
         state: "no-claim",
         detail: sawForeign

@@ -35,6 +35,7 @@ package-lock.json.meta
 
 # Session work logs (local only)
 GOAL.md*
+PLAN.md*
 progress/
 progress.meta
 
