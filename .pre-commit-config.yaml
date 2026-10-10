@@ -20,11 +20,16 @@ repos:
         types:
           - c#
         description: CSharpier is an opinionated C# formatter inspired by Prettier.
+      # Repo-wide linters are scoped to their input domain: a staged change
+      # outside a domain cannot change that domain's verdict, so re-running it
+      # per commit only cost wall time (the commit tax was ~25 s, paid again at
+      # pre-push). CI (tooling-tests) still runs every linter unconditionally
+      # on every push and PR, which keeps the full-repo scan as the backstop.
       - id: comparison-direction-lint
         name: Lint C# comparison direction (only '<' and '<='; issue #51)
         entry: node tooling~/scripts/lint-comparison-direction.mjs
         language: system
-        always_run: true
+        files: \.cs$
         pass_filenames: false
         stages:
           - pre-commit
@@ -37,7 +42,7 @@ repos:
         name: Lint C# member ordering and nested-type placement (issue #50)
         entry: node tooling~/scripts/lint-member-ordering.mjs
         language: system
-        always_run: true
+        files: \.cs$
         pass_filenames: false
         stages:
           - pre-commit
@@ -51,7 +56,7 @@ repos:
         name: Lint C# multi-line comments (block comments, not stacked '//'; PR #57 review)
         entry: node tooling~/scripts/lint-multiline-comments.mjs
         language: system
-        always_run: true
+        files: \.cs$
         pass_filenames: false
         stages:
           - pre-commit
@@ -64,7 +69,7 @@ repos:
         name: Lint LINQ ban in production code (Runtime/, Editor/; PR #60 review)
         entry: node tooling~/scripts/lint-linq-production.mjs
         language: system
-        always_run: true
+        files: \.cs$
         pass_filenames: false
         stages:
           - pre-commit
@@ -78,7 +83,7 @@ repos:
         name: Lint explicit string comparisons (Runtime/, Editor/; PR #73 review)
         entry: node tooling~/scripts/lint-string-equality.mjs
         language: system
-        always_run: true
+        files: \.cs$
         pass_filenames: false
         stages:
           - pre-commit
@@ -92,7 +97,7 @@ repos:
         name: Lint out-parameter discipline (assign per path, before return; rule 13, issue #119)
         entry: node tooling~/scripts/lint-out-param-discipline.mjs
         language: system
-        always_run: true
+        files: \.cs$
         pass_filenames: false
         stages:
           - pre-commit
@@ -106,7 +111,7 @@ repos:
         name: Lint palette theme tokens (Themes/ coverage, .palette-* var() fallbacks)
         entry: node tooling~/scripts/lint-theme-palette-tokens.mjs
         language: system
-        always_run: true
+        files: ^Styles/
         pass_filenames: false
         stages:
           - pre-commit
@@ -120,7 +125,7 @@ repos:
         name: Lint Unity-object null assertions (rule 25, issue #98/#100)
         entry: node tooling~/scripts/lint-unity-null-patterns.mjs
         language: system
-        always_run: true
+        files: \.cs$
         pass_filenames: false
         stages:
           - pre-commit
@@ -133,7 +138,7 @@ repos:
         name: Lint .llm instructions (SKILL.md spec, index freshness, pointer delegation)
         entry: pwsh -NoProfile -File tooling~/scripts/lint-llm-instructions.ps1
         language: system
-        always_run: true
+        files: (^\.llm/)|(AGENTS\.md$)|(CLAUDE\.md$)|(^\.cursorrules$)|(^\.github/copilot-instructions\.md$)|(tooling~/scripts/(lint-llm-instructions|generate-skills-index)\.ps1$)
         pass_filenames: false
         stages:
           - pre-commit
@@ -146,7 +151,7 @@ repos:
         name: Enforce .llm line limits (300 hard, 270 critical)
         entry: pwsh -NoProfile -File tooling~/scripts/lint-skill-sizes.ps1
         language: system
-        always_run: true
+        files: (^\.llm/)|(tooling~/scripts/lint-skill-sizes\.ps1$)
         pass_filenames: false
         stages:
           - pre-commit
