@@ -868,6 +868,63 @@
             }
         }
 
+        /*
+            A paste into a ranked query must leave the bar serving the
+            argument the pasted caret sits in (#181, the test half of the
+            #180 fix). The paste path re-ranks against the caret the paste
+            computed, because a change event's caret is version-dependent -
+            the write dispatches before the caret lands, and 2021.3 exposes
+            the caret getters only. Measured on 6000.5.2f1 the change event's
+            caret agrees with the pasted one in this scenario, so the
+            fixture pins the contract both passes must reach: the token the
+            pasted caret sits in is the one the bar completes against.
+         */
+        [UnityTest]
+        public IEnumerator CtrlVPasteReranksAgainstTheCaretThePasteLeft()
+        {
+            yield return SpawnPalette();
+            RegisterSpawnItemCommand();
+
+            string originalClipboard = GUIUtility.systemCopyBuffer;
+            try
+            {
+                _palette.Open();
+                yield return null;
+
+                yield return SetQueryWithCaret("spawnitem torch 1", 15, 10);
+                Assert.IsTrue(
+                    _palette._completionMode,
+                    "Sanity: the parked caret ranks the first argument's candidates"
+                );
+
+                yield return SetClipboard("to");
+                yield return SendKeyDown(KeyCode.V, EventModifiers.Control);
+
+                Assert.AreEqual(
+                    "spawnitem to 1",
+                    _palette._input.value,
+                    "Sanity: the paste replaced the selected span; "
+                        + $"value=\"{_palette._input.value}\" "
+                        + $"clipboard=\"{GUIUtility.systemCopyBuffer}\" "
+                        + $"caret=[{_palette._input.selectIndex}, {_palette._input.cursorIndex}]"
+                );
+                Assert.IsTrue(
+                    _palette._completionMode,
+                    "The paste must leave the bar serving the argument the pasted caret sits in"
+                );
+                Assert.AreEqual(
+                    10,
+                    _palette._completionContext.ReplacementStart,
+                    "The re-rank must act on the token the pasted caret sits in, "
+                        + "not the token the pre-paste caret was in"
+                );
+            }
+            finally
+            {
+                GUIUtility.systemCopyBuffer = originalClipboard;
+            }
+        }
+
         [UnityTest]
         public IEnumerator ToggleFlipsOpenStateAndFiresEvents()
         {
@@ -2219,6 +2276,76 @@
             }
 
             yield return null;
+        }
+
+        /*
+            The palette's share of the retry-and-hold caret rig: a
+            programmatic caret write on a synthetic panel is clamped to the
+            last laid-out text length and can be re-clamped afterwards, so
+            the write retries until a read-back holds both ends of the
+            selection across two consecutive passes - the same two-pass rule
+            the palette's own caret queue applies, because the text element
+            runs its own caret reset after a value write. A bare cursorIndex
+            write followed by one frame does not hold.
+         */
+        private IEnumerator SetQueryWithCaret(string text, int cursorIndex, int selectIndex)
+        {
+            _palette._input.value = text;
+            yield return null;
+
+            int frameBudget = 300;
+            int heldPasses = 0;
+            while (heldPasses < 2 && 0 < frameBudget--)
+            {
+                _palette._input.selectIndex = selectIndex;
+                _palette._input.cursorIndex = cursorIndex;
+                yield return null;
+                if (
+                    _palette._input.cursorIndex == cursorIndex
+                    && _palette._input.selectIndex == selectIndex
+                )
+                {
+                    ++heldPasses;
+                }
+                else
+                {
+                    heldPasses = 0;
+                }
+            }
+
+            if (heldPasses < 2)
+            {
+                Assert.Fail(
+                    $"The caret never held at [{selectIndex}, {cursorIndex}); "
+                        + $"the field reported [{_palette._input.selectIndex}, {_palette._input.cursorIndex}]"
+                );
+            }
+        }
+
+        /*
+            Sets the system clipboard and waits until a read-back answers,
+            because this host's clipboard drops writes intermittently (#207):
+            a write followed by an immediate read sometimes answers empty or
+            the previous value. The paste reads the clipboard, so a dropped
+            write would fail the fixture for the environment's sake; the
+            retry is what makes the fixture about the caret instead.
+         */
+        private IEnumerator SetClipboard(string text)
+        {
+            for (int attempt = 0; attempt < 5; ++attempt)
+            {
+                GUIUtility.systemCopyBuffer = text;
+                yield return null;
+                if (GUIUtility.systemCopyBuffer == text)
+                {
+                    yield break;
+                }
+            }
+
+            Assert.Ignore(
+                $"The host clipboard did not hold \"{text}\" after five writes; "
+                    + "the paste fixture needs a platform that answers (#207)"
+            );
         }
     }
 }
