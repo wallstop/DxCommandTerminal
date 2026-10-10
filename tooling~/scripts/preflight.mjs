@@ -149,6 +149,11 @@ export function buildChecks() {
       ]
     },
     { name: "compat-check", command: "npm --prefix tooling~ run compat:check" },
+    {
+      name: "test-editor",
+      command: "npm --prefix tooling~ run test:editor",
+      cacheRuntimeEnvironment: true
+    },
     csharpCheck(
       "lint-comparison-direction",
       "node tooling~/scripts/lint-comparison-direction.mjs",
