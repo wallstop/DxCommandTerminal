@@ -49,9 +49,11 @@
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             Debug.Log(
-                $"[DxCommandTerminal] Discovered {commands.Count} auto-registered commands in "
-                    + $"{stopwatch.Elapsed.TotalMilliseconds:F2} ms (scanned {scanCandidates.Count} of "
-                    + $"{loadedAssemblies.Length} loaded assemblies)"
+                LogTextSanitizer.Sanitize(
+                    $"[DxCommandTerminal] Discovered {commands.Count} auto-registered commands in "
+                        + $"{stopwatch.Elapsed.TotalMilliseconds:F2} ms (scanned {scanCandidates.Count} of "
+                        + $"{loadedAssemblies.Length} loaded assemblies)"
+                )
             );
 #endif
 
@@ -411,9 +413,11 @@
                 catch (Exception e)
                 {
                     Debug.LogWarning(
-                        $"[DxCommandTerminal] Generated command catalog in "
-                            + $"{assembly.GetName().Name} failed to collect: {e.Message}; "
-                            + $"falling back to provider and reflection discovery"
+                        LogTextSanitizer.Sanitize(
+                            $"[DxCommandTerminal] Generated command catalog in "
+                                + $"{assembly.GetName().Name} failed to collect: {e.Message}; "
+                                + $"falling back to provider and reflection discovery"
+                        )
                     );
                 }
 
@@ -475,9 +479,11 @@
                     }
 
                     Debug.LogWarning(
-                        $"[DxCommandTerminal] Command discovery provider "
-                            + $"{provider.GetType().Name} failed for assembly "
-                            + $"{assembly.GetName().Name}: {e.Message}"
+                        LogTextSanitizer.Sanitize(
+                            $"[DxCommandTerminal] Command discovery provider "
+                                + $"{provider.GetType().Name} failed for assembly "
+                                + $"{assembly.GetName().Name}: {e.Message}"
+                        )
                     );
                 }
             }
@@ -695,7 +701,9 @@
                         catch (Exception e)
                         {
                             Debug.LogError(
-                                $"Failed to resolve method {method.Name} of type {type.FullName} with exception {e}"
+                                LogTextSanitizer.Sanitize(
+                                    $"Failed to resolve method {method.Name} of type {type.FullName} with exception {e}"
+                                )
                             );
                         }
                     }
@@ -703,7 +711,9 @@
                 catch (Exception e)
                 {
                     Debug.LogError(
-                        $"Failed to resolve methods for type {type.FullName} with exception {e}"
+                        LogTextSanitizer.Sanitize(
+                            $"Failed to resolve methods for type {type.FullName} with exception {e}"
+                        )
                     );
                 }
             }
@@ -759,8 +769,10 @@
             catch (Exception e)
             {
                 Debug.LogWarning(
-                    $"[DxCommandTerminal] Failed to probe for a generated command catalog in "
-                        + $"{assembly.GetName().Name}: {e.Message}"
+                    LogTextSanitizer.Sanitize(
+                        $"[DxCommandTerminal] Failed to probe for a generated command catalog in "
+                            + $"{assembly.GetName().Name}: {e.Message}"
+                    )
                 );
                 return null;
             }
@@ -784,8 +796,10 @@
             catch (Exception e)
             {
                 Debug.LogWarning(
-                    $"[DxCommandTerminal] Found a generated command catalog in "
-                        + $"{assembly.GetName().Name} but failed to bind it: {e.Message}"
+                    LogTextSanitizer.Sanitize(
+                        $"[DxCommandTerminal] Found a generated command catalog in "
+                            + $"{assembly.GetName().Name} but failed to bind it: {e.Message}"
+                    )
                 );
                 return null;
             }
@@ -806,8 +820,10 @@
             catch (Exception e)
             {
                 Debug.LogWarning(
-                    $"[DxCommandTerminal] Found a generated command catalog in "
-                        + $"{assembly.GetName().Name} but failed to bind it: {e.Message}"
+                    LogTextSanitizer.Sanitize(
+                        $"[DxCommandTerminal] Found a generated command catalog in "
+                            + $"{assembly.GetName().Name} but failed to bind it: {e.Message}"
+                    )
                 );
                 return null;
             }
@@ -828,8 +844,10 @@
                 */
                 types = e.Types;
                 Debug.LogWarning(
-                    $"Some types of assembly {assembly.FullName} failed to load; "
-                        + $"command discovery continues with the {e.Types.Length} types that loaded"
+                    LogTextSanitizer.Sanitize(
+                        $"Some types of assembly {assembly.FullName} failed to load; "
+                            + $"command discovery continues with the {e.Types.Length} types that loaded"
+                    )
                 );
                 return true;
             }
@@ -837,7 +855,9 @@
             {
                 types = Array.Empty<Type>();
                 Debug.LogError(
-                    $"Failed to enumerate types for assembly {assembly.FullName} with exception {e}"
+                    LogTextSanitizer.Sanitize(
+                        $"Failed to enumerate types for assembly {assembly.FullName} with exception {e}"
+                    )
                 );
                 return false;
             }
@@ -1203,7 +1223,9 @@
                 {
                     results.Clear();
                     Debug.LogError(
-                        $"[DxCommandTerminal] Completion provider for '{commandName}' failed: {e.Message}"
+                        LogTextSanitizer.Sanitize(
+                            $"[DxCommandTerminal] Completion provider for '{commandName}' failed: {e.Message}"
+                        )
                     );
                     return true;
                 }
@@ -1574,8 +1596,10 @@
                     catch (Exception e)
                     {
                         Debug.LogError(
-                            $"[DxCommandTerminal] Failed to bind command {commandName} "
-                                + $"(method {command.MethodName}): {e.Message}"
+                            LogTextSanitizer.Sanitize(
+                                $"[DxCommandTerminal] Failed to bind command {commandName} "
+                                    + $"(method {command.MethodName}): {e.Message}"
+                            )
                         );
                         continue;
                     }
@@ -1583,8 +1607,10 @@
                     if (proc == null)
                     {
                         Debug.LogError(
-                            $"[DxCommandTerminal] Failed to bind command {commandName} "
-                                + $"(method {command.MethodName}): no handler was produced"
+                            LogTextSanitizer.Sanitize(
+                                $"[DxCommandTerminal] Failed to bind command {commandName} "
+                                    + $"(method {command.MethodName}): no handler was produced"
+                            )
                         );
                         continue;
                     }
@@ -1624,9 +1650,11 @@
                 else
                 {
                     Debug.LogWarning(
-                        $"[DxCommandTerminal] Auto command {commandName} "
-                            + $"(method {command.MethodName}) skipped: a command with "
-                            + $"that name is already registered"
+                        LogTextSanitizer.Sanitize(
+                            $"[DxCommandTerminal] Auto command {commandName} "
+                                + $"(method {command.MethodName}) skipped: a command with "
+                                + $"that name is already registered"
+                        )
                     );
                 }
             }
@@ -1648,12 +1676,14 @@
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             Debug.Log(
-                $"[DxCommandTerminal] Registered {registeredCount} auto-registered commands in "
-                    + $"{stopwatch.Elapsed.TotalMilliseconds:F2} ms "
-                    + $"({catalogAssemblies} generated catalog(s), {providerAssemblies} "
-                    + $"provider-served assembly(ies), {reflectedAssemblies} "
-                    + $"reflection-scanned assembly(ies), {includedAssemblies} "
-                    + $"explicitly included assembly(ies))"
+                LogTextSanitizer.Sanitize(
+                    $"[DxCommandTerminal] Registered {registeredCount} auto-registered commands in "
+                        + $"{stopwatch.Elapsed.TotalMilliseconds:F2} ms "
+                        + $"({catalogAssemblies} generated catalog(s), {providerAssemblies} "
+                        + $"provider-served assembly(ies), {reflectedAssemblies} "
+                        + $"reflection-scanned assembly(ies), {includedAssemblies} "
+                        + $"explicitly included assembly(ies))"
+                )
             );
 #endif
         }
@@ -1670,8 +1700,10 @@
                 catch (Exception e)
                 {
                     Debug.LogWarning(
-                        $"[DxCommandTerminal] Failed to resolve rejected command {commandName} "
-                            + $"(method {command.MethodName}) for diagnostics: {e.Message}"
+                        LogTextSanitizer.Sanitize(
+                            $"[DxCommandTerminal] Failed to resolve rejected command {commandName} "
+                                + $"(method {command.MethodName}) for diagnostics: {e.Message}"
+                        )
                     );
                 }
             }
@@ -2288,15 +2320,19 @@
                     }
 
                     Debug.LogError(
-                        $"[DxCommandTerminal] Failed to bind command {_commandName} "
-                            + $"(method {_methodName}): no handler was produced"
+                        LogTextSanitizer.Sanitize(
+                            $"[DxCommandTerminal] Failed to bind command {_commandName} "
+                                + $"(method {_methodName}): no handler was produced"
+                        )
                     );
                 }
                 catch (Exception e)
                 {
                     Debug.LogError(
-                        $"[DxCommandTerminal] Failed to bind command {_commandName} "
-                            + $"(method {_methodName}): {e.Message}"
+                        LogTextSanitizer.Sanitize(
+                            $"[DxCommandTerminal] Failed to bind command {_commandName} "
+                                + $"(method {_methodName}): {e.Message}"
+                        )
                     );
                 }
 

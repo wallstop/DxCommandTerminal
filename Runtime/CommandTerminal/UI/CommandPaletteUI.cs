@@ -580,9 +580,11 @@
                     : focused == _input || _input.Contains(focused) ? "input"
                     : focused.name;
                 Debug.Log(
-                    $"[CommandPaletteUI] caret pass frame={Time.frameCount} pending={snapped}"
-                        + $" cursor={_input.cursorIndex} select={_input.selectIndex}"
-                        + $" valueLength={_input.value.Length} focus='{focusOwner}'",
+                    LogTextSanitizer.Sanitize(
+                        $"[CommandPaletteUI] caret pass frame={Time.frameCount} pending={snapped}"
+                            + $" cursor={_input.cursorIndex} select={_input.selectIndex}"
+                            + $" valueLength={_input.value.Length} focus='{focusOwner}'"
+                    ),
                     this
                 );
             }

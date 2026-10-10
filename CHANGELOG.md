@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Escape the text the package writes to Unity's Console window and the player log: a font, theme, command, or file name carrying invisible control or bidirectional characters now prints as its `\u202E` escape instead of reading as a name the project does not hold. The in-game console already showed that text and still does.
 - Fix ignored log entries landing when the ignore filter changed mid-write.
 - Make `CommandLog` own the ignore filter and stack-trace mode, configured through `TerminalUI` or `TerminalSettings`.
 

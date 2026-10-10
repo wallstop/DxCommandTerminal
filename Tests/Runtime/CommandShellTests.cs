@@ -6,6 +6,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     using System.Text;
     using System.Text.RegularExpressions;
     using Backend;
+    using Helper;
     using NUnit.Framework;
     using UI;
     using UnityEngine;
@@ -120,6 +121,70 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     exception = e;
                     throw;
                 }
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator LogCommandEscapesUserTextForUnityConsole()
+        {
+            yield return TerminalTests.SpawnTerminal(resetStateOnInit: true);
+
+            /*
+               These tests assert per-command logging only; applying deferred
+               registration up front keeps its readiness log out of the window.
+            */
+            Terminal.Shell.EnsureAutoCommandsRegistered();
+
+            /*
+                The `log` command hands developer-typed text to Debug.Log, whose
+                sink is Unity's Console window and the player log - surfaces the
+                in-game funnel never sanitizes - so the command escapes before
+                the call. A right-to-left override in the argument would
+                otherwise render "Adminexe" for a name the project does not
+                hold. The escape is idempotent, so the in-game terminal, which
+                captures this same call through the funnel, shows this same
+                text either way.
+            */
+            const string hostile = "Admin\u202Eexe";
+            const string expected = "Admin\\u202Eexe";
+            string consoleMessage = null;
+            int messageCount = 0;
+
+            Application.logMessageReceived += HandleMessageReceived;
+            try
+            {
+                Terminal.Shell.RunCommand($"log {hostile}");
+            }
+            finally
+            {
+                Application.logMessageReceived -= HandleMessageReceived;
+            }
+
+            Assert.AreEqual(
+                1,
+                messageCount,
+                $"Expected exactly one console message for 'log {hostile}'"
+            );
+            Assert.AreEqual(
+                expected,
+                consoleMessage,
+                "The log command must escape its arguments before Unity's Console shows them"
+            );
+
+            /*
+                The funnel captures this same Debug.Log call and sanitizes it
+                again, which is a same-reference pass, so the in-game terminal
+                shows this same text. That consistency is pinned where the
+                buffer is the asserted surface:
+                TerminalUISemanticTests.TheLogCommandShowsTheTerminalTheTextUnityConsoleSees.
+            */
+
+            yield break;
+
+            void HandleMessageReceived(string message, string stackTrace, LogType type)
+            {
+                ++messageCount;
+                consoleMessage = message;
             }
         }
 
@@ -282,7 +347,18 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                         expected += $" {quote}{quote} final string";
                         assertion = message =>
                             Assert.AreEqual(
-                                expected.Replace(quote.ToString(), string.Empty),
+                                /*
+                                    The console shows the sanitized text: the log
+                                    command escapes before Debug.Log, so a CR the
+                                    command carried arrives as a line feed, the
+                                    same normalization the in-game funnel applies.
+                                    The sanitized expectation keeps the break's
+                                    position, so a parse that dropped the CR still
+                                    fails here.
+                                */
+                                LogTextSanitizer.Sanitize(
+                                    expected.Replace(quote.ToString(), string.Empty)
+                                ),
                                 message
                             );
                         command = "log " + expected;
@@ -303,7 +379,18 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                         expected = $"{quote}{quote}";
                         assertion = message =>
                             Assert.AreEqual(
-                                expected.Replace(quote.ToString(), string.Empty),
+                                /*
+                                    The console shows the sanitized text: the log
+                                    command escapes before Debug.Log, so a CR the
+                                    command carried arrives as a line feed, the
+                                    same normalization the in-game funnel applies.
+                                    The sanitized expectation keeps the break's
+                                    position, so a parse that dropped the CR still
+                                    fails here.
+                                */
+                                LogTextSanitizer.Sanitize(
+                                    expected.Replace(quote.ToString(), string.Empty)
+                                ),
                                 message
                             );
                         command = "log " + expected;

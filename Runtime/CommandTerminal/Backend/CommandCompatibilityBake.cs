@@ -8,6 +8,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     using System.Security;
     using System.Text;
     using Attributes;
+    using Helper;
     using UnityEditor;
     using UnityEditor.Build;
     using UnityEditor.Build.Reporting;
@@ -299,8 +300,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             catch (Exception e)
             {
                 Debug.LogWarning(
-                    $"[DxCommandTerminal] Player compatibility bake manifest write failed: "
-                        + $"{e.Message}"
+                    LogTextSanitizer.Sanitize(
+                        $"[DxCommandTerminal] Player compatibility bake manifest write failed: "
+                            + $"{e.Message}"
+                    )
                 );
                 path = null;
                 return false;
@@ -558,8 +561,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
 
             Debug.Log(
-                $"[DxCommandTerminal] Player compatibility bake preserved {entries.Count} "
-                    + $"reflection-bound command handler(s) -> {path}"
+                LogTextSanitizer.Sanitize(
+                    $"[DxCommandTerminal] Player compatibility bake preserved {entries.Count} "
+                        + $"reflection-bound command handler(s) -> {path}"
+                )
             );
             return path;
         }

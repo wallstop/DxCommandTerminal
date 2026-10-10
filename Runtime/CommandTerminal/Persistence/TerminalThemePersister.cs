@@ -5,6 +5,7 @@ namespace WallstopStudios.DxCommandTerminal.Persistence
     using System.IO;
     using System.Threading.Tasks;
     using Attributes;
+    using Helper;
     using UI;
     using UnityEngine;
 
@@ -149,7 +150,9 @@ namespace WallstopStudios.DxCommandTerminal.Persistence
                         _lastSeenFont = null;
                         _lastSeenTheme = null;
                         Debug.LogError(
-                            $"Failed to read theme file {themeFile}: {readerTask.Exception}.",
+                            LogTextSanitizer.Sanitize(
+                                $"Failed to read theme file {themeFile}: {readerTask.Exception}."
+                            ),
                             this
                         );
                         yield break;
@@ -165,7 +168,9 @@ namespace WallstopStudios.DxCommandTerminal.Persistence
                     catch (Exception e)
                     {
                         Debug.LogError(
-                            $"Failed to parse theme file {themeFile}, defaulting to empty theme file: {e}",
+                            LogTextSanitizer.Sanitize(
+                                $"Failed to parse theme file {themeFile}, defaulting to empty theme file: {e}"
+                            ),
                             this
                         );
                         configurations = new TerminalThemeConfigurations();
@@ -175,7 +180,9 @@ namespace WallstopStudios.DxCommandTerminal.Persistence
                 {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
                     Debug.Log(
-                        $"Creating new theme file {themeFile} for terminal {terminal.id} ...",
+                        LogTextSanitizer.Sanitize(
+                            $"Creating new theme file {themeFile} for terminal {terminal.id} ..."
+                        ),
                         this
                     );
 #endif
@@ -216,7 +223,9 @@ namespace WallstopStudios.DxCommandTerminal.Persistence
                         else
                         {
                             Debug.LogWarning(
-                                $"Failed to find persisted font {existingConfiguration.font} for terminal {terminal.id} while hydrating.",
+                                LogTextSanitizer.Sanitize(
+                                    $"Failed to find persisted font {existingConfiguration.font} for terminal {terminal.id} while hydrating."
+                                ),
                                 this
                             );
                         }
@@ -245,7 +254,9 @@ namespace WallstopStudios.DxCommandTerminal.Persistence
                         else
                         {
                             Debug.LogWarning(
-                                $"Failed to find persisted theme {existingConfiguration.theme} for terminal {terminal.id} while hydrating.",
+                                LogTextSanitizer.Sanitize(
+                                    $"Failed to find persisted theme {existingConfiguration.theme} for terminal {terminal.id} while hydrating."
+                                ),
                                 this
                             );
                         }
@@ -256,7 +267,9 @@ namespace WallstopStudios.DxCommandTerminal.Persistence
                     {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
                         Debug.Log(
-                            $"Failed to find persisted configuration for terminal {terminal.id} while hydrating, defaulting to Prefab configuration.",
+                            LogTextSanitizer.Sanitize(
+                                $"Failed to find persisted configuration for terminal {terminal.id} while hydrating, defaulting to Prefab configuration."
+                            ),
                             this
                         );
 #endif
@@ -287,14 +300,19 @@ namespace WallstopStudios.DxCommandTerminal.Persistence
                     _lastSeenFont = null;
                     _lastSeenTheme = null;
                     Debug.LogError(
-                        $"Failed to write theme file {themeFile} (terminal {terminal.id}): {writerTask.Exception}",
+                        LogTextSanitizer.Sanitize(
+                            $"Failed to write theme file {themeFile} (terminal {terminal.id}): {writerTask.Exception}"
+                        ),
                         this
                     );
                 }
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
                 else
                 {
-                    Debug.Log($"Theme file {themeFile} successfully updated.", this);
+                    Debug.Log(
+                        LogTextSanitizer.Sanitize($"Theme file {themeFile} successfully updated."),
+                        this
+                    );
                 }
 #endif
             }

@@ -130,6 +130,28 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         [UnityTest]
+        public IEnumerator TheLogCommandShowsTheTerminalTheTextUnityConsoleSees()
+        {
+            yield return SpawnOpenTerminal(logUnityMessages: true);
+
+            /*
+                The log command hands its arguments to Debug.Log, which Unity's
+                Console and the player log show before the in-game funnel
+                sanitizes them, so the command escapes at the call. The escape
+                is idempotent, so the funnel's second pass shows the terminal
+                this same text: one rendering on both surfaces.
+            */
+            DefaultTerminalInput.Instance.CommandText = "log Admin\u202Eexe";
+            _terminal.EnterCommand();
+
+            AssertLogContains(
+                TerminalLogType.Message,
+                "Admin\\u202Eexe",
+                "The terminal must show the escaped text Unity's Console is handed"
+            );
+        }
+
+        [UnityTest]
         public IEnumerator FailedCommandRetainsErrorAndStaysUsable()
         {
             yield return SpawnOpenTerminal();
@@ -553,7 +575,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
         }
 
-        private IEnumerator SpawnOpenTerminal()
+        private IEnumerator SpawnOpenTerminal(bool logUnityMessages = false)
         {
 #if UNITY_EDITOR
             _panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
@@ -566,6 +588,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             _terminal.resetStateOnInit = true;
             _terminal.easeOutTime = 0f;
             _terminal.easeInTime = 0f;
+            _terminal._logUnityMessages = logUnityMessages;
             _terminal._themePack = LoadAsset<TerminalThemePack>("Packs/Themes/Medium.asset");
             _terminal._fontPack = LoadAsset<TerminalFontPack>("Packs/Fonts/Medium.asset");
             StartTracker tracker = _terminalObject.AddComponent<StartTracker>();
