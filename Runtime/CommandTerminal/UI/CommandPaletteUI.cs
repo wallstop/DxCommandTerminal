@@ -1305,6 +1305,21 @@
                 return;
             }
 
+            /*
+                Copy and cut answer beside the paste. A copy changes no text,
+                so the query stays as the caret report says - null - and only
+                a cut, which reports the caret it left, re-derives the rows.
+             */
+            if (TextFieldCopyCut.TryApply(_input, evt, out int? cutCaret))
+            {
+                KeyEvents.Consume(_paletteRoot, evt);
+                if (cutCaret is int caret)
+                {
+                    RefreshQuery(_input.value ?? string.Empty, caret);
+                }
+                return;
+            }
+
             switch (evt.keyCode)
             {
                 case KeyCode.DownArrow:

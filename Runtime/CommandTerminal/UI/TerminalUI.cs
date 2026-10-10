@@ -2820,6 +2820,20 @@
                         return;
                     }
 
+                    /*
+                        Copy and cut answer beside the paste, for the same
+                        reason the paste exists: the field has no clipboard of
+                        its own, and a selection that can be pasted over but
+                        not taken out is half an editing surface. A refused
+                        write answers false, so the key falls through and
+                        nothing - not even the selection on a cut - changes.
+                     */
+                    if (TextFieldCopyCut.TryApply(context._commandInput, evt, out _))
+                    {
+                        KeyEvents.Consume(context._commandInput, evt);
+                        return;
+                    }
+
                     if (context.TryScrollLog(evt))
                     {
                         KeyEvents.Consume(context._commandInput, evt);

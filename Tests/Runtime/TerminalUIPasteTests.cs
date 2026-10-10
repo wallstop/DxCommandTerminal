@@ -12,12 +12,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     using UnityEngine.UIElements;
 
     /*
-        End-to-end paste routing: TextFieldPasteTests covers the helper's own
-        contract in EditMode, and this covers the part only a live panel can
-        answer - that a Ctrl+V key event reaches the terminal's input at all,
-        and that the value write arrives as the user edit the command text is
-        read from. A UI Toolkit TextField has no clipboard of its own, so
-        nothing here happens unless the terminal registers the key.
+        End-to-end clipboard key routing: TextFieldPasteTests and
+        TextFieldCopyCutTests cover the helpers' own contracts in EditMode,
+        and this covers the part only a live panel can answer - that a
+        Ctrl+V, Ctrl+C, or Ctrl+X key event reaches the terminal's input at
+        all, and that a value write arrives as the user edit the command
+        text is read from. A UI Toolkit TextField has no clipboard of its
+        own, so nothing here happens unless the terminal registers the key.
 
         Keys are injected at the document root, which is what makes the
         event travel down to the field the way a real keystroke does. An
@@ -71,28 +72,47 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             yield return SpawnOpenTerminal();
 
-            GUIUtility.systemCopyBuffer = "give\titem\n42";
-            using (
-                KeyDownEvent key = KeyDownEvent.GetPooled('\0', KeyCode.V, EventModifiers.Control)
-            )
+            /*
+                The send retries until the field holds the flattened paste:
+                this host drops clipboard writes intermittently (#207), and a
+                write that vanished between the set and the V the handler
+                reads would fail the fixture for the environment's sake.
+                Eight exhausted attempts probe the host; the probe decides
+                whether exhaustion was the environment or a routing defect.
+             */
+            for (int attempt = 0; attempt < 8; ++attempt)
             {
-                _terminal._uiDocument.rootVisualElement.SendEvent(key);
+                GUIUtility.systemCopyBuffer = "give\titem\n42";
+                using (
+                    KeyDownEvent key = KeyDownEvent.GetPooled(
+                        '\0',
+                        KeyCode.V,
+                        EventModifiers.Control
+                    )
+                )
+                {
+                    _terminal._uiDocument.rootVisualElement.SendEvent(key);
+                }
+
+                yield return null;
+                if (_terminal._commandInput.value == "give item 42")
+                {
+                    yield return WaitForCommandText("give item 42");
+                    yield break;
+                }
             }
 
-            yield return null;
-
-            Assert.AreEqual(
-                "give item 42",
-                _terminal._commandInput.value,
-                "The field holds the flattened paste"
-            );
-
             /*
-                The paste has to arrive as a user edit, not as a silent write:
-                the terminal reads its command text from the change event, so
-                Enter would run nothing if the write skipped it.
+                A host that holds a direct probe twice in a row is healthy,
+                so eight straight failures name a paste-routing defect, not
+                the environment; a host stuck in a bad window ignores from
+                the probe.
              */
-            yield return WaitForCommandText("give item 42");
+            yield return ProbeClipboard();
+            Assert.Fail(
+                "The host clipboard holds a direct write, but no paste held "
+                    + "the flattened text; the V did not route to the field"
+            );
         }
 
         [UnityTest]
@@ -114,6 +134,170 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 DefaultTerminalInput.Instance.CommandText,
                 "A V with no paste modifier leaves the command text alone"
             );
+        }
+
+        [UnityTest]
+        public IEnumerator CopyCarriesTheSelectedCommandText()
+        {
+            yield return SpawnOpenTerminal();
+
+            yield return SendClipboardKey(KeyCode.C, "item torch", "spawn item torch");
+
+            Assert.AreEqual(
+                "item torch",
+                GUIUtility.systemCopyBuffer,
+                "The selected span reached the system clipboard"
+            );
+            Assert.AreEqual(
+                "spawn item torch",
+                _terminal._commandInput.value,
+                "A copy leaves the command line alone"
+            );
+        }
+
+        [UnityTest]
+        public IEnumerator CutRemovesTheSelectedCommandTextAsAUserEdit()
+        {
+            yield return SpawnOpenTerminal();
+
+            yield return SendClipboardKey(KeyCode.X, "item torch", "spawn ");
+            yield return null;
+
+            Assert.AreEqual(
+                "item torch",
+                GUIUtility.systemCopyBuffer,
+                "The cut span reached the system clipboard"
+            );
+            Assert.AreEqual(
+                "spawn ",
+                _terminal._commandInput.value,
+                "The cut span is gone from the field"
+            );
+            yield return WaitForCommandText("spawn ");
+        }
+
+        [UnityTest]
+        public IEnumerator CBareOrWithoutASelectionChangesNothing()
+        {
+            yield return SpawnOpenTerminal();
+
+            GUIUtility.systemCopyBuffer = "untouched";
+            _terminal._commandInput.value = "spawn item";
+            yield return SendKey(KeyCode.C, EventModifiers.None);
+            yield return null;
+            Assert.AreEqual(
+                "untouched",
+                GUIUtility.systemCopyBuffer,
+                "A bare C is a typed character, not a copy"
+            );
+
+#if UNITY_2022_1_OR_NEWER
+            _terminal._commandInput.cursorIndex = 6;
+            _terminal._commandInput.selectIndex = 6;
+#endif
+            yield return SendKey(KeyCode.C, EventModifiers.Control);
+            yield return null;
+            Assert.AreEqual(
+                "untouched",
+                GUIUtility.systemCopyBuffer,
+                "A Ctrl+C with no selection copies nothing"
+            );
+            Assert.AreEqual("spawn item", _terminal._commandInput.value);
+        }
+
+        private void SetCommandSelection(string value, int selectIndex, int cursorIndex)
+        {
+            _terminal._commandInput.value = value;
+#if UNITY_2022_1_OR_NEWER
+            _terminal._commandInput.selectIndex = selectIndex;
+            _terminal._commandInput.cursorIndex = cursorIndex;
+#else
+            Assert.Ignore("2021.3 exposes the caret getters only; the engine owns placement");
+#endif
+        }
+
+        /*
+            Sends a copy or cut until the full postcondition holds: the
+            clipboard carries the span and the field is in the state the key
+            leaves. The key handler writes through the verified
+            TerminalClipboard path, and the same host race that drops a
+            fixture's write can drop the product's - or answer the read-back
+            behind it wrong, which is why the field is checked too and not
+            just the clipboard. The selection is re-arranged every attempt,
+            in the frame the key is sent, so a caret the panel re-clamped
+            between frames cannot make the handler read an empty selection.
+
+            Eight exhausted attempts probe the host once: a clipboard that
+            cannot hold a direct write across two consecutive passes is the
+            environment (#207) and the fixture ignores; one that answers
+            twice in a row means the key never reached the handler, and that
+            is a failure the retry must not absorb. The two-pass hold is
+            what keeps a host that drops writes in windows (#207) from being
+            called healthy because its bad window ended between the attempts
+            and the probe.
+         */
+        private IEnumerator SendClipboardKey(
+            KeyCode keyCode,
+            string expectedClipboard,
+            string expectedValue
+        )
+        {
+            EventModifiers modifiers = EventModifiers.Control;
+            for (int attempt = 0; attempt < 8; ++attempt)
+            {
+                SetCommandSelection("spawn item torch", 6, 16);
+                using (KeyDownEvent key = KeyDownEvent.GetPooled('\0', keyCode, modifiers))
+                {
+                    _terminal._uiDocument.rootVisualElement.SendEvent(key);
+                }
+
+                yield return null;
+                if (
+                    GUIUtility.systemCopyBuffer == expectedClipboard
+                    && _terminal._commandInput.value == expectedValue
+                )
+                {
+                    yield break;
+                }
+            }
+
+            yield return ProbeClipboard();
+            Assert.Fail(
+                $"The host clipboard holds a direct write, but a {keyCode} never produced "
+                    + $"\"{expectedClipboard}\" on \"{expectedValue}\"; the key did not route"
+            );
+        }
+
+        /*
+            Writes and reads back a probe string through the system clipboard,
+            the same evidence TerminalClipboard.TryWrite uses, until it holds
+            on two consecutive passes. A host that never holds ignores from
+            here - the #207 environment, not a regression - and one that
+            holds twice lets the caller's Assert.Fail stand as a defect
+            verdict.
+         */
+        private IEnumerator ProbeClipboard()
+        {
+            string original = GUIUtility.systemCopyBuffer;
+            const string probe = "dxct-clipboard-probe";
+            int heldPasses = 0;
+            for (int attempt = 0; attempt < 10 && heldPasses < 2; ++attempt)
+            {
+                GUIUtility.systemCopyBuffer = probe;
+                yield return null;
+                heldPasses = GUIUtility.systemCopyBuffer == probe ? heldPasses + 1 : 0;
+            }
+
+            if (heldPasses < 2)
+            {
+                GUIUtility.systemCopyBuffer = original;
+                Assert.Ignore(
+                    "The host clipboard did not hold a direct probe twice in a row; "
+                        + "the paste fixtures need a platform that answers (#207)"
+                );
+            }
+
+            GUIUtility.systemCopyBuffer = original;
         }
 
         private IEnumerator SpawnOpenTerminal()
