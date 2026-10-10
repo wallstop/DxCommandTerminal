@@ -20,7 +20,11 @@
     scanner (tooling~/scripts/lib/csharp-interpolation.mjs), so a `.Message`
     inside a comment or a plain string cannot trip the rule, and one inside
     an interpolation hole - the shape that carries it to the Console - is
-    always seen.
+    always seen. Stated limit: a plain string NESTED inside a hole (e.g.
+    `{config["ex.Message"]}`) is hole text to the scanner and will read as a
+    violation; write such a lookup without the word `.Message` in the key,
+    because the gate cannot tell it from a member access without tracking
+    nested literal spans.
 
     There is no `--fix` on purpose: choosing where the full exception reads
     well is a per-call decision, not a mechanical rewrite.
@@ -39,10 +43,9 @@ const SCAN_ROOTS = process.env.EXCEPTION_TOSTRING_ROOTS
   ? process.env.EXCEPTION_TOSTRING_ROOTS.split(path.delimiter).filter(Boolean)
   : ["Runtime", "Editor"];
 
-const { blankComments, callCloseParen, classify, firstArgumentSpan, lineOf, startsInside } =
-  await import(
-    pathToFileURL(path.join(REPO_ROOT, "tooling~", "scripts", "lib", "csharp-interpolation.mjs")).href
-  );
+const { blankComments, callCloseParen, classify, lineOf, startsInside } = await import(
+  pathToFileURL(path.join(REPO_ROOT, "tooling~", "scripts", "lib", "csharp-interpolation.mjs")).href
+);
 
 /* `\b` matches the tail of `UnityEngine.Debug.` too. LogException already takes the exception. */
 const DEBUG_LOG_CALL = /\bDebug\.(?:Log|LogWarning|LogError)\s*\(/g;

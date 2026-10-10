@@ -535,6 +535,8 @@ test("a Runtime Error envelope thrown mid-reload is transient; diagnostics are n
 test("a relay port refusal mid-reload is transient; a missing command is not", async () => {
   const client = fakeClient([
     new Error("Error: Cannot connect to Unity Editor Pipeline server at 127.0.0.1:7800. Make sure Unity Editor is running with the Pipeline package installed."),
+    new Error("Failed to execute command 'eval': Connection reset by server"),
+    new Error("terminated"),
     answered("{}")
   ]);
   await callFirstWorking(client, [{ name: "test_status", arguments: {} }], undefined, {
@@ -542,7 +544,7 @@ test("a relay port refusal mid-reload is transient; a missing command is not", a
     now: quietClock(),
     pause: instant
   });
-  assert.equal(client.asked.length, 2, "the relay-port refusal is the editor being busy");
+  assert.equal(client.asked.length, 4, "relay-port and reset refusals are the editor being busy");
 
   await assert.rejects(
     callFirstWorking(

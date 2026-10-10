@@ -2319,6 +2319,8 @@ const TRANSIENT_TOOL_ERROR = [
   // Observed live: "Failed to execute command 'eval': Connection reset by server".
   /connection reset/i,
   /econnreset/i,
+  // undici's spelling for a socket that died mid-request.
+  /terminated/i,
   /socket hang up/i,
   /cannot connect to .*pipeline server/i
 ];
