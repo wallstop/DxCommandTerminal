@@ -21,6 +21,35 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             return KeyDownEvent.GetPooled('\0', keyCode, modifiers);
         }
 
+        /*
+            Arranges a selection on a detached field. 2022.1 made the caret
+            settable (the same verified constant TextFieldPaste itself
+            guards); 2021.3 exposes the getters only and the engine owns
+            placement, so no public path builds an arbitrary selection on a
+            field that is not in a panel there. A fixture that needs an
+            arranged selection therefore ignores itself on 2021.3 with that
+            reason and runs unchanged everywhere the setter exists.
+         */
+        private static TextField FieldWithArrangedSelection(
+            string value,
+            int selectIndex,
+            int cursorIndex
+        )
+        {
+            TextField field = new TextField();
+            field.value = value;
+#if UNITY_2022_1_OR_NEWER
+            field.selectIndex = selectIndex;
+            field.cursorIndex = cursorIndex;
+#else
+            Assert.Ignore(
+                "2021.3 exposes the caret getters only; the engine owns placement, "
+                    + "so this fixture's arranged selection cannot be built here"
+            );
+#endif
+            return field;
+        }
+
         private static string Tokenize(string line)
         {
             List<CommandToken> tokens = new();
@@ -134,10 +163,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             int expectedCaret
         )
         {
-            TextField field = new TextField();
-            field.value = value;
-            field.selectIndex = selectIndex;
-            field.cursorIndex = cursorIndex;
+            TextField field = FieldWithArrangedSelection(value, selectIndex, cursorIndex);
             GUIUtility.systemCopyBuffer = clipboard;
 
             using KeyDownEvent paste = PasteKeyDown(EventModifiers.Control);
@@ -153,10 +179,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void TryApplyReplacesTheSelectedSpan()
         {
-            TextField field = new TextField();
-            field.value = "give item 42";
-            field.selectIndex = 5;
-            field.cursorIndex = 9;
+            TextField field = FieldWithArrangedSelection("give item 42", 5, 9);
             GUIUtility.systemCopyBuffer = "torch\npick";
 
             using KeyDownEvent paste = PasteKeyDown(EventModifiers.Control);
@@ -168,10 +191,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void AnAllWhitespacePasteAtTheStartDoesNothing()
         {
-            TextField field = new TextField();
-            field.value = "give";
-            field.selectIndex = 0;
-            field.cursorIndex = 0;
+            TextField field = FieldWithArrangedSelection("give", 0, 0);
             GUIUtility.systemCopyBuffer = "   ";
 
             using KeyDownEvent paste = PasteKeyDown(EventModifiers.Control);
@@ -185,10 +205,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void ABackwardsSelectionIsReplaced()
         {
-            TextField field = new TextField();
-            field.value = "give item 42";
-            field.cursorIndex = 5;
-            field.selectIndex = 9;
+            TextField field = FieldWithArrangedSelection("give item 42", 9, 5);
             GUIUtility.systemCopyBuffer = "torch";
 
             using KeyDownEvent paste = PasteKeyDown(EventModifiers.Command);
@@ -223,10 +240,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             int expectedCaret
         )
         {
-            TextField field = new TextField();
-            field.value = value;
-            field.selectIndex = selectIndex;
-            field.cursorIndex = cursorIndex;
+            TextField field = FieldWithArrangedSelection(value, selectIndex, cursorIndex);
             GUIUtility.systemCopyBuffer = clipboard;
 
             using KeyDownEvent paste = PasteKeyDown(EventModifiers.Control);
@@ -245,10 +259,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void AKeyThatIsNotAPasteReportsNoCaret()
         {
-            TextField field = new TextField();
-            field.value = "give";
-            field.selectIndex = 4;
-            field.cursorIndex = 4;
+            TextField field = FieldWithArrangedSelection("give", 4, 4);
             GUIUtility.systemCopyBuffer = "item 42";
 
             using KeyDownEvent key = PasteKeyDown(KeyCode.V, EventModifiers.None);
@@ -276,10 +287,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             string expectedValue
         )
         {
-            TextField field = new TextField();
-            field.value = value;
-            field.selectIndex = caret;
-            field.cursorIndex = caret;
+            TextField field = FieldWithArrangedSelection(value, caret, caret);
             GUIUtility.systemCopyBuffer = clipboard;
 
             using KeyDownEvent paste = PasteKeyDown(EventModifiers.Control);
@@ -361,10 +369,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             int expectedCaret
         )
         {
-            TextField field = new TextField();
-            field.value = value;
-            field.selectIndex = caret;
-            field.cursorIndex = caret;
+            TextField field = FieldWithArrangedSelection(value, caret, caret);
             GUIUtility.systemCopyBuffer = clipboard;
 
             using KeyDownEvent paste = PasteKeyDown(EventModifiers.Control);
@@ -412,10 +417,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         )]
         public void NonPasteKeysAreLeftAlone(KeyCode keyCode, EventModifiers modifiers)
         {
-            TextField field = new TextField();
-            field.value = "give";
-            field.selectIndex = 4;
-            field.cursorIndex = 4;
+            TextField field = FieldWithArrangedSelection("give", 4, 4);
             GUIUtility.systemCopyBuffer = "item";
 
             using KeyDownEvent key = PasteKeyDown(keyCode, modifiers);
@@ -429,10 +431,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void AnEmptyClipboardIsNotAConsumedPaste()
         {
-            TextField field = new TextField();
-            field.value = "give";
-            field.selectIndex = 4;
-            field.cursorIndex = 4;
+            TextField field = FieldWithArrangedSelection("give", 4, 4);
             GUIUtility.systemCopyBuffer = string.Empty;
 
             using KeyDownEvent paste = PasteKeyDown(EventModifiers.Control);
