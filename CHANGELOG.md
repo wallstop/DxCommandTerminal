@@ -6,25 +6,42 @@ user cannot observe the difference, it does not belong here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+Entry style follows [unity-helpers](https://github.com/Ambiguous-Interactive/unity-helpers)
+(MIT): one user-observable change per bullet, a present-tense verb first - `Add`, `Fix`,
+`Change` - one sentence, two only when the second names what is preserved or refused, and
+the issue reference at the end. Details live in the docs and the linked issue.
+
 ## Unreleased
 
 ### Added
 
-- Ctrl+C and Ctrl+X copy and cut the selected text on both console surfaces' input fields (#194). A cut removes the span and arrives as a user edit - the command text updates and the palette re-ranks against the caret the cut left - and a copy leaves the field alone. The write goes through the verified clipboard path: a platform that will not keep the text reports the refusal, and a cut whose write was refused leaves the selection in the field rather than deleting text the clipboard never took.
+- Add Ctrl+C and Ctrl+X copy and cut of the selected text on both console surfaces' input
+  fields; a cut updates the command text and re-ranks the palette, and a clipboard that will
+  not take the text leaves the selection in the field instead of deleting it
+  ([#194](https://github.com/wallstop/DxCommandTerminal/issues/194)).
 
 ### Changed
 
-- The console key opens and closes the console on every press, even while the command line or the palette search has focus (#218). A toggle binding is reserved by the surface it opens: backtick and shift+backtick toggle their surface instead of typing their character into a focused field, on the polled hotkeys, on `PlayerInput` toggle messages, and on a `CommandPaletteUI` character toggle binding. The cost of the reservation is the character: a toggle press that closes the console clears the line, so nothing typed survives it, and a character cannot be typed onto a bound toggle key. Every non-toggle character binding keeps the typing-wins rule.
+- Reserve the console key: backtick and shift+backtick open and close the console on every
+  press, even while a field has focus, instead of typing their character into it. A close
+  clears the line, and the character cannot be typed onto a bound toggle key
+  ([#218](https://github.com/wallstop/DxCommandTerminal/issues/218)).
 - Deprecate `CommandLog.Logs` in favor of the safe `CopyTo`, `Count`, and `TryGetLast` reads.
 - Make `CommandHistory.GetHistory` return an allocation-free live view of the history.
-- Log the full exception in the package's Console warnings and errors: an interpolation failure, discovery fallback, or asset-postprocessor retry now carries the exception type, message, and throw-site stack, where the sentence alone printed before.
+- Log the full exception in the package's Console warnings and errors: the type, message, and
+  throw-site stack now accompany the sentence, where the message alone printed before.
 
 ### Fixed
 
-- Make the float and double argument parsers answer the same on every runtime: a numeric literal too large for the type (`1e39`) parses to an infinity with a `true` answer on .NET Core 3.0+ hosts and `false` on Unity's runtime. The overflowed literal is now refused everywhere, so an argument that is not a number is never read as one; the named spellings (`Infinity`, `PositiveInfinity`, `NaN`, and friends) still parse.
-- Escape the text the package writes to Unity's Console window and the player log: a font, theme, command, or file name carrying invisible control or bidirectional characters now prints as its `\u202E` escape instead of reading as a name the project does not hold. The in-game console already showed that text and still does.
+- Fix the float and double argument parsers answering differently per runtime for literals too
+  large for the type; the overflowed literal is now refused everywhere, and named spellings
+  like `Infinity` and `NaN` still parse.
+- Fix text the package writes to Unity's Console window and the player log carrying invisible
+  control or bidirectional characters in a font, theme, command, or file name; such text now
+  prints as its `\u202E` escape. The in-game console already showed it and still does.
 - Fix ignored log entries landing when the ignore filter changed mid-write.
-- Make `CommandLog` own the ignore filter and stack-trace mode, configured through `TerminalUI` or `TerminalSettings`.
+- Make `CommandLog` own the ignore filter and stack-trace mode, configured through `TerminalUI`
+  or `TerminalSettings`.
 
 ## [1.0.1] - 2026-10-02
 

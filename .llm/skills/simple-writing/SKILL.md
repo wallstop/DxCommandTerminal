@@ -1,6 +1,6 @@
 ---
 name: simple-writing
-description: Write user-facing copy in Simplified Technical English (STE), extremely short and to the point - a few sentences max for PRs, commits, issues, and comments, covering how (plus why/what for PRs). Use when writing or editing any text a human will read in this repo.
+description: Write user-facing copy in Simplified Technical English (STE), extremely short and to the point - a few sentences max for PRs, commits, issues, comments, and CHANGELOG entries, covering how (plus why/what for PRs). Use when writing or editing any text a human will read in this repo.
 metadata:
   category: Core
 ---
@@ -32,7 +32,7 @@ before adding. A reader should get the point in seconds.
 | --- | --- | --- |
 | PR title | Imperative, <= 72 chars. "Add X", "Fix Y". | 1 line |
 | PR description | `**Why:**` the problem, one sentence, plus the `Closes #N` line. `**What:**` one-line bullets (3-6, <= 12 words each) - the how. Nothing else: test lists, CI results, measurements, and review narration go in the commit body or the linked issue. | <= ~10 lines |
-| CHANGELOG entry | One sentence, <= 300 chars. Start with the section's verb (`Add`, `Fix`); lead with the user-visible effect, not the mechanism. No root cause, no process detail. | 1 sentence |
+| CHANGELOG entry | One sentence, <= 300 chars, in the unity-helpers style: verb first (`Add`, `Fix`, `Change`), the user-visible effect, issue reference at the end. A second sentence only to name what is preserved or refused. No root cause, no mechanism tour. | 1-2 sentences |
 | Commit subject | Imperative, <= 72 chars, no trailing period. | 1 line |
 | Commit body | `Why` 1-2 sentences, then `What changed` one-line bullets (2-5). Optional one-line `How we know`. Wrap at ~72 chars. | <= ~8 lines |
 | Review comments | 1-3 sentences. Say what to change and why. | 3 lines |

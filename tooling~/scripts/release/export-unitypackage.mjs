@@ -8,8 +8,8 @@
     gzip. Two checkouts of the same revision rebuild byte-identically: fixed
     tar header fields, fixed entry order, and a normalized gzip header (MTIME 0,
     OS 0xFF). Callers that only need the checkout's artifact may pass
-    `cache: true` to answer a clean tree from `.artifacts/export-cache/`; the
-    release flow always builds fresh.
+    `cache: true` to answer from the content-keyed cache under
+    `.artifacts/export-cache/`; the release flow always builds fresh.
 
     Samples~/ content is excluded: the tilde folder is invisible to Unity, its
     files ship without .meta files (Package Manager generates fresh metas when
@@ -109,24 +109,25 @@ function packagedList(packageRoot) {
 
 /*
     The exported artifact is a pure function of the checkout's packaged
-    content, this module's archive logic, and the npm allowlist engine. A
-    test that needs the real artifact used to pay the whole build every
+    content, this module's archive logic, and the requested import prefix.
+    A test that needs the real artifact used to pay the whole build every
     time - one `npm pack` spawn plus a read of every packaged file - and
     one `npm test` run paid five of those builds across its parallel test
     processes. The disk cache answers from `.artifacts/export-cache/`
     instead.
 
-    The key hashes the INPUTS, not the tree's cleanliness: a stat
-    signature (size, mtimes, inode) over every file that could ship -
-    git-tracked files plus a walk of the `files` allowlist entries, which
-    also covers untracked additions - plus package.json itself, this
-    module's source, and the node (npm) version. Editing a test, a doc, or
+    The key hashes the packaged INPUTS, not the tree's cleanliness: a stat
+    signature (size, mtime, inode) over every file the `files` allowlist
+    could ship - walked from the filesystem, so an untracked addition
+    invalidates too - plus package.json itself, this module's source, the
+    node version, and the requested root prefix. Editing a test, a doc, or
     tooling keeps the key and answers from the cache; editing anything
-    packaged changes a stat and re-exports. A stat collision without a
-    content change would need a same-size write that preserves mtime and
-    inode, and the recorded digest still gates whatever the entry hands
-    back. The release flow never passes `cache: true`; freshness there is
-    the contract the cache borrows from.
+    packaged changes a stat and re-exports. Stated limits: a content change
+    that preserves size, mtime, and inode of every packaged file defeats
+    the key, and the npm version is not hashed - an npm upgrade under the
+    same node is answered by clearing `.artifacts/export-cache` or by the
+    next packaged edit. The release flow never passes `cache: true`;
+    freshness there is the contract the cache borrows from.
  */
 const EXPORTER_SOURCE_SHA256 = sha256Hex(fs.readFileSync(fileURLToPath(import.meta.url)));
 
@@ -136,15 +137,40 @@ function sha256Hex(buffer) {
 
 /*
     Every path that could change the shipped artifact: a walk of the
-    package.json `files` entries (literal paths and directories). The walk
-    reads the filesystem, so an untracked new asset invalidates too.
-    Negated entries cannot change the artifact and are skipped. Entries
-    with glob characters are not walked - this package ships literal
-    paths; a future glob degrades to package.json-hash invalidation only,
-    which is a stale-key risk on its matched files and no worse than the
-    pre-cache behavior.
+    package.json `files` entries (literal paths and directories), minus the
+    negated entries, which cannot change what the exporter archives. The
+    walk reads the filesystem, so an untracked new asset invalidates too.
+    A glob metacharacter in a non-negated entry disables the cache: the
+    walk cannot know which files a pattern matches, and guessing would
+    answer stale bytes for the files it missed.
  */
+const GLOB_CHARACTERS = /[*?[\]]/u;
+
 function packagedInputPaths(packageRoot, files) {
+  const negated = new Set();
+  const negatedPrefixes = [];
+  for (const entry of files) {
+    if (!entry.startsWith("!")) {
+      continue;
+    }
+    const path_ = entry.slice(1);
+    if (path_.endsWith("/")) {
+      negatedPrefixes.push(path_);
+    } else {
+      negated.add(path_);
+    }
+  }
+  const negatedPath = (relative) => {
+    if (negated.has(relative)) {
+      return true;
+    }
+    for (const prefix of negatedPrefixes) {
+      if (relative.startsWith(prefix)) {
+        return true;
+      }
+    }
+    return false;
+  };
   const inputs = new Set();
   const visit = (relative, absolute) => {
     let entries;
@@ -163,8 +189,11 @@ function packagedInputPaths(packageRoot, files) {
     }
   };
   for (const entry of files) {
-    if (entry.startsWith("!") || entry.includes("*")) {
+    if (entry.startsWith("!")) {
       continue;
+    }
+    if (GLOB_CHARACTERS.test(entry)) {
+      return null;
     }
     const absolute = path.join(packageRoot, entry);
     let stat;
@@ -175,39 +204,54 @@ function packagedInputPaths(packageRoot, files) {
     }
     if (stat.isDirectory()) {
       visit(entry, absolute);
-    } else {
+      continue;
+    }
+    if (!negatedPath(entry)) {
       inputs.add(entry);
     }
   }
-  return [...inputs].sort();
+  return [...inputs].filter((relative) => !negatedPath(relative)).sort();
 }
 
 /*
     Per-process constant, like the packaged list: the packaged inputs, this
     module's source, and the node version do not change under a running
-    test, and each caller process would otherwise re-stat the walk.
+    test, and each caller process would otherwise re-stat the walk. The
+    requested root prefix is folded in per call, after the memo.
  */
 const ARTIFACT_KEY_CACHE = new Map();
 
-function artifactCacheKey(packageRoot) {
+function artifactCacheKey(packageRoot, rootPrefix) {
   const resolved = path.resolve(packageRoot);
-  const cached = ARTIFACT_KEY_CACHE.get(resolved);
-  if (cached !== undefined) {
-    return cached;
+  const signature = (() => {
+    const cached = ARTIFACT_KEY_CACHE.get(resolved);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const computed = computePackagedInputSignature(resolved);
+    ARTIFACT_KEY_CACHE.set(resolved, computed);
+    return computed;
+  })();
+  if (signature === null) {
+    return null;
   }
-  const key = computeArtifactCacheKey(resolved);
-  ARTIFACT_KEY_CACHE.set(resolved, key);
-  return key;
+  return sha256Hex(
+    `${signature}\n${EXPORTER_SOURCE_SHA256}\n${process.version}\n${rootPrefix ?? ""}\n`
+  );
 }
 
-function computeArtifactCacheKey(packageRoot) {
+function computePackagedInputSignature(packageRoot) {
   let manifest;
+  let paths;
   try {
     manifest = JSON.parse(fs.readFileSync(path.join(packageRoot, "package.json"), "utf8"));
   } catch {
     return null;
   }
-  const paths = packagedInputPaths(packageRoot, manifest.files ?? []);
+  paths = packagedInputPaths(packageRoot, manifest.files ?? []);
+  if (paths === null) {
+    return null;
+  }
   const signature = [];
   for (const relative of paths) {
     let stat;
@@ -217,13 +261,11 @@ function computeArtifactCacheKey(packageRoot) {
       /* Vanished between the walk and the stat: the next run sees it. */
       continue;
     }
-    signature.push(`${relative}\u0000${stat.size}\u0000${stat.mtimeMs}`);
+    signature.push(`${relative}\u0000${stat.size}\u0000${stat.mtimeMs}\u0000${stat.ino}`);
   }
   return sha256Hex(
     `${sha256Hex(fs.readFileSync(path.join(packageRoot, "package.json")))}\n`
-    + `${sha256Hex(signature.join("\n"))}\n`
-    + `${EXPORTER_SOURCE_SHA256}\n`
-    + `${process.version}\n`
+    + `${sha256Hex(signature.join("\n"))}`
   );
 }
 
@@ -275,7 +317,7 @@ function writeCachedArtifact(packageRoot, key, result) {
     name: result.name,
     version: result.version,
     rootPrefix: result.rootPrefix,
-    sha256: sha256Hex(result.buffer),
+    sha256: result.sha256,
     assetCount: result.assetCount,
     folderCount: result.folderCount,
     fileCount: result.fileCount,
@@ -304,9 +346,14 @@ function writeCachedArtifact(packageRoot, key, result) {
 /*
     Keeps the newest few entries and best-effort removes the rest: every
     packaged change writes a ~7 MB pair, and nothing reads an old key
-    again. Racing processes may delete an entry another is about to read;
+    again. Orphan `*.tmp` files from a process killed mid-write are swept
+    once they are an hour old - a live writer's temporary file is seconds
+    old, and deleting one mid-write only costs that process its cache
+    write. Racing processes may delete an entry another is about to read;
     a miss re-exports, which is the behavior the race replaced.
  */
+const TEMPORARY_FILE_AGE_MS = 60 * 60 * 1000;
+
 function pruneCachedArtifacts(packageRoot, keepKey) {
   const directory = path.join(packageRoot, ".artifacts", "export-cache");
   let names;
@@ -315,8 +362,20 @@ function pruneCachedArtifacts(packageRoot, keepKey) {
   } catch {
     return;
   }
+  const now = Date.now();
   const entries = [];
   for (const name of names) {
+    if (name.endsWith(".tmp")) {
+      try {
+        const stat = fs.statSync(path.join(directory, name));
+        if (now - stat.mtimeMs > TEMPORARY_FILE_AGE_MS) {
+          fs.rmSync(path.join(directory, name), { force: true });
+        }
+      } catch {
+        /* Vanished mid-prune: nothing to do. */
+      }
+      continue;
+    }
     if (!name.endsWith(".unitypackage")) {
       continue;
     }
@@ -518,12 +577,14 @@ function resolveRootPrefix(rootPrefix, packageName) {
 
 /*
     Exports the .unitypackage for one package checkout. Throws on any
-    collected violation; returns { buffer, assetCount, folderCount,
-    fileCount, excludedSampleCount, rootPrefix }.
+    collected violation; returns { buffer, name, version, rootPrefix,
+    sha256, assetCount, folderCount, fileCount, excludedSampleCount } -
+    the same shape a cache hit answers with.
 */
 function exportUnityPackage(options) {
   const packageRoot = path.resolve(options.packageRoot);
-  const cacheKey = options.cache === true ? artifactCacheKey(packageRoot) : null;
+  const requestedPrefix = options.rootPrefix ?? "";
+  const cacheKey = options.cache === true ? artifactCacheKey(packageRoot, requestedPrefix) : null;
   if (cacheKey !== null) {
     const cached = readCachedArtifact(packageRoot, cacheKey);
     if (cached !== null) {
@@ -548,7 +609,7 @@ function exportUnityPackage(options) {
   for (const asset of collected.assets) {
     asset.absolutePath = path.join(packageRoot, asset.path);
   }
-  const rootPrefix = resolveRootPrefix(options.rootPrefix ?? "", name);
+  const rootPrefix = resolveRootPrefix(requestedPrefix, name);
   const tar = buildTar(collected.assets, rootPrefix);
   const buffer = gzipDeterministic(tar);
   const result = {
@@ -556,6 +617,7 @@ function exportUnityPackage(options) {
     name,
     version,
     rootPrefix,
+    sha256: sha256Hex(buffer),
     assetCount: collected.assets.length,
     folderCount: collected.assets.filter((asset) => asset.isFolder).length,
     fileCount: collected.assets.length - collected.assets.filter((asset) => asset.isFolder).length,

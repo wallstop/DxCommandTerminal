@@ -161,16 +161,19 @@ test("matrix manifests record complete identity and reject stale reports", async
   const root = temporaryRoot("run");
   const artifactPath = path.join(root, "artifact.unitypackage");
   const artifact = exportUnityPackage({ packageRoot: path.resolve(TOOLING_ROOT, ".."), out: "", cache: true });
+  const fresh = exportUnityPackage({ packageRoot: path.resolve(TOOLING_ROOT, ".."), out: "", cache: false });
+  /*
+      The gate compares what the cache answered against what a fresh build
+      of the same checkout answers: if the entry ever stops matching its
+      inputs, this assert fails here and the manifest's hash check fails in
+      every leg, instead of a stale artifact being certified as matching.
+      export-unitypackage-real owns the wider freshness contract; this is
+      the staleness tripwire.
+   */
+  assert.strictEqual(artifact.buffer.equals(fresh.buffer), true, "the cache must answer the fresh build");
   fs.writeFileSync(artifactPath, artifact.buffer);
   const out = path.join(root, "reports");
-  /*
-      The manifest must name the hash of the artifact the leg actually
-      imports, and the exporter's disk cache makes the run's own export and
-      the fixtures module's per-process export the same bytes on a clean
-      tree; passing it here keeps that equality the thing under test
-      instead of paying a second whole-package export to recompute it.
-   */
-  const options = { artifact: artifactPath, out, only: "unity-6", unity: "unity", unityById: new Map(), fixtureRoot: FIXTURE_ROOT, keep: true, timeoutMinutes: 5, expectedArtifactSha256: crypto.createHash("sha256").update(artifact.buffer).digest("hex") };
+  const options = { artifact: artifactPath, out, only: "unity-6", unity: "unity", unityById: new Map(), fixtureRoot: FIXTURE_ROOT, keep: true, timeoutMinutes: 5, expectedArtifactSha256: crypto.createHash("sha256").update(fresh.buffer).digest("hex") };
   const matrix = loadMatrix(MATRIX_PATH);
   const testEnvironments = [];
   const runtime = {

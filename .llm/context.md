@@ -251,8 +251,8 @@ Details: [simple-writing](./skills/simple-writing/SKILL.md).
 serialized-data changes, behavior changes, fixes, install-size or console-output changes.
 Internal work (refactors, tooling, style enforcement, linters, measurement, CI lanes) stays
 out, and so do internal numbers - those live in PR descriptions, issues, and `progress/`
-logs. If a user cannot observe the difference it does not belong in the changelog; new
-`Unreleased` entries keep the existing buckets per the policy in the file header.
+logs. Entries follow the unity-helpers style: verb-first (`Add`/`Fix`/`Change`), one
+sentence per user-observable change, issue reference at the end; the file header is law.
 
 ### LLM Attribution (GitHub)
 

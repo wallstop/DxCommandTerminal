@@ -961,6 +961,12 @@
                     _palette._completionMode,
                     "The cut re-ranks the bar against the caret it left"
                 );
+                Assert.AreEqual(
+                    10,
+                    _palette._completionContext.ReplacementStart,
+                    "The re-rank must act on the token the cut caret sits in, "
+                        + "not the token a stale caret was in"
+                );
             }
             finally
             {

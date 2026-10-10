@@ -75,12 +75,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             /*
                 The send retries until the field holds the flattened paste:
                 this host drops clipboard writes intermittently (#207), and a
-                write that vanished between the verified set and the V the
-                handler reads would fail the fixture for the environment's
-                sake. Five exhausted attempts ignore with that reason; a
-                healthy host answers on the first.
+                write that vanished between the set and the V the handler
+                reads would fail the fixture for the environment's sake.
+                Eight exhausted attempts probe the host; the probe decides
+                whether exhaustion was the environment or a routing defect.
              */
-            for (int attempt = 0; attempt < 5; ++attempt)
+            for (int attempt = 0; attempt < 8; ++attempt)
             {
                 GUIUtility.systemCopyBuffer = "give\titem\n42";
                 using (
@@ -102,9 +102,16 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 }
             }
 
-            Assert.Ignore(
-                "The host clipboard never fed a paste that held; "
-                    + "the paste fixture needs a platform that answers (#207)"
+            /*
+                A host that holds a direct probe twice in a row is healthy,
+                so eight straight failures name a paste-routing defect, not
+                the environment; a host stuck in a bad window ignores from
+                the probe.
+             */
+            yield return ProbeClipboard();
+            Assert.Fail(
+                "The host clipboard holds a direct write, but no paste held "
+                    + "the flattened text; the V did not route to the field"
             );
         }
 
@@ -216,12 +223,18 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             TerminalClipboard path, and the same host race that drops a
             fixture's write can drop the product's - or answer the read-back
             behind it wrong, which is why the field is checked too and not
-            just the clipboard. One failed attempt is the environment and not
-            a verdict; five exhausted attempts ignore with the #207 reason,
-            and a healthy host answers on the first. The selection is
-            re-arranged every attempt, in the frame the key is sent, so a
-            caret the panel re-clamped between frames cannot make the handler
-            read an empty selection.
+            just the clipboard. The selection is re-arranged every attempt,
+            in the frame the key is sent, so a caret the panel re-clamped
+            between frames cannot make the handler read an empty selection.
+
+            Eight exhausted attempts probe the host once: a clipboard that
+            cannot hold a direct write across two consecutive passes is the
+            environment (#207) and the fixture ignores; one that answers
+            twice in a row means the key never reached the handler, and that
+            is a failure the retry must not absorb. The two-pass hold is
+            what keeps a host that drops writes in windows (#207) from being
+            called healthy because its bad window ended between the attempts
+            and the probe.
          */
         private IEnumerator SendClipboardKey(
             KeyCode keyCode,
@@ -230,7 +243,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         )
         {
             EventModifiers modifiers = EventModifiers.Control;
-            for (int attempt = 0; attempt < 5; ++attempt)
+            for (int attempt = 0; attempt < 8; ++attempt)
             {
                 SetCommandSelection("spawn item torch", 6, 16);
                 using (KeyDownEvent key = KeyDownEvent.GetPooled('\0', keyCode, modifiers))
@@ -248,10 +261,43 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 }
             }
 
-            Assert.Ignore(
-                $"The host never answered a {keyCode} with \"{expectedClipboard}\"; "
-                    + "the copy fixtures need a platform that answers (#207)"
+            yield return ProbeClipboard();
+            Assert.Fail(
+                $"The host clipboard holds a direct write, but a {keyCode} never produced "
+                    + $"\"{expectedClipboard}\" on \"{expectedValue}\"; the key did not route"
             );
+        }
+
+        /*
+            Writes and reads back a probe string through the system clipboard,
+            the same evidence TerminalClipboard.TryWrite uses, until it holds
+            on two consecutive passes. A host that never holds ignores from
+            here - the #207 environment, not a regression - and one that
+            holds twice lets the caller's Assert.Fail stand as a defect
+            verdict.
+         */
+        private IEnumerator ProbeClipboard()
+        {
+            string original = GUIUtility.systemCopyBuffer;
+            const string probe = "dxct-clipboard-probe";
+            int heldPasses = 0;
+            for (int attempt = 0; attempt < 10 && heldPasses < 2; ++attempt)
+            {
+                GUIUtility.systemCopyBuffer = probe;
+                yield return null;
+                heldPasses = GUIUtility.systemCopyBuffer == probe ? heldPasses + 1 : 0;
+            }
+
+            if (heldPasses < 2)
+            {
+                GUIUtility.systemCopyBuffer = original;
+                Assert.Ignore(
+                    "The host clipboard did not hold a direct probe twice in a row; "
+                        + "the paste fixtures need a platform that answers (#207)"
+                );
+            }
+
+            GUIUtility.systemCopyBuffer = original;
         }
 
         private IEnumerator SpawnOpenTerminal()

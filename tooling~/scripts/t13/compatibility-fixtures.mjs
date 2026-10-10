@@ -333,17 +333,18 @@ function sha256Buffer(buffer) { return crypto.createHash("sha256").update(buffer
 
 /*
     Both identities are per-process constants: the exported artifact is a
-    function of the checkout, and the git state is answered by one sample
-    per run rather than one per manifest (the report directories a run
-    writes are gitignored, so no sample sees a different tree). The t13
-    fixture process used to pay one whole-package export per runMatrix call
-    that reached the hash and a git pair per manifest - measured at ~3.3 s
-    and ~1.5 s per call on the dev container. The export goes through the
-    exporter's clean-tree disk cache, so a fresh process re-exports only
-    when the cache has no entry for this revision and exporter; a dirty
-    tree always exports fresh, exactly like the release flow. Repeated
-    calls within one process reuse the answers either way (the same
-    contract as the exporter's packaged-list cache).
+    function of the checkout's packaged inputs, and the git state is
+    answered by one sample per run rather than one per manifest (the
+    report directories a run writes are gitignored, so no sample sees a
+    different tree). The t13 fixture process used to pay one whole-package
+    export per runMatrix call that reached the hash and a git pair per
+    manifest - measured at ~3.3 s and ~1.5 s per call on the dev container.
+    The export goes through the exporter's disk cache, which keys on the
+    packaged inputs themselves: an edit outside the package answers from
+    the cache, an edit inside it re-exports, and the t13 gate compares the
+    answer against a fresh build either way. Repeated calls within one
+    process reuse the answers (the same contract as the exporter's
+    packaged-list cache).
  */
 let cachedArtifactSha256 = null;
 
