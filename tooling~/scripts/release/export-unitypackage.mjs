@@ -7,7 +7,9 @@
     GUID directory), and emits a deterministic ustar tarball normalized through
     gzip. Two checkouts of the same revision rebuild byte-identically: fixed
     tar header fields, fixed entry order, and a normalized gzip header (MTIME 0,
-    OS 0xFF).
+    OS 0xFF). Callers that only need the checkout's artifact may pass
+    `cache: true` to answer a clean tree from `.artifacts/export-cache/`; the
+    release flow always builds fresh.
 
     Samples~/ content is excluded: the tilde folder is invisible to Unity, its
     files ship without .meta files (Package Manager generates fresh metas when
@@ -18,6 +20,7 @@
     import destination, `--root-prefix` + asset path, no .meta suffix).
 */
 import { execFileSync } from "node:child_process";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -41,7 +44,8 @@ function parseArgs(argv) {
   const options = {
     packageRoot: REPO_ROOT,
     out: "",
-    rootPrefix: ""
+    rootPrefix: "",
+    cache: false
   };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -101,6 +105,124 @@ function packagedList(packageRoot) {
   };
   PACKAGED_LIST_CACHE.set(cacheKey, Object.freeze(result));
   return result;
+}
+
+/*
+    The exported artifact is a pure function of three things: the checkout's
+    packaged content, this module's archive logic, and the npm allowlist
+    engine. A test that needs the real artifact used to pay the whole build
+    every time - one `npm pack` spawn plus a read of every packaged file -
+    and one `npm test` run paid five of those builds across its parallel
+    test processes. The disk cache answers a clean tree from
+    `.artifacts/export-cache/` instead.
+
+    The key is <git revision> + <this module's source hash> + <node version>,
+    so a new commit, an exporter edit, or a toolchain change re-exports. A
+    dirty tree keys to nothing and always exports fresh: `git status
+    --porcelain` sees tracked edits and untracked files, but not the content
+    of a gitignored file that npm would still ship, so only a clean tree is
+    provably the revision its name claims. The release flow never passes
+    `cache: true`; freshness there is the contract the cache borrows from.
+ */
+const EXPORTER_SOURCE_SHA256 = sha256Hex(fs.readFileSync(fileURLToPath(import.meta.url)));
+
+function sha256Hex(buffer) {
+  return crypto.createHash("sha256").update(buffer).digest("hex");
+}
+
+function artifactCacheKey(packageRoot) {
+  try {
+    const revision = execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: packageRoot,
+      encoding: "utf8"
+    }).trim();
+    if (!/^[0-9a-f]{40}$/u.test(revision)) {
+      return null;
+    }
+    const status = execFileSync("git", ["status", "--porcelain"], {
+      cwd: packageRoot,
+      encoding: "utf8"
+    });
+    if (status.length !== 0) {
+      return null;
+    }
+    return sha256Hex(`${revision}\n${cachedExporterSourceSha256}\n${process.version}\n`);
+  } catch {
+    return null;
+  }
+}
+
+function cachedArtifactPaths(packageRoot, key) {
+  const directory = path.join(packageRoot, ".artifacts", "export-cache");
+  return {
+    buffer: path.join(directory, `${key}.unitypackage`),
+    meta: path.join(directory, `${key}.json`)
+  };
+}
+
+function readCachedArtifact(packageRoot, key) {
+  const paths = cachedArtifactPaths(packageRoot, key);
+  try {
+    const buffer = fs.readFileSync(paths.buffer);
+    const meta = JSON.parse(fs.readFileSync(paths.meta, "utf8"));
+    if (
+      meta === null ||
+      typeof meta !== "object" ||
+      typeof meta.name !== "string" ||
+      typeof meta.version !== "string" ||
+      typeof meta.rootPrefix !== "string" ||
+      typeof meta.sha256 !== "string" ||
+      !Number.isInteger(meta.assetCount) ||
+      !Number.isInteger(meta.folderCount) ||
+      !Number.isInteger(meta.fileCount) ||
+      !Number.isInteger(meta.excludedSampleCount)
+    ) {
+      return null;
+    }
+    /*
+        The key proves what was exported; the digest proves the file on disk
+        is what was exported. A truncated or half-renamed entry misses and
+        the fresh export below repairs it instead of handing a test a broken
+        artifact that fails three files away from the cause.
+     */
+    if (sha256Hex(buffer) !== meta.sha256) {
+      return null;
+    }
+    return { buffer, meta };
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedArtifact(packageRoot, key, result) {
+  const paths = cachedArtifactPaths(packageRoot, key);
+  const meta = {
+    name: result.name,
+    version: result.version,
+    rootPrefix: result.rootPrefix,
+    sha256: sha256Hex(result.buffer),
+    assetCount: result.assetCount,
+    folderCount: result.folderCount,
+    fileCount: result.fileCount,
+    excludedSampleCount: result.excludedSampleCount
+  };
+  try {
+    fs.mkdirSync(path.dirname(paths.buffer), { recursive: true });
+    /*
+        Write-then-rename so a concurrent first export cannot be observed
+        half-written; racing writers rename identical bytes over each other.
+        Best-effort: a read-only or full disk still exports, it just never
+        answers from the cache.
+     */
+    const temporaryBuffer = `${paths.buffer}.${process.pid}.tmp`;
+    const temporaryMeta = `${paths.meta}.${process.pid}.tmp`;
+    fs.writeFileSync(temporaryBuffer, result.buffer);
+    fs.writeFileSync(temporaryMeta, `${JSON.stringify(meta)}\n`);
+    fs.renameSync(temporaryBuffer, paths.buffer);
+    fs.renameSync(temporaryMeta, paths.meta);
+  } catch {
+    /* The cache is an accelerator, never a dependency. */
+  }
 }
 
 function readMetaText(packageRoot, metaPath) {
@@ -284,6 +406,18 @@ function resolveRootPrefix(rootPrefix, packageName) {
 */
 function exportUnityPackage(options) {
   const packageRoot = path.resolve(options.packageRoot);
+  const cacheKey = options.cache === true ? artifactCacheKey(packageRoot) : null;
+  if (cacheKey !== null) {
+    const cached = readCachedArtifact(packageRoot, cacheKey);
+    if (cached !== null) {
+      const result = { ...cached.meta, buffer: cached.buffer };
+      if (options.out && options.out.length > 0) {
+        fs.mkdirSync(path.dirname(options.out), { recursive: true });
+        fs.writeFileSync(options.out, result.buffer);
+      }
+      return result;
+    }
+  }
   const { name, version, files } = packagedList(packageRoot);
   const collected = collectAssets(packageRoot, files);
   if (0 < collected.violations.length) {
@@ -300,11 +434,7 @@ function exportUnityPackage(options) {
   const rootPrefix = resolveRootPrefix(options.rootPrefix ?? "", name);
   const tar = buildTar(collected.assets, rootPrefix);
   const buffer = gzipDeterministic(tar);
-  if (options.out && options.out.length > 0) {
-    fs.mkdirSync(path.dirname(options.out), { recursive: true });
-    fs.writeFileSync(options.out, buffer);
-  }
-  return {
+  const result = {
     buffer,
     name,
     version,
@@ -314,6 +444,14 @@ function exportUnityPackage(options) {
     fileCount: collected.assets.length - collected.assets.filter((asset) => asset.isFolder).length,
     excludedSampleCount: collected.excludedSampleCount
   };
+  if (cacheKey !== null) {
+    writeCachedArtifact(packageRoot, cacheKey, result);
+  }
+  if (options.out && options.out.length > 0) {
+    fs.mkdirSync(path.dirname(options.out), { recursive: true });
+    fs.writeFileSync(options.out, buffer);
+  }
+  return result;
 }
 
 function main() {
@@ -359,4 +497,4 @@ if (isMain) {
   main();
 }
 
-export { collectAssets, exportUnityPackage, gzipDeterministic, packagedList, resolveRootPrefix, buildTar };
+export { collectAssets, exportUnityPackage, gzipDeterministic, packagedList, resolveRootPrefix, buildTar, artifactCacheKey };

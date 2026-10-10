@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -159,10 +160,17 @@ test("Unity timeout resolves after close and spawn errors survive", async () => 
 test("matrix manifests record complete identity and reject stale reports", async () => {
   const root = temporaryRoot("run");
   const artifactPath = path.join(root, "artifact.unitypackage");
-  const artifact = exportUnityPackage({ packageRoot: path.resolve(TOOLING_ROOT, ".."), out: "" });
+  const artifact = exportUnityPackage({ packageRoot: path.resolve(TOOLING_ROOT, ".."), out: "", cache: true });
   fs.writeFileSync(artifactPath, artifact.buffer);
   const out = path.join(root, "reports");
-  const options = { artifact: artifactPath, out, only: "unity-6", unity: "unity", unityById: new Map(), fixtureRoot: FIXTURE_ROOT, keep: true, timeoutMinutes: 5 };
+  /*
+      The manifest must name the hash of the artifact the leg actually
+      imports, and the exporter's disk cache makes the run's own export and
+      the fixtures module's per-process export the same bytes on a clean
+      tree; passing it here keeps that equality the thing under test
+      instead of paying a second whole-package export to recompute it.
+   */
+  const options = { artifact: artifactPath, out, only: "unity-6", unity: "unity", unityById: new Map(), fixtureRoot: FIXTURE_ROOT, keep: true, timeoutMinutes: 5, expectedArtifactSha256: crypto.createHash("sha256").update(artifact.buffer).digest("hex") };
   const matrix = loadMatrix(MATRIX_PATH);
   const testEnvironments = [];
   const runtime = {

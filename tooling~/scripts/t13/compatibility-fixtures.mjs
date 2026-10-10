@@ -338,16 +338,18 @@ function sha256Buffer(buffer) { return crypto.createHash("sha256").update(buffer
     writes are gitignored, so no sample sees a different tree). The t13
     fixture process used to pay one whole-package export per runMatrix call
     that reached the hash and a git pair per manifest - measured at ~3.3 s
-    and ~1.5 s per call on the dev container. Every fresh process still
-    exports and still asks git, exactly like the release flow; repeated
-    calls within one process reuse the answers (the same contract as the
-    exporter's packaged-list cache).
+    and ~1.5 s per call on the dev container. The export goes through the
+    exporter's clean-tree disk cache, so a fresh process re-exports only
+    when the cache has no entry for this revision and exporter; a dirty
+    tree always exports fresh, exactly like the release flow. Repeated
+    calls within one process reuse the answers either way (the same
+    contract as the exporter's packaged-list cache).
  */
 let cachedArtifactSha256 = null;
 
 function currentArtifactSha256() {
   cachedArtifactSha256 ??= sha256Buffer(
-    exportUnityPackage({ packageRoot: REPO_ROOT, out: "" }).buffer
+    exportUnityPackage({ packageRoot: REPO_ROOT, out: "", cache: true }).buffer
   );
   return cachedArtifactSha256;
 }
