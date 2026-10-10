@@ -546,6 +546,22 @@ test("a relay port refusal mid-reload is transient; a missing command is not", a
   });
   assert.equal(client.asked.length, 4, "relay-port and reset refusals are the editor being busy");
 
+  // undici's bare "terminated" is a dead socket; a compile error naming the
+  // word inside a longer sentence is a permanent answer (Bugbot, PR #216).
+  await assert.rejects(
+    callFirstWorking(
+      fakeClient([
+        new Error('error TS1005: Unterminated string literal'),
+        answered("{}")
+      ]),
+      [{ name: "eval", arguments: { code: "x" } }],
+      undefined,
+      { deadline: 60_000, now: quietClock(), pause: instant }
+    ),
+    /Unterminated/
+  );
+
+
   await assert.rejects(
     callFirstWorking(
       fakeClient([new Error("Pipeline server returned 400 Bad Request: Command Not Found. No command named 'Unity_RunCommand' is available.")]),

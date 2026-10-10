@@ -21,7 +21,8 @@ import {
   summaryKey,
   testRunLegs,
   testSummaryLine,
-  waitForTestIdle
+  waitForTestIdle,
+  waitForTestIdleQuietly
 } from "../unity-mcp.mjs";
 import path from "node:path";
 import fs from "node:fs";
@@ -1278,4 +1279,40 @@ test("the run reporter survives a probe that races an editor reload", async () =
   } finally {
     fs.rmSync(project, { recursive: true, force: true });
   }
+});
+
+test("the mid-run idle wait probes on a short window and returns on the first refusal", async () => {
+  /*
+      The quiet wait exists so the status poll after each attempt can see a run
+      in flight (that observation is what makes a second identical summary
+      attributable). A probe that blocked until the editor freed would skip the
+      in-flight polls, so the wait bounds each probe to a 5 s window and a
+      refusal ends the wait instead of being retried here (Bugbot, PR #216).
+   */
+  const asked = [];
+  const deadline = Date.now() + 600_000;
+  const refused = () => {
+    throw new Error("Main thread operation timed out after 5000ms");
+  };
+
+  const options = [];
+  const end = await waitForTestIdleQuietly(null, (expression, window) => {
+    asked.push(expression);
+    options.push(window);
+    return refused();
+  }, deadline);
+  assert.equal(end, undefined, "a refused probe ends the wait quietly");
+  assert.equal(asked.length, 1, "a refusal is not retried by this wait");
+  assert.ok(options[0].deadline <= deadline, "the probe window never passes the leg deadline");
+  assert.ok(options[0].deadline - Date.now() <= 5_100, "the probe window is short");
+
+  // A busy answer keeps the wait looping; an idle answer ends it.
+  let probes = 0;
+  const answered = (text) => ({ call: { content: [{ text }] } });
+  const end2 = await waitForTestIdleQuietly(null, () => {
+    probes += 1;
+    return answered(probes === 1 ? "true" : "false");
+  }, deadline);
+  assert.equal(end2, undefined);
+  assert.equal(probes, 2, "busy once, then idle");
 });

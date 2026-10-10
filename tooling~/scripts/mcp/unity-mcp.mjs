@@ -2319,8 +2319,10 @@ const TRANSIENT_TOOL_ERROR = [
   // Observed live: "Failed to execute command 'eval': Connection reset by server".
   /connection reset/i,
   /econnreset/i,
-  // undici's spelling for a socket that died mid-request.
-  /terminated/i,
+  // undici's whole message for a socket that died mid-request is "terminated";
+  // anchored, so "Unterminated string literal" (a permanent compile error)
+  // never reads as a busy editor.
+  /^terminated$/i,
   /socket hang up/i,
   /cannot connect to .*pipeline server/i
 ];
@@ -3776,7 +3778,15 @@ export async function runUnityTests(options, runtime = {}) {
      */
     const sessionBudgetMs = sessionSignalBudgetMs(runTimeout, legs.length);
     const signal = AbortSignal.timeout(sessionBudgetMs);
-    const evalCall = (expression) =>
+    /*
+        Every eval rides the CURRENT leg's deadline, not a fresh slice of the
+        session budget: a busy window inside one leg must not eat the next
+        leg's room, and the mid-run quiet wait needs its callers' refusals to
+        stay short (it polls test_status between attempts, and those polls are
+        what record a run as seen in flight).
+     */
+    let legDeadline = Date.now();
+    const evalCall = (expression, window = {}) =>
       callFirstWorking(
         client,
         [
@@ -3784,7 +3794,7 @@ export async function runUnityTests(options, runtime = {}) {
           { name: "eval", arguments: { expression } }
         ],
         signal,
-        { deadline: Date.now() + sessionBudgetMs }
+        { deadline: window.deadline ?? legDeadline }
       );
 
     const summaries = [];
@@ -3798,7 +3808,7 @@ export async function runUnityTests(options, runtime = {}) {
           Each leg gets its own deadline: the flag reads as how long a run may
           take, and a slow first suite must not starve the second one.
        */
-      const legDeadline = Date.now() + runTimeout;
+      legDeadline = Date.now() + runTimeout;
       if (signal.aborted) {
         fail(
           `The run timeout (${runTimeout} ms per leg) is spent after `
@@ -3883,15 +3893,21 @@ async function pollTestStatus(client, signal, attempts = 5) {
 /*
     The mid-run variant of the idle wait: the editor being busy is the expected
     state while a run winds down, so a stalled answer ends the wait instead of
-    failing the command.
+    failing the command. The probe rides a SHORT window and a refusal returns
+    quietly, because the status poll that follows each attempt is what records
+    a run as seen in flight - a probe that blocked until the editor freed would
+    skip the in-flight polls and a second identical green run would read as
+    stale (found by Cursor Bugbot on PR #216).
  */
-async function waitForTestIdleQuietly(client, evalCall, deadline) {
+export async function waitForTestIdleQuietly(client, evalCall, deadline) {
   const expression =
     "return (UnityEditor.EditorApplication.isCompiling || UnityEditor.EditorApplication.isUpdating || UnityEditor.EditorApplication.isPlayingOrWillChangePlaymode);";
   for (let attempt = 0; attempt < 30; ++attempt) {
     if (Date.now() >= deadline) return;
     try {
-      const { call } = await evalCall(expression);
+      const { call } = await evalCall(expression, {
+        deadline: Math.min(Date.now() + 5_000, deadline)
+      });
       if (evalAnswerIsFalse(extractText(call))) return;
     } catch {
       return;
