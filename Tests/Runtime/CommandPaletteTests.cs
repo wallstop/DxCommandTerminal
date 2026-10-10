@@ -852,7 +852,7 @@
             {
                 _palette.Open();
                 yield return null;
-                GUIUtility.systemCopyBuffer = "palette\tping\n1 2";
+                yield return SetClipboard("palette\tping\n1 2");
 
                 yield return SendKeyDown(KeyCode.V, EventModifiers.Control);
 
@@ -2293,7 +2293,7 @@
             _palette._input.value = text;
             yield return null;
 
-            int frameBudget = 300;
+            int frameBudget = FrameBudget;
             int heldPasses = 0;
             while (heldPasses < 2 && 0 < frameBudget--)
             {
@@ -2316,8 +2316,9 @@
             if (heldPasses < 2)
             {
                 Assert.Fail(
-                    $"The caret never held at [{selectIndex}, {cursorIndex}); "
-                        + $"the field reported [{_palette._input.selectIndex}, {_palette._input.cursorIndex}]"
+                    $"The caret never held at select {selectIndex}, cursor {cursorIndex}; "
+                        + $"the field reported select {_palette._input.selectIndex}, "
+                        + $"cursor {_palette._input.cursorIndex}"
                 );
             }
         }

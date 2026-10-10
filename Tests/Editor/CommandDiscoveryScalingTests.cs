@@ -25,8 +25,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         for gross tail blowups - so two stalled samples under 4x the budget
         cannot fail a shared host editor (#170). The cold budget stays a
         single sample of the first registration cycle - that window happens
-        once per session by definition - but a breach must repeat on two
-        immediate first-touch re-measurements to fail (#171): three sessions
+        once per session by definition - and a breach fails when either
+        immediate first-touch confirmation repeats it (#171): three sessions
         recorded single cold samples at 1.5-4x a budget that never
         approached it again, so the trip answers "regression" and a
         non-repeating spike is recorded as a stall. Editor-only: players
@@ -68,9 +68,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         /*
             How many first-touch re-measurements a cold breach must survive
-            before it fails (#171). Two, so one lingering stall cannot
-            confirm itself, and the pair together stay a few milliseconds of
-            work at every tier.
+            before it fails (#171): the trip needs any one of them to repeat
+            the breach, so a lone stall cannot confirm itself, and a
+            sustained breach cannot hide. On breach the pair costs one extra
+            registration cycle per measurement - at the 10,000 tier that is
+            the tier's own cold cost, twice, and only ever paid on a breach.
          */
         private const int ColdConfirmationCount = 2;
 
@@ -338,10 +340,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         )
         {
             /*
-                The cold tripwire stays absolute; a breach only counts when a
-                first-touch re-measurement crosses the same budget (#171).
+                The cold tripwire stays absolute; a breach counts only when
+                a first-touch re-measurement crosses the same budget (#171).
                 The message names the original sample, its confirmations, and
-                the margin each left, so a trip still says what it cost.
+                the margin each left, so a trip still says what it cost. A
+                breach no confirmation repeats passes this assert and is
+                recorded in the log line instead - a host stall, not a
+                regression.
              */
             if (readiness.ColdTripwireFails(coldBudgetMilliseconds))
             {
@@ -354,8 +359,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                         + $"budget={coldBudgetMilliseconds:F3} ms "
                         + $"margin={coldBudgetMilliseconds - readiness.ColdMilliseconds:F3} ms "
                         + $"confirmations=[{confirmations}] "
-                        + $"(n={readiness.ColdConfirmationMilliseconds.Length} at the same budget; "
-                        + "a breach that no re-measurement repeats is a host stall, not a regression)"
+                        + $"(n={readiness.ColdConfirmationMilliseconds.Length} at the same budget)"
                 );
             }
 

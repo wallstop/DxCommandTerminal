@@ -11,9 +11,11 @@ namespace WallstopStudios.DxCommandTerminal.Input
         /// <summary>
         ///     Whether either console surface's text field currently holds
         ///     panel focus. The live read is the shipped behavior; a game
-        ///     that wants a character key to keep toggling while the field
-        ///     has focus overrides this to <c>false</c>, which restores the
-        ///     pre-rule behavior.
+        ///     that wants a non-toggle character binding to keep running
+        ///     while the field has focus overrides this to <c>false</c>,
+        ///     which restores the pre-rule behavior for the six messages the
+        ///     rule covers. The two toggle messages do not consult this
+        ///     property - their key is reserved (#218).
         /// </summary>
         protected virtual bool TextInputOwnsFocus => TerminalUI.AnyConsoleFieldOwnsFocus();
 

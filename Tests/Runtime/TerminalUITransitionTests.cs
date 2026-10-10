@@ -527,13 +527,22 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 _terminal.IsClosed,
                 "Opening the bar over the terminal must close the terminal surface"
             );
+
+            /*
+                The press is left held; release it so the next test's queued
+                press is a new press, not a re-assertion of a held bit.
+             */
+            ReleaseKeys();
+            yield return null;
         }
 #endif
 
         /*
-            The console key is the terminal's: with the palette open and its
-            query focused, the console key still opens the terminal, and the
-            terminal's open closes the palette (#218).
+            The console key answers with the terminal it opens: with the
+            palette open and its query focused, the console key still opens
+            the terminal, and the terminal's open closes the palette (#218).
+            The palette's own key is the palette's; one key bound to both
+            surfaces' toggles is a config the polls do not arbitrate (README).
          */
         [UnityTest]
         public IEnumerator ConsoleKeyOpensTheTerminalOverAFocusedPalette()

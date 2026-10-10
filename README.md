@@ -510,6 +510,8 @@ A binding that presses a character key is left to the field being typed into. Wh
 
 The toggle bindings are the exception: the console key is reserved by the surface it opens. `` ` `` (toggle) and `` #` `` (full) open and close their surface every press, even while a field has focus - the stroke that opens the console is the stroke that closes it. The cost of the reservation is the character: a toggle press that closes the console clears the line, so nothing typed survives it. If you need to type a backtick into a command, bind the toggles to keys that press no character (a function key, or any `ctrl+` chord).
 
+Each surface answers its own toggle key: the terminal's key toggles the terminal, the palette's key toggles the palette. Do not bind the same key to both surfaces' toggles - one press would then reach both polls in the same frame, and which surface ends up open depends on script execution order. (Opening one surface always closes the other, so the surfaces never stack; only the winner is unordered.)
+
 All other bindings that press no character keep working while you type: navigation and editing keys (arrows, Home, End, PageUp/PageDown, Enter, Tab, Escape, Backspace, Insert, Delete), function keys, modifiers, lock and media keys, and mouse or joystick buttons - plus any `ctrl+` chord. `TerminalKeyboardController` only reads `shift+` and `ctrl+`; a `cmd+`/`super+`/`alt+` prefix is not parsed, so such a binding never fires.
 
 Keep `closeHotkey` on a key that presses no character (Escape by default): a character bound to it cannot close the terminal while the field has focus. Escape, or any `ctrl+` chord, closes from inside.

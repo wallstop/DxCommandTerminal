@@ -984,11 +984,14 @@
 
         /// <summary>
         ///     Reports whether any console text field - a live terminal's
-        ///     command line or a palette's query - holds panel focus. Both
-        ///     input polls ask this so a key that types text is left to the
-        ///     surface being typed into (see
-        ///     <see cref="InputHelpers.ProducesTypedText"/>). It lives here so
-        ///     the two surfaces share one answer.
+        ///     command line or a palette's query - holds panel focus. The
+        ///     input polls that still hold a text-producing key back (the
+        ///     six non-toggle controls on the keyboard controller, the
+        ///     PlayerInput messages the typing rule covers) ask this so the
+        ///     key is left to the surface being typed into (see
+        ///     <see cref="InputHelpers.ProducesTypedText"/>). The toggle
+        ///     controls sit outside the rule (#218). It lives here so the
+        ///     two surfaces share one answer.
         /// </summary>
         internal static bool AnyConsoleFieldOwnsFocus()
         {
@@ -997,10 +1000,11 @@
 
         /// <summary>
         ///     Reports whether any live terminal's command field holds panel
-        ///     focus. A console input poll asks
-        ///     <see cref="AnyConsoleFieldOwnsFocus"/> so a key that types text
-        ///     is left to the surface being typed into (see
-        ///     <see cref="InputHelpers.ProducesTypedText"/>).
+        ///     focus. The keyboard controller's typed-text hold asks
+        ///     <see cref="AnyConsoleFieldOwnsFocus"/> (which asks this) so a
+        ///     key that types text is left to the surface being typed into
+        ///     (see <see cref="InputHelpers.ProducesTypedText"/>); the toggle
+        ///     controls do not consult it (#218).
         /// </summary>
         internal static bool AnyInputOwnsFocus()
         {

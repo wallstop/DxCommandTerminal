@@ -334,15 +334,14 @@ function sha256Buffer(buffer) { return crypto.createHash("sha256").update(buffer
 /*
     Both identities are per-process constants: the exported artifact is a
     function of the checkout, and the git state is answered by one sample
-    per run rather than one per leg (the report directories a run writes
-    are gitignored, so no leg sees a different tree). A matrix leg used to
-    re-export the whole package for its expected hash and re-run git for
-    every manifest - measured at ~3.3 s and ~1.5 s per call on the dev
-    container - so a four-leg matrix paid the export once per call site
-    and git once per manifest. Every fresh process still exports and still
-    asks git, exactly like the release flow; repeated calls within one
-    process reuse the answers (the same contract as the exporter's
-    packaged-list cache).
+    per run rather than one per manifest (the report directories a run
+    writes are gitignored, so no sample sees a different tree). The t13
+    fixture process used to pay one whole-package export per runMatrix call
+    that reached the hash and a git pair per manifest - measured at ~3.3 s
+    and ~1.5 s per call on the dev container. Every fresh process still
+    exports and still asks git, exactly like the release flow; repeated
+    calls within one process reuse the answers (the same contract as the
+    exporter's packaged-list cache).
  */
 let cachedArtifactSha256 = null;
 

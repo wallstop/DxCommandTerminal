@@ -247,10 +247,11 @@
 
         /// <summary>
         ///     Reports whether any live palette's query field holds panel
-        ///     focus. A console input poll consults
-        ///     <see cref="TerminalUI.AnyConsoleFieldOwnsFocus"/> so a key that
-        ///     types text stays with the surface being typed into (see
-        ///     <see cref="InputHelpers.ProducesTypedText"/>).
+        ///     focus. The keyboard controller's typed-text hold consults
+        ///     <see cref="TerminalUI.AnyConsoleFieldOwnsFocus"/> (which asks
+        ///     this) so a key that types text stays with the surface being
+        ///     typed into (see <see cref="InputHelpers.ProducesTypedText"/>);
+        ///     the toggle polls do not consult it (#218).
         /// </summary>
         internal static bool AnyInputOwnsFocus()
         {
