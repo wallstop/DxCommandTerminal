@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Make the float and double argument parsers answer the same on every runtime: a numeric literal too large for the type (`1e39`) parses to an infinity with a `true` answer on .NET Core 3.0+ hosts and `false` on Unity's runtime. The overflowed literal is now refused everywhere, so an argument that is not a number is never read as one; the named spellings (`Infinity`, `PositiveInfinity`, `NaN`, and friends) still parse.
 - Escape the text the package writes to Unity's Console window and the player log: a font, theme, command, or file name carrying invisible control or bidirectional characters now prints as its `\u202E` escape instead of reading as a name the project does not hold. The in-game console already showed that text and still does.
 - Fix ignored log entries landing when the ignore filter changed mid-write.
 - Make `CommandLog` own the ignore filter and stack-trace mode, configured through `TerminalUI` or `TerminalSettings`.
