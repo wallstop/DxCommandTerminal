@@ -155,6 +155,22 @@ than the MCP tooling started the run and means the two sides resolved different 
 directories on the first leg; and a run that matches no test never starts, so the
 editor reports nothing and the bridge's zero-total answer is used instead.
 
+### Busy-window retry windows are the caller's deadline
+
+`callFirstWorking` waits busy answers out, and the window it waits for must be
+the calling flow's own deadline - the current leg's, a probe's 5 s - never a
+fresh slice of a bigger budget. A window refilled per call outlives the leg it
+serves, and a wait that holds until the editor frees can starve the polls
+around it: the no-reporter result loop depends on `test_status` polls landing
+while a run is still in flight (`seenRunning` is what makes a second identical
+summary attributable), so the mid-run idle probe rides a short window and
+returns on its first refusal (Bugbot, PR #216). When adding a caller, thread
+the deadline; when adding a matcher for busy errors, anchor word-only
+patterns (`^terminated$`, not `terminated`) so a permanent error that merely
+contains the word retires its variant instead of being waited out, and let
+envelope failures count as transient only with empty diagnostics - compile
+diagnostics are the editor's own final answer.
+
 ## Host editor hygiene (eval drills)
 
 A modal dialog blocks the editor's main thread; while it is up, every bridge
