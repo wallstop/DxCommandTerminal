@@ -27,10 +27,10 @@
     seen, so a future reader is not misled: a tooltip assembled by
     concatenation, a tooltip held in a local and passed as a variable, a
     `GUIContent` bound by an object initializer or on a later line, an
-    expression-bodied factory, a label API other than a GUIContent
-    construction (a bare `GUILayout.Label($"... {name}")`), and a hole whose
-    own braces would need balancing. None of those exists in the package
-    today; widening the gate to them is a separate piece of work.
+    expression-bodied factory, and a label API other than a GUIContent
+    construction (a bare `GUILayout.Label($"... {name}")`). None of those
+    exists in the package today; widening the gate to them is a separate
+    piece of work.
 
     Rule 2 watches `EditorGUILayout.Popup` only - the call the three
     inspectors use. `EditorGUI.Popup` and `EditorGUILayout.IntPopup` are
@@ -97,6 +97,11 @@ function collectCSharpFiles(directory, files) {
     GUIContent walk has to step over: string literals (whose text may hold
     brackets, braces, and the token itself) and comments (whose text is not
     code at all).
+
+    An interpolated string is scanned brace-depth aware: inside a {...} hole
+    a quote starts a nested string, which may itself be interpolated. Before
+    that, a hole like {string.Join(", ", names)} split the literal at the
+    nested quote and rule 3 went blind to the whole call (issue #213).
  */
 function classify(text) {
   const literals = [];
@@ -147,34 +152,15 @@ function classify(text) {
     if (character === '"' || (character === "@" && next === '"')) {
       const verbatim = character === "@";
       const start = index;
-      index += verbatim ? 2 : 1;
-      while (index < text.length) {
-        if (text[index] === "\\" && !verbatim) {
-          index += 2;
-          continue;
-        }
-
-        if (text[index] === '"') {
-          if (verbatim && text[index + 1] === '"') {
-            index += 2;
-            continue;
-          }
-
-          index += 1;
-          break;
-        }
-
-        ++index;
-      }
-
-      /*
-        `$@` is a verbatim interpolated string and `@` is a verbatim one that
-        is not, and `start` indexes the `@` in both cases - so the character
-        that decides is the one immediately before it. Reading a second
-        character back instead matches nothing, and every `$@"...{x}"` hole
-        then goes unreported.
-       */
-      literals.push({ start, end: index, interpolated: text[start - 1] === "$", verbatim });
+      // Enter the scan at the literal's first character: the `$` of an
+      // interpolated string (`$"..."` and `$@"..."` both), so the flag reads
+      // forward (stringStartAt's contract), while the recorded span still
+      // starts at the quote.
+      const scanFrom = text[start - 1] === "$" ? start - 1 : start;
+      const literal = { start, end: 0, interpolated: text[start - 1] === "$", holes: [] };
+      index = skipStringFrom(text, scanFrom, literal.holes);
+      literal.end = index;
+      literals.push(literal);
       continue;
     }
 
@@ -182,6 +168,144 @@ function classify(text) {
   }
 
   return { literals, comments };
+}
+
+/*
+    What begins at index: a plain or verbatim string, an interpolated or
+    verbatim-interpolated string, or a char literal. `index` names the first
+    character of the literal - the `$` of `$"..."`, the `@` of `@"..."` - so
+    the interpolated flag reads forward, never back. Null when none does: a
+    lone `$` or `@` in a hole is code text, not a literal start.
+ */
+function stringStartAt(text, index) {
+  const character = text[index];
+  if (character === "'") return { quote: index, verbatim: false, interpolated: false, charLiteral: true };
+  if (character === '"') return { quote: index, verbatim: false, interpolated: false };
+  if (character === "$" && text[index + 1] === '"') {
+    return { quote: index + 1, verbatim: false, interpolated: true };
+  }
+
+  if (character === "$" && text[index + 1] === "@" && text[index + 2] === '"') {
+    return { quote: index + 2, verbatim: true, interpolated: true };
+  }
+
+  if (character === "@" && text[index + 1] === '"') {
+    return { quote: index + 1, verbatim: true, interpolated: false };
+  }
+
+  return null;
+}
+
+/** The index just past a char literal that opens at index. */
+function skipCharLiteral(text, index) {
+  index += 1;
+  while (index < text.length) {
+    if (text[index] === "\\") {
+      index += 2;
+      continue;
+    }
+
+    if (text[index] === "'") {
+      return index + 1;
+    }
+
+    ++index;
+  }
+
+  return index;
+}
+
+/*
+    Consume the literal that starts at index (one of stringStartAt's shapes)
+    and return the index just past its close. Interpolation holes are
+    recorded as absolute [start, end) spans into `holes`: the spans see the
+    code inside the hole, quotes and nested strings included, while doubled
+    braces - literal text in both verbatim and plain interpolated strings -
+    never open one.
+ */
+function skipStringFrom(text, index, holes) {
+  const start = stringStartAt(text, index);
+  if (start === null) {
+    return index + 1;
+  }
+
+  if (start.charLiteral) {
+    return skipCharLiteral(text, index);
+  }
+
+  let holeDepth = 0;
+  let holeStart = 0;
+  index = start.quote + 1;
+  while (index < text.length) {
+    const character = text[index];
+
+    if (holeDepth > 0) {
+      if (character === "{") {
+        holeDepth += 1;
+        index += 1;
+        continue;
+      }
+
+      if (character === "}") {
+        holeDepth -= 1;
+        if (holeDepth === 0) {
+          holes.push({ start: holeStart, end: index });
+        }
+
+        index += 1;
+        continue;
+      }
+
+      if (stringStartAt(text, index) !== null) {
+        index = skipStringFrom(text, index, []);
+        continue;
+      }
+
+      index += 1;
+      continue;
+    }
+
+    if (character === "\\" && !start.verbatim) {
+      index += 2;
+      continue;
+    }
+
+    if (character === "{") {
+      if (!start.interpolated) {
+        index += 1;
+        continue;
+      }
+
+      if (text[index + 1] === "{") {
+        // A doubled brace is literal text in an interpolated string too.
+        index += 2;
+        continue;
+      }
+
+      holeDepth = 1;
+      holeStart = index + 1;
+      index += 1;
+      continue;
+    }
+
+    if (character === "}" && start.interpolated && text[index + 1] === "}") {
+      index += 2;
+      continue;
+    }
+
+    if (character === '"') {
+      if (start.verbatim && text[index + 1] === '"') {
+        index += 2;
+        continue;
+      }
+
+      return index + 1;
+    }
+
+    index += 1;
+  }
+
+  return index;
 }
 
 function startsInside(spans, index) {
@@ -240,15 +364,13 @@ function interpolationHoles(source, literals) {
       continue;
     }
 
-    const text = source.slice(literal.start, literal.end);
     /*
-        A verbatim interpolated string doubles a literal brace, so "{{x}}" is
-        the text {x} and not a hole. Blank the doubled pairs before looking
-        for holes, or every one of them reads as an unescaped name.
+        The spans come from the brace-depth-aware scan: doubled braces never
+        opened a hole, and a quote inside a hole stayed inside it, so the
+        slice is the expression the compiler sees.
      */
-    const body = literal.verbatim ? text.replace(/\{\{|\}\}/g, "  ") : text;
-    for (const match of body.matchAll(/\{([^{}]*)\}/g)) {
-      holes.push({ hole: match[1].trim(), offset: literal.start + match.index });
+    for (const span of literal.holes) {
+      holes.push({ hole: source.slice(span.start, span.end).trim(), offset: span.start });
     }
   }
 
@@ -282,7 +404,15 @@ function unescapedTooltipNames(text) {
     const argumentText = text.slice(openParen + 1, closeParen);
     const argumentLiterals = literals
       .filter((literal) => literal.start > openParen && literal.end <= closeParen)
-      .map((literal) => ({ ...literal, start: literal.start - openParen, end: literal.end - openParen }));
+      .map((literal) => ({
+        ...literal,
+        start: literal.start - openParen,
+        end: literal.end - openParen,
+        holes: literal.holes.map((span) => ({
+          start: span.start - openParen - 1,
+          end: span.end - openParen - 1
+        }))
+      }));
     for (const { hole, offset } of interpolationHoles(argumentText, argumentLiterals)) {
       if (!hole.startsWith(SANITIZE_CALL)) {
         findings.push(`line ${lineOf(text, openParen + offset)}: ${hole}`);
@@ -427,6 +557,10 @@ function unwrappedDebugLogMessages(text) {
         ...literal,
         start: literal.start - argumentStart,
         end: literal.end - argumentStart,
+        holes: literal.holes.map((span) => ({
+          start: span.start - argumentStart,
+          end: span.end - argumentStart
+        }))
       }));
     const holes = interpolationHoles(argumentText, argumentLiterals);
     const printsCallerText = JOIN_ARGUMENTS_CALL.test(argumentText.trim());
@@ -673,35 +807,74 @@ test("display text: the Debug.Log rule ignores the shapes around it", () => {
   assert.deepEqual(unwrappedDebugLogMessages(followedByComment), [], followedByComment);
 });
 
-test("display text: the hole the scanner cannot see is wrapped by hand", () => {
+test("display text: the Debug.Log rule reads a hole that holds a string literal", () => {
   /*
-    A `string.Join(", ", ...)` hole holds a quote, which ends the literal
-    scan early, so rule 3 never reports the call (issue #213). Pin the one
-    site that uses the shape until the scanner can read it, and hold it to
-    rule 3's own bar: the whole message argument wrapped, not just a
-    sanitizer mention at the front.
+    A `string.Join(", ", ...)` hole holds a quote. The literal scan used to
+    end at that quote, the hole went unseen, and rule 3 passed the call
+    (issue #213). The scanner is brace-depth aware now, so the shape is
+    reported raw and accepted wrapped - and the shipped tree's one such site
+    is under the ordinary rule-3 sweep, not a special pin.
+  */
+  const raw = [
+    "Debug.LogWarning(",
+    '    $"Control Order is missing the following controls: [{string.Join(", ", missingControls)}]. "',
+    '        + "Input for these will not be handled. Is this intentional?",',
+    "    this",
+    ");"
+  ].join("\n");
+  assert.deepEqual(
+    unwrappedDebugLogMessages(raw),
+    ['line 1: string.Join(", ", missingControls)'],
+    "a hole holding a quoted argument is still a hole"
+  );
+
+  const wrapped = [
+    "Debug.LogWarning(",
+    "    LogTextSanitizer.Sanitize(",
+    '        $"Control Order is missing the following controls: [{string.Join(", ", missingControls)}]. "',
+    '            + "Input for these will not be handled. Is this intentional?"',
+    "    ),",
+    "    this",
+    ");"
+  ].join("\n");
+  assert.deepEqual(unwrappedDebugLogMessages(wrapped), [], wrapped);
+});
+
+test("display text: the shipped control-order warning is under rule 3's own sweep", () => {
+  /*
+    The scanner reads the shape now, so the real site needs no pin of its
+    own - but this assertion fails with a named pointer if the site is
+    deleted or rewritten past recognition, which is the one silent drift a
+    shape-only test cannot name.
   */
   const file = path.join(repoRoot, "Runtime/CommandTerminal/Input/TerminalKeyboardController.cs");
   const text = fs.readFileSync(file, "utf8");
-  const message = text.indexOf("Control Order is missing");
-  assert.ok(message >= 0, "the control-order warning moved; repoint this pin");
-  const call = text.lastIndexOf("Debug.LogWarning(", message);
-  assert.ok(call >= 0, "the control-order warning moved; repoint this pin");
-  const openParen = call + "Debug.LogWarning(".length - 1;
-  const { literals } = classify(text);
-  const closeParen = callCloseParen(text, openParen, literals);
-  assert.ok(closeParen >= 0, "the call's parens must balance for this pin to read it");
-  const [argumentStart, argumentEnd] = firstArgumentSpan(text, openParen, closeParen, literals);
-  const argumentText = text.slice(argumentStart, argumentEnd);
-  const argumentLiterals = literals
-    .filter((literal) => literal.start >= argumentStart && literal.end <= argumentEnd)
-    .map((literal) => ({
-      ...literal,
-      start: literal.start - argumentStart,
-      end: literal.end - argumentStart,
-    }));
-  assert.ok(
-    isWrappedInSanitize(argumentText, argumentLiterals),
-    "rule 3 cannot see this call, so the pin holds it to rule 3's own bar"
+  assert.match(
+    text,
+    /Debug\.LogWarning\(\s*LogTextSanitizer\.Sanitize\(/u,
+    "the control-order warning left rule 3's shape; check its replacement is wrapped"
+  );
+});
+
+test("display text: nested strings and braces inside a hole do not end it", () => {
+  const sources = [
+    'Debug.Log($"values [{string.Join("; ", items.Select(i => i["key"]))}]");',
+    'Debug.Log($"flag {value is \'\\\'\' ? "quote" : "plain"} end");',
+    'Debug.Log($"outer {string.Concat($"inner {nested}")} tail");'
+  ];
+  for (const source of sources) {
+    assert.deepEqual(
+      unwrappedDebugLogMessages(source),
+      ["line 1: " + source.slice(source.indexOf("{") + 1, source.lastIndexOf("}")).trim()],
+      source
+    );
+  }
+
+  assert.deepEqual(
+    unwrappedDebugLogMessages(
+      'Debug.Log(LogTextSanitizer.Sanitize($"outer {string.Concat($"inner {nested}")} tail"));'
+    ),
+    [],
+    "a nested-interpolated hole is accepted wrapped"
   );
 });
