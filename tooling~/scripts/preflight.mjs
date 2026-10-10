@@ -148,14 +148,22 @@ export function buildChecks() {
         "tooling~/package.json"
       ]
     },
-    { name: "compat-check", command: "npm --prefix tooling~ run compat:check" },
+    /*
+        One lane: both are dotnet builds whose projects live in
+        tooling~/compat and share its obj state, and concurrent restores
+        there scramble each other's references into a CS0246 storm
+        (measured: a 1,294-error build failure that passes either build
+        alone). The lane serializes them; everything else stays parallel.
+     */
+    { name: "compat-check", command: "npm --prefix tooling~ run compat:check", lane: "dotnet" },
     {
       // Not cached, same as compat-check: both are dotnet builds whose
       // input surface is the whole tree, and the lane is seconds. A
       // cached key over that surface either hashes everything or goes
       // stale; neither is worth it.
       name: "test-editor",
-      command: "npm --prefix tooling~ run test:editor"
+      command: "npm --prefix tooling~ run test:editor",
+      lane: "dotnet"
     },
     csharpCheck(
       "lint-comparison-direction",
@@ -242,52 +250,78 @@ function tailLines(text, maxLines = OUTPUT_TAIL_LINES) {
 }
 
 /**
- * Runs every check concurrently. Resolves once all exits are collected; never
- * rejects for a check's non-zero exit (that is a result, not a crash). A check
- * exceeding CHECK_TIMEOUT_MS is killed and reported as failed so a hung gate
- * cannot hang the run.
+ * Runs every check concurrently, except checks that share a lane: a check
+ * with a `lane` string runs after any other check in the same lane, and
+ * checks in different lanes (and lane-less checks, which get their own) run
+ * together. The lane exists for checks whose processes share build state -
+ * the two dotnet builds both write tooling~/compat/obj, and concurrent
+ * restores there scramble each other's references into a CS0246 storm.
+ * Resolves once all exits are collected; never rejects for a check's
+ * non-zero exit (that is a result, not a crash). A check exceeding
+ * CHECK_TIMEOUT_MS is killed and reported as failed so a hung gate cannot
+ * hang the run.
  */
 export function runChecks(checks, { onSettled = () => {} } = {}) {
+  const lanes = new Map();
+  for (const check of checks) {
+    const lane = check.lane ?? check.name;
+    if (!lanes.has(lane)) {
+      lanes.set(lane, []);
+    }
+    lanes.get(lane).push(check);
+  }
+
+  const runOne = (check) =>
+    new Promise((resolve) => {
+      const startedAt = Date.now();
+      const child = spawn(check.command, {
+        shell: true,
+        cwd: REPO_ROOT,
+        stdio: ["ignore", "pipe", "pipe"]
+      });
+      let output = "";
+      let timedOut = false;
+      const capture = (chunk) => {
+        output += chunk;
+      };
+      const timer = setTimeout(() => {
+        timedOut = true;
+        output += `\n[preflight] check exceeded ${CHECK_TIMEOUT_MS / 1000}s; killed`;
+        child.kill("SIGKILL");
+      }, CHECK_TIMEOUT_MS);
+      child.stdout.on("data", capture);
+      child.stderr.on("data", capture);
+      child.on("error", (error) => {
+        output += `\n[preflight] failed to spawn: ${error.message}`;
+      });
+      child.on("close", (code) => {
+        clearTimeout(timer);
+        const result = {
+          name: check.name,
+          command: check.command,
+          ok: code === 0 && !timedOut,
+          durationMs: Date.now() - startedAt,
+          output: tailLines(output)
+        };
+        onSettled(result);
+        resolve(result);
+      });
+    });
+
   return Promise.all(
-    checks.map(
-      (check) =>
-        new Promise((resolve) => {
-          const startedAt = Date.now();
-          const child = spawn(check.command, {
-            shell: true,
-            cwd: REPO_ROOT,
-            stdio: ["ignore", "pipe", "pipe"]
-          });
-          let output = "";
-          let timedOut = false;
-          const capture = (chunk) => {
-            output += chunk;
-          };
-          const timer = setTimeout(() => {
-            timedOut = true;
-            output += `\n[preflight] check exceeded ${CHECK_TIMEOUT_MS / 1000}s; killed`;
-            child.kill("SIGKILL");
-          }, CHECK_TIMEOUT_MS);
-          child.stdout.on("data", capture);
-          child.stderr.on("data", capture);
-          child.on("error", (error) => {
-            output += `\n[preflight] failed to spawn: ${error.message}`;
-          });
-          child.on("close", (code) => {
-            clearTimeout(timer);
-            const result = {
-              name: check.name,
-              command: check.command,
-              ok: code === 0 && !timedOut,
-              durationMs: Date.now() - startedAt,
-              output: tailLines(output)
-            };
-            onSettled(result);
-            resolve(result);
-          });
-        })
+    /*
+        One chain per lane: a lane's checks run in order, every other lane
+        runs alongside, and each lane resolves to ALL of its results so the
+        summary counts checks, not lanes.
+     */
+    [...lanes.values()].map((laneChecks) =>
+      laneChecks.reduce(
+        (chain, check) =>
+          chain.then((results) => runOne(check).then((result) => [...results, result])),
+        Promise.resolve([])
+      )
     )
-  );
+  ).then((groups) => groups.flat());
 }
 
 /** Extracts the --skip value (accepts `--skip=a,b` and `--skip a,b`). */

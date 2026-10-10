@@ -187,6 +187,60 @@ test("runChecks: settles once per check and preserves results", async () => {
   assert.ok(results.every((result) => result.ok), "all subjects pass");
 });
 
+test("runChecks: same-lane checks serialize while other lanes run concurrently", async () => {
+  /*
+      The lane exists because two dotnet builds sharing compat/obj scramble
+      each other's restores. The pin: two checks in one lane never overlap
+      (each records a start after the other's end), while a third check in
+      another lane overlaps the first anyway, so the lane costs no more
+      serialization than it needs.
+   */
+  const marker = path.join(os.tmpdir(), `dxct-preflight-lane-${process.pid}-${Date.now()}`);
+  const overlap = (label, holdMs) => `
+    const fs = await import("node:fs");
+    const marker = ${JSON.stringify(marker)};
+    const key = ${JSON.stringify(label)};
+    const read = () =>
+      fs.existsSync(marker) ? JSON.parse(fs.readFileSync(marker, "utf8")) : {};
+    const state = read();
+    state[key] = { start: Date.now(), end: 0 };
+    fs.writeFileSync(marker, JSON.stringify(state));
+    setTimeout(() => {
+      /*
+          Re-read at write time: a sibling in another lane finished while
+          this one held, and its entry must survive this write.
+       */
+      const fresh = read();
+      fresh[key] = { ...state[key], end: Date.now() };
+      fs.writeFileSync(marker, JSON.stringify(fresh));
+      process.exit(0);
+    }, ${holdMs});
+  `;
+  const scripts = {
+    laneA1: overlap("laneA1", 300),
+    laneA2: overlap("laneA2", 0),
+    laneB: overlap("laneB", 150)
+  };
+  try {
+    await runChecks([
+      { name: "laneA1", command: `node "${writeTempScript(scripts.laneA1)}"`, lane: "A" },
+      { name: "laneA2", command: `node "${writeTempScript(scripts.laneA2)}"`, lane: "A" },
+      { name: "laneB", command: `node "${writeTempScript(scripts.laneB)}"`, lane: "B" }
+    ]);
+    const state = JSON.parse(fs.readFileSync(marker, "utf8"));
+    assert.ok(
+      state.laneA2.start >= state.laneA1.end,
+      "the second check in a lane must start at or after the first one ends"
+    );
+    assert.ok(
+      state.laneB.start < state.laneA1.end,
+      "a check in another lane must overlap the lane, not wait for it"
+    );
+  } finally {
+    fs.rmSync(marker, { force: true });
+  }
+});
+
 test("main: skipping every check refuses to scan nothing", async () => {
   const all = buildChecks().map((check) => check.name);
   const exitCode = await main([`--skip=${all.join(",")}`]);
