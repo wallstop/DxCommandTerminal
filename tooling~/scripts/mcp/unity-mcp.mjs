@@ -2125,6 +2125,11 @@ export function evalResultText(text) {
  * without raising a tool error, so the failure text must be surfaced
  * explicitly or capture failures become deadline timeouts. Returns the
  * failure message, or null when the answer is not a failed envelope.
+ *
+ * Framing note: the Pipeline-generation bridge raises a thrown envelope as a
+ * tool error (isError), which callFirstWorking's transient check reads; the
+ * non-error framing below is the older backend's, where an envelope answer
+ * flows to the caller's assertEvalAnswer.
  */
 export function evalFailure(text) {
   const parsed = parseEnvelope(text);
@@ -2311,7 +2316,10 @@ function reconnectingSession(connect) {
  */
 const TRANSIENT_TOOL_ERROR = [
   /main thread operation timed out/i,
+  // Observed live: "Failed to execute command 'eval': Connection reset by server".
   /connection reset/i,
+  /econnreset/i,
+  /socket hang up/i,
   /cannot connect to .*pipeline server/i
 ];
 
@@ -3455,7 +3463,15 @@ async function noTestsMatchedSummary(client, signal, initial) {
   const candidates = [initial];
   try {
     candidates.push(
-      extractText((await callFirstWorking(client, [{ name: "test_status", arguments: {} }], signal)).call)
+      extractText(
+        (
+          await callFirstWorking(client, [{ name: "test_status", arguments: {} }], signal, {
+            // Best effort by contract: this poll's answer is optional, so it
+            // must not sit out a whole busy window inside a swallowed catch.
+            deadline: Date.now() + 5_000
+          })
+        ).call
+      )
     );
   } catch {}
 

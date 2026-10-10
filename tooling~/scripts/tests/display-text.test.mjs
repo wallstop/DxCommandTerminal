@@ -114,6 +114,9 @@ const GUICONTENT_CONSTRUCTION =
 /** Every unescaped name interpolated into a GUIContent, as "line: hole". */
 function unescapedTooltipNames(text) {
   const { literals, comments } = classify(text);
+  // The paren walk reads comment-blanked text (same offsets): a comment with
+  // an unbalanced paren must not desync it (rule 3 and the lints do this too).
+  const code = blankComments(text, comments);
   const findings = [];
   for (const match of text.matchAll(GUICONTENT_CONSTRUCTION)) {
     if (startsInside(comments, match.index) || startsInside(literals, match.index)) {
@@ -121,18 +124,20 @@ function unescapedTooltipNames(text) {
     }
 
     const openParen = match.index + match[0].length - 1;
-    const closeParen = callCloseParen(text, openParen, literals);
+    const closeParen = callCloseParen(code, openParen, literals);
     if (closeParen < 0) {
       continue;
     }
 
-    const argumentText = text.slice(openParen + 1, closeParen);
+    const argumentText = code.slice(openParen + 1, closeParen);
     const argumentLiterals = literals
       .filter((literal) => literal.start > openParen && literal.end <= closeParen)
       .map((literal) => ({
         ...literal,
-        start: literal.start - openParen,
-        end: literal.end - openParen,
+        // Both spans rebase by the argument's start, so literal and hole
+        // offsets read from the same origin.
+        start: literal.start - openParen - 1,
+        end: literal.end - openParen - 1,
         holes: literal.holes.map((span) => ({
           start: span.start - openParen - 1,
           end: span.end - openParen - 1
@@ -140,7 +145,7 @@ function unescapedTooltipNames(text) {
       }));
     for (const { hole, offset } of interpolationHoles(argumentText, argumentLiterals)) {
       if (!hole.startsWith(SANITIZE_CALL)) {
-        findings.push(`line ${lineOf(text, openParen + offset)}: ${hole}`);
+        findings.push(`line ${lineOf(text, openParen + 1 + offset)}: ${hole}`);
       }
     }
   }
@@ -538,4 +543,33 @@ test("display text: nested strings and braces inside a hole do not end it", () =
     [],
     "a nested-interpolated hole is accepted wrapped"
   );
+});
+
+test("display text: a verbatim-interpolated string reads in both prefix orders", () => {
+  /*
+    `$@"..."` and `@$"..."` are the same string to C#. `@$` is the canonical
+    path shape - backslashes are literal - and its doubled quotes stay
+    literal text even when a hole follows them.
+   */
+  const paths = [
+    [
+      'Debug.Log($@"scanning {directory} \\\\server\\{shared} now");',
+      ["line 1: directory, shared"]
+    ],
+    [
+      'Debug.Log(@$"found {count} in ""{directory}""");',
+      ["line 1: count, directory"]
+    ],
+    [
+      'Debug.Log(LogTextSanitizer.Sanitize($@"scanning {directory} \\\\server\\{shared} now"));',
+      []
+    ],
+    [
+      'Debug.Log(LogTextSanitizer.Sanitize(@"scanning $directory ""x"""));',
+      []
+    ]
+  ];
+  for (const [source, expected] of paths) {
+    assert.deepEqual(unwrappedDebugLogMessages(source), expected, source);
+  }
 });

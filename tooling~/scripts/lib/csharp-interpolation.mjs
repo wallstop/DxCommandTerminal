@@ -67,15 +67,20 @@ export function classify(text) {
       continue;
     }
 
-    if (character === '"' || (character === "@" && next === '"')) {
-      const verbatim = character === "@";
+    if (
+      character === '"' ||
+      (character === "@" && (next === '"' || (next === "$" && text[index + 2] === '"')))
+    ) {
       const start = index;
       // Enter the scan at the literal's first character: the `$` of an
-      // interpolated string (`$"..."` and `$@"..."` both), so the flag reads
-      // forward (stringStartAt's contract), while the recorded span still
-      // starts at the quote.
+      // interpolated string (`$"..."`, `$@"..."`, and `@$"..."` all), so the
+      // flags read forward (stringStartAt's contract), while the recorded
+      // span still starts at the first prefix character. For `@$"..."` the
+      // first character is the `@`, which stringStartAt reads as
+      // verbatim-interpolated itself.
       const scanFrom = text[start - 1] === "$" ? start - 1 : start;
-      const literal = { start, end: 0, interpolated: text[start - 1] === "$", holes: [] };
+      const parsed = stringStartAt(text, scanFrom);
+      const literal = { start, end: 0, interpolated: parsed.interpolated, holes: [] };
       index = skipStringFrom(text, scanFrom, literal.holes);
       literal.end = index;
       literals.push(literal);
@@ -104,6 +109,10 @@ export function stringStartAt(text, index) {
   }
 
   if (character === "$" && text[index + 1] === "@" && text[index + 2] === '"') {
+    return { quote: index + 2, verbatim: true, interpolated: true };
+  }
+
+  if (character === "@" && text[index + 1] === "$" && text[index + 2] === '"') {
     return { quote: index + 2, verbatim: true, interpolated: true };
   }
 
