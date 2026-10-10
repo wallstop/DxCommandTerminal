@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Added
+
+- Ctrl+C and Ctrl+X copy and cut the selected text on both console surfaces' input fields (#194). A cut removes the span and arrives as a user edit - the command text updates and the palette re-ranks against the caret the cut left - and a copy leaves the field alone. The write goes through the verified clipboard path: a platform that will not keep the text reports the refusal, and a cut whose write was refused leaves the selection in the field rather than deleting text the clipboard never took.
+
 ### Changed
 
 - The console key opens and closes the console on every press, even while the command line or the palette search has focus (#218). A toggle binding is reserved by the surface it opens: backtick and shift+backtick toggle their surface instead of typing their character into a focused field, on the polled hotkeys, on `PlayerInput` toggle messages, and on a `CommandPaletteUI` character toggle binding. The cost of the reservation is the character: a toggle press that closes the console clears the line, so nothing typed survives it, and a character cannot be typed onto a bound toggle key. Every non-toggle character binding keeps the typing-wins rule.
