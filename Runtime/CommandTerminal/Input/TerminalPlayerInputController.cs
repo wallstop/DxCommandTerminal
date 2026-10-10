@@ -11,9 +11,11 @@ namespace WallstopStudios.DxCommandTerminal.Input
         /// <summary>
         ///     Whether either console surface's text field currently holds
         ///     panel focus. The live read is the shipped behavior; a game
-        ///     that wants a character key to keep toggling while the field
-        ///     has focus overrides this to <c>false</c>, which restores the
-        ///     pre-rule behavior.
+        ///     that wants a non-toggle character binding to keep running
+        ///     while the field has focus overrides this to <c>false</c>,
+        ///     which restores the pre-rule behavior for the six messages the
+        ///     rule covers. The two toggle messages do not consult this
+        ///     property - their key is reserved (#218).
         /// </summary>
         protected virtual bool TextInputOwnsFocus => TerminalUI.AnyConsoleFieldOwnsFocus();
 
@@ -58,7 +60,13 @@ namespace WallstopStudios.DxCommandTerminal.Input
 
         public virtual void OnToggleSmall(InputValue inputValue)
         {
-            if (!ShouldHandleMessage("ToggleSmall"))
+            /*
+                The toggle key is reserved: it opens and closes the surface
+                (#218), so the typing gate that holds a character binding for
+                the focused field does not apply to toggles - only the live
+                gate does.
+             */
+            if (!IsLive())
             {
                 return;
             }
@@ -67,7 +75,7 @@ namespace WallstopStudios.DxCommandTerminal.Input
 
         public virtual void OnToggleFull(InputValue inputValue)
         {
-            if (!ShouldHandleMessage("ToggleFull"))
+            if (!IsLive())
             {
                 return;
             }
@@ -151,10 +159,14 @@ namespace WallstopStudios.DxCommandTerminal.Input
             control with - a hand-sent message, a release that has already
             cleared the control, a name that resolves to no action - runs as
             it always has, as does every control that is not a typing key.
+
+            The two toggle messages do not pass through here: their handlers
+            answer only <see cref="IsLive"/>, because the stroke that opens a
+            surface must be the stroke that closes it (#218).
          */
         private bool ShouldHandleMessage(string actionName)
         {
-            if (!_enabled || terminal == null)
+            if (!IsLive())
             {
                 return false;
             }
@@ -173,6 +185,11 @@ namespace WallstopStudios.DxCommandTerminal.Input
             }
 
             return false;
+        }
+
+        private bool IsLive()
+        {
+            return _enabled && terminal != null;
         }
 
         /*

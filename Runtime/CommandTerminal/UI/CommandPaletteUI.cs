@@ -147,6 +147,17 @@
         internal int _caretStickPasses;
 
         /*
+            Only the scalar geometry of the last request (replacement range,
+            quoted flag) is read after the refresh, and always before the
+            next shell call; PrecedingArguments is valid only inside the
+            provider callback and must never be consumed from here. Internal
+            so the paste-caret fixture (#181) can read the geometry a paste
+            left.
+         */
+        internal CommandCompletionContext _completionContext;
+        internal bool _completionMode;
+
+        /*
             The search field's own history. A TextField has none, so this is
             the whole of Ctrl+Z; see TextFieldUndo for why the surface hands
             the stack the field's current text on every key instead of
@@ -163,14 +174,6 @@
         private readonly List<CommandCompletion> _completionsBuffer = new();
         private readonly List<CommandToken> _tokenBuffer = new();
 
-        /*
-            Only the scalar geometry of the last request (replacement range,
-            quoted flag) is read after the refresh, and always before the
-            next shell call; PrecedingArguments is valid only inside the
-            provider callback and must never be consumed from here.
-         */
-        private CommandCompletionContext _completionContext;
-        private bool _completionMode;
         private int? _selectionIndex;
         private bool _isOpen;
         private bool _built;
@@ -244,10 +247,11 @@
 
         /// <summary>
         ///     Reports whether any live palette's query field holds panel
-        ///     focus. A console input poll consults
-        ///     <see cref="TerminalUI.AnyConsoleFieldOwnsFocus"/> so a key that
-        ///     types text stays with the surface being typed into (see
-        ///     <see cref="InputHelpers.ProducesTypedText"/>).
+        ///     focus. The keyboard controller's typed-text hold consults
+        ///     <see cref="TerminalUI.AnyConsoleFieldOwnsFocus"/> (which asks
+        ///     this) so a key that types text stays with the surface being
+        ///     typed into (see <see cref="InputHelpers.ProducesTypedText"/>);
+        ///     the toggle polls do not consult it (#218).
         /// </summary>
         internal static bool AnyInputOwnsFocus()
         {
@@ -797,20 +801,15 @@
         }
 
         /*
-            A binding that types text belongs to whichever console field has
-            focus - this palette's query, or a terminal's command line - so
-            the character is typed instead of opening or closing a surface.
+            The palette's toggle key is reserved by the palette: the stroke
+            that opens the bar must be the stroke that closes it (#218), so
+            the poll reads the key every frame and no typed-text hold applies.
+            A character the binding would type is the cost of the reservation;
+            the bar's query is transient and a toggle that fires mid-typing
+            closes the bar.
          */
         private bool IsToggleHotkeyLive()
         {
-            if (
-                InputHelpers.ProducesTypedText(toggleHotkey)
-                && TerminalUI.AnyConsoleFieldOwnsFocus()
-            )
-            {
-                return false;
-            }
-
             return InputHelpers.IsKeyPressed(toggleHotkey, inputMode);
         }
 

@@ -225,19 +225,21 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         /*
-            The default toggle binding is a character, so pressing the console
-            key is a text edit: while the command field owns focus the key
-            belongs to the field and must not toggle the terminal.
+            The console key is reserved by the surface it opens (#218): the
+            stroke that opens must be the stroke that closes, so the poll
+            answers it while the command field owns focus. From full, the
+            small toggle first shrinks and the second press closes - both
+            with the field still focused.
          */
         [UnityTest]
-        public IEnumerator TextHotkeyDoesNotToggleWhileTheInputOwnsFocus()
+        public IEnumerator ConsoleKeyTogglesTheTerminalClosedWhileTheInputOwnsFocus()
         {
             yield return SpawnTerminal(open: true, withHotkeyController: true);
             yield return WaitForFocusedInput("Sanity: the command field holds panel focus");
 
             /*
                 The shipped default is a character key, which is what makes
-                this a text conflict rather than a hotkey.
+                this the reservation contract rather than a free hotkey.
              */
             Assert.IsTrue(
                 InputHelpers.ProducesTypedText(_hotkeyController.toggleHotkey),
@@ -246,11 +248,35 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             _hotkeyController.PressedHotkey = _hotkeyController.toggleHotkey;
             _hotkeyController.DriveUpdate();
-
             Assert.AreEqual(
-                TerminalState.OpenFull,
+                TerminalState.OpenSmall,
                 _terminal.State,
-                "Pressing the console key must type its character, not change the terminal state"
+                "The console key must act while the field has focus, not type its character"
+            );
+            yield return WaitForFocusedInput("Sanity: the shrunken surface's field holds focus");
+
+            _hotkeyController.PressedHotkey = _hotkeyController.toggleHotkey;
+            _hotkeyController.DriveUpdate();
+            yield return WaitForClosed(
+                "The same stroke must close the surface it opened, whatever holds focus"
+            );
+        }
+
+        /*
+            The full toggle answers the same contract in one stroke: while the
+            command field owns focus, shift+console key closes the full
+            surface directly.
+         */
+        [UnityTest]
+        public IEnumerator FullConsoleKeyClosesTheSurfaceWhileTheInputOwnsFocus()
+        {
+            yield return SpawnTerminal(open: true, withHotkeyController: true);
+            yield return WaitForFocusedInput("Sanity: the command field holds panel focus");
+
+            _hotkeyController.PressedHotkey = _hotkeyController.toggleFullHotkey;
+            _hotkeyController.DriveUpdate();
+            yield return WaitForClosed(
+                "The full-console key must close the surface while the field has focus"
             );
         }
 
@@ -282,28 +308,35 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
         }
 
+        /*
+            The reservation costs the character: the press reaches the focused
+            field and the poll in the same frame, and the close that answers
+            it clears the line. Nothing typed survives the console key - that
+            is the reserved-key contract (#218), not a dropped edit.
+         */
         [UnityTest]
-        public IEnumerator TypedCharacterSurvivesItsOwnKeyPress()
+        public IEnumerator ConsoleKeyPressClosesAndClearsTheLineItHeld()
         {
             yield return SpawnTerminal(open: true, withHotkeyController: true);
             yield return WaitForFocusedInput("Sanity: the command field holds panel focus");
 
-            _hotkeyController.PressedHotkey = _hotkeyController.toggleHotkey;
-
             /*
                 The field write stands in for the character the engine hands
-                the field from the same key press the poll sees. The change
-                handler reverts field writes on a frame a control handled, so
-                with the console key live the character never reached the
-                command line.
+                the field from the same key press the poll sees. The full
+                toggle is the one-stroke close from full; the small toggle
+                would shrink first.
              */
-            _terminal._commandInput.value = "echo `tick";
-            yield return null;
+            _terminal._commandInput.value = "echo ready";
+            _hotkeyController.PressedHotkey = _hotkeyController.toggleFullHotkey;
+            _hotkeyController.DriveUpdate();
 
+            yield return WaitForClosed(
+                "The console key must close the terminal while its line holds text"
+            );
             Assert.AreEqual(
-                "echo `tick",
+                string.Empty,
                 DefaultTerminalInput.Instance.CommandText,
-                "A character must not be dropped from the command line by its own hotkey"
+                "The close answers the console key, and the close clears the line"
             );
         }
 
@@ -364,7 +397,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         /*
             A control can carry several bindings. The gate applies per binding,
             so a character added to the enter list types while Enter still runs
-            the command.
+            the command. The character is not a toggle binding, so the
+            reservation contract (#218) leaves it to the field and this pins
+            the typed-text rule the enter list still answers.
          */
         [UnityTest]
         public IEnumerator TextBindingInTheEnterListTypesWhileEnterStillRuns()
@@ -384,15 +419,20 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 "Sanity: the probe command registers"
             );
 
-            _hotkeyController.BindEnterTo("enter", _hotkeyController.toggleHotkey);
+            _hotkeyController.BindEnterTo("enter", "=");
             DefaultTerminalInput.Instance.CommandText = "mixedgate";
 
-            _hotkeyController.PressedHotkey = _hotkeyController.toggleHotkey;
+            _hotkeyController.PressedHotkey = "=";
             _hotkeyController.DriveUpdate();
             Assert.AreEqual(
                 0,
                 runs,
                 "A character binding in the enter list must type while the field has focus"
+            );
+            Assert.AreEqual(
+                TerminalState.OpenFull,
+                _terminal.State,
+                "Sanity: the character is no toggle binding, so the surface stays open"
             );
 
             _hotkeyController.PressedHotkey = "enter";
@@ -410,7 +450,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
          */
 #if ENABLE_INPUT_SYSTEM
         [UnityTest]
-        public IEnumerator PaletteTextToggleTypesWhileItsQueryHasFocus()
+        public IEnumerator PaletteTextToggleClosesTheBarWhileItsQueryHasFocus()
         {
             yield return SpawnTerminal(open: false, withPalette: true);
 
@@ -422,19 +462,26 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
 
             _palette.toggleHotkey = "`";
+
+            /*
+                Release whatever a predecessor left held: a state event
+                re-asserting a held bit is not a new press, and both presses
+                below have to be new ones.
+             */
+            ReleaseKeys();
+            yield return null;
+
             PressBackquote();
             yield return WaitForPaletteState(
-                true,
-                "A character toggle must not close the palette while its query has focus"
+                false,
+                "The palette's toggle key must close it even while its query has focus"
             );
 
             /*
-                Close the palette so nothing has focus, then press the same key
-                again: it must open, which is what makes the first half mean
+                The control half: with nothing focused, the same key must
+                reopen the bar, which is what makes the first half mean
                 something.
              */
-            _palette.Close();
-            yield return null;
             ReleaseKeys();
             yield return null;
             PressBackquote();
@@ -442,29 +489,63 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 true,
                 "Sanity: the queued key reaches the palette poll once nothing is focused"
             );
+
+            /*
+                The press is left held; release it so the next test's queued
+                press is a new press, not a re-assertion of a held bit.
+             */
+            ReleaseKeys();
+            yield return null;
         }
 
         /*
-            The mirror of the test above: a character palette binding must not
-            open the bar over a focused terminal command line.
+            The mirror: the palette's toggle key is the palette's, so it opens
+            the bar even over a focused terminal command line, and the open
+            closes the terminal surface.
          */
         [UnityTest]
-        public IEnumerator PaletteTextToggleDoesNotOpenOverAFocusedTerminal()
+        public IEnumerator PaletteTextToggleOpensTheBarOverAFocusedTerminal()
         {
             yield return SpawnTerminal(open: true, withPalette: true);
             yield return WaitForFocusedInput("Sanity: the command field holds panel focus");
 
+            /*
+                Release whatever a predecessor test left held: a state event
+                re-asserting a held bit is not a new press, and this press
+                has to be one.
+             */
+            ReleaseKeys();
+            yield return null;
+
             _palette.toggleHotkey = "`";
             PressBackquote();
             yield return WaitForPaletteState(
-                false,
-                "A character toggle must not open the palette over a focused command line"
+                true,
+                "The palette's toggle key must open the bar even over a focused command line"
             );
+            Assert.IsTrue(
+                _terminal.IsClosed,
+                "Opening the bar over the terminal must close the terminal surface"
+            );
+
+            /*
+                The press is left held; release it so the next test's queued
+                press is a new press, not a re-assertion of a held bit.
+             */
+            ReleaseKeys();
+            yield return null;
         }
 #endif
 
+        /*
+            The console key answers with the terminal it opens: with the
+            palette open and its query focused, the console key still opens
+            the terminal, and the terminal's open closes the palette (#218).
+            The palette's own key is the palette's; one key bound to both
+            surfaces' toggles is a config the polls do not arbitrate (README).
+         */
         [UnityTest]
-        public IEnumerator TextHotkeyLeavesAFocusedPaletteAlone()
+        public IEnumerator ConsoleKeyOpensTheTerminalOverAFocusedPalette()
         {
             yield return SpawnTerminal(open: false, withPalette: true);
 
@@ -481,13 +562,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             controller.PressedHotkey = controller.toggleHotkey;
             controller.DriveUpdate();
 
-            Assert.IsTrue(
-                _terminal.IsClosed,
-                "Typing the console key in a palette query must not open the terminal over it"
-            );
-            Assert.IsTrue(
+            Assert.IsFalse(
                 _palette.IsOpen,
-                "Typing the console key in a palette query must not close the palette"
+                "The terminal taking the surface must close the palette"
+            );
+            yield return WaitForInputVisible(
+                "The console key must open the terminal over the palette"
             );
         }
 

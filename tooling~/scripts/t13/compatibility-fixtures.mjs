@@ -330,10 +330,36 @@ function packageIdentityRecord(artifactIdentity) {
 }
 function matrixHash(matrix) { return sha256Buffer(Buffer.from(JSON.stringify(matrix))); }
 function sha256Buffer(buffer) { return crypto.createHash("sha256").update(buffer).digest("hex"); }
+
+/*
+    Both identities are per-process constants: the exported artifact is a
+    function of the checkout, and the git state is answered by one sample
+    per run rather than one per manifest (the report directories a run
+    writes are gitignored, so no sample sees a different tree). The t13
+    fixture process used to pay one whole-package export per runMatrix call
+    that reached the hash and a git pair per manifest - measured at ~3.3 s
+    and ~1.5 s per call on the dev container. Every fresh process still
+    exports and still asks git, exactly like the release flow; repeated
+    calls within one process reuse the answers (the same contract as the
+    exporter's packaged-list cache).
+ */
+let cachedArtifactSha256 = null;
+
 function currentArtifactSha256() {
-  return sha256Buffer(exportUnityPackage({ packageRoot: REPO_ROOT, out: "" }).buffer);
+  cachedArtifactSha256 ??= sha256Buffer(
+    exportUnityPackage({ packageRoot: REPO_ROOT, out: "" }).buffer
+  );
+  return cachedArtifactSha256;
 }
+
+let cachedGitState = null;
+
 function gitState() {
+  cachedGitState ??= readGitState();
+  return cachedGitState;
+}
+
+function readGitState() {
   try {
     const revision = execFileSync("git", ["rev-parse", "HEAD"], {
       cwd: REPO_ROOT,
