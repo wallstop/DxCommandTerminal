@@ -15,7 +15,8 @@ import {
   evalAnswerIsFalse,
   CAPTURE_PACKAGE_NAME,
   SCRIPT_REFRESH_EXPRESSION,
-  refreshScripts
+  refreshScripts,
+  callFirstWorking
 } from "../unity-mcp.mjs";
 import fs from "node:fs";
 import os from "node:os";
@@ -432,4 +433,148 @@ test("decoded-answer predicates read the result, never the envelope flags", () =
   assert.equal(evalAnswerIsFalse('{"success":true,"result":true}'), false);
   assert.equal(evalAnswerIsFalse('{"success":false,"error":"Runtime Error"}'), false);
   assert.equal(evalAnswerIsFalse("false"), true);
+});
+
+/*
+    A busy editor (a compile, a domain reload) refuses tool calls with busy
+    signals, and a refused variant used to end the command after burning every
+    schema shape - the #211 capture failures read as an eval schema mismatch
+    because the wrong-schema variant's answer was quoted. A busy answer must
+    be waited out on the same variant; a schema answer must be retired.
+ */
+function answered(text) {
+  return { content: [{ text }] };
+}
+
+function thrown(text) {
+  return { isError: true, content: [{ text }] };
+}
+
+function fakeClient(answers) {
+  const asked = [];
+  return {
+    asked,
+    async callTool(candidate) {
+      asked.push(`${candidate.name}:${JSON.stringify(candidate.arguments)}`);
+      const answer = answers.length > 1 ? answers.shift() : answers[0];
+      if (answer instanceof Error) throw answer;
+      return answer;
+    }
+  };
+}
+
+const CLOCK_STEP = 1_000;
+const quietClock = () => {
+  let clock = 0;
+  return () => {
+    clock += CLOCK_STEP;
+    return clock;
+  };
+};
+const instant = () => Promise.resolve();
+
+test("a busy editor is waited out on the same variant until it answers", async () => {
+  const client = fakeClient([
+    new Error("Pipeline server returned 400 Bad Request: Internal Server Error. Main thread operation timed out after 5000ms"),
+    thrown('{"success":false,"error":"Runtime Error","errorDetails":"Exception has been thrown by the target of an invocation."}'),
+    answered("false")
+  ]);
+  const { call } = await callFirstWorking(
+    client,
+    [{ name: "eval", arguments: { code: "return false;" } }],
+    undefined,
+    { deadline: 60_000, now: quietClock(), pause: instant }
+  );
+  assert.equal((call.content ?? [])[0]?.text, "false");
+  assert.equal(client.asked.length, 3, "the same variant is asked again, not replaced");
+});
+
+test("a schema-refused variant is retired and the next shape answers", async () => {
+  const client = fakeClient([
+    new Error("Pipeline server returned 400 Bad Request: Parameter Validation Failed. Required parameter 'code' is missing or empty"),
+    answered("true")
+  ]);
+  const { candidate } = await callFirstWorking(
+    client,
+    [
+      { name: "eval", arguments: { expression: "return true;" } },
+      { name: "eval", arguments: { code: "return true;" } }
+    ],
+    undefined,
+    { deadline: 60_000, now: quietClock(), pause: instant }
+  );
+  assert.deepEqual(JSON.stringify(Object.keys(candidate.arguments)), JSON.stringify(["code"]));
+  assert.equal(client.asked.length, 2);
+});
+
+test("a Runtime Error envelope thrown mid-reload is transient; diagnostics are not", async () => {
+  const runtimeError =
+    '{"output":null,"diagnostics":[],"success":false,"error":"Runtime Error","errorDetails":"Exception has been thrown by the target of an invocation."}';
+  const client = fakeClient([thrown(runtimeError), answered("true")]);
+  await callFirstWorking(
+    client,
+    [{ name: "eval", arguments: { code: "return true;" } }],
+    undefined,
+    { deadline: 60_000, now: quietClock(), pause: instant }
+  );
+  assert.equal(client.asked.length, 2, "a mid-reload runtime throw is waited out");
+
+  const compileError =
+    '{"output":null,"diagnostics":[{"message":"CS1002: ; expected"}],"success":false,"error":"Runtime Error"}';
+  await assert.rejects(
+    callFirstWorking(
+      fakeClient([thrown(compileError), answered("true")]),
+      [{ name: "eval", arguments: { code: "return true;" } }],
+      undefined,
+      { deadline: 60_000, now: quietClock(), pause: instant }
+    ),
+    /CS1002/
+  );
+});
+
+test("a relay port refusal mid-reload is transient; a missing command is not", async () => {
+  const client = fakeClient([
+    new Error("Error: Cannot connect to Unity Editor Pipeline server at 127.0.0.1:7800. Make sure Unity Editor is running with the Pipeline package installed."),
+    answered("{}")
+  ]);
+  await callFirstWorking(client, [{ name: "test_status", arguments: {} }], undefined, {
+    deadline: 60_000,
+    now: quietClock(),
+    pause: instant
+  });
+  assert.equal(client.asked.length, 2, "the relay-port refusal is the editor being busy");
+
+  await assert.rejects(
+    callFirstWorking(
+      fakeClient([new Error("Pipeline server returned 400 Bad Request: Command Not Found. No command named 'Unity_RunCommand' is available.")]),
+      [{ name: "Unity_RunCommand", arguments: { Command: "x" } }],
+      undefined,
+      { deadline: 60_000, now: quietClock(), pause: instant }
+    ),
+    /Unity_RunCommand/
+  );
+});
+
+test("the refusal names every variant and the busy answers it saw", async () => {
+  const client = fakeClient([
+    new Error("Main thread operation timed out after 5000ms"),
+    new Error("Pipeline server returned 400 Bad Request: Parameter Validation Failed. Required parameter 'code' is missing or empty")
+  ]);
+  await assert.rejects(
+    callFirstWorking(
+      client,
+      [
+        { name: "eval", arguments: { code: "return 1;" } },
+        { name: "eval", arguments: { expression: "return 1;" } }
+      ],
+      undefined,
+      { deadline: 10_000, now: quietClock(), pause: instant }
+    ),
+    (error) => {
+      const message = String(error?.message ?? error);
+      return /No backend tool variant answered/.test(message)
+        && /timed out/.test(message)
+        && /'code' is missing/.test(message);
+    }
+  );
 });
