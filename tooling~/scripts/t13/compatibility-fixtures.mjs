@@ -330,10 +330,37 @@ function packageIdentityRecord(artifactIdentity) {
 }
 function matrixHash(matrix) { return sha256Buffer(Buffer.from(JSON.stringify(matrix))); }
 function sha256Buffer(buffer) { return crypto.createHash("sha256").update(buffer).digest("hex"); }
+
+/*
+    Both identities are per-process constants: the exported artifact is a
+    function of the checkout, and the git state is answered by one sample
+    per run rather than one per leg (the report directories a run writes
+    are gitignored, so no leg sees a different tree). A matrix leg used to
+    re-export the whole package for its expected hash and re-run git for
+    every manifest - measured at ~3.3 s and ~1.5 s per call on the dev
+    container - so a four-leg matrix paid the export once per call site
+    and git once per manifest. Every fresh process still exports and still
+    asks git, exactly like the release flow; repeated calls within one
+    process reuse the answers (the same contract as the exporter's
+    packaged-list cache).
+ */
+let cachedArtifactSha256 = null;
+
 function currentArtifactSha256() {
-  return sha256Buffer(exportUnityPackage({ packageRoot: REPO_ROOT, out: "" }).buffer);
+  cachedArtifactSha256 ??= sha256Buffer(
+    exportUnityPackage({ packageRoot: REPO_ROOT, out: "" }).buffer
+  );
+  return cachedArtifactSha256;
 }
+
+let cachedGitState = null;
+
 function gitState() {
+  cachedGitState ??= readGitState();
+  return cachedGitState;
+}
+
+function readGitState() {
   try {
     const revision = execFileSync("git", ["rev-parse", "HEAD"], {
       cwd: REPO_ROOT,
