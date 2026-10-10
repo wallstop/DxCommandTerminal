@@ -177,7 +177,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor
             {
                 Debug.LogWarning(
                     LogTextSanitizer.Sanitize(
-                        $"Could not delete generated theme sheet leftover '{path}': {e.Message}"
+                        $"Could not delete generated theme sheet leftover '{path}': {e}"
                     )
                 );
             }
@@ -249,7 +249,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor
                 Debug.LogError(
                     LogTextSanitizer.Sanitize(
                         $"Could not write generated theme sheet '{sheetPath}' for "
-                            + $"'{themeAsset.name}': {e.Message}"
+                            + $"'{themeAsset.name}': {e}"
                     ),
                     themeAsset
                 );

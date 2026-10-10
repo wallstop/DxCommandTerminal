@@ -99,7 +99,7 @@ frontmatter validity, index freshness, and pointer-file delegation; see
 3. Explicit types over `var`; explicit access modifiers on every member.
 4. Classes/structs are `sealed`/`readonly` where possible; collections exposed immutably by
    default - mutable access only when necessary.
-5. Zero warnings. No dead code, no commented-out code.
+5. Zero warnings. No dead code, no commented-out code. A Debug.Log-family call logs the exception itself, never `.Message` (the in-game funnel renders the message by design; enforced by `npm --prefix tooling~ run lint:exception-tostring`).
 6. Prefer `TryXxx` patterns over exceptions for expected failures; validate inputs on all public
    methods (see `CommandArg.TryGet<T>` for the canonical example).
 7. String comparisons state their rule: `string.Equals(a, b, StringComparison.Ordinal|OrdinalIgnoreCase)`;

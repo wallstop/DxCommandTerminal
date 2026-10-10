@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Deprecate `CommandLog.Logs` in favor of the safe `CopyTo`, `Count`, and `TryGetLast` reads.
 - Make `CommandHistory.GetHistory` return an allocation-free live view of the history.
+- Log the full exception in the package's Console warnings and errors: an interpolation failure, discovery fallback, or asset-postprocessor retry now carries the exception type, message, and throw-site stack, where the sentence alone printed before.
 
 ### Fixed
 

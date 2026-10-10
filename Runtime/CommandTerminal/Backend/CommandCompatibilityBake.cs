@@ -302,7 +302,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 Debug.LogWarning(
                     LogTextSanitizer.Sanitize(
                         $"[DxCommandTerminal] Player compatibility bake manifest write failed: "
-                            + $"{e.Message}"
+                            + $"{e}"
                     )
                 );
                 path = null;

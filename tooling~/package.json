@@ -26,6 +26,7 @@
     "lint:unity-null-patterns:fix": "node scripts/lint-unity-null-patterns.mjs --fix",
     "lint:linq-production": "node scripts/lint-linq-production.mjs",
     "lint:string-equality": "node scripts/lint-string-equality.mjs",
+    "lint:exception-tostring": "node scripts/lint-exception-tostring.mjs",
     "lint:out-param-discipline": "node scripts/lint-out-param-discipline.mjs",
     "lint:theme-palette-tokens": "node scripts/lint-theme-palette-tokens.mjs",
     "lint:docs-catalog": "node scripts/lint-docs-catalog.mjs",

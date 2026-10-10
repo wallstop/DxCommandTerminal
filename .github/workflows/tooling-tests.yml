@@ -146,6 +146,9 @@ jobs:
       - name: Lint explicit string comparisons
         run: node tooling~/scripts/lint-string-equality.mjs
 
+      - name: Lint exception logging
+        run: node tooling~/scripts/lint-exception-tostring.mjs
+
       - name: Lint out-parameter discipline
         run: node tooling~/scripts/lint-out-param-discipline.mjs
 

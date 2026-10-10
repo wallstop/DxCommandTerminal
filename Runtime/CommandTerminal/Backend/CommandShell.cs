@@ -415,7 +415,7 @@
                     Debug.LogWarning(
                         LogTextSanitizer.Sanitize(
                             $"[DxCommandTerminal] Generated command catalog in "
-                                + $"{assembly.GetName().Name} failed to collect: {e.Message}; "
+                                + $"{assembly.GetName().Name} failed to collect: {e}; "
                                 + $"falling back to provider and reflection discovery"
                         )
                     );
@@ -482,7 +482,7 @@
                         LogTextSanitizer.Sanitize(
                             $"[DxCommandTerminal] Command discovery provider "
                                 + $"{provider.GetType().Name} failed for assembly "
-                                + $"{assembly.GetName().Name}: {e.Message}"
+                                + $"{assembly.GetName().Name}: {e}"
                         )
                     );
                 }
@@ -771,7 +771,7 @@
                 Debug.LogWarning(
                     LogTextSanitizer.Sanitize(
                         $"[DxCommandTerminal] Failed to probe for a generated command catalog in "
-                            + $"{assembly.GetName().Name}: {e.Message}"
+                            + $"{assembly.GetName().Name}: {e}"
                     )
                 );
                 return null;
@@ -798,7 +798,7 @@
                 Debug.LogWarning(
                     LogTextSanitizer.Sanitize(
                         $"[DxCommandTerminal] Found a generated command catalog in "
-                            + $"{assembly.GetName().Name} but failed to bind it: {e.Message}"
+                            + $"{assembly.GetName().Name} but failed to bind it: {e}"
                     )
                 );
                 return null;
@@ -822,7 +822,7 @@
                 Debug.LogWarning(
                     LogTextSanitizer.Sanitize(
                         $"[DxCommandTerminal] Found a generated command catalog in "
-                            + $"{assembly.GetName().Name} but failed to bind it: {e.Message}"
+                            + $"{assembly.GetName().Name} but failed to bind it: {e}"
                     )
                 );
                 return null;
@@ -1224,7 +1224,7 @@
                     results.Clear();
                     Debug.LogError(
                         LogTextSanitizer.Sanitize(
-                            $"[DxCommandTerminal] Completion provider for '{commandName}' failed: {e.Message}"
+                            $"[DxCommandTerminal] Completion provider for '{commandName}' failed: {e}"
                         )
                     );
                     return true;
@@ -1598,7 +1598,7 @@
                         Debug.LogError(
                             LogTextSanitizer.Sanitize(
                                 $"[DxCommandTerminal] Failed to bind command {commandName} "
-                                    + $"(method {command.MethodName}): {e.Message}"
+                                    + $"(method {command.MethodName}): {e}"
                             )
                         );
                         continue;
@@ -1702,7 +1702,7 @@
                     Debug.LogWarning(
                         LogTextSanitizer.Sanitize(
                             $"[DxCommandTerminal] Failed to resolve rejected command {commandName} "
-                                + $"(method {command.MethodName}) for diagnostics: {e.Message}"
+                                + $"(method {command.MethodName}) for diagnostics: {e}"
                         )
                     );
                 }
@@ -2331,7 +2331,7 @@
                     Debug.LogError(
                         LogTextSanitizer.Sanitize(
                             $"[DxCommandTerminal] Failed to bind command {_commandName} "
-                                + $"(method {_methodName}): {e.Message}"
+                                + $"(method {_methodName}): {e}"
                         )
                     );
                 }

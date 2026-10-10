@@ -3,6 +3,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     using System;
     using System.Collections.Generic;
     using System.Linq;
+    using System.Text.RegularExpressions;
     using Backend;
     using NUnit.Framework;
     using UnityEngine;
@@ -299,9 +300,18 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 List<CommandCompletion> results = new() { new CommandCompletion("stale") };
                 if (!providerReturnsNull)
                 {
+                    /*
+                        The failed provider's log now carries the full exception
+                        (ToString), whose tail is the throw-site stack trace, so
+                        the expectation is a prefix regex rather than the whole
+                        message.
+                     */
                     LogAssert.Expect(
                         LogType.Error,
-                        "[DxCommandTerminal] Completion provider for 'callback-choice' failed: choice failed"
+                        new Regex(
+                            @"\[DxCommandTerminal\] Completion provider for 'callback-choice' failed: "
+                                + @"System\.InvalidOperationException: choice failed"
+                        )
                     );
                 }
 

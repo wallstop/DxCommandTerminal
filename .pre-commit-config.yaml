@@ -107,6 +107,21 @@ repos:
           assignment is a blanket fallback that defeats the compiler's
           definite-assignment bugcheck (context.md rule 13, PR #118 review). No
           --fix by design; restoring one-assignment-per-path is a code change.
+      - id: exception-tostring-lint
+        name: Lint exception logging (Debug.Log-family logs the exception, not .Message)
+        entry: node tooling~/scripts/lint-exception-tostring.mjs
+        language: system
+        files: \.cs$
+        pass_filenames: false
+        stages:
+          - pre-commit
+          - pre-push
+        description: >
+          Interpolating an exception into a Debug.Log-family call keeps the type, the
+          message, and the throw-site stack; .Message keeps only the sentence. The
+          in-game funnel renders the message by design, so Terminal.Log and the
+          split-channel failure record are out of the rule's subject. No --fix by
+          design; where the full exception reads well is a per-call decision.
       - id: theme-palette-tokens-lint
         name: Lint palette theme tokens (Themes/ coverage, .palette-* var() fallbacks)
         entry: node tooling~/scripts/lint-theme-palette-tokens.mjs
