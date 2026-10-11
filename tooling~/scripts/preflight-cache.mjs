@@ -6,7 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const CACHE_VERSION = 3;
+const CACHE_VERSION = 4;
 const CACHE_DIRECTORY = path.join(path.dirname(fileURLToPath(import.meta.url)), ".preflight-cache");
 const CHECKOUT_ID = (() => {
   try {
@@ -71,42 +71,87 @@ function hashText(value) {
   return crypto.createHash("sha256").update(value).digest("hex");
 }
 
-function repositoryFiles() {
-  const output = execFileSync("git", ["ls-files", "-co", "--exclude-standard", "-z"], {
-    cwd: REPO_ROOT,
-    encoding: "utf8"
-  });
-  return output.split("\0").filter(Boolean).sort();
+/*
+    Untracked files at or below this many bytes are hashed by content in
+    the repo snapshot; larger ones hash their stat signature instead (see
+    repositorySnapshot).
+ */
+const UNTRACKED_CONTENT_HASH_LIMIT = 1024 * 1024;
+
+function statSignature(stat) {
+  return `${stat.mode}\0${stat.size}\0${stat.mtimeMs}\0${stat.ino}\0`;
 }
+
+/*
+    File identities are content hashes behind a cheap identity walk: the
+    per-entry cost that made the old keying take 112 s serial was
+    realpathSync plus readlinkSync on every entry - three metadata syscalls
+    on a filesystem where one costs milliseconds - not the content reads.
+    The walk keys visited directories by dev+ino instead of a resolved real
+    path, reads directory entries with their types in one call, and hashes
+    file bytes, so a same-size edit moves the key exactly like any other.
+    Symlinks hash their link text and are followed, and the followed
+    identity joins the visited set so a symlinked directory cycles out.
+ */
 
 function updatePathHash(hash, target, label, visited, excludes) {
   hash.update(`${label}\0`);
-  let link;
-  try {
-    link = fs.readlinkSync(target);
-  } catch {
-    link = null;
-  }
-  if (link !== null) {
-    hash.update(`${label}\0symlink\0${link}\0`);
-  }
-
-  let realPath;
   let stat;
   try {
-    realPath = fs.realpathSync(target);
-    stat = fs.statSync(target);
+    stat = fs.lstatSync(target);
   } catch {
     hash.update("missing\0");
     return;
   }
-  if (visited.has(realPath)) {
+
+  /*
+      The walk's identity key is dev+ino, not a resolved real path:
+      realpathSync cost three extra metadata syscalls per entry, and on a
+      container where one stat costs milliseconds that tripled the keying
+      wall. dev+ino answers the same question - have I walked this exact
+      directory already - for the symlink-cycle guard, for a fraction of
+      the cost. A symlink hashes its link text and is then followed, so a
+      retargeted link still moves the key through the target's own walk.
+   */
+  const identity = `${stat.dev}:${stat.ino}`;
+  if (visited.has(identity)) {
     hash.update("cycle\0");
     return;
   }
-  visited.add(realPath);
+  visited.add(identity);
+
+  if (stat.isSymbolicLink()) {
+    let link;
+    try {
+      link = fs.readlinkSync(target);
+    } catch {
+      link = null;
+    }
+    if (link !== null) {
+      hash.update(`${label}\0symlink\0${link}\0`);
+    }
+
+    /*
+        The link is followed, like the realpath walk it replaces: the
+        hashed state is the target's, and the followed identity joins the
+        visited set so a symlinked directory cycles out through the same
+        guard.
+     */
+    try {
+      stat = fs.statSync(target);
+    } catch {
+      hash.update("broken\0");
+      return;
+    }
+    const followed = `${stat.dev}:${stat.ino}`;
+    if (visited.has(followed)) {
+      hash.update("cycle\0");
+      return;
+    }
+    visited.add(followed);
+  }
+
   if (stat.isFile()) {
-    hash.update(`${stat.mode}\0${stat.size}\0`);
     hash.update(fs.readFileSync(target));
     return;
   }
@@ -115,19 +160,33 @@ function updatePathHash(hash, target, label, visited, excludes) {
     return;
   }
 
-  const entries = fs.readdirSync(target).sort((left, right) => (left < right ? -1 : left > right ? 1 : 0));
+  let entries;
+  try {
+    entries = fs.readdirSync(target, { withFileTypes: true });
+  } catch {
+    hash.update("unreadable\0");
+    return;
+  }
+  entries.sort((left, right) => (left.name < right.name ? -1 : left.name > right.name ? 1 : 0));
   for (const entry of entries) {
-    const entryLabel = path.posix.join(label, entry);
-    const relative = path.relative(REPO_ROOT, path.join(target, entry)).split(path.sep).join("/");
+    const entryLabel = path.posix.join(label, entry.name);
+    const relative = path
+      .relative(REPO_ROOT, path.join(target, entry.name))
+      .split(path.sep)
+      .join("/");
     if (excludes.some((root) => relative === root || relative.startsWith(`${root}/`))) {
       hash.update(`${entryLabel}\0excluded\0`);
       continue;
     }
-    updatePathHash(hash, path.join(target, entry), entryLabel, visited, excludes);
+    updatePathHash(hash, path.join(target, entry.name), entryLabel, visited, excludes);
   }
 }
 
 export function pathState(value, excludes = []) {
+  return combinedPathState(value, excludes, hashPathEntry);
+}
+
+function combinedPathState(value, excludes, resolveEntryState) {
   if (value === undefined) {
     return "unset";
   }
@@ -137,35 +196,74 @@ export function pathState(value, excludes = []) {
   }
   const hash = crypto.createHash("sha256");
   for (const entry of entries) {
-    const resolved = path.resolve(REPO_ROOT, entry);
     hash.update(`${entry}\0`);
-    updatePathHash(hash, resolved, entry, new Set(), excludes);
+    hash.update(resolveEntryState(entry, excludes));
   }
   return hash.digest("hex");
 }
 
-function repositorySnapshot(files = repositoryFiles()) {
+function hashPathEntry(entry, excludes) {
   const hash = crypto.createHash("sha256");
-  for (const relativePath of files) {
-    const filePath = path.join(REPO_ROOT, relativePath);
-    hash.update(relativePath);
+  const resolved = path.resolve(REPO_ROOT, entry);
+  hash.update(`${entry}\0`);
+  updatePathHash(hash, resolved, entry, new Set(), excludes);
+  return hash.digest("hex");
+}
+
+function repositorySnapshot() {
+  /*
+      One git call instead of a stat per tracked file: `git status
+      --porcelain` is index-backed and answers which tracked files changed
+      and which untracked files exist, in one process on every filesystem,
+      where the per-file walk cost tens of seconds of metadata syscalls on
+      the dev container before a single check spawned.
+
+      Status encodes an untracked file as a bare `?? <path>` line, so an
+      edit to an untracked file's CONTENT leaves the output byte-identical
+      while the check inputs move - and node-tests reads files outside its
+      declared roots (.github/, .devcontainer/, .llm/), where a draft file
+      would age a cached pass. The untracked set is hashed by content to
+      close that gap. The hash is incremental over raw bytes - a UTF-8
+      string join would decode two different binary files to the same
+      replacement-character string - and a file above the size cap hashes
+      its stat signature instead of its bytes, so an un-ignored dump in
+      the worktree cannot reintroduce the keying wall. The cap trades the
+      same documented coin as every stat key here: a same-size, same-mtime
+      content edit to one huge untracked file defeats its part of the key.
+
+      Stated limit: a tracked file flagged assume-unchanged or
+      skip-worktree hides its edits from status, and this snapshot does not
+      re-hash tracked contents to catch it - that flag is a deliberate,
+      per-developer opt-in, and re-walking every tracked file is the cost
+      this snapshot exists to remove.
+   */
+  const output = execFileSync(
+    "git",
+    ["status", "--porcelain", "-z", "--untracked-files=all"],
+    {
+      cwd: REPO_ROOT,
+      maxBuffer: 256 * 1024 * 1024,
+      encoding: "utf8"
+    }
+  );
+  const hash = crypto.createHash("sha256");
+  hash.update(output);
+  const untracked = output.split("\0").filter((entry) => entry.startsWith("?? "));
+  for (const entry of untracked) {
+    /* -z paths are literal (never quoted), so the slice is the path. */
+    const relative = entry.slice(3);
+    hash.update(relative);
     hash.update("\0");
+    const absolute = path.join(REPO_ROOT, relative);
     try {
-      const stat = fs.lstatSync(filePath);
-      hash.update(`${stat.mode}\0${stat.size}\0`);
-      if (stat.isSymbolicLink()) {
-        hash.update(fs.readlinkSync(filePath));
-        updatePathHash(hash, filePath, relativePath, new Set(), []);
-      } else if (stat.isFile()) {
-        hash.update(fs.readFileSync(filePath));
-      } else {
-        hash.update("directory");
+      const stat = fs.statSync(absolute);
+      if (stat.isFile() && stat.size <= UNTRACKED_CONTENT_HASH_LIMIT) {
+        hash.update(fs.readFileSync(absolute));
+        continue;
       }
-    } catch (error) {
-      if (error.code !== "ENOENT") {
-        throw error;
-      }
-      hash.update("missing");
+      hash.update(statSignature(stat));
+    } catch {
+      hash.update("unreadable");
     }
   }
   return hash.digest("hex");
@@ -369,7 +467,6 @@ export function createCacheContext() {
   lazy(context, "dependencies", () => dependencyState());
   lazy(context, "docfxTool", () => dotnetToolState("docfx"));
   lazy(context, "docsApi", () => pathState(path.join(REPO_ROOT, "tooling~", "docs", "obj", "api")));
-  lazy(context, "files", () => repositoryFiles());
   lazy(context, "gitTracked", () => gitTrackedState());
   lazy(context, "npmConfig", () => npmConfigState());
   lazy(context, "gitConfig", () => gitConfigState());
@@ -428,14 +525,55 @@ function environmentState(
   return state;
 }
 
-function checkPathState(check) {
+function checkPathState(check, sources) {
   if (check.cachePaths === undefined) {
     return "unset";
   }
-  return pathState(check.cachePaths, check.cacheExcludes ?? []);
+  return sources.pathState(check.cachePaths, check.cacheExcludes ?? []);
 }
 
 export function cacheKeyForCheck(check, context = createCacheContext()) {
+  return buildCacheKey(check, context, {
+    pathState: combinedPathStateDefault,
+    repoSnapshot: repositorySnapshot
+  });
+}
+
+function combinedPathStateDefault(value, excludes) {
+  return combinedPathState(value, excludes, hashPathEntry);
+}
+
+/*
+    One key computer per preflight run: it memoizes per-root states and the
+    repo snapshot for the keying phase only, where the nine linters declare
+    overlapping roots and every check would otherwise re-walk the same
+    trees serially. The memo lives in the computer, never in the exported
+    functions, so direct callers (the contract tests) keep observing the
+    live filesystem.
+ */
+export function createCacheKeyComputer() {
+  const entryCache = new Map();
+  let repoState = null;
+  return {
+    keyFor(check, context = createCacheContext()) {
+      return buildCacheKey(check, context, {
+        pathState: (value, excludes) =>
+          combinedPathState(value, excludes, (entry, excludes_) => {
+            const memoKey = `${entry}\0${excludes_.join("\0")}`;
+            let state = entryCache.get(memoKey);
+            if (state === undefined) {
+              state = hashPathEntry(entry, excludes_);
+              entryCache.set(memoKey, state);
+            }
+            return state;
+          }),
+        repoSnapshot: () => (repoState ??= repositorySnapshot())
+      });
+    }
+  };
+}
+
+function buildCacheKey(check, context, sources) {
   const identity = [
     `version=${CACHE_VERSION}`,
     `name=${check.name}`,
@@ -472,8 +610,8 @@ export function cacheKeyForCheck(check, context = createCacheContext()) {
     `git-tracked=${check.cacheGitTracked === true ? context.gitTracked : ""}`,
     `cache-paths=${JSON.stringify(check.cachePaths ?? null)}`,
     `cache-excludes=${JSON.stringify(check.cacheExcludes ?? null)}`,
-    `repo-paths=${checkPathState(check)}`,
-    `repo-files=${check.cacheTrackedFiles === true ? repositorySnapshot(context.files ?? repositoryFiles()) : ""}`
+    `repo-paths=${checkPathState(check, sources)}`,
+    `repo-files=${check.cacheTrackedFiles === true ? sources.repoSnapshot() : ""}`
   ].join("\n");
   return hashText(identity);
 }

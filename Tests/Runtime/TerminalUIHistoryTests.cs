@@ -292,9 +292,7 @@
                 Assert.Ignore(
                     "A synthetic key does not reach the command field in this environment, so "
                         + "delivery cannot be measured here: a key that never arrives looks exactly "
-                        + "like routing that is broken. "
-                        + "TerminalUIPasteTests.PasteReachesTheCommandTextAsAUserEdit fails on "
-                        + "unmodified master on this host for the same reason."
+                        + "like routing that is broken."
                 );
             }
         }

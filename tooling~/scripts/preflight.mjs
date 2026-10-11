@@ -25,7 +25,7 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { cacheKeyForCheck, createCacheContext, isCacheableCheck, readCacheEntry, writeCacheEntry } from "./preflight-cache.mjs";
+import { createCacheContext, createCacheKeyComputer, isCacheableCheck, readCacheEntry, writeCacheEntry } from "./preflight-cache.mjs";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -365,9 +365,11 @@ export async function main(argv = process.argv.slice(2), checks = buildChecks())
   const pending = [];
   const cacheKeys = new Map();
   let cacheContext = null;
+  let keyComputer = null;
   if (useCache) {
     try {
       cacheContext = createCacheContext();
+      keyComputer = createCacheKeyComputer();
     } catch {
       console.warn("[preflight] cache setup failed; running every selected check");
     }
@@ -376,7 +378,7 @@ export async function main(argv = process.argv.slice(2), checks = buildChecks())
     let key = null;
     if (useCache && isCacheableCheck(check)) {
       try {
-        key = cacheKeyForCheck(check, cacheContext);
+        key = keyComputer.keyFor(check, cacheContext);
         cacheKeys.set(check.name, key);
       } catch {
         key = null;

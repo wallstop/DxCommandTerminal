@@ -3128,29 +3128,24 @@
                 int childCount = content.childCount;
                 for (int i = 0; i < logCount && i < childCount; ++i)
                 {
-                    VisualElement item = content[i];
-                    LogItem logItem = rendered[i];
-                    switch (item)
+                    /*
+                        Every log line this view builds is a Label (created
+                        above), so this loop has one kind to serve. A
+                        TextField and a Button arm used to sit here for
+                        element kinds no code path creates any more (#194);
+                        a foreign child is skipped, not thrown over - the
+                        content container is reachable, and an exception in
+                        the refresh pass would take the update loop's rest,
+                        the hotkey polls included, down with it.
+                     */
+                    if (content[i] is not Label logLabel)
                     {
-                        case TextField logText:
-                        {
-                            SetupLogText(logText, logItem);
-                            logText.value = logItem.message;
-                            break;
-                        }
-                        case Label logLabel:
-                        {
-                            SetupLogText(logLabel, logItem);
-                            logLabel.text = logItem.message;
-                            break;
-                        }
-                        case Button button:
-                        {
-                            SetupLogText(button, logItem);
-                            button.text = logItem.message;
-                            break;
-                        }
+                        continue;
                     }
+
+                    LogItem logItem = rendered[i];
+                    SetupLogText(logLabel, logItem);
+                    logLabel.text = logItem.message;
                 }
 
                 if (logCount == content.childCount)

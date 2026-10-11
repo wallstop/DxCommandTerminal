@@ -123,13 +123,14 @@ jobs:
 
       - name: Check capture baselines
         # T11 Unity-free integrity gate: baseline schema, scenario coverage,
-        # decodability, and provenance (never Unity rendering).
-        run: npm --prefix tooling~ run t11:check
+        # decodability, and provenance (never Unity rendering). Invoked
+        # directly: the npm wrapper only adds a startup per step here.
+        run: node tooling~/scripts/t11/check.mjs
 
       - name: Lint docs catalog and guide links
         # Issue #137: catalog drift/staleness + guide links (xrefs need the
         # docfx API model, generated in the docs-build workflow instead).
-        run: npm --prefix tooling~ run lint:docs-catalog
+        run: node tooling~/scripts/lint-docs-catalog.mjs
 
       - name: Lint comparison direction
         run: node tooling~/scripts/lint-comparison-direction.mjs
@@ -157,7 +158,7 @@ jobs:
 
       - name: Validate package contents
         if: matrix.os == 'ubuntu-latest'
-        run: npm --prefix tooling~ run package:validate
+        run: node tooling~/scripts/release/validate-package-contents.mjs
 
   devtool-grammar:
     # DxTerminalTestRunReporter only ever compiled inside a host Unity project,
