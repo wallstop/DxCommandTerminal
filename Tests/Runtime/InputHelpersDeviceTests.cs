@@ -3,7 +3,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     /*
         Every member needs the Input System's device APIs and the
         ENABLE_INPUT_SYSTEM members they poll, so the whole fixture exists
-        only under that define (the TerminalUITransitionTests precedent).
+        only under that define; the transition suite guards the same way
+        around its Input System members.
      */
 #if ENABLE_INPUT_SYSTEM
     using System.Collections;
