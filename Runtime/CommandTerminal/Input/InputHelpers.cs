@@ -11,11 +11,6 @@
 
     public static class InputHelpers
     {
-        /*
-            How many control resolutions the memo has had to run. Diagnostics
-            for the memo's contract: a pass over unchanged hotkeys after the
-            first leaves this where it was (see InputHelpersDeviceTests).
-         */
 #if ENABLE_INPUT_SYSTEM
         /*
             How many control resolutions the memo has had to run. Diagnostics

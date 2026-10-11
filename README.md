@@ -422,6 +422,8 @@ All of these unregistration functions will return you information on whether the
 
 Note: Built in parser functions cannot be unregistered.
 
+Note: With Enter Play Mode Options configured to skip domain reload, the package resets registered parsers and the control sets below at every play-session boundary. Re-apply any registration or non-default configuration in `Awake` or a `RuntimeInitializeOnLoadMethod` hook at `BeforeSplashScreen` or later; a `SubsystemRegistration` hook runs in unspecified order against the package's reset and can be wiped for the session.
+
 ## Advanced Parsing - Changing Control Sets
 By default, command parameter input is stripped of whitespace characters. This, along with several other parsing-specific behaviors, are controlled via public static sets on `CommandArg` itself. If you would like to change this behavior in your code, you can modify the contents of these sets to be whatever you'd like. Below are a description of the sets and what they control.
 

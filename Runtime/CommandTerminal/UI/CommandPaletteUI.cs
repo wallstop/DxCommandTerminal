@@ -320,6 +320,7 @@
         {
             Instance = null;
             _livePalettes.Clear();
+            _logCaretPasses = false;
         }
 
         public void Open()

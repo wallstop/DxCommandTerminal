@@ -1,7 +1,12 @@
 namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 {
+    /*
+        Every member needs the Input System's device APIs and the
+        ENABLE_INPUT_SYSTEM members they poll, so the whole fixture exists
+        only under that define (the TerminalUITransitionTests precedent).
+     */
+#if ENABLE_INPUT_SYSTEM
     using System.Collections;
-    using System.Collections.Generic;
     using Input;
     using NUnit.Framework;
     using UnityEngine.InputSystem;
@@ -246,4 +251,5 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return null;
         }
     }
+#endif
 }

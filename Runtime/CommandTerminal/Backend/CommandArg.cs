@@ -440,8 +440,11 @@
             not leak into this one: user parsers drop, and every public
             control set returns to its default contents. A game that
             configures a set or registers a parser re-applies it for the new
-            session, in Awake or a RuntimeInitializeOnLoadMethod - exactly
-            what it must already do when domain reload is on (#224).
+            session in Awake or a RuntimeInitializeOnLoadMethod hook at
+            BeforeSplashScreen or later: a SubsystemRegistration hook runs in
+            the same phase as this reset, in unspecified order across
+            assemblies, so a registration made there can be wiped for the
+            whole session (#224).
          */
         internal static int ResetForNextPlaySession()
         {
