@@ -22,12 +22,6 @@
         private const string TerminalRootName = "TerminalRoot";
 
         /*
-            Floor for the reused log window, so a small configured buffer does
-            not reallocate on every capacity change around it.
-         */
-        private const int MinimumLogWindowSize = 16;
-
-        /*
             Log refreshes a queued search jump waits for the view to lay out
             the line it is aiming at. The layout runs after the pass that
             creates the line, so the first attempt has nothing to scroll to and
@@ -279,6 +273,13 @@
         private readonly LogFilter _logFilter = new();
 
         /*
+            The log read the frame draws: the window copy and the search's
+            kept lines live in the cache, which also answers an unchanged
+            frame without reading the buffer again.
+         */
+        private readonly LogWindowCache _logWindowCache;
+
+        /*
             A search asked for one of its matches to be brought into view, and
             the log refreshes left to wait for that line to have a layout.
 
@@ -293,19 +294,6 @@
 
         private int _findScrollPasses;
 
-        /*
-            The log window the frame reads, sized to the buffer's capacity and
-            reused. RefreshLogs copies into it once so the count it lays out
-            and the lines it renders are the same read.
-         */
-        private LogItem[] _logWindow = Array.Empty<LogItem>();
-
-        /*
-            The lines of that window a search keeps, in the same reused form.
-            Separate from the window so clearing a search redraws every line
-            without the buffer being read a second time.
-         */
-        private LogItem[] _filteredLogWindow = Array.Empty<LogItem>();
         private bool _paletteHeldSurface;
         private bool _needsInitialRefresh;
         private string _lastKnownCommandText;
@@ -387,6 +375,7 @@
 
         public TerminalUI()
         {
+            _logWindowCache = new LogWindowCache(_logFilter);
 #if UNITY_EDITOR
             _checkForChanges = CheckForChanges;
 #endif
@@ -968,6 +957,8 @@
             Instance = null;
             _configOwner = null;
             LiveTerminals.Clear();
+            CommandPaletteUI.ResetForNextPlaySession();
+            CommandArg.ResetForNextPlaySession();
             TerminalSession.Current.ResetState();
 
             /*
@@ -3187,55 +3178,14 @@
         }
 
         /*
-            Copies the buffer's visible window into the reused array and
-            returns how many entries it holds. The array grows with the
-            buffer's capacity and never shrinks, so a terminal whose log
-            buffer is resized reallocates once rather than per frame.
-         */
-        private int ReadLogWindow(CommandLog buffer)
-        {
-            int capacity = buffer.Capacity;
-            if (_logWindow.Length < capacity)
-            {
-                _logWindow = new LogItem[Math.Max(capacity, MinimumLogWindowSize)];
-            }
-
-            return buffer.CopyTo(_logWindow);
-        }
-
-        /*
-            The lines the log view draws this pass: the buffer's window, or the
-            ones of it a search keeps. Hands back the array holding them and
-            how many there are, so the caller reads the count and the lines
-            from one place - a count from a filtered read and lines from the
-            unfiltered window would draw lines the count never promised.
-
-            No search means no second pass and no second array: the window is
-            already the answer, which is why the filtered array only ever grows
-            to the window's size.
+            Reads the log read for this pass through the cache. The cache
+            owns the reused window arrays and the memo, so a frame whose
+            buffer version, capacity, and query are unchanged costs no copy
+            and no search pass (#222).
          */
         private int ReadRenderedLogWindow(CommandLog buffer, out LogItem[] rendered)
         {
-            if (buffer == null)
-            {
-                rendered = Array.Empty<LogItem>();
-                return 0;
-            }
-
-            int windowCount = ReadLogWindow(buffer);
-            if (!_logFilter.IsActive)
-            {
-                rendered = _logWindow;
-                return windowCount;
-            }
-
-            if (_filteredLogWindow.Length < _logWindow.Length)
-            {
-                _filteredLogWindow = new LogItem[_logWindow.Length];
-            }
-
-            rendered = _filteredLogWindow;
-            return _logFilter.Apply(_logWindow, windowCount, _filteredLogWindow);
+            return _logWindowCache.Read(buffer, out rendered);
         }
 
         /*
