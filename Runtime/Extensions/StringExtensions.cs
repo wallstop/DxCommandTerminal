@@ -156,11 +156,7 @@ namespace WallstopStudios.DxCommandTerminal.Extensions
                 return false;
             }
 
-            if (
-                c == ZeroWidthJoiner
-                || c == ZeroWidthNonJoiner
-                || StartsPair(input, index, TagHigh, TagLowFirst, TagLowLast)
-            )
+            if (c == ZeroWidthJoiner || c == ZeroWidthNonJoiner || StartsPair(input, index, TagHigh, TagLowFirst, TagLowLast))
             {
                 return true;
             }
@@ -184,18 +180,9 @@ namespace WallstopStudios.DxCommandTerminal.Extensions
         /* Every code point above U+FFFF is stored as a high surrogate followed
            by a low one, and the ones that continue a character are told apart
            by the pair they form. */
-        private static bool StartsPair(
-            string input,
-            int index,
-            char high,
-            char lowFirst,
-            char lowLast
-        )
+        private static bool StartsPair(string input, int index, char high, char lowFirst, char lowLast)
         {
-            return input[index] == high
-                && index + 1 < input.Length
-                && lowFirst <= input[index + 1]
-                && input[index + 1] <= lowLast;
+            return input[index] == high && index + 1 < input.Length && lowFirst <= input[index + 1] && input[index + 1] <= lowLast;
         }
 
         /* A flag is two flag letters, so a run of three is a flag and a letter

@@ -40,11 +40,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
 
             using (CachedStringBuilder.Scope scope = CachedStringBuilder.Rent(64))
             {
-                Assert.AreSame(
-                    first,
-                    scope.Builder,
-                    "A disposed builder must come back from its slot"
-                );
+                Assert.AreSame(first, scope.Builder, "A disposed builder must come back from its slot");
                 Assert.AreEqual(0, first.Length, "Released builders must be cleared");
             }
         }
@@ -63,11 +59,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
 
             using (CachedStringBuilder.Scope next = CachedStringBuilder.Rent(64))
             {
-                Assert.AreSame(
-                    builder,
-                    next.Builder,
-                    "The builder must return exactly once and stay usable"
-                );
+                Assert.AreSame(builder, next.Builder, "The builder must return exactly once and stay usable");
                 Assert.AreEqual(0, next.Builder.Length, "The winning claim must clear the builder");
             }
         }
@@ -81,21 +73,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
 
             using (CachedStringBuilder.Scope next = CachedStringBuilder.Rent(64))
             {
-                Assert.AreSame(
-                    staleCopyBuilder,
-                    next.Builder,
-                    "Sanity: the re-rent must reuse the recycled slot's builder"
-                );
+                Assert.AreSame(staleCopyBuilder, next.Builder, "Sanity: the re-rent must reuse the recycled slot's builder");
                 next.Builder.Append("live-data");
 
                 // The stale copy holds the old generation: its dispose must lose.
                 scope.Dispose();
 
-                Assert.AreEqual(
-                    "live-data",
-                    next.Builder.ToString(),
-                    "A stale copy's dispose must not clear the new renter's builder"
-                );
+                Assert.AreEqual("live-data", next.Builder.ToString(), "A stale copy's dispose must not clear the new renter's builder");
             }
         }
 
@@ -111,19 +95,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
                 using (CachedStringBuilder.Scope inner = CachedStringBuilder.Rent(64))
                 {
                     innerBuilder = inner.Builder;
-                    Assert.AreNotSame(
-                        outerBuilder,
-                        innerBuilder,
-                        "A nested scope must not share the outer scope's builder"
-                    );
+                    Assert.AreNotSame(outerBuilder, innerBuilder, "A nested scope must not share the outer scope's builder");
                     innerBuilder.Append("inner");
                 }
 
-                Assert.AreEqual(
-                    "outer",
-                    outerBuilder.ToString(),
-                    "Disposing the inner scope must not disturb the outer builder"
-                );
+                Assert.AreEqual("outer", outerBuilder.ToString(), "Disposing the inner scope must not disturb the outer builder");
             }
 
             /*
@@ -151,10 +127,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
                 }
             }
 
-            Assert.IsTrue(
-                returned.Contains(outerBuilder) && returned.Contains(innerBuilder),
-                "Both nested builders must survive their scopes and come back re-rentable"
-            );
+            Assert.IsTrue(returned.Contains(outerBuilder) && returned.Contains(innerBuilder), "Both nested builders must survive their scopes and come back re-rentable");
         }
 
         [Test]
@@ -162,11 +135,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
         {
             using (CachedStringBuilder.Scope scope = CachedStringBuilder.Rent(1024))
             {
-                Assert.GreaterOrEqual(
-                    scope.Builder.Capacity,
-                    1024,
-                    "Rent must ensure the requested capacity"
-                );
+                Assert.GreaterOrEqual(scope.Builder.Capacity, 1024, "Rent must ensure the requested capacity");
             }
         }
 
@@ -174,32 +143,16 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
         public void OversizedBuilderIsReclaimedNotPinned()
         {
             StringBuilder oversized;
-            using (
-                CachedStringBuilder.Scope scope = CachedStringBuilder.Rent(
-                    CachedStringBuilder.MaxRetainedBuilderCapacity + 1
-                )
-            )
+            using (CachedStringBuilder.Scope scope = CachedStringBuilder.Rent(CachedStringBuilder.MaxRetainedBuilderCapacity + 1))
             {
                 oversized = scope.Builder;
-                Assert.GreaterOrEqual(
-                    oversized.Capacity,
-                    CachedStringBuilder.MaxRetainedBuilderCapacity,
-                    "Sanity: the oversized rent must hold its requested capacity"
-                );
+                Assert.GreaterOrEqual(oversized.Capacity, CachedStringBuilder.MaxRetainedBuilderCapacity, "Sanity: the oversized rent must hold its requested capacity");
             }
 
             using (CachedStringBuilder.Scope scope = CachedStringBuilder.Rent(16))
             {
-                Assert.AreNotSame(
-                    oversized,
-                    scope.Builder,
-                    "An oversized builder must be dropped for the GC, not pooled"
-                );
-                Assert.LessOrEqual(
-                    scope.Builder.Capacity,
-                    CachedStringBuilder.MaxRetainedBuilderCapacity,
-                    "The replacement builder must be small again"
-                );
+                Assert.AreNotSame(oversized, scope.Builder, "An oversized builder must be dropped for the GC, not pooled");
+                Assert.LessOrEqual(scope.Builder.Capacity, CachedStringBuilder.MaxRetainedBuilderCapacity, "The replacement builder must be small again");
             }
         }
     }

@@ -35,12 +35,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         /// <summary>Effective display label, never null.</summary>
         public string EffectiveDisplayLabel => DisplayLabel ?? InsertionText;
 
-        public CommandCompletion(
-            string insertionText,
-            string displayLabel = null,
-            string description = null,
-            CommandCompletionReplacement? replacement = null
-        )
+        public CommandCompletion(string insertionText, string displayLabel = null, string description = null, CommandCompletionReplacement? replacement = null)
         {
             InsertionText = insertionText ?? throw new ArgumentNullException(nameof(insertionText));
             DisplayLabel = displayLabel;

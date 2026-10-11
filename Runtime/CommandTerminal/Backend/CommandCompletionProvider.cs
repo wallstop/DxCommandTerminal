@@ -14,8 +14,5 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     ///     contained by the shell and reported, and never disable later
     ///     completion requests.
     /// </remarks>
-    public delegate void CommandCompletionProvider(
-        in CommandCompletionContext context,
-        List<CommandCompletion> results
-    );
+    public delegate void CommandCompletionProvider(in CommandCompletionContext context, List<CommandCompletion> results);
 }

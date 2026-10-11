@@ -63,26 +63,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void ProviderCommandsRegisterThroughSharedPipeline()
         {
             bool invoked = false;
-            StubProvider provider = new StubProvider
-            {
-                Producer = _ => new List<CommandShell.AutoCommand>
-                {
-                    CreateInvokableCommand("provider-command", () => invoked = true),
-                },
-            };
+            StubProvider provider = new StubProvider { Producer = _ => new List<CommandShell.AutoCommand> { CreateInvokableCommand("provider-command", () => invoked = true) } };
             Register(provider);
 
             CommandShell shell = CreateShell();
             shell.EnsureAutoCommandsRegistered();
 
-            Assert.IsTrue(
-                shell.Commands.ContainsKey("provider-command"),
-                "Provider-claimed commands should register through the shared pipeline"
-            );
-            Assert.IsTrue(
-                shell.AutoRegisteredCommands.Contains("provider-command"),
-                "Provider-claimed commands should be reported as auto-registered"
-            );
+            Assert.IsTrue(shell.Commands.ContainsKey("provider-command"), "Provider-claimed commands should register through the shared pipeline");
+            Assert.IsTrue(shell.AutoRegisteredCommands.Contains("provider-command"), "Provider-claimed commands should be reported as auto-registered");
 
             shell.RunCommand("provider-command");
 
@@ -98,14 +86,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             CommandShell shell = CreateShell();
             shell.EnsureAutoCommandsRegistered();
 
-            Assert.IsNotEmpty(
-                provider.Consulted,
-                "Sanity: expected at least one catalog-less candidate assembly to consult"
-            );
-            Assert.IsFalse(
-                provider.Consulted.Contains(typeof(BuiltInCommands).Assembly),
-                "Assemblies with a non-empty generated catalog must never reach a provider"
-            );
+            Assert.IsNotEmpty(provider.Consulted, "Sanity: expected at least one catalog-less candidate assembly to consult");
+            Assert.IsFalse(provider.Consulted.Contains(typeof(BuiltInCommands).Assembly), "Assemblies with a non-empty generated catalog must never reach a provider");
             Assert.IsFalse(
                 provider.Consulted.Contains(typeof(CommandDiscoveryProviderTests).Assembly),
                 "Assemblies with a non-empty generated catalog must never reach a provider"
@@ -116,57 +98,32 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void FirstRegisteredProviderWins()
         {
             StubProvider first = new StubProvider { Producer = _ => CreateNamed("provider-first") };
-            StubProvider second = new StubProvider
-            {
-                Producer = _ => CreateNamed("provider-second"),
-            };
+            StubProvider second = new StubProvider { Producer = _ => CreateNamed("provider-second") };
             Register(first);
             Register(second);
 
             CommandShell shell = CreateShell();
             shell.EnsureAutoCommandsRegistered();
 
-            Assert.IsTrue(
-                shell.Commands.ContainsKey("provider-first"),
-                "The first registered provider should claim assemblies first"
-            );
-            Assert.IsFalse(
-                shell.Commands.ContainsKey("provider-second"),
-                "Later providers must not contribute to assemblies an earlier provider claimed"
-            );
-            Assert.IsEmpty(
-                second.Consulted,
-                "Later providers must not be consulted once an earlier provider claimed"
-            );
+            Assert.IsTrue(shell.Commands.ContainsKey("provider-first"), "The first registered provider should claim assemblies first");
+            Assert.IsFalse(shell.Commands.ContainsKey("provider-second"), "Later providers must not contribute to assemblies an earlier provider claimed");
+            Assert.IsEmpty(second.Consulted, "Later providers must not be consulted once an earlier provider claimed");
         }
 
         [Test]
         public void UnclaimedAssembliesFallThroughToLaterProviders()
         {
             StubProvider passing = new StubProvider { ClaimFilter = _ => false };
-            StubProvider claiming = new StubProvider
-            {
-                Producer = _ => CreateNamed("provider-second"),
-            };
+            StubProvider claiming = new StubProvider { Producer = _ => CreateNamed("provider-second") };
             Register(passing);
             Register(claiming);
 
             CommandShell shell = CreateShell();
             shell.EnsureAutoCommandsRegistered();
 
-            Assert.IsTrue(
-                shell.Commands.ContainsKey("provider-second"),
-                "An assembly the first provider passed should reach the second provider"
-            );
-            Assert.IsNotEmpty(
-                passing.Consulted,
-                "Sanity: the first provider should have been consulted first"
-            );
-            CollectionAssert.IsSubsetOf(
-                passing.Consulted,
-                claiming.Consulted,
-                "Assemblies the first provider passed must be the ones the second provider sees"
-            );
+            Assert.IsTrue(shell.Commands.ContainsKey("provider-second"), "An assembly the first provider passed should reach the second provider");
+            Assert.IsNotEmpty(passing.Consulted, "Sanity: the first provider should have been consulted first");
+            CollectionAssert.IsSubsetOf(passing.Consulted, claiming.Consulted, "Assemblies the first provider passed must be the ones the second provider sees");
         }
 
         [Test]
@@ -176,23 +133,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             IDisposable handle = Register(first);
             handle.Dispose();
 
-            StubProvider second = new StubProvider
-            {
-                Producer = _ => CreateNamed("provider-second"),
-            };
+            StubProvider second = new StubProvider { Producer = _ => CreateNamed("provider-second") };
             Register(second);
 
             CommandShell shell = CreateShell();
             shell.EnsureAutoCommandsRegistered();
 
-            Assert.IsFalse(
-                shell.Commands.ContainsKey("provider-first"),
-                "A disposed provider must stop contributing commands"
-            );
-            Assert.IsTrue(
-                shell.Commands.ContainsKey("provider-second"),
-                "Discovery should continue through the providers that remain registered"
-            );
+            Assert.IsFalse(shell.Commands.ContainsKey("provider-first"), "A disposed provider must stop contributing commands");
+            Assert.IsTrue(shell.Commands.ContainsKey("provider-second"), "Discovery should continue through the providers that remain registered");
         }
 
         [Test]
@@ -205,33 +153,20 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             CommandShell shell = CreateShell();
             shell.EnsureAutoCommandsRegistered();
 
-            Assert.IsNotEmpty(
-                provider.Consulted,
-                "Sanity: the provider should have been consulted for the registration"
-            );
-            Assert.AreEqual(
-                provider.Consulted.Count,
-                provider.Consulted.Distinct().Count(),
-                "A hook rerun must not double-register a provider instance"
-            );
+            Assert.IsNotEmpty(provider.Consulted, "Sanity: the provider should have been consulted for the registration");
+            Assert.AreEqual(provider.Consulted.Count, provider.Consulted.Distinct().Count(), "A hook rerun must not double-register a provider instance");
         }
 
         [Test]
         public void ProviderExceptionsAreContained()
         {
-            StubProvider throwing = new StubProvider
-            {
-                Producer = _ => throw new InvalidOperationException("Provider failure"),
-            };
+            StubProvider throwing = new StubProvider { Producer = _ => throw new InvalidOperationException("Provider failure") };
             Register(throwing);
 
             CommandShell shell = CreateShell();
             shell.EnsureAutoCommandsRegistered();
 
-            Assert.IsTrue(
-                shell.AutoCommandsRegistered,
-                "A throwing provider must not abort auto registration"
-            );
+            Assert.IsTrue(shell.AutoCommandsRegistered, "A throwing provider must not abort auto registration");
             Assert.IsTrue(
                 KnownDefaultCommandNames.All(name => shell.AutoRegisteredCommands.Contains(name)),
                 "Discovery should complete through the remaining stages when a provider throws"
@@ -241,34 +176,19 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void ProviderRejectedSignaturesReportInvalidSignatureErrors()
         {
-            MethodInfo invalidMethod = typeof(CommandDiscoveryProviderTests).GetMethod(
-                nameof(InvalidSignatureMethod),
-                BindingFlags.Static | BindingFlags.NonPublic
-            );
+            MethodInfo invalidMethod = typeof(CommandDiscoveryProviderTests).GetMethod(nameof(InvalidSignatureMethod), BindingFlags.Static | BindingFlags.NonPublic);
             Assert.That(invalidMethod != null, "Sanity: expected the invalid-signature method");
             RegisterCommandAttribute attribute = new RegisterCommandAttribute();
             attribute.NormalizeName(invalidMethod);
 
-            StubProvider provider = new StubProvider
-            {
-                Producer = _ => new List<CommandShell.AutoCommand>
-                {
-                    CommandShell.AutoCommand.FromReflected(invalidMethod, attribute),
-                },
-            };
+            StubProvider provider = new StubProvider { Producer = _ => new List<CommandShell.AutoCommand> { CommandShell.AutoCommand.FromReflected(invalidMethod, attribute) } };
             Register(provider);
 
             CommandShell shell = CreateShell();
             shell.EnsureAutoCommandsRegistered();
 
-            Assert.IsTrue(
-                shell.HasErrors,
-                "Rejected provider signatures should queue the invalid-signature error"
-            );
-            Assert.IsFalse(
-                shell.Commands.ContainsKey(attribute.Name),
-                "Rejected signatures must not register a runnable command"
-            );
+            Assert.IsTrue(shell.HasErrors, "Rejected provider signatures should queue the invalid-signature error");
+            Assert.IsFalse(shell.Commands.ContainsKey(attribute.Name), "Rejected signatures must not register a runnable command");
         }
 
         [Test]
@@ -277,170 +197,93 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             CommandShell shell = new CommandShell(new CommandHistory(16));
             shell.InitializeAutoRegisteredCommands(deferRegistration: true);
 
-            StubProvider provider = new StubProvider
-            {
-                Producer = _ => CreateNamed("provider-late"),
-            };
+            StubProvider provider = new StubProvider { Producer = _ => CreateNamed("provider-late") };
             Register(provider);
 
-            Assert.IsEmpty(
-                provider.Consulted,
-                "Deferred initialization must not consult providers synchronously"
-            );
-            Assert.IsEmpty(
-                shell.AutoRegisteredCommands,
-                "Deferred initialization must not surface commands before readiness"
-            );
+            Assert.IsEmpty(provider.Consulted, "Deferred initialization must not consult providers synchronously");
+            Assert.IsEmpty(shell.AutoRegisteredCommands, "Deferred initialization must not surface commands before readiness");
 
             shell.EnsureAutoCommandsRegistered();
 
-            Assert.IsTrue(
-                shell.Commands.ContainsKey("provider-late"),
-                "Readiness should consult providers registered after initialization"
-            );
+            Assert.IsTrue(shell.Commands.ContainsKey("provider-late"), "Readiness should consult providers registered after initialization");
         }
 
         [Test]
         public void ProviderClaimReplacesReflectionCollection()
         {
             Assembly coreAssembly = typeof(int).Assembly;
-            StubProvider provider = new StubProvider
-            {
-                Producer = _ => CreateNamed("provider-core"),
-            };
+            StubProvider provider = new StubProvider { Producer = _ => CreateNamed("provider-core") };
             IDisposable handle = Register(provider);
 
             List<CommandShell.AutoCommand> collected = new();
-            CommandShell.AutoCommandSource source = CommandShell.CollectAutoCommands(
-                coreAssembly,
-                collected
-            );
-            Assert.AreEqual(
-                CommandShell.AutoCommandSource.Provider,
-                source,
-                "A claiming provider should own the assembly's collection"
-            );
-            Assert.AreEqual(
-                1,
-                collected.Count,
-                "A claimed assembly should collect exactly the provider's candidates"
-            );
-            Assert.AreEqual(
-                "provider-core",
-                collected[0].Name,
-                "The provider's candidate should be the collected command"
-            );
+            CommandShell.AutoCommandSource source = CommandShell.CollectAutoCommands(coreAssembly, collected);
+            Assert.AreEqual(CommandShell.AutoCommandSource.Provider, source, "A claiming provider should own the assembly's collection");
+            Assert.AreEqual(1, collected.Count, "A claimed assembly should collect exactly the provider's candidates");
+            Assert.AreEqual("provider-core", collected[0].Name, "The provider's candidate should be the collected command");
 
             handle.Dispose();
             collected.Clear();
             source = CommandShell.CollectAutoCommands(coreAssembly, collected);
-            Assert.AreEqual(
-                CommandShell.AutoCommandSource.Reflected,
-                source,
-                "Without a provider the assembly should fall through to reflection"
-            );
+            Assert.AreEqual(CommandShell.AutoCommandSource.Reflected, source, "Without a provider the assembly should fall through to reflection");
             Assert.IsEmpty(collected, "The core assembly carries no reflected commands");
         }
 
         [Test]
         public void ClearThenReinitializeReconsultsProviders()
         {
-            StubProvider provider = new StubProvider
-            {
-                Producer = _ => CreateNamed("provider-cycle"),
-            };
+            StubProvider provider = new StubProvider { Producer = _ => CreateNamed("provider-cycle") };
             Register(provider);
 
             CommandShell shell = CreateShell();
             int consultedAfterFirst = provider.Consulted.Count;
-            Assert.IsNotEmpty(
-                provider.Consulted,
-                "Sanity: the provider should have served the first registration"
-            );
+            Assert.IsNotEmpty(provider.Consulted, "Sanity: the provider should have served the first registration");
 
             shell.ClearAutoRegisteredCommands();
             shell.InitializeAutoRegisteredCommands();
 
-            Assert.Greater(
-                provider.Consulted.Count,
-                consultedAfterFirst,
-                "Re-registration should re-consult providers"
-            );
-            Assert.IsTrue(
-                shell.Commands.ContainsKey("provider-cycle"),
-                "Provider commands should re-register after a clear"
-            );
+            Assert.Greater(provider.Consulted.Count, consultedAfterFirst, "Re-registration should re-consult providers");
+            Assert.IsTrue(shell.Commands.ContainsKey("provider-cycle"), "Provider commands should re-register after a clear");
         }
 
         [Test]
         public void ProviderCommandCollidingWithBuiltInWins()
         {
             bool invoked = false;
-            StubProvider provider = new StubProvider
-            {
-                Producer = _ => new List<CommandShell.AutoCommand>
-                {
-                    CreateInvokableCommand("list-themes", () => invoked = true),
-                },
-            };
+            StubProvider provider = new StubProvider { Producer = _ => new List<CommandShell.AutoCommand> { CreateInvokableCommand("list-themes", () => invoked = true) } };
             Register(provider);
 
             CommandShell shell = CreateShell();
 
-            CollectionAssert.Contains(
-                KnownDefaultCommandNames,
-                "list-themes",
-                "Sanity: expected 'list-themes' to be a default built-in for the collision"
-            );
+            CollectionAssert.Contains(KnownDefaultCommandNames, "list-themes", "Sanity: expected 'list-themes' to be a default built-in for the collision");
             shell.RunCommand("list-themes");
 
-            Assert.IsTrue(
-                invoked,
-                "Provider-served candidates register with the earlier candidates and win "
-                    + "the name collision against built-ins"
-            );
+            Assert.IsTrue(invoked, "Provider-served candidates register with the earlier candidates and win " + "the name collision against built-ins");
         }
 
 #if UNITY_EDITOR
         [Test]
         public void TypeCacheDiscoveryMatchesReflectionOracle()
         {
-            Assembly[] knownAssemblies =
-            {
-                typeof(CommandDiscoveryProviderTests).Assembly,
-                typeof(BuiltInCommands).Assembly,
-            };
+            Assembly[] knownAssemblies = { typeof(CommandDiscoveryProviderTests).Assembly, typeof(BuiltInCommands).Assembly };
 
             foreach (Assembly assembly in knownAssemblies)
             {
                 List<CommandShell.AutoCommand> collected = new();
                 bool claimed = TypeCacheCommandDiscovery.Instance.TryCollect(assembly, collected);
-                Assert.IsTrue(
-                    claimed,
-                    $"TypeCache should claim the compiled assembly '{assembly.GetName().Name}'"
-                );
+                Assert.IsTrue(claimed, $"TypeCache should claim the compiled assembly '{assembly.GetName().Name}'");
 
-                string[] providerNames = collected
-                    .Select(command => command.Name)
-                    .OrderBy(name => name, StringComparer.Ordinal)
-                    .ToArray();
+                string[] providerNames = collected.Select(command => command.Name).OrderBy(name => name, StringComparer.Ordinal).ToArray();
                 string[] oracleNames = CommandShell
-                    .RegisteredCommands.Value.Where(tuple =>
-                        ReferenceEquals(tuple.method.DeclaringType.Assembly, assembly)
-                    )
+                    .RegisteredCommands.Value.Where(tuple => ReferenceEquals(tuple.method.DeclaringType.Assembly, assembly))
                     .Select(tuple => tuple.attribute.Name)
                     .OrderBy(name => name, StringComparer.Ordinal)
                     .ToArray();
 
-                Assert.IsNotEmpty(
-                    oracleNames,
-                    $"Sanity: expected attributed commands in '{assembly.GetName().Name}'"
-                );
+                Assert.IsNotEmpty(oracleNames, $"Sanity: expected attributed commands in '{assembly.GetName().Name}'");
                 Assert.AreEqual(
                     string.Join("\n", oracleNames),
                     string.Join("\n", providerNames),
-                    $"TypeCache discovery diverged from the reflection oracle for "
-                        + $"'{assembly.GetName().Name}'"
+                    $"TypeCache discovery diverged from the reflection oracle for " + $"'{assembly.GetName().Name}'"
                 );
             }
         }
@@ -451,22 +294,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             List<CommandShell.AutoCommand> collected = new();
 
             Assert.IsTrue(
-                TypeCacheCommandDiscovery.Instance.TryCollect(
-                    typeof(CommandDiscoveryProviderTests).Assembly,
-                    collected
-                ),
+                TypeCacheCommandDiscovery.Instance.TryCollect(typeof(CommandDiscoveryProviderTests).Assembly, collected),
                 "TypeCache should claim the test assembly, which holds attributed commands"
             );
-            Assert.IsNotEmpty(
-                collected,
-                "Claimed assemblies should surface their attributed commands"
-            );
+            Assert.IsNotEmpty(collected, "Claimed assemblies should surface their attributed commands");
 
             collected.Clear();
-            Assert.IsFalse(
-                TypeCacheCommandDiscovery.Instance.TryCollect(typeof(int).Assembly, collected),
-                "Assemblies without attributed commands must pass to the next provider"
-            );
+            Assert.IsFalse(TypeCacheCommandDiscovery.Instance.TryCollect(typeof(int).Assembly, collected), "Assemblies without attributed commands must pass to the next provider");
             Assert.IsEmpty(collected, "Unknown assemblies must not contribute commands");
 
             collected.Clear();
@@ -496,20 +330,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             Action<CommandArg[]> handler = _ => invoked();
             return CommandShell.AutoCommand.FromCatalog(
-                new CommandCatalogEntry(
-                    name,
-                    $"{name}-method",
-                    0,
-                    -1,
-                    "Provider test command",
-                    null,
-                    true,
-                    false,
-                    false,
-                    false,
-                    () => handler,
-                    null
-                )
+                new CommandCatalogEntry(name, $"{name}-method", 0, -1, "Provider test command", null, true, false, false, false, () => handler, null)
             );
         }
 

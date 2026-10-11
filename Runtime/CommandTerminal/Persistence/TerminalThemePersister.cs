@@ -12,8 +12,7 @@ namespace WallstopStudios.DxCommandTerminal.Persistence
     [DisallowMultipleComponent]
     public class TerminalThemePersister : MonoBehaviour
     {
-        protected virtual string ThemeFile =>
-            Path.Join(Application.persistentDataPath, "DxCommandTerminal", "TerminalTheme.json");
+        protected virtual string ThemeFile => Path.Join(Application.persistentDataPath, "DxCommandTerminal", "TerminalTheme.json");
 
         [Header("System")]
         public TerminalUI terminal;
@@ -91,14 +90,7 @@ namespace WallstopStudios.DxCommandTerminal.Persistence
                 return;
             }
 
-            if (
-                _lastSeenFont == terminal.CurrentFont
-                && string.Equals(
-                    _lastSeenTheme,
-                    terminal.CurrentTheme,
-                    StringComparison.OrdinalIgnoreCase
-                )
-            )
+            if (_lastSeenFont == terminal.CurrentFont && string.Equals(_lastSeenTheme, terminal.CurrentTheme, StringComparison.OrdinalIgnoreCase))
             {
                 _nextUpdateTime = Time.time + savePeriod;
                 return;
@@ -149,54 +141,32 @@ namespace WallstopStudios.DxCommandTerminal.Persistence
                     {
                         _lastSeenFont = null;
                         _lastSeenTheme = null;
-                        Debug.LogError(
-                            LogTextSanitizer.Sanitize(
-                                $"Failed to read theme file {themeFile}: {readerTask.Exception}."
-                            ),
-                            this
-                        );
+                        Debug.LogError(LogTextSanitizer.Sanitize($"Failed to read theme file {themeFile}: {readerTask.Exception}."), this);
                         yield break;
                     }
 
                     string inputJson = readerTask.Result;
                     try
                     {
-                        configurations = JsonUtility.FromJson<TerminalThemeConfigurations>(
-                            inputJson
-                        );
+                        configurations = JsonUtility.FromJson<TerminalThemeConfigurations>(inputJson);
                     }
                     catch (Exception e)
                     {
-                        Debug.LogError(
-                            LogTextSanitizer.Sanitize(
-                                $"Failed to parse theme file {themeFile}, defaulting to empty theme file: {e}"
-                            ),
-                            this
-                        );
+                        Debug.LogError(LogTextSanitizer.Sanitize($"Failed to parse theme file {themeFile}, defaulting to empty theme file: {e}"), this);
                         configurations = new TerminalThemeConfigurations();
                     }
                 }
                 else
                 {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-                    Debug.Log(
-                        LogTextSanitizer.Sanitize(
-                            $"Creating new theme file {themeFile} for terminal {terminal.id} ..."
-                        ),
-                        this
-                    );
+                    Debug.Log(LogTextSanitizer.Sanitize($"Creating new theme file {themeFile} for terminal {terminal.id} ..."), this);
 #endif
                     configurations = new TerminalThemeConfigurations();
                 }
 
                 if (hydrate)
                 {
-                    if (
-                        configurations.TryGetConfiguration(
-                            terminal,
-                            out TerminalThemeConfiguration existingConfiguration
-                        )
-                    )
+                    if (configurations.TryGetConfiguration(terminal, out TerminalThemeConfiguration existingConfiguration))
                     {
                         int fontIndex;
                         if (terminal._fontPack == null)
@@ -206,12 +176,7 @@ namespace WallstopStudios.DxCommandTerminal.Persistence
                         else
                         {
                             fontIndex = terminal._fontPack._fonts.FindIndex(font =>
-                                font != null
-                                && string.Equals(
-                                    font.name,
-                                    existingConfiguration.font,
-                                    StringComparison.OrdinalIgnoreCase
-                                )
+                                font != null && string.Equals(font.name, existingConfiguration.font, StringComparison.OrdinalIgnoreCase)
                             );
                         }
 
@@ -223,9 +188,7 @@ namespace WallstopStudios.DxCommandTerminal.Persistence
                         else
                         {
                             Debug.LogWarning(
-                                LogTextSanitizer.Sanitize(
-                                    $"Failed to find persisted font {existingConfiguration.font} for terminal {terminal.id} while hydrating."
-                                ),
+                                LogTextSanitizer.Sanitize($"Failed to find persisted font {existingConfiguration.font} for terminal {terminal.id} while hydrating."),
                                 this
                             );
                         }
@@ -237,13 +200,7 @@ namespace WallstopStudios.DxCommandTerminal.Persistence
                         }
                         else
                         {
-                            themeIndex = terminal._themePack._themeNames.FindIndex(theme =>
-                                string.Equals(
-                                    theme,
-                                    existingConfiguration.theme,
-                                    StringComparison.OrdinalIgnoreCase
-                                )
-                            );
+                            themeIndex = terminal._themePack._themeNames.FindIndex(theme => string.Equals(theme, existingConfiguration.theme, StringComparison.OrdinalIgnoreCase));
                         }
 
                         if (0 <= themeIndex)
@@ -254,9 +211,7 @@ namespace WallstopStudios.DxCommandTerminal.Persistence
                         else
                         {
                             Debug.LogWarning(
-                                LogTextSanitizer.Sanitize(
-                                    $"Failed to find persisted theme {existingConfiguration.theme} for terminal {terminal.id} while hydrating."
-                                ),
+                                LogTextSanitizer.Sanitize($"Failed to find persisted theme {existingConfiguration.theme} for terminal {terminal.id} while hydrating."),
                                 this
                             );
                         }
@@ -267,9 +222,7 @@ namespace WallstopStudios.DxCommandTerminal.Persistence
                     {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
                         Debug.Log(
-                            LogTextSanitizer.Sanitize(
-                                $"Failed to find persisted configuration for terminal {terminal.id} while hydrating, defaulting to Prefab configuration."
-                            ),
+                            LogTextSanitizer.Sanitize($"Failed to find persisted configuration for terminal {terminal.id} while hydrating, defaulting to Prefab configuration."),
                             this
                         );
 #endif
@@ -299,20 +252,12 @@ namespace WallstopStudios.DxCommandTerminal.Persistence
                 {
                     _lastSeenFont = null;
                     _lastSeenTheme = null;
-                    Debug.LogError(
-                        LogTextSanitizer.Sanitize(
-                            $"Failed to write theme file {themeFile} (terminal {terminal.id}): {writerTask.Exception}"
-                        ),
-                        this
-                    );
+                    Debug.LogError(LogTextSanitizer.Sanitize($"Failed to write theme file {themeFile} (terminal {terminal.id}): {writerTask.Exception}"), this);
                 }
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
                 else
                 {
-                    Debug.Log(
-                        LogTextSanitizer.Sanitize($"Theme file {themeFile} successfully updated."),
-                        this
-                    );
+                    Debug.Log(LogTextSanitizer.Sanitize($"Theme file {themeFile} successfully updated."), this);
                 }
 #endif
             }

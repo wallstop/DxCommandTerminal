@@ -23,9 +23,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             float delta = Math.Abs(a - b);
             // Check ToString representations too, the numbers may be crazy small or crazy big, outside the scope of our tolerance
-            return delta <= tolerance
-                || a.ToString(CultureInfo.InvariantCulture)
-                    .Equals(b.ToString(CultureInfo.InvariantCulture));
+            return delta <= tolerance || a.ToString(CultureInfo.InvariantCulture).Equals(b.ToString(CultureInfo.InvariantCulture));
         }
 
         private static bool Approximately(decimal a, decimal b, decimal? tolerance = null)
@@ -38,18 +36,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             tolerance ??= new decimal(0.0001);
 
             decimal delta = Math.Abs(a - b);
-            return delta <= tolerance
-                || a.ToString(CultureInfo.InvariantCulture)
-                    .Equals(b.ToString(CultureInfo.InvariantCulture));
+            return delta <= tolerance || a.ToString(CultureInfo.InvariantCulture).Equals(b.ToString(CultureInfo.InvariantCulture));
         }
 
         private static bool Approximately(double a, double b, double tolerance = 0.0001)
         {
             double delta = Math.Abs(a - b);
             // Check ToString representations too, the numbers may be crazy small or crazy big, outside the scope of our tolerance
-            return delta <= tolerance
-                || a.ToString(CultureInfo.InvariantCulture)
-                    .Equals(b.ToString(CultureInfo.InvariantCulture));
+            return delta <= tolerance || a.ToString(CultureInfo.InvariantCulture).Equals(b.ToString(CultureInfo.InvariantCulture));
         }
 
         /*
@@ -62,14 +56,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             1e-9 tolerance instead of exact equality; a genuine parser
             regression shifting a component by more than that still fails.
          */
-        private static void AssertComplexRoundTrips(
-            System.Numerics.Complex expected,
-            System.Numerics.Complex value
-        )
+        private static void AssertComplexRoundTrips(System.Numerics.Complex expected, System.Numerics.Complex value)
         {
             Assert.IsTrue(
-                Approximately(expected.Real, value.Real, 0.000000001)
-                    && Approximately(expected.Imaginary, value.Imaginary, 0.000000001),
+                Approximately(expected.Real, value.Real, 0.000000001) && Approximately(expected.Imaginary, value.Imaginary, 0.000000001),
                 $"Expected {value} to round-trip as {expected}."
             );
         }
@@ -87,9 +77,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             int unregistered = CommandArg.ResetForNextPlaySession();
             if (0 < unregistered)
             {
-                Debug.Log(
-                    $"Unregistered {unregistered} parser{(unregistered == 1 ? string.Empty : "s")}."
-                );
+                Debug.Log($"Unregistered {unregistered} parser{(unregistered == 1 ? string.Empty : "s")}.");
             }
         }
 
@@ -109,16 +97,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.IsTrue(Approximately(3.0f, value), $"Expected {value} to be equal to {3.0f}");
             arg = new CommandArg("-100");
             Assert.IsTrue(arg.TryGet(out value));
-            Assert.IsTrue(
-                Approximately(-100.0f, value),
-                $"Expected {value} to be equal to {-100.0f}"
-            );
+            Assert.IsTrue(Approximately(-100.0f, value), $"Expected {value} to be equal to {-100.0f}");
 
             for (int i = 0; i < NumTries; ++i)
             {
-                float expected = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
+                float expected = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
                 arg = new CommandArg(expected.ToString(CultureInfo.InvariantCulture));
                 Assert.IsTrue(arg.TryGet(out value));
                 Assert.IsTrue(Approximately(expected, value), $"{expected} not equal to {value}");
@@ -163,27 +146,17 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreEqual(new decimal(0.0), value);
             arg = new CommandArg("1");
             Assert.IsTrue(arg.TryGet(out value));
-            Assert.IsTrue(
-                Approximately(new decimal(1), value),
-                $"Expected {value} to be equal to {1.0}"
-            );
+            Assert.IsTrue(Approximately(new decimal(1), value), $"Expected {value} to be equal to {1.0}");
             arg = new CommandArg("3");
             Assert.IsTrue(arg.TryGet(out value));
-            Assert.IsTrue(
-                Approximately(new decimal(3), value),
-                $"Expected {value} to be equal to {3.0}"
-            );
+            Assert.IsTrue(Approximately(new decimal(3), value), $"Expected {value} to be equal to {3.0}");
             arg = new CommandArg("-100");
             Assert.IsTrue(arg.TryGet(out value));
-            Assert.IsTrue(
-                Approximately(new decimal(-100), value),
-                $"Expected {value} to be equal to {-100.0}"
-            );
+            Assert.IsTrue(Approximately(new decimal(-100), value), $"Expected {value} to be equal to {-100.0}");
 
             for (int i = 0; i < NumTries; ++i)
             {
-                double expectedDouble =
-                    _random.NextDouble() * _random.Next(int.MinValue, int.MaxValue);
+                double expectedDouble = _random.NextDouble() * _random.Next(int.MinValue, int.MaxValue);
                 decimal expected = new(expectedDouble);
                 arg = new CommandArg(expected.ToString(CultureInfo.InvariantCulture));
                 Assert.IsTrue(arg.TryGet(out value));
@@ -249,10 +222,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.IsTrue(Approximately(3.0, value), $"Expected {value} to be equal to {3.0}");
             arg = new CommandArg("-100");
             Assert.IsTrue(arg.TryGet(out value));
-            Assert.IsTrue(
-                Approximately(-100.0, value),
-                $"Expected {value} to be equal to {-100.0}"
-            );
+            Assert.IsTrue(Approximately(-100.0, value), $"Expected {value} to be equal to {-100.0}");
 
             for (int i = 0; i < NumTries; ++i)
             {
@@ -343,9 +313,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 {
                     _random.NextBytes(longBytes);
                     ticks = BitConverter.ToInt64(longBytes, 0);
-                } while (
-                    ticks < System.DateTime.MinValue.Ticks || System.DateTime.MaxValue.Ticks < ticks
-                );
+                } while (ticks < System.DateTime.MinValue.Ticks || System.DateTime.MaxValue.Ticks < ticks);
 
                 DateTimeOffset expected = new(ticks, TimeSpan.Zero);
                 arg = new CommandArg(expected.ToString("O"));
@@ -410,10 +378,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             CommandArg arg = new("");
             Assert.IsFalse(arg.TryGet(out DateTime value), $"Unexpectedly parsed {value}");
 
-            DateTimeKind[] kinds = System
-                .Enum.GetValues(typeof(DateTimeKind))
-                .OfType<DateTimeKind>()
-                .ToArray();
+            DateTimeKind[] kinds = System.Enum.GetValues(typeof(DateTimeKind)).OfType<DateTimeKind>().ToArray();
 
             byte[] longBytes = new byte[sizeof(long)];
             for (int i = 0; i < NumTries; ++i)
@@ -424,9 +389,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 {
                     _random.NextBytes(longBytes);
                     ticks = BitConverter.ToInt64(longBytes, 0);
-                } while (
-                    ticks < System.DateTime.MinValue.Ticks || System.DateTime.MaxValue.Ticks < ticks
-                );
+                } while (ticks < System.DateTime.MinValue.Ticks || System.DateTime.MaxValue.Ticks < ticks);
 
                 DateTime expected = new(ticks, kind);
                 arg = new CommandArg(expected.ToString("O"));
@@ -439,18 +402,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 {
                     if (!expected.Equals(value))
                     {
-                        Assert.IsTrue(
-                            Math.Abs(expected.Hour - value.Hour) <= 1,
-                            $"Failed to parse - expected: {expected}, parsed: {value}"
-                        );
+                        Assert.IsTrue(Math.Abs(expected.Hour - value.Hour) <= 1, $"Failed to parse - expected: {expected}, parsed: {value}");
                     }
                     else
                     {
-                        Assert.AreEqual(
-                            expected,
-                            value,
-                            $"Failed to parse - expected is using {expected.Kind}, parsed is using {value.Kind}"
-                        );
+                        Assert.AreEqual(expected, value, $"Failed to parse - expected is using {expected.Kind}, parsed is using {value.Kind}");
                     }
                 }
             }
@@ -513,11 +469,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             for (int i = 0; i < NumTries; ++i)
             {
                 Guid expected = System.Guid.NewGuid();
-                arg = new CommandArg(
-                    _random.Next() % 2 == 0
-                        ? expected.ToString().ToLower()
-                        : expected.ToString().ToUpper()
-                );
+                arg = new CommandArg(_random.Next() % 2 == 0 ? expected.ToString().ToLower() : expected.ToString().ToUpper());
                 Assert.IsTrue(arg.TryGet(out value));
                 Assert.AreEqual(expected, value);
             }
@@ -548,10 +500,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             {
                 char expected = (char)_random.Next(char.MinValue, char.MaxValue);
                 arg = new CommandArg(expected.ToString());
-                Assert.IsTrue(
-                    arg.TryGet(out value),
-                    $"Failed to parse {expected} as char. Cleaned arg: '{arg.CleanedContents}'"
-                );
+                Assert.IsTrue(arg.TryGet(out value), $"Failed to parse {expected} as char. Cleaned arg: '{arg.CleanedContents}'");
                 Assert.AreEqual(expected, value);
             }
 
@@ -903,10 +852,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.IsTrue(arg.TryGet(out value));
             Assert.AreEqual((TestEnum1)0, value);
 
-            TestEnum1[] testEnum1Values = System
-                .Enum.GetValues(typeof(TestEnum1))
-                .OfType<TestEnum1>()
-                .ToArray();
+            TestEnum1[] testEnum1Values = System.Enum.GetValues(typeof(TestEnum1)).OfType<TestEnum1>().ToArray();
             for (int i = 0; i < NumTries; ++i)
             {
                 int index = _random.Next(testEnum1Values.Length);
@@ -921,10 +867,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.IsTrue(arg.TryGet(out TestEnum2 testEnum2Value));
             Assert.AreEqual(TestEnum2.Value6, testEnum2Value);
 
-            TestEnum2[] testEnum2Values = System
-                .Enum.GetValues(typeof(TestEnum2))
-                .OfType<TestEnum2>()
-                .ToArray();
+            TestEnum2[] testEnum2Values = System.Enum.GetValues(typeof(TestEnum2)).OfType<TestEnum2>().ToArray();
             for (int i = 0; i < NumTries; ++i)
             {
                 int index = _random.Next(testEnum2Values.Length);
@@ -969,12 +912,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 int x = _random.Next(short.MinValue, short.MaxValue);
                 arg = new CommandArg(x.ToString(CultureInfo.InvariantCulture));
                 Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
-                foreach (
-                    (string pre, string post) in _prepend.Zip(
-                        _append,
-                        (preValue, postValue) => (preValue, postValue)
-                    )
-                )
+                foreach ((string pre, string post) in _prepend.Zip(_append, (preValue, postValue) => (preValue, postValue)))
                 {
                     arg = new CommandArg($"{pre}{x}{post}");
                     Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
@@ -995,12 +933,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 Assert.IsTrue(arg.TryGet(out value));
                 Assert.AreEqual(expected, value);
 
-                foreach (
-                    (string pre, string post) in _prepend.Zip(
-                        _append,
-                        (preValue, postValue) => (preValue, postValue)
-                    )
-                )
+                foreach ((string pre, string post) in _prepend.Zip(_append, (preValue, postValue) => (preValue, postValue)))
                 {
                     arg = new CommandArg($"{pre}{expected.x},{expected.y}{post}");
                     Assert.IsTrue(arg.TryGet(out value));
@@ -1020,12 +953,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 Assert.IsTrue(arg.TryGet(out value));
                 Assert.AreEqual(expected, value);
 
-                foreach (
-                    (string pre, string post) in _prepend.Zip(
-                        _append,
-                        (preValue, postValue) => (preValue, postValue)
-                    )
-                )
+                foreach ((string pre, string post) in _prepend.Zip(_append, (preValue, postValue) => (preValue, postValue)))
                 {
                     arg = new CommandArg($"{pre}{expected.x},{expected.y},{z}{post}");
                     Assert.IsTrue(arg.TryGet(out value));
@@ -1084,12 +1012,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 int x = _random.Next(short.MinValue, short.MaxValue);
                 arg = new CommandArg(x.ToString(CultureInfo.InvariantCulture));
                 Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
-                foreach (
-                    (string pre, string post) in _prepend.Zip(
-                        _append,
-                        (preValue, postValue) => (preValue, postValue)
-                    )
-                )
+                foreach ((string pre, string post) in _prepend.Zip(_append, (preValue, postValue) => (preValue, postValue)))
                 {
                     arg = new CommandArg($"{pre}{x}{post}");
                     Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
@@ -1110,12 +1033,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 Assert.IsTrue(arg.TryGet(out value));
                 Assert.AreEqual(expected, value);
 
-                foreach (
-                    (string pre, string post) in _prepend.Zip(
-                        _append,
-                        (preValue, postValue) => (preValue, postValue)
-                    )
-                )
+                foreach ((string pre, string post) in _prepend.Zip(_append, (preValue, postValue) => (preValue, postValue)))
                 {
                     arg = new CommandArg($"{pre}{expected.x},{expected.y}{post}");
                     Assert.IsTrue(arg.TryGet(out value));
@@ -1138,12 +1056,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 Assert.IsTrue(arg.TryGet(out value));
                 Assert.AreEqual(expected, value);
 
-                foreach (
-                    (string pre, string post) in _prepend.Zip(
-                        _append,
-                        (preValue, postValue) => (preValue, postValue)
-                    )
-                )
+                foreach ((string pre, string post) in _prepend.Zip(_append, (preValue, postValue) => (preValue, postValue)))
                 {
                     arg = new CommandArg($"{pre}{expected.x},{expected.y},{expected.z}{post}");
                     Assert.IsTrue(arg.TryGet(out value));
@@ -1220,12 +1133,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 int x = _random.Next(short.MinValue, short.MaxValue);
                 arg = new CommandArg(x.ToString(CultureInfo.InvariantCulture));
                 Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
-                foreach (
-                    (string pre, string post) in _prepend.Zip(
-                        _append,
-                        (preValue, postValue) => (preValue, postValue)
-                    )
-                )
+                foreach ((string pre, string post) in _prepend.Zip(_append, (preValue, postValue) => (preValue, postValue)))
                 {
                     arg = new CommandArg($"{pre}{x}{post}");
                     Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
@@ -1236,18 +1144,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             for (int i = 0; i < NumTries; ++i)
             {
-                float x = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
-                float y = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
-                float width = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
-                float height = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
+                float x = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
+                float y = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
+                float width = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
+                float height = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
                 expected = new Rect(x, y, width, height);
                 arg = new CommandArg(expected.ToString());
                 Assert.IsTrue(arg.TryGet(out value));
@@ -1258,9 +1158,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                         && Approximately(expected.height, value.height, rectTolerance)
                 );
 
-                arg = new CommandArg(
-                    $"{expected.x},{expected.y},{expected.width},{expected.height}"
-                );
+                arg = new CommandArg($"{expected.x},{expected.y},{expected.width},{expected.height}");
                 Assert.IsTrue(arg.TryGet(out value));
                 Assert.IsTrue(
                     Approximately(expected.x, value.x, rectTolerance)
@@ -1269,16 +1167,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                         && Approximately(expected.height, value.height, rectTolerance)
                 );
 
-                foreach (
-                    (string pre, string post) in _prepend.Zip(
-                        _append,
-                        (preValue, postValue) => (preValue, postValue)
-                    )
-                )
+                foreach ((string pre, string post) in _prepend.Zip(_append, (preValue, postValue) => (preValue, postValue)))
                 {
-                    arg = new CommandArg(
-                        $"{pre}{expected.x},{expected.y},{expected.width},{expected.height}{post}"
-                    );
+                    arg = new CommandArg($"{pre}{expected.x},{expected.y},{expected.width},{expected.height}{post}");
                     Assert.IsTrue(arg.TryGet(out value));
                     Assert.IsTrue(
                         Approximately(expected.x, value.x, rectTolerance)
@@ -1322,12 +1213,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 int x = _random.Next(short.MinValue, short.MaxValue);
                 arg = new CommandArg(x.ToString(CultureInfo.InvariantCulture));
                 Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
-                foreach (
-                    (string pre, string post) in _prepend.Zip(
-                        _append,
-                        (preValue, postValue) => (preValue, postValue)
-                    )
-                )
+                foreach ((string pre, string post) in _prepend.Zip(_append, (preValue, postValue) => (preValue, postValue)))
                 {
                     arg = new CommandArg($"{pre}{x}{post}");
                     Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
@@ -1345,22 +1231,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 Assert.IsTrue(arg.TryGet(out value));
                 Assert.AreEqual(expected, value);
 
-                arg = new CommandArg(
-                    $"{expected.x},{expected.y},{expected.width},{expected.height}"
-                );
+                arg = new CommandArg($"{expected.x},{expected.y},{expected.width},{expected.height}");
                 Assert.IsTrue(arg.TryGet(out value));
                 Assert.AreEqual(expected, value);
 
-                foreach (
-                    (string pre, string post) in _prepend.Zip(
-                        _append,
-                        (preValue, postValue) => (preValue, postValue)
-                    )
-                )
+                foreach ((string pre, string post) in _prepend.Zip(_append, (preValue, postValue) => (preValue, postValue)))
                 {
-                    arg = new CommandArg(
-                        $"{pre}{expected.x},{expected.y},{expected.width},{expected.height}{post}"
-                    );
+                    arg = new CommandArg($"{pre}{expected.x},{expected.y},{expected.width},{expected.height}{post}");
                     Assert.IsTrue(arg.TryGet(out value));
                     Assert.AreEqual(expected, value);
                 }
@@ -1387,17 +1264,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             // Unexpected input
             for (int i = 0; i < NumTries; ++i)
             {
-                float x = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
+                float x = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
                 arg = new CommandArg(x.ToString(CultureInfo.InvariantCulture));
                 Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
-                foreach (
-                    (string pre, string post) in _prepend.Zip(
-                        _append,
-                        (preValue, postValue) => (preValue, postValue)
-                    )
-                )
+                foreach ((string pre, string post) in _prepend.Zip(_append, (preValue, postValue) => (preValue, postValue)))
                 {
                     arg = new CommandArg($"{pre}{x}{post}");
                     Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
@@ -1409,45 +1279,30 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             // x,y
             for (int i = 0; i < NumTries; ++i)
             {
-                float x = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
-                float y = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
+                float x = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
+                float y = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
                 expected = new Vector2(x, y);
                 arg = new CommandArg(expected.ToString());
                 Assert.IsTrue(arg.TryGet(out value));
                 Assert.IsTrue(
-                    Approximately(expected.x, value.x, vector2RoundTolerance)
-                        && Approximately(expected.y, value.y, vector2RoundTolerance),
-                    $"Expected {value} to be approximately {expected}. "
-                        + $"Input: ({x},{y}). "
-                        + $"Value: ({value.x},{value.y}). "
-                        + $"Expected: ({expected.x},{expected.y})."
+                    Approximately(expected.x, value.x, vector2RoundTolerance) && Approximately(expected.y, value.y, vector2RoundTolerance),
+                    $"Expected {value} to be approximately {expected}. " + $"Input: ({x},{y}). " + $"Value: ({value.x},{value.y}). " + $"Expected: ({expected.x},{expected.y})."
                 );
 
                 arg = new CommandArg($"{expected.x},{expected.y}");
                 Assert.IsTrue(arg.TryGet(out value));
                 Assert.IsTrue(
                     Approximately(expected.x, value.x) && Approximately(expected.y, value.y),
-                    $"Expected {value} to be approximately {expected}. "
-                        + $"Value: ({value.x},{value.y}). Expected: ({x},{y})."
+                    $"Expected {value} to be approximately {expected}. " + $"Value: ({value.x},{value.y}). Expected: ({x},{y})."
                 );
 
-                foreach (
-                    (string pre, string post) in _prepend.Zip(
-                        _append,
-                        (preValue, postValue) => (preValue, postValue)
-                    )
-                )
+                foreach ((string pre, string post) in _prepend.Zip(_append, (preValue, postValue) => (preValue, postValue)))
                 {
                     arg = new CommandArg($"{pre}{expected.x},{expected.y}{post}");
                     Assert.IsTrue(arg.TryGet(out value));
                     Assert.IsTrue(
                         Approximately(expected.x, value.x) && Approximately(expected.y, value.y),
-                        $"Expected {value} to be approximately {expected}. "
-                            + $"Value: ({value.x},{value.y}). Expected: ({x},{y})."
+                        $"Expected {value} to be approximately {expected}. " + $"Value: ({value.x},{value.y}). Expected: ({x},{y})."
                     );
                 }
             }
@@ -1455,48 +1310,31 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             // x,y,z (z is ok, but ignored)
             for (int i = 0; i < NumTries; ++i)
             {
-                float x = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
-                float y = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
-                float z = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
+                float x = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
+                float y = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
+                float z = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
                 expected = new Vector2(x, y);
                 arg = new CommandArg(expected.ToString());
                 Assert.IsTrue(arg.TryGet(out value));
                 Assert.IsTrue(
-                    Approximately(expected.x, value.x, vector2RoundTolerance)
-                        && Approximately(expected.y, value.y, vector2RoundTolerance),
-                    $"Expected {value} to be approximately {expected}. "
-                        + $"Input: ({x},{y},{z}). "
-                        + $"Value: ({value.x},{value.y}). "
-                        + $"Expected: ({expected.x},{expected.y})."
+                    Approximately(expected.x, value.x, vector2RoundTolerance) && Approximately(expected.y, value.y, vector2RoundTolerance),
+                    $"Expected {value} to be approximately {expected}. " + $"Input: ({x},{y},{z}). " + $"Value: ({value.x},{value.y}). " + $"Expected: ({expected.x},{expected.y})."
                 );
 
                 arg = new CommandArg($"{expected.x},{expected.y},{z}");
                 Assert.IsTrue(arg.TryGet(out value));
                 Assert.IsTrue(
                     Approximately(expected.x, value.x) && Approximately(expected.y, value.y),
-                    $"Expected {value} to be approximately {expected}. "
-                        + $"Value: ({value.x},{value.y}). Expected: ({x},{y})."
+                    $"Expected {value} to be approximately {expected}. " + $"Value: ({value.x},{value.y}). Expected: ({x},{y})."
                 );
 
-                foreach (
-                    (string pre, string post) in _prepend.Zip(
-                        _append,
-                        (preValue, postValue) => (preValue, postValue)
-                    )
-                )
+                foreach ((string pre, string post) in _prepend.Zip(_append, (preValue, postValue) => (preValue, postValue)))
                 {
                     arg = new CommandArg($"{pre}{expected.x},{expected.y},{z}{post}");
                     Assert.IsTrue(arg.TryGet(out value));
                     Assert.IsTrue(
                         Approximately(expected.x, value.x) && Approximately(expected.y, value.y),
-                        $"Expected {value} to be approximately {expected}. "
-                            + $"Value: ({value.x},{value.y}). Expected: ({x},{y})."
+                        $"Expected {value} to be approximately {expected}. " + $"Value: ({value.x},{value.y}). Expected: ({x},{y})."
                     );
                 }
             }
@@ -1504,26 +1342,17 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             arg = new CommandArg(nameof(UnityEngine.Vector2.zero));
             expected = UnityEngine.Vector2.zero;
             Assert.IsTrue(arg.TryGet(out value));
-            Assert.IsTrue(
-                Approximately(expected.x, value.x) && Approximately(expected.y, value.y),
-                $"Expected {value} to be approximately {expected}."
-            );
+            Assert.IsTrue(Approximately(expected.x, value.x) && Approximately(expected.y, value.y), $"Expected {value} to be approximately {expected}.");
 
             arg = new CommandArg(nameof(UnityEngine.Vector2.up));
             expected = UnityEngine.Vector2.up;
             Assert.IsTrue(arg.TryGet(out value));
-            Assert.IsTrue(
-                Approximately(expected.x, value.x) && Approximately(expected.y, value.y),
-                $"Expected {value} to be approximately {expected}."
-            );
+            Assert.IsTrue(Approximately(expected.x, value.x) && Approximately(expected.y, value.y), $"Expected {value} to be approximately {expected}.");
 
             arg = new CommandArg(nameof(UnityEngine.Vector2.left));
             expected = UnityEngine.Vector2.left;
             Assert.IsTrue(arg.TryGet(out value));
-            Assert.IsTrue(
-                Approximately(expected.x, value.x) && Approximately(expected.y, value.y),
-                $"Expected {value} to be approximately {expected}."
-            );
+            Assert.IsTrue(Approximately(expected.x, value.x) && Approximately(expected.y, value.y), $"Expected {value} to be approximately {expected}.");
 
             arg = new CommandArg(System.Guid.NewGuid().ToString());
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
@@ -1548,17 +1377,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             // Unexpected input
             for (int i = 0; i < NumTries; ++i)
             {
-                float x = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
+                float x = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
                 arg = new CommandArg(x.ToString(CultureInfo.InvariantCulture));
                 Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
-                foreach (
-                    (string pre, string post) in _prepend.Zip(
-                        _append,
-                        (preValue, postValue) => (preValue, postValue)
-                    )
-                )
+                foreach ((string pre, string post) in _prepend.Zip(_append, (preValue, postValue) => (preValue, postValue)))
                 {
                     arg = new CommandArg($"{pre}{x}{post}");
                     Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
@@ -1568,12 +1390,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             // x,y
             for (int i = 0; i < NumTries; ++i)
             {
-                float x = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
-                float y = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
+                float x = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
+                float y = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
                 float z = 0f;
                 expected = new Vector3(x, y);
                 arg = new CommandArg(expected.ToString());
@@ -1591,28 +1409,17 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 arg = new CommandArg($"{expected.x},{expected.y}");
                 Assert.IsTrue(arg.TryGet(out value));
                 Assert.IsTrue(
-                    Approximately(expected.x, value.x)
-                        && Approximately(expected.y, value.y)
-                        && Approximately(expected.z, value.z),
-                    $"Expected {value} to be approximately {expected}. "
-                        + $"Value: ({value.x},{value.y},{value.z}). Expected: ({x},{y},{z})."
+                    Approximately(expected.x, value.x) && Approximately(expected.y, value.y) && Approximately(expected.z, value.z),
+                    $"Expected {value} to be approximately {expected}. " + $"Value: ({value.x},{value.y},{value.z}). Expected: ({x},{y},{z})."
                 );
 
-                foreach (
-                    (string pre, string post) in _prepend.Zip(
-                        _append,
-                        (preValue, postValue) => (preValue, postValue)
-                    )
-                )
+                foreach ((string pre, string post) in _prepend.Zip(_append, (preValue, postValue) => (preValue, postValue)))
                 {
                     arg = new CommandArg($"{pre}{expected.x},{expected.y}{post}");
                     Assert.IsTrue(arg.TryGet(out value));
                     Assert.IsTrue(
-                        Approximately(expected.x, value.x)
-                            && Approximately(expected.y, value.y)
-                            && Approximately(expected.z, value.z),
-                        $"Expected {value} to be approximately {expected}. "
-                            + $"Value: ({value.x},{value.y}). Expected: ({x},{y})."
+                        Approximately(expected.x, value.x) && Approximately(expected.y, value.y) && Approximately(expected.z, value.z),
+                        $"Expected {value} to be approximately {expected}. " + $"Value: ({value.x},{value.y}). Expected: ({x},{y})."
                     );
                 }
             }
@@ -1620,15 +1427,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             // x,y,z (z is ok, but ignored)
             for (int i = 0; i < NumTries; ++i)
             {
-                float x = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
-                float y = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
-                float z = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
+                float x = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
+                float y = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
+                float z = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
                 expected = new Vector3(x, y, z);
                 arg = new CommandArg(expected.ToString());
                 Assert.IsTrue(arg.TryGet(out value));
@@ -1645,28 +1446,17 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 arg = new CommandArg($"{expected.x},{expected.y},{expected.z}");
                 Assert.IsTrue(arg.TryGet(out value));
                 Assert.IsTrue(
-                    Approximately(expected.x, value.x)
-                        && Approximately(expected.y, value.y)
-                        && Approximately(expected.z, value.z),
-                    $"Expected {value} to be approximately {expected}. "
-                        + $"Value: ({value.x},{value.y},{value.z}). Expected: ({x},{y},{z})."
+                    Approximately(expected.x, value.x) && Approximately(expected.y, value.y) && Approximately(expected.z, value.z),
+                    $"Expected {value} to be approximately {expected}. " + $"Value: ({value.x},{value.y},{value.z}). Expected: ({x},{y},{z})."
                 );
 
-                foreach (
-                    (string pre, string post) in _prepend.Zip(
-                        _append,
-                        (preValue, postValue) => (preValue, postValue)
-                    )
-                )
+                foreach ((string pre, string post) in _prepend.Zip(_append, (preValue, postValue) => (preValue, postValue)))
                 {
                     arg = new CommandArg($"{pre}{expected.x},{expected.y},{z}{post}");
                     Assert.IsTrue(arg.TryGet(out value));
                     Assert.IsTrue(
-                        Approximately(expected.x, value.x)
-                            && Approximately(expected.y, value.y)
-                            && Approximately(expected.z, value.z),
-                        $"Expected {value} to be approximately {expected}. "
-                            + $"Value: ({value.x},{value.y},{value.z}). Expected: ({x},{y},{z})."
+                        Approximately(expected.x, value.x) && Approximately(expected.y, value.y) && Approximately(expected.z, value.z),
+                        $"Expected {value} to be approximately {expected}. " + $"Value: ({value.x},{value.y},{value.z}). Expected: ({x},{y},{z})."
                     );
                 }
             }
@@ -1675,9 +1465,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             expected = UnityEngine.Vector3.zero;
             Assert.IsTrue(arg.TryGet(out value));
             Assert.IsTrue(
-                Approximately(expected.x, value.x)
-                    && Approximately(expected.y, value.y)
-                    && Approximately(expected.z, value.z),
+                Approximately(expected.x, value.x) && Approximately(expected.y, value.y) && Approximately(expected.z, value.z),
                 $"Expected {value} to be approximately {expected}."
             );
 
@@ -1685,9 +1473,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             expected = UnityEngine.Vector3.up;
             Assert.IsTrue(arg.TryGet(out value));
             Assert.IsTrue(
-                Approximately(expected.x, value.x)
-                    && Approximately(expected.y, value.y)
-                    && Approximately(expected.z, value.z),
+                Approximately(expected.x, value.x) && Approximately(expected.y, value.y) && Approximately(expected.z, value.z),
                 $"Expected {value} to be approximately {expected}."
             );
 
@@ -1695,9 +1481,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             expected = UnityEngine.Vector3.left;
             Assert.IsTrue(arg.TryGet(out value));
             Assert.IsTrue(
-                Approximately(expected.x, value.x)
-                    && Approximately(expected.y, value.y)
-                    && Approximately(expected.z, value.z),
+                Approximately(expected.x, value.x) && Approximately(expected.y, value.y) && Approximately(expected.z, value.z),
                 $"Expected {value} to be approximately {expected}."
             );
 
@@ -1705,9 +1489,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             expected = UnityEngine.Vector3.back;
             Assert.IsTrue(arg.TryGet(out value));
             Assert.IsTrue(
-                Approximately(expected.x, value.x)
-                    && Approximately(expected.y, value.y)
-                    && Approximately(expected.z, value.z),
+                Approximately(expected.x, value.x) && Approximately(expected.y, value.y) && Approximately(expected.z, value.z),
                 $"Expected {value} to be approximately {expected}."
             );
 
@@ -1715,9 +1497,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             expected = UnityEngine.Vector3.forward;
             Assert.IsTrue(arg.TryGet(out value));
             Assert.IsTrue(
-                Approximately(expected.x, value.x)
-                    && Approximately(expected.y, value.y)
-                    && Approximately(expected.z, value.z),
+                Approximately(expected.x, value.x) && Approximately(expected.y, value.y) && Approximately(expected.z, value.z),
                 $"Expected {value} to be approximately {expected}."
             );
 
@@ -1725,9 +1505,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             expected = UnityEngine.Vector3.one;
             Assert.IsTrue(arg.TryGet(out value));
             Assert.IsTrue(
-                Approximately(expected.x, value.x)
-                    && Approximately(expected.y, value.y)
-                    && Approximately(expected.z, value.z),
+                Approximately(expected.x, value.x) && Approximately(expected.y, value.y) && Approximately(expected.z, value.z),
                 $"Expected {value} to be approximately {expected}."
             );
 
@@ -1754,17 +1532,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             // Unexpected input
             for (int i = 0; i < NumTries; ++i)
             {
-                float x = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
+                float x = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
                 arg = new CommandArg(x.ToString(CultureInfo.InvariantCulture));
                 Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
-                foreach (
-                    (string pre, string post) in _prepend.Zip(
-                        _append,
-                        (preValue, postValue) => (preValue, postValue)
-                    )
-                )
+                foreach ((string pre, string post) in _prepend.Zip(_append, (preValue, postValue) => (preValue, postValue)))
                 {
                     arg = new CommandArg($"{pre}{x}{post}");
                     Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
@@ -1774,12 +1545,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             // x,y
             for (int i = 0; i < NumTries; ++i)
             {
-                float x = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
-                float y = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
+                float x = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
+                float y = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
                 float z = 0f;
                 float w = 0f;
                 expected = new Vector4(x, y);
@@ -1799,30 +1566,17 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 arg = new CommandArg($"{expected.x},{expected.y}");
                 Assert.IsTrue(arg.TryGet(out value));
                 Assert.IsTrue(
-                    Approximately(expected.x, value.x)
-                        && Approximately(expected.y, value.y)
-                        && Approximately(expected.z, value.z)
-                        && Approximately(expected.w, value.w),
-                    $"Expected {value} to be approximately {expected}. "
-                        + $"Value: ({value.x},{value.y},{value.z},{value.w}). Expected: ({x},{y},{z},{w})."
+                    Approximately(expected.x, value.x) && Approximately(expected.y, value.y) && Approximately(expected.z, value.z) && Approximately(expected.w, value.w),
+                    $"Expected {value} to be approximately {expected}. " + $"Value: ({value.x},{value.y},{value.z},{value.w}). Expected: ({x},{y},{z},{w})."
                 );
 
-                foreach (
-                    (string pre, string post) in _prepend.Zip(
-                        _append,
-                        (preValue, postValue) => (preValue, postValue)
-                    )
-                )
+                foreach ((string pre, string post) in _prepend.Zip(_append, (preValue, postValue) => (preValue, postValue)))
                 {
                     arg = new CommandArg($"{pre}{expected.x},{expected.y}{post}");
                     Assert.IsTrue(arg.TryGet(out value));
                     Assert.IsTrue(
-                        Approximately(expected.x, value.x)
-                            && Approximately(expected.y, value.y)
-                            && Approximately(expected.z, value.z)
-                            && Approximately(expected.w, value.w),
-                        $"Expected {value} to be approximately {expected}. "
-                            + $"Value: ({value.x},{value.y},{value.z},{value.w}). Expected: ({x},{y},{z},{w})."
+                        Approximately(expected.x, value.x) && Approximately(expected.y, value.y) && Approximately(expected.z, value.z) && Approximately(expected.w, value.w),
+                        $"Expected {value} to be approximately {expected}. " + $"Value: ({value.x},{value.y},{value.z},{value.w}). Expected: ({x},{y},{z},{w})."
                     );
                 }
             }
@@ -1830,15 +1584,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             // x,y,z
             for (int i = 0; i < NumTries; ++i)
             {
-                float x = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
-                float y = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
-                float z = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
+                float x = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
+                float y = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
+                float z = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
                 float w = 0f;
                 expected = new Vector4(x, y, z);
                 arg = new CommandArg(expected.ToString());
@@ -1857,30 +1605,17 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 arg = new CommandArg($"{expected.x},{expected.y},{expected.z}");
                 Assert.IsTrue(arg.TryGet(out value));
                 Assert.IsTrue(
-                    Approximately(expected.x, value.x)
-                        && Approximately(expected.y, value.y)
-                        && Approximately(expected.z, value.z)
-                        && Approximately(expected.w, value.w),
-                    $"Expected {value} to be approximately {expected}. "
-                        + $"Value: ({value.x},{value.y},{value.z},{value.w}). Expected: ({x},{y},{z},{w})."
+                    Approximately(expected.x, value.x) && Approximately(expected.y, value.y) && Approximately(expected.z, value.z) && Approximately(expected.w, value.w),
+                    $"Expected {value} to be approximately {expected}. " + $"Value: ({value.x},{value.y},{value.z},{value.w}). Expected: ({x},{y},{z},{w})."
                 );
 
-                foreach (
-                    (string pre, string post) in _prepend.Zip(
-                        _append,
-                        (preValue, postValue) => (preValue, postValue)
-                    )
-                )
+                foreach ((string pre, string post) in _prepend.Zip(_append, (preValue, postValue) => (preValue, postValue)))
                 {
                     arg = new CommandArg($"{pre}{expected.x},{expected.y},{z}{post}");
                     Assert.IsTrue(arg.TryGet(out value));
                     Assert.IsTrue(
-                        Approximately(expected.x, value.x)
-                            && Approximately(expected.y, value.y)
-                            && Approximately(expected.z, value.z)
-                            && Approximately(expected.w, value.w),
-                        $"Expected {value} to be approximately {expected}. "
-                            + $"Value: ({value.x},{value.y},{value.z},{value.w}). Expected: ({x},{y},{z},{w})."
+                        Approximately(expected.x, value.x) && Approximately(expected.y, value.y) && Approximately(expected.z, value.z) && Approximately(expected.w, value.w),
+                        $"Expected {value} to be approximately {expected}. " + $"Value: ({value.x},{value.y},{value.z},{value.w}). Expected: ({x},{y},{z},{w})."
                     );
                 }
             }
@@ -1888,18 +1623,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             // x,y,z,w
             for (int i = 0; i < NumTries; ++i)
             {
-                float x = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
-                float y = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
-                float z = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
-                float w = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
+                float x = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
+                float y = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
+                float z = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
+                float w = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
                 expected = new Vector4(x, y, z, w);
                 arg = new CommandArg(expected.ToString());
                 Assert.IsTrue(arg.TryGet(out value));
@@ -1917,32 +1644,17 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 arg = new CommandArg($"{expected.x},{expected.y},{expected.z},{expected.w}");
                 Assert.IsTrue(arg.TryGet(out value));
                 Assert.IsTrue(
-                    Approximately(expected.x, value.x)
-                        && Approximately(expected.y, value.y)
-                        && Approximately(expected.z, value.z)
-                        && Approximately(expected.w, value.w),
-                    $"Expected {value} to be approximately {expected}. "
-                        + $"Value: ({value.x},{value.y},{value.z},{value.w}). Expected: ({x},{y},{z},{w})."
+                    Approximately(expected.x, value.x) && Approximately(expected.y, value.y) && Approximately(expected.z, value.z) && Approximately(expected.w, value.w),
+                    $"Expected {value} to be approximately {expected}. " + $"Value: ({value.x},{value.y},{value.z},{value.w}). Expected: ({x},{y},{z},{w})."
                 );
 
-                foreach (
-                    (string pre, string post) in _prepend.Zip(
-                        _append,
-                        (preValue, postValue) => (preValue, postValue)
-                    )
-                )
+                foreach ((string pre, string post) in _prepend.Zip(_append, (preValue, postValue) => (preValue, postValue)))
                 {
-                    arg = new CommandArg(
-                        $"{pre}{expected.x},{expected.y},{expected.z},{expected.w}{post}"
-                    );
+                    arg = new CommandArg($"{pre}{expected.x},{expected.y},{expected.z},{expected.w}{post}");
                     Assert.IsTrue(arg.TryGet(out value));
                     Assert.IsTrue(
-                        Approximately(expected.x, value.x)
-                            && Approximately(expected.y, value.y)
-                            && Approximately(expected.z, value.z)
-                            && Approximately(expected.w, value.w),
-                        $"Expected {value} to be approximately {expected}. "
-                            + $"Value: ({value.x},{value.y},{value.z},{value.w}). Expected: ({x},{y},{z},{w})."
+                        Approximately(expected.x, value.x) && Approximately(expected.y, value.y) && Approximately(expected.z, value.z) && Approximately(expected.w, value.w),
+                        $"Expected {value} to be approximately {expected}. " + $"Value: ({value.x},{value.y},{value.z},{value.w}). Expected: ({x},{y},{z},{w})."
                     );
                 }
             }
@@ -1951,20 +1663,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             expected = UnityEngine.Vector4.zero;
             Assert.IsTrue(arg.TryGet(out value));
             Assert.IsTrue(
-                Approximately(expected.x, value.x)
-                    && Approximately(expected.y, value.y)
-                    && Approximately(expected.z, value.z)
-                    && Approximately(expected.w, value.w),
+                Approximately(expected.x, value.x) && Approximately(expected.y, value.y) && Approximately(expected.z, value.z) && Approximately(expected.w, value.w),
                 $"Expected {value} to be approximately {expected}."
             );
             arg = new CommandArg(UnityEngine.Vector4.zero.ToString());
             expected = UnityEngine.Vector4.zero;
             Assert.IsTrue(arg.TryGet(out value));
             Assert.IsTrue(
-                Approximately(expected.x, value.x)
-                    && Approximately(expected.y, value.y)
-                    && Approximately(expected.z, value.z)
-                    && Approximately(expected.w, value.w),
+                Approximately(expected.x, value.x) && Approximately(expected.y, value.y) && Approximately(expected.z, value.z) && Approximately(expected.w, value.w),
                 $"Expected {value} to be approximately {expected}."
             );
 
@@ -1972,20 +1678,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             expected = UnityEngine.Vector4.negativeInfinity;
             Assert.IsTrue(arg.TryGet(out value));
             Assert.IsTrue(
-                Approximately(expected.x, value.x)
-                    && Approximately(expected.y, value.y)
-                    && Approximately(expected.z, value.z)
-                    && Approximately(expected.w, value.w),
+                Approximately(expected.x, value.x) && Approximately(expected.y, value.y) && Approximately(expected.z, value.z) && Approximately(expected.w, value.w),
                 $"Expected {value} to be approximately {expected}."
             );
             arg = new CommandArg(UnityEngine.Vector4.negativeInfinity.ToString());
             expected = UnityEngine.Vector4.negativeInfinity;
             Assert.IsTrue(arg.TryGet(out value));
             Assert.IsTrue(
-                Approximately(expected.x, value.x)
-                    && Approximately(expected.y, value.y)
-                    && Approximately(expected.z, value.z)
-                    && Approximately(expected.w, value.w),
+                Approximately(expected.x, value.x) && Approximately(expected.y, value.y) && Approximately(expected.z, value.z) && Approximately(expected.w, value.w),
                 $"Expected {value} to be approximately {expected}."
             );
 
@@ -1993,20 +1693,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             expected = UnityEngine.Vector4.positiveInfinity;
             Assert.IsTrue(arg.TryGet(out value));
             Assert.IsTrue(
-                Approximately(expected.x, value.x)
-                    && Approximately(expected.y, value.y)
-                    && Approximately(expected.z, value.z)
-                    && Approximately(expected.w, value.w),
+                Approximately(expected.x, value.x) && Approximately(expected.y, value.y) && Approximately(expected.z, value.z) && Approximately(expected.w, value.w),
                 $"Expected {value} to be approximately {expected}."
             );
             arg = new CommandArg(UnityEngine.Vector4.positiveInfinity.ToString());
             expected = UnityEngine.Vector4.positiveInfinity;
             Assert.IsTrue(arg.TryGet(out value));
             Assert.IsTrue(
-                Approximately(expected.x, value.x)
-                    && Approximately(expected.y, value.y)
-                    && Approximately(expected.z, value.z)
-                    && Approximately(expected.w, value.w),
+                Approximately(expected.x, value.x) && Approximately(expected.y, value.y) && Approximately(expected.z, value.z) && Approximately(expected.w, value.w),
                 $"Expected {value} to be approximately {expected}."
             );
 
@@ -2194,17 +1888,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             // Unexpected input
             for (int i = 0; i < NumTries; ++i)
             {
-                float x = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
+                float x = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
                 arg = new CommandArg(x.ToString(CultureInfo.InvariantCulture));
                 Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
-                foreach (
-                    (string pre, string post) in _prepend.Zip(
-                        _append,
-                        (preValue, postValue) => (preValue, postValue)
-                    )
-                )
+                foreach ((string pre, string post) in _prepend.Zip(_append, (preValue, postValue) => (preValue, postValue)))
                 {
                     arg = new CommandArg($"{pre}{x}{post}");
                     Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
@@ -2216,18 +1903,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             // x,y,z, w (z is ok, but ignored)
             for (int i = 0; i < NumTries; ++i)
             {
-                float x = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
-                float y = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
-                float z = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
-                float w = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
+                float x = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
+                float y = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
+                float z = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
+                float w = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
                 expected = new Quaternion(x, y, z, w);
                 arg = new CommandArg(expected.ToString());
                 Assert.IsTrue(arg.TryGet(out value));
@@ -2245,29 +1924,18 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 arg = new CommandArg($"{x},{y},{z},{w}");
                 Assert.IsTrue(arg.TryGet(out value));
                 Assert.IsTrue(
-                    Approximately(expected.x, value.x)
-                        && Approximately(expected.y, value.y)
-                        && Approximately(expected.z, value.z)
-                        && Approximately(expected.w, value.w),
+                    Approximately(expected.x, value.x) && Approximately(expected.y, value.y) && Approximately(expected.z, value.z) && Approximately(expected.w, value.w),
                     $"Expected {value} to be approximately {expected}. "
                         + $"Value: ({value.x},{value.y},{value.z},{value.w}). "
                         + $"Expected: ({expected.x},{expected.y},{expected.z},{expected.w})."
                 );
 
-                foreach (
-                    (string pre, string post) in _prepend.Zip(
-                        _append,
-                        (preValue, postValue) => (preValue, postValue)
-                    )
-                )
+                foreach ((string pre, string post) in _prepend.Zip(_append, (preValue, postValue) => (preValue, postValue)))
                 {
                     arg = new CommandArg($"{pre}{x},{y},{z},{w}{post}");
                     Assert.IsTrue(arg.TryGet(out value));
                     Assert.IsTrue(
-                        Approximately(expected.x, value.x)
-                            && Approximately(expected.y, value.y)
-                            && Approximately(expected.z, value.z)
-                            && Approximately(expected.w, value.w),
+                        Approximately(expected.x, value.x) && Approximately(expected.y, value.y) && Approximately(expected.z, value.z) && Approximately(expected.w, value.w),
                         $"Expected {value} to be approximately {expected}. "
                             + $"Value: ({value.x},{value.y},{value.z},{value.w}). "
                             + $"Expected: ({expected.x},{expected.y},{expected.z},{expected.w})."
@@ -2279,10 +1947,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             expected = UnityEngine.Quaternion.identity;
             Assert.IsTrue(arg.TryGet(out value));
             Assert.IsTrue(
-                Approximately(expected.x, value.x)
-                    && Approximately(expected.y, value.y)
-                    && Approximately(expected.z, value.z)
-                    && Approximately(expected.w, value.w),
+                Approximately(expected.x, value.x) && Approximately(expected.y, value.y) && Approximately(expected.z, value.z) && Approximately(expected.w, value.w),
                 $"Expected {value} to be approximately {expected}. "
                     + $"Value: ({value.x},{value.y},{value.z},{value.w}). "
                     + $"Expected: ({expected.x},{expected.y},{expected.z},{expected.w})."
@@ -2361,12 +2026,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                         + $"Expected: ({expected.r},{expected.g},{expected.b},{expected.a})."
                 );
 
-                foreach (
-                    (string pre, string post) in _prepend.Zip(
-                        _append,
-                        (preValue, postValue) => (preValue, postValue)
-                    )
-                )
+                foreach ((string pre, string post) in _prepend.Zip(_append, (preValue, postValue) => (preValue, postValue)))
                 {
                     arg = new CommandArg($"{pre}{r},{g},{b}{post}");
                     Assert.IsTrue(arg.TryGet(out value));
@@ -2398,9 +2058,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                         && Approximately(expected.g, value.g, 0.001f)
                         && Approximately(expected.b, value.b, 0.001f)
                         && Approximately(expected.a, value.a, 0.001f),
-                    $"Expected {value} to be approximately {expected}. "
-                        + $"Value: ({r},{g},{b},{a}). "
-                        + $"Expected: ({expected.r},{expected.g},{expected.b},{expected.a})."
+                    $"Expected {value} to be approximately {expected}. " + $"Value: ({r},{g},{b},{a}). " + $"Expected: ({expected.r},{expected.g},{expected.b},{expected.a})."
                 );
 
                 arg = new CommandArg($"{r},{g},{b},{a}");
@@ -2410,17 +2068,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                         && Approximately(expected.g, value.g, 0.001f)
                         && Approximately(expected.b, value.b, 0.001f)
                         && Approximately(expected.a, value.a, 0.001f),
-                    $"Expected {value} to be approximately {expected}. "
-                        + $"Value: ({r},{g},{b},{a}). "
-                        + $"Expected: ({expected.r},{expected.g},{expected.b},{expected.a})."
+                    $"Expected {value} to be approximately {expected}. " + $"Value: ({r},{g},{b},{a}). " + $"Expected: ({expected.r},{expected.g},{expected.b},{expected.a})."
                 );
 
-                foreach (
-                    (string pre, string post) in _prepend.Zip(
-                        _append,
-                        (preValue, postValue) => (preValue, postValue)
-                    )
-                )
+                foreach ((string pre, string post) in _prepend.Zip(_append, (preValue, postValue) => (preValue, postValue)))
                 {
                     arg = new CommandArg($"{pre}{r},{g},{b},{a}{post}");
                     Assert.IsTrue(arg.TryGet(out value));
@@ -2429,9 +2080,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                             && Approximately(expected.g, value.g, 0.001f)
                             && Approximately(expected.b, value.b, 0.001f)
                             && Approximately(expected.a, value.a, 0.001f),
-                        $"Expected {value} to be approximately {expected}. "
-                            + $"Value: ({r},{g},{b},{a}). "
-                            + $"Expected: ({expected.r},{expected.g},{expected.b},{expected.a})."
+                        $"Expected {value} to be approximately {expected}. " + $"Value: ({r},{g},{b},{a}). " + $"Expected: ({expected.r},{expected.g},{expected.b},{expected.a})."
                     );
                 }
             }
@@ -2450,10 +2099,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void Complex()
         {
             CommandArg arg = new("");
-            Assert.IsFalse(
-                arg.TryGet(out System.Numerics.Complex value),
-                $"Unexpectedly parsed {value}"
-            );
+            Assert.IsFalse(arg.TryGet(out System.Numerics.Complex value), $"Unexpectedly parsed {value}");
             arg = new CommandArg("5");
             Assert.IsFalse(arg.TryGet(out value), $"Unexpectedly parsed {value}");
 
@@ -2462,32 +2108,17 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             for (int i = 0; i < NumTries; ++i)
             {
                 double real = _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue);
-                double imaginary =
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue);
+                double imaginary = _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue);
                 expected = new System.Numerics.Complex(real, imaginary);
 
-                arg = new CommandArg(
-                    $"{real.ToString("R", CultureInfo.InvariantCulture)}"
-                        + $",{imaginary.ToString("R", CultureInfo.InvariantCulture)}"
-                );
+                arg = new CommandArg($"{real.ToString("R", CultureInfo.InvariantCulture)}" + $",{imaginary.ToString("R", CultureInfo.InvariantCulture)}");
                 Assert.IsTrue(arg.TryGet(out value), $"Failed to parse {arg.contents} as Complex");
                 AssertComplexRoundTrips(expected, value);
 
-                foreach (
-                    (string pre, string post) in _prepend.Zip(
-                        _append,
-                        (preValue, postValue) => (preValue, postValue)
-                    )
-                )
+                foreach ((string pre, string post) in _prepend.Zip(_append, (preValue, postValue) => (preValue, postValue)))
                 {
-                    arg = new CommandArg(
-                        $"{pre}{real.ToString("R", CultureInfo.InvariantCulture)}"
-                            + $",{imaginary.ToString("R", CultureInfo.InvariantCulture)}{post}"
-                    );
-                    Assert.IsTrue(
-                        arg.TryGet(out value),
-                        $"Failed to parse {arg.contents} as Complex"
-                    );
+                    arg = new CommandArg($"{pre}{real.ToString("R", CultureInfo.InvariantCulture)}" + $",{imaginary.ToString("R", CultureInfo.InvariantCulture)}{post}");
+                    Assert.IsTrue(arg.TryGet(out value), $"Failed to parse {arg.contents} as Complex");
                     AssertComplexRoundTrips(expected, value);
                 }
             }
@@ -2527,28 +2158,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             for (int i = 0; i < NumTries; ++i)
             {
-                float centerX = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
-                float centerY = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
-                float centerZ = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
-                float sizeX = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
-                float sizeY = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
-                float sizeZ = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
-                expected = new Bounds(
-                    new Vector3(centerX, centerY, centerZ),
-                    new Vector3(sizeX, sizeY, sizeZ)
-                );
+                float centerX = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
+                float centerY = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
+                float centerZ = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
+                float sizeX = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
+                float sizeY = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
+                float sizeZ = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
+                expected = new Bounds(new Vector3(centerX, centerY, centerZ), new Vector3(sizeX, sizeY, sizeZ));
 
                 arg = new CommandArg(
                     $"{centerX.ToString(CultureInfo.InvariantCulture)}"
@@ -2569,12 +2185,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     $"Expected {value} to be approximately {expected}"
                 );
 
-                foreach (
-                    (string pre, string post) in _prepend.Zip(
-                        _append,
-                        (preValue, postValue) => (preValue, postValue)
-                    )
-                )
+                foreach ((string pre, string post) in _prepend.Zip(_append, (preValue, postValue) => (preValue, postValue)))
                 {
                     arg = new CommandArg(
                         $"{pre}{centerX.ToString(CultureInfo.InvariantCulture)}"
@@ -2584,10 +2195,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                             + $",{sizeY.ToString(CultureInfo.InvariantCulture)}"
                             + $",{sizeZ.ToString(CultureInfo.InvariantCulture)}{post}"
                     );
-                    Assert.IsTrue(
-                        arg.TryGet(out value),
-                        $"Failed to parse {arg.contents} as Bounds"
-                    );
+                    Assert.IsTrue(arg.TryGet(out value), $"Failed to parse {arg.contents} as Bounds");
                     Assert.IsTrue(
                         Approximately(expected.center.x, value.center.x)
                             && Approximately(expected.center.y, value.center.y)
@@ -2602,9 +2210,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             foreach (char delimiter in CommandArg.Delimiters)
             {
-                arg = new CommandArg(
-                    $"1{delimiter}2{delimiter}3{delimiter}4{delimiter}5{delimiter}6"
-                );
+                arg = new CommandArg($"1{delimiter}2{delimiter}3{delimiter}4{delimiter}5{delimiter}6");
                 Assert.IsTrue(arg.TryGet(out value), $"Failed to parse {arg.contents} as Bounds");
                 Assert.IsTrue(
                     Approximately(1f, value.center.x)
@@ -2620,28 +2226,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             // The Unity ToString form prints center plus extents (half the size).
             for (int i = 0; i < NumTries; ++i)
             {
-                float centerX = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
-                float centerY = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
-                float centerZ = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
-                float sizeX = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
-                float sizeY = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
-                float sizeZ = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
-                expected = new Bounds(
-                    new Vector3(centerX, centerY, centerZ),
-                    new Vector3(sizeX, sizeY, sizeZ)
-                );
+                float centerX = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
+                float centerY = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
+                float centerZ = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
+                float sizeX = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
+                float sizeY = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
+                float sizeZ = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
+                expected = new Bounds(new Vector3(centerX, centerY, centerZ), new Vector3(sizeX, sizeY, sizeZ));
                 arg = new CommandArg(expected.ToString());
                 Assert.IsTrue(arg.TryGet(out value), $"Failed to parse {arg.contents} as Bounds");
                 /*
@@ -2690,35 +2281,17 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 int sizeX = _random.Next(short.MinValue, short.MaxValue);
                 int sizeY = _random.Next(short.MinValue, short.MaxValue);
                 int sizeZ = _random.Next(short.MinValue, short.MaxValue);
-                expected = new BoundsInt(
-                    new Vector3Int(positionX, positionY, positionZ),
-                    new Vector3Int(sizeX, sizeY, sizeZ)
-                );
+                expected = new BoundsInt(new Vector3Int(positionX, positionY, positionZ), new Vector3Int(sizeX, sizeY, sizeZ));
 
-                arg = new CommandArg(
-                    $"{positionX},{positionY},{positionZ},{sizeX},{sizeY},{sizeZ}"
-                );
-                Assert.IsTrue(
-                    arg.TryGet(out value),
-                    $"Failed to parse {arg.contents} as BoundsInt"
-                );
+                arg = new CommandArg($"{positionX},{positionY},{positionZ},{sizeX},{sizeY},{sizeZ}");
+                Assert.IsTrue(arg.TryGet(out value), $"Failed to parse {arg.contents} as BoundsInt");
                 Assert.AreEqual(expected.position, value.position);
                 Assert.AreEqual(expected.size, value.size);
 
-                foreach (
-                    (string pre, string post) in _prepend.Zip(
-                        _append,
-                        (preValue, postValue) => (preValue, postValue)
-                    )
-                )
+                foreach ((string pre, string post) in _prepend.Zip(_append, (preValue, postValue) => (preValue, postValue)))
                 {
-                    arg = new CommandArg(
-                        $"{pre}{positionX},{positionY},{positionZ},{sizeX},{sizeY},{sizeZ}{post}"
-                    );
-                    Assert.IsTrue(
-                        arg.TryGet(out value),
-                        $"Failed to parse {arg.contents} as BoundsInt"
-                    );
+                    arg = new CommandArg($"{pre}{positionX},{positionY},{positionZ},{sizeX},{sizeY},{sizeZ}{post}");
+                    Assert.IsTrue(arg.TryGet(out value), $"Failed to parse {arg.contents} as BoundsInt");
                     Assert.AreEqual(expected.position, value.position);
                     Assert.AreEqual(expected.size, value.size);
                 }
@@ -2726,13 +2299,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             foreach (char delimiter in CommandArg.Delimiters)
             {
-                arg = new CommandArg(
-                    $"1{delimiter}2{delimiter}3{delimiter}4{delimiter}5{delimiter}6"
-                );
-                Assert.IsTrue(
-                    arg.TryGet(out value),
-                    $"Failed to parse {arg.contents} as BoundsInt"
-                );
+                arg = new CommandArg($"1{delimiter}2{delimiter}3{delimiter}4{delimiter}5{delimiter}6");
+                Assert.IsTrue(arg.TryGet(out value), $"Failed to parse {arg.contents} as BoundsInt");
                 Assert.AreEqual(new Vector3Int(1, 2, 3), value.position);
                 Assert.AreEqual(new Vector3Int(4, 5, 6), value.size);
             }
@@ -2745,15 +2313,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 int sizeX = _random.Next(short.MinValue, short.MaxValue);
                 int sizeY = _random.Next(short.MinValue, short.MaxValue);
                 int sizeZ = _random.Next(short.MinValue, short.MaxValue);
-                expected = new BoundsInt(
-                    new Vector3Int(positionX, positionY, positionZ),
-                    new Vector3Int(sizeX, sizeY, sizeZ)
-                );
+                expected = new BoundsInt(new Vector3Int(positionX, positionY, positionZ), new Vector3Int(sizeX, sizeY, sizeZ));
                 arg = new CommandArg(expected.ToString());
-                Assert.IsTrue(
-                    arg.TryGet(out value),
-                    $"Failed to parse {arg.contents} as BoundsInt"
-                );
+                Assert.IsTrue(arg.TryGet(out value), $"Failed to parse {arg.contents} as BoundsInt");
                 Assert.AreEqual(expected.position, value.position);
                 Assert.AreEqual(expected.size, value.size);
             }
@@ -2787,27 +2349,16 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 RectOffset expected = new(left, right, top, bottom);
 
                 arg = new CommandArg($"{left},{right},{top},{bottom}");
-                Assert.IsTrue(
-                    arg.TryGet(out value),
-                    $"Failed to parse {arg.contents} as RectOffset"
-                );
+                Assert.IsTrue(arg.TryGet(out value), $"Failed to parse {arg.contents} as RectOffset");
                 Assert.AreEqual(expected.left, value.left);
                 Assert.AreEqual(expected.right, value.right);
                 Assert.AreEqual(expected.top, value.top);
                 Assert.AreEqual(expected.bottom, value.bottom);
 
-                foreach (
-                    (string pre, string post) in _prepend.Zip(
-                        _append,
-                        (preValue, postValue) => (preValue, postValue)
-                    )
-                )
+                foreach ((string pre, string post) in _prepend.Zip(_append, (preValue, postValue) => (preValue, postValue)))
                 {
                     arg = new CommandArg($"{pre}{left},{right},{top},{bottom}{post}");
-                    Assert.IsTrue(
-                        arg.TryGet(out value),
-                        $"Failed to parse {arg.contents} as RectOffset"
-                    );
+                    Assert.IsTrue(arg.TryGet(out value), $"Failed to parse {arg.contents} as RectOffset");
                     Assert.AreEqual(expected.left, value.left);
                     Assert.AreEqual(expected.right, value.right);
                     Assert.AreEqual(expected.top, value.top);
@@ -2818,10 +2369,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             foreach (char delimiter in CommandArg.Delimiters)
             {
                 arg = new CommandArg($"4{delimiter}8{delimiter}2{delimiter}6");
-                Assert.IsTrue(
-                    arg.TryGet(out value),
-                    $"Failed to parse {arg.contents} as RectOffset"
-                );
+                Assert.IsTrue(arg.TryGet(out value), $"Failed to parse {arg.contents} as RectOffset");
                 Assert.AreEqual(4, value.left);
                 Assert.AreEqual(8, value.right);
                 Assert.AreEqual(2, value.top);
@@ -2859,9 +2407,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 float normalX = (float)(_random.NextDouble() * 2 - 1);
                 float normalY = (float)(_random.NextDouble() * 2 - 1);
                 float normalZ = (float)(_random.NextDouble() * 2 - 1);
-                float distance = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
+                float distance = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
                 Vector3 normal = new(normalX, normalY, normalZ);
                 if (normal == UnityEngine.Vector3.zero)
                 {
@@ -2886,12 +2432,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     $"Expected {value} to be approximately {expected}"
                 );
 
-                foreach (
-                    (string pre, string post) in _prepend.Zip(
-                        _append,
-                        (preValue, postValue) => (preValue, postValue)
-                    )
-                )
+                foreach ((string pre, string post) in _prepend.Zip(_append, (preValue, postValue) => (preValue, postValue)))
                 {
                     arg = new CommandArg(
                         $"{pre}{normal.x.ToString(CultureInfo.InvariantCulture)}"
@@ -2899,10 +2440,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                             + $",{normal.z.ToString(CultureInfo.InvariantCulture)}"
                             + $",{distance.ToString(CultureInfo.InvariantCulture)}{post}"
                     );
-                    Assert.IsTrue(
-                        arg.TryGet(out value),
-                        $"Failed to parse {arg.contents} as Plane"
-                    );
+                    Assert.IsTrue(arg.TryGet(out value), $"Failed to parse {arg.contents} as Plane");
                     Assert.IsTrue(
                         Approximately(expected.normal.x, value.normal.x)
                             && Approximately(expected.normal.y, value.normal.y)
@@ -2918,10 +2456,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 arg = new CommandArg($"0{delimiter}1{delimiter}0{delimiter}5");
                 Assert.IsTrue(arg.TryGet(out value), $"Failed to parse {arg.contents} as Plane");
                 Assert.IsTrue(
-                    Approximately(0f, value.normal.x)
-                        && Approximately(1f, value.normal.y)
-                        && Approximately(0f, value.normal.z)
-                        && Approximately(5f, value.distance),
+                    Approximately(0f, value.normal.x) && Approximately(1f, value.normal.y) && Approximately(0f, value.normal.z) && Approximately(5f, value.distance),
                     $"Expected normal (0, 1, 0) and distance 5, got {value}"
                 );
             }
@@ -2931,9 +2466,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 float normalX = (float)(_random.NextDouble() * 2 - 1);
                 float normalY = (float)(_random.NextDouble() * 2 - 1);
                 float normalZ = (float)(_random.NextDouble() * 2 - 1);
-                float distance = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
+                float distance = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
                 Vector3 normal = new(normalX, normalY, normalZ);
                 if (normal == UnityEngine.Vector3.zero)
                 {
@@ -2975,22 +2508,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             for (int i = 0; i < NumTries; ++i)
             {
-                float originX = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
-                float originY = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
-                float originZ = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
+                float originX = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
+                float originY = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
+                float originZ = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
                 float directionX = (float)(_random.NextDouble() * 2 - 1);
                 float directionY = (float)(_random.NextDouble() * 2 - 1);
                 float directionZ = (float)(_random.NextDouble() * 2 - 1);
-                expected = new Ray(
-                    new Vector3(originX, originY, originZ),
-                    new Vector3(directionX, directionY, directionZ)
-                );
+                expected = new Ray(new Vector3(originX, originY, originZ), new Vector3(directionX, directionY, directionZ));
 
                 arg = new CommandArg(
                     $"{originX.ToString(CultureInfo.InvariantCulture)}"
@@ -3011,12 +2535,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     $"Expected {value} to be approximately {expected}"
                 );
 
-                foreach (
-                    (string pre, string post) in _prepend.Zip(
-                        _append,
-                        (preValue, postValue) => (preValue, postValue)
-                    )
-                )
+                foreach ((string pre, string post) in _prepend.Zip(_append, (preValue, postValue) => (preValue, postValue)))
                 {
                     arg = new CommandArg(
                         $"{pre}{originX.ToString(CultureInfo.InvariantCulture)}"
@@ -3041,9 +2560,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             foreach (char delimiter in CommandArg.Delimiters)
             {
-                arg = new CommandArg(
-                    $"0{delimiter}0{delimiter}0{delimiter}0{delimiter}1{delimiter}0"
-                );
+                arg = new CommandArg($"0{delimiter}0{delimiter}0{delimiter}0{delimiter}1{delimiter}0");
                 Assert.IsTrue(arg.TryGet(out value), $"Failed to parse {arg.contents} as Ray");
                 Assert.IsTrue(
                     Approximately(0f, value.origin.x)
@@ -3058,22 +2575,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             for (int i = 0; i < NumTries; ++i)
             {
-                float originX = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
-                float originY = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
-                float originZ = (float)(
-                    _random.NextDouble() * _random.Next(short.MinValue, short.MaxValue)
-                );
+                float originX = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
+                float originY = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
+                float originZ = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
                 float directionX = (float)(_random.NextDouble() * 2 - 1);
                 float directionY = (float)(_random.NextDouble() * 2 - 1);
                 float directionZ = (float)(_random.NextDouble() * 2 - 1);
-                expected = new Ray(
-                    new Vector3(originX, originY, originZ),
-                    new Vector3(directionX, directionY, directionZ)
-                );
+                expected = new Ray(new Vector3(originX, originY, originZ), new Vector3(directionX, directionY, directionZ));
                 arg = new CommandArg(expected.ToString());
                 Assert.IsTrue(arg.TryGet(out value), $"Failed to parse {arg.contents} as Ray");
                 Assert.IsTrue(
@@ -3122,39 +2630,20 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 (typeof(ushort), "5", parsed => Equals(parsed, (ushort)5)),
                 (typeof(byte), "2", parsed => Equals(parsed, (byte)2)),
                 (typeof(sbyte), "-2", parsed => Equals(parsed, (sbyte)-2)),
-                (
-                    typeof(Guid),
-                    "6f9619ff-8b86-d011-b42d-00c04fc964ff",
-                    parsed => Equals(parsed, new Guid("6f9619ff-8b86-d011-b42d-00c04fc964ff"))
-                ),
+                (typeof(Guid), "6f9619ff-8b86-d011-b42d-00c04fc964ff", parsed => Equals(parsed, new Guid("6f9619ff-8b86-d011-b42d-00c04fc964ff"))),
                 (
                     typeof(DateTime),
                     "2026-01-02T03:04:05.0000000Z",
                     parsed =>
-                        Equals(
-                            parsed,
-                            new DateTime(2026, 1, 2, 3, 4, 5, DateTimeKind.Utc).ToLocalTime()
-                        ) || Equals(parsed, new DateTime(2026, 1, 2, 3, 4, 5, DateTimeKind.Utc))
+                        Equals(parsed, new DateTime(2026, 1, 2, 3, 4, 5, DateTimeKind.Utc).ToLocalTime()) || Equals(parsed, new DateTime(2026, 1, 2, 3, 4, 5, DateTimeKind.Utc))
                 ),
-                (
-                    typeof(DateTimeOffset),
-                    "2026-01-02T03:04:05+00:00",
-                    parsed => Equals(parsed, new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero))
-                ),
+                (typeof(DateTimeOffset), "2026-01-02T03:04:05+00:00", parsed => Equals(parsed, new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero))),
                 (typeof(char), "x", parsed => Equals(parsed, 'x')),
                 (typeof(decimal), "1.5", parsed => Equals(parsed, 1.5m)),
-                (
-                    typeof(System.Numerics.BigInteger),
-                    "42",
-                    parsed => Equals(parsed, new System.Numerics.BigInteger(42))
-                ),
+                (typeof(System.Numerics.BigInteger), "42", parsed => Equals(parsed, new System.Numerics.BigInteger(42))),
                 (typeof(TimeSpan), "00:00:03", parsed => Equals(parsed, TimeSpan.FromSeconds(3))),
                 (typeof(Version), "1.2", parsed => Equals(parsed, new Version(1, 2))),
-                (
-                    typeof(System.Net.IPAddress),
-                    "127.0.0.1",
-                    parsed => Equals(parsed, System.Net.IPAddress.Loopback)
-                ),
+                (typeof(System.Net.IPAddress), "127.0.0.1", parsed => Equals(parsed, System.Net.IPAddress.Loopback)),
                 (
                     typeof(Vector2),
                     "1.5, 2.5",
@@ -3170,9 +2659,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     parsed =>
                     {
                         Vector3 vector = (Vector3)parsed;
-                        return Approximately(1.5f, vector.x)
-                            && Approximately(2.5f, vector.y)
-                            && Approximately(3.5f, vector.z);
+                        return Approximately(1.5f, vector.x) && Approximately(2.5f, vector.y) && Approximately(3.5f, vector.z);
                     }
                 ),
                 (
@@ -3181,10 +2668,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     parsed =>
                     {
                         Vector4 vector = (Vector4)parsed;
-                        return Approximately(1.5f, vector.x)
-                            && Approximately(2.5f, vector.y)
-                            && Approximately(3.5f, vector.z)
-                            && Approximately(4.5f, vector.w);
+                        return Approximately(1.5f, vector.x) && Approximately(2.5f, vector.y) && Approximately(3.5f, vector.z) && Approximately(4.5f, vector.w);
                     }
                 ),
                 (typeof(Vector2Int), "1, 2", parsed => Equals(parsed, new Vector2Int(1, 2))),
@@ -3195,10 +2679,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     parsed =>
                     {
                         Color color = (Color)parsed;
-                        return Approximately(1f, color.r)
-                            && Approximately(0f, color.g)
-                            && Approximately(0f, color.b)
-                            && Approximately(1f, color.a);
+                        return Approximately(1f, color.r) && Approximately(0f, color.g) && Approximately(0f, color.b) && Approximately(1f, color.a);
                     }
                 ),
                 (
@@ -3207,10 +2688,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     parsed =>
                     {
                         Quaternion quaternion = (Quaternion)parsed;
-                        return Approximately(0f, quaternion.x)
-                            && Approximately(0f, quaternion.y)
-                            && Approximately(0f, quaternion.z)
-                            && Approximately(1f, quaternion.w);
+                        return Approximately(0f, quaternion.x) && Approximately(0f, quaternion.y) && Approximately(0f, quaternion.z) && Approximately(1f, quaternion.w);
                     }
                 ),
                 (typeof(Rect), "1, 2, 3, 4", parsed => Equals(parsed, new Rect(1f, 2f, 3f, 4f))),
@@ -3235,12 +2713,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     parsed =>
                     {
                         BoundsInt bounds = (BoundsInt)parsed;
-                        return bounds.position.x == 1
-                            && bounds.position.y == 2
-                            && bounds.position.z == 3
-                            && bounds.size.x == 4
-                            && bounds.size.y == 5
-                            && bounds.size.z == 6;
+                        return bounds.position.x == 1 && bounds.position.y == 2 && bounds.position.z == 3 && bounds.size.x == 4 && bounds.size.y == 5 && bounds.size.z == 6;
                     }
                 ),
                 (
@@ -3249,10 +2722,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     parsed =>
                     {
                         RectOffset offset = (RectOffset)parsed;
-                        return offset.left == 4
-                            && offset.right == 8
-                            && offset.top == 2
-                            && offset.bottom == 6;
+                        return offset.left == 4 && offset.right == 8 && offset.top == 2 && offset.bottom == 6;
                     }
                 ),
                 (
@@ -3261,10 +2731,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     parsed =>
                     {
                         Plane plane = (Plane)parsed;
-                        return Approximately(0f, plane.normal.x)
-                            && Approximately(1f, plane.normal.y)
-                            && Approximately(0f, plane.normal.z)
-                            && Approximately(5f, plane.distance);
+                        return Approximately(0f, plane.normal.x) && Approximately(1f, plane.normal.y) && Approximately(0f, plane.normal.z) && Approximately(5f, plane.distance);
                     }
                 ),
                 (
@@ -3281,11 +2748,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                             && Approximately(-1f, ray.direction.z);
                     }
                 ),
-                (
-                    typeof(System.Numerics.Complex),
-                    "1.5, -2.5",
-                    parsed => Equals(parsed, new System.Numerics.Complex(1.5, -2.5))
-                ),
+                (typeof(System.Numerics.Complex), "1.5, -2.5", parsed => Equals(parsed, new System.Numerics.Complex(1.5, -2.5))),
             };
 
             /*
@@ -3304,29 +2767,17 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
             foreach (Type expectedType in expectedTypes)
             {
-                Assert.IsTrue(
-                    registeredTypes.Contains(expectedType),
-                    $"{expectedType.Name} is missing from the built-in parser table"
-                );
+                Assert.IsTrue(registeredTypes.Contains(expectedType), $"{expectedType.Name} is missing from the built-in parser table");
             }
 
             foreach ((Type type, string input, Func<object, bool> matches) in rows)
             {
                 CommandArg arg = new(input);
-                Assert.IsTrue(
-                    arg.TryGet(type, out object parsed),
-                    $"{type.Name} is in the built-in table but failed to parse '{input}'"
-                );
-                Assert.IsTrue(
-                    matches(parsed),
-                    $"{type.Name} parsed '{input}' to {parsed}, which does not match the expected value"
-                );
+                Assert.IsTrue(arg.TryGet(type, out object parsed), $"{type.Name} is in the built-in table but failed to parse '{input}'");
+                Assert.IsTrue(matches(parsed), $"{type.Name} parsed '{input}' to {parsed}, which does not match the expected value");
 
                 arg = new CommandArg("asdf-junk");
-                Assert.IsFalse(
-                    arg.TryGet(type, out object junk),
-                    $"{type.Name} unexpectedly parsed junk as {junk}"
-                );
+                Assert.IsFalse(arg.TryGet(type, out object junk), $"{type.Name} unexpectedly parsed junk as {junk}");
             }
         }
 
@@ -3339,10 +2790,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             arg = new CommandArg("2.5");
             Assert.IsTrue(arg.TryGet(typeof(float), out value));
-            Assert.IsTrue(
-                Approximately((float)value, 2.5f),
-                $"Expected {value} to be approximately {2.5f}"
-            );
+            Assert.IsTrue(Approximately((float)value, 2.5f), $"Expected {value} to be approximately {2.5f}");
 
             arg = new CommandArg("red");
             Assert.IsTrue(arg.TryGet(typeof(Color), out value));
@@ -3354,10 +2802,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             arg = new CommandArg("(1.2564, 3.6)");
             Assert.IsTrue(arg.TryGet(typeof(Vector2), out value));
             Vector2 expected = (Vector2)value;
-            Assert.IsTrue(
-                Approximately(expected.x, 1.2564f) && Approximately(expected.y, 3.6f),
-                $"Expected {expected} to be approximately {arg.contents}"
-            );
+            Assert.IsTrue(Approximately(expected.x, 1.2564f) && Approximately(expected.y, 3.6f), $"Expected {expected} to be approximately {arg.contents}");
 
             arg = new CommandArg("asdf");
             Assert.IsFalse(arg.TryGet(typeof(float), out value));
@@ -3656,10 +3101,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 reload off, none of it clears on its own - the reset is what
                 a session boundary costs (#224).
              */
-            Assert.IsTrue(
-                CommandArg.RegisterParser<int>(StaticResetIntParser),
-                "Sanity: the parser registered"
-            );
+            Assert.IsTrue(CommandArg.RegisterParser<int>(StaticResetIntParser), "Sanity: the parser registered");
             CommandArg.Delimiters.Add('x');
             CommandArg.Quotes.Add('^');
             CommandArg.IgnoredValuesForCleanedTypes.Add("\t");
@@ -3668,20 +3110,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             CommandArg.ResetForNextPlaySession();
 
-            Assert.IsFalse(
-                CommandArg.TryGetParser(out CommandArgParser<int> _),
-                "The play-session reset must drop registered parsers"
-            );
+            Assert.IsFalse(CommandArg.TryGetParser(out CommandArgParser<int> _), "The play-session reset must drop registered parsers");
             CollectionAssert.AreEquivalent(
                 new[] { ',', ';', ':', '_', '/', '\\' },
                 CommandArg.Delimiters,
                 $"Delimiters after reset: [{string.Join(string.Empty, CommandArg.Delimiters)}]"
             );
-            CollectionAssert.AreEquivalent(
-                new[] { '"', '\'' },
-                CommandArg.Quotes,
-                $"Quotes after reset: [{string.Join(string.Empty, CommandArg.Quotes)}]"
-            );
+            CollectionAssert.AreEquivalent(new[] { '"', '\'' }, CommandArg.Quotes, $"Quotes after reset: [{string.Join(string.Empty, CommandArg.Quotes)}]");
             CollectionAssert.AreEquivalent(
                 new[] { "\r", "\n" },
                 CommandArg.IgnoredValuesForCleanedTypes,
@@ -3699,10 +3134,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
 
             CommandArg arg = new("1");
-            Assert.IsTrue(
-                arg.TryGet(out int parsed),
-                "Built-in parsing keeps working across the reset"
-            );
+            Assert.IsTrue(arg.TryGet(out int parsed), "Built-in parsing keeps working across the reset");
             Assert.AreEqual(1, parsed);
 
             return;
@@ -3793,10 +3225,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
                 arg = new CommandArg("1.5, 2.5");
                 Assert.IsTrue(arg.TryGet(out Vector2 vector), cultureName);
-                Assert.IsTrue(
-                    Approximately(1.5f, vector.x) && Approximately(2.5f, vector.y),
-                    $"{cultureName}: expected (1.5, 2.5), got {vector}"
-                );
+                Assert.IsTrue(Approximately(1.5f, vector.x) && Approximately(2.5f, vector.y), $"{cultureName}: expected (1.5, 2.5), got {vector}");
 
                 arg = new CommandArg("1.5, 2.5");
                 Assert.IsTrue(arg.TryGet(out System.Numerics.Complex complex), cultureName);
@@ -3817,11 +3246,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             CommandArg.SetDoNotCleanTypes(typeof(float));
             CommandArg.SetIgnoredValuesForComplexTypes("@");
 
-            CollectionAssert.AreEquivalent(
-                new[] { '|' },
-                CommandArg.Delimiters,
-                "SetDelimiters must replace the delimiter contents"
-            );
+            CollectionAssert.AreEquivalent(new[] { '|' }, CommandArg.Delimiters, "SetDelimiters must replace the delimiter contents");
             CollectionAssert.AreEquivalent(new[] { '^' }, CommandArg.Quotes);
             CollectionAssert.AreEquivalent(new[] { "\t" }, CommandArg.IgnoredValuesForCleanedTypes);
             CollectionAssert.AreEquivalent(new[] { typeof(float) }, CommandArg.DoNotCleanTypes);
@@ -3847,24 +3272,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             void AssertNamesThePublicParameter(TestDelegate call, string expected)
             {
                 ArgumentNullException thrown = Assert.Throws<ArgumentNullException>(call);
-                Assert.AreEqual(
-                    expected,
-                    thrown.ParamName,
-                    "A null setter array must name the public parameter the caller passed"
-                );
+                Assert.AreEqual(expected, thrown.ParamName, "A null setter array must name the public parameter the caller passed");
             }
 
             AssertNamesThePublicParameter(() => CommandArg.SetDelimiters(null), "delimiters");
             AssertNamesThePublicParameter(() => CommandArg.SetQuotes(null), "quotes");
-            AssertNamesThePublicParameter(
-                () => CommandArg.SetIgnoredValuesForCleanedTypes(null),
-                "values"
-            );
+            AssertNamesThePublicParameter(() => CommandArg.SetIgnoredValuesForCleanedTypes(null), "values");
             AssertNamesThePublicParameter(() => CommandArg.SetDoNotCleanTypes(null), "types");
-            AssertNamesThePublicParameter(
-                () => CommandArg.SetIgnoredValuesForComplexTypes(null),
-                "values"
-            );
+            AssertNamesThePublicParameter(() => CommandArg.SetIgnoredValuesForComplexTypes(null), "values");
         }
 
         [Test]
@@ -3873,10 +3288,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             CommandArg.SetDelimiters('~');
             CommandArg arg = new CommandArg("3~4");
             Assert.IsTrue(arg.TryGet(out Vector2 vector), $"Failed to parse {arg.contents}");
-            Assert.IsTrue(
-                Approximately(3f, vector.x) && Approximately(4f, vector.y),
-                $"Expected (3, 4), got {vector}"
-            );
+            Assert.IsTrue(Approximately(3f, vector.x) && Approximately(4f, vector.y), $"Expected (3, 4), got {vector}");
         }
 
         [Test]
@@ -3895,23 +3307,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 CommandArg.Delimiters,
                 $"Delimiters after reset: [{string.Join(string.Empty, CommandArg.Delimiters)}]"
             );
-            CollectionAssert.AreEquivalent(
-                new[] { '"', '\'' },
-                CommandArg.Quotes,
-                $"Quotes after reset: [{string.Join(string.Empty, CommandArg.Quotes)}]"
-            );
-            CollectionAssert.AreEquivalent(
-                new[] { "\r", "\n" },
-                CommandArg.IgnoredValuesForCleanedTypes
-            );
-            CollectionAssert.AreEquivalent(
-                new[] { typeof(string), typeof(char), typeof(DateTime), typeof(DateTimeOffset) },
-                CommandArg.DoNotCleanTypes
-            );
-            CollectionAssert.AreEquivalent(
-                new[] { "(", ")", "[", "]", "'", "`", "|", "{", "}", "<", ">" },
-                CommandArg.IgnoredValuesForComplexTypes
-            );
+            CollectionAssert.AreEquivalent(new[] { '"', '\'' }, CommandArg.Quotes, $"Quotes after reset: [{string.Join(string.Empty, CommandArg.Quotes)}]");
+            CollectionAssert.AreEquivalent(new[] { "\r", "\n" }, CommandArg.IgnoredValuesForCleanedTypes);
+            CollectionAssert.AreEquivalent(new[] { typeof(string), typeof(char), typeof(DateTime), typeof(DateTimeOffset) }, CommandArg.DoNotCleanTypes);
+            CollectionAssert.AreEquivalent(new[] { "(", ")", "[", "]", "'", "`", "|", "{", "}", "<", ">" }, CommandArg.IgnoredValuesForComplexTypes);
         }
 
         private enum TestEnum1

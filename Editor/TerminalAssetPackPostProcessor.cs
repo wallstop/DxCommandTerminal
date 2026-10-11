@@ -10,12 +10,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor
         internal static readonly List<TerminalThemePack> NewThemePacks = new();
         internal static readonly List<TerminalFontPack> NewFontPacks = new();
 
-        private static void OnPostprocessAllAssets(
-            string[] importedAssets,
-            string[] deletedAssets,
-            string[] movedAssets,
-            string[] movedFromAssetPaths
-        )
+        private static void OnPostprocessAllAssets(string[] importedAssets, string[] deletedAssets, string[] movedAssets, string[] movedFromAssetPaths)
         {
             foreach (string importedAsset in importedAssets)
             {
@@ -24,17 +19,13 @@ namespace WallstopStudios.DxCommandTerminal.Editor
                     continue;
                 }
 
-                TerminalThemePack themePack = AssetDatabase.LoadAssetAtPath<TerminalThemePack>(
-                    importedAsset
-                );
+                TerminalThemePack themePack = AssetDatabase.LoadAssetAtPath<TerminalThemePack>(importedAsset);
                 if (themePack != null)
                 {
                     NewThemePacks.Add(themePack);
                 }
 
-                TerminalFontPack fontPack = AssetDatabase.LoadAssetAtPath<TerminalFontPack>(
-                    importedAsset
-                );
+                TerminalFontPack fontPack = AssetDatabase.LoadAssetAtPath<TerminalFontPack>(importedAsset);
                 if (fontPack != null)
                 {
                     NewFontPacks.Add(fontPack);

@@ -64,14 +64,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         ///     crosses once. Only remaining arguments support this; other
         ///     specs throw.
         /// </summary>
-        internal abstract bool TryParseAll(
-            BorrowedCommandArguments arguments,
-            int start,
-            object[] parsedValues,
-            int slot,
-            out CommandArg failedToken,
-            out string validationError
-        );
+        internal abstract bool TryParseAll(BorrowedCommandArguments arguments, int start, object[] parsedValues, int slot, out CommandArg failedToken, out string validationError);
 
         internal abstract object GetDefault();
 
@@ -81,9 +74,6 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         internal abstract void AppendUsage(StringBuilder builder);
 
-        internal abstract void AppendCompletions(
-            in CommandCompletionContext context,
-            List<CommandCompletion> results
-        );
+        internal abstract void AppendCompletions(in CommandCompletionContext context, List<CommandCompletion> results);
     }
 }

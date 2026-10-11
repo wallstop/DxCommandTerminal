@@ -37,10 +37,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             return follower;
         }
 
-        private static List<bool> Drive(
-            ref LogTailFollower follower,
-            params (float Value, float HighValue, bool NewLogs)[] passes
-        )
+        private static List<bool> Drive(ref LogTailFollower follower, params (float Value, float HighValue, bool NewLogs)[] passes)
         {
             List<bool> requests = new(passes.Length);
             for (int i = 0; i < passes.Length; ++i)
@@ -71,11 +68,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             LogTailFollower follower = new();
 
             Assert.That(follower.Detached, Is.False, "A default follower follows its output");
-            Assert.That(
-                follower.Observe(0f, Extent, true),
-                Is.True,
-                "A view that has never scrolled takes new output"
-            );
+            Assert.That(follower.Observe(0f, Extent, true), Is.True, "A view that has never scrolled takes new output");
         }
 
         [Test]
@@ -134,11 +127,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 float scrolled = Extent - (200f * page);
                 bool request = follower.Observe(scrolled, Extent, false);
 
-                Assert.That(
-                    request,
-                    Is.False,
-                    $"Page {page} must not ask for a pin, or the view snaps back to the end"
-                );
+                Assert.That(request, Is.False, $"Page {page} must not ask for a pin, or the view snaps back to the end");
                 Assert.That(follower.Detached, Is.True, $"Page {page} detaches the tail");
             }
         }
@@ -171,11 +160,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             bool request = follower.Observe(Extent - 400f, Extent, true);
 
-            Assert.That(
-                request,
-                Is.False,
-                "A page taken inside the attach window must not ask for a pin that undoes it"
-            );
+            Assert.That(request, Is.False, "A page taken inside the attach window must not ask for a pin that undoes it");
             Assert.That(follower.Detached, Is.True);
         }
 
@@ -196,16 +181,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             follower.Detach(Extent, Extent);
             bool request = follower.Observe(Extent, Extent + 20f, true);
 
-            Assert.That(
-                follower.Detached,
-                Is.False,
-                "A developer who paged down to the bottom wants to follow again"
-            );
-            Assert.That(
-                request,
-                Is.True,
-                "The end grew after the key, so the view has to be taken to the new one"
-            );
+            Assert.That(follower.Detached, Is.False, "A developer who paged down to the bottom wants to follow again");
+            Assert.That(request, Is.True, "The end grew after the key, so the view has to be taken to the new one");
         }
 
         [Test]
@@ -215,11 +192,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             follower.Detach(Extent - 200f, Extent);
 
-            Assert.That(
-                follower.Detached,
-                Is.True,
-                "Everything short of the end is the developer having scrolled away"
-            );
+            Assert.That(follower.Detached, Is.True, "Everything short of the end is the developer having scrolled away");
         }
 
         [Test]
@@ -246,11 +219,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             follower.Observe(Extent, Extent, false);
 
-            Assert.That(
-                follower.Detached,
-                Is.False,
-                "Reaching the end is the way back to following, whichever key did it"
-            );
+            Assert.That(follower.Detached, Is.False, "Reaching the end is the way back to following, whichever key did it");
         }
 
         [Test]
@@ -265,11 +234,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
              */
             LogTailFollower follower = new();
 
-            Assert.That(
-                follower.Observe(0f, Extent, true),
-                Is.True,
-                "A view nobody has scrolled takes new output"
-            );
+            Assert.That(follower.Observe(0f, Extent, true), Is.True, "A view nobody has scrolled takes new output");
             Assert.That(follower.Detached, Is.False);
         }
 
@@ -281,11 +246,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             bool request = follower.Observe(Extent - 200f, Extent + 500f, true);
 
-            Assert.That(
-                request,
-                Is.False,
-                "Content growing under a scrolled view does not pull it down"
-            );
+            Assert.That(request, Is.False, "Content growing under a scrolled view does not pull it down");
             Assert.That(follower.Detached, Is.True);
         }
 
@@ -309,11 +270,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             bool request = follower.Observe(Extent, Extent + 100f, false);
 
             Assert.That(request, Is.True, "The pin that laid out before the new line is re-pinned");
-            Assert.That(
-                follower.Detached,
-                Is.False,
-                "A pin the layout grew past is not a developer's scroll"
-            );
+            Assert.That(follower.Detached, Is.False, "A pin the layout grew past is not a developer's scroll");
         }
 
         [Test]
@@ -321,11 +278,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             LogTailFollower follower = new();
 
-            Assert.That(
-                follower.Observe(0f, 0f, true),
-                Is.False,
-                "An empty view has no end to pin to"
-            );
+            Assert.That(follower.Observe(0f, 0f, true), Is.False, "An empty view has no end to pin to");
         }
 
         [Test]
@@ -341,11 +294,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             LogTailFollower follower = AttachedFollower();
             follower.Observe(0f, 0f, true);
 
-            Assert.That(
-                follower.Observe(0f, Extent / 5f, true),
-                Is.True,
-                "A view emptied and refilled is not a developer's scroll on the old one"
-            );
+            Assert.That(follower.Observe(0f, Extent / 5f, true), Is.True, "A view emptied and refilled is not a developer's scroll on the old one");
         }
 
         [Test]
@@ -360,16 +309,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             follower.Observe(Extent / 2f, Extent / 2f, true);
             follower.Pin(Extent / 2f);
 
-            Assert.That(
-                follower.Observe(Extent, Extent, false),
-                Is.False,
-                "Reaching the end with nothing new logs needs no re-pin"
-            );
-            Assert.That(
-                follower.Observe(Extent - 100f, Extent, true),
-                Is.False,
-                "A re-attached tail detaches on the developer's next scroll away"
-            );
+            Assert.That(follower.Observe(Extent, Extent, false), Is.False, "Reaching the end with nothing new logs needs no re-pin");
+            Assert.That(follower.Observe(Extent - 100f, Extent, true), Is.False, "A re-attached tail detaches on the developer's next scroll away");
             Assert.That(follower.Detached, Is.True);
         }
 
@@ -396,11 +337,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             follower.Attach();
 
             Assert.That(follower.Detached, Is.False, "A rebuilt view follows its output");
-            Assert.That(
-                follower.Observe(0f, Extent, true),
-                Is.True,
-                "A view at zero is not a developer's scroll on the old one"
-            );
+            Assert.That(follower.Observe(0f, Extent, true), Is.True, "A view at zero is not a developer's scroll on the old one");
         }
 
         [TestCase(1000f, 1000f, true, true, "At the end with new output")]
@@ -410,13 +347,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [TestCase(800f, 1000f, true, false, "The developer scrolled up")]
         [TestCase(800f, 1000f, false, false, "The developer scrolled up, nothing arrived")]
         [TestCase(0f, 0f, true, false, "Nothing to scroll to")]
-        public void DecideWhetherToPin(
-            float value,
-            float highValue,
-            bool newLogs,
-            bool expected,
-            string because
-        )
+        public void DecideWhetherToPin(float value, float highValue, bool newLogs, bool expected, string because)
         {
             LogTailFollower follower = AttachedFollower();
 

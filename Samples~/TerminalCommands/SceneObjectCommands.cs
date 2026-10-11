@@ -8,19 +8,11 @@ namespace WallstopStudios.DxCommandTerminal.Samples
         protected override void RegisterCommands()
         {
             SceneObjectArgumentAdapter<GameObject> objects = new();
-            SceneObjectArgumentAdapter<Transform> transforms = new(
-                SceneObjectAmbiguityPolicy.RequireUnique
-            );
+            SceneObjectArgumentAdapter<Transform> transforms = new(SceneObjectAmbiguityPolicy.RequireUnique);
             Register(
                 CommandBuilder
                     .Create("object-info", "Logs the first object's name and layer")
-                    .Arg<GameObject>(
-                        "target",
-                        spec =>
-                            spec.Required()
-                                .RawParser(objects.TryParse)
-                                .Choices(objects.GetChoices, objects.FormatChoice)
-                    )
+                    .Arg<GameObject>("target", spec => spec.Required().RawParser(objects.TryParse).Choices(objects.GetChoices, objects.FormatChoice))
                     .Handler(
                         (context, arguments) =>
                         {
@@ -32,13 +24,7 @@ namespace WallstopStudios.DxCommandTerminal.Samples
             Register(
                 CommandBuilder
                     .Create("object-position", "Logs a uniquely named object's position")
-                    .Arg<Transform>(
-                        "target",
-                        spec =>
-                            spec.Required()
-                                .RawParser(transforms.TryParse)
-                                .Choices(transforms.GetChoices, transforms.FormatChoice)
-                    )
+                    .Arg<Transform>("target", spec => spec.Required().RawParser(transforms.TryParse).Choices(transforms.GetChoices, transforms.FormatChoice))
                     .Handler(
                         (context, arguments) =>
                         {

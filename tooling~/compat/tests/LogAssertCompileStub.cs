@@ -18,35 +18,23 @@ namespace UnityEngine.TestTools
     {
         public static bool ignoreFailingMessages
         {
-            get =>
-                throw new InvalidOperationException(
-                    "LogAssert is compile-only in the Unity-free lane; run this fixture in a live editor."
-                );
-            set =>
-                throw new InvalidOperationException(
-                    "LogAssert is compile-only in the Unity-free lane; run this fixture in a live editor."
-                );
+            get => throw new InvalidOperationException("LogAssert is compile-only in the Unity-free lane; run this fixture in a live editor.");
+            set => throw new InvalidOperationException("LogAssert is compile-only in the Unity-free lane; run this fixture in a live editor.");
         }
 
         public static void Expect(LogType type, string message)
         {
-            throw new InvalidOperationException(
-                "LogAssert is compile-only in the Unity-free lane; run this fixture in a live editor."
-            );
+            throw new InvalidOperationException("LogAssert is compile-only in the Unity-free lane; run this fixture in a live editor.");
         }
 
         public static void Expect(LogType type, Regex message)
         {
-            throw new InvalidOperationException(
-                "LogAssert is compile-only in the Unity-free lane; run this fixture in a live editor."
-            );
+            throw new InvalidOperationException("LogAssert is compile-only in the Unity-free lane; run this fixture in a live editor.");
         }
 
         public static void NoUnexpectedReceived()
         {
-            throw new InvalidOperationException(
-                "LogAssert is compile-only in the Unity-free lane; run this fixture in a live editor."
-            );
+            throw new InvalidOperationException("LogAssert is compile-only in the Unity-free lane; run this fixture in a live editor.");
         }
     }
 }

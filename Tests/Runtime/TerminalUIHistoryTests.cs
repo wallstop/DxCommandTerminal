@@ -99,10 +99,7 @@
         {
             yield return SpawnOpenTerminal();
 
-            Assert.IsTrue(
-                Terminal.Shell.AddCommand("hist-undo", _ => { }, minArgs: 0, maxArgs: 0, help: "t"),
-                "Sanity: the recalled command registers"
-            );
+            Assert.IsTrue(Terminal.Shell.AddCommand("hist-undo", _ => { }, minArgs: 0, maxArgs: 0, help: "t"), "Sanity: the recalled command registers");
             DefaultTerminalInput.Instance.CommandText = "hist-undo";
             yield return EnterCommand();
             yield return SetInputText("h");
@@ -112,10 +109,7 @@
 
             yield return SendUndo();
 
-            yield return WaitForCommandText(
-                "h",
-                "The undo returned to the state the recall replaced"
-            );
+            yield return WaitForCommandText("h", "The undo returned to the state the recall replaced");
         }
 
         /*
@@ -144,11 +138,7 @@
 
             yield return SendUndo();
 
-            Assert.AreEqual(
-                string.Empty,
-                DefaultTerminalInput.Instance.CommandText,
-                "The key past the start wrote nothing, so the empty line is still empty"
-            );
+            Assert.AreEqual(string.Empty, DefaultTerminalInput.Instance.CommandText, "The key past the start wrote nothing, so the empty line is still empty");
         }
 
         /*
@@ -165,20 +155,14 @@
         {
             yield return SpawnOpenTerminal();
 
-            Assert.IsTrue(
-                Terminal.Shell.AddCommand("hist-run", _ => { }, minArgs: 0, maxArgs: 0, help: "t"),
-                "Sanity: the command registers"
-            );
+            Assert.IsTrue(Terminal.Shell.AddCommand("hist-run", _ => { }, minArgs: 0, maxArgs: 0, help: "t"), "Sanity: the command registers");
             yield return SetInputText("hist-run");
             yield return EnterCommand();
             yield return WaitForCommandText(string.Empty, "Sanity: the run cleared the line");
 
             yield return SendUndo();
 
-            yield return WaitForCommandText(
-                "hist-run",
-                "The clear the run made is one undoable step, so the command comes back"
-            );
+            yield return WaitForCommandText("hist-run", "The clear the run made is one undoable step, so the command comes back");
         }
 
         [UnityTest]
@@ -192,11 +176,7 @@
 
             yield return SendKey(KeyCode.Y, EventModifiers.Control);
 
-            Assert.AreEqual(
-                "giv",
-                DefaultTerminalInput.Instance.CommandText,
-                "Y is not claimed, so it is a character and the line is where the undo left it"
-            );
+            Assert.AreEqual("giv", DefaultTerminalInput.Instance.CommandText, "Y is not claimed, so it is a character and the line is where the undo left it");
         }
 
         [UnityTest]
@@ -208,11 +188,7 @@
 
             yield return SendKey(KeyCode.Z, EventModifiers.None);
 
-            Assert.AreEqual(
-                "givx",
-                DefaultTerminalInput.Instance.CommandText,
-                "A bare Z is a character, and this field has no history to route it to"
-            );
+            Assert.AreEqual("givx", DefaultTerminalInput.Instance.CommandText, "A bare Z is a character, and this field has no history to route it to");
         }
 
         /*
@@ -254,11 +230,7 @@
 
             yield return SendKey(KeyCode.Z, EventModifiers.Control | EventModifiers.Shift);
 
-            Assert.AreEqual(
-                "give",
-                DefaultTerminalInput.Instance.CommandText,
-                "There was nothing left to redo, so the line is what was typed"
-            );
+            Assert.AreEqual("give", DefaultTerminalInput.Instance.CommandText, "There was nothing left to redo, so the line is what was typed");
         }
 
         /*
@@ -274,14 +246,9 @@
             yield return SpawnOpenTerminal();
 
             bool reached = false;
-            _terminal._commandInput.RegisterCallback<KeyDownEvent>(
-                _ => reached = true,
-                TrickleDown.TrickleDown
-            );
+            _terminal._commandInput.RegisterCallback<KeyDownEvent>(_ => reached = true, TrickleDown.TrickleDown);
 
-            using (
-                KeyDownEvent key = KeyDownEvent.GetPooled('\0', KeyCode.Z, EventModifiers.Control)
-            )
+            using (KeyDownEvent key = KeyDownEvent.GetPooled('\0', KeyCode.Z, EventModifiers.Control))
             {
                 _terminal._uiDocument.rootVisualElement.SendEvent(key);
             }
@@ -330,21 +297,12 @@
             yield return null;
 
             int frameBudget = 600;
-            while (
-                0 < frameBudget--
-                && (
-                    _terminal._commandInput == null
-                    || _terminal._commandInput.resolvedStyle.display != DisplayStyle.Flex
-                )
-            )
+            while (0 < frameBudget-- && (_terminal._commandInput == null || _terminal._commandInput.resolvedStyle.display != DisplayStyle.Flex))
             {
                 yield return null;
             }
 
-            Assert.That(
-                _terminal._commandInput != null,
-                "The terminal input field should exist after the terminal opens"
-            );
+            Assert.That(_terminal._commandInput != null, "The terminal input field should exist after the terminal opens");
         }
 
         /*
@@ -357,10 +315,7 @@
         {
             _terminal._commandInput.value = text;
             yield return null;
-            yield return WaitForCommandText(
-                text,
-                $"Sanity: the field's '{text}' is the command text"
-            );
+            yield return WaitForCommandText(text, $"Sanity: the field's '{text}' is the command text");
         }
 
         private IEnumerator EnterCommand()
@@ -400,24 +355,12 @@
         private IEnumerator WaitForCommandText(string expected, string message)
         {
             int frameBudget = 120;
-            while (
-                0 < frameBudget--
-                && !string.Equals(
-                    DefaultTerminalInput.Instance.CommandText,
-                    expected,
-                    StringComparison.Ordinal
-                )
-            )
+            while (0 < frameBudget-- && !string.Equals(DefaultTerminalInput.Instance.CommandText, expected, StringComparison.Ordinal))
             {
                 yield return null;
             }
 
-            Assert.AreEqual(
-                expected,
-                DefaultTerminalInput.Instance.CommandText,
-                $"{message}: command text is still"
-                    + $" '{DefaultTerminalInput.Instance.CommandText}'"
-            );
+            Assert.AreEqual(expected, DefaultTerminalInput.Instance.CommandText, $"{message}: command text is still" + $" '{DefaultTerminalInput.Instance.CommandText}'");
         }
     }
 }

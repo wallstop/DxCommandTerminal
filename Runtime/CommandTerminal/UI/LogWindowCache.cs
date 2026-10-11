@@ -89,12 +89,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             long version = buffer.Version;
             int capacity = buffer.Capacity;
             long filterGeneration = _filter.Generation;
-            if (
-                ReferenceEquals(buffer, _readBuffer)
-                && version == _readVersion
-                && capacity == _readCapacity
-                && filterGeneration == _readFilterGeneration
-            )
+            if (ReferenceEquals(buffer, _readBuffer) && version == _readVersion && capacity == _readCapacity && filterGeneration == _readFilterGeneration)
             {
                 LastReadReused = true;
                 rendered = _readFiltered ? _filteredWindow : _window;

@@ -24,8 +24,7 @@ namespace WallstopStudios.DxCommandTerminal.Themes
                 return false;
             }
 
-            return theme.Contains("-theme", StringComparison.OrdinalIgnoreCase)
-                || theme.Contains("theme-", StringComparison.OrdinalIgnoreCase);
+            return theme.Contains("-theme", StringComparison.OrdinalIgnoreCase) || theme.Contains("theme-", StringComparison.OrdinalIgnoreCase);
         }
 
         public static string GetFriendlyThemeName(string theme)
@@ -34,9 +33,7 @@ namespace WallstopStudios.DxCommandTerminal.Themes
             {
                 return theme;
             }
-            return theme
-                .Replace("theme-", string.Empty, StringComparison.OrdinalIgnoreCase)
-                .Replace("-theme", string.Empty, StringComparison.OrdinalIgnoreCase);
+            return theme.Replace("theme-", string.Empty, StringComparison.OrdinalIgnoreCase).Replace("-theme", string.Empty, StringComparison.OrdinalIgnoreCase);
         }
     }
 }

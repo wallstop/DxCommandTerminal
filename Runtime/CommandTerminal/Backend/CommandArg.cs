@@ -35,36 +35,9 @@
 
         public static readonly HashSet<char> Delimiters = new() { ',', ';', ':', '_', '/', '\\' };
         public static readonly List<char> Quotes = new() { '"', '\'' };
-        public static readonly HashSet<string> IgnoredValuesForCleanedTypes = new(
-            StringComparer.Ordinal
-        )
-        {
-            "\r",
-            "\n",
-        };
-        public static readonly HashSet<Type> DoNotCleanTypes = new()
-        {
-            typeof(string),
-            typeof(char),
-            typeof(DateTime),
-            typeof(DateTimeOffset),
-        };
-        public static readonly HashSet<string> IgnoredValuesForComplexTypes = new(
-            StringComparer.Ordinal
-        )
-        {
-            "(",
-            ")",
-            "[",
-            "]",
-            "'",
-            "`",
-            "|",
-            "{",
-            "}",
-            "<",
-            ">",
-        };
+        public static readonly HashSet<string> IgnoredValuesForCleanedTypes = new(StringComparer.Ordinal) { "\r", "\n" };
+        public static readonly HashSet<Type> DoNotCleanTypes = new() { typeof(string), typeof(char), typeof(DateTime), typeof(DateTimeOffset) };
+        public static readonly HashSet<string> IgnoredValuesForComplexTypes = new(StringComparer.Ordinal) { "(", ")", "[", "]", "'", "`", "|", "{", "}", "<", ">" };
 
         /*
             The five sets above are public mutable configuration, so a play
@@ -79,15 +52,11 @@
 
         private static readonly ReadOnlyCollection<char> DefaultQuotes = CopyOf(Quotes);
 
-        private static readonly ReadOnlyCollection<string> DefaultIgnoredValuesForCleanedTypes =
-            CopyOf(IgnoredValuesForCleanedTypes);
+        private static readonly ReadOnlyCollection<string> DefaultIgnoredValuesForCleanedTypes = CopyOf(IgnoredValuesForCleanedTypes);
 
-        private static readonly ReadOnlyCollection<Type> DefaultDoNotCleanTypes = CopyOf(
-            DoNotCleanTypes
-        );
+        private static readonly ReadOnlyCollection<Type> DefaultDoNotCleanTypes = CopyOf(DoNotCleanTypes);
 
-        private static readonly ReadOnlyCollection<string> DefaultIgnoredValuesForComplexTypes =
-            CopyOf(IgnoredValuesForComplexTypes);
+        private static readonly ReadOnlyCollection<string> DefaultIgnoredValuesForComplexTypes = CopyOf(IgnoredValuesForComplexTypes);
 
         private static readonly Dictionary<Type, object> RegisteredParsers = new();
 
@@ -312,10 +281,7 @@
         };
 
         private static readonly Dictionary<Type, UntypedParser> RegisteredUntypedParsers = new();
-        private static readonly Dictionary<
-            Type,
-            Dictionary<string, PropertyInfo>
-        > StaticProperties = new();
+        private static readonly Dictionary<Type, Dictionary<string, PropertyInfo>> StaticProperties = new();
         private static readonly Dictionary<Type, Dictionary<string, FieldInfo>> ConstFields = new();
         private static readonly Dictionary<Type, object> EnumValues = new();
 
@@ -334,8 +300,7 @@
             [typeof(sbyte)] = (CommandArgParser<sbyte>)CommandArgParsers.Sbyte,
             [typeof(Guid)] = (CommandArgParser<Guid>)CommandArgParsers.Guid,
             [typeof(DateTime)] = (CommandArgParser<DateTime>)CommandArgParsers.DateTime,
-            [typeof(DateTimeOffset)] =
-                (CommandArgParser<DateTimeOffset>)CommandArgParsers.DateTimeOffset,
+            [typeof(DateTimeOffset)] = (CommandArgParser<DateTimeOffset>)CommandArgParsers.DateTimeOffset,
             [typeof(char)] = (CommandArgParser<char>)CommandArgParsers.Char,
             [typeof(decimal)] = (CommandArgParser<decimal>)CommandArgParsers.Decimal,
             [typeof(BigInteger)] = (CommandArgParser<BigInteger>)CommandArgParsers.BigInteger,
@@ -366,11 +331,7 @@
                 string cleanedString = contents;
                 foreach (string ignoredValue in IgnoredValuesForCleanedTypes)
                 {
-                    cleanedString = cleanedString.Replace(
-                        ignoredValue,
-                        string.Empty,
-                        StringComparison.OrdinalIgnoreCase
-                    );
+                    cleanedString = cleanedString.Replace(ignoredValue, string.Empty, StringComparison.OrdinalIgnoreCase);
                 }
 
                 return cleanedString;
@@ -550,17 +511,10 @@
                 solely on the named-constant fallback need an explicit parser
                 registration.
              */
-            return type == typeof(string)
-                || type.IsEnum
-                || BuiltInParsers.ContainsKey(type)
-                || RegisteredParsers.ContainsKey(type);
+            return type == typeof(string) || type.IsEnum || BuiltInParsers.ContainsKey(type) || RegisteredParsers.ContainsKey(type);
         }
 
-        private static void ReplaceContents<T>(
-            ICollection<T> contents,
-            T[] replacement,
-            string name
-        )
+        private static void ReplaceContents<T>(ICollection<T> contents, T[] replacement, string name)
         {
             /*
                 `name` carries the caller's parameter name as its value: the
@@ -601,11 +555,7 @@
         private static Dictionary<string, PropertyInfo> LoadStaticPropertiesForType(Type type)
         {
             Dictionary<string, PropertyInfo> properties = new(StringComparer.OrdinalIgnoreCase);
-            foreach (
-                PropertyInfo property in type.GetProperties(
-                    BindingFlags.Static | BindingFlags.Public
-                )
-            )
+            foreach (PropertyInfo property in type.GetProperties(BindingFlags.Static | BindingFlags.Public))
             {
                 if (property.PropertyType == type)
                 {
@@ -632,9 +582,7 @@
 
         private static bool TryGetNamedConstantUntyped(Type type, string input, out object value)
         {
-            if (
-                !StaticProperties.TryGetValue(type, out Dictionary<string, PropertyInfo> properties)
-            )
+            if (!StaticProperties.TryGetValue(type, out Dictionary<string, PropertyInfo> properties))
             {
                 properties = LoadStaticPropertiesForType(type);
                 StaticProperties[type] = properties;

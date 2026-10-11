@@ -34,12 +34,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         private readonly object[] _values;
         private readonly BorrowedCommandArguments _raw;
 
-        internal CommandArguments(
-            CommandArgument[] specs,
-            object[] values,
-            BorrowedCommandArguments raw,
-            CommandExecutionContext context
-        )
+        internal CommandArguments(CommandArgument[] specs, object[] values, BorrowedCommandArguments raw, CommandExecutionContext context)
         {
             _specs = specs;
             _values = values;
@@ -71,8 +66,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
              */
             Type storedType = value?.GetType() ?? spec.DeclaredType;
             throw new CommandArgumentTypeMismatchException(
-                $"Argument '{spec.Name}' is declared as {spec.TypeName}; "
-                    + $"requested {typeof(T).Name}.",
+                $"Argument '{spec.Name}' is declared as {spec.TypeName}; " + $"requested {typeof(T).Name}.",
                 spec.Name,
                 storedType,
                 typeof(T)
@@ -143,10 +137,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             int index = IndexOfArgument(name);
             if (index < 0)
             {
-                throw new ArgumentException(
-                    $"No argument named '{name}' on this command.",
-                    nameof(name)
-                );
+                throw new ArgumentException($"No argument named '{name}' on this command.", nameof(name));
             }
 
             return Get<T>(index);

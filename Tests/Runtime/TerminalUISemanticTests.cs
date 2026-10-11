@@ -41,19 +41,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             for (int index = 0; index < count; ++index)
             {
                 LogItem item = logs[index];
-                if (
-                    item.type == type
-                    && 0 <= item.message.IndexOf(fragment, StringComparison.Ordinal)
-                )
+                if (item.type == type && 0 <= item.message.IndexOf(fragment, StringComparison.Ordinal))
                 {
                     return;
                 }
             }
 
-            Assert.Fail(
-                $"{message}: no {type} entry containing '{fragment}' in "
-                    + $"{count} buffer entries"
-            );
+            Assert.Fail($"{message}: no {type} entry containing '{fragment}' in " + $"{count} buffer entries");
         }
 
 #if UNITY_EDITOR
@@ -101,31 +95,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return SpawnOpenTerminal();
 
             int runs = 0;
-            Assert.IsTrue(
-                Terminal.Shell.AddCommand(
-                    "semanticrun",
-                    _ => ++runs,
-                    minArgs: 0,
-                    maxArgs: 0,
-                    help: "test"
-                ),
-                "Sanity: the probe command registers"
-            );
+            Assert.IsTrue(Terminal.Shell.AddCommand("semanticrun", _ => ++runs, minArgs: 0, maxArgs: 0, help: "test"), "Sanity: the probe command registers");
 
             DefaultTerminalInput.Instance.CommandText = "semanticrun";
             _terminal.EnterCommand();
 
             Assert.AreEqual(1, runs, "EnterCommand must run the typed command exactly once");
-            Assert.AreEqual(
-                string.Empty,
-                DefaultTerminalInput.Instance.CommandText,
-                "EnterCommand must clear the input after running"
-            );
-            AssertLogContains(
-                TerminalLogType.Input,
-                "semanticrun",
-                "The executed line must be logged as input"
-            );
+            Assert.AreEqual(string.Empty, DefaultTerminalInput.Instance.CommandText, "EnterCommand must clear the input after running");
+            AssertLogContains(TerminalLogType.Input, "semanticrun", "The executed line must be logged as input");
             yield return WaitForFocusedInput("EnterCommand must keep the input focused");
         }
 
@@ -144,11 +121,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             DefaultTerminalInput.Instance.CommandText = "log Admin\u202Eexe";
             _terminal.EnterCommand();
 
-            AssertLogContains(
-                TerminalLogType.Message,
-                "Admin\\u202Eexe",
-                "The terminal must show the escaped text Unity's Console is handed"
-            );
+            AssertLogContains(TerminalLogType.Message, "Admin\\u202Eexe", "The terminal must show the escaped text Unity's Console is handed");
         }
 
         [UnityTest]
@@ -157,34 +130,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return SpawnOpenTerminal();
 
             int runs = 0;
-            Assert.IsTrue(
-                Terminal.Shell.AddCommand(
-                    "semanticafter",
-                    _ => ++runs,
-                    minArgs: 0,
-                    maxArgs: 0,
-                    help: "test"
-                ),
-                "Sanity: the probe command registers"
-            );
+            Assert.IsTrue(Terminal.Shell.AddCommand("semanticafter", _ => ++runs, minArgs: 0, maxArgs: 0, help: "test"), "Sanity: the probe command registers");
 
             DefaultTerminalInput.Instance.CommandText = "not-a-real-command-058";
             _terminal.EnterCommand();
 
-            AssertLogContains(
-                TerminalLogType.Error,
-                "not-a-real-command-058",
-                "The failed command's error must be retained in the buffer"
-            );
-            Assert.IsFalse(
-                Terminal.Shell.TryConsumeErrorMessage(out _),
-                "EnterCommand must drain the shell error queue with the retained log entry"
-            );
-            Assert.AreEqual(
-                string.Empty,
-                DefaultTerminalInput.Instance.CommandText,
-                "A failed command still clears the input"
-            );
+            AssertLogContains(TerminalLogType.Error, "not-a-real-command-058", "The failed command's error must be retained in the buffer");
+            Assert.IsFalse(Terminal.Shell.TryConsumeErrorMessage(out _), "EnterCommand must drain the shell error queue with the retained log entry");
+            Assert.AreEqual(string.Empty, DefaultTerminalInput.Instance.CommandText, "A failed command still clears the input");
 
             DefaultTerminalInput.Instance.CommandText = "semanticafter";
             _terminal.EnterCommand();
@@ -203,53 +156,23 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return SpawnOpenTerminal();
 
             Assert.IsTrue(
-                Terminal.Shell.AddCommand(
-                    "semanticthrow",
-                    _ => throw new InvalidOperationException("semantic explosion"),
-                    minArgs: 0,
-                    maxArgs: 0,
-                    help: "test"
-                ),
+                Terminal.Shell.AddCommand("semanticthrow", _ => throw new InvalidOperationException("semantic explosion"), minArgs: 0, maxArgs: 0, help: "test"),
                 "Sanity: the throwing command registers"
             );
-            Assert.IsTrue(
-                Terminal.Shell.AddCommand(
-                    "semanticafterthrow",
-                    _ => { },
-                    minArgs: 0,
-                    maxArgs: 0,
-                    help: "test"
-                ),
-                "Sanity: the command that runs afterwards registers"
-            );
+            Assert.IsTrue(Terminal.Shell.AddCommand("semanticafterthrow", _ => { }, minArgs: 0, maxArgs: 0, help: "test"), "Sanity: the command that runs afterwards registers");
 
             LogAssert.Expect(LogType.Exception, new Regex("semantic explosion"));
 
             DefaultTerminalInput.Instance.CommandText = "semanticthrow";
             _terminal.EnterCommand();
 
-            AssertLogContains(
-                TerminalLogType.Error,
-                "semanticthrow",
-                "The thrown command must be reported in the log"
-            );
-            AssertLogContains(
-                TerminalLogType.Error,
-                "semantic explosion",
-                "The report carries what was thrown"
-            );
-            Assert.IsFalse(
-                Terminal.Shell.TryConsumeErrorMessage(out _),
-                "EnterCommand must drain the report with the log entry"
-            );
+            AssertLogContains(TerminalLogType.Error, "semanticthrow", "The thrown command must be reported in the log");
+            AssertLogContains(TerminalLogType.Error, "semantic explosion", "The report carries what was thrown");
+            Assert.IsFalse(Terminal.Shell.TryConsumeErrorMessage(out _), "EnterCommand must drain the report with the log entry");
 
             DefaultTerminalInput.Instance.CommandText = "semanticafterthrow";
             _terminal.EnterCommand();
-            AssertLogContains(
-                TerminalLogType.Input,
-                "semanticafterthrow",
-                "A command after the failure still runs"
-            );
+            AssertLogContains(TerminalLogType.Input, "semanticafterthrow", "A command after the failure still runs");
         }
 
         [UnityTest]
@@ -257,57 +180,23 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             yield return SpawnOpenTerminal();
 
-            Assert.IsTrue(
-                Terminal.Shell.AddCommand(
-                    "hist-alpha",
-                    _ => { },
-                    minArgs: 0,
-                    maxArgs: 0,
-                    help: "test"
-                ),
-                "Sanity: the first history command registers"
-            );
-            Assert.IsTrue(
-                Terminal.Shell.AddCommand(
-                    "hist-beta",
-                    _ => { },
-                    minArgs: 0,
-                    maxArgs: 0,
-                    help: "test"
-                ),
-                "Sanity: the second history command registers"
-            );
+            Assert.IsTrue(Terminal.Shell.AddCommand("hist-alpha", _ => { }, minArgs: 0, maxArgs: 0, help: "test"), "Sanity: the first history command registers");
+            Assert.IsTrue(Terminal.Shell.AddCommand("hist-beta", _ => { }, minArgs: 0, maxArgs: 0, help: "test"), "Sanity: the second history command registers");
 
             RunThroughInput("hist-alpha");
             RunThroughInput("hist-beta");
 
             _terminal.HandlePrevious();
-            Assert.AreEqual(
-                "hist-beta",
-                DefaultTerminalInput.Instance.CommandText,
-                "The first Previous must load the newest history entry"
-            );
+            Assert.AreEqual("hist-beta", DefaultTerminalInput.Instance.CommandText, "The first Previous must load the newest history entry");
 
             _terminal.HandlePrevious();
-            Assert.AreEqual(
-                "hist-alpha",
-                DefaultTerminalInput.Instance.CommandText,
-                "The second Previous must load the older history entry"
-            );
+            Assert.AreEqual("hist-alpha", DefaultTerminalInput.Instance.CommandText, "The second Previous must load the older history entry");
 
             _terminal.HandleNext();
-            Assert.AreEqual(
-                "hist-beta",
-                DefaultTerminalInput.Instance.CommandText,
-                "Next must walk forward toward the newest entry"
-            );
+            Assert.AreEqual("hist-beta", DefaultTerminalInput.Instance.CommandText, "Next must walk forward toward the newest entry");
 
             _terminal.HandleNext();
-            Assert.AreEqual(
-                string.Empty,
-                DefaultTerminalInput.Instance.CommandText,
-                "Next past the newest entry must empty the input"
-            );
+            Assert.AreEqual(string.Empty, DefaultTerminalInput.Instance.CommandText, "Next past the newest entry must empty the input");
         }
 
         [UnityTest]
@@ -315,51 +204,21 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             yield return SpawnOpenTerminal();
 
-            Assert.IsTrue(
-                Terminal.Shell.AddCommand(
-                    "hist-dup",
-                    _ => { },
-                    minArgs: 0,
-                    maxArgs: 0,
-                    help: "test"
-                ),
-                "Sanity: the duplicate history command registers"
-            );
-            Assert.IsTrue(
-                Terminal.Shell.AddCommand(
-                    "hist-unique",
-                    _ => { },
-                    minArgs: 0,
-                    maxArgs: 0,
-                    help: "test"
-                ),
-                "Sanity: the unique history command registers"
-            );
+            Assert.IsTrue(Terminal.Shell.AddCommand("hist-dup", _ => { }, minArgs: 0, maxArgs: 0, help: "test"), "Sanity: the duplicate history command registers");
+            Assert.IsTrue(Terminal.Shell.AddCommand("hist-unique", _ => { }, minArgs: 0, maxArgs: 0, help: "test"), "Sanity: the unique history command registers");
 
             RunThroughInput("hist-dup");
             RunThroughInput("hist-dup");
             RunThroughInput("hist-unique");
 
             _terminal.HandlePrevious();
-            Assert.AreEqual(
-                "hist-unique",
-                DefaultTerminalInput.Instance.CommandText,
-                "The first Previous must load the newest entry"
-            );
+            Assert.AreEqual("hist-unique", DefaultTerminalInput.Instance.CommandText, "The first Previous must load the newest entry");
 
             _terminal.HandlePrevious();
-            Assert.AreEqual(
-                "hist-dup",
-                DefaultTerminalInput.Instance.CommandText,
-                "The second Previous must land on the repeated entry once"
-            );
+            Assert.AreEqual("hist-dup", DefaultTerminalInput.Instance.CommandText, "The second Previous must land on the repeated entry once");
 
             _terminal.HandlePrevious();
-            Assert.AreEqual(
-                string.Empty,
-                DefaultTerminalInput.Instance.CommandText,
-                "The repeated entry must not come back a second time while walking backward"
-            );
+            Assert.AreEqual(string.Empty, DefaultTerminalInput.Instance.CommandText, "The repeated entry must not come back a second time while walking backward");
         }
 
         [UnityTest]
@@ -367,26 +226,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             yield return SpawnOpenTerminal();
 
-            Assert.IsTrue(
-                Terminal.Shell.AddCommand(
-                    "alphacmd",
-                    _ => { },
-                    minArgs: 0,
-                    maxArgs: 0,
-                    help: "test"
-                ),
-                "Sanity: the first completion candidate registers"
-            );
-            Assert.IsTrue(
-                Terminal.Shell.AddCommand(
-                    "alphabet",
-                    _ => { },
-                    minArgs: 0,
-                    maxArgs: 0,
-                    help: "test"
-                ),
-                "Sanity: the second completion candidate registers"
-            );
+            Assert.IsTrue(Terminal.Shell.AddCommand("alphacmd", _ => { }, minArgs: 0, maxArgs: 0, help: "test"), "Sanity: the first completion candidate registers");
+            Assert.IsTrue(Terminal.Shell.AddCommand("alphabet", _ => { }, minArgs: 0, maxArgs: 0, help: "test"), "Sanity: the second completion candidate registers");
 
             yield return SetInputText("alph");
 
@@ -405,19 +246,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 yield return null;
             }
 
-            Assert.That(
-                hints != null && hints.childCount == 2,
-                "Completion must render one hint per candidate"
-            );
-            yield return WaitForInputText(
-                "alphabet",
-                "The first completion must apply the first candidate"
-            );
-            yield return WaitForSelectedHint(
-                hints,
-                "alphabet",
-                "The selected hint must match the applied candidate"
-            );
+            Assert.That(hints != null && hints.childCount == 2, "Completion must render one hint per candidate");
+            yield return WaitForInputText("alphabet", "The first completion must apply the first candidate");
+            yield return WaitForSelectedHint(hints, "alphabet", "The selected hint must match the applied candidate");
 
             /*
                 The hint view is a carousel: cycling rotates the rendered
@@ -426,15 +257,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
              */
             _terminal.CompleteCommand(true);
 
-            yield return WaitForInputText(
-                "alphacmd",
-                "Cycling must apply the next candidate to the input"
-            );
-            yield return WaitForSelectedHint(
-                hints,
-                "alphacmd",
-                "The selection must follow the cycled candidate"
-            );
+            yield return WaitForInputText("alphacmd", "Cycling must apply the next candidate to the input");
+            yield return WaitForSelectedHint(hints, "alphacmd", "The selection must follow the cycled candidate");
         }
 
         /*
@@ -449,37 +273,17 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             yield return SpawnOpenTerminal();
 
-            Assert.IsTrue(
-                Terminal.Shell.AddCommand(
-                    "hist-caret",
-                    _ => { },
-                    minArgs: 0,
-                    maxArgs: 0,
-                    help: "test"
-                ),
-                "Sanity: the recalled command registers"
-            );
+            Assert.IsTrue(Terminal.Shell.AddCommand("hist-caret", _ => { }, minArgs: 0, maxArgs: 0, help: "test"), "Sanity: the recalled command registers");
 
             RunThroughInput("hist-caret");
             yield return SetInputText("hist");
             yield return SetInputCaret(1);
-            Assert.AreEqual(
-                1,
-                _terminal._commandInput.cursorIndex,
-                "Sanity: the caret sits mid-line, as it does while typing"
-            );
+            Assert.AreEqual(1, _terminal._commandInput.cursorIndex, "Sanity: the caret sits mid-line, as it does while typing");
 
             _terminal.HandlePrevious();
 
-            Assert.AreEqual(
-                "hist-caret",
-                DefaultTerminalInput.Instance.CommandText,
-                "The recalled line loads"
-            );
-            yield return WaitForCaret(
-                "hist-caret".Length,
-                "A recalled line takes the caret to its end"
-            );
+            Assert.AreEqual("hist-caret", DefaultTerminalInput.Instance.CommandText, "The recalled line loads");
+            yield return WaitForCaret("hist-caret".Length, "A recalled line takes the caret to its end");
         }
 
         /*
@@ -495,24 +299,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return SpawnOpenTerminal();
             _terminal.hintDisplayMode = HintDisplayMode.Always;
 
-            Assert.IsTrue(
-                Terminal.Shell.AddCommand("zapo", _ => { }, minArgs: 0, maxArgs: 0, help: "test"),
-                "Sanity: the first candidate registers"
-            );
-            Assert.IsTrue(
-                Terminal.Shell.AddCommand("zapt", _ => { }, minArgs: 0, maxArgs: 0, help: "test"),
-                "Sanity: the second candidate registers"
-            );
+            Assert.IsTrue(Terminal.Shell.AddCommand("zapo", _ => { }, minArgs: 0, maxArgs: 0, help: "test"), "Sanity: the first candidate registers");
+            Assert.IsTrue(Terminal.Shell.AddCommand("zapt", _ => { }, minArgs: 0, maxArgs: 0, help: "test"), "Sanity: the second candidate registers");
 
             yield return SetInputText("zap");
             yield return WaitForHintCount(2);
             yield return SetInputText("zapo");
             yield return WaitForHintCount(1);
             yield return SetInputText("zapt");
-            yield return WaitForSingleHintText(
-                "zapt",
-                "The bar shows the candidate the current input resolves to"
-            );
+            yield return WaitForSingleHintText("zapt", "The bar shows the candidate the current input resolves to");
 
             /*
                 The line goes back to the two candidates and the click takes
@@ -524,23 +319,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return SetInputText("zap");
             yield return WaitForHintCount(2);
             yield return SetInputCaret(0);
-            Assert.AreEqual(
-                0,
-                _terminal._commandInput.cursorIndex,
-                "Sanity: the caret starts at the head of the line"
-            );
+            Assert.AreEqual(0, _terminal._commandInput.cursorIndex, "Sanity: the caret starts at the head of the line");
 
             _terminal.ApplyHint(1);
 
-            Assert.AreEqual(
-                "zapt",
-                DefaultTerminalInput.Instance.CommandText,
-                "A row applies the candidate it currently shows"
-            );
-            yield return WaitForCaret(
-                "zapt".Length,
-                "An applied row takes the caret to the end of the line"
-            );
+            Assert.AreEqual("zapt", DefaultTerminalInput.Instance.CommandText, "A row applies the candidate it currently shows");
+            yield return WaitForCaret("zapt".Length, "An applied row takes the caret to the end of the line");
         }
 
         /*
@@ -554,25 +338,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return SpawnOpenTerminal();
             _terminal.hintDisplayMode = HintDisplayMode.Always;
 
-            Assert.IsTrue(
-                Terminal.Shell.AddCommand("uniarg", _ => { }, minArgs: 1, maxArgs: 1, help: "test"),
-                "Sanity: the argument command registers"
-            );
+            Assert.IsTrue(Terminal.Shell.AddCommand("uniarg", _ => { }, minArgs: 1, maxArgs: 1, help: "test"), "Sanity: the argument command registers");
             RunThroughInput("uniarg a\u202Eb");
 
             yield return SetInputText("uniarg a");
-            yield return WaitForSingleHintText(
-                "uniarg a\\u202Eb",
-                "The row shows the escaped history line"
-            );
+            yield return WaitForSingleHintText("uniarg a\\u202Eb", "The row shows the escaped history line");
 
             _terminal.ApplyHint(0);
 
-            Assert.AreEqual(
-                "uniarg a\u202Eb",
-                DefaultTerminalInput.Instance.CommandText,
-                "The applied candidate is the raw text the developer chose"
-            );
+            Assert.AreEqual("uniarg a\u202Eb", DefaultTerminalInput.Instance.CommandText, "The applied candidate is the raw text the developer chose");
         }
 
         private IEnumerator SpawnOpenTerminal(bool logUnityMessages = false)
@@ -615,21 +389,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return null;
 
             int frameBudget = FrameBudget;
-            while (
-                0 < frameBudget--
-                && (
-                    _terminal._commandInput == null
-                    || _terminal._commandInput.resolvedStyle.display != DisplayStyle.Flex
-                )
-            )
+            while (0 < frameBudget-- && (_terminal._commandInput == null || _terminal._commandInput.resolvedStyle.display != DisplayStyle.Flex))
             {
                 yield return null;
             }
 
-            Assert.That(
-                _terminal._commandInput != null,
-                "The terminal input field must exist after the terminal opens"
-            );
+            Assert.That(_terminal._commandInput != null, "The terminal input field must exist after the terminal opens");
         }
 
         private void RunThroughInput(string commandName)
@@ -680,20 +445,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private IEnumerator WaitForCaret(int expectedCaretIndex, string message)
         {
             int frameBudget = FrameBudget;
-            while (
-                0 < frameBudget--
-                && _terminal._commandInput.cursorIndex != expectedCaretIndex
-                && _terminal._pendingCaretIndex != expectedCaretIndex
-            )
+            while (0 < frameBudget-- && _terminal._commandInput.cursorIndex != expectedCaretIndex && _terminal._pendingCaretIndex != expectedCaretIndex)
             {
                 yield return null;
             }
 
             Assert.IsTrue(
-                _terminal._commandInput.cursorIndex == expectedCaretIndex
-                    || _terminal._pendingCaretIndex == expectedCaretIndex,
-                $"{message}: cursor={_terminal._commandInput.cursorIndex}"
-                    + $" queued={_terminal._pendingCaretIndex}"
+                _terminal._commandInput.cursorIndex == expectedCaretIndex || _terminal._pendingCaretIndex == expectedCaretIndex,
+                $"{message}: cursor={_terminal._commandInput.cursorIndex}" + $" queued={_terminal._pendingCaretIndex}"
             );
         }
 
@@ -705,11 +464,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 yield return null;
             }
 
-            Assert.AreEqual(
-                expectedCount,
-                HintRowCount(),
-                $"The bar must hold {expectedCount} rows for the current input"
-            );
+            Assert.AreEqual(expectedCount, HintRowCount(), $"The bar must hold {expectedCount} rows for the current input");
         }
 
         private IEnumerator WaitForSingleHintText(string expectedText, string message)
@@ -737,11 +492,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 return false;
             }
 
-            return string.Equals(
-                (hints[0] as TextElement)?.text,
-                expectedText,
-                StringComparison.Ordinal
-            );
+            return string.Equals((hints[0] as TextElement)?.text, expectedText, StringComparison.Ordinal);
         }
 
         private IEnumerator WaitForFocusedInput(string message)
@@ -765,11 +516,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             int frameBudget = FrameBudget;
             while (
                 0 < frameBudget--
-                && !string.Equals(
-                    DefaultTerminalInput.Instance.CommandText,
-                    expected,
-                    StringComparison.Ordinal
-                )
+                && !string.Equals(DefaultTerminalInput.Instance.CommandText, expected, StringComparison.Ordinal)
                 && !string.Equals(_terminal._commandInput.value, expected, StringComparison.Ordinal)
             )
             {
@@ -777,18 +524,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             }
 
             Assert.IsTrue(
-                string.Equals(
-                    DefaultTerminalInput.Instance.CommandText,
-                    expected,
-                    StringComparison.Ordinal
-                )
-                    || string.Equals(
-                        _terminal._commandInput.value,
-                        expected,
-                        StringComparison.Ordinal
-                    ),
-                $"{message}: field='{_terminal._commandInput.value}'"
-                    + $" input='{DefaultTerminalInput.Instance.CommandText}'"
+                string.Equals(DefaultTerminalInput.Instance.CommandText, expected, StringComparison.Ordinal)
+                    || string.Equals(_terminal._commandInput.value, expected, StringComparison.Ordinal),
+                $"{message}: field='{_terminal._commandInput.value}'" + $" input='{DefaultTerminalInput.Instance.CommandText}'"
             );
         }
 
@@ -800,11 +538,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             LateUpdate, so the rig polls for it like every other frame-
             coupled surface.
          */
-        private IEnumerator WaitForSelectedHint(
-            ScrollView hints,
-            string expectedText,
-            string message
-        )
+        private IEnumerator WaitForSelectedHint(ScrollView hints, string expectedText, string message)
         {
             int frameBudget = FrameBudget;
             while (0 < frameBudget-- && !HasSingleSelectedHint(hints, expectedText))
@@ -812,10 +546,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 yield return null;
             }
 
-            Assert.IsTrue(
-                HasSingleSelectedHint(hints, expectedText),
-                $"{message}: {DescribeSelectedHints(hints)}"
-            );
+            Assert.IsTrue(HasSingleSelectedHint(hints, expectedText), $"{message}: {DescribeSelectedHints(hints)}");
         }
 
         private bool HasSingleSelectedHint(ScrollView hints, string expectedText)
@@ -831,11 +562,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 }
 
                 ++selectedCount;
-                matchedText |= string.Equals(
-                    (hint as TextElement)?.text,
-                    expectedText,
-                    StringComparison.Ordinal
-                );
+                matchedText |= string.Equals((hint as TextElement)?.text, expectedText, StringComparison.Ordinal);
             }
 
             return selectedCount == 1 && matchedText;

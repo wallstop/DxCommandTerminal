@@ -12,10 +12,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Components
      */
     internal static partial class BakePartialFixtureCommands
     {
-        [RegisterCommand(
-            Help = "Bake fixture command rooted by a partial companion.",
-            Name = "bake-partial"
-        )]
+        [RegisterCommand(Help = "Bake fixture command rooted by a partial companion.", Name = "bake-partial")]
         private static void PartialPrivateCommand(CommandArg[] args) { }
 
         /*

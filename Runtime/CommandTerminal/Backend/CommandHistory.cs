@@ -95,12 +95,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             _direction = 1;
 
             int count = _history.Count;
-            while (
-                skipSameCommands
-                && 0 <= _position
-                && _position < count
-                && _seenInDirection.Contains(_history[_position].text)
-            )
+            while (skipSameCommands && 0 <= _position && _position < count && _seenInDirection.Contains(_history[_position].text))
             {
                 ++_position;
             }
@@ -126,12 +121,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             _direction = -1;
 
             int count = _history.Count;
-            while (
-                skipSameCommands
-                && 0 <= _position
-                && _position < count
-                && _seenInDirection.Contains(_history[_position].text)
-            )
+            while (skipSameCommands && 0 <= _position && _position < count && _seenInDirection.Contains(_history[_position].text))
             {
                 --_position;
             }
@@ -243,11 +233,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             private int _index;
             private string _current;
 
-            internal HistoryEnumerator(
-                CyclicBuffer<(string text, bool? success, bool? errorFree)> history,
-                bool onlySuccess,
-                bool onlyErrorFree
-            )
+            internal HistoryEnumerator(CyclicBuffer<(string text, bool? success, bool? errorFree)> history, bool onlySuccess, bool onlyErrorFree)
             {
                 _history = history;
                 _onlySuccess = onlySuccess;

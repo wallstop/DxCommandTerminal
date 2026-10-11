@@ -43,9 +43,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return false;
             }
 
-            string formattedMessage = parameters is { Length: > 0 }
-                ? string.Format(format, parameters)
-                : format;
+            string formattedMessage = parameters is { Length: > 0 } ? string.Format(format, parameters) : format;
             return buffer.HandleLog(formattedMessage, type);
         }
     }

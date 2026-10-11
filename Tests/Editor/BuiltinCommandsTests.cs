@@ -87,16 +87,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.That(
                 copied.Length,
                 Is.EqualTo(expected.Length),
-                $"{because} (line count: {copied.Length}; clipboard: "
-                    + $"{DescribeClipboard(string.Join(LogCopySeparator, copied))})"
+                $"{because} (line count: {copied.Length}; clipboard: " + $"{DescribeClipboard(string.Join(LogCopySeparator, copied))})"
             );
             for (int i = 0; i < expected.Length && i < copied.Length; ++i)
             {
-                Assert.That(
-                    string.Equals(copied[i], expected[i], StringComparison.Ordinal),
-                    Is.True,
-                    $"{because} (line {i}: {DescribeClipboard(copied[i])})"
-                );
+                Assert.That(string.Equals(copied[i], expected[i], StringComparison.Ordinal), Is.True, $"{because} (line {i}: {DescribeClipboard(copied[i])})");
             }
         }
 
@@ -138,8 +133,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             /* A player-shaped context, so an editor-side run is not a
                context-eligibility test in disguise. */
-            CommandExecutionContext.AmbientContextProvider = () =>
-                new CommandExecutionContext(CommandExecutionContexts.Player);
+            CommandExecutionContext.AmbientContextProvider = () => new CommandExecutionContext(CommandExecutionContexts.Player);
 
             _buffer = new CommandLog(LogCapacity);
             _history = new CommandHistory(16);
@@ -166,24 +160,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void TimeRunsTheCommandItWasGivenWithItsQuotedArgumentIntact()
         {
-            _shell.AddCommand(
-                "record",
-                args => _recorded.Add(string.Join("|", Contents(args))),
-                minArgs: 0
-            );
+            _shell.AddCommand("record", args => _recorded.Add(string.Join("|", Contents(args))), minArgs: 0);
 
             string error = Run("time record \"two words\" plain");
 
-            Assert.That(
-                error,
-                Is.Null,
-                $"`time` must run the command it names, not reject its arguments: {error}"
-            );
-            Assert.That(
-                _recorded,
-                Is.EqualTo(new[] { "two words|plain" }),
-                "`time` re-tokenized a flattened string, so a quoted argument split"
-            );
+            Assert.That(error, Is.Null, $"`time` must run the command it names, not reject its arguments: {error}");
+            Assert.That(_recorded, Is.EqualTo(new[] { "two words|plain" }), "`time` re-tokenized a flattened string, so a quoted argument split");
         }
 
         [Test]
@@ -193,11 +175,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Run("time record");
 
-            Assert.That(
-                _recorded,
-                Is.EqualTo(new[] { "ran" }),
-                "`time` must invoke the command it names"
-            );
+            Assert.That(_recorded, Is.EqualTo(new[] { "ran" }), "`time` must invoke the command it names");
         }
 
         [Test]
@@ -205,11 +183,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             string error = Run("time");
 
-            Assert.That(
-                error,
-                Is.Not.Null,
-                "A `time` with no command is still an argument-count failure"
-            );
+            Assert.That(error, Is.Not.Null, "A `time` with no command is still an argument-count failure");
         }
 
         [Test]
@@ -226,11 +200,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             string error = Run("time log-terminal $greet");
 
             Assert.That(error, Is.Null, $"`time` must run the substituted line: {error}");
-            Assert.That(
-                Contains(Newest(3), "Hello World!"),
-                Is.True,
-                "`time` must not hand the timed command the literal `$greet`"
-            );
+            Assert.That(Contains(Newest(3), "Hello World!"), Is.True, "`time` must not hand the timed command the literal `$greet`");
         }
 
         [Test]
@@ -240,18 +210,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             string[] history = _history.GetHistory(true, true).ToArray();
 
+            Assert.That(history, Does.Contain("time log-terminal once"), "The line the developer typed is in history");
             Assert.That(
-                history,
-                Does.Contain("time log-terminal once"),
-                "The line the developer typed is in history"
-            );
-            Assert.That(
-                history.Count(line =>
-                    string.Equals(line, "log-terminal once", StringComparison.Ordinal)
-                ),
+                history.Count(line => string.Equals(line, "log-terminal once", StringComparison.Ordinal)),
                 Is.EqualTo(1),
-                "The timed command's own line reaches history once, through the same "
-                    + "funnel the string path used, so Up recalls exactly what it did before"
+                "The timed command's own line reaches history once, through the same " + "funnel the string path used, so Up recalls exactly what it did before"
             );
         }
 
@@ -266,14 +229,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.That(
                 string.Equals(copied, "second", StringComparison.Ordinal),
                 Is.True,
-                "`copy-last` copies the newest line, which is the one above the echo "
-                    + $"(clipboard: {DescribeClipboard(copied)})"
+                "`copy-last` copies the newest line, which is the one above the echo " + $"(clipboard: {DescribeClipboard(copied)})"
             );
-            Assert.That(
-                Contains(Newest(3), "Copied the most recent log line to the clipboard."),
-                Is.True,
-                "`copy-last` answers in the console like every other command"
-            );
+            Assert.That(Contains(Newest(3), "Copied the most recent log line to the clipboard."), Is.True, "`copy-last` answers in the console like every other command");
         }
 
         [Test]
@@ -287,14 +245,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.That(
                 0 <= copied.IndexOf("alpha", StringComparison.Ordinal),
                 Is.True,
-                "`copy-log` with no count copies every buffered line "
-                    + $"(clipboard: {DescribeClipboard(copied)})"
+                "`copy-log` with no count copies every buffered line " + $"(clipboard: {DescribeClipboard(copied)})"
             );
             Assert.That(
                 0 <= copied.IndexOf("beta", StringComparison.Ordinal),
                 Is.True,
-                "`copy-log` with no count copies every buffered line "
-                    + $"(clipboard: {DescribeClipboard(copied)})"
+                "`copy-log` with no count copies every buffered line " + $"(clipboard: {DescribeClipboard(copied)})"
             );
         }
 
@@ -310,17 +266,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Run($"copy-log {count}");
 
             string[] copied = GUIUtility.systemCopyBuffer.Split(LogCopySeparator);
-            Assert.That(
-                copied.Length,
-                Is.EqualTo(int.Parse(count, CultureInfo.InvariantCulture)),
-                $"`copy-log {count}` copies exactly {count} lines"
-            );
+            Assert.That(copied.Length, Is.EqualTo(int.Parse(count, CultureInfo.InvariantCulture)), $"`copy-log {count}` copies exactly {count} lines");
             string newest = copied[copied.Length - 1];
             Assert.That(
                 string.Equals(newest, "line4", StringComparison.Ordinal),
                 Is.True,
-                "The window is the newest lines, and its own end is the newest of them "
-                    + $"(newest: {DescribeClipboard(newest)})"
+                "The window is the newest lines, and its own end is the newest of them " + $"(newest: {DescribeClipboard(newest)})"
             );
         }
 
@@ -335,14 +286,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.That(
                 string.Equals(after, untouched, StringComparison.Ordinal),
                 Is.True,
-                "A count that does not parse must not fall through to copying everything "
-                    + $"(clipboard: {DescribeClipboard(after)})"
+                "A count that does not parse must not fall through to copying everything " + $"(clipboard: {DescribeClipboard(after)})"
             );
-            Assert.That(
-                Contains(Newest(2), "Invalid line count not-a-number."),
-                Is.True,
-                "A count that does not parse is reported, not silently ignored"
-            );
+            Assert.That(Contains(Newest(2), "Invalid line count not-a-number."), Is.True, "A count that does not parse is reported, not silently ignored");
         }
 
         [Test]
@@ -356,14 +302,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.That(
                 string.Equals(after, untouched, StringComparison.Ordinal),
                 Is.True,
-                "`copy-log 0` copies nothing rather than everything "
-                    + $"(clipboard: {DescribeClipboard(after)})"
+                "`copy-log 0` copies nothing rather than everything " + $"(clipboard: {DescribeClipboard(after)})"
             );
-            Assert.That(
-                Contains(Newest(2), "Line count must be at least 1."),
-                Is.True,
-                "A zero count is reported"
-            );
+            Assert.That(Contains(Newest(2), "Line count must be at least 1."), Is.True, "A zero count is reported");
         }
 
         [Test]
@@ -383,8 +324,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.That(
                 string.Equals(copied, "the error line", StringComparison.Ordinal),
                 Is.True,
-                "`copy-last` copies the line above its own echo, not the echo "
-                    + $"(clipboard: {DescribeClipboard(copied)})"
+                "`copy-last` copies the line above its own echo, not the echo " + $"(clipboard: {DescribeClipboard(copied)})"
             );
         }
 
@@ -397,11 +337,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             string[] copied = GUIUtility.systemCopyBuffer.Split(LogCopySeparator);
 
-            AssertCopiedLines(
-                copied,
-                new[] { "log-terminal beta", "beta" },
-                "`copy-log 2` takes the two entries above the echo, and they are the ones the developer saw last"
-            );
+            AssertCopiedLines(copied, new[] { "log-terminal beta", "beta" }, "`copy-log 2` takes the two entries above the echo, and they are the ones the developer saw last");
         }
 
         [Test]
@@ -421,8 +357,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.That(
                 0 <= copied.IndexOf("log-terminal alpha", StringComparison.Ordinal),
                 Is.True,
-                "An earlier command echo is part of the log and stays in the transcript "
-                    + $"(clipboard: {DescribeClipboard(copied)})"
+                "An earlier command echo is part of the log and stays in the transcript " + $"(clipboard: {DescribeClipboard(copied)})"
             );
         }
 
@@ -433,11 +368,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                `Run` writes the typed line into it before dispatching. */
             _shell.RunCommand("copy-last");
 
-            Assert.That(
-                Contains(Newest(1), "Nothing to copy: the log is empty."),
-                Is.True,
-                "An empty log is a report, not a silent no-op"
-            );
+            Assert.That(Contains(Newest(1), "Nothing to copy: the log is empty."), Is.True, "An empty log is a report, not a silent no-op");
         }
 
         [Test]
@@ -460,22 +391,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Run("copy-log 2");
 
-            Assert.That(
-                Contains(Newest(2), "Nothing to copy: the log holds no text."),
-                Is.True,
-                "Empty lines are not a platform that refused the copy"
-            );
-            Assert.That(
-                Contains(Newest(2), "did not keep the text"),
-                Is.False,
-                "The refusal message is reserved for a platform that declined"
-            );
+            Assert.That(Contains(Newest(2), "Nothing to copy: the log holds no text."), Is.True, "Empty lines are not a platform that refused the copy");
+            Assert.That(Contains(Newest(2), "did not keep the text"), Is.False, "The refusal message is reserved for a platform that declined");
             string after = GUIUtility.systemCopyBuffer;
-            Assert.That(
-                string.Equals(after, untouched, StringComparison.Ordinal),
-                Is.True,
-                $"A refused copy leaves the clipboard alone (clipboard: {DescribeClipboard(after)})"
-            );
+            Assert.That(string.Equals(after, untouched, StringComparison.Ordinal), Is.True, $"A refused copy leaves the clipboard alone (clipboard: {DescribeClipboard(after)})");
         }
 
         [Test]
@@ -488,11 +407,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             string[] copied = GUIUtility.systemCopyBuffer.Split(LogCopySeparator);
 
-            AssertCopiedLines(
-                copied,
-                new[] { string.Empty, "log-terminal beta", "beta" },
-                "The three entries above the echo, blank one included"
-            );
+            AssertCopiedLines(copied, new[] { string.Empty, "log-terminal beta", "beta" }, "The three entries above the echo, blank one included");
         }
 
         [Test]
@@ -518,8 +433,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.That(
                 string.Equals(copied, "boom", StringComparison.Ordinal),
                 Is.True,
-                "A copied line is the line the developer sees; `trace` is how they get a trace "
-                    + $"(clipboard: {DescribeClipboard(copied)})"
+                "A copied line is the line the developer sees; `trace` is how they get a trace " + $"(clipboard: {DescribeClipboard(copied)})"
             );
         }
 

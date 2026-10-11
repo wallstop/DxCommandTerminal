@@ -33,29 +33,16 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             LogFilter filter = new();
             Assert.That(filter.SetQuery("NullReference"), Is.True);
 
-            LogItem[] window = Window(
-                "starting",
-                "NullReferenceException: value",
-                "middle",
-                "also NullReference here"
-            );
+            LogItem[] window = Window("starting", "NullReferenceException: value", "middle", "also NullReference here");
             LogItem[] destination = new LogItem[window.Length];
 
             int kept = filter.Apply(window, window.Length, destination);
 
             Assert.That(kept, Is.EqualTo(2), "Only the two matching lines are drawn");
             Assert.That(destination[0].message, Is.EqualTo("NullReferenceException: value"));
-            Assert.That(
-                destination[1].message,
-                Is.EqualTo("also NullReference here"),
-                "The oldest match is drawn first, so the view reads top to bottom like the log"
-            );
+            Assert.That(destination[1].message, Is.EqualTo("also NullReference here"), "The oldest match is drawn first, so the view reads top to bottom like the log");
             Assert.That(filter.MatchCount, Is.EqualTo(2));
-            Assert.That(
-                filter.TotalCount,
-                Is.EqualTo(4),
-                "The count a developer compares against is the whole log, not the matches"
-            );
+            Assert.That(filter.TotalCount, Is.EqualTo(4), "The count a developer compares against is the whole log, not the matches");
         }
 
         [Test]
@@ -75,14 +62,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             int kept = filter.Apply(window, window.Length, new LogItem[window.Length]);
 
             Assert.That(kept, Is.EqualTo(1), "A lowercase search reaches the capitalized line");
-            Assert.That(
-                LogFilter.Matches(
-                    new LogItem(TerminalLogType.Message, "straße", string.Empty),
-                    "STRASSE"
-                ),
-                Is.False,
-                "No culture rule folds a sharp s into a double s"
-            );
+            Assert.That(LogFilter.Matches(new LogItem(TerminalLogType.Message, "straße", string.Empty), "STRASSE"), Is.False, "No culture rule folds a sharp s into a double s");
         }
 
         [Test]
@@ -96,16 +76,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
              */
             LogItem escaped = new(TerminalLogType.Message, @"name is Admin‮exe", string.Empty);
 
-            Assert.That(
-                LogFilter.Matches(escaped, "‮"),
-                Is.True,
-                "The escape the view draws is in the text the search reads"
-            );
-            Assert.That(
-                LogFilter.Matches(escaped, "Admin"),
-                Is.True,
-                "The visible part of the name still matches"
-            );
+            Assert.That(LogFilter.Matches(escaped, "‮"), Is.True, "The escape the view draws is in the text the search reads");
+            Assert.That(LogFilter.Matches(escaped, "Admin"), Is.True, "The visible part of the name still matches");
         }
 
         [Test]
@@ -121,16 +93,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
              */
             LogItem echo = new(TerminalLogType.Input, "find the hit", string.Empty);
 
+            Assert.That(LogFilter.Matches(echo, "the hit"), Is.False, "A search cannot find the command that performed it");
             Assert.That(
-                LogFilter.Matches(echo, "the hit"),
-                Is.False,
-                "A search cannot find the command that performed it"
-            );
-            Assert.That(
-                LogFilter.Matches(
-                    new LogItem(TerminalLogType.Message, "find the hit", string.Empty),
-                    "the hit"
-                ),
+                LogFilter.Matches(new LogItem(TerminalLogType.Message, "find the hit", string.Empty), "the hit"),
                 Is.True,
                 "Output holding the same words is a match; only the echo type is excluded"
             );
@@ -148,11 +113,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             LogFilter filter = new();
             Assert.That(filter.SetQuery("the hit"), Is.True);
 
-            LogItem[] window =
-            {
-                new LogItem(TerminalLogType.Message, "routine frame", string.Empty),
-                new LogItem(TerminalLogType.Input, "find the hit", string.Empty),
-            };
+            LogItem[] window = { new LogItem(TerminalLogType.Message, "routine frame", string.Empty), new LogItem(TerminalLogType.Input, "find the hit", string.Empty) };
             int kept = filter.Apply(window, window.Length, new LogItem[window.Length]);
 
             Assert.That(kept, Is.EqualTo(0), "A query no output holds found nothing");
@@ -173,11 +134,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             LogFilter filter = new();
             Assert.That(filter.SetQuery("hit"), Is.True);
 
-            LogItem[] before =
-            {
-                new LogItem(TerminalLogType.Message, "hit one", string.Empty),
-                new LogItem(TerminalLogType.Message, "miss", string.Empty),
-            };
+            LogItem[] before = { new LogItem(TerminalLogType.Message, "hit one", string.Empty), new LogItem(TerminalLogType.Message, "miss", string.Empty) };
             int first = filter.Apply(before, before.Length, new LogItem[before.Length]);
 
             /*
@@ -196,16 +153,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             };
             int second = filter.Apply(after, after.Length, new LogItem[after.Length]);
 
-            Assert.That(
-                second,
-                Is.EqualTo(first + 1),
-                "A new match and a new echo are two different things to the count"
-            );
-            Assert.That(
-                filter.TotalCount,
-                Is.EqualTo(3),
-                "The echoed command is not one of the lines the search ranged over"
-            );
+            Assert.That(second, Is.EqualTo(first + 1), "A new match and a new echo are two different things to the count");
+            Assert.That(filter.TotalCount, Is.EqualTo(3), "The echoed command is not one of the lines the search ranged over");
         }
 
         [Test]
@@ -214,18 +163,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             LogFilter filter = new();
             Assert.That(filter.SetQuery("boom"), Is.True, "A search is set to be lost");
 
-            Assert.That(
-                filter.SetQuery("   "),
-                Is.False,
-                "Every line contains a space, so this is not a search"
-            );
+            Assert.That(filter.SetQuery("   "), Is.False, "Every line contains a space, so this is not a search");
             Assert.That(filter.SetQuery(string.Empty), Is.False);
             Assert.That(filter.SetQuery(null), Is.False);
-            Assert.That(
-                filter.Query,
-                Is.EqualTo("boom"),
-                "A refused query leaves the search the developer set alone"
-            );
+            Assert.That(filter.Query, Is.EqualTo("boom"), "A refused query leaves the search the developer set alone");
         }
 
         [Test]
@@ -234,11 +175,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             LogFilter filter = new();
             Assert.That(filter.SetQuery("  boom  "), Is.True);
 
-            Assert.That(
-                filter.Query,
-                Is.EqualTo("boom"),
-                "A pasted query with a trailing space still finds the line"
-            );
+            Assert.That(filter.Query, Is.EqualTo("boom"), "A pasted query with a trailing space still finds the line");
         }
 
         [Test]
@@ -250,11 +187,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             LogItem[] window = Window("hit one", "miss", "hit two");
             filter.Apply(window, window.Length, new LogItem[window.Length]);
 
-            Assert.That(
-                filter.CurrentMatch,
-                Is.EqualTo(1),
-                "The first match is where a search starts"
-            );
+            Assert.That(filter.CurrentMatch, Is.EqualTo(1), "The first match is where a search starts");
         }
 
         [Test]
@@ -272,17 +205,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.That(filter.StepForward(), Is.True);
             Assert.That(filter.CurrentMatch, Is.EqualTo(3), "The last match, not past it");
             Assert.That(filter.StepForward(), Is.True);
-            Assert.That(
-                filter.CurrentMatch,
-                Is.EqualTo(1),
-                "Forward from the last match wraps to the first"
-            );
+            Assert.That(filter.CurrentMatch, Is.EqualTo(1), "Forward from the last match wraps to the first");
             Assert.That(filter.StepBackward(), Is.True);
-            Assert.That(
-                filter.CurrentMatch,
-                Is.EqualTo(3),
-                "Backward from the first match wraps to the last"
-            );
+            Assert.That(filter.CurrentMatch, Is.EqualTo(3), "Backward from the first match wraps to the last");
         }
 
         [Test]
@@ -323,11 +248,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             kept = filter.Apply(rotated, rotated.Length, new LogItem[rotated.Length]);
 
             Assert.That(kept, Is.EqualTo(1));
-            Assert.That(
-                filter.CurrentMatch,
-                Is.EqualTo(1),
-                "Clamped to a position the current window has"
-            );
+            Assert.That(filter.CurrentMatch, Is.EqualTo(1), "Clamped to a position the current window has");
         }
 
         [Test]
@@ -347,11 +268,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             int kept = filter.Apply(window, window.Length, new LogItem[1]);
 
             Assert.That(kept, Is.EqualTo(1));
-            Assert.That(
-                filter.MatchCount,
-                Is.EqualTo(1),
-                "The count is what was drawn, not what matched"
-            );
+            Assert.That(filter.MatchCount, Is.EqualTo(1), "The count is what was drawn, not what matched");
             Assert.That(filter.TotalCount, Is.EqualTo(3));
         }
 
@@ -370,11 +287,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.That(filter.Query, Is.Null);
             Assert.That(filter.MatchCount, Is.EqualTo(0));
             Assert.That(filter.TotalCount, Is.EqualTo(0));
-            Assert.That(
-                filter.CurrentMatch,
-                Is.Null,
-                "A cleared search has no position to resume from"
-            );
+            Assert.That(filter.CurrentMatch, Is.Null, "A cleared search has no position to resume from");
             Assert.That(filter.StepForward(), Is.False);
         }
 
@@ -411,11 +324,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             int secondKept = filter.Apply(second, second.Length, new LogItem[second.Length]);
 
             Assert.That(secondKept, Is.EqualTo(firstKept), "The answer is not a match");
-            Assert.That(
-                filter.TotalCount,
-                Is.EqualTo(firstTotal),
-                "And it is not a line the search ranged over either"
-            );
+            Assert.That(filter.TotalCount, Is.EqualTo(firstTotal), "And it is not a line the search ranged over either");
         }
 
         [Test]
@@ -430,19 +339,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
              */
             LogFilter filter = new();
 
-            Assert.That(
-                filter.IsActive,
-                Is.False,
-                "A terminal with no search draws the window itself, never through this"
-            );
+            Assert.That(filter.IsActive, Is.False, "A terminal with no search draws the window itself, never through this");
             Assert.That(filter.MatchCount, Is.EqualTo(0));
             Assert.That(filter.TotalCount, Is.EqualTo(0));
             Assert.That(filter.CurrentMatch, Is.Null);
-            Assert.That(
-                filter.StepForward(),
-                Is.False,
-                "There is nothing to step through, and saying so is what stops a stale count"
-            );
+            Assert.That(filter.StepForward(), Is.False, "There is nothing to step through, and saying so is what stops a stale count");
         }
 
         [Test]
@@ -463,11 +364,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Assert.That(kept, Is.EqualTo(2), "The destination held what it could");
             Assert.That(filter.MatchCount, Is.EqualTo(2), "The count is what was drawn");
-            Assert.That(
-                filter.TotalCount,
-                Is.EqualTo(window.Length),
-                "The denominator still covers every line the search could have matched"
-            );
+            Assert.That(filter.TotalCount, Is.EqualTo(window.Length), "The denominator still covers every line the search could have matched");
         }
     }
 }

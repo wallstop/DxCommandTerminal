@@ -129,10 +129,7 @@
                         Handler = (context, arguments) => { },
                         CompletionProvider = CommandCompletionProviders.Staged(
                             InventoryStage(),
-                            (
-                                in CommandCompletionContext context,
-                                List<CommandCompletion> results
-                            ) =>
+                            (in CommandCompletionContext context, List<CommandCompletion> results) =>
                             {
                                 foreach (string count in new[] { "1", "2", "3" })
                                 {
@@ -153,10 +150,7 @@
                     {
                         Name = "emptychoice",
                         Handler = (context, arguments) => { },
-                        CompletionProvider = (
-                            in CommandCompletionContext context,
-                            List<CommandCompletion> results
-                        ) => { },
+                        CompletionProvider = (in CommandCompletionContext context, List<CommandCompletion> results) => { },
                     }
                 )
             );
@@ -171,10 +165,7 @@
                         Name = "editcommand",
                         Contexts = CommandExecutionContexts.EditorEditMode,
                         Handler = (context, arguments) => { },
-                        CompletionProvider = (
-                            in CommandCompletionContext context,
-                            List<CommandCompletion> results
-                        ) => results.Add(new CommandCompletion("editvalue")),
+                        CompletionProvider = (in CommandCompletionContext context, List<CommandCompletion> results) => results.Add(new CommandCompletion("editvalue")),
                     }
                 )
             );
@@ -264,47 +255,20 @@
         [Test]
         public void RankTiersMatchExactPrefixThenSubsequence()
         {
-            Assert.AreEqual(
-                CommandPaletteSearch.ExactMatch,
-                CommandPaletteSearch.Rank("alpha", "alpha")
-            );
-            Assert.AreEqual(
-                CommandPaletteSearch.PrefixMatch,
-                CommandPaletteSearch.Rank("alpha", "alphabet")
-            );
-            Assert.AreEqual(
-                CommandPaletteSearch.SubsequenceMatch,
-                CommandPaletteSearch.Rank("alpha", "zalphabet")
-            );
-            Assert.AreEqual(
-                CommandPaletteSearch.NoMatch,
-                CommandPaletteSearch.Rank("alpha", "beta")
-            );
-            Assert.AreEqual(
-                CommandPaletteSearch.NoMatch,
-                CommandPaletteSearch.Rank(string.Empty, "beta")
-            );
+            Assert.AreEqual(CommandPaletteSearch.ExactMatch, CommandPaletteSearch.Rank("alpha", "alpha"));
+            Assert.AreEqual(CommandPaletteSearch.PrefixMatch, CommandPaletteSearch.Rank("alpha", "alphabet"));
+            Assert.AreEqual(CommandPaletteSearch.SubsequenceMatch, CommandPaletteSearch.Rank("alpha", "zalphabet"));
+            Assert.AreEqual(CommandPaletteSearch.NoMatch, CommandPaletteSearch.Rank("alpha", "beta"));
+            Assert.AreEqual(CommandPaletteSearch.NoMatch, CommandPaletteSearch.Rank(string.Empty, "beta"));
         }
 
         [Test]
         public void RankMatchingIsCaseInsensitive()
         {
-            Assert.AreEqual(
-                CommandPaletteSearch.ExactMatch,
-                CommandPaletteSearch.Rank("ALPHA", "alpha")
-            );
-            Assert.AreEqual(
-                CommandPaletteSearch.PrefixMatch,
-                CommandPaletteSearch.Rank("Alpha", "ALPHABET")
-            );
-            Assert.AreEqual(
-                CommandPaletteSearch.PrefixMatch,
-                CommandPaletteSearch.Rank("ZALPHA", "zalphabet")
-            );
-            Assert.AreEqual(
-                CommandPaletteSearch.SubsequenceMatch,
-                CommandPaletteSearch.Rank("LPHAB", "zalphabet")
-            );
+            Assert.AreEqual(CommandPaletteSearch.ExactMatch, CommandPaletteSearch.Rank("ALPHA", "alpha"));
+            Assert.AreEqual(CommandPaletteSearch.PrefixMatch, CommandPaletteSearch.Rank("Alpha", "ALPHABET"));
+            Assert.AreEqual(CommandPaletteSearch.PrefixMatch, CommandPaletteSearch.Rank("ZALPHA", "zalphabet"));
+            Assert.AreEqual(CommandPaletteSearch.SubsequenceMatch, CommandPaletteSearch.Rank("LPHAB", "zalphabet"));
         }
 
         [Test]
@@ -315,11 +279,7 @@
 
             CommandPaletteSearch.Filter("alpha", source, results);
 
-            Assert.AreEqual(
-                new[] { "alpha", "alphabet", "zalphabet" },
-                results.ToArray(),
-                "Exact matches come first, then prefixes, then subsequence matches"
-            );
+            Assert.AreEqual(new[] { "alpha", "alphabet", "zalphabet" }, results.ToArray(), "Exact matches come first, then prefixes, then subsequence matches");
         }
 
         [Test]
@@ -346,11 +306,7 @@
 
             Assert.IsTrue(_palette.IsOpen, "Open() must open the palette");
             Assert.AreEqual(1, openedCount, "Opened must fire exactly once per open");
-            Assert.AreEqual(
-                0,
-                _palette._matchNames.Count,
-                "A blank query keeps the bar collapsed with no listed commands"
-            );
+            Assert.AreEqual(0, _palette._matchNames.Count, "A blank query keeps the bar collapsed with no listed commands");
             AssertResultsCollapsed("Opening without a query shows only the bar");
             yield return WaitForFocusedInput("The palette input should be focused after open");
         }
@@ -368,10 +324,7 @@
             _palette.Open();
             yield return null;
 
-            Assert.That(
-                _palette._paletteRoot.style.unityFontDefinition.value.font == null,
-                "Sanity: the palette built before the terminal resolved a pack font"
-            );
+            Assert.That(_palette._paletteRoot.style.unityFontDefinition.value.font == null, "Sanity: the palette built before the terminal resolved a pack font");
 
             _terminalObject = new GameObject("PaletteFontTerminal");
             _terminalObject.SetActive(false);
@@ -393,25 +346,15 @@
                 yield return null;
             }
 
-            Assert.That(
-                terminal._commandInput != null,
-                "Sanity: the terminal's first open builds the tree"
-            );
-            Assert.That(
-                terminal.CurrentFont != null,
-                "Sanity: the first build resolved the pack font"
-            );
+            Assert.That(terminal._commandInput != null, "Sanity: the terminal's first open builds the tree");
+            Assert.That(terminal.CurrentFont != null, "Sanity: the first build resolved the pack font");
 
             _palette.Close();
             _palette.Open();
             yield return null;
 
             Font appliedFont = _palette._paletteRoot.style.unityFontDefinition.value.font;
-            Assert.AreEqual(
-                terminal.CurrentFont,
-                appliedFont,
-                "A palette opened after the terminal's first build renders the pack font"
-            );
+            Assert.AreEqual(terminal.CurrentFont, appliedFont, "A palette opened after the terminal's first build renders the pack font");
         }
 
         /*
@@ -440,11 +383,7 @@
 
             yield return SendHistoryKey(KeyCode.Z, EventModifiers.Control);
 
-            Assert.AreEqual(
-                "palettep",
-                _palette._input.value,
-                "One Ctrl+Z drops the character that was typed"
-            );
+            Assert.AreEqual("palettep", _palette._input.value, "One Ctrl+Z drops the character that was typed");
         }
 
         /*
@@ -458,16 +397,7 @@
         public IEnumerator UndoTakesBackTheCandidateTabApplied()
         {
             yield return SpawnPalette();
-            Assert.IsTrue(
-                Terminal.Shell.AddCommand(
-                    "paletteundo",
-                    _ => { },
-                    minArgs: 0,
-                    maxArgs: 0,
-                    help: "test"
-                ),
-                "Sanity: the candidate command registers"
-            );
+            Assert.IsTrue(Terminal.Shell.AddCommand("paletteundo", _ => { }, minArgs: 0, maxArgs: 0, help: "test"), "Sanity: the candidate command registers");
 
             _palette.Open();
             yield return null;
@@ -480,27 +410,16 @@
                 yield return null;
             }
 
-            Assert.IsTrue(
-                _palette.TryGetSelected(out string selected),
-                "The query matches the registered command"
-            );
+            Assert.IsTrue(_palette.TryGetSelected(out string selected), "The query matches the registered command");
             Assert.AreEqual("paletteundo", selected, "And the match is the command name");
 
             _palette.ApplySelected();
             yield return null;
-            Assert.AreEqual(
-                "paletteundo",
-                _palette._input.value,
-                "Sanity: the applied candidate is on the field"
-            );
+            Assert.AreEqual("paletteundo", _palette._input.value, "Sanity: the applied candidate is on the field");
 
             yield return SendHistoryKey(KeyCode.Z, EventModifiers.Control);
 
-            Assert.AreEqual(
-                "paletteun",
-                _palette._input.value,
-                "The undo returned to the query the application replaced"
-            );
+            Assert.AreEqual("paletteun", _palette._input.value, "The undo returned to the query the application replaced");
         }
 
         [UnityTest]
@@ -517,11 +436,7 @@
 
             yield return SendHistoryKey(KeyCode.Z, EventModifiers.None);
 
-            Assert.AreEqual(
-                "palettepin",
-                _palette._input.value,
-                "A bare Z is not claimed, so the query is where it was"
-            );
+            Assert.AreEqual("palettepin", _palette._input.value, "A bare Z is not claimed, so the query is where it was");
         }
 
         [UnityTest]
@@ -536,11 +451,7 @@
             _palette._input.value = "alpha";
             yield return null;
 
-            Assert.AreEqual(
-                new[] { "alphabet", "zalphabet" },
-                _palette._matchNames.ToArray(),
-                "Prefix matches outrank subsequence matches"
-            );
+            Assert.AreEqual(new[] { "alphabet", "zalphabet" }, _palette._matchNames.ToArray(), "Prefix matches outrank subsequence matches");
             Assert.IsTrue(_palette.TryGetSelected(out string selected));
             Assert.AreEqual("alphabet", selected, "Selection resets to the first match");
             AssertResultsExpanded("Typing reveals the results dropdown");
@@ -560,11 +471,7 @@
             yield return null;
 
             AssertResultsExpanded("Typing reveals the results dropdown");
-            Assert.AreEqual(
-                new[] { "paletteping1", "paletteping2" },
-                _palette._matchNames.ToArray(),
-                "Matches list in the shell's ordinal order"
-            );
+            Assert.AreEqual(new[] { "paletteping1", "paletteping2" }, _palette._matchNames.ToArray(), "Matches list in the shell's ordinal order");
 
             _palette._input.value = string.Empty;
             yield return null;
@@ -584,23 +491,12 @@
             _palette._input.value = "paletteping";
             yield return null;
 
-            Assert.AreEqual(
-                new[] { "paletteping1", "paletteping2" },
-                _palette._matchNames.ToArray(),
-                "Both commands match the typed prefix in ordinal order"
-            );
+            Assert.AreEqual(new[] { "paletteping1", "paletteping2" }, _palette._matchNames.ToArray(), "Both commands match the typed prefix in ordinal order");
 
             Assert.IsTrue(_palette.MoveSelection(1), "Moving down from the first row succeeds");
-            Assert.IsTrue(
-                _palette.TryGetSelected(out string down),
-                "Selection survives navigation"
-            );
+            Assert.IsTrue(_palette.TryGetSelected(out string down), "Selection survives navigation");
             Assert.AreEqual("paletteping2", down, "One down move lands on the second row");
-            Assert.AreEqual(
-                "paletteping2",
-                _palette._input.value,
-                "Arrow navigation auto-loads the selected command name into the input"
-            );
+            Assert.AreEqual("paletteping2", _palette._input.value, "Arrow navigation auto-loads the selected command name into the input");
             Assert.AreEqual(
                 new[] { "paletteping1", "paletteping2" },
                 _palette._matchNames.ToArray(),
@@ -608,24 +504,16 @@
             );
 
             Assert.IsFalse(_palette.MoveSelection(1), "Moving past the last row is rejected");
-            Assert.AreEqual(
-                "paletteping2",
-                _palette._input.value,
-                "A rejected move keeps the loaded name"
-            );
+            Assert.AreEqual("paletteping2", _palette._input.value, "A rejected move keeps the loaded name");
 
             Assert.IsTrue(_palette.MoveSelection(-1), "Moving up from the second row succeeds");
             Assert.IsTrue(_palette.TryGetSelected(out string up), "Selection survives navigation");
             Assert.AreEqual("paletteping1", up);
             Assert.AreEqual("paletteping1", _palette._input.value, "Moving up auto-loads again");
             Assert.IsFalse(_palette.MoveSelection(-1), "Moving past the first row is rejected");
-            yield return WaitForCaret(
-                "paletteping1".Length,
-                "Auto-loading parks the caret at the end of the loaded name"
-            );
+            yield return WaitForCaret("paletteping1".Length, "Auto-loading parks the caret at the end of the loaded name");
             Assert.IsTrue(
-                _palette._input.selectIndex == _palette._input.cursorIndex
-                    || _palette._pendingCaretIndex == "paletteping1".Length,
+                _palette._input.selectIndex == _palette._input.cursorIndex || _palette._pendingCaretIndex == "paletteping1".Length,
                 "Auto-loading collapses the selection"
             );
         }
@@ -648,11 +536,7 @@
             Assert.IsFalse(_palette.IsOpen, "Enter runs the loaded name and closes");
             string[] history = CollectHistory();
             Assert.IsTrue(0 < history.Length, "The executed command must be recorded in history");
-            Assert.AreEqual(
-                "paletteping2",
-                history[^1],
-                "Enter executes the auto-loaded name, not the typed filter query"
-            );
+            Assert.AreEqual("paletteping2", history[^1], "Enter executes the auto-loaded name, not the typed filter query");
         }
 
         [UnityTest]
@@ -671,11 +555,7 @@
             _palette._input.value = "paletteping1x";
             yield return null;
 
-            Assert.AreEqual(
-                0,
-                _palette._matchNames.Count,
-                "Editing after auto-load re-runs the filter on the edited text"
-            );
+            Assert.AreEqual(0, _palette._matchNames.Count, "Editing after auto-load re-runs the filter on the edited text");
             AssertResultsCollapsed("No matches collapse the results");
         }
 
@@ -708,11 +588,7 @@
             yield return SendKeyDown(KeyCode.Return);
 
             Assert.IsTrue(_palette.IsOpen, "Enter without any results leaves the palette open");
-            Assert.AreEqual(
-                0,
-                CollectHistory().Length,
-                "Enter without any results executes nothing"
-            );
+            Assert.AreEqual(0, CollectHistory().Length, "Enter without any results executes nothing");
             AssertResultsCollapsed("The bar stays collapsed");
         }
 
@@ -729,11 +605,7 @@
             Assert.IsFalse(_palette.Submit(), "An unknown command fails to submit");
             Assert.IsTrue(_palette.IsOpen, "A failed submission keeps the palette open");
             AssertResultsCollapsed("No matches keep the bar collapsed");
-            StringAssert.StartsWith(
-                "Error:",
-                _palette._feedback.text,
-                "The failure message must be visible as feedback"
-            );
+            StringAssert.StartsWith("Error:", _palette._feedback.text, "The failure message must be visible as feedback");
         }
 
         [UnityTest]
@@ -765,24 +637,17 @@
             yield return SendKeyDown(KeyCode.Escape);
 
             Assert.IsFalse(_palette.IsOpen, "Escape closes the palette");
-            Assert.That(
-                _palette._paletteRoot.parent == null,
-                "A closed palette must be detached from the panel"
-            );
+            Assert.That(_palette._paletteRoot.parent == null, "A closed palette must be detached from the panel");
 
             int frameBudget = FrameBudget;
-            while (
-                0 < frameBudget--
-                && _palette._uiDocument.rootVisualElement.focusController.focusedElement != null
-            )
+            while (0 < frameBudget-- && _palette._uiDocument.rootVisualElement.focusController.focusedElement != null)
             {
                 yield return null;
             }
 
             Assert.That(
                 _palette._uiDocument.rootVisualElement.focusController.focusedElement == null,
-                "Closing without other focusable UI must release panel focus, "
-                    + "or the hidden palette keeps consuming game keys"
+                "Closing without other focusable UI must release panel focus, " + "or the hidden palette keeps consuming game keys"
             );
         }
 
@@ -823,18 +688,10 @@
 
             yield return SendKeyDown(KeyCode.Tab);
 
-            Assert.AreEqual(
-                "paletteping2",
-                _palette._input.value,
-                "Tab applies the selected command name to the input"
-            );
+            Assert.AreEqual("paletteping2", _palette._input.value, "Tab applies the selected command name to the input");
             Assert.IsTrue(_palette.TryGetSelected(out string selected), "Selection stays valid");
             Assert.AreEqual("paletteping2", selected, "Tab keeps the applied row selected");
-            Assert.AreEqual(
-                new[] { "paletteping2" },
-                _palette._matchNames.ToArray(),
-                "Applying re-filters to the exact command"
-            );
+            Assert.AreEqual(new[] { "paletteping2" }, _palette._matchNames.ToArray(), "Applying re-filters to the exact command");
         }
 
         /*
@@ -856,11 +713,7 @@
 
                 yield return SendKeyDown(KeyCode.V, EventModifiers.Control);
 
-                Assert.AreEqual(
-                    "palette ping 1 2",
-                    _palette._input.value,
-                    "A pasted block arrives as one line of arguments"
-                );
+                Assert.AreEqual("palette ping 1 2", _palette._input.value, "A pasted block arrives as one line of arguments");
             }
             finally
             {
@@ -892,10 +745,7 @@
                 yield return null;
 
                 yield return SetQueryWithCaret("spawnitem torch 1", 15, 10);
-                Assert.IsTrue(
-                    _palette._completionMode,
-                    "Sanity: the parked caret ranks the first argument's candidates"
-                );
+                Assert.IsTrue(_palette._completionMode, "Sanity: the parked caret ranks the first argument's candidates");
 
                 yield return SetClipboard("to");
                 yield return SendKeyDown(KeyCode.V, EventModifiers.Control);
@@ -908,15 +758,11 @@
                         + $"clipboard=\"{GUIUtility.systemCopyBuffer}\" "
                         + $"caret=[{_palette._input.selectIndex}, {_palette._input.cursorIndex}]"
                 );
-                Assert.IsTrue(
-                    _palette._completionMode,
-                    "The paste must leave the bar serving the argument the pasted caret sits in"
-                );
+                Assert.IsTrue(_palette._completionMode, "The paste must leave the bar serving the argument the pasted caret sits in");
                 Assert.AreEqual(
                     10,
                     _palette._completionContext.ReplacementStart,
-                    "The re-rank must act on the token the pasted caret sits in, "
-                        + "not the token the pre-paste caret was in"
+                    "The re-rank must act on the token the pasted caret sits in, " + "not the token the pre-paste caret was in"
                 );
             }
             finally
@@ -947,25 +793,13 @@
 
                 yield return SendKeyDown(KeyCode.X, EventModifiers.Control);
 
-                Assert.AreEqual(
-                    "torc",
-                    GUIUtility.systemCopyBuffer,
-                    "The cut span reached the system clipboard"
-                );
-                Assert.AreEqual(
-                    "spawnitem h 1",
-                    _palette._input.value,
-                    "The cut span is gone from the query"
-                );
-                Assert.IsTrue(
-                    _palette._completionMode,
-                    "The cut re-ranks the bar against the caret it left"
-                );
+                Assert.AreEqual("torc", GUIUtility.systemCopyBuffer, "The cut span reached the system clipboard");
+                Assert.AreEqual("spawnitem h 1", _palette._input.value, "The cut span is gone from the query");
+                Assert.IsTrue(_palette._completionMode, "The cut re-ranks the bar against the caret it left");
                 Assert.AreEqual(
                     10,
                     _palette._completionContext.ReplacementStart,
-                    "The re-rank must act on the token the cut caret sits in, "
-                        + "not the token a stale caret was in"
+                    "The re-rank must act on the token the cut caret sits in, " + "not the token a stale caret was in"
                 );
             }
             finally
@@ -1003,10 +837,7 @@
             yield return SpawnPalette();
             yield return SpawnTerminal();
             TerminalUI.Instance.SetState(TerminalState.OpenSmall);
-            Assert.IsFalse(
-                TerminalUI.Instance.IsClosed,
-                "Sanity: the terminal is open before the palette opens"
-            );
+            Assert.IsFalse(TerminalUI.Instance.IsClosed, "Sanity: the terminal is open before the palette opens");
 
             _palette.Open();
             yield return null;
@@ -1023,10 +854,7 @@
 
             TerminalUI.Instance.SetState(TerminalState.OpenSmall);
             yield return null;
-            Assert.IsFalse(
-                TerminalUI.Instance.IsClosed,
-                "Sanity: the terminal is open before the palette opens"
-            );
+            Assert.IsFalse(TerminalUI.Instance.IsClosed, "Sanity: the terminal is open before the palette opens");
 
             _palette.Open();
             yield return null;
@@ -1042,24 +870,14 @@
             Assert.AreEqual(
                 StyleKeyword.Auto,
                 documentRoot.style.height.keyword,
-                "The terminal must not clamp the shared root to its own window "
-                    + "height while the palette owns the surface"
+                "The terminal must not clamp the shared root to its own window " + "height while the palette owns the surface"
             );
-            Assert.IsTrue(
-                InputOwnsFocus(),
-                "The palette input keeps panel focus while the terminal runs its "
-                    + "close animation"
-            );
+            Assert.IsTrue(InputOwnsFocus(), "The palette input keeps panel focus while the terminal runs its " + "close animation");
 
             _palette.Close();
             yield return null;
 
-            Assert.AreNotEqual(
-                StyleKeyword.Auto,
-                documentRoot.style.height.keyword,
-                "Closing the palette hands the shared root back to the terminal's "
-                    + "own window height"
-            );
+            Assert.AreNotEqual(StyleKeyword.Auto, documentRoot.style.height.keyword, "Closing the palette hands the shared root back to the terminal's " + "own window height");
         }
 
         [UnityTest]
@@ -1093,20 +911,11 @@
             yield return null;
 
             Assert.IsFalse(_palette.IsOpen, "Opening the terminal closes the instance palette");
-            Assert.IsFalse(
-                extraPalette.IsOpen,
-                "Opening the terminal closes every palette on the shared document"
-            );
-            Assert.IsFalse(
-                TerminalUI.Instance.IsClosed,
-                "The terminal stays open and reclaims the surface"
-            );
+            Assert.IsFalse(extraPalette.IsOpen, "Opening the terminal closes every palette on the shared document");
+            Assert.IsFalse(TerminalUI.Instance.IsClosed, "The terminal stays open and reclaims the surface");
 
             int frameBudget = FrameBudget;
-            while (
-                0 < frameBudget--
-                && _palette._uiDocument.rootVisualElement.style.height.keyword == StyleKeyword.Auto
-            )
+            while (0 < frameBudget-- && _palette._uiDocument.rootVisualElement.style.height.keyword == StyleKeyword.Auto)
             {
                 yield return null;
             }
@@ -1134,45 +943,20 @@
 
             Assert.IsTrue(_palette.Submit(), "An output-producing command submits");
             Assert.IsTrue(_palette.IsOpen, "Output-producing commands keep the palette open");
-            Assert.AreEqual(
-                DisplayStyle.Flex,
-                _palette._output.style.display.value,
-                "The command output is displayed"
-            );
+            Assert.AreEqual(DisplayStyle.Flex, _palette._output.style.display.value, "The command output is displayed");
             StringAssert.Contains("Fira Mono", _palette._output.text, "Output lines shown");
             StringAssert.Contains("No font pack found.", _palette._output.text, "Warnings shown");
-            StringAssert.DoesNotContain(
-                "paletteecho",
-                _palette._output.text,
-                "The input echo is not part of the displayed output"
-            );
-            Assert.AreEqual(
-                string.Empty,
-                _palette._input.value,
-                "The executed command leaves the bar so the output reads on its own"
-            );
-            AssertResultsCollapsed(
-                "The executed command's result rows collapse with the cleared bar"
-            );
-            Assert.IsFalse(
-                _palette.Submit(),
-                "Enter with the cleared bar does not re-run the command"
-            );
+            StringAssert.DoesNotContain("paletteecho", _palette._output.text, "The input echo is not part of the displayed output");
+            Assert.AreEqual(string.Empty, _palette._input.value, "The executed command leaves the bar so the output reads on its own");
+            AssertResultsCollapsed("The executed command's result rows collapse with the cleared bar");
+            Assert.IsFalse(_palette.Submit(), "Enter with the cleared bar does not re-run the command");
             Assert.IsTrue(_palette.IsOpen, "A no-op Enter keeps the output visible");
-            Assert.AreEqual(
-                DisplayStyle.Flex,
-                _palette._output.style.display.value,
-                "The no-op Enter keeps the output visible"
-            );
+            Assert.AreEqual(DisplayStyle.Flex, _palette._output.style.display.value, "The no-op Enter keeps the output visible");
 
             _palette._input.value = "heal";
             yield return null;
 
-            Assert.AreEqual(
-                DisplayStyle.None,
-                _palette._output.style.display.value,
-                "Typing a new query clears the previous run's output"
-            );
+            Assert.AreEqual(DisplayStyle.None, _palette._output.style.display.value, "Typing a new query clears the previous run's output");
         }
 
         /*
@@ -1204,27 +988,12 @@
             _palette._input.value = "palettevalidate 3";
             yield return null;
 
-            Assert.IsFalse(
-                _palette.Submit(),
-                "A command that reported an error is not a successful submission"
-            );
+            Assert.IsFalse(_palette.Submit(), "A command that reported an error is not a successful submission");
             Assert.AreEqual(1, runs, "The command ran before it reported the error");
             Assert.IsTrue(_palette.IsOpen, "The error bar must survive the run");
-            Assert.AreEqual(
-                DisplayStyle.Flex,
-                _palette._feedback.style.display.value,
-                "The error bar is shown"
-            );
-            StringAssert.Contains(
-                "value out of range",
-                _palette._feedback.text,
-                "The controlled error must be visible"
-            );
-            Assert.AreEqual(
-                "palettevalidate 3",
-                _palette._input.value,
-                "The rejected line stays editable"
-            );
+            Assert.AreEqual(DisplayStyle.Flex, _palette._feedback.style.display.value, "The error bar is shown");
+            StringAssert.Contains("value out of range", _palette._feedback.text, "The controlled error must be visible");
+            Assert.AreEqual("palettevalidate 3", _palette._input.value, "The rejected line stays editable");
         }
 
         /*
@@ -1243,10 +1012,7 @@
                     {
                         Name = "rowescape",
                         Handler = (context, arguments) => { },
-                        CompletionProvider = (
-                            in CommandCompletionContext context,
-                            List<CommandCompletion> results
-                        ) => results.Add(new CommandCompletion(hostileCandidate)),
+                        CompletionProvider = (in CommandCompletionContext context, List<CommandCompletion> results) => results.Add(new CommandCompletion(hostileCandidate)),
                     }
                 ),
                 "Sanity: the completion command registers"
@@ -1260,24 +1026,13 @@
             Assert.AreEqual(1, _palette._matchNames.Count, "The candidate row exists");
             Label rowLabel = _palette._rows[0].Q<Label>(name: "PaletteRowName");
             Assert.That(rowLabel != null, "The row carries a name label");
-            StringAssert.Contains(
-                "\\u202E",
-                rowLabel.text,
-                "The row shows the escape, not the raw override"
-            );
-            Assert.That(
-                rowLabel.text.IndexOf("\u202E", StringComparison.Ordinal) < 0,
-                $"The row must hold no raw override: '{rowLabel.text}'"
-            );
+            StringAssert.Contains("\\u202E", rowLabel.text, "The row shows the escape, not the raw override");
+            Assert.That(rowLabel.text.IndexOf("\u202E", StringComparison.Ordinal) < 0, $"The row must hold no raw override: '{rowLabel.text}'");
 
             _palette.RowActivated(0);
             yield return null;
 
-            Assert.AreEqual(
-                "rowescape torch\u202Eexe",
-                _palette._input.value,
-                "The applied candidate is the raw text the developer chose"
-            );
+            Assert.AreEqual("rowescape torch\u202Eexe", _palette._input.value, "The applied candidate is the raw text the developer chose");
         }
 
         [UnityTest]
@@ -1292,10 +1047,7 @@
             yield return SpawnPalette();
             Assert.IsTrue(
                 Terminal.Shell.AddCommand(
-                    CommandBuilder
-                        .Create("paletteamount")
-                        .Arg<int>("amount", spec => spec.Required().Range(1, 10))
-                        .Handler((context, arguments) => { }),
+                    CommandBuilder.Create("paletteamount").Arg<int>("amount", spec => spec.Required().Range(1, 10)).Handler((context, arguments) => { }),
                     out _
                 ),
                 "The typed command should register cleanly"
@@ -1309,15 +1061,8 @@
             _palette.Submit();
             yield return null;
 
-            StringAssert.Contains(
-                "\\u202E",
-                _palette._feedback.text,
-                "The quoted token must render as a visible escape"
-            );
-            Assert.IsFalse(
-                0 <= _palette._feedback.text.IndexOf("\u202E", StringComparison.Ordinal),
-                "No raw bidi override may reach the feedback label"
-            );
+            StringAssert.Contains("\\u202E", _palette._feedback.text, "The quoted token must render as a visible escape");
+            Assert.IsFalse(0 <= _palette._feedback.text.IndexOf("\u202E", StringComparison.Ordinal), "No raw bidi override may reach the feedback label");
         }
 
         [UnityTest]
@@ -1332,25 +1077,13 @@
             yield return null;
 
             Assert.IsTrue(_palette.Submit(), "The command runs and shows output");
-            Assert.AreEqual(
-                string.Empty,
-                _palette._input.value,
-                "Sanity: the completed command left the bar"
-            );
+            Assert.AreEqual(string.Empty, _palette._input.value, "Sanity: the completed command left the bar");
 
             yield return null;
             yield return SendKeyDown(KeyCode.DownArrow);
 
-            Assert.AreEqual(
-                _palette._input.selectIndex,
-                _palette._input.cursorIndex,
-                "Down after a completed command never selects input text"
-            );
-            Assert.AreEqual(
-                string.Empty,
-                _palette._input.value,
-                "Down after a completed command leaves the bar clear"
-            );
+            Assert.AreEqual(_palette._input.selectIndex, _palette._input.cursorIndex, "Down after a completed command never selects input text");
+            Assert.AreEqual(string.Empty, _palette._input.value, "Down after a completed command leaves the bar clear");
             Assert.IsTrue(_palette.IsOpen, "The output stays visible");
         }
 
@@ -1360,11 +1093,7 @@
             yield return SpawnPalette();
             for (int index = 0; index < 10; ++index)
             {
-                Terminal.Shell.AddCommand(
-                    "palettescroll" + index,
-                    _ => { },
-                    help: "overflow row " + index
-                );
+                Terminal.Shell.AddCommand("palettescroll" + index, _ => { }, help: "overflow row " + index);
             }
 
             _palette.Open();
@@ -1372,10 +1101,7 @@
             _palette._input.value = "palettescroll";
             yield return null;
 
-            Assert.IsTrue(
-                10 <= _palette._matchNames.Count,
-                "Sanity: the query matches enough rows to overflow"
-            );
+            Assert.IsTrue(10 <= _palette._matchNames.Count, "Sanity: the query matches enough rows to overflow");
 
             int frameBudget = FrameBudget;
             while (0 < frameBudget-- && _palette._results.verticalScroller == null)
@@ -1383,22 +1109,10 @@
                 yield return null;
             }
 
-            Assert.That(
-                _palette._results.verticalScroller != null,
-                "The overflowing results create a scroller"
-            );
-            Assert.IsFalse(
-                _palette._results.verticalScroller.focusable,
-                "Clicking the scrollbar must not steal panel focus from the input"
-            );
-            Assert.That(
-                _palette._results.verticalScroller.slider != null,
-                "The scroller hosts the slider UITK focuses on click"
-            );
-            Assert.IsFalse(
-                _palette._results.verticalScroller.slider.focusable,
-                "The child slider must opt out of focus too; it is what takes the caret"
-            );
+            Assert.That(_palette._results.verticalScroller != null, "The overflowing results create a scroller");
+            Assert.IsFalse(_palette._results.verticalScroller.focusable, "Clicking the scrollbar must not steal panel focus from the input");
+            Assert.That(_palette._results.verticalScroller.slider != null, "The scroller hosts the slider UITK focuses on click");
+            Assert.IsFalse(_palette._results.verticalScroller.slider.focusable, "The child slider must opt out of focus too; it is what takes the caret");
         }
 
         [UnityTest]
@@ -1412,40 +1126,20 @@
             _palette._input.value = "paletteecho";
             yield return null;
             Assert.IsTrue(_palette.Submit(), "The output command runs");
-            Assert.AreEqual(
-                DisplayStyle.Flex,
-                _palette._output.style.display.value,
-                "Sanity: the output is shown"
-            );
+            Assert.AreEqual(DisplayStyle.Flex, _palette._output.style.display.value, "Sanity: the output is shown");
 
             _palette._input.value = "palettenosuchcommand";
             yield return null;
             Assert.IsFalse(_palette.Submit(), "The unknown command runs and fails");
 
-            Assert.AreEqual(
-                DisplayStyle.None,
-                _palette._output.style.display.value,
-                "A later error hides the previous run's output"
-            );
-            StringAssert.StartsWith(
-                "Error:",
-                _palette._feedback.text,
-                "The later error is the visible diagnostic"
-            );
+            Assert.AreEqual(DisplayStyle.None, _palette._output.style.display.value, "A later error hides the previous run's output");
+            StringAssert.StartsWith("Error:", _palette._feedback.text, "The later error is the visible diagnostic");
 
             _palette._input.value = "paletteecho";
             yield return null;
             Assert.IsTrue(_palette.Submit(), "The output command runs again");
-            Assert.AreEqual(
-                DisplayStyle.Flex,
-                _palette._output.style.display.value,
-                "Sanity: the output is shown again"
-            );
-            Assert.AreEqual(
-                DisplayStyle.None,
-                _palette._feedback.style.display.value,
-                "A later output hides the previous run's error"
-            );
+            Assert.AreEqual(DisplayStyle.Flex, _palette._output.style.display.value, "Sanity: the output is shown again");
+            Assert.AreEqual(DisplayStyle.None, _palette._feedback.style.display.value, "A later output hides the previous run's error");
         }
 
         [UnityTest]
@@ -1469,22 +1163,14 @@
                 _palette.SetQuery(query);
                 yield return null;
 
-                Assert.AreEqual(
-                    expectedRows,
-                    _palette._matchNames.ToArray(),
-                    $"Completion rows for '{query}'"
-                );
+                Assert.AreEqual(expectedRows, _palette._matchNames.ToArray(), $"Completion rows for '{query}'");
                 string[] insertions = new string[expectedRows.Length];
                 for (int index = 0; index < _palette._completions.Count; ++index)
                 {
                     insertions[index] = _palette._completions[index].InsertionText;
                 }
 
-                CollectionAssert.AreEqual(
-                    expectedRows,
-                    insertions,
-                    $"Completion insertions for '{query}'"
-                );
+                CollectionAssert.AreEqual(expectedRows, insertions, $"Completion insertions for '{query}'");
             }
         }
 
@@ -1499,11 +1185,7 @@
             _palette._input.value = "emptychoice x";
             yield return null;
 
-            Assert.AreEqual(
-                0,
-                _palette._completions.Count,
-                "A provider answer without candidates leaves no completion state"
-            );
+            Assert.AreEqual(0, _palette._completions.Count, "A provider answer without candidates leaves no completion state");
             AssertResultsCollapsed("An empty provider answer must not fall back to name filtering");
         }
 
@@ -1519,16 +1201,8 @@
             _palette._input.value = "pickitem";
             yield return null;
 
-            Assert.AreEqual(
-                0,
-                _palette._completions.Count,
-                "A query without an active argument stage stays a command-name search"
-            );
-            Assert.AreEqual(
-                new[] { "pickitem" },
-                _palette._matchNames.ToArray(),
-                "Command-name filtering keeps answering while no argument is active"
-            );
+            Assert.AreEqual(0, _palette._completions.Count, "A query without an active argument stage stays a command-name search");
+            Assert.AreEqual(new[] { "pickitem" }, _palette._matchNames.ToArray(), "Command-name filtering keeps answering while no argument is active");
         }
 
         [UnityTest]
@@ -1542,16 +1216,8 @@
             _palette._input.value = "editcommand ";
             yield return null;
 
-            Assert.AreEqual(
-                0,
-                _palette._completions.Count,
-                "An Editor-only command must not offer argument candidates in Play Mode"
-            );
-            Assert.AreEqual(
-                0,
-                _palette._matchNames.Count,
-                "The name filter also hides the ineligible command"
-            );
+            Assert.AreEqual(0, _palette._completions.Count, "An Editor-only command must not offer argument candidates in Play Mode");
+            Assert.AreEqual(0, _palette._matchNames.Count, "The name filter also hides the ineligible command");
             AssertResultsCollapsed("The bar stays collapsed for an ineligible command");
         }
 
@@ -1570,11 +1236,7 @@
             yield return SendKeyDown(KeyCode.Tab);
             yield return WaitForCaret(21, "The caret lands after the quoted insertion");
 
-            Assert.AreEqual(
-                "pickitem \"torch pick\"",
-                _palette._input.value,
-                "Tab quotes an insertion containing spaces when the token is unquoted"
-            );
+            Assert.AreEqual("pickitem \"torch pick\"", _palette._input.value, "Tab quotes an insertion containing spaces when the token is unquoted");
         }
 
         [UnityTest]
@@ -1587,20 +1249,12 @@
             yield return null;
             _palette._input.value = "pickitem \"to";
             yield return null;
-            Assert.AreEqual(
-                new[] { "torch", "torch pick" },
-                _palette._matchNames.ToArray(),
-                "The quoted token prefix still filters provider candidates"
-            );
+            Assert.AreEqual(new[] { "torch", "torch pick" }, _palette._matchNames.ToArray(), "The quoted token prefix still filters provider candidates");
 
             yield return SendKeyDown(KeyCode.Tab);
             yield return WaitForCaret(16, "The caret parks on the closed token");
 
-            Assert.AreEqual(
-                "pickitem \"torch\"",
-                _palette._input.value,
-                "Tab closes the token to preserve its literal value"
-            );
+            Assert.AreEqual("pickitem \"torch\"", _palette._input.value, "Tab closes the token to preserve its literal value");
         }
 
         /*
@@ -1618,11 +1272,7 @@
             yield return null;
             _palette._input.value = "pickitem to";
             yield return null;
-            Assert.AreEqual(
-                new[] { "torch", "torch pick" },
-                _palette._matchNames.ToArray(),
-                "Sanity: the stage offers the item candidates"
-            );
+            Assert.AreEqual(new[] { "torch", "torch pick" }, _palette._matchNames.ToArray(), "Sanity: the stage offers the item candidates");
 
             yield return SendKeyDown(KeyCode.Tab);
             yield return WaitForCaret(14, "The caret lands after the applied candidate");
@@ -1630,14 +1280,8 @@
             _palette._input.cursorIndex = 9;
             _palette._input.selectIndex = 9;
 
-            yield return WaitForCaret(
-                14,
-                "The queued caret re-asserts after a panel-driven re-clamp"
-            );
-            Assert.IsTrue(
-                _palette._input.selectIndex == 14 || _palette._pendingCaretIndex == 14,
-                "The re-asserted caret is not left selected at the stale position"
-            );
+            yield return WaitForCaret(14, "The queued caret re-asserts after a panel-driven re-clamp");
+            Assert.IsTrue(_palette._input.selectIndex == 14 || _palette._pendingCaretIndex == 14, "The re-asserted caret is not left selected at the stale position");
 
             /*
                 The drain rule is pinned synchronously (a persistent panel
@@ -1653,18 +1297,11 @@
             _palette._caretStickPasses = 0;
             _palette.ApplyPendingCaret();
             _palette.ApplyPendingCaret();
-            Assert.That(
-                _palette._pendingCaretIndex == null,
-                "Two held passes drain the queued caret"
-            );
+            Assert.That(_palette._pendingCaretIndex == null, "Two held passes drain the queued caret");
             _palette._input.cursorIndex = 2;
             yield return null;
             yield return null;
-            Assert.AreEqual(
-                2,
-                _palette._input.cursorIndex,
-                "Movement after the caret settles is never re-asserted"
-            );
+            Assert.AreEqual(2, _palette._input.cursorIndex, "Movement after the caret settles is never re-asserted");
         }
 
         [UnityTest]
@@ -1695,51 +1332,24 @@
             _palette.ApplyPendingCaret();
             Assert.AreEqual(target, _palette._input.cursorIndex, "The first pass parks the caret");
             Assert.AreEqual(0, _palette._caretStickPasses, "The parking pass has not stuck yet");
-            Assert.AreEqual(
-                target,
-                _palette._pendingCaretIndex,
-                "The marker survives the parking pass"
-            );
+            Assert.AreEqual(target, _palette._pendingCaretIndex, "The marker survives the parking pass");
 
             _palette._input.cursorIndex = target - 1;
             _palette._input.selectIndex = target - 1;
             _palette.ApplyPendingCaret();
-            Assert.AreEqual(
-                target,
-                _palette._input.cursorIndex,
-                "A drift pass re-asserts the queued caret"
-            );
-            Assert.AreEqual(
-                target,
-                _palette._pendingCaretIndex,
-                "The marker survives the drift pass"
-            );
+            Assert.AreEqual(target, _palette._input.cursorIndex, "A drift pass re-asserts the queued caret");
+            Assert.AreEqual(target, _palette._pendingCaretIndex, "The marker survives the drift pass");
 
             _palette.ApplyPendingCaret();
-            Assert.AreEqual(
-                target,
-                _palette._pendingCaretIndex,
-                "One stable pass is not enough to consume"
-            );
+            Assert.AreEqual(target, _palette._pendingCaretIndex, "One stable pass is not enough to consume");
 
             _palette.ApplyPendingCaret();
-            Assert.That(
-                _palette._pendingCaretIndex == null,
-                "Two stable passes consume the marker"
-            );
-            Assert.AreEqual(
-                target,
-                _palette._input.cursorIndex,
-                "The caret stays parked after consumption"
-            );
+            Assert.That(_palette._pendingCaretIndex == null, "Two stable passes consume the marker");
+            Assert.AreEqual(target, _palette._input.cursorIndex, "The caret stays parked after consumption");
 
             _palette._pendingCaretIndex = 30;
             _palette.ApplyPendingCaret();
-            Assert.AreEqual(
-                target,
-                _palette._input.cursorIndex,
-                "A position beyond the value is not written yet"
-            );
+            Assert.AreEqual(target, _palette._input.cursorIndex, "A position beyond the value is not written yet");
             Assert.AreEqual(30, _palette._pendingCaretIndex, "The marker waits for the value sync");
 
             _palette._input.cursorIndex = 2;
@@ -1762,15 +1372,8 @@
             _palette._input.value = "pickitem torchx";
             int caret = _palette._input.cursorIndex;
             _palette.ApplyPendingCaret();
-            Assert.That(
-                _palette._pendingCaretIndex == null,
-                "A field change is a user edit and cancels the queued caret"
-            );
-            Assert.AreEqual(
-                caret,
-                _palette._input.cursorIndex,
-                "The cancelled caret writes nothing on the pass"
-            );
+            Assert.That(_palette._pendingCaretIndex == null, "A field change is a user edit and cancels the queued caret");
+            Assert.AreEqual(caret, _palette._input.cursorIndex, "The cancelled caret writes nothing on the pass");
         }
 
         [UnityTest]
@@ -1783,24 +1386,12 @@
             yield return null;
             _palette._input.value = "spawnitem torch ";
             yield return null;
-            Assert.AreEqual(
-                new[] { "1", "2", "3" },
-                _palette._matchNames.ToArray(),
-                "The second argument stage answers after the first is parsed"
-            );
+            Assert.AreEqual(new[] { "1", "2", "3" }, _palette._matchNames.ToArray(), "The second argument stage answers after the first is parsed");
 
             yield return SendKeyDown(KeyCode.Tab);
 
-            Assert.AreEqual(
-                "spawnitem torch 1",
-                _palette._input.value,
-                "Tab applies the selected stage-one candidate"
-            );
-            Assert.AreEqual(
-                new[] { "1", "2", "3" },
-                _palette._matchNames.ToArray(),
-                "The caret stays on the applied token, so Tab can keep cycling its candidates"
-            );
+            Assert.AreEqual("spawnitem torch 1", _palette._input.value, "Tab applies the selected stage-one candidate");
+            Assert.AreEqual(new[] { "1", "2", "3" }, _palette._matchNames.ToArray(), "The caret stays on the applied token, so Tab can keep cycling its candidates");
             AssertResultsExpanded("The applied stage keeps its candidate list visible");
         }
 
@@ -1814,18 +1405,10 @@
             yield return null;
             _palette._input.value = "pickitem";
             yield return null;
-            Assert.AreEqual(
-                new[] { "pickitem" },
-                _palette._matchNames.ToArray(),
-                "The name filter answers the command name first"
-            );
+            Assert.AreEqual(new[] { "pickitem" }, _palette._matchNames.ToArray(), "The name filter answers the command name first");
 
             yield return SendKeyDown(KeyCode.Tab);
-            Assert.AreEqual(
-                "pickitem",
-                _palette._input.value,
-                "Tab commits the selected command name"
-            );
+            Assert.AreEqual("pickitem", _palette._input.value, "Tab commits the selected command name");
 
             /*
                Appending to the committed command derives the caret from the
@@ -1835,19 +1418,11 @@
              */
             _palette._input.value = "pickitem ";
             yield return null;
-            Assert.AreEqual(
-                new[] { "pickaxe", "torch", "torch pick" },
-                _palette._matchNames.ToArray(),
-                "The append opens the command's stage-zero candidates"
-            );
+            Assert.AreEqual(new[] { "pickaxe", "torch", "torch pick" }, _palette._matchNames.ToArray(), "The append opens the command's stage-zero candidates");
 
             _palette._input.value = "pickitem to";
             yield return null;
-            Assert.AreEqual(
-                new[] { "torch", "torch pick" },
-                _palette._matchNames.ToArray(),
-                "The append-derived caret completes the token the user is editing"
-            );
+            Assert.AreEqual(new[] { "torch", "torch pick" }, _palette._matchNames.ToArray(), "The append-derived caret completes the token the user is editing");
         }
 
         [UnityTest]
@@ -1873,11 +1448,7 @@
             yield return null;
             _palette._input.value = "pickitem torch";
             yield return null;
-            Assert.AreEqual(
-                new[] { "torch", "torch pick" },
-                _palette._matchNames.ToArray(),
-                "The argument stage shows the provider's candidates"
-            );
+            Assert.AreEqual(new[] { "torch", "torch pick" }, _palette._matchNames.ToArray(), "The argument stage shows the provider's candidates");
 
             yield return SendKeyDown(KeyCode.Return);
 
@@ -1921,11 +1492,7 @@
 
             Assert.AreEqual(0, executed, "Applying an argument completion must not run anything");
             Assert.IsTrue(_palette.IsOpen, "Applying keeps the palette open");
-            Assert.AreEqual(
-                "pickitem torch",
-                _palette._input.value,
-                "The activation applies the selected candidate to the active token"
-            );
+            Assert.AreEqual("pickitem torch", _palette._input.value, "The activation applies the selected candidate to the active token");
         }
 
         /*
@@ -1949,28 +1516,11 @@
             palette._uiDocument.panelSettings = _panelSettings;
             _paletteObject.SetActive(true);
 
-            Assert.That(
-                Terminal.Buffer != null,
-                "Enabling a palette must create the shared session's backends"
-            );
-            Assert.AreEqual(
-                TerminalSession.Config.Default.LogBufferSize,
-                Terminal.Buffer.Capacity,
-                "The bootstrapped buffer uses the default capacity"
-            );
-            Assert.AreEqual(
-                TerminalSession.Config.Default.HistoryBufferSize,
-                Terminal.History.Capacity,
-                "The bootstrapped history uses the default capacity"
-            );
-            Assert.IsTrue(
-                Terminal.Log("palette-only"),
-                "Logging is available with no terminal UI in the scene"
-            );
-            Assert.IsTrue(
-                Terminal.Shell.RunCommand("help"),
-                "Auto commands register on first use on the bootstrapped shell"
-            );
+            Assert.That(Terminal.Buffer != null, "Enabling a palette must create the shared session's backends");
+            Assert.AreEqual(TerminalSession.Config.Default.LogBufferSize, Terminal.Buffer.Capacity, "The bootstrapped buffer uses the default capacity");
+            Assert.AreEqual(TerminalSession.Config.Default.HistoryBufferSize, Terminal.History.Capacity, "The bootstrapped history uses the default capacity");
+            Assert.IsTrue(Terminal.Log("palette-only"), "Logging is available with no terminal UI in the scene");
+            Assert.IsTrue(Terminal.Shell.RunCommand("help"), "Auto commands register on first use on the bootstrapped shell");
         }
 
         /*
@@ -1999,16 +1549,8 @@
             palette._uiDocument.panelSettings = _panelSettings;
             _paletteObject.SetActive(true);
 
-            Assert.AreEqual(
-                32,
-                Terminal.Buffer.Capacity,
-                "The bootstrapped buffer follows the settings asset"
-            );
-            Assert.AreEqual(
-                24,
-                Terminal.History.Capacity,
-                "The bootstrapped history follows the settings asset"
-            );
+            Assert.AreEqual(32, Terminal.Buffer.Capacity, "The bootstrapped buffer follows the settings asset");
+            Assert.AreEqual(24, Terminal.History.Capacity, "The bootstrapped history follows the settings asset");
         }
 
         /*
@@ -2040,29 +1582,11 @@
             palette._uiDocument.panelSettings = _panelSettings;
             _paletteObject.SetActive(true);
 
-            Assert.AreSame(
-                bufferBefore,
-                Terminal.Buffer,
-                "Enabling a palette must not recreate the existing buffer"
-            );
-            Assert.AreSame(
-                shellBefore,
-                Terminal.Shell,
-                "Enabling a palette must not recreate the existing shell"
-            );
-            Assert.AreEqual(
-                128,
-                Terminal.Buffer.Capacity,
-                "The palette must not resize a session it does not own"
-            );
-            Assert.IsTrue(
-                Terminal.Buffer.IsIgnored(TerminalLogType.Warning),
-                "The palette must not touch the configured log filters"
-            );
-            Assert.IsFalse(
-                Terminal.Shell.IgnoredCommands.Contains("help"),
-                "The palette must not touch the configured disabled commands"
-            );
+            Assert.AreSame(bufferBefore, Terminal.Buffer, "Enabling a palette must not recreate the existing buffer");
+            Assert.AreSame(shellBefore, Terminal.Shell, "Enabling a palette must not recreate the existing shell");
+            Assert.AreEqual(128, Terminal.Buffer.Capacity, "The palette must not resize a session it does not own");
+            Assert.IsTrue(Terminal.Buffer.IsIgnored(TerminalLogType.Warning), "The palette must not touch the configured log filters");
+            Assert.IsFalse(Terminal.Shell.IgnoredCommands.Contains("help"), "The palette must not touch the configured disabled commands");
         }
 
         /*
@@ -2103,21 +1627,14 @@
             second._uiDocument.panelSettings = _panelSettings;
             _extraPaletteObject.SetActive(true);
 
-            Assert.AreEqual(
-                48,
-                Terminal.Buffer.Capacity,
-                "The first enabled palette owns the bootstrap configuration"
-            );
+            Assert.AreEqual(48, Terminal.Buffer.Capacity, "The first enabled palette owns the bootstrap configuration");
             bool anyIgnored = false;
             foreach (TerminalLogType type in AllLogTypes)
             {
                 anyIgnored |= Terminal.Buffer.IsIgnored(type);
             }
 
-            Assert.IsFalse(
-                anyIgnored,
-                "The second palette's settings must not leak into the session"
-            );
+            Assert.IsFalse(anyIgnored, "The second palette's settings must not leak into the session");
         }
 
         /*
@@ -2141,40 +1658,25 @@
             _palette.Open();
             yield return WaitForFocusedInput("Sanity: the field reports focus");
 
-            VisualElement focused =
-                _palette._input.focusController?.focusedElement as VisualElement;
-            Assert.IsTrue(
-                focused == _palette._input || _palette._input.Contains(focused),
-                "Sanity: the panel reports focus on the field or inside it"
-            );
-            Assert.IsTrue(
-                _palette.InputOwnsFocus,
-                "A focused query field must report owning focus"
-            );
+            VisualElement focused = _palette._input.focusController?.focusedElement as VisualElement;
+            Assert.IsTrue(focused == _palette._input || _palette._input.Contains(focused), "Sanity: the panel reports focus on the field or inside it");
+            Assert.IsTrue(_palette.InputOwnsFocus, "A focused query field must report owning focus");
 
             _palette.Close();
-            Assert.IsFalse(
-                _palette.InputOwnsFocus,
-                "A closed palette must not report owning focus, whatever still holds it"
-            );
+            Assert.IsFalse(_palette.InputOwnsFocus, "A closed palette must not report owning focus, whatever still holds it");
         }
 
         private IEnumerator WaitForCaret(int expected, string message)
         {
             int frameBudget = FrameBudget;
-            while (
-                0 < frameBudget--
-                && _palette._input.cursorIndex != expected
-                && _palette._pendingCaretIndex != expected
-            )
+            while (0 < frameBudget-- && _palette._input.cursorIndex != expected && _palette._pendingCaretIndex != expected)
             {
                 yield return null;
             }
 
             Assert.IsTrue(
                 _palette._input.cursorIndex == expected || _palette._pendingCaretIndex == expected,
-                $"{message}: cursor={_palette._input.cursorIndex}"
-                    + $" queued={_palette._pendingCaretIndex}"
+                $"{message}: cursor={_palette._input.cursorIndex}" + $" queued={_palette._pendingCaretIndex}"
             );
         }
 
@@ -2221,9 +1723,7 @@
         private string[] CollectHistory()
         {
             List<string> entries = new();
-            foreach (
-                string entry in Terminal.History.GetHistory(onlySuccess: true, onlyErrorFree: true)
-            )
+            foreach (string entry in Terminal.History.GetHistory(onlySuccess: true, onlyErrorFree: true))
             {
                 entries.Add(entry);
             }
@@ -2255,22 +1755,12 @@
         private IEnumerator WaitForFocused(VisualElement expected, string message)
         {
             int frameBudget = FrameBudget;
-            while (
-                0 < frameBudget--
-                && !ReferenceEquals(
-                    _palette._uiDocument.rootVisualElement.focusController.focusedElement,
-                    expected
-                )
-            )
+            while (0 < frameBudget-- && !ReferenceEquals(_palette._uiDocument.rootVisualElement.focusController.focusedElement, expected))
             {
                 yield return null;
             }
 
-            Assert.AreEqual(
-                expected,
-                _palette._uiDocument.rootVisualElement.focusController.focusedElement,
-                message
-            );
+            Assert.AreEqual(expected, _palette._uiDocument.rootVisualElement.focusController.focusedElement, message);
         }
 
         /*
@@ -2349,10 +1839,7 @@
                 _palette._input.selectIndex = selectIndex;
                 _palette._input.cursorIndex = cursorIndex;
                 yield return null;
-                if (
-                    _palette._input.cursorIndex == cursorIndex
-                    && _palette._input.selectIndex == selectIndex
-                )
+                if (_palette._input.cursorIndex == cursorIndex && _palette._input.selectIndex == selectIndex)
                 {
                     ++heldPasses;
                 }
@@ -2392,10 +1879,7 @@
                 }
             }
 
-            Assert.Ignore(
-                $"The host clipboard did not hold \"{text}\" after five writes; "
-                    + "the paste fixture needs a platform that answers (#207)"
-            );
+            Assert.Ignore($"The host clipboard did not hold \"{text}\" after five writes; " + "the paste fixture needs a platform that answers (#207)");
         }
     }
 }

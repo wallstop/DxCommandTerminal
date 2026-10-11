@@ -105,9 +105,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
          */
         public static bool Matches(LogItem item, string query)
         {
-            return IsSearchable(item)
-                && !string.IsNullOrEmpty(query)
-                && item.message.Contains(query, StringComparison.OrdinalIgnoreCase);
+            return IsSearchable(item) && !string.IsNullOrEmpty(query) && item.message.Contains(query, StringComparison.OrdinalIgnoreCase);
         }
 
         /*

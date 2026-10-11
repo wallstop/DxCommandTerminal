@@ -21,14 +21,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return false;
             }
 
-            if (
-                !float.TryParse(
-                    input,
-                    NumberStyles.Float | NumberStyles.AllowThousands,
-                    CultureInfo.InvariantCulture,
-                    out parsed
-                )
-            )
+            if (!float.TryParse(input, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out parsed))
             {
                 return false;
             }
@@ -50,14 +43,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return false;
             }
 
-            if (
-                !double.TryParse(
-                    input,
-                    NumberStyles.Float | NumberStyles.AllowThousands,
-                    CultureInfo.InvariantCulture,
-                    out parsed
-                )
-            )
+            if (!double.TryParse(input, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out parsed))
             {
                 return false;
             }
@@ -71,72 +57,43 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             return true;
         }
 
-        public static bool Decimal(string input, out decimal parsed) =>
-            decimal.TryParse(input, NumberStyles.Number, CultureInfo.InvariantCulture, out parsed);
+        public static bool Decimal(string input, out decimal parsed) => decimal.TryParse(input, NumberStyles.Number, CultureInfo.InvariantCulture, out parsed);
 
-        public static bool Int(string input, out int parsed) =>
-            int.TryParse(input, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed);
+        public static bool Int(string input, out int parsed) => int.TryParse(input, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed);
 
-        public static bool Uint(string input, out uint parsed) =>
-            uint.TryParse(input, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed);
+        public static bool Uint(string input, out uint parsed) => uint.TryParse(input, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed);
 
-        public static bool Long(string input, out long parsed) =>
-            long.TryParse(input, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed);
+        public static bool Long(string input, out long parsed) => long.TryParse(input, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed);
 
-        public static bool Ulong(string input, out ulong parsed) =>
-            ulong.TryParse(input, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed);
+        public static bool Ulong(string input, out ulong parsed) => ulong.TryParse(input, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed);
 
-        public static bool Short(string input, out short parsed) =>
-            short.TryParse(input, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed);
+        public static bool Short(string input, out short parsed) => short.TryParse(input, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed);
 
-        public static bool Ushort(string input, out ushort parsed) =>
-            ushort.TryParse(input, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed);
+        public static bool Ushort(string input, out ushort parsed) => ushort.TryParse(input, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed);
 
-        public static bool Byte(string input, out byte parsed) =>
-            byte.TryParse(input, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed);
+        public static bool Byte(string input, out byte parsed) => byte.TryParse(input, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed);
 
-        public static bool Sbyte(string input, out sbyte parsed) =>
-            sbyte.TryParse(input, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed);
+        public static bool Sbyte(string input, out sbyte parsed) => sbyte.TryParse(input, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed);
 
         public static bool BigInteger(string input, out System.Numerics.BigInteger parsed) =>
-            System.Numerics.BigInteger.TryParse(
-                input,
-                NumberStyles.Integer,
-                CultureInfo.InvariantCulture,
-                out parsed
-            );
+            System.Numerics.BigInteger.TryParse(input, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed);
 
-        public static bool DateTime(string input, out System.DateTime parsed) =>
-            System.DateTime.TryParse(
-                input,
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.None,
-                out parsed
-            );
+        public static bool DateTime(string input, out System.DateTime parsed) => System.DateTime.TryParse(input, CultureInfo.InvariantCulture, DateTimeStyles.None, out parsed);
 
         public static bool DateTimeOffset(string input, out System.DateTimeOffset parsed) =>
-            System.DateTimeOffset.TryParse(
-                input,
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.None,
-                out parsed
-            );
+            System.DateTimeOffset.TryParse(input, CultureInfo.InvariantCulture, DateTimeStyles.None, out parsed);
 
-        public static bool TimeSpan(string input, out System.TimeSpan parsed) =>
-            System.TimeSpan.TryParse(input, CultureInfo.InvariantCulture, out parsed);
+        public static bool TimeSpan(string input, out System.TimeSpan parsed) => System.TimeSpan.TryParse(input, CultureInfo.InvariantCulture, out parsed);
 
         public static bool Bool(string input, out bool parsed) => bool.TryParse(input, out parsed);
 
         public static bool Char(string input, out char parsed) => char.TryParse(input, out parsed);
 
-        public static bool Guid(string input, out System.Guid parsed) =>
-            System.Guid.TryParse(input, out parsed);
+        public static bool Guid(string input, out System.Guid parsed) => System.Guid.TryParse(input, out parsed);
 
-        public static bool Version(string input, out System.Version parsed) =>
-            System.Version.TryParse(input, out parsed);
+        public static bool Version(string input, out System.Version parsed) => System.Version.TryParse(input, out parsed);
 
-        public static bool IPAddress(string input, out System.Net.IPAddress parsed) =>
-            System.Net.IPAddress.TryParse(input, out parsed);
+        public static bool IPAddress(string input, out System.Net.IPAddress parsed) => System.Net.IPAddress.TryParse(input, out parsed);
 
         /// <summary>
         ///     Parses two or three components: "1.5, 2.5" is (1.5, 2.5) and a
@@ -156,10 +113,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 case 2 when Float(split[0], out float x) && Float(split[1], out float y):
                     parsed = new UnityEngine.Vector2(x, y);
                     return true;
-                case 3
-                    when Float(split[0], out float x)
-                        && Float(split[1], out float y)
-                        && Float(split[2], out float z):
+                case 3 when Float(split[0], out float x) && Float(split[1], out float y) && Float(split[2], out float z):
                     parsed = (UnityEngine.Vector2)new UnityEngine.Vector3(x, y, z);
                     return true;
                 default:
@@ -184,10 +138,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 case 2 when Float(split[0], out float x) && Float(split[1], out float y):
                     parsed = new UnityEngine.Vector3(x, y);
                     return true;
-                case 3
-                    when Float(split[0], out float x)
-                        && Float(split[1], out float y)
-                        && Float(split[2], out float z):
+                case 3 when Float(split[0], out float x) && Float(split[1], out float y) && Float(split[2], out float z):
                     parsed = new UnityEngine.Vector3(x, y, z);
                     return true;
                 default:
@@ -212,17 +163,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 case 2 when Float(split[0], out float x) && Float(split[1], out float y):
                     parsed = new UnityEngine.Vector4(x, y);
                     return true;
-                case 3
-                    when Float(split[0], out float x)
-                        && Float(split[1], out float y)
-                        && Float(split[2], out float z):
+                case 3 when Float(split[0], out float x) && Float(split[1], out float y) && Float(split[2], out float z):
                     parsed = new UnityEngine.Vector4(x, y, z);
                     return true;
-                case 4
-                    when Float(split[0], out float x)
-                        && Float(split[1], out float y)
-                        && Float(split[2], out float z)
-                        && Float(split[3], out float w):
+                case 4 when Float(split[0], out float x) && Float(split[1], out float y) && Float(split[2], out float z) && Float(split[3], out float w):
                     parsed = new UnityEngine.Vector4(x, y, z, w);
                     return true;
                 default:
@@ -249,10 +193,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 case 2 when Int(split[0], out int x) && Int(split[1], out int y):
                     parsed = new UnityEngine.Vector2Int(x, y);
                     return true;
-                case 3
-                    when Int(split[0], out int x)
-                        && Int(split[1], out int y)
-                        && Int(split[2], out int z):
+                case 3 when Int(split[0], out int x) && Int(split[1], out int y) && Int(split[2], out int z):
                     parsed = (UnityEngine.Vector2Int)new UnityEngine.Vector3Int(x, y, z);
                     return true;
                 default:
@@ -277,10 +218,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 case 2 when Int(split[0], out int x) && Int(split[1], out int y):
                     parsed = new UnityEngine.Vector3Int(x, y);
                     return true;
-                case 3
-                    when Int(split[0], out int x)
-                        && Int(split[1], out int y)
-                        && Int(split[2], out int z):
+                case 3 when Int(split[0], out int x) && Int(split[1], out int y) && Int(split[2], out int z):
                     parsed = new UnityEngine.Vector3Int(x, y, z);
                     return true;
                 default:
@@ -305,11 +243,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             string colorString = input;
             if (input.StartsWith("RGBA", StringComparison.OrdinalIgnoreCase))
             {
-                colorString = colorString.Replace(
-                    "RGBA",
-                    string.Empty,
-                    StringComparison.OrdinalIgnoreCase
-                );
+                colorString = colorString.Replace("RGBA", string.Empty, StringComparison.OrdinalIgnoreCase);
             }
 
             if (!TrySplitComponents(colorString, out string[] split))
@@ -320,17 +254,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
             switch (split.Length)
             {
-                case 3
-                    when Float(split[0], out float r)
-                        && Float(split[1], out float g)
-                        && Float(split[2], out float b):
+                case 3 when Float(split[0], out float r) && Float(split[1], out float g) && Float(split[2], out float b):
                     parsed = new UnityEngine.Color(r, g, b);
                     return true;
-                case 4
-                    when Float(split[0], out float r)
-                        && Float(split[1], out float g)
-                        && Float(split[2], out float b)
-                        && Float(split[3], out float a):
+                case 4 when Float(split[0], out float r) && Float(split[1], out float g) && Float(split[2], out float b) && Float(split[3], out float a):
                     parsed = new UnityEngine.Color(r, g, b, a);
                     return true;
                 default:
@@ -350,13 +277,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return false;
             }
 
-            if (
-                split.Length == 4
-                && Float(split[0], out float x)
-                && Float(split[1], out float y)
-                && Float(split[2], out float z)
-                && Float(split[3], out float w)
-            )
+            if (split.Length == 4 && Float(split[0], out float x) && Float(split[1], out float y) && Float(split[2], out float z) && Float(split[3], out float w))
             {
                 parsed = new UnityEngine.Quaternion(x, y, z, w);
                 return true;
@@ -382,22 +303,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
             if (
                 split.Length == 4
-                && Float(
-                    split[0].Replace("x:", string.Empty, StringComparison.OrdinalIgnoreCase),
-                    out float x
-                )
-                && Float(
-                    split[1].Replace("y:", string.Empty, StringComparison.OrdinalIgnoreCase),
-                    out float y
-                )
-                && Float(
-                    split[2].Replace("width:", string.Empty, StringComparison.OrdinalIgnoreCase),
-                    out float width
-                )
-                && Float(
-                    split[3].Replace("height:", string.Empty, StringComparison.OrdinalIgnoreCase),
-                    out float height
-                )
+                && Float(split[0].Replace("x:", string.Empty, StringComparison.OrdinalIgnoreCase), out float x)
+                && Float(split[1].Replace("y:", string.Empty, StringComparison.OrdinalIgnoreCase), out float y)
+                && Float(split[2].Replace("width:", string.Empty, StringComparison.OrdinalIgnoreCase), out float width)
+                && Float(split[3].Replace("height:", string.Empty, StringComparison.OrdinalIgnoreCase), out float height)
             )
             {
                 parsed = new UnityEngine.Rect(x, y, width, height);
@@ -424,22 +333,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
             if (
                 split.Length == 4
-                && Int(
-                    split[0].Replace("x:", string.Empty, StringComparison.OrdinalIgnoreCase),
-                    out int x
-                )
-                && Int(
-                    split[1].Replace("y:", string.Empty, StringComparison.OrdinalIgnoreCase),
-                    out int y
-                )
-                && Int(
-                    split[2].Replace("width:", string.Empty, StringComparison.OrdinalIgnoreCase),
-                    out int width
-                )
-                && Int(
-                    split[3].Replace("height:", string.Empty, StringComparison.OrdinalIgnoreCase),
-                    out int height
-                )
+                && Int(split[0].Replace("x:", string.Empty, StringComparison.OrdinalIgnoreCase), out int x)
+                && Int(split[1].Replace("y:", string.Empty, StringComparison.OrdinalIgnoreCase), out int y)
+                && Int(split[2].Replace("width:", string.Empty, StringComparison.OrdinalIgnoreCase), out int width)
+                && Int(split[3].Replace("height:", string.Empty, StringComparison.OrdinalIgnoreCase), out int height)
             )
             {
                 parsed = new UnityEngine.RectInt(x, y, width, height);
@@ -478,10 +375,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                        the bare form's center-plus-size reading intact.
                      */
                     float scale = centerLabeled ? 2f : 1f;
-                    parsed = new UnityEngine.Bounds(
-                        new UnityEngine.Vector3(centerX, centerY, centerZ),
-                        new UnityEngine.Vector3(sizeX * scale, sizeY * scale, sizeZ * scale)
-                    );
+                    parsed = new UnityEngine.Bounds(new UnityEngine.Vector3(centerX, centerY, centerZ), new UnityEngine.Vector3(sizeX * scale, sizeY * scale, sizeZ * scale));
                     return true;
                 }
             }
@@ -511,10 +405,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                     && Int(split[5], out int sizeZ)
                 )
                 {
-                    parsed = new UnityEngine.BoundsInt(
-                        new UnityEngine.Vector3Int(positionX, positionY, positionZ),
-                        new UnityEngine.Vector3Int(sizeX, sizeY, sizeZ)
-                    );
+                    parsed = new UnityEngine.BoundsInt(new UnityEngine.Vector3Int(positionX, positionY, positionZ), new UnityEngine.Vector3Int(sizeX, sizeY, sizeZ));
                     return true;
                 }
             }
@@ -562,17 +453,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             {
                 string first = StripLabel(split[0], "normal:", out _);
                 string fourth = StripLabel(split[3], "distance:", out _);
-                if (
-                    Float(first, out float normalX)
-                    && Float(split[1], out float normalY)
-                    && Float(split[2], out float normalZ)
-                    && Float(fourth, out float distance)
-                )
+                if (Float(first, out float normalX) && Float(split[1], out float normalY) && Float(split[2], out float normalZ) && Float(fourth, out float distance))
                 {
-                    parsed = new UnityEngine.Plane(
-                        new UnityEngine.Vector3(normalX, normalY, normalZ),
-                        distance
-                    );
+                    parsed = new UnityEngine.Plane(new UnityEngine.Vector3(normalX, normalY, normalZ), distance);
                     return true;
                 }
             }
@@ -602,10 +485,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                     && Float(split[5], out float directionZ)
                 )
                 {
-                    parsed = new UnityEngine.Ray(
-                        new UnityEngine.Vector3(originX, originY, originZ),
-                        new UnityEngine.Vector3(directionX, directionY, directionZ)
-                    );
+                    parsed = new UnityEngine.Ray(new UnityEngine.Vector3(originX, originY, originZ), new UnityEngine.Vector3(directionX, directionY, directionZ));
                     return true;
                 }
             }
@@ -620,12 +500,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         /// </summary>
         public static bool Complex(string input, out System.Numerics.Complex parsed)
         {
-            if (
-                TrySplitComponents(input, out string[] split)
-                && split.Length == 2
-                && Double(split[0], out double real)
-                && Double(split[1], out double imaginary)
-            )
+            if (TrySplitComponents(input, out string[] split) && split.Length == 2 && Double(split[0], out double real) && Double(split[1], out double imaginary))
             {
                 parsed = new System.Numerics.Complex(real, imaginary);
                 return true;
@@ -668,11 +543,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             {
                 if (!string.IsNullOrEmpty(ignored))
                 {
-                    strippedInput = strippedInput.Replace(
-                        ignored,
-                        string.Empty,
-                        StringComparison.OrdinalIgnoreCase
-                    );
+                    strippedInput = strippedInput.Replace(ignored, string.Empty, StringComparison.OrdinalIgnoreCase);
                 }
             }
 

@@ -13,8 +13,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
      */
     public sealed class CommandBuilderSubcommandTests
     {
-        private static readonly Func<CommandExecutionContext> GameplayContext = () =>
-            new CommandExecutionContext(CommandExecutionContexts.EditorPlayMode);
+        private static readonly Func<CommandExecutionContext> GameplayContext = () => new CommandExecutionContext(CommandExecutionContexts.EditorPlayMode);
 
         private Func<CommandExecutionContext> _previousAmbientProvider;
 
@@ -84,36 +83,20 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                                         }
                                     )
                         )
-                        .Subcommand(
-                            "remove",
-                            remove =>
-                                remove
-                                    .Arg<string>("item", spec => spec.Required())
-                                    .Handler(
-                                        (_, arguments) => removedItem = arguments.Get<string>(0)
-                                    )
-                        ),
+                        .Subcommand("remove", remove => remove.Arg<string>("item", spec => spec.Required()).Handler((_, arguments) => removedItem = arguments.Get<string>(0))),
                     out _
                 ),
                 "The router should register cleanly"
             );
 
             Assert.IsTrue(shell.RunCommand("inventory add pickaxe 3"));
-            Assert.AreEqual(
-                "pickaxe",
-                addedItem,
-                "The subcommand handler should receive its arguments"
-            );
+            Assert.AreEqual("pickaxe", addedItem, "The subcommand handler should receive its arguments");
             Assert.AreEqual(3, addedCount, "Input should override the declared default");
             Assert.That(removedItem == null, "Only the routed subcommand runs");
             Assert.That(ConsumeAllErrors(shell) == null, "A valid route queues no error");
 
             Assert.IsTrue(shell.RunCommand("inventory remove sword"));
-            Assert.AreEqual(
-                "sword",
-                removedItem,
-                "The other subcommand routes through the same command"
-            );
+            Assert.AreEqual("sword", removedItem, "The other subcommand routes through the same command");
             Assert.That(ConsumeAllErrors(shell) == null, "The second route queues no error");
         }
 
@@ -123,25 +106,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             CommandShell shell = new(new CommandHistory(16));
             int invocations = 0;
 
-            Assert.IsTrue(
-                shell.AddCommand(
-                    CommandBuilder
-                        .Create("inventory")
-                        .Subcommand("add", add => add.Handler((_, _) => ++invocations)),
-                    out _
-                )
-            );
+            Assert.IsTrue(shell.AddCommand(CommandBuilder.Create("inventory").Subcommand("add", add => add.Handler((_, _) => ++invocations)), out _));
 
             Assert.IsTrue(shell.RunCommand("inventory ADD"));
             Assert.AreEqual(1, invocations, "Routing matches command-name case rules");
             Assert.That(ConsumeAllErrors(shell) == null);
 
             Assert.IsTrue(shell.RunCommand("inventory \"add\""));
-            Assert.AreEqual(
-                2,
-                invocations,
-                "Quoted subcommand tokens route on their stripped contents"
-            );
+            Assert.AreEqual(2, invocations, "Quoted subcommand tokens route on their stripped contents");
             Assert.That(ConsumeAllErrors(shell) == null);
         }
 
@@ -155,29 +127,17 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 shell.AddCommand(
                     CommandBuilder
                         .Create("inventory")
-                        .Subcommand(
-                            "add",
-                            add =>
-                                add.Arg<string>("item", spec => spec.Required())
-                                    .Handler((_, _) => ++invocations)
-                        )
+                        .Subcommand("add", add => add.Arg<string>("item", spec => spec.Required()).Handler((_, _) => ++invocations))
                         .Subcommand("list", list => list.Handler((_, _) => ++invocations)),
                     out _
                 )
             );
 
-            Assert.IsTrue(
-                shell.RunCommand("inventory forge pickaxe"),
-                "The router handles the invocation; the mistake becomes a queued error"
-            );
+            Assert.IsTrue(shell.RunCommand("inventory forge pickaxe"), "The router handles the invocation; the mistake becomes a queued error");
             string error = ConsumeError(shell);
             Assert.That(error != null, "An unknown subcommand queues an error");
             Assert.That(error, Does.Contain("unknown subcommand 'forge'"));
-            Assert.That(
-                error,
-                Does.Contain("add <item:string>"),
-                "The error lists what can follow the command"
-            );
+            Assert.That(error, Does.Contain("add <item:string>"), "The error lists what can follow the command");
             Assert.That(error, Does.Contain("list"));
             Assert.AreEqual(0, invocations, "No handler runs for an unknown subcommand");
         }
@@ -188,14 +148,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             CommandShell shell = new(new CommandHistory(16));
             int invocations = 0;
 
-            Assert.IsTrue(
-                shell.AddCommand(
-                    CommandBuilder
-                        .Create("inventory")
-                        .Subcommand("add", add => add.Handler((_, _) => ++invocations)),
-                    out _
-                )
-            );
+            Assert.IsTrue(shell.AddCommand(CommandBuilder.Create("inventory").Subcommand("add", add => add.Handler((_, _) => ++invocations)), out _));
 
             Assert.IsTrue(shell.RunCommand("inventory"));
             string error = ConsumeError(shell);
@@ -229,11 +182,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
 
             Assert.IsTrue(shell.RunCommand("inventory"));
-            Assert.AreEqual(
-                1,
-                fallbackRuns,
-                "The parent handler acts as the bare-invocation fallback"
-            );
+            Assert.AreEqual(1, fallbackRuns, "The parent handler acts as the bare-invocation fallback");
             Assert.AreEqual(0, rawCount, "The fallback receives no arguments");
             Assert.That(ConsumeAllErrors(shell) == null);
         }
@@ -246,14 +195,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Assert.IsTrue(
                 shell.AddCommand(
-                    CommandBuilder
-                        .Create("inventory")
-                        .Subcommand(
-                            "add",
-                            add =>
-                                add.Arg<string>("item", spec => spec.Required())
-                                    .Handler((_, _) => ++invocations)
-                        ),
+                    CommandBuilder.Create("inventory").Subcommand("add", add => add.Arg<string>("item", spec => spec.Required()).Handler((_, _) => ++invocations)),
                     out _
                 )
             );
@@ -261,16 +203,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.IsTrue(shell.RunCommand("inventory add"));
             string error = ConsumeError(shell);
             Assert.That(error != null);
-            Assert.That(
-                error,
-                Does.Contain("'inventory add': requires at least 1 argument"),
-                "The bounds error names the routed subcommand"
-            );
-            Assert.That(
-                error,
-                Does.Contain("Usage: inventory add <item:string>"),
-                "The derived usage composes parent and subcommand"
-            );
+            Assert.That(error, Does.Contain("'inventory add': requires at least 1 argument"), "The bounds error names the routed subcommand");
+            Assert.That(error, Does.Contain("Usage: inventory add <item:string>"), "The derived usage composes parent and subcommand");
             Assert.AreEqual(0, invocations);
         }
 
@@ -284,12 +218,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 shell.AddCommand(
                     CommandBuilder
                         .Create("inventory")
-                        .Subcommand(
-                            "add",
-                            add =>
-                                add.Arg<string>("item", spec => spec.Required())
-                                    .Handler((_, _) => ++invocations)
-                        )
+                        .Subcommand("add", add => add.Arg<string>("item", spec => spec.Required()).Handler((_, _) => ++invocations))
                         .Subcommand(
                             "stash",
                             stash =>
@@ -317,11 +246,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.IsTrue(shell.RunCommand("inventory add pickaxe spare third fourth"));
             error = ConsumeError(shell);
             Assert.That(error != null);
-            Assert.That(
-                error,
-                Does.Contain("'inventory add': expects at most 1 argument"),
-                "Over-filling the widest sibling's span still names the routed leaf"
-            );
+            Assert.That(error, Does.Contain("'inventory add': expects at most 1 argument"), "Over-filling the widest sibling's span still names the routed leaf");
             Assert.AreEqual(0, invocations);
         }
 
@@ -333,14 +258,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Assert.IsTrue(
                 shell.AddCommand(
-                    CommandBuilder
-                        .Create("inventory")
-                        .Subcommand(
-                            "add",
-                            add =>
-                                add.Arg<int>("count", spec => spec.Required().Range(1, 9))
-                                    .Handler((_, _) => ++invocations)
-                        ),
+                    CommandBuilder.Create("inventory").Subcommand("add", add => add.Arg<int>("count", spec => spec.Required().Range(1, 9)).Handler((_, _) => ++invocations)),
                     out _
                 )
             );
@@ -348,11 +266,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.IsTrue(shell.RunCommand("inventory add abc"));
             string error = ConsumeError(shell);
             Assert.That(error != null);
-            Assert.That(
-                error,
-                Does.Contain("'inventory add':"),
-                "Parse errors name the composed command"
-            );
+            Assert.That(error, Does.Contain("'inventory add':"), "Parse errors name the composed command");
             Assert.That(error, Does.Contain("for argument 'count'"));
             Assert.AreEqual(0, invocations);
 
@@ -380,15 +294,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                             group =>
                                 group
                                     .Handler((_, _) => ++groupFallbackRuns)
-                                    .Subcommand(
-                                        "add",
-                                        add =>
-                                            add.Arg<string>("item", spec => spec.Required())
-                                                .Handler(
-                                                    (_, arguments) =>
-                                                        deepItem = arguments.Get<string>(0)
-                                                )
-                                    )
+                                    .Subcommand("add", add => add.Arg<string>("item", spec => spec.Required()).Handler((_, arguments) => deepItem = arguments.Get<string>(0)))
                         ),
                     out _
                 )
@@ -399,11 +305,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.That(ConsumeAllErrors(shell) == null);
 
             Assert.IsTrue(shell.RunCommand("inv group"));
-            Assert.AreEqual(
-                1,
-                groupFallbackRuns,
-                "A nested router's own handler is its bare-invocation fallback"
-            );
+            Assert.AreEqual(1, groupFallbackRuns, "A nested router's own handler is its bare-invocation fallback");
             Assert.That(ConsumeAllErrors(shell) == null);
         }
 
@@ -412,35 +314,17 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             CommandShell shell = new(new CommandHistory(16));
 
-            Assert.IsTrue(
-                shell.AddCommand(
-                    CommandBuilder
-                        .Create("inv")
-                        .Subcommand(
-                            "group",
-                            group => group.Subcommand("add", add => add.Handler((_, _) => { }))
-                        ),
-                    out _
-                )
-            );
+            Assert.IsTrue(shell.AddCommand(CommandBuilder.Create("inv").Subcommand("group", group => group.Subcommand("add", add => add.Handler((_, _) => { }))), out _));
 
             Assert.IsTrue(shell.RunCommand("inv group forge"));
             string error = ConsumeError(shell);
             Assert.That(error != null);
-            Assert.That(
-                error,
-                Does.Contain("'inv group': unknown subcommand 'forge'"),
-                "Nested diagnostics compose every routing level"
-            );
+            Assert.That(error, Does.Contain("'inv group': unknown subcommand 'forge'"), "Nested diagnostics compose every routing level");
 
             Assert.IsTrue(shell.RunCommand("inv group"));
             error = ConsumeError(shell);
             Assert.That(error != null);
-            Assert.That(
-                error,
-                Does.Contain("'inv group': expected a subcommand"),
-                "A nested router without a fallback errors on a bare invocation"
-            );
+            Assert.That(error, Does.Contain("'inv group': expected a subcommand"), "A nested router without a fallback errors on a bare invocation");
             Assert.That(error, Does.Contain("add"));
         }
 
@@ -475,16 +359,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
 
             Assert.IsTrue(shell.RunCommand("inventory add pickaxe"));
-            Assert.AreEqual(
-                2,
-                argumentsCount,
-                "The typed view covers the declared arguments, defaults included"
-            );
-            Assert.AreEqual(
-                1,
-                rawCount,
-                "The raw view covers only what was typed after the subcommand"
-            );
+            Assert.AreEqual(2, argumentsCount, "The typed view covers the declared arguments, defaults included");
+            Assert.AreEqual(1, rawCount, "The raw view covers only what was typed after the subcommand");
             Assert.AreEqual("pickaxe", rawFirst, "Raw index 0 is the subcommand's first argument");
         }
 
@@ -497,63 +373,23 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 shell.AddCommand(
                     CommandBuilder
                         .Create("inventory", "Manage the inventory")
-                        .Subcommand(
-                            "add",
-                            add =>
-                                add.Help("Add an item")
-                                    .Arg<string>("item", spec => spec.Required())
-                                    .Handler((_, _) => { })
-                        )
-                        .Subcommand(
-                            "remove",
-                            remove =>
-                                remove
-                                    .Arg<string>("item", spec => spec.Required())
-                                    .Handler((_, _) => { })
-                        ),
+                        .Subcommand("add", add => add.Help("Add an item").Arg<string>("item", spec => spec.Required()).Handler((_, _) => { }))
+                        .Subcommand("remove", remove => remove.Arg<string>("item", spec => spec.Required()).Handler((_, _) => { })),
                     out _
                 )
             );
 
             List<CommandCompletion> results = new();
-            Assert.IsTrue(
-                shell.TryComplete(
-                    CommandExecutionContext.Current,
-                    "inventory ",
-                    "inventory ".Length,
-                    results,
-                    out _
-                ),
-                "A router command owns its own completion"
-            );
+            Assert.IsTrue(shell.TryComplete(CommandExecutionContext.Current, "inventory ", "inventory ".Length, results, out _), "A router command owns its own completion");
             Assert.AreEqual(2, results.Count, "Blank input offers every subcommand");
             Assert.AreEqual("add", results[0].InsertionText, "Declaration order is preserved");
             Assert.AreEqual("remove", results[1].InsertionText);
-            Assert.AreEqual(
-                "Add an item",
-                results[0].Description,
-                "Subcommand help flows into completion descriptions"
-            );
-            Assert.IsEmpty(
-                results[1].Description,
-                "Subcommands without help complete with an empty description"
-            );
+            Assert.AreEqual("Add an item", results[0].Description, "Subcommand help flows into completion descriptions");
+            Assert.IsEmpty(results[1].Description, "Subcommands without help complete with an empty description");
 
             results.Clear();
-            Assert.IsTrue(
-                shell.TryComplete(
-                    CommandExecutionContext.Current,
-                    "inventory re",
-                    "inventory re".Length,
-                    results,
-                    out _
-                )
-            );
-            CollectionAssert.AreEqual(
-                new[] { "remove" },
-                ResultsToTexts(results),
-                "Prefix filtering keeps only matching subcommand names"
-            );
+            Assert.IsTrue(shell.TryComplete(CommandExecutionContext.Current, "inventory re", "inventory re".Length, results, out _));
+            CollectionAssert.AreEqual(new[] { "remove" }, ResultsToTexts(results), "Prefix filtering keeps only matching subcommand names");
         }
 
         [Test]
@@ -565,56 +401,19 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 shell.AddCommand(
                     CommandBuilder
                         .Create("inventory")
-                        .Subcommand(
-                            "give",
-                            give =>
-                                give.Arg<string>(
-                                        "item",
-                                        spec => spec.Required().Choices("pickaxe", "sword")
-                                    )
-                                    .Handler((_, _) => { })
-                        )
-                        .Subcommand(
-                            "drop",
-                            drop =>
-                                drop.Arg<int>("slot", spec => spec.Required().Range(0, 3))
-                                    .Handler((_, _) => { })
-                        ),
+                        .Subcommand("give", give => give.Arg<string>("item", spec => spec.Required().Choices("pickaxe", "sword")).Handler((_, _) => { }))
+                        .Subcommand("drop", drop => drop.Arg<int>("slot", spec => spec.Required().Range(0, 3)).Handler((_, _) => { })),
                     out _
                 )
             );
 
             List<CommandCompletion> results = new();
-            Assert.IsTrue(
-                shell.TryComplete(
-                    CommandExecutionContext.Current,
-                    "inventory give ",
-                    "inventory give ".Length,
-                    results,
-                    out _
-                )
-            );
-            CollectionAssert.AreEqual(
-                new[] { "pickaxe", "sword" },
-                ResultsToTexts(results),
-                "The routed subcommand's choices complete its first argument"
-            );
+            Assert.IsTrue(shell.TryComplete(CommandExecutionContext.Current, "inventory give ", "inventory give ".Length, results, out _));
+            CollectionAssert.AreEqual(new[] { "pickaxe", "sword" }, ResultsToTexts(results), "The routed subcommand's choices complete its first argument");
 
             results.Clear();
-            Assert.IsTrue(
-                shell.TryComplete(
-                    CommandExecutionContext.Current,
-                    "inventory give pick",
-                    "inventory give pick".Length,
-                    results,
-                    out _
-                )
-            );
-            CollectionAssert.AreEqual(
-                new[] { "pickaxe" },
-                ResultsToTexts(results),
-                "Prefix filtering applies within the routed subcommand"
-            );
+            Assert.IsTrue(shell.TryComplete(CommandExecutionContext.Current, "inventory give pick", "inventory give pick".Length, results, out _));
+            CollectionAssert.AreEqual(new[] { "pickaxe" }, ResultsToTexts(results), "Prefix filtering applies within the routed subcommand");
         }
 
         [Test]
@@ -628,36 +427,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                         .Create("inv")
                         .Subcommand(
                             "group",
-                            group =>
-                                group.Subcommand(
-                                    "set",
-                                    set =>
-                                        set.Arg<string>(
-                                                "mode",
-                                                spec => spec.Required().Choices("easy", "hard")
-                                            )
-                                            .Handler((_, _) => { })
-                                )
+                            group => group.Subcommand("set", set => set.Arg<string>("mode", spec => spec.Required().Choices("easy", "hard")).Handler((_, _) => { }))
                         ),
                     out _
                 )
             );
 
             List<CommandCompletion> results = new();
-            Assert.IsTrue(
-                shell.TryComplete(
-                    CommandExecutionContext.Current,
-                    "inv group set ",
-                    "inv group set ".Length,
-                    results,
-                    out _
-                )
-            );
-            CollectionAssert.AreEqual(
-                new[] { "easy", "hard" },
-                ResultsToTexts(results),
-                "Completion follows both routing levels"
-            );
+            Assert.IsTrue(shell.TryComplete(CommandExecutionContext.Current, "inv group set ", "inv group set ".Length, results, out _));
+            CollectionAssert.AreEqual(new[] { "easy", "hard" }, ResultsToTexts(results), "Completion follows both routing levels");
         }
 
         [Test]
@@ -674,10 +452,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                         .Subcommand(
                             "pair",
                             pair =>
-                                pair.Arg<string>(
-                                        "creature",
-                                        spec => spec.Required().Choices("wolf", "dragon")
-                                    )
+                                pair.Arg<string>("creature", spec => spec.Required().Choices("wolf", "dragon"))
                                     .Arg<string>(
                                         "title",
                                         spec =>
@@ -685,11 +460,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                                                 .Choices(context =>
                                                 {
                                                     observedStage = context.ActiveArgumentIndex;
-                                                    observedFirst = context
-                                                        .PrecedingArguments
-                                                        .IsEmpty
-                                                        ? null
-                                                        : context.PrecedingArguments[0].contents;
+                                                    observedFirst = context.PrecedingArguments.IsEmpty ? null : context.PrecedingArguments[0].contents;
                                                     return new[] { $"{observedFirst}-lord" };
                                                 })
                                     )
@@ -700,30 +471,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
 
             List<CommandCompletion> results = new();
-            Assert.IsTrue(
-                shell.TryComplete(
-                    CommandExecutionContext.Current,
-                    "summon pair wolf ",
-                    "summon pair wolf ".Length,
-                    results,
-                    out _
-                )
-            );
-            CollectionAssert.AreEqual(
-                new[] { "wolf-lord" },
-                ResultsToTexts(results),
-                "The dynamic provider builds candidates from the subcommand's own preceding argument"
-            );
-            Assert.AreEqual(
-                1,
-                observedStage,
-                "The dynamic provider sees the subcommand-relative stage"
-            );
-            Assert.AreEqual(
-                "wolf",
-                observedFirst,
-                "The dynamic provider sees the subcommand's preceding arguments, not router tokens"
-            );
+            Assert.IsTrue(shell.TryComplete(CommandExecutionContext.Current, "summon pair wolf ", "summon pair wolf ".Length, results, out _));
+            CollectionAssert.AreEqual(new[] { "wolf-lord" }, ResultsToTexts(results), "The dynamic provider builds candidates from the subcommand's own preceding argument");
+            Assert.AreEqual(1, observedStage, "The dynamic provider sees the subcommand-relative stage");
+            Assert.AreEqual("wolf", observedFirst, "The dynamic provider sees the subcommand's preceding arguments, not router tokens");
         }
 
         [Test]
@@ -733,27 +484,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Assert.IsTrue(
                 shell.AddCommand(
-                    CommandBuilder
-                        .Create("inventory")
-                        .Subcommand(
-                            "add",
-                            add =>
-                                add.Arg<string>("item", spec => spec.Required().Choices("pickaxe"))
-                                    .Handler((_, _) => { })
-                        ),
+                    CommandBuilder.Create("inventory").Subcommand("add", add => add.Arg<string>("item", spec => spec.Required().Choices("pickaxe")).Handler((_, _) => { })),
                     out _
                 )
             );
 
             List<CommandCompletion> results = new();
             Assert.IsTrue(
-                shell.TryComplete(
-                    CommandExecutionContext.Current,
-                    "inventory addx ",
-                    "inventory addx ".Length,
-                    results,
-                    out _
-                ),
+                shell.TryComplete(CommandExecutionContext.Current, "inventory addx ", "inventory addx ".Length, results, out _),
                 "The router keeps ownership so history suggestions cannot overwrite input"
             );
             Assert.IsEmpty(results, "An unknown subcommand completes to nothing");
@@ -766,109 +504,45 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void DefinitionTimeValidation()
         {
-            CommandConfigurationException duplicate = Assert.Throws<CommandConfigurationException>(
-                () =>
-                    CommandBuilder
-                        .Create("inventory")
-                        .Subcommand("add", _ => { })
-                        .Subcommand("ADD", _ => { })
+            CommandConfigurationException duplicate = Assert.Throws<CommandConfigurationException>(() =>
+                CommandBuilder.Create("inventory").Subcommand("add", _ => { }).Subcommand("ADD", _ => { })
             );
-            Assert.That(
-                duplicate.Message,
-                Does.Contain("duplicate subcommand name 'ADD'"),
-                "Duplicate detection follows command-name case rules"
-            );
+            Assert.That(duplicate.Message, Does.Contain("duplicate subcommand name 'ADD'"), "Duplicate detection follows command-name case rules");
 
-            CommandConfigurationException parentArguments =
-                Assert.Throws<CommandConfigurationException>(() =>
-                    new CommandShell(new CommandHistory(16)).AddCommand(
-                        CommandBuilder
-                            .Create("inventory")
-                            .Arg<int>("mode", spec => spec.Required())
-                            .Subcommand("add", add => add.Handler((_, _) => { })),
-                        out _
-                    )
-                );
-            Assert.That(
-                parentArguments.Message,
-                Does.Contain("cannot declare its own arguments"),
-                "Router commands route; they take no own arguments"
+            CommandConfigurationException parentArguments = Assert.Throws<CommandConfigurationException>(() =>
+                new CommandShell(new CommandHistory(16)).AddCommand(
+                    CommandBuilder.Create("inventory").Arg<int>("mode", spec => spec.Required()).Subcommand("add", add => add.Handler((_, _) => { })),
+                    out _
+                )
             );
+            Assert.That(parentArguments.Message, Does.Contain("cannot declare its own arguments"), "Router commands route; they take no own arguments");
 
-            CommandConfigurationException childContexts =
-                Assert.Throws<CommandConfigurationException>(() =>
-                    CommandBuilder
-                        .Create("inventory")
-                        .Subcommand(
-                            "add",
-                            add =>
-                                add.Contexts(CommandExecutionContexts.EditorEditMode)
-                                    .Handler((_, _) => { })
-                        )
-                );
-            Assert.That(
-                childContexts.Message,
-                Does.Contain("do not set Contexts on a subcommand"),
-                "The parent's contexts govern every subcommand"
+            CommandConfigurationException childContexts = Assert.Throws<CommandConfigurationException>(() =>
+                CommandBuilder.Create("inventory").Subcommand("add", add => add.Contexts(CommandExecutionContexts.EditorEditMode).Handler((_, _) => { }))
             );
+            Assert.That(childContexts.Message, Does.Contain("do not set Contexts on a subcommand"), "The parent's contexts govern every subcommand");
 
-            CommandConfigurationException childHistory =
-                Assert.Throws<CommandConfigurationException>(() =>
-                    CommandBuilder
-                        .Create("inventory")
-                        .Subcommand("add", add => add.AddToHistory(false).Handler((_, _) => { }))
-                );
-            Assert.That(
-                childHistory.Message,
-                Does.Contain("do not set AddToHistory on a subcommand")
+            CommandConfigurationException childHistory = Assert.Throws<CommandConfigurationException>(() =>
+                CommandBuilder.Create("inventory").Subcommand("add", add => add.AddToHistory(false).Handler((_, _) => { }))
             );
+            Assert.That(childHistory.Message, Does.Contain("do not set AddToHistory on a subcommand"));
 
-            CommandConfigurationException missingHandler =
-                Assert.Throws<CommandConfigurationException>(() =>
-                    new CommandShell(new CommandHistory(16)).AddCommand(
-                        CommandBuilder.Create("inventory").Subcommand("add", _ => { }),
-                        out _
-                    )
-                );
-            Assert.That(
-                missingHandler.Message,
-                Does.Contain("Command 'inventory add':"),
-                "The diagnostic names the composed path"
+            CommandConfigurationException missingHandler = Assert.Throws<CommandConfigurationException>(() =>
+                new CommandShell(new CommandHistory(16)).AddCommand(CommandBuilder.Create("inventory").Subcommand("add", _ => { }), out _)
             );
+            Assert.That(missingHandler.Message, Does.Contain("Command 'inventory add':"), "The diagnostic names the composed path");
             Assert.That(missingHandler.Message, Does.Contain("set a handler"));
 
-            CommandConfigurationException colliding = Assert.Throws<CommandConfigurationException>(
-                () =>
-                    CommandBuilder
-                        .Create("inventory")
-                        .Subcommand("ad d", _ => { })
-                        .Subcommand("ADD", _ => { })
+            CommandConfigurationException colliding = Assert.Throws<CommandConfigurationException>(() =>
+                CommandBuilder.Create("inventory").Subcommand("ad d", _ => { }).Subcommand("ADD", _ => { })
             );
-            Assert.That(
-                colliding.Message,
-                Does.Contain("duplicate subcommand name 'ADD'"),
-                "Normalization happens before duplicate detection"
-            );
+            Assert.That(colliding.Message, Does.Contain("duplicate subcommand name 'ADD'"), "Normalization happens before duplicate detection");
 
-            CommandConfigurationException emptyName = Assert.Throws<CommandConfigurationException>(
-                () =>
-                    CommandBuilder.Create("inventory").Subcommand("   ", _ => { })
-            );
-            Assert.That(
-                emptyName.Message,
-                Does.Contain("subcommand names must not be empty"),
-                "Names that normalize to nothing are rejected"
-            );
+            CommandConfigurationException emptyName = Assert.Throws<CommandConfigurationException>(() => CommandBuilder.Create("inventory").Subcommand("   ", _ => { }));
+            Assert.That(emptyName.Message, Does.Contain("subcommand names must not be empty"), "Names that normalize to nothing are rejected");
 
-            CommandConfigurationException nullName = Assert.Throws<CommandConfigurationException>(
-                () =>
-                    CommandBuilder.Create("inventory").Subcommand(null, _ => { })
-            );
-            Assert.That(
-                nullName.Message,
-                Does.Contain("subcommand names must not be empty"),
-                "A null subcommand name is a definition error, not a crash"
-            );
+            CommandConfigurationException nullName = Assert.Throws<CommandConfigurationException>(() => CommandBuilder.Create("inventory").Subcommand(null, _ => { }));
+            Assert.That(nullName.Message, Does.Contain("subcommand names must not be empty"), "A null subcommand name is a definition error, not a crash");
         }
 
         [Test]
@@ -881,36 +555,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     CommandBuilder
                         .Create("inventory")
                         .Subcommand("add", add => add.Handler((_, _) => { }))
-                        .Subcommand(
-                            "stash",
-                            stash =>
-                                stash
-                                    .Arg<string>("a", spec => spec.Required())
-                                    .Arg<string>("b", spec => spec.Required())
-                                    .Handler((_, _) => { })
-                        ),
+                        .Subcommand("stash", stash => stash.Arg<string>("a", spec => spec.Required()).Arg<string>("b", spec => spec.Required()).Handler((_, _) => { })),
                     out _
                 )
             );
 
-            Assert.IsTrue(
-                shell.Commands.TryGetValue("inventory", out CommandInfo info),
-                "The router registers under the parent name only"
-            );
-            Assert.AreEqual(
-                "inventory <subcommand>",
-                info.hint,
-                "The router hint derives from the command name"
-            );
-            Assert.AreEqual(
-                0,
-                info.minArgCount,
-                "Bare invocations must reach the router, so the minimum is zero"
-            );
-            Assert.That(
-                info.maxArgCount == null,
-                "The router owns bounds after routing, so the shell leaves the maximum open"
-            );
+            Assert.IsTrue(shell.Commands.TryGetValue("inventory", out CommandInfo info), "The router registers under the parent name only");
+            Assert.AreEqual("inventory <subcommand>", info.hint, "The router hint derives from the command name");
+            Assert.AreEqual(0, info.minArgCount, "Bare invocations must reach the router, so the minimum is zero");
+            Assert.That(info.maxArgCount == null, "The router owns bounds after routing, so the shell leaves the maximum open");
         }
 
         [Test]
@@ -918,28 +571,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             CommandShell shell = new(new CommandHistory(16));
 
-            Assert.IsTrue(
-                shell.AddCommand(
-                    CommandBuilder
-                        .Create("inventory")
-                        .Subcommand("add", add => add.Handler((_, _) => { })),
-                    out CommandRegistrationHandle handle
-                )
-            );
+            Assert.IsTrue(shell.AddCommand(CommandBuilder.Create("inventory").Subcommand("add", add => add.Handler((_, _) => { })), out CommandRegistrationHandle handle));
 
             handle.Dispose();
 
-            Assert.IsFalse(
-                shell.Commands.ContainsKey("inventory"),
-                "Disposing the handle removes the routed command"
-            );
+            Assert.IsFalse(shell.Commands.ContainsKey("inventory"), "Disposing the handle removes the routed command");
             Assert.IsTrue(
-                shell.AddCommand(
-                    CommandBuilder
-                        .Create("inventory")
-                        .Subcommand("remove", remove => remove.Handler((_, _) => { })),
-                    out _
-                ),
+                shell.AddCommand(CommandBuilder.Create("inventory").Subcommand("remove", remove => remove.Handler((_, _) => { })), out _),
                 "A replacement router registers under the same name"
             );
         }
@@ -950,14 +588,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             CommandShell shell = new(new CommandHistory(16));
             int invocations = 0;
 
-            Assert.IsTrue(
-                shell.AddCommand(
-                    CommandBuilder
-                        .Create("inventory")
-                        .Subcommand("ad d", add => add.Handler((_, _) => ++invocations)),
-                    out _
-                )
-            );
+            Assert.IsTrue(shell.AddCommand(CommandBuilder.Create("inventory").Subcommand("ad d", add => add.Handler((_, _) => ++invocations)), out _));
 
             Assert.IsTrue(shell.RunCommand("inventory add"));
             Assert.AreEqual(1, invocations, "Subcommand names strip spaces like command names");

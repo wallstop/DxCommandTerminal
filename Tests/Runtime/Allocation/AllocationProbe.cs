@@ -65,13 +65,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
     validated would make that capability impossible to approve.
 */
             AllocationAssertions.ForceControlAllocation();
-            bool detected = DetectsAllocations(
-                AllocationAssertions.ForceControlAllocation,
-                out long controlBytes
-            );
+            bool detected = DetectsAllocations(AllocationAssertions.ForceControlAllocation, out long controlBytes);
             _instrumentValid = detected;
-            _byteCapabilityValid =
-                controlBytes != AllocationMeasurement.Unavailable && 0 < controlBytes;
+            _byteCapabilityValid = controlBytes != AllocationMeasurement.Unavailable && 0 < controlBytes;
             _validated = true;
         }
 
@@ -184,10 +180,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
             }
 
             subjectBytes =
-                innerStart != AllocationMeasurement.Unavailable
-                && innerEnd != AllocationMeasurement.Unavailable
-                    ? innerEnd - innerStart
-                    : AllocationMeasurement.Unavailable;
+                innerStart != AllocationMeasurement.Unavailable && innerEnd != AllocationMeasurement.Unavailable ? innerEnd - innerStart : AllocationMeasurement.Unavailable;
             return detected;
         }
     }

@@ -109,16 +109,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return SpawnTerminal(open: false);
 
             int runs = 0;
-            Assert.IsTrue(
-                Terminal.Shell.AddCommand(
-                    "closedgate",
-                    _ => ++runs,
-                    minArgs: 0,
-                    maxArgs: 0,
-                    help: "test"
-                ),
-                "Sanity: the probe command registers"
-            );
+            Assert.IsTrue(Terminal.Shell.AddCommand("closedgate", _ => ++runs, minArgs: 0, maxArgs: 0, help: "test"), "Sanity: the probe command registers");
 
             /*
                 The gates must neither run nor touch staged input: stage a
@@ -131,15 +122,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             _terminal.HandleNext();
 
             Assert.AreEqual(0, runs, "Input actions on a closed terminal must not run commands");
-            Assert.IsTrue(
-                _terminal.IsClosed,
-                "Input actions on a closed terminal must not open it"
-            );
-            Assert.AreEqual(
-                "staged",
-                DefaultTerminalInput.Instance.CommandText,
-                "Input actions on a closed terminal must not consume staged input text"
-            );
+            Assert.IsTrue(_terminal.IsClosed, "Input actions on a closed terminal must not open it");
+            Assert.AreEqual("staged", DefaultTerminalInput.Instance.CommandText, "Input actions on a closed terminal must not consume staged input text");
         }
 
         [UnityTest]
@@ -148,16 +132,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return SpawnTerminal(open: true);
 
             int runs = 0;
-            Assert.IsTrue(
-                Terminal.Shell.AddCommand(
-                    "dupgate",
-                    _ => ++runs,
-                    minArgs: 0,
-                    maxArgs: 0,
-                    help: "test"
-                ),
-                "Sanity: the probe command registers"
-            );
+            Assert.IsTrue(Terminal.Shell.AddCommand("dupgate", _ => ++runs, minArgs: 0, maxArgs: 0, help: "test"), "Sanity: the probe command registers");
 
             /*
                 Execution clears the input, so a second Enter on the same
@@ -168,11 +143,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             _terminal.EnterCommand();
             _terminal.EnterCommand();
 
-            Assert.AreEqual(
-                1,
-                runs,
-                "A held or repeated Enter must not re-run the command after execution"
-            );
+            Assert.AreEqual(1, runs, "A held or repeated Enter must not re-run the command after execution");
         }
 
         [UnityTest]
@@ -181,16 +152,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return SpawnTerminal(open: true);
 
             int runs = 0;
-            Assert.IsTrue(
-                Terminal.Shell.AddCommand(
-                    "conflictrun",
-                    _ => ++runs,
-                    minArgs: 0,
-                    maxArgs: 0,
-                    help: "test"
-                ),
-                "Sanity: the probe command registers"
-            );
+            Assert.IsTrue(Terminal.Shell.AddCommand("conflictrun", _ => ++runs, minArgs: 0, maxArgs: 0, help: "test"), "Sanity: the probe command registers");
 
             ScriptedInputController controller = SpawnController();
 
@@ -202,25 +164,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             controller.PressClose = true;
             controller.PressEnter = true;
             controller.DriveUpdate();
-            yield return WaitForClosed(
-                "The higher-priority control must win a same-frame hotkey conflict"
-            );
-            Assert.AreEqual(
-                0,
-                runs,
-                "The lower-priority control must not also run on the conflict frame"
-            );
+            yield return WaitForClosed("The higher-priority control must win a same-frame hotkey conflict");
+            Assert.AreEqual(0, runs, "The lower-priority control must not also run on the conflict frame");
 
             controller.PressClose = false;
             controller.PressEnter = true;
             _terminal.SetState(TerminalState.OpenFull);
             DefaultTerminalInput.Instance.CommandText = "conflictrun";
             controller.DriveUpdate();
-            Assert.AreEqual(
-                1,
-                runs,
-                "EnterCommand must run on a frame where it is the only pressed control"
-            );
+            Assert.AreEqual(1, runs, "EnterCommand must run on a frame where it is the only pressed control");
             Assert.IsFalse(_terminal.IsClosed, "EnterCommand must not close the terminal");
         }
 
@@ -241,25 +193,16 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 The shipped default is a character key, which is what makes
                 this the reservation contract rather than a free hotkey.
              */
-            Assert.IsTrue(
-                InputHelpers.ProducesTypedText(_hotkeyController.toggleHotkey),
-                $"Sanity: the default toggle binding \"{_hotkeyController.toggleHotkey}\" types text"
-            );
+            Assert.IsTrue(InputHelpers.ProducesTypedText(_hotkeyController.toggleHotkey), $"Sanity: the default toggle binding \"{_hotkeyController.toggleHotkey}\" types text");
 
             _hotkeyController.PressedHotkey = _hotkeyController.toggleHotkey;
             _hotkeyController.DriveUpdate();
-            Assert.AreEqual(
-                TerminalState.OpenSmall,
-                _terminal.State,
-                "The console key must act while the field has focus, not type its character"
-            );
+            Assert.AreEqual(TerminalState.OpenSmall, _terminal.State, "The console key must act while the field has focus, not type its character");
             yield return WaitForFocusedInput("Sanity: the shrunken surface's field holds focus");
 
             _hotkeyController.PressedHotkey = _hotkeyController.toggleHotkey;
             _hotkeyController.DriveUpdate();
-            yield return WaitForClosed(
-                "The same stroke must close the surface it opened, whatever holds focus"
-            );
+            yield return WaitForClosed("The same stroke must close the surface it opened, whatever holds focus");
         }
 
         /*
@@ -275,9 +218,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             _hotkeyController.PressedHotkey = _hotkeyController.toggleFullHotkey;
             _hotkeyController.DriveUpdate();
-            yield return WaitForClosed(
-                "The full-console key must close the surface while the field has focus"
-            );
+            yield return WaitForClosed("The full-console key must close the surface while the field has focus");
         }
 
         [UnityTest]
@@ -289,9 +230,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             _hotkeyController.PressedHotkey = _hotkeyController.toggleHotkey;
             _hotkeyController.DriveUpdate();
 
-            yield return WaitForInputVisible(
-                "With no console field focused the console key must still open the terminal"
-            );
+            yield return WaitForInputVisible("With no console field focused the console key must still open the terminal");
         }
 
         [UnityTest]
@@ -303,9 +242,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             _hotkeyController.PressedHotkey = _hotkeyController.closeHotkey;
             _hotkeyController.DriveUpdate();
 
-            yield return WaitForClosed(
-                "A binding that types no character must keep working while the field has focus"
-            );
+            yield return WaitForClosed("A binding that types no character must keep working while the field has focus");
         }
 
         /*
@@ -330,14 +267,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             _hotkeyController.PressedHotkey = _hotkeyController.toggleFullHotkey;
             _hotkeyController.DriveUpdate();
 
-            yield return WaitForClosed(
-                "The console key must close the terminal while its line holds text"
-            );
-            Assert.AreEqual(
-                string.Empty,
-                DefaultTerminalInput.Instance.CommandText,
-                "The close answers the console key, and the close clears the line"
-            );
+            yield return WaitForClosed("The console key must close the terminal while its line holds text");
+            Assert.AreEqual(string.Empty, DefaultTerminalInput.Instance.CommandText, "The close answers the console key, and the close clears the line");
         }
 
         [UnityTest]
@@ -358,9 +289,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             _hotkeyController.PressedHotkey = _hotkeyController.toggleHotkey;
             _hotkeyController.DriveUpdate();
 
-            yield return WaitForInputVisible(
-                "The console key must open a terminal that was closed while its field held focus"
-            );
+            yield return WaitForInputVisible("The console key must open a terminal that was closed while its field held focus");
         }
 
         /*
@@ -375,23 +304,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return SpawnTerminal(open: true);
             yield return WaitForFocusedInput("Sanity: the field reports focus");
 
-            VisualElement focused =
-                _terminal._commandInput.focusController?.focusedElement as VisualElement;
-            Assert.IsTrue(
-                focused == _terminal._commandInput || _terminal._commandInput.Contains(focused),
-                "Sanity: the panel reports focus on the field or inside it"
-            );
-            Assert.IsTrue(
-                _terminal.InputOwnsFocus,
-                "A focused command field must report owning focus"
-            );
+            VisualElement focused = _terminal._commandInput.focusController?.focusedElement as VisualElement;
+            Assert.IsTrue(focused == _terminal._commandInput || _terminal._commandInput.Contains(focused), "Sanity: the panel reports focus on the field or inside it");
+            Assert.IsTrue(_terminal.InputOwnsFocus, "A focused command field must report owning focus");
 
             _terminal.Close();
             yield return WaitForClosed("Sanity: the terminal closes");
-            Assert.IsFalse(
-                _terminal.InputOwnsFocus,
-                "A closed terminal must not report owning focus, whatever still holds it"
-            );
+            Assert.IsFalse(_terminal.InputOwnsFocus, "A closed terminal must not report owning focus, whatever still holds it");
         }
 
         /*
@@ -408,32 +327,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return WaitForFocusedInput("Sanity: the command field holds panel focus");
 
             int runs = 0;
-            Assert.IsTrue(
-                Terminal.Shell.AddCommand(
-                    "mixedgate",
-                    _ => ++runs,
-                    minArgs: 0,
-                    maxArgs: 0,
-                    help: "test"
-                ),
-                "Sanity: the probe command registers"
-            );
+            Assert.IsTrue(Terminal.Shell.AddCommand("mixedgate", _ => ++runs, minArgs: 0, maxArgs: 0, help: "test"), "Sanity: the probe command registers");
 
             _hotkeyController.BindEnterTo("enter", "=");
             DefaultTerminalInput.Instance.CommandText = "mixedgate";
 
             _hotkeyController.PressedHotkey = "=";
             _hotkeyController.DriveUpdate();
-            Assert.AreEqual(
-                0,
-                runs,
-                "A character binding in the enter list must type while the field has focus"
-            );
-            Assert.AreEqual(
-                TerminalState.OpenFull,
-                _terminal.State,
-                "Sanity: the character is no toggle binding, so the surface stays open"
-            );
+            Assert.AreEqual(0, runs, "A character binding in the enter list must type while the field has focus");
+            Assert.AreEqual(TerminalState.OpenFull, _terminal.State, "Sanity: the character is no toggle binding, so the surface stays open");
 
             _hotkeyController.PressedHotkey = "enter";
             _hotkeyController.DriveUpdate();
@@ -456,10 +358,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             _palette.Open();
             yield return null;
-            Assert.IsTrue(
-                CommandPaletteUI.AnyInputOwnsFocus(),
-                "Sanity: the palette query field holds panel focus"
-            );
+            Assert.IsTrue(CommandPaletteUI.AnyInputOwnsFocus(), "Sanity: the palette query field holds panel focus");
 
             _palette.toggleHotkey = "`";
 
@@ -472,10 +371,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return null;
 
             PressBackquote();
-            yield return WaitForPaletteState(
-                false,
-                "The palette's toggle key must close it even while its query has focus"
-            );
+            yield return WaitForPaletteState(false, "The palette's toggle key must close it even while its query has focus");
 
             /*
                 The control half: with nothing focused, the same key must
@@ -485,10 +381,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             ReleaseKeys();
             yield return null;
             PressBackquote();
-            yield return WaitForPaletteState(
-                true,
-                "Sanity: the queued key reaches the palette poll once nothing is focused"
-            );
+            yield return WaitForPaletteState(true, "Sanity: the queued key reaches the palette poll once nothing is focused");
 
             /*
                 The press is left held; release it so the next test's queued
@@ -519,14 +412,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             _palette.toggleHotkey = "`";
             PressBackquote();
-            yield return WaitForPaletteState(
-                true,
-                "The palette's toggle key must open the bar even over a focused command line"
-            );
-            Assert.IsTrue(
-                _terminal.IsClosed,
-                "Opening the bar over the terminal must close the terminal surface"
-            );
+            yield return WaitForPaletteState(true, "The palette's toggle key must open the bar even over a focused command line");
+            Assert.IsTrue(_terminal.IsClosed, "Opening the bar over the terminal must close the terminal surface");
 
             /*
                 The press is left held; release it so the next test's queued
@@ -553,22 +440,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return null;
 
             Assert.IsTrue(_palette.IsOpen, "Sanity: the palette opens over the closed terminal");
-            Assert.IsTrue(
-                CommandPaletteUI.AnyInputOwnsFocus(),
-                "Sanity: the palette query field holds panel focus"
-            );
+            Assert.IsTrue(CommandPaletteUI.AnyInputOwnsFocus(), "Sanity: the palette query field holds panel focus");
 
             HotkeyController controller = SpawnHotkeyController();
             controller.PressedHotkey = controller.toggleHotkey;
             controller.DriveUpdate();
 
-            Assert.IsFalse(
-                _palette.IsOpen,
-                "The terminal taking the surface must close the palette"
-            );
-            yield return WaitForInputVisible(
-                "The console key must open the terminal over the palette"
-            );
+            Assert.IsFalse(_palette.IsOpen, "The terminal taking the surface must close the palette");
+            yield return WaitForInputVisible("The console key must open the terminal over the palette");
         }
 
         [UnityTest]
@@ -582,20 +461,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             _terminalObject = null;
             _terminal = null;
 
-            Assert.That(
-                controller.terminal == null,
-                "Sanity: destroying the terminal leaves the controller's reference fake-null"
-            );
+            Assert.That(controller.terminal == null, "Sanity: destroying the terminal leaves the controller's reference fake-null");
 
-            Assert.DoesNotThrow(
-                controller.DriveUpdate,
-                "A controller update with no pressed keys must skip a destroyed terminal"
-            );
+            Assert.DoesNotThrow(controller.DriveUpdate, "A controller update with no pressed keys must skip a destroyed terminal");
             controller.PressClose = true;
-            Assert.DoesNotThrow(
-                controller.DriveUpdate,
-                "A controller update with a pressed key must skip a destroyed terminal"
-            );
+            Assert.DoesNotThrow(controller.DriveUpdate, "A controller update with a pressed key must skip a destroyed terminal");
         }
 
         [UnityTest]
@@ -606,22 +476,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.IsFalse(_palette.IsOpen, "Sanity: the palette starts closed");
 
             Assert.IsFalse(_palette.Submit(), "Submit on a closed palette must be a no-op");
-            Assert.IsFalse(
-                _palette.ApplySelected(),
-                "ApplySelected on a closed palette must be a no-op"
-            );
-            Assert.IsFalse(
-                _palette.MoveSelection(1),
-                "MoveSelection on a closed palette must be a no-op"
-            );
-            Assert.IsFalse(
-                _palette.MoveSelection(-1),
-                "Reverse MoveSelection on a closed palette must be a no-op"
-            );
-            Assert.IsFalse(
-                _palette.TryGetSelected(out _),
-                "With nothing staged, TryGetSelected must report no selection"
-            );
+            Assert.IsFalse(_palette.ApplySelected(), "ApplySelected on a closed palette must be a no-op");
+            Assert.IsFalse(_palette.MoveSelection(1), "MoveSelection on a closed palette must be a no-op");
+            Assert.IsFalse(_palette.MoveSelection(-1), "Reverse MoveSelection on a closed palette must be a no-op");
+            Assert.IsFalse(_palette.TryGetSelected(out _), "With nothing staged, TryGetSelected must report no selection");
         }
 
         /*
@@ -646,9 +504,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.IsTrue(_palette.IsOpen, "Sanity: the palette opens");
             yield return WaitForClosed("Opening the palette closes the terminal surface");
             Assert.That(
-                _palette._input != null
-                    && _palette._input.focusController != null
-                    && _palette._input.focusController.focusedElement == _palette._input,
+                _palette._input != null && _palette._input.focusController != null && _palette._input.focusController.focusedElement == _palette._input,
                 "Sanity: the palette input takes over panel focus"
             );
 
@@ -657,14 +513,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             _terminal = null;
             yield return null;
 
-            Assert.IsTrue(
-                _palette.IsOpen,
-                "The palette must survive its focus target's destruction"
-            );
-            Assert.DoesNotThrow(
-                _palette.Close,
-                "Closing a palette whose captured focus target was destroyed must not throw"
-            );
+            Assert.IsTrue(_palette.IsOpen, "The palette must survive its focus target's destruction");
+            Assert.DoesNotThrow(_palette.Close, "Closing a palette whose captured focus target was destroyed must not throw");
             Assert.IsFalse(_palette.IsOpen, "The palette must close after the destroyed target");
         }
 
@@ -672,8 +522,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             GameObject controllerObject = new("TransitionController");
             controllerObject.SetActive(false);
-            ScriptedInputController controller =
-                controllerObject.AddComponent<ScriptedInputController>();
+            ScriptedInputController controller = controllerObject.AddComponent<ScriptedInputController>();
             controller.terminal = _terminal;
             controllerObject.SetActive(true);
             _spawnedObjects.Add(controllerObject);
@@ -727,22 +576,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private IEnumerator WaitForInputVisible(string message)
         {
             int frameBudget = FrameBudget;
-            while (
-                0 < frameBudget--
-                && (
-                    _terminal._commandInput == null
-                    || _terminal._commandInput.resolvedStyle.display != DisplayStyle.Flex
-                )
-            )
+            while (0 < frameBudget-- && (_terminal._commandInput == null || _terminal._commandInput.resolvedStyle.display != DisplayStyle.Flex))
             {
                 yield return null;
             }
 
-            Assert.AreEqual(
-                DisplayStyle.Flex,
-                _terminal._commandInput.resolvedStyle.display,
-                message
-            );
+            Assert.AreEqual(DisplayStyle.Flex, _terminal._commandInput.resolvedStyle.display, message);
         }
 
         private IEnumerator WaitForClosed(string message)
@@ -756,11 +595,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.IsTrue(_terminal.IsClosed, message);
         }
 
-        private IEnumerator SpawnTerminal(
-            bool open,
-            bool withHotkeyController = false,
-            bool withPalette = false
-        )
+        private IEnumerator SpawnTerminal(bool open, bool withHotkeyController = false, bool withPalette = false)
         {
 #if UNITY_EDITOR
             _panelSettings = ScriptableObject.CreateInstance<PanelSettings>();

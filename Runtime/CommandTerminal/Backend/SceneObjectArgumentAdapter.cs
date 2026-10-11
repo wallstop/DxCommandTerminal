@@ -22,21 +22,14 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         private EntityId[] _sortKeys = Array.Empty<EntityId>();
 #endif
 
-        public SceneObjectArgumentAdapter(
-            SceneObjectAmbiguityPolicy ambiguityPolicy = SceneObjectAmbiguityPolicy.FirstMatch,
-            bool includeInactive = false
-        )
+        public SceneObjectArgumentAdapter(SceneObjectAmbiguityPolicy ambiguityPolicy = SceneObjectAmbiguityPolicy.FirstMatch, bool includeInactive = false)
         {
             if (typeof(T) != typeof(GameObject) && !typeof(Component).IsAssignableFrom(typeof(T)))
             {
                 throw new ArgumentException("Use GameObject or a Component type.", nameof(T));
             }
 
-            if (
-                ambiguityPolicy
-                is not SceneObjectAmbiguityPolicy.FirstMatch
-                    and not SceneObjectAmbiguityPolicy.RequireUnique
-            )
+            if (ambiguityPolicy is not SceneObjectAmbiguityPolicy.FirstMatch and not SceneObjectAmbiguityPolicy.RequireUnique)
             {
                 throw new ArgumentOutOfRangeException(nameof(ambiguityPolicy));
             }
@@ -59,10 +52,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             for (int i = 0; i < candidateCount; ++i)
             {
                 T candidate = candidates[i];
-                if (
-                    candidate == null
-                    || !string.Equals(candidate.name, input, StringComparison.OrdinalIgnoreCase)
-                )
+                if (candidate == null || !string.Equals(candidate.name, input, StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
                 }
@@ -155,14 +145,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         private T[] Query()
         {
 #if UNITY_6000_4_OR_NEWER
-            return Object.FindObjectsByType<T>(
-                _includeInactive ? FindObjectsInactive.Include : FindObjectsInactive.Exclude
-            );
+            return Object.FindObjectsByType<T>(_includeInactive ? FindObjectsInactive.Include : FindObjectsInactive.Exclude);
 #elif UNITY_2022_2_OR_NEWER
-            return Object.FindObjectsByType<T>(
-                _includeInactive ? FindObjectsInactive.Include : FindObjectsInactive.Exclude,
-                FindObjectsSortMode.InstanceID
-            );
+            return Object.FindObjectsByType<T>(_includeInactive ? FindObjectsInactive.Include : FindObjectsInactive.Exclude, FindObjectsSortMode.InstanceID);
 #else
             return Object.FindObjectsOfType<T>(_includeInactive);
 #endif

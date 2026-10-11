@@ -40,10 +40,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         private static void AppendField(StringBuilder json, string name, string value)
         {
-            json.Append(TerminalSurfaceCapture.EscapeJson(name))
-                .Append(':')
-                .Append(TerminalSurfaceCapture.EscapeJson(value))
-                .Append(',');
+            json.Append(TerminalSurfaceCapture.EscapeJson(name)).Append(':').Append(TerminalSurfaceCapture.EscapeJson(value)).Append(',');
         }
 
         private static string FormatFraction(float fraction)
@@ -53,13 +50,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         private static string FormatRgb(CapturePixelMetrics metrics)
         {
-            return string.Format(
-                CultureInfo.InvariantCulture,
-                "#{0:X2}{1:X2}{2:X2}",
-                metrics.BackgroundRed,
-                metrics.BackgroundGreen,
-                metrics.BackgroundBlue
-            );
+            return string.Format(CultureInfo.InvariantCulture, "#{0:X2}{1:X2}{2:X2}", metrics.BackgroundRed, metrics.BackgroundGreen, metrics.BackgroundBlue);
         }
 
         public string ToJson()
@@ -69,14 +60,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             AppendField(json, "scenario", Scenario);
             AppendField(json, "capturedUtc", CapturedUtc);
             json.Append("\"complete\":").Append(Complete ? "true" : "false").Append(',');
-            json.Append("\"resolution\":{\"width\":")
-                .Append(ResolutionWidth)
-                .Append(",\"height\":")
-                .Append(ResolutionHeight)
-                .Append("},");
-            json.Append("\"logicalScale\":")
-                .Append(LogicalScale.ToString("0.####", CultureInfo.InvariantCulture))
-                .Append(',');
+            json.Append("\"resolution\":{\"width\":").Append(ResolutionWidth).Append(",\"height\":").Append(ResolutionHeight).Append("},");
+            json.Append("\"logicalScale\":").Append(LogicalScale.ToString("0.####", CultureInfo.InvariantCulture)).Append(',');
             AppendField(json, "colorSpace", ColorSpace);
             AppendField(json, "unityVersion", UnityVersion);
             AppendField(json, "graphicsApi", GraphicsApi);
@@ -87,9 +72,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             AppendField(json, "diagnostics", Diagnostics);
             if (RendersToFirstCompleteFrame.HasValue)
             {
-                json.Append("\"rendersToFirstCompleteFrame\":")
-                    .Append(RendersToFirstCompleteFrame.Value)
-                    .Append(',');
+                json.Append("\"rendersToFirstCompleteFrame\":").Append(RendersToFirstCompleteFrame.Value).Append(',');
             }
             if (Metrics != null)
             {

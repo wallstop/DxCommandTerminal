@@ -70,10 +70,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Editor
 
             int count = _cache.Read(_buffer, out LogItem[] reused);
 
-            Assert.IsTrue(
-                _cache.LastReadReused,
-                "A read over an unchanged buffer and query must answer from the memo"
-            );
+            Assert.IsTrue(_cache.LastReadReused, "A read over an unchanged buffer and query must answer from the memo");
             Assert.AreSame(first, reused, "The memo hands back the previous pass's array");
             Assert.AreEqual(2, count);
             Assert.AreEqual("one", reused[0].message);
@@ -131,10 +128,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Editor
 
             int count = _cache.Read(_buffer, out LogItem[] reused);
 
-            Assert.IsTrue(
-                _cache.LastReadReused,
-                "An unchanged query over an unchanged buffer must skip the search pass"
-            );
+            Assert.IsTrue(_cache.LastReadReused, "An unchanged query over an unchanged buffer must skip the search pass");
             Assert.AreSame(first, reused);
             Assert.AreEqual(1, count);
         }
@@ -211,11 +205,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Editor
             _buffer.Resize(1);
             int shrunkCount = _cache.Read(_buffer, out LogItem[] shrunk);
             Assert.IsFalse(_cache.LastReadReused, "The shrink must invalidate the memo too");
-            Assert.AreEqual(
-                1,
-                shrunkCount,
-                $"Newest entry survives a shrink to its own count: [{Names(shrunk, shrunkCount)}]"
-            );
+            Assert.AreEqual(1, shrunkCount, $"Newest entry survives a shrink to its own count: [{Names(shrunk, shrunkCount)}]");
         }
 
         [Test]
@@ -229,10 +219,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Editor
 
             int count = _cache.Read(other, out LogItem[] rendered);
 
-            Assert.IsFalse(
-                _cache.LastReadReused,
-                "A different buffer instance must miss even with the same version and capacity"
-            );
+            Assert.IsFalse(_cache.LastReadReused, "A different buffer instance must miss even with the same version and capacity");
             Assert.AreEqual(1, count);
             Assert.AreEqual("two", rendered[0].message);
         }
@@ -267,10 +254,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Editor
         {
             foreach (string message in messages)
             {
-                Assert.IsTrue(
-                    _buffer.HandleLog(message, TerminalLogType.Message),
-                    $"Sanity: '{message}' was written, not filtered"
-                );
+                Assert.IsTrue(_buffer.HandleLog(message, TerminalLogType.Message), $"Sanity: '{message}' was written, not filtered");
             }
         }
     }

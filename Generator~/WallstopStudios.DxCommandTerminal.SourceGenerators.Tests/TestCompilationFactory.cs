@@ -16,17 +16,13 @@
 
     internal static class TestCompilationFactory
     {
-        public const string CatalogTypeName =
-            "WallstopStudios.DxCommandTerminal.Generated.CommandCatalog";
+        public const string CatalogTypeName = "WallstopStudios.DxCommandTerminal.Generated.CommandCatalog";
 
-        public const string EntryTypeName =
-            "WallstopStudios.DxCommandTerminal.Backend.CommandCatalogEntry";
+        public const string EntryTypeName = "WallstopStudios.DxCommandTerminal.Backend.CommandCatalogEntry";
 
         public const string GeneratedHintName = "DxCommandTerminalCommandCatalog.g.cs";
 
-        private static readonly IReadOnlyList<MetadataReference> References = NetStandard21
-            .References
-            .All;
+        private static readonly IReadOnlyList<MetadataReference> References = NetStandard21.References.All;
 
         private static readonly List<SyntaxTree> CoreRuntimeSources = LoadRuntimeSources(
             new[]
@@ -41,47 +37,29 @@
             }
         );
 
-        private static readonly List<SyntaxTree> ContractSources = LoadRuntimeSources(
-            new[] { "Runtime/CommandTerminal/Backend/CommandCatalogEntry.cs" }
-        );
+        private static readonly List<SyntaxTree> ContractSources = LoadRuntimeSources(new[] { "Runtime/CommandTerminal/Backend/CommandCatalogEntry.cs" });
 
         private static readonly List<SyntaxTree> UnityShimSources = LoadRuntimeSources(
-            new[]
-            {
-                "Generator~/WallstopStudios.DxCommandTerminal.SourceGenerators.Tests/UnityScriptingShim.cs",
-            }
+            new[] { "Generator~/WallstopStudios.DxCommandTerminal.SourceGenerators.Tests/UnityScriptingShim.cs" }
         );
 
-        public static (SyntaxTree generated, CSharpCompilation output) RunGenerator(
-            CSharpCompilation compilation
-        )
+        public static (SyntaxTree generated, CSharpCompilation output) RunGenerator(CSharpCompilation compilation)
         {
             CommandCatalogGenerator generator = new CommandCatalogGenerator();
             CSharpGeneratorDriver driver = CSharpGeneratorDriver.Create(generator);
-            driver.RunGeneratorsAndUpdateCompilation(
-                compilation,
-                out Compilation outputCompilation,
-                out ImmutableArray<Diagnostic> generatorDiagnostics
-            );
+            driver.RunGeneratorsAndUpdateCompilation(compilation, out Compilation outputCompilation, out ImmutableArray<Diagnostic> generatorDiagnostics);
 
-            List<Diagnostic> errors = generatorDiagnostics
-                .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
-                .ToList();
+            List<Diagnostic> errors = generatorDiagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error).ToList();
             if (0 < errors.Count)
             {
                 throw new InvalidOperationException(
-                    "The generator produced error diagnostics: "
-                        + string.Join(
-                            Environment.NewLine,
-                            errors.Select(diagnostic => diagnostic.ToString())
-                        )
+                    "The generator produced error diagnostics: " + string.Join(Environment.NewLine, errors.Select(diagnostic => diagnostic.ToString()))
                 );
             }
 
             CSharpCompilation output = (CSharpCompilation)outputCompilation;
             SyntaxTree generated = output.SyntaxTrees.FirstOrDefault(tree =>
-                tree.FilePath == GeneratedHintName
-                || tree.FilePath.EndsWith(GeneratedHintName, StringComparison.Ordinal)
+                tree.FilePath == GeneratedHintName || tree.FilePath.EndsWith(GeneratedHintName, StringComparison.Ordinal)
             );
             return (generated, output);
         }
@@ -111,27 +89,14 @@
                conditional compilation is exercised at parse time, exactly as
                it is in real compilations.
             */
-            syntaxTrees.Add(
-                CSharpSyntaxTree.ParseText(
-                    fixtureSource,
-                    new CSharpParseOptions(preprocessorSymbols: defines ?? Array.Empty<string>())
-                )
-            );
+            syntaxTrees.Add(CSharpSyntaxTree.ParseText(fixtureSource, new CSharpParseOptions(preprocessorSymbols: defines ?? Array.Empty<string>())));
 
-            return CSharpCompilation.Create(
-                assemblyName,
-                syntaxTrees,
-                References,
-                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
-            );
+            return CSharpCompilation.Create(assemblyName, syntaxTrees, References, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
         }
 
         public static Assembly CompileAndLoad(CSharpCompilation compilation)
         {
-            List<Diagnostic> errors = compilation
-                .GetDiagnostics()
-                .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
-                .ToList();
+            List<Diagnostic> errors = compilation.GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error).ToList();
             if (0 < errors.Count)
             {
                 StringBuilder message = new StringBuilder("Fixture compilation has errors:");
@@ -141,15 +106,11 @@
                 }
 
                 SyntaxTree generatedTree = compilation.SyntaxTrees.FirstOrDefault(tree =>
-                    tree.FilePath == GeneratedHintName
-                    || tree.ToString().Contains("auto-generated", StringComparison.Ordinal)
+                    tree.FilePath == GeneratedHintName || tree.ToString().Contains("auto-generated", StringComparison.Ordinal)
                 );
                 if (generatedTree != null)
                 {
-                    message
-                        .AppendLine()
-                        .AppendLine("Generated source was:")
-                        .Append(generatedTree.ToString());
+                    message.AppendLine().AppendLine("Generated source was:").Append(generatedTree.ToString());
                 }
 
                 throw new InvalidOperationException(message.ToString());
@@ -159,18 +120,11 @@
             EmitResult emitResult = compilation.Emit(peStream);
             if (!emitResult.Success)
             {
-                List<Diagnostic> emitErrors = emitResult
-                    .Diagnostics.Where(diagnostic =>
-                        diagnostic.Severity == DiagnosticSeverity.Error
-                    )
-                    .ToList();
+                List<Diagnostic> emitErrors = emitResult.Diagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error).ToList();
                 throw new InvalidOperationException(
                     "Fixture compilation could not be emitted to an assembly:"
                         + Environment.NewLine
-                        + string.Join(
-                            Environment.NewLine,
-                            emitErrors.Select(diagnostic => diagnostic.ToString())
-                        )
+                        + string.Join(Environment.NewLine, emitErrors.Select(diagnostic => diagnostic.ToString()))
                 );
             }
 
@@ -188,14 +142,10 @@
                 string path = Path.Combine(repoRoot, relativePath);
                 if (!File.Exists(path))
                 {
-                    throw new FileNotFoundException(
-                        $"Runtime source for the test harness was not found: {path}"
-                    );
+                    throw new FileNotFoundException($"Runtime source for the test harness was not found: {path}");
                 }
 
-                syntaxTrees.Add(
-                    CSharpSyntaxTree.ParseText(File.ReadAllText(path), path: relativePath)
-                );
+                syntaxTrees.Add(CSharpSyntaxTree.ParseText(File.ReadAllText(path), path: relativePath));
             }
 
             return syntaxTrees;
@@ -207,12 +157,7 @@
             while (current != null)
             {
                 string generatorDirectory = Path.Combine(current, "Generator~");
-                if (
-                    Directory.Exists(generatorDirectory)
-                    && File.Exists(
-                        Path.Combine(current, "Runtime/Attributes/RegisterCommandAttribute.cs")
-                    )
-                )
+                if (Directory.Exists(generatorDirectory) && File.Exists(Path.Combine(current, "Runtime/Attributes/RegisterCommandAttribute.cs")))
                 {
                     return current;
                 }
@@ -221,9 +166,7 @@
             }
 
             throw new InvalidOperationException(
-                "Could not locate the repository root from "
-                    + AppContext.BaseDirectory
-                    + "; expected an ancestor directory containing Generator~ and the Runtime sources."
+                "Could not locate the repository root from " + AppContext.BaseDirectory + "; expected an ancestor directory containing Generator~ and the Runtime sources."
             );
         }
 
@@ -242,9 +185,7 @@
                 */
                 if (assemblyName.Name == "netstandard")
                 {
-                    string runtimeDirectory = Path.GetDirectoryName(
-                        typeof(object).Assembly.Location
-                    );
+                    string runtimeDirectory = Path.GetDirectoryName(typeof(object).Assembly.Location);
                     string facadePath = Path.Combine(runtimeDirectory, "netstandard.dll");
                     return File.Exists(facadePath) ? LoadFromAssemblyPath(facadePath) : null;
                 }
@@ -278,25 +219,17 @@
             Type catalogType = assembly.GetType(TestCompilationFactory.CatalogTypeName);
             if (catalogType == null)
             {
-                throw new InvalidOperationException(
-                    $"Assembly {assembly.GetName().Name} has no generated command catalog."
-                );
+                throw new InvalidOperationException($"Assembly {assembly.GetName().Name} has no generated command catalog.");
             }
 
             Type entryType = assembly.GetType(TestCompilationFactory.EntryTypeName);
-            MethodInfo collect = catalogType.GetMethod(
-                "Collect",
-                BindingFlags.Public | BindingFlags.Static
-            );
+            MethodInfo collect = catalogType.GetMethod("Collect", BindingFlags.Public | BindingFlags.Static);
             if (collect == null)
             {
-                throw new InvalidOperationException(
-                    "The generated catalog does not expose a public static Collect method."
-                );
+                throw new InvalidOperationException("The generated catalog does not expose a public static Collect method.");
             }
 
-            IList entries = (IList)
-                Activator.CreateInstance(typeof(List<>).MakeGenericType(entryType));
+            IList entries = (IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(entryType));
             collect.Invoke(null, new object[] { entries });
             List<object> snapshot = new List<object>();
             foreach (object entry in entries)
@@ -357,8 +290,7 @@
             return (MethodInfo)accessorFactory.DynamicInvoke();
         }
 
-        public string DeclaringTypeNameOf(object entry) =>
-            (string)GetValue(entry, "DeclaringTypeName");
+        public string DeclaringTypeNameOf(object entry) => (string)GetValue(entry, "DeclaringTypeName");
 
         /*
             Invokes the entry's memoized bind (GetHandler) twice and returns
@@ -367,15 +299,10 @@
         */
         public (object first, object second) GetHandlerPairOf(object entry)
         {
-            MethodInfo getHandler = _entryType.GetMethod(
-                "GetHandler",
-                BindingFlags.Public | BindingFlags.Instance
-            );
+            MethodInfo getHandler = _entryType.GetMethod("GetHandler", BindingFlags.Public | BindingFlags.Instance);
             if (getHandler == null)
             {
-                throw new InvalidOperationException(
-                    "The entry type does not expose a public GetHandler bind."
-                );
+                throw new InvalidOperationException("The entry type does not expose a public GetHandler bind.");
             }
 
             return (getHandler.Invoke(entry, null), getHandler.Invoke(entry, null));
@@ -385,9 +312,7 @@
 
         private object GetValue(object entry, string propertyName)
         {
-            return _entryType
-                .GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance)
-                .GetValue(entry);
+            return _entryType.GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance).GetValue(entry);
         }
     }
 }

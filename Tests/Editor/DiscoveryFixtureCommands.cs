@@ -13,10 +13,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [RegisterCommand(Help = "Editor test fixture with an inferred name.")]
         private static void EditorFixtureCommand(CommandArg[] args) { }
 
-        [RegisterCommand(
-            Help = "Editor test fixture with an explicit name.",
-            Name = "editorfixture-named"
-        )]
+        [RegisterCommand(Help = "Editor test fixture with an explicit name.", Name = "editorfixture-named")]
         private static void EditorFixtureNamed(CommandArg[] args) { }
     }
 }

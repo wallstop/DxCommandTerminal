@@ -28,10 +28,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
             AllocationProbe.Validate();
             if (!AllocationProbe.InstrumentValid)
             {
-                Assert.Fail(
-                    "Allocation instrument cannot detect a forced allocation on this platform; "
-                        + "zero-allocation claims would be unproven"
-                );
+                Assert.Fail("Allocation instrument cannot detect a forced allocation on this platform; " + "zero-allocation claims would be unproven");
             }
         }
 
@@ -40,11 +37,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
         ///     unless a validated instrument reports zero allocations. Warm-up
         ///     runs outside the window; only the final invocation is measured.
         /// </summary>
-        public static void AssertZeroAllocations(
-            string label,
-            Action subject,
-            int warmupIterations = DefaultWarmupIterations
-        )
+        public static void AssertZeroAllocations(string label, Action subject, int warmupIterations = DefaultWarmupIterations)
         {
             EnsureInstrumentValidated();
             for (int index = 0; index < warmupIterations; ++index)
@@ -53,10 +46,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
             }
 
             AllocationMeasurement measurement = AllocationProbe.Measure(subject);
-            Assert.IsTrue(
-                measurement.IsZeroAllocation,
-                $"{label} must not allocate: {measurement.Describe()}"
-            );
+            Assert.IsTrue(measurement.IsZeroAllocation, $"{label} must not allocate: {measurement.Describe()}");
         }
 
         /// <summary>
@@ -69,8 +59,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
             EnsureInstrumentValidated();
             AllocationMeasurement measurement = AllocationProbe.Measure(subject);
             Assert.IsTrue(
-                measurement.Status == AllocationMeasurementStatus.Measured
-                    && measurement.DetectedAllocations,
+                measurement.Status == AllocationMeasurementStatus.Measured && measurement.DetectedAllocations,
                 $"{label} must report allocations: {measurement.Describe()}"
             );
             return measurement;

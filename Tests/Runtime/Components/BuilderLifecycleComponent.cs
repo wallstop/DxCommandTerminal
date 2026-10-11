@@ -16,10 +16,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                disable, so scene transitions never leak commands.
              */
             Terminal.Shell.AddCommand(
-                CommandBuilder
-                    .Create("lifecycle-hit")
-                    .Arg<int>("value", spec => spec.Required())
-                    .Handler((context, arguments) => ++Invocations),
+                CommandBuilder.Create("lifecycle-hit").Arg<int>("value", spec => spec.Required()).Handler((context, arguments) => ++Invocations),
                 out CommandRegistrationHandle handle
             );
             Handle = handle;

@@ -141,18 +141,12 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
             if (string.IsNullOrWhiteSpace(methodName))
             {
-                throw new ArgumentException(
-                    "Method name must not be null or blank.",
-                    nameof(methodName)
-                );
+                throw new ArgumentException("Method name must not be null or blank.", nameof(methodName));
             }
 
             if (binder == null && methodAccessor == null)
             {
-                throw new ArgumentException(
-                    "Rejected commands must provide a method accessor for diagnostics.",
-                    nameof(methodAccessor)
-                );
+                throw new ArgumentException("Rejected commands must provide a method accessor for diagnostics.", nameof(methodAccessor));
             }
 
             Name = name;

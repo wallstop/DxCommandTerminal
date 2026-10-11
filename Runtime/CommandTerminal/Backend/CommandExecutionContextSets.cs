@@ -7,11 +7,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     public static class CommandExecutionContextSets
     {
         /// <summary>Gameplay environments: Editor Play Mode and players.</summary>
-        public const CommandExecutionContexts Gameplay =
-            CommandExecutionContexts.EditorPlayMode | CommandExecutionContexts.Player;
+        public const CommandExecutionContexts Gameplay = CommandExecutionContexts.EditorPlayMode | CommandExecutionContexts.Player;
 
         /// <summary>Every environment.</summary>
-        public const CommandExecutionContexts All =
-            Gameplay | CommandExecutionContexts.EditorEditMode;
+        public const CommandExecutionContexts All = Gameplay | CommandExecutionContexts.EditorEditMode;
     }
 }

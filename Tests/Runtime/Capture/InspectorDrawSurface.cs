@@ -26,12 +26,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private float _height;
         private bool _active;
 
-        public void Begin(
-            UnityEditor.Editor editor,
-            RenderTexture target,
-            float width,
-            float height
-        )
+        public void Begin(UnityEditor.Editor editor, RenderTexture target, float width, float height)
         {
             _editor = editor;
             _target = target;

@@ -13,8 +13,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     {
         private static CommandCompletionProvider Record(List<int> stages)
         {
-            return (in CommandCompletionContext context, List<CommandCompletion> results) =>
-                stages.Add(context.ActiveArgumentIndex);
+            return (in CommandCompletionContext context, List<CommandCompletion> results) => stages.Add(context.ActiveArgumentIndex);
         }
 
         private static void Invoke(CommandCompletionProvider provider, int activeArgumentIndex)
@@ -24,18 +23,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         private static CommandCompletionContext CreateContext(int activeArgumentIndex)
         {
-            return new CommandCompletionContext(
-                CommandExecutionContext.Current,
-                string.Empty,
-                0,
-                activeArgumentIndex,
-                new List<CommandArg>(),
-                string.Empty,
-                0,
-                0,
-                false,
-                null
-            );
+            return new CommandCompletionContext(CommandExecutionContext.Current, string.Empty, 0, activeArgumentIndex, new List<CommandArg>(), string.Empty, 0, 0, false, null);
         }
 
         /* Half a character is not text: it renders as a replacement glyph and
@@ -68,10 +56,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                                 source switch
                                 {
                                     "static" => spec.Required().Choices(value),
-                                    "dynamic" => spec.Required()
-                                        .Choices(context => new[] { value }),
-                                    _ => spec.Required()
-                                        .Choices(context => new[] { value }, item => item),
+                                    "dynamic" => spec.Required().Choices(context => new[] { value }),
+                                    _ => spec.Required().Choices(context => new[] { value }, item => item),
                                 }
                         )
                         .Handler((context, arguments) => received = arguments.Get<string>("value")),
@@ -82,25 +68,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             {
                 const string input = "whitespace-choice \"\"";
                 List<CommandCompletion> results = new();
-                Assert.IsTrue(
-                    shell.TryComplete(
-                        CommandExecutionContext.Current,
-                        input,
-                        input.Length - 1,
-                        results,
-                        out CommandCompletionContext context
-                    )
-                );
+                Assert.IsTrue(shell.TryComplete(CommandExecutionContext.Current, input, input.Length - 1, results, out CommandCompletionContext context));
                 Assert.AreEqual(1, results.Count);
                 Assert.AreEqual(value, results[0].InsertionText);
                 Assert.IsTrue(context.IsQuoted);
-                string insertion = CommandTokenizer.QuoteInsertionIfNeeded(
-                    results[0].InsertionText,
-                    context.IsQuoted
-                );
-                string completed = input
-                    .Remove(context.ReplacementStart, context.ReplacementLength)
-                    .Insert(context.ReplacementStart, insertion);
+                string insertion = CommandTokenizer.QuoteInsertionIfNeeded(results[0].InsertionText, context.IsQuoted);
+                string completed = input.Remove(context.ReplacementStart, context.ReplacementLength).Insert(context.ReplacementStart, insertion);
                 shell.RunCommand(completed);
                 Assert.AreEqual(value, received);
                 Assert.IsFalse(shell.TryConsumeErrorMessage(out _));
@@ -121,10 +94,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             };
             List<CommandCompletion> results = new();
             spec.AppendCompletions(CreateContext(0), results);
-            CollectionAssert.AreEqual(
-                new[] { "valid" },
-                results.Select(item => item.InsertionText)
-            );
+            CollectionAssert.AreEqual(new[] { "valid" }, results.Select(item => item.InsertionText));
         }
 
         /*
@@ -145,48 +115,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             is not empty: without those, an implementation that floored to the
             start of the argument would pass every row.
          */
-        [TestCase(
-            "give \ud83d\ude00 x",
-            6,
-            5,
-            Description = "An emoji at the start of the argument"
-        )]
+        [TestCase("give \ud83d\ude00 x", 6, 5, Description = "An emoji at the start of the argument")]
         [TestCase("give cafe\u0301 x", 9, 8, Description = "An accented letter mid-argument")]
-        [TestCase(
-            "give \ud83d\udc4d\ud83c\udffd x",
-            7,
-            5,
-            Description = "An emoji with a skin tone"
-        )]
-        [TestCase(
-            "give \ud83c\udde6\ud83c\udde7 x",
-            7,
-            5,
-            Description = "A flag at the start of the argument"
-        )]
-        [TestCase(
-            "give \ud83d\udc68\u200d\ud83d\udc69 x",
-            7,
-            5,
-            Description = "A joined emoji sequence"
-        )]
-        [TestCase(
-            "give to\ud83d\ude00ken x",
-            8,
-            7,
-            Description = "An emoji after other text in the argument"
-        )]
-        [TestCase(
-            "give ca\u0301fety x",
-            7,
-            6,
-            Description = "An accent after other text in the argument"
-        )]
-        public void ACaretInsideACharacterCompletesTheWholeCharacter(
-            string input,
-            int caretInside,
-            int expectedCaret
-        )
+        [TestCase("give \ud83d\udc4d\ud83c\udffd x", 7, 5, Description = "An emoji with a skin tone")]
+        [TestCase("give \ud83c\udde6\ud83c\udde7 x", 7, 5, Description = "A flag at the start of the argument")]
+        [TestCase("give \ud83d\udc68\u200d\ud83d\udc69 x", 7, 5, Description = "A joined emoji sequence")]
+        [TestCase("give to\ud83d\ude00ken x", 8, 7, Description = "An emoji after other text in the argument")]
+        [TestCase("give ca\u0301fety x", 7, 6, Description = "An accent after other text in the argument")]
+        public void ACaretInsideACharacterCompletesTheWholeCharacter(string input, int caretInside, int expectedCaret)
         {
             CommandShell shell = new(new CommandHistory(16));
             CommandCompletionContext received = default;
@@ -196,10 +132,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     {
                         Name = "give",
                         Handler = (context, arguments) => { },
-                        CompletionProvider = (
-                            in CommandCompletionContext context,
-                            List<CommandCompletion> results
-                        ) =>
+                        CompletionProvider = (in CommandCompletionContext context, List<CommandCompletion> results) =>
                         {
                             received = context;
                             results.Add(new CommandCompletion(context.Token + " sword"));
@@ -209,15 +142,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
 
             List<CommandCompletion> results = new();
-            Assert.IsTrue(
-                shell.TryComplete(
-                    CommandExecutionContext.Current,
-                    input,
-                    caretInside,
-                    results,
-                    out CommandCompletionContext context
-                )
-            );
+            Assert.IsTrue(shell.TryComplete(CommandExecutionContext.Current, input, caretInside, results, out CommandCompletionContext context));
 
             /* The token is the one argument being edited, and its bounds are
                the two spaces around it, so a row states only the two offsets
@@ -226,28 +151,19 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             int tokenEnd = input.IndexOf(' ', tokenStart);
 
             AssertNoSurrogate(received.Token, "The provider was handed");
-            Assert.AreEqual(
-                input.Substring(tokenStart, expectedCaret - tokenStart),
-                received.Token
-            );
+            Assert.AreEqual(input.Substring(tokenStart, expectedCaret - tokenStart), received.Token);
             Assert.AreEqual(expectedCaret, received.CaretIndex);
             Assert.AreEqual(tokenStart, context.ReplacementStart);
             Assert.AreEqual(tokenEnd - tokenStart, context.ReplacementLength);
 
-            string completed = input
-                .Remove(context.ReplacementStart, context.ReplacementLength)
-                .Insert(context.ReplacementStart, results[0].InsertionText);
+            string completed = input.Remove(context.ReplacementStart, context.ReplacementLength).Insert(context.ReplacementStart, results[0].InsertionText);
             AssertNoSurrogate(completed, "The completed line holds");
         }
 
         [TestCase(true, false, false)]
         [TestCase(false, true, false)]
         [TestCase(false, false, true)]
-        public void ChoiceCallbackFailuresDiscardResultsAndRecover(
-            bool providerThrows,
-            bool providerReturnsNull,
-            bool formatterThrows
-        )
+        public void ChoiceCallbackFailuresDiscardResultsAndRecover(bool providerThrows, bool providerReturnsNull, bool formatterThrows)
         {
             CommandShell shell = new(new CommandHistory(16));
             bool fail = true;
@@ -267,21 +183,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                                             throw new InvalidOperationException("choice failed");
                                         }
 
-                                        return fail && providerReturnsNull
-                                            ? null
-                                            : new[] { "first", "second" };
+                                        return fail && providerReturnsNull ? null : new[] { "first", "second" };
                                     },
                                     value =>
                                     {
-                                        if (
-                                            fail
-                                            && formatterThrows
-                                            && string.Equals(
-                                                value,
-                                                "second",
-                                                StringComparison.Ordinal
-                                            )
-                                        )
+                                        if (fail && formatterThrows && string.Equals(value, "second", StringComparison.Ordinal))
                                         {
                                             throw new InvalidOperationException("choice failed");
                                         }
@@ -308,37 +214,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                      */
                     LogAssert.Expect(
                         LogType.Error,
-                        new Regex(
-                            @"\[DxCommandTerminal\] Completion provider for 'callback-choice' failed: "
-                                + @"System\.InvalidOperationException: choice failed"
-                        )
+                        new Regex(@"\[DxCommandTerminal\] Completion provider for 'callback-choice' failed: " + @"System\.InvalidOperationException: choice failed")
                     );
                 }
 
-                Assert.IsTrue(
-                    shell.TryComplete(
-                        CommandExecutionContext.Current,
-                        input,
-                        input.Length,
-                        results,
-                        out _
-                    )
-                );
+                Assert.IsTrue(shell.TryComplete(CommandExecutionContext.Current, input, input.Length, results, out _));
                 Assert.IsEmpty(results);
                 fail = false;
-                Assert.IsTrue(
-                    shell.TryComplete(
-                        CommandExecutionContext.Current,
-                        input,
-                        input.Length,
-                        results,
-                        out _
-                    )
-                );
-                CollectionAssert.AreEqual(
-                    new[] { "first", "second" },
-                    results.Select(item => item.InsertionText)
-                );
+                Assert.IsTrue(shell.TryComplete(CommandExecutionContext.Current, input, input.Length, results, out _));
+                CollectionAssert.AreEqual(new[] { "first", "second" }, results.Select(item => item.InsertionText));
             }
         }
 
@@ -346,30 +230,18 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void ReplacementOverrideValidatesBothValues()
         {
             Assert.DoesNotThrow(() => new CommandCompletionReplacement(0, 0));
-            Assert.Throws<ArgumentOutOfRangeException>(
-                () => new CommandCompletionReplacement(-1, 0),
-                "A negative start is rejected"
-            );
-            Assert.Throws<ArgumentOutOfRangeException>(
-                () => new CommandCompletionReplacement(0, -1),
-                "A negative length is rejected"
-            );
+            Assert.Throws<ArgumentOutOfRangeException>(() => new CommandCompletionReplacement(-1, 0), "A negative start is rejected");
+            Assert.Throws<ArgumentOutOfRangeException>(() => new CommandCompletionReplacement(0, -1), "A negative length is rejected");
         }
 
         [Test]
         public void ReplacementOverrideIsAtomic()
         {
             CommandCompletion withoutOverride = new("alpha");
-            Assert.IsFalse(
-                withoutOverride.HasReplacementOverride,
-                "No replacement means the context range applies"
-            );
+            Assert.IsFalse(withoutOverride.HasReplacementOverride, "No replacement means the context range applies");
             Assert.That(withoutOverride.Replacement == null);
 
-            CommandCompletion withOverride = new(
-                "alpha",
-                replacement: new CommandCompletionReplacement(2, 3)
-            );
+            CommandCompletion withOverride = new("alpha", replacement: new CommandCompletionReplacement(2, 3));
             Assert.IsTrue(withOverride.HasReplacementOverride);
             CommandCompletionReplacement replacement = withOverride.Replacement.Value;
             Assert.AreEqual(2, replacement.Start);
@@ -382,10 +254,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             List<int> stages = new();
             CommandCompletionProvider provider = CommandCompletionProviders.Staged(Record(stages));
 
-            Assert.Throws<ArgumentNullException>(
-                () => CommandCompletionProviders.Staged((CommandCompletionProvider)null),
-                "A null single stage is rejected"
-            );
+            Assert.Throws<ArgumentNullException>(() => CommandCompletionProviders.Staged((CommandCompletionProvider)null), "A null single stage is rejected");
 
             Invoke(provider, 0);
             Invoke(provider, 1);
@@ -397,20 +266,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             List<int> twoStages = new();
             List<int> threeStages = new();
-            CommandCompletionProvider two = CommandCompletionProviders.Staged(
-                Record(twoStages),
-                Record(twoStages)
-            );
-            CommandCompletionProvider three = CommandCompletionProviders.Staged(
-                Record(threeStages),
-                Record(threeStages),
-                Record(threeStages)
-            );
+            CommandCompletionProvider two = CommandCompletionProviders.Staged(Record(twoStages), Record(twoStages));
+            CommandCompletionProvider three = CommandCompletionProviders.Staged(Record(threeStages), Record(threeStages), Record(threeStages));
 
-            Assert.Throws<ArgumentNullException>(
-                () => CommandCompletionProviders.Staged(Record(twoStages), null),
-                "Null fixed stages are rejected"
-            );
+            Assert.Throws<ArgumentNullException>(() => CommandCompletionProviders.Staged(Record(twoStages), null), "Null fixed stages are rejected");
 
             Invoke(two, 0);
             Invoke(two, 1);
@@ -426,27 +285,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void StagedParamsAcceptsNullStagesAndBeyondListRequests()
         {
             List<int> stages = new();
-            CommandCompletionProvider provider = CommandCompletionProviders.Staged(
-                Record(stages),
-                null,
-                Record(stages),
-                Record(stages)
-            );
+            CommandCompletionProvider provider = CommandCompletionProviders.Staged(Record(stages), null, Record(stages), Record(stages));
 
             Invoke(provider, 0);
             Invoke(provider, 1);
             Invoke(provider, 2);
             Invoke(provider, 5);
-            CollectionAssert.AreEqual(
-                new[] { 0, 2 },
-                stages,
-                "Null stages produce nothing; stages beyond the list produce nothing"
-            );
+            CollectionAssert.AreEqual(new[] { 0, 2 }, stages, "Null stages produce nothing; stages beyond the list produce nothing");
 
-            Assert.Throws<ArgumentNullException>(
-                () => CommandCompletionProviders.Staged((CommandCompletionProvider[])null),
-                "A null stage array is rejected"
-            );
+            Assert.Throws<ArgumentNullException>(() => CommandCompletionProviders.Staged((CommandCompletionProvider[])null), "A null stage array is rejected");
         }
     }
 }

@@ -18,21 +18,15 @@
     {
         /* Internal for the player compatibility bake, which probes candidate
            assemblies for the same generated catalog the discovery scan binds. */
-        internal const string CatalogTypeName =
-            "WallstopStudios.DxCommandTerminal.Generated.CommandCatalog";
+        internal const string CatalogTypeName = "WallstopStudios.DxCommandTerminal.Generated.CommandCatalog";
 
         private const string CatalogCollectMethodName = "Collect";
 
-        private const BindingFlags CatalogBindingFlags =
-            BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+        private const BindingFlags CatalogBindingFlags = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
 
-        private const BindingFlags ReflectedMethodBindingFlags =
-            BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+        private const BindingFlags ReflectedMethodBindingFlags = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
 
-        public static readonly Lazy<(
-            MethodInfo method,
-            RegisterCommandAttribute attribute
-        )[]> RegisteredCommands = new(static () =>
+        public static readonly Lazy<(MethodInfo method, RegisterCommandAttribute attribute)[]> RegisteredCommands = new(static () =>
         {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             Stopwatch stopwatch = Stopwatch.StartNew();
@@ -79,8 +73,7 @@
         */
         private static readonly Type[] CatalogHandlerSignature = { typeof(CommandArg[]) };
 
-        private static readonly ConditionalWeakTable<Assembly, DiscoveryCache> DiscoveryCaches =
-            new ConditionalWeakTable<Assembly, DiscoveryCache>();
+        private static readonly ConditionalWeakTable<Assembly, DiscoveryCache> DiscoveryCaches = new ConditionalWeakTable<Assembly, DiscoveryCache>();
 
         /*
             Classification memo for the discovery scan. Assembly metadata
@@ -93,10 +86,7 @@
             command scaling tier). Entries die with their assembly, so
             unloads cannot serve stale data.
          */
-        private static readonly ConditionalWeakTable<
-            Assembly,
-            AssemblyClassification
-        > AssemblyClassifications = new ConditionalWeakTable<Assembly, AssemblyClassification>();
+        private static readonly ConditionalWeakTable<Assembly, AssemblyClassification> AssemblyClassifications = new ConditionalWeakTable<Assembly, AssemblyClassification>();
 
         /*
             Ordered discovery providers consulted between the generated-catalog
@@ -145,11 +135,9 @@
         ///     of <see cref="Commands"/>, or an explicit
         ///     <see cref="EnsureAutoCommandsRegistered"/> call fills it.
         /// </summary>
-        public ReadOnlyHashSet<string> AutoRegisteredCommands { get; private set; } =
-            ReadOnlyHashSet<string>.Empty;
+        public ReadOnlyHashSet<string> AutoRegisteredCommands { get; private set; } = ReadOnlyHashSet<string>.Empty;
 
-        public ReadOnlyHashSet<string> IgnoredCommands { get; private set; } =
-            ReadOnlyHashSet<string>.Empty;
+        public ReadOnlyHashSet<string> IgnoredCommands { get; private set; } = ReadOnlyHashSet<string>.Empty;
 
         public bool IgnoringDefaultCommands { get; private set; }
 
@@ -175,9 +163,7 @@
 
         internal long CommandsVersion => _commandVersion;
 
-        private readonly HashSet<string> _autoRegisteredCommands = new(
-            StringComparer.OrdinalIgnoreCase
-        );
+        private readonly HashSet<string> _autoRegisteredCommands = new(StringComparer.OrdinalIgnoreCase);
 
         /*
             1 while a deferred registration is waiting to run. The readiness
@@ -189,9 +175,7 @@
 
         private readonly StringBuilder _commandBuilder = new();
 
-        private readonly SortedDictionary<string, CommandInfo> _commands = new(
-            StringComparer.OrdinalIgnoreCase
-        );
+        private readonly SortedDictionary<string, CommandInfo> _commands = new(StringComparer.OrdinalIgnoreCase);
 
         /*
             Bumped on every command-table mutation. In-assembly consumers (the
@@ -214,13 +198,9 @@
             Rejections only arise on the reflection compatibility path; the
             generator catalog never produces them.
          */
-        private readonly SortedDictionary<string, string> _rejectedCommands = new(
-            StringComparer.OrdinalIgnoreCase
-        );
+        private readonly SortedDictionary<string, string> _rejectedCommands = new(StringComparer.OrdinalIgnoreCase);
 
-        private readonly SortedDictionary<string, CommandArg> _variables = new(
-            StringComparer.OrdinalIgnoreCase
-        );
+        private readonly SortedDictionary<string, CommandArg> _variables = new(StringComparer.OrdinalIgnoreCase);
 
         private readonly List<string> _variableClearBuffer = new();
 
@@ -408,19 +388,10 @@
             Internal for test coverage of the provider stage (see
             WallstopStudios.DxCommandTerminal.Tests.Runtime).
          */
-        internal static AutoCommandSource CollectAutoCommands(
-            Assembly assembly,
-            List<AutoCommand> commands
-        )
+        internal static AutoCommandSource CollectAutoCommands(Assembly assembly, List<AutoCommand> commands)
         {
             DiscoveryCache cache = GetOrCreateDiscoveryCache(assembly);
-            if (
-                TryGetCatalogCollector(
-                    assembly,
-                    cache,
-                    out Action<List<CommandCatalogEntry>> collector
-                )
-            )
+            if (TryGetCatalogCollector(assembly, cache, out Action<List<CommandCatalogEntry>> collector))
             {
                 List<CommandCatalogEntry> entries = new();
                 bool collected = false;
@@ -499,9 +470,7 @@
 
                     Debug.LogWarning(
                         LogTextSanitizer.Sanitize(
-                            $"[DxCommandTerminal] Command discovery provider "
-                                + $"{provider.GetType().Name} failed for assembly "
-                                + $"{assembly.GetName().Name}: {e}"
+                            $"[DxCommandTerminal] Command discovery provider " + $"{provider.GetType().Name} failed for assembly " + $"{assembly.GetName().Name}: {e}"
                         )
                     );
                 }
@@ -574,10 +543,7 @@
             processed last so user commands, if they conflict with in-built
             ones, are always registered first.
          */
-        private static List<Assembly> CollectScanCandidates(
-            Assembly[] loadedAssemblies,
-            Assembly ourAssembly
-        )
+        private static List<Assembly> CollectScanCandidates(Assembly[] loadedAssemblies, Assembly ourAssembly)
         {
             AssemblyName self = ourAssembly.GetName();
             List<Assembly> scanCandidates = new(loadedAssemblies.Length);
@@ -684,18 +650,9 @@
             falls back to the reflection sweep, and the per-command failures
             are contained exactly as they are there.
         */
-        private static bool TryCollectCatalogRegisteredCommands(
-            Assembly assembly,
-            List<(MethodInfo method, RegisterCommandAttribute attribute)> commands
-        )
+        private static bool TryCollectCatalogRegisteredCommands(Assembly assembly, List<(MethodInfo method, RegisterCommandAttribute attribute)> commands)
         {
-            if (
-                !TryGetCatalogCollector(
-                    assembly,
-                    GetOrCreateDiscoveryCache(assembly),
-                    out Action<List<CommandCatalogEntry>> collector
-                )
-            )
+            if (!TryGetCatalogCollector(assembly, GetOrCreateDiscoveryCache(assembly), out Action<List<CommandCatalogEntry>> collector))
             {
                 return false;
             }
@@ -711,9 +668,7 @@
             {
                 Debug.LogWarning(
                     LogTextSanitizer.Sanitize(
-                        $"[DxCommandTerminal] Generated command catalog in "
-                            + $"{assembly.GetName().Name} failed to collect: {e}; "
-                            + $"falling back to reflection discovery"
+                        $"[DxCommandTerminal] Generated command catalog in " + $"{assembly.GetName().Name} failed to collect: {e}; " + $"falling back to reflection discovery"
                     )
                 );
             }
@@ -734,17 +689,12 @@
                 RegisterCommandAttribute attribute;
                 try
                 {
-                    attribute =
-                        Attribute.GetCustomAttribute(method, typeof(RegisterCommandAttribute))
-                        as RegisterCommandAttribute;
+                    attribute = Attribute.GetCustomAttribute(method, typeof(RegisterCommandAttribute)) as RegisterCommandAttribute;
                 }
                 catch (Exception e)
                 {
                     Debug.LogError(
-                        LogTextSanitizer.Sanitize(
-                            $"Failed to resolve attribute for method {method.Name} of type "
-                                + $"{method.DeclaringType?.FullName} with exception {e}"
-                        )
+                        LogTextSanitizer.Sanitize($"Failed to resolve attribute for method {method.Name} of type " + $"{method.DeclaringType?.FullName} with exception {e}")
                     );
                     continue;
                 }
@@ -778,13 +728,7 @@
                     }
 
                     Type holder = assembly.GetType(entry.DeclaringTypeName, false);
-                    return holder?.GetMethod(
-                        entry.MethodName,
-                        CatalogBindingFlags,
-                        null,
-                        CatalogHandlerSignature,
-                        null
-                    );
+                    return holder?.GetMethod(entry.MethodName, CatalogBindingFlags, null, CatalogHandlerSignature, null);
                 }
 
                 /* Rejected command: the generated accessor is the contract. */
@@ -793,19 +737,13 @@
             catch (Exception e)
             {
                 Debug.LogError(
-                    LogTextSanitizer.Sanitize(
-                        $"Failed to resolve method {entry.MethodName} of type "
-                            + $"{entry.DeclaringTypeName ?? "unknown holder"} with exception {e}"
-                    )
+                    LogTextSanitizer.Sanitize($"Failed to resolve method {entry.MethodName} of type " + $"{entry.DeclaringTypeName ?? "unknown holder"} with exception {e}")
                 );
                 return null;
             }
         }
 
-        private static void CollectReflectedCommands(
-            Assembly assembly,
-            List<(MethodInfo method, RegisterCommandAttribute attribute)> commands
-        )
+        private static void CollectReflectedCommands(Assembly assembly, List<(MethodInfo method, RegisterCommandAttribute attribute)> commands)
         {
             if (!TryGetScanTypes(assembly, out Type[] types))
             {
@@ -830,13 +768,7 @@
                                 continue;
                             }
 
-                            if (
-                                Attribute.GetCustomAttribute(
-                                    method,
-                                    typeof(RegisterCommandAttribute)
-                                )
-                                is not RegisterCommandAttribute attribute
-                            )
+                            if (Attribute.GetCustomAttribute(method, typeof(RegisterCommandAttribute)) is not RegisterCommandAttribute attribute)
                             {
                                 continue;
                             }
@@ -846,21 +778,13 @@
                         }
                         catch (Exception e)
                         {
-                            Debug.LogError(
-                                LogTextSanitizer.Sanitize(
-                                    $"Failed to resolve method {method.Name} of type {type.FullName} with exception {e}"
-                                )
-                            );
+                            Debug.LogError(LogTextSanitizer.Sanitize($"Failed to resolve method {method.Name} of type {type.FullName} with exception {e}"));
                         }
                     }
                 }
                 catch (Exception e)
                 {
-                    Debug.LogError(
-                        LogTextSanitizer.Sanitize(
-                            $"Failed to resolve methods for type {type.FullName} with exception {e}"
-                        )
-                    );
+                    Debug.LogError(LogTextSanitizer.Sanitize($"Failed to resolve methods for type {type.FullName} with exception {e}"));
                 }
             }
         }
@@ -889,11 +813,7 @@
             return cache ?? new DiscoveryCache();
         }
 
-        private static bool TryGetCatalogCollector(
-            Assembly assembly,
-            DiscoveryCache cache,
-            out Action<List<CommandCatalogEntry>> collector
-        )
+        private static bool TryGetCatalogCollector(Assembly assembly, DiscoveryCache cache, out Action<List<CommandCatalogEntry>> collector)
         {
             if (!cache.CollectorProbed)
             {
@@ -914,12 +834,7 @@
             }
             catch (Exception e)
             {
-                Debug.LogWarning(
-                    LogTextSanitizer.Sanitize(
-                        $"[DxCommandTerminal] Failed to probe for a generated command catalog in "
-                            + $"{assembly.GetName().Name}: {e}"
-                    )
-                );
+                Debug.LogWarning(LogTextSanitizer.Sanitize($"[DxCommandTerminal] Failed to probe for a generated command catalog in " + $"{assembly.GetName().Name}: {e}"));
                 return null;
             }
 
@@ -931,22 +846,11 @@
             MethodInfo collectMethod;
             try
             {
-                collectMethod = catalogType.GetMethod(
-                    CatalogCollectMethodName,
-                    CatalogBindingFlags,
-                    null,
-                    new Type[] { typeof(List<CommandCatalogEntry>) },
-                    null
-                );
+                collectMethod = catalogType.GetMethod(CatalogCollectMethodName, CatalogBindingFlags, null, new Type[] { typeof(List<CommandCatalogEntry>) }, null);
             }
             catch (Exception e)
             {
-                Debug.LogWarning(
-                    LogTextSanitizer.Sanitize(
-                        $"[DxCommandTerminal] Found a generated command catalog in "
-                            + $"{assembly.GetName().Name} but failed to bind it: {e}"
-                    )
-                );
+                Debug.LogWarning(LogTextSanitizer.Sanitize($"[DxCommandTerminal] Found a generated command catalog in " + $"{assembly.GetName().Name} but failed to bind it: {e}"));
                 return null;
             }
 
@@ -957,20 +861,11 @@
 
             try
             {
-                return (Action<List<CommandCatalogEntry>>)
-                    Delegate.CreateDelegate(
-                        typeof(Action<List<CommandCatalogEntry>>),
-                        collectMethod
-                    );
+                return (Action<List<CommandCatalogEntry>>)Delegate.CreateDelegate(typeof(Action<List<CommandCatalogEntry>>), collectMethod);
             }
             catch (Exception e)
             {
-                Debug.LogWarning(
-                    LogTextSanitizer.Sanitize(
-                        $"[DxCommandTerminal] Found a generated command catalog in "
-                            + $"{assembly.GetName().Name} but failed to bind it: {e}"
-                    )
-                );
+                Debug.LogWarning(LogTextSanitizer.Sanitize($"[DxCommandTerminal] Found a generated command catalog in " + $"{assembly.GetName().Name} but failed to bind it: {e}"));
                 return null;
             }
         }
@@ -991,8 +886,7 @@
                 types = e.Types;
                 Debug.LogWarning(
                     LogTextSanitizer.Sanitize(
-                        $"Some types of assembly {assembly.FullName} failed to load; "
-                            + $"command discovery continues with the {e.Types.Length} types that loaded"
+                        $"Some types of assembly {assembly.FullName} failed to load; " + $"command discovery continues with the {e.Types.Length} types that loaded"
                     )
                 );
                 return true;
@@ -1000,11 +894,7 @@
             catch (Exception e)
             {
                 types = Array.Empty<Type>();
-                Debug.LogError(
-                    LogTextSanitizer.Sanitize(
-                        $"Failed to enumerate types for assembly {assembly.FullName} with exception {e}"
-                    )
-                );
+                Debug.LogError(LogTextSanitizer.Sanitize($"Failed to enumerate types for assembly {assembly.FullName} with exception {e}"));
                 return false;
             }
         }
@@ -1079,11 +969,7 @@
         ///     of <see cref="Commands"/>, keeping terminal enabling cheap; the
         ///     ignored/default configuration itself is applied immediately.
         /// </summary>
-        public void InitializeAutoRegisteredCommands(
-            IEnumerable<string> ignoredCommands = null,
-            bool ignoreDefaultCommands = false,
-            bool deferRegistration = false
-        )
+        public void InitializeAutoRegisteredCommands(IEnumerable<string> ignoredCommands = null, bool ignoreDefaultCommands = false, bool deferRegistration = false)
         {
             IgnoringDefaultCommands = ignoreDefaultCommands;
             ClearAutoRegisteredCommands();
@@ -1190,12 +1076,7 @@
 
                 // History lines rebuild lazily, only when a push happens.
 
-                return RunCommandCore(
-                    CommandExecutionContext.Current,
-                    commandName,
-                    arguments,
-                    historyLine: null
-                );
+                return RunCommandCore(CommandExecutionContext.Current, commandName, arguments, historyLine: null);
             }
             finally
             {
@@ -1226,11 +1107,7 @@
         ///     <c>AddToHistory = false</c> dispatch without rebuilding the
         ///     line.
         /// </summary>
-        public bool RunCommand(
-            CommandExecutionContext context,
-            string commandName,
-            List<CommandArg> arguments
-        )
+        public bool RunCommand(CommandExecutionContext context, string commandName, List<CommandArg> arguments)
         {
             /*
                A first command request is an explicit readiness boundary: any
@@ -1261,13 +1138,7 @@
         ///     provider answered, including the replacement range an accepted
         ///     completion applies to.
         /// </remarks>
-        public bool TryComplete(
-            CommandExecutionContext context,
-            string input,
-            int caretIndex,
-            List<CommandCompletion> results,
-            out CommandCompletionContext completionContext
-        )
+        public bool TryComplete(CommandExecutionContext context, string input, int caretIndex, List<CommandCompletion> results, out CommandCompletionContext completionContext)
         {
             if (results == null)
             {
@@ -1315,11 +1186,7 @@
                 }
 
                 string commandName = tokens[0].Contents;
-                if (
-                    string.IsNullOrWhiteSpace(commandName)
-                    || !_commands.TryGetValue(commandName, out CommandInfo command)
-                    || command.completionProvider == null
-                )
+                if (string.IsNullOrWhiteSpace(commandName) || !_commands.TryGetValue(commandName, out CommandInfo command) || command.completionProvider == null)
                 {
                     completionContext = default;
                     return false;
@@ -1368,11 +1235,7 @@
                 catch (Exception e)
                 {
                     results.Clear();
-                    Debug.LogError(
-                        LogTextSanitizer.Sanitize(
-                            $"[DxCommandTerminal] Completion provider for '{commandName}' failed: {e}"
-                        )
-                    );
+                    Debug.LogError(LogTextSanitizer.Sanitize($"[DxCommandTerminal] Completion provider for '{commandName}' failed: {e}"));
                     return true;
                 }
 
@@ -1440,15 +1303,7 @@
         }
 
         // ReSharper disable once MemberCanBePrivate.Global
-        public bool AddCommand(
-            string name,
-            Action<CommandArg[]> proc,
-            int minArgs = 0,
-            int? maxArgs = null,
-            string help = "",
-            string hint = null,
-            bool addToHistory = true
-        )
+        public bool AddCommand(string name, Action<CommandArg[]> proc, int minArgs = 0, int? maxArgs = null, string help = "", string hint = null, bool addToHistory = true)
         {
             CommandInfo info = new(proc, minArgs, maxArgs, help, hint, addToHistory);
             return AddCommand(name, info);
@@ -1481,9 +1336,7 @@
             if ((legacyHandler == null) == (handler == null))
             {
                 IssueErrorMessage(
-                    $"Command {name} must declare exactly one handler "
-                        + $"({nameof(CommandDefinition.Handler)} or "
-                        + $"{nameof(CommandDefinition.LegacyHandler)})."
+                    $"Command {name} must declare exactly one handler " + $"({nameof(CommandDefinition.Handler)} or " + $"{nameof(CommandDefinition.LegacyHandler)})."
                 );
                 return false;
             }
@@ -1602,9 +1455,7 @@
 
             if (name.Contains(' '))
             {
-                name =
-                    name.Replace(" ", string.Empty, StringComparison.OrdinalIgnoreCase)
-                    ?? string.Empty;
+                name = name.Replace(" ", string.Empty, StringComparison.OrdinalIgnoreCase) ?? string.Empty;
             }
 
             return _variables.TryGetValue(name, out variable);
@@ -1612,9 +1463,7 @@
 
         public void IssueErrorMessage(string format, params object[] parameters)
         {
-            string formattedMessage =
-                (parameters is { Length: > 0 } ? string.Format(format, parameters) : format)
-                ?? string.Empty;
+            string formattedMessage = (parameters is { Length: > 0 } ? string.Format(format, parameters) : format) ?? string.Empty;
             _errorMessages.Enqueue(formattedMessage);
         }
 
@@ -1631,10 +1480,7 @@
                 return false;
             }
 
-            if (
-                !_commands.TryGetValue(name, out CommandInfo existing)
-                || !ReferenceEquals(existing.handler, registration)
-            )
+            if (!_commands.TryGetValue(name, out CommandInfo existing) || !ReferenceEquals(existing.handler, registration))
             {
                 return false;
             }
@@ -1660,10 +1506,7 @@
             int includedAssemblies = 0;
 
             Assembly[] loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies();
-            List<Assembly> scanCandidates = CollectScanCandidates(
-                loadedAssemblies,
-                typeof(BuiltInCommands).Assembly
-            );
+            List<Assembly> scanCandidates = CollectScanCandidates(loadedAssemblies, typeof(BuiltInCommands).Assembly);
 
             List<AutoCommand> autoCommands = new();
             foreach (Assembly assembly in scanCandidates)
@@ -1739,29 +1582,18 @@
                 {
                     try
                     {
-                        proc =
-                            command.CatalogEntry != null
-                                ? command.CatalogEntry.GetHandler()
-                                : command.Binder();
+                        proc = command.CatalogEntry != null ? command.CatalogEntry.GetHandler() : command.Binder();
                     }
                     catch (Exception e)
                     {
-                        Debug.LogError(
-                            LogTextSanitizer.Sanitize(
-                                $"[DxCommandTerminal] Failed to bind command {commandName} "
-                                    + $"(method {command.MethodName}): {e}"
-                            )
-                        );
+                        Debug.LogError(LogTextSanitizer.Sanitize($"[DxCommandTerminal] Failed to bind command {commandName} " + $"(method {command.MethodName}): {e}"));
                         continue;
                     }
 
                     if (proc == null)
                     {
                         Debug.LogError(
-                            LogTextSanitizer.Sanitize(
-                                $"[DxCommandTerminal] Failed to bind command {commandName} "
-                                    + $"(method {command.MethodName}): no handler was produced"
-                            )
+                            LogTextSanitizer.Sanitize($"[DxCommandTerminal] Failed to bind command {commandName} " + $"(method {command.MethodName}): no handler was produced")
                         );
                         continue;
                     }
@@ -1780,17 +1612,7 @@
                     continue;
                 }
 
-                CommandInfo info = new(
-                    proc,
-                    null,
-                    null,
-                    command.Contexts,
-                    command.MinArgCount,
-                    command.MaxArgCount,
-                    command.Help,
-                    command.Hint,
-                    command.AddToHistory
-                );
+                CommandInfo info = new(proc, null, null, command.Contexts, command.MinArgCount, command.MaxArgCount, command.Help, command.Hint, command.AddToHistory);
 
                 if (_commands.TryAdd(commandName, info))
                 {
@@ -1802,25 +1624,17 @@
                 {
                     Debug.LogWarning(
                         LogTextSanitizer.Sanitize(
-                            $"[DxCommandTerminal] Auto command {commandName} "
-                                + $"(method {command.MethodName}) skipped: a command with "
-                                + $"that name is already registered"
+                            $"[DxCommandTerminal] Auto command {commandName} " + $"(method {command.MethodName}) skipped: a command with " + $"that name is already registered"
                         )
                     );
                 }
             }
 
-            AutoRegisteredCommands = _autoRegisteredCommands.ToReadOnlyHashSet(
-                StringComparer.OrdinalIgnoreCase
-            );
+            AutoRegisteredCommands = _autoRegisteredCommands.ToReadOnlyHashSet(StringComparer.OrdinalIgnoreCase);
 
             foreach (KeyValuePair<string, string> command in _rejectedCommands)
             {
-                IssueErrorMessage(
-                    $"{command.Key} has an invalid signature. "
-                        + $"Expected: {command.Key}(CommandArg[]). "
-                        + $"Found: {command.Value}"
-                );
+                IssueErrorMessage($"{command.Key} has an invalid signature. " + $"Expected: {command.Key}(CommandArg[]). " + $"Found: {command.Value}");
             }
 
             AutoCommandsRegistered = true;
@@ -1851,20 +1665,14 @@
                 catch (Exception e)
                 {
                     Debug.LogWarning(
-                        LogTextSanitizer.Sanitize(
-                            $"[DxCommandTerminal] Failed to resolve rejected command {commandName} "
-                                + $"(method {command.MethodName}) for diagnostics: {e}"
-                        )
+                        LogTextSanitizer.Sanitize($"[DxCommandTerminal] Failed to resolve rejected command {commandName} " + $"(method {command.MethodName}) for diagnostics: {e}")
                     );
                 }
             }
 
             if (method == null)
             {
-                IssueErrorMessage(
-                    $"{commandName} has an invalid signature. "
-                        + $"Expected: {command.MethodName}(CommandArg[])."
-                );
+                IssueErrorMessage($"{commandName} has an invalid signature. " + $"Expected: {command.MethodName}(CommandArg[]).");
                 return;
             }
 
@@ -1926,12 +1734,7 @@
             validation, history accounting, and invocation are identical for
             array, list, and parsed-line callers.
          */
-        private bool RunCommandCore(
-            CommandExecutionContext context,
-            string commandName,
-            IReadOnlyList<CommandArg> arguments,
-            string historyLine
-        )
+        private bool RunCommandCore(CommandExecutionContext context, string commandName, IReadOnlyList<CommandArg> arguments, string historyLine)
         {
             if (string.IsNullOrWhiteSpace(commandName))
             {
@@ -1942,38 +1745,24 @@
 
             if (commandName.Contains(' '))
             {
-                commandName = commandName.Replace(
-                    " ",
-                    string.Empty,
-                    StringComparison.OrdinalIgnoreCase
-                );
+                commandName = commandName.Replace(" ", string.Empty, StringComparison.OrdinalIgnoreCase);
             }
 
             if (!_commands.TryGetValue(commandName, out CommandInfo command))
             {
                 IssueErrorMessage($"Command {commandName} not found");
                 // Unknown command, unconditional push
-                _history.Push(
-                    historyLine ?? BuildHistoryLine(commandName, arguments),
-                    false,
-                    false
-                );
+                _history.Push(historyLine ?? BuildHistoryLine(commandName, arguments), false, false);
                 return false;
             }
 
             if (!context.IsEligibleFor(command.executionContexts))
             {
-                _errorMessages.Enqueue(
-                    $"{commandName} is not available in the current execution context"
-                );
+                _errorMessages.Enqueue($"{commandName} is not available in the current execution context");
                 // Known but unavailable command, respect addToHistory flag
                 if (command.addToHistory)
                 {
-                    _history.Push(
-                        historyLine ?? BuildHistoryLine(commandName, arguments),
-                        false,
-                        false
-                    );
+                    _history.Push(historyLine ?? BuildHistoryLine(commandName, arguments), false, false);
                 }
 
                 return false;
@@ -1998,8 +1787,7 @@
             {
                 string pluralFix = requiredArg == 1 ? "" : "s";
 
-                string invalidMessage =
-                    $"{commandName} requires {errorMessage} {requiredArg} argument{pluralFix}";
+                string invalidMessage = $"{commandName} requires {errorMessage} {requiredArg} argument{pluralFix}";
                 if (!string.IsNullOrWhiteSpace(command.hint))
                 {
                     invalidMessage += $"\n    -> Usage: {command.hint}";
@@ -2009,11 +1797,7 @@
                 // Known command with invalid arguments, respect addToHistory flag
                 if (command.addToHistory)
                 {
-                    _history.Push(
-                        historyLine ?? BuildHistoryLine(commandName, arguments),
-                        false,
-                        false
-                    );
+                    _history.Push(historyLine ?? BuildHistoryLine(commandName, arguments), false, false);
                 }
 
                 return false;
@@ -2032,11 +1816,7 @@
             // Known command executed, respect addToHistory flag
             if (command.addToHistory)
             {
-                _history.Push(
-                    historyLine ?? BuildHistoryLine(commandName, arguments),
-                    true,
-                    errorCount == _errorMessages.Count
-                );
+                _history.Push(historyLine ?? BuildHistoryLine(commandName, arguments), true, errorCount == _errorMessages.Count);
             }
 
             return true;
@@ -2055,9 +1835,7 @@
          */
         private void ReportCommandFailure(string commandName, Exception exception)
         {
-            IssueErrorMessage(
-                $"Command '{commandName}' threw {exception.GetType().Name}: {exception.Message}"
-            );
+            IssueErrorMessage($"Command '{commandName}' threw {exception.GetType().Name}: {exception.Message}");
             Debug.LogException(exception);
         }
 
@@ -2067,11 +1845,7 @@
             own array, and a legacy proc that may retain its argument array
             and so gets a fresh one per invocation.
          */
-        private void InvokeCommand(
-            CommandInfo command,
-            CommandExecutionContext context,
-            IReadOnlyList<CommandArg> arguments
-        )
+        private void InvokeCommand(CommandInfo command, CommandExecutionContext context, IReadOnlyList<CommandArg> arguments)
         {
             if (command.handler != null)
             {
@@ -2241,17 +2015,10 @@
                 );
             }
 
-            public static AutoCommand FromReflected(
-                MethodInfo method,
-                RegisterCommandAttribute attribute
-            )
+            public static AutoCommand FromReflected(MethodInfo method, RegisterCommandAttribute attribute)
             {
                 bool valid = IsValidSignature(method);
-                Func<Action<CommandArg[]>> binder = valid
-                    ? () =>
-                        (Action<CommandArg[]>)
-                            Delegate.CreateDelegate(typeof(Action<CommandArg[]>), method)
-                    : null;
+                Func<Action<CommandArg[]>> binder = valid ? () => (Action<CommandArg[]>)Delegate.CreateDelegate(typeof(Action<CommandArg[]>), method) : null;
                 return new AutoCommand(
                     attribute.Name,
                     method.Name,
@@ -2266,9 +2033,7 @@
                     attribute.Contexts,
                     binder,
                     () => method,
-                    valid
-                        ? new DeferredCommandHandler(attribute.Name, method.Name, binder).Invoke
-                        : null
+                    valid ? new DeferredCommandHandler(attribute.Name, method.Name, binder).Invoke : null
                 );
             }
 
@@ -2285,9 +2050,7 @@
                     including its contained error when a platform cannot bind.
                  */
                 ParameterInfo[] methodParams = method.GetParameters();
-                return methodParams.Length == 1
-                    && methodParams[0].ParameterType == typeof(CommandArg[])
-                    && !method.IsGenericMethodDefinition;
+                return methodParams.Length == 1 && methodParams[0].ParameterType == typeof(CommandArg[]) && !method.IsGenericMethodDefinition;
             }
         }
 
@@ -2439,11 +2202,7 @@
             private Action<CommandArg[]> _bound;
             private bool _failed;
 
-            public DeferredCommandHandler(
-                string commandName,
-                string methodName,
-                Func<Action<CommandArg[]>> binder
-            )
+            public DeferredCommandHandler(string commandName, string methodName, Func<Action<CommandArg[]>> binder)
             {
                 _binder = binder;
                 _commandName = commandName;
@@ -2481,21 +2240,11 @@
                         return bound;
                     }
 
-                    Debug.LogError(
-                        LogTextSanitizer.Sanitize(
-                            $"[DxCommandTerminal] Failed to bind command {_commandName} "
-                                + $"(method {_methodName}): no handler was produced"
-                        )
-                    );
+                    Debug.LogError(LogTextSanitizer.Sanitize($"[DxCommandTerminal] Failed to bind command {_commandName} " + $"(method {_methodName}): no handler was produced"));
                 }
                 catch (Exception e)
                 {
-                    Debug.LogError(
-                        LogTextSanitizer.Sanitize(
-                            $"[DxCommandTerminal] Failed to bind command {_commandName} "
-                                + $"(method {_methodName}): {e}"
-                        )
-                    );
+                    Debug.LogError(LogTextSanitizer.Sanitize($"[DxCommandTerminal] Failed to bind command {_commandName} " + $"(method {_methodName}): {e}"));
                 }
 
                 _failed = true;

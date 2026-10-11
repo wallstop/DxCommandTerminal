@@ -9,8 +9,5 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     ///     parsed arguments. The borrowed view is valid only during the
     ///     callback; copy out anything that must outlive it.
     /// </summary>
-    public delegate void CommandHandler(
-        CommandExecutionContext context,
-        BorrowedCommandArguments arguments
-    );
+    public delegate void CommandHandler(CommandExecutionContext context, BorrowedCommandArguments arguments);
 }

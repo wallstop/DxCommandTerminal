@@ -57,12 +57,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             go.AddComponent<UIDocument>().panelSettings = settings;
             TerminalUI terminal = go.AddComponent<TerminalUI>();
             terminal.resetStateOnInit = true;
-            terminal._themePack = AssetDatabase.LoadAssetAtPath<TerminalThemePack>(
-                $"{PackageRoot}/Packs/Themes/Medium.asset"
-            );
-            terminal._fontPack = AssetDatabase.LoadAssetAtPath<TerminalFontPack>(
-                $"{PackageRoot}/Packs/Fonts/Medium.asset"
-            );
+            terminal._themePack = AssetDatabase.LoadAssetAtPath<TerminalThemePack>($"{PackageRoot}/Packs/Themes/Medium.asset");
+            terminal._fontPack = AssetDatabase.LoadAssetAtPath<TerminalFontPack>($"{PackageRoot}/Packs/Fonts/Medium.asset");
             go.AddComponent<StartTracker>();
 
             go.SetActive(true);
@@ -75,15 +71,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
              */
             terminal.SetState(TerminalState.OpenFull);
 
-            Assert.AreEqual(
-                1,
-                go.GetComponent<UIDocument>().rootVisualElement.childCount,
-                "SetupUI must recover via TryGetComponent and build the terminal tree"
-            );
-            Assert.That(
-                terminal._commandInput != null,
-                "The command input must exist after recovery"
-            );
+            Assert.AreEqual(1, go.GetComponent<UIDocument>().rootVisualElement.childCount, "SetupUI must recover via TryGetComponent and build the terminal tree");
+            Assert.That(terminal._commandInput != null, "The command input must exist after recovery");
 
             UnityEngine.Object.Destroy(settings);
         }
@@ -102,11 +91,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [TestCase(LogType.Warning, TerminalLogType.Warning, 2)]
         [TestCase(LogType.Log, TerminalLogType.Message, 3)]
         [TestCase(LogType.Exception, TerminalLogType.Exception, 4)]
-        public void UnityLogOrdinalsRemainCompatible(
-            LogType unityType,
-            TerminalLogType terminalType,
-            int ordinal
-        )
+        public void UnityLogOrdinalsRemainCompatible(LogType unityType, TerminalLogType terminalType, int ordinal)
         {
             Assert.AreEqual(ordinal, (int)terminalType);
             Assert.AreEqual(terminalType, (TerminalLogType)unityType);
@@ -136,25 +121,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             shell.RunCommand("log");
 
             string[] events = history.GetHistory(onlySuccess: true, onlyErrorFree: true).ToArray();
-            Assert.AreNotEqual(
-                0,
-                events.Length,
-                "Expected at least one history event after running 'log'"
-            );
+            Assert.AreNotEqual(0, events.Length, "Expected at least one history event after running 'log'");
 
             terminal.enabled = false;
             terminal.resetStateOnInit = false;
             terminal.ignoreDefaultCommands = !terminal.ignoreDefaultCommands;
             terminal.enabled = true;
-            Assert.AreSame(
-                shell,
-                Terminal.Shell,
-                "Shell instance should be reused when resetStateOnInit is false"
-            );
-            Assert.IsNotEmpty(
-                KnownDefaultCommands,
-                "Sanity: expected at least one default command to be registered via [RegisterCommand(isDefault: true)]"
-            );
+            Assert.AreSame(shell, Terminal.Shell, "Shell instance should be reused when resetStateOnInit is false");
+            Assert.IsNotEmpty(KnownDefaultCommands, "Sanity: expected at least one default command to be registered via [RegisterCommand(isDefault: true)]");
             foreach (string command in KnownDefaultCommands)
             {
                 Assert.AreNotEqual(
@@ -163,38 +137,16 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     $"Default command '{command}' should {(terminal.ignoreDefaultCommands ? "not be" : "be")} registered when ignoreDefaultCommands={terminal.ignoreDefaultCommands}"
                 );
             }
-            Assert.AreEqual(
-                terminal.ignoreDefaultCommands,
-                shell.IgnoringDefaultCommands,
-                "Shell.IgnoringDefaultCommands should match terminal.ignoreDefaultCommands"
-            );
-            Assert.AreSame(
-                history,
-                Terminal.History,
-                "History instance should be reused when resetStateOnInit is false"
-            );
-            string[] currentEvents = history
-                .GetHistory(onlySuccess: true, onlyErrorFree: true)
-                .ToArray();
-            Assert.AreEqual(
-                events.Length,
-                currentEvents.Length,
-                "History length should be preserved after toggling ignoreDefaultCommands"
-            );
+            Assert.AreEqual(terminal.ignoreDefaultCommands, shell.IgnoringDefaultCommands, "Shell.IgnoringDefaultCommands should match terminal.ignoreDefaultCommands");
+            Assert.AreSame(history, Terminal.History, "History instance should be reused when resetStateOnInit is false");
+            string[] currentEvents = history.GetHistory(onlySuccess: true, onlyErrorFree: true).ToArray();
+            Assert.AreEqual(events.Length, currentEvents.Length, "History length should be preserved after toggling ignoreDefaultCommands");
             for (int i = 0; i < events.Length; ++i)
             {
                 Assert.AreEqual(events[i], currentEvents[i], $"History event {i} wasn't the same!");
             }
-            Assert.AreSame(
-                buffer,
-                Terminal.Buffer,
-                "Buffer instance should be reused when resetStateOnInit is false"
-            );
-            Assert.AreSame(
-                autoComplete,
-                Terminal.AutoComplete,
-                "AutoComplete instance should be reused when resetStateOnInit is false"
-            );
+            Assert.AreSame(buffer, Terminal.Buffer, "Buffer instance should be reused when resetStateOnInit is false");
+            Assert.AreSame(autoComplete, Terminal.AutoComplete, "AutoComplete instance should be reused when resetStateOnInit is false");
         }
 
         [UnityTest]
@@ -203,10 +155,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return SpawnTerminal(resetStateOnInit: true);
 
             TerminalUI terminal1 = TerminalUI.Instance;
-            Assert.That(
-                terminal1 != null,
-                "TerminalUI.Instance should not be null after SpawnTerminal"
-            );
+            Assert.That(terminal1 != null, "TerminalUI.Instance should not be null after SpawnTerminal");
             CommandShell shell = Terminal.Shell;
             Assert.That(shell != null, "Terminal.Shell should not be null after SpawnTerminal");
             CommandHistory history = Terminal.History;
@@ -214,90 +163,31 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             CommandLog buffer = Terminal.Buffer;
             Assert.That(buffer != null, "Terminal.Buffer should not be null after SpawnTerminal");
             CommandAutoComplete autoComplete = Terminal.AutoComplete;
-            Assert.That(
-                autoComplete != null,
-                "Terminal.AutoComplete should not be null after SpawnTerminal"
-            );
+            Assert.That(autoComplete != null, "Terminal.AutoComplete should not be null after SpawnTerminal");
 
             yield return SpawnTerminal(resetStateOnInit: false);
 
             TerminalUI terminal2 = TerminalUI.Instance;
-            Assert.That(
-                TerminalUI.Instance != null,
-                "TerminalUI.Instance should not be null after second SpawnTerminal"
-            );
-            Assert.AreNotSame(
-                terminal1,
-                TerminalUI.Instance,
-                "New terminal instance should be created on second SpawnTerminal"
-            );
-            Assert.AreSame(
-                shell,
-                Terminal.Shell,
-                "Shell should be reused when resetStateOnInit is false"
-            );
-            Assert.AreSame(
-                history,
-                Terminal.History,
-                "History should be reused when resetStateOnInit is false"
-            );
-            Assert.AreSame(
-                buffer,
-                Terminal.Buffer,
-                "Buffer should be reused when resetStateOnInit is false"
-            );
-            Assert.AreSame(
-                autoComplete,
-                Terminal.AutoComplete,
-                "AutoComplete should be reused when resetStateOnInit is false"
-            );
+            Assert.That(TerminalUI.Instance != null, "TerminalUI.Instance should not be null after second SpawnTerminal");
+            Assert.AreNotSame(terminal1, TerminalUI.Instance, "New terminal instance should be created on second SpawnTerminal");
+            Assert.AreSame(shell, Terminal.Shell, "Shell should be reused when resetStateOnInit is false");
+            Assert.AreSame(history, Terminal.History, "History should be reused when resetStateOnInit is false");
+            Assert.AreSame(buffer, Terminal.Buffer, "Buffer should be reused when resetStateOnInit is false");
+            Assert.AreSame(autoComplete, Terminal.AutoComplete, "AutoComplete should be reused when resetStateOnInit is false");
 
             yield return SpawnTerminal(resetStateOnInit: true);
 
-            Assert.That(
-                TerminalUI.Instance != null,
-                "TerminalUI.Instance should not be null after third SpawnTerminal"
-            );
-            Assert.AreNotSame(
-                terminal2,
-                TerminalUI.Instance,
-                "New terminal instance should be created on third SpawnTerminal"
-            );
-            Assert.AreNotSame(
-                terminal1,
-                TerminalUI.Instance,
-                "Third terminal should differ from first terminal"
-            );
-            Assert.AreNotSame(
-                shell,
-                Terminal.Shell,
-                "Shell should be recreated when resetStateOnInit is true"
-            );
+            Assert.That(TerminalUI.Instance != null, "TerminalUI.Instance should not be null after third SpawnTerminal");
+            Assert.AreNotSame(terminal2, TerminalUI.Instance, "New terminal instance should be created on third SpawnTerminal");
+            Assert.AreNotSame(terminal1, TerminalUI.Instance, "Third terminal should differ from first terminal");
+            Assert.AreNotSame(shell, Terminal.Shell, "Shell should be recreated when resetStateOnInit is true");
             Assert.That(Terminal.Shell != null, "Terminal.Shell should not be null after reset");
-            Assert.AreNotSame(
-                history,
-                Terminal.History,
-                "History should be recreated when resetStateOnInit is true"
-            );
-            Assert.That(
-                Terminal.History != null,
-                "Terminal.History should not be null after reset"
-            );
-            Assert.AreNotSame(
-                buffer,
-                Terminal.Buffer,
-                "Buffer should be recreated when resetStateOnInit is true"
-            );
+            Assert.AreNotSame(history, Terminal.History, "History should be recreated when resetStateOnInit is true");
+            Assert.That(Terminal.History != null, "Terminal.History should not be null after reset");
+            Assert.AreNotSame(buffer, Terminal.Buffer, "Buffer should be recreated when resetStateOnInit is true");
             Assert.That(Terminal.Buffer != null, "Terminal.Buffer should not be null after reset");
-            Assert.AreNotSame(
-                autoComplete,
-                Terminal.AutoComplete,
-                "AutoComplete should be recreated when resetStateOnInit is true"
-            );
-            Assert.That(
-                Terminal.AutoComplete != null,
-                "Terminal.AutoComplete should not be null after reset"
-            );
+            Assert.AreNotSame(autoComplete, Terminal.AutoComplete, "AutoComplete should be recreated when resetStateOnInit is true");
+            Assert.That(Terminal.AutoComplete != null, "Terminal.AutoComplete should not be null after reset");
         }
 
         [UnityTest]
@@ -305,21 +195,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             yield return SpawnTerminal(resetStateOnInit: true, ignoreDefaultCommands: true);
 
-            Assert.IsNotEmpty(
-                KnownDefaultCommands,
-                "Sanity: expected at least one default command to be registered via [RegisterCommand(isDefault: true)]"
-            );
+            Assert.IsNotEmpty(KnownDefaultCommands, "Sanity: expected at least one default command to be registered via [RegisterCommand(isDefault: true)]");
             CommandShell shell = Terminal.Shell;
-            Assert.IsTrue(
-                shell.IgnoringDefaultCommands,
-                "Shell.IgnoringDefaultCommands should be true when ignoreDefaultCommands is true"
-            );
+            Assert.IsTrue(shell.IgnoringDefaultCommands, "Shell.IgnoringDefaultCommands should be true when ignoreDefaultCommands is true");
             foreach (string command in KnownDefaultCommands)
             {
-                Assert.IsFalse(
-                    shell.Commands.ContainsKey(command),
-                    $"Default command '{command}' should not be registered when ignoreDefaultCommands is true"
-                );
+                Assert.IsFalse(shell.Commands.ContainsKey(command), $"Default command '{command}' should not be registered when ignoreDefaultCommands is true");
             }
         }
 
@@ -328,21 +209,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             yield return SpawnTerminal(resetStateOnInit: true, ignoreDefaultCommands: false);
 
-            Assert.IsNotEmpty(
-                KnownDefaultCommands,
-                "Sanity: expected at least one default command to be registered via [RegisterCommand(isDefault: true)]"
-            );
+            Assert.IsNotEmpty(KnownDefaultCommands, "Sanity: expected at least one default command to be registered via [RegisterCommand(isDefault: true)]");
             CommandShell shell = Terminal.Shell;
-            Assert.IsFalse(
-                shell.IgnoringDefaultCommands,
-                "Shell.IgnoringDefaultCommands should be false when ignoreDefaultCommands is false"
-            );
+            Assert.IsFalse(shell.IgnoringDefaultCommands, "Shell.IgnoringDefaultCommands should be false when ignoreDefaultCommands is false");
             foreach (string command in KnownDefaultCommands)
             {
-                Assert.IsTrue(
-                    shell.Commands.ContainsKey(command),
-                    $"Default command '{command}' should be registered when ignoreDefaultCommands is false"
-                );
+                Assert.IsTrue(shell.Commands.ContainsKey(command), $"Default command '{command}' should be registered when ignoreDefaultCommands is false");
             }
         }
 
@@ -353,15 +225,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             CommandShell shell = Terminal.Shell;
             Assert.That(shell != null, "Terminal.Shell should not be null after SpawnTerminal");
-            Assert.IsFalse(
-                shell.AutoCommandsRegistered,
-                "Terminal enabling must not register auto commands; registration is "
-                    + "deferred to the first command request"
-            );
-            Assert.IsEmpty(
-                shell.AutoRegisteredCommands,
-                "Auto commands must stay unregistered before the first use"
-            );
+            Assert.IsFalse(shell.AutoCommandsRegistered, "Terminal enabling must not register auto commands; registration is " + "deferred to the first command request");
+            Assert.IsEmpty(shell.AutoRegisteredCommands, "Auto commands must stay unregistered before the first use");
 
             /*
                Pick a zero-argument auto command that is safe to run inside a
@@ -369,27 +234,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             */
             string knownCommand = CommandShell
                 .RegisteredCommands.Value.Where(tuple =>
-                    tuple.attribute.MinArgCount == 0
-                    && tuple.attribute.MaxArgCount == 0
-                    && !tuple.attribute.Name.Equals("quit", StringComparison.OrdinalIgnoreCase)
+                    tuple.attribute.MinArgCount == 0 && tuple.attribute.MaxArgCount == 0 && !tuple.attribute.Name.Equals("quit", StringComparison.OrdinalIgnoreCase)
                 )
                 .Select(tuple => tuple.attribute.Name)
                 .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
                 .First();
 
-            Assert.IsTrue(
-                shell.RunCommand(knownCommand),
-                $"First command request '{knownCommand}' should apply the deferred "
-                    + "registration and run"
-            );
-            Assert.IsTrue(
-                shell.AutoCommandsRegistered,
-                "The first command request should complete the deferred registration"
-            );
-            Assert.IsNotEmpty(
-                shell.AutoRegisteredCommands,
-                "Deferred registration should surface auto commands on first use"
-            );
+            Assert.IsTrue(shell.RunCommand(knownCommand), $"First command request '{knownCommand}' should apply the deferred " + "registration and run");
+            Assert.IsTrue(shell.AutoCommandsRegistered, "The first command request should complete the deferred registration");
+            Assert.IsNotEmpty(shell.AutoRegisteredCommands, "Deferred registration should surface auto commands on first use");
         }
     }
 }

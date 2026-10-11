@@ -79,27 +79,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return SetInput("pickup ", 7);
 
             _terminal.CompleteCommand(true);
-            yield return WaitForInput(
-                "pickup pickaxe",
-                "The first Tab applies the first provider result to the active token"
-            );
-            Assert.IsEmpty(
-                _terminal._lastCompletionBuffer,
-                "A provider answer must suppress stale full-line history hints"
-            );
+            yield return WaitForInput("pickup pickaxe", "The first Tab applies the first provider result to the active token");
+            Assert.IsEmpty(_terminal._lastCompletionBuffer, "A provider answer must suppress stale full-line history hints");
             yield return WaitForCaret(14, "The caret lands after the inserted token");
 
             _terminal.CompleteCommand(true);
-            yield return WaitForInput(
-                "pickup torch",
-                "Repeated Tab presses cycle provider results"
-            );
+            yield return WaitForInput("pickup torch", "Repeated Tab presses cycle provider results");
 
             _terminal.CompleteCommand(true);
-            yield return WaitForInput(
-                "pickup \"torch pick\"",
-                "Insertions containing spaces are quoted when the token is unquoted"
-            );
+            yield return WaitForInput("pickup \"torch pick\"", "Insertions containing spaces are quoted when the token is unquoted");
         }
 
         [UnityTest]
@@ -112,10 +100,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return SetInput("pickup ", 7);
 
             _terminal.CompleteCommand(false);
-            yield return WaitForInput(
-                "pickup \"torch pick\"",
-                "Reverse completion starts from the last result"
-            );
+            yield return WaitForInput("pickup \"torch pick\"", "Reverse completion starts from the last result");
 
             _terminal.CompleteCommand(false);
             yield return WaitForInput("pickup torch", "Completion applies");
@@ -137,10 +122,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return SetInput("pickup to", 9);
 
             _terminal.CompleteCommand(true);
-            yield return WaitForInput(
-                "pickup torch",
-                "Typing restarts completion from the provider's first prefix match"
-            );
+            yield return WaitForInput("pickup torch", "Typing restarts completion from the provider's first prefix match");
         }
 
         [UnityTest]
@@ -153,10 +135,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return SetInput("pickup \"to", 10);
 
             _terminal.CompleteCommand(true);
-            yield return WaitForInput(
-                "pickup \"torch\"",
-                "Completion closes the token to preserve its literal value"
-            );
+            yield return WaitForInput("pickup \"torch\"", "Completion closes the token to preserve its literal value");
             yield return WaitForCaret(14, "The caret parks on the closed token");
         }
 
@@ -170,10 +149,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return SetInput("pickup to after", 9);
 
             _terminal.CompleteCommand(true);
-            yield return WaitForInput(
-                "pickup torch after",
-                "Only the active token is replaced; trailing text is preserved"
-            );
+            yield return WaitForInput("pickup torch after", "Only the active token is replaced; trailing text is preserved");
             yield return WaitForCaret(12, "The caret lands before the preserved trailing text");
         }
 
@@ -189,10 +165,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             _terminal.CompleteCommand(true);
             yield return WaitForInput("pickup pickaxe", "Completion applies to an unfocused field");
-            yield return WaitForCaret(
-                14,
-                "The queued caret survives the focus pass instead of jumping to line end"
-            );
+            yield return WaitForCaret(14, "The queued caret survives the focus pass instead of jumping to line end");
         }
 
         [UnityTest]
@@ -211,20 +184,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             _terminal._pendingCaretIndex = 3;
             _terminal.ApplyPendingCaret();
             yield return WaitForCaretAppliedOrQueued(3);
-            Assert.AreEqual(
-                3,
-                _terminal._pendingCaretIndex,
-                "An unfocused pass keeps the marker so a later focus cannot jump to line end"
-            );
+            Assert.AreEqual(3, _terminal._pendingCaretIndex, "An unfocused pass keeps the marker so a later focus cannot jump to line end");
 
             _terminal._pendingCaretIndex = 1;
             _terminal.ApplyPendingCaret();
             yield return WaitForCaretAppliedOrQueued(1);
-            Assert.AreEqual(
-                1,
-                _terminal._pendingCaretIndex,
-                "A pass where the caret has not stuck keeps the marker"
-            );
+            Assert.AreEqual(1, _terminal._pendingCaretIndex, "A pass where the caret has not stuck keeps the marker");
         }
 
         [UnityTest]
@@ -233,25 +198,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return SpawnTerminalWithUi();
 
             CommandDefinition definition = DefinePickupWithStagedInventory();
-            definition.CompletionProvider = (
-                in CommandCompletionContext context,
-                List<CommandCompletion> results
-            ) =>
-                results.Add(
-                    new CommandCompletion(
-                        "pickaxe",
-                        replacement: new CommandCompletionReplacement(0, 14)
-                    )
-                );
+            definition.CompletionProvider = (in CommandCompletionContext context, List<CommandCompletion> results) =>
+                results.Add(new CommandCompletion("pickaxe", replacement: new CommandCompletionReplacement(0, 14)));
             Assert.IsTrue(Terminal.Shell.AddCommand(definition));
 
             yield return SetInput("pickup pickaxe", 14);
 
             _terminal.CompleteCommand(true);
-            yield return WaitForInput(
-                "pickaxe",
-                "The override replaces the whole line while the context range would replace only the token"
-            );
+            yield return WaitForInput("pickaxe", "The override replaces the whole line while the context range would replace only the token");
         }
 
         [UnityTest]
@@ -275,10 +229,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return SetInput("h", 1);
 
             _terminal.CompleteCommand(true);
-            yield return WaitForInput(
-                "help",
-                "Without a provider the legacy history completion still suggests command names"
-            );
+            yield return WaitForInput("help", "Without a provider the legacy history completion still suggests command names");
         }
 
         private IEnumerator SpawnTerminalWithUi()
@@ -313,26 +264,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return null;
 
             int frameBudget = 600;
-            while (
-                0 < frameBudget--
-                && (
-                    _terminal._commandInput == null
-                    || _terminal._commandInput.resolvedStyle.display != DisplayStyle.Flex
-                )
-            )
+            while (0 < frameBudget-- && (_terminal._commandInput == null || _terminal._commandInput.resolvedStyle.display != DisplayStyle.Flex))
             {
                 yield return null;
             }
 
-            Assert.That(
-                _terminal._commandInput != null,
-                "The terminal input field should exist after the terminal opens"
-            );
-            Assert.AreEqual(
-                DisplayStyle.Flex,
-                _terminal._commandInput.resolvedStyle.display,
-                "The input field should be visible on an open terminal"
-            );
+            Assert.That(_terminal._commandInput != null, "The terminal input field should exist after the terminal opens");
+            Assert.AreEqual(DisplayStyle.Flex, _terminal._commandInput.resolvedStyle.display, "The input field should be visible on an open terminal");
         }
 
         /*
@@ -388,11 +326,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             while (
                 0 < frameBudget--
                 && !string.Equals(_terminal._commandInput.value, expected, StringComparison.Ordinal)
-                && !string.Equals(
-                    DefaultTerminalInput.Instance.CommandText,
-                    expected,
-                    StringComparison.Ordinal
-                )
+                && !string.Equals(DefaultTerminalInput.Instance.CommandText, expected, StringComparison.Ordinal)
             )
             {
                 yield return null;
@@ -400,13 +334,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Assert.IsTrue(
                 string.Equals(_terminal._commandInput.value, expected, StringComparison.Ordinal)
-                    || string.Equals(
-                        DefaultTerminalInput.Instance.CommandText,
-                        expected,
-                        StringComparison.Ordinal
-                    ),
-                $"{message}: field='{_terminal._commandInput.value}'"
-                    + $" input='{DefaultTerminalInput.Instance.CommandText}'"
+                    || string.Equals(DefaultTerminalInput.Instance.CommandText, expected, StringComparison.Ordinal),
+                $"{message}: field='{_terminal._commandInput.value}'" + $" input='{DefaultTerminalInput.Instance.CommandText}'"
             );
         }
 
@@ -425,20 +354,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private IEnumerator WaitForCaret(int expectedCaretIndex, string message)
         {
             int frameBudget = 600;
-            while (
-                0 < frameBudget--
-                && _terminal._commandInput.cursorIndex != expectedCaretIndex
-                && _terminal._pendingCaretIndex != expectedCaretIndex
-            )
+            while (0 < frameBudget-- && _terminal._commandInput.cursorIndex != expectedCaretIndex && _terminal._pendingCaretIndex != expectedCaretIndex)
             {
                 yield return null;
             }
 
             Assert.IsTrue(
-                _terminal._commandInput.cursorIndex == expectedCaretIndex
-                    || _terminal._pendingCaretIndex == expectedCaretIndex,
-                $"{message}: cursor={_terminal._commandInput.cursorIndex}"
-                    + $" queued={_terminal._pendingCaretIndex}"
+                _terminal._commandInput.cursorIndex == expectedCaretIndex || _terminal._pendingCaretIndex == expectedCaretIndex,
+                $"{message}: cursor={_terminal._commandInput.cursorIndex}" + $" queued={_terminal._pendingCaretIndex}"
             );
         }
 
@@ -454,20 +377,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private static IEnumerator WaitForCaretAppliedOrQueued(int expected)
         {
             int frameBudget = 600;
-            while (
-                0 < frameBudget--
-                && TerminalUI.Instance._commandInput.cursorIndex != expected
-                && TerminalUI.Instance._pendingCaretIndex != expected
-            )
+            while (0 < frameBudget-- && TerminalUI.Instance._commandInput.cursorIndex != expected && TerminalUI.Instance._pendingCaretIndex != expected)
             {
                 yield return null;
             }
 
-            Assert.IsTrue(
-                TerminalUI.Instance._commandInput.cursorIndex == expected
-                    || TerminalUI.Instance._pendingCaretIndex == expected,
-                "The queued caret position is applied"
-            );
+            Assert.IsTrue(TerminalUI.Instance._commandInput.cursorIndex == expected || TerminalUI.Instance._pendingCaretIndex == expected, "The queued caret position is applied");
         }
 
 #endif

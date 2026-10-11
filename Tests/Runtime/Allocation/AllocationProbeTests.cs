@@ -21,10 +21,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
         [Test]
         public void PositiveControlDetectsForcedAllocations()
         {
-            AllocationMeasurement measurement = AllocationAssertions.AssertDetectsAllocation(
-                "positive control",
-                AllocationAssertions.ForceControlAllocation
-            );
+            AllocationMeasurement measurement = AllocationAssertions.AssertDetectsAllocation("positive control", AllocationAssertions.ForceControlAllocation);
 
             /*
                 The detection verdict and the byte reader are separate
@@ -33,19 +30,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
             */
             if (AllocationProbe.ByteCapabilityValid)
             {
-                Assert.IsTrue(
-                    0 < measurement.AllocatedBytes,
-                    "A validated byte reader must see the forced allocation: "
-                        + measurement.Describe()
-                );
+                Assert.IsTrue(0 < measurement.AllocatedBytes, "A validated byte reader must see the forced allocation: " + measurement.Describe());
                 return;
             }
 
-            Assert.AreEqual(
-                AllocationMeasurement.Unavailable,
-                measurement.AllocatedBytes,
-                "An unvalidated byte reader must report unavailability, never a trusted zero"
-            );
+            Assert.AreEqual(AllocationMeasurement.Unavailable, measurement.AllocatedBytes, "An unvalidated byte reader must report unavailability, never a trusted zero");
         }
 
         [Test]
@@ -70,25 +59,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
             try
             {
                 AllocationMeasurement measurement = AllocationProbe.Measure(() => { });
-                Assert.IsFalse(
-                    measurement.IsZeroAllocation,
-                    $"An unvalidated window must never map to zero: {measurement.Describe()}"
-                );
-                Assert.AreEqual(
-                    AllocationMeasurementStatus.InstrumentInvalid,
-                    measurement.Status,
-                    "An unvalidated window reports the invalid verdict"
-                );
+                Assert.IsFalse(measurement.IsZeroAllocation, $"An unvalidated window must never map to zero: {measurement.Describe()}");
+                Assert.AreEqual(AllocationMeasurementStatus.InstrumentInvalid, measurement.Status, "An unvalidated window reports the invalid verdict");
             }
             finally
             {
                 AllocationProbe.ResetValidation();
             }
 
-            AllocationAssertions.AssertZeroAllocations(
-                "recovery after unvalidated window",
-                () => { }
-            );
+            AllocationAssertions.AssertZeroAllocations("recovery after unvalidated window", () => { });
         }
 
         [Test]
@@ -98,10 +77,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
             AllocationProbe.ResetValidation();
             try
             {
-                Assert.Catch<AssertionException>(
-                    () => AllocationAssertions.EnsureInstrumentValidated(),
-                    "A required verdict must fail when the instrument cannot measure"
-                );
+                Assert.Catch<AssertionException>(() => AllocationAssertions.EnsureInstrumentValidated(), "A required verdict must fail when the instrument cannot measure");
                 Assert.Catch<AssertionException>(
                     () => AllocationAssertions.AssertZeroAllocations("sealed window", () => { }),
                     "An inactive instrument must not create a green zero claim"
@@ -113,10 +89,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
                 AllocationProbe.ResetValidation();
             }
 
-            AllocationAssertions.AssertZeroAllocations(
-                "recovery after unavailable instrument",
-                () => { }
-            );
+            AllocationAssertions.AssertZeroAllocations("recovery after unavailable instrument", () => { });
         }
 
         [Test]
@@ -124,10 +97,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
         {
             AllocationAssertions.EnsureInstrumentValidated();
             Assert.Throws<InvalidOperationException>(
-                () =>
-                    AllocationProbe.Measure(() =>
-                        throw new InvalidOperationException("subject failure")
-                    ),
+                () => AllocationProbe.Measure(() => throw new InvalidOperationException("subject failure")),
                 "The subject's exception must reach the caller"
             );
 

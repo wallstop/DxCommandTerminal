@@ -40,12 +40,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         [ThreadStatic]
         private static LogItem[] LogWindow;
 
-        [RegisterCommand(
-            isDefault: true,
-            Name = "list-themes",
-            Help = "Lists all currently available themes",
-            MaxArgCount = 0
-        )]
+        [RegisterCommand(isDefault: true, Name = "list-themes", Help = "Lists all currently available themes", MaxArgCount = 0)]
         public static void CommandListThemes(CommandArg[] args)
         {
             TerminalUI terminal = TerminalUI.Instance;
@@ -62,9 +57,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
 
             List<string> themeNames = terminal._themePack._themeNames;
-            using CachedStringBuilder.Scope themes = new(
-                themeNames.Count * AverageThemeNameCapacity
-            );
+            using CachedStringBuilder.Scope themes = new(themeNames.Count * AverageThemeNameCapacity);
             bool firstTheme = true;
             foreach (string themeName in themeNames)
             {
@@ -80,12 +73,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             Terminal.Log(TerminalLogType.Message, themes.Builder.ToString());
         }
 
-        [RegisterCommand(
-            isDefault: true,
-            Name = "list-fonts",
-            Help = "Lists all currently available fonts",
-            MaxArgCount = 0
-        )]
+        [RegisterCommand(isDefault: true, Name = "list-fonts", Help = "Lists all currently available fonts", MaxArgCount = 0)]
         public static void CommandListFonts(CommandArg[] args)
         {
             TerminalUI terminal = TerminalUI.Instance;
@@ -123,13 +111,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             Terminal.Log(TerminalLogType.Message, fontNames.Builder.ToString());
         }
 
-        [RegisterCommand(
-            isDefault: true,
-            Name = "set-theme",
-            Help = "Sets the current Terminal UI theme",
-            MinArgCount = 1,
-            MaxArgCount = 1
-        )]
+        [RegisterCommand(isDefault: true, Name = "set-theme", Help = "Sets the current Terminal UI theme", MinArgCount = 1, MaxArgCount = 1)]
         public static void CommandSetTheme(CommandArg[] args)
         {
             TerminalUI terminal = TerminalUI.Instance;
@@ -142,13 +124,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             string theme = args[0].contents;
             string friendlyThemeName = ThemeNameHelper.GetFriendlyThemeName(theme);
 
-            if (
-                string.Equals(
-                    friendlyThemeName,
-                    terminal.CurrentFriendlyTheme,
-                    StringComparison.OrdinalIgnoreCase
-                )
-            )
+            if (string.Equals(friendlyThemeName, terminal.CurrentFriendlyTheme, StringComparison.OrdinalIgnoreCase))
             {
                 Terminal.Log(TerminalLogType.Message, $"Theme '{theme}' is already set.");
                 return;
@@ -157,9 +133,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             int newThemeIndex = -1;
             foreach (string themeName in ThemeNameHelper.GetPossibleThemeNames(theme))
             {
-                newThemeIndex = terminal._themePack._themeNames.FindIndex(existingTheme =>
-                    string.Equals(existingTheme, themeName, StringComparison.OrdinalIgnoreCase)
-                );
+                newThemeIndex = terminal._themePack._themeNames.FindIndex(existingTheme => string.Equals(existingTheme, themeName, StringComparison.OrdinalIgnoreCase));
                 if (0 <= newThemeIndex)
                 {
                     break;
@@ -176,11 +150,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             Terminal.Log(TerminalLogType.Message, $"Theme '{theme}' set.");
         }
 
-        [RegisterCommand(
-            isDefault: true,
-            Name = "get-theme",
-            Help = "Gets the current Terminal UI theme"
-        )]
+        [RegisterCommand(isDefault: true, Name = "get-theme", Help = "Gets the current Terminal UI theme")]
         public static void CommandGetTheme(CommandArg[] args)
         {
             TerminalUI terminal = TerminalUI.Instance;
@@ -190,17 +160,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return;
             }
 
-            Terminal.Log(
-                TerminalLogType.Message,
-                $"Current terminal theme is '{terminal.CurrentFriendlyTheme}'."
-            );
+            Terminal.Log(TerminalLogType.Message, $"Current terminal theme is '{terminal.CurrentFriendlyTheme}'.");
         }
 
-        [RegisterCommand(
-            isDefault: true,
-            Name = "get-font",
-            Help = "Gets the current Terminal UI font"
-        )]
+        [RegisterCommand(isDefault: true, Name = "get-font", Help = "Gets the current Terminal UI font")]
         public static void CommandGetFont(CommandArg[] args)
         {
             TerminalUI terminal = TerminalUI.Instance;
@@ -211,19 +174,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
 
             Font currentFont = terminal.CurrentFont;
-            Terminal.Log(
-                TerminalLogType.Message,
-                $"Current terminal font is '{(currentFont == null ? "null" : currentFont.name)}'."
-            );
+            Terminal.Log(TerminalLogType.Message, $"Current terminal font is '{(currentFont == null ? "null" : currentFont.name)}'.");
         }
 
-        [RegisterCommand(
-            isDefault: true,
-            Name = "set-random-theme",
-            Help = "Sets the current Terminal UI theme to a randomly selected one",
-            MinArgCount = 0,
-            MaxArgCount = 0
-        )]
+        [RegisterCommand(isDefault: true, Name = "set-random-theme", Help = "Sets the current Terminal UI theme to a randomly selected one", MinArgCount = 0, MaxArgCount = 0)]
         public static void CommandSetRandomTheme(CommandArg[] args)
         {
             TerminalUI terminal = TerminalUI.Instance;
@@ -234,19 +188,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
 
             string newTheme = terminal.SetRandomTheme();
-            Terminal.Log(
-                TerminalLogType.Message,
-                $"Randomly selected and set theme to '{newTheme}'."
-            );
+            Terminal.Log(TerminalLogType.Message, $"Randomly selected and set theme to '{newTheme}'.");
         }
 
-        [RegisterCommand(
-            isDefault: true,
-            Name = "set-font",
-            Help = "Sets the current Terminal UI font",
-            MinArgCount = 1,
-            MaxArgCount = 1
-        )]
+        [RegisterCommand(isDefault: true, Name = "set-font", Help = "Sets the current Terminal UI font", MinArgCount = 1, MaxArgCount = 1)]
         public static void CommandSetFont(CommandArg[] args)
         {
             TerminalUI terminal = TerminalUI.Instance;
@@ -264,10 +209,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
             string fontName = args[0].contents;
 
-            int newFontIndex = terminal._fontPack._fonts.FindIndex(font =>
-                font != null
-                && string.Equals(font.name, fontName, StringComparison.OrdinalIgnoreCase)
-            );
+            int newFontIndex = terminal._fontPack._fonts.FindIndex(font => font != null && string.Equals(font.name, fontName, StringComparison.OrdinalIgnoreCase));
             if (newFontIndex < 0)
             {
                 Terminal.Log(TerminalLogType.Warning, $"Font '{fontName}' not found.");
@@ -280,13 +222,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             Terminal.Log(TerminalLogType.Message, $"Font '{font.name}' set.");
         }
 
-        [RegisterCommand(
-            isDefault: true,
-            Name = "set-random-font",
-            Help = "Sets the current Terminal UI font to a randomly selected one",
-            MinArgCount = 0,
-            MaxArgCount = 0
-        )]
+        [RegisterCommand(isDefault: true, Name = "set-random-font", Help = "Sets the current Terminal UI font to a randomly selected one", MinArgCount = 0, MaxArgCount = 0)]
         public static void CommandSetRandomFont(CommandArg[] args)
         {
             TerminalUI terminal = TerminalUI.Instance;
@@ -303,52 +239,28 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return;
             }
 
-            Terminal.Log(
-                TerminalLogType.Message,
-                $"Randomly selected and set font to '{font.name}'."
-            );
+            Terminal.Log(TerminalLogType.Message, $"Randomly selected and set font to '{font.name}'.");
         }
 
-        [RegisterCommand(
-            isDefault: true,
-            Name = "clear-console",
-            Help = "Clear the command console",
-            MaxArgCount = 0
-        )]
+        [RegisterCommand(isDefault: true, Name = "clear-console", Help = "Clear the command console", MaxArgCount = 0)]
         public static void CommandClearConsole(CommandArg[] args)
         {
             Terminal.Buffer?.Clear();
         }
 
-        [RegisterCommand(
-            isDefault: true,
-            Name = "clear-history",
-            Help = "Clear the command console's history",
-            MaxArgCount = 0,
-            AddToHistory = false
-        )]
+        [RegisterCommand(isDefault: true, Name = "clear-history", Help = "Clear the command console's history", MaxArgCount = 0, AddToHistory = false)]
         public static void CommandClearHistory(CommandArg[] args)
         {
             Terminal.History?.Clear();
         }
 
-        [RegisterCommand(
-            isDefault: true,
-            Name = "copy-last",
-            Help = "Copy the most recent log line to the clipboard",
-            MaxArgCount = 0
-        )]
+        [RegisterCommand(isDefault: true, Name = "copy-last", Help = "Copy the most recent log line to the clipboard", MaxArgCount = 0)]
         public static void CommandCopyLast(CommandArg[] args)
         {
             CopyLogLines(1);
         }
 
-        [RegisterCommand(
-            isDefault: true,
-            Name = "copy-log",
-            Help = "Copy the last N log lines to the clipboard",
-            MaxArgCount = 1
-        )]
+        [RegisterCommand(isDefault: true, Name = "copy-log", Help = "Copy the last N log lines to the clipboard", MaxArgCount = 1)]
         public static void CommandCopyLog(CommandArg[] args)
         {
             if (0 < args.Length)
@@ -384,11 +296,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             reaches the search whole - the same rule `log` follows, and the
             reason `find "two words"` searches for two words.
          */
-        [RegisterCommand(
-            isDefault: true,
-            Name = "find",
-            Help = "Show only the log lines that contain the text, then the next match on a repeat"
-        )]
+        [RegisterCommand(isDefault: true, Name = "find", Help = "Show only the log lines that contain the text, then the next match on a repeat")]
         public static void CommandFind(CommandArg[] args)
         {
             TerminalUI terminal = TerminalUI.Instance;
@@ -407,12 +315,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             terminal.SetLogFilter(JoinArguments(args));
         }
 
-        [RegisterCommand(
-            isDefault: true,
-            Name = "clear-filter",
-            Help = "Show every log line again, dropping a find",
-            MaxArgCount = 0
-        )]
+        [RegisterCommand(isDefault: true, Name = "clear-filter", Help = "Show every log line again, dropping a find", MaxArgCount = 0)]
         public static void CommandClearFilter(CommandArg[] args)
         {
             TerminalUI terminal = TerminalUI.Instance;
@@ -425,12 +328,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             terminal.ClearLogFilter();
         }
 
-        [RegisterCommand(
-            isDefault: true,
-            Name = "help",
-            Help = "Display help information about a command",
-            MaxArgCount = 1
-        )]
+        [RegisterCommand(isDefault: true, Name = "help", Help = "Display help information about a command", MaxArgCount = 1)]
         public static void CommandHelp(CommandArg[] args)
         {
             CommandShell shell = Terminal.Shell;
@@ -470,12 +368,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
         }
 
-        [RegisterCommand(
-            isDefault: true,
-            Name = "time",
-            Help = "Time the execution of a command",
-            MinArgCount = 1
-        )]
+        [RegisterCommand(isDefault: true, Name = "time", Help = "Time the execution of a command", MinArgCount = 1)]
         public static void CommandTime(CommandArg[] args)
         {
             CommandShell shell = Terminal.Shell;
@@ -518,13 +411,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             Terminal.Log($"Time: {sw.ElapsedMilliseconds}ms");
         }
 
-        [RegisterCommand(
-            isDefault: true,
-            Name = "time-scale",
-            Help = "Sets Time.timeScale",
-            MinArgCount = 1,
-            MaxArgCount = 1
-        )]
+        [RegisterCommand(isDefault: true, Name = "time-scale", Help = "Sets Time.timeScale", MinArgCount = 1, MaxArgCount = 1)]
         public static void CommandTimeScale(CommandArg[] args)
         {
             CommandShell shell = Terminal.Shell;
@@ -543,11 +430,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             Time.timeScale = timeScale;
         }
 
-        [RegisterCommand(
-            isDefault: true,
-            Name = "log-terminal",
-            Help = "Output message via Terminal.Log"
-        )]
+        [RegisterCommand(isDefault: true, Name = "log-terminal", Help = "Output message via Terminal.Log")]
         public static void CommandLogTerminal(CommandArg[] args)
         {
             Terminal.Log(JoinArguments(args));
@@ -559,12 +442,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             UnityEngine.Debug.Log(LogTextSanitizer.Sanitize(JoinArguments(args)));
         }
 
-        [RegisterCommand(
-            isDefault: true,
-            Name = "trace",
-            Help = "Output the stack trace of the previous message",
-            MaxArgCount = 0
-        )]
+        [RegisterCommand(isDefault: true, Name = "trace", Help = "Output the stack trace of the previous message", MaxArgCount = 0)]
         public static void CommandTrace(CommandArg[] args)
         {
             CommandLog buffer = Terminal.Buffer;
@@ -594,11 +472,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
             if (string.IsNullOrWhiteSpace(logItem.stackTrace))
             {
-                Terminal.Log(
-                    logItem.message.EndsWith(" (no trace)", StringComparison.OrdinalIgnoreCase)
-                        ? logItem.message
-                        : $"{logItem.message} (no trace)"
-                );
+                Terminal.Log(logItem.message.EndsWith(" (no trace)", StringComparison.OrdinalIgnoreCase) ? logItem.message : $"{logItem.message} (no trace)");
             }
             else
             {
@@ -606,13 +480,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
         }
 
-        [RegisterCommand(
-            isDefault: true,
-            Name = "clear-variable",
-            Help = "Clears a variable value",
-            MinArgCount = 1,
-            MaxArgCount = 1
-        )]
+        [RegisterCommand(isDefault: true, Name = "clear-variable", Help = "Clears a variable value", MinArgCount = 1, MaxArgCount = 1)]
         public static void CommandClearVariable(CommandArg[] args)
         {
             CommandShell shell = Terminal.Shell;
@@ -629,20 +497,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
             else
             {
-                Terminal.Log(
-                    TerminalLogType.Warning,
-                    $"Warning: Variable '{variableName}' not found."
-                );
+                Terminal.Log(TerminalLogType.Warning, $"Warning: Variable '{variableName}' not found.");
             }
         }
 
-        [RegisterCommand(
-            isDefault: true,
-            Name = "clear-all-variables",
-            Help = "Clears all variable values",
-            MinArgCount = 0,
-            MaxArgCount = 0
-        )]
+        [RegisterCommand(isDefault: true, Name = "clear-all-variables", Help = "Clears all variable values", MinArgCount = 0, MaxArgCount = 0)]
         public static void CommandClearAllVariable(CommandArg[] args)
         {
             CommandShell shell = Terminal.Shell;
@@ -653,20 +512,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
             int variableCount = shell.ClearVariables();
 
-            Terminal.Log(
-                variableCount == 0
-                    ? "No variables found - nothing to clear."
-                    : $"Cleared {variableCount} variables."
-            );
+            Terminal.Log(variableCount == 0 ? "No variables found - nothing to clear." : $"Cleared {variableCount} variables.");
         }
 
-        [RegisterCommand(
-            isDefault: true,
-            Name = "set-variable",
-            Help = "Sets a variable value",
-            MinArgCount = 2,
-            MaxArgCount = 2
-        )]
+        [RegisterCommand(isDefault: true, Name = "set-variable", Help = "Sets a variable value", MinArgCount = 2, MaxArgCount = 2)]
         public static void CommandSetVariable(CommandArg[] args)
         {
             CommandShell shell = Terminal.Shell;
@@ -679,10 +528,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
             if (string.IsNullOrWhiteSpace(variableName) || variableName.StartsWith('$'))
             {
-                Terminal.Log(
-                    TerminalLogType.Warning,
-                    $"Warning: Possibly invalid variable name '{variableName}'."
-                );
+                Terminal.Log(TerminalLogType.Warning, $"Warning: Possibly invalid variable name '{variableName}'.");
             }
 
             string variableValue = JoinArguments(args, 1);
@@ -693,27 +539,15 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
             else if (shell.Variables.TryGetValue(variableName, out CommandArg existingVariable))
             {
-                Terminal.Log(
-                    TerminalLogType.Warning,
-                    $"Variable '{variableName}' failed to set. Existing value: {existingVariable}."
-                );
+                Terminal.Log(TerminalLogType.Warning, $"Variable '{variableName}' failed to set. Existing value: {existingVariable}.");
             }
             else
             {
-                Terminal.Log(
-                    TerminalLogType.Warning,
-                    $"Variable '{variableName}' failed to set. No existing value found."
-                );
+                Terminal.Log(TerminalLogType.Warning, $"Variable '{variableName}' failed to set. No existing value found.");
             }
         }
 
-        [RegisterCommand(
-            isDefault: true,
-            Name = "get-variable",
-            Help = "Gets a variable value",
-            MinArgCount = 1,
-            MaxArgCount = 1
-        )]
+        [RegisterCommand(isDefault: true, Name = "get-variable", Help = "Gets a variable value", MinArgCount = 1, MaxArgCount = 1)]
         public static void CommandGetVariable(CommandArg[] args)
         {
             CommandShell shell = Terminal.Shell;
@@ -734,13 +568,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
         }
 
-        [RegisterCommand(
-            isDefault: true,
-            Name = "list-variables",
-            Help = "Gets all variables and their associated values",
-            MinArgCount = 0,
-            MaxArgCount = 0
-        )]
+        [RegisterCommand(isDefault: true, Name = "list-variables", Help = "Gets all variables and their associated values", MinArgCount = 0, MaxArgCount = 0)]
         public static void CommandGetAllVariables(CommandArg[] args)
         {
             CommandShell shell = Terminal.Shell;
@@ -767,12 +595,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             // No-op
         }
 
-        [RegisterCommand(
-            isDefault: true,
-            Name = "quit",
-            Help = "Quit running application",
-            MaxArgCount = 0
-        )]
+        [RegisterCommand(isDefault: true, Name = "quit", Help = "Quit running application", MaxArgCount = 0)]
         public static void CommandQuit(CommandArg[] args)
         {
 #if UNITY_EDITOR
@@ -867,21 +690,14 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             int usable = OutputLength(window, logCount);
             if (usable == 0)
             {
-                Terminal.Log(
-                    TerminalLogType.Warning,
-                    logCount == 0
-                        ? "Nothing to copy: the log is empty."
-                        : "Nothing to copy: the log holds no output, only commands."
-                );
+                Terminal.Log(TerminalLogType.Warning, logCount == 0 ? "Nothing to copy: the log is empty." : "Nothing to copy: the log holds no output, only commands.");
                 return;
             }
 
             int first = Math.Max(0, usable - Math.Min(lineCount, usable));
             int copied = usable - first;
 
-            using CachedStringBuilder.Scope scope = CachedStringBuilder.Rent(
-                MeasureCopyLength(window, first, usable)
-            );
+            using CachedStringBuilder.Scope scope = CachedStringBuilder.Rent(MeasureCopyLength(window, first, usable));
             StringBuilder builder = scope.Builder;
             bool hasText = false;
             for (int i = first; i < usable; ++i)
@@ -916,19 +732,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
             if (!TerminalClipboard.TryWrite(builder.ToString()))
             {
-                Terminal.Log(
-                    TerminalLogType.Warning,
-                    "The platform did not keep the text. tvOS has no clipboard, and a "
-                        + "browser clipboard may refuse without a user gesture."
-                );
+                Terminal.Log(TerminalLogType.Warning, "The platform did not keep the text. tvOS has no clipboard, and a " + "browser clipboard may refuse without a user gesture.");
                 return;
             }
 
-            Terminal.Log(
-                copied == 1
-                    ? "Copied the most recent log line to the clipboard."
-                    : $"Copied {copied} log lines to the clipboard."
-            );
+            Terminal.Log(copied == 1 ? "Copied the most recent log line to the clipboard." : $"Copied {copied} log lines to the clipboard.");
         }
 
         /*

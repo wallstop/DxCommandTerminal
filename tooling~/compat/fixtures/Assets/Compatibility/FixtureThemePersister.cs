@@ -8,8 +8,7 @@ namespace DxCommandTerminal.T13.Compatibility.Tests
     public sealed class FixtureThemePersister : TerminalThemePersister
     {
         protected override string ThemeFile =>
-            Environment.GetEnvironmentVariable("DX_T13_PERSISTENCE_FILE")
-            ?? Path.Combine(Path.GetTempPath(), "DxCommandTerminal", "TerminalTheme.json");
+            Environment.GetEnvironmentVariable("DX_T13_PERSISTENCE_FILE") ?? Path.Combine(Path.GetTempPath(), "DxCommandTerminal", "TerminalTheme.json");
     }
 }
 #endif

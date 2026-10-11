@@ -116,10 +116,7 @@ namespace WallstopStudios.DxCommandTerminal.Input
             {
                 if (!TryGetComponent(out _playerInput) && enableWarnings)
                 {
-                    Debug.LogWarning(
-                        "No PlayerInput attached, events may not work (which is the point of this component).",
-                        this
-                    );
+                    Debug.LogWarning("No PlayerInput attached, events may not work (which is the point of this component).", this);
                 }
             }
 
@@ -176,10 +173,7 @@ namespace WallstopStudios.DxCommandTerminal.Input
                 return true;
             }
 
-            if (
-                !TryGetDrivingControl(actionName, out InputControl drivingControl)
-                || !InputHelpers.ControlProducesTypedText(drivingControl)
-            )
+            if (!TryGetDrivingControl(actionName, out InputControl drivingControl) || !InputHelpers.ControlProducesTypedText(drivingControl))
             {
                 return true;
             }

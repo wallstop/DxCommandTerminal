@@ -6,8 +6,5 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     ///     build-time-validated default of any omitted optional argument;
     ///     <paramref name="arguments"/> exposes the parsed values.
     /// </summary>
-    public delegate void TypedCommandHandler(
-        CommandExecutionContext context,
-        CommandArguments arguments
-    );
+    public delegate void TypedCommandHandler(CommandExecutionContext context, CommandArguments arguments);
 }

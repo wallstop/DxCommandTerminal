@@ -15,12 +15,7 @@ namespace WallstopStudios.DxCommandTerminal.Samples
             Register(
                 CommandBuilder
                     .Create("game", "Game-world debug controls")
-                    .Handler(
-                        (context, arguments) =>
-                            Terminal.Log(
-                                "Try: game time set <hour>, game time scale <multiplier>, game pause <on>"
-                            )
-                    )
+                    .Handler((context, arguments) => Terminal.Log("Try: game time set <hour>, game time scale <multiplier>, game pause <on>"))
                     .Subcommand(
                         "time",
                         time =>
@@ -28,40 +23,19 @@ namespace WallstopStudios.DxCommandTerminal.Samples
                                     "set",
                                     set =>
                                         set.Arg<int>("hour", spec => spec.Required().Range(0, 23))
-                                            .Handler(
-                                                (context, arguments) =>
-                                                    Terminal.Log(
-                                                        "In-game hour set to {0}:00.",
-                                                        arguments.Get<int>("hour")
-                                                    )
-                                            )
+                                            .Handler((context, arguments) => Terminal.Log("In-game hour set to {0}:00.", arguments.Get<int>("hour")))
                                 )
                                 .Subcommand(
                                     "scale",
                                     scale =>
                                         scale
-                                            .Arg<float>(
-                                                "multiplier",
-                                                spec => spec.Required().Range(0f, 10f)
-                                            )
-                                            .Handler(
-                                                (context, arguments) =>
-                                                    Terminal.Log(
-                                                        "Time scale set to {0}.",
-                                                        arguments.Get<float>("multiplier")
-                                                    )
-                                            )
+                                            .Arg<float>("multiplier", spec => spec.Required().Range(0f, 10f))
+                                            .Handler((context, arguments) => Terminal.Log("Time scale set to {0}.", arguments.Get<float>("multiplier")))
                                 )
                     )
                     .Subcommand(
                         "pause",
-                        pause =>
-                            pause
-                                .Arg<bool>("on", spec => spec.BoolChoices())
-                                .Handler(
-                                    (context, arguments) =>
-                                        Terminal.Log("Game paused: {0}.", arguments.Get<bool>("on"))
-                                )
+                        pause => pause.Arg<bool>("on", spec => spec.BoolChoices()).Handler((context, arguments) => Terminal.Log("Game paused: {0}.", arguments.Get<bool>("on")))
                     )
             );
         }

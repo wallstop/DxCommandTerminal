@@ -20,20 +20,12 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         {
             if (start < 0)
             {
-                throw new ArgumentOutOfRangeException(
-                    nameof(start),
-                    start,
-                    "Start must not be negative."
-                );
+                throw new ArgumentOutOfRangeException(nameof(start), start, "Start must not be negative.");
             }
 
             if (length < 0)
             {
-                throw new ArgumentOutOfRangeException(
-                    nameof(length),
-                    length,
-                    "Length must not be negative."
-                );
+                throw new ArgumentOutOfRangeException(nameof(length), length, "Length must not be negative.");
             }
 
             Start = start;

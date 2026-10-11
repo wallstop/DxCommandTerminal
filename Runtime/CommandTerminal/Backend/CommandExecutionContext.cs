@@ -20,8 +20,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         ///     <see cref="AmbientContextProvider"/> hook; otherwise the Unity
         ///     environment decides.
         /// </summary>
-        public static CommandExecutionContext Current =>
-            AmbientContextProvider?.Invoke() ?? new CommandExecutionContext(ResolveEnvironment());
+        public static CommandExecutionContext Current => AmbientContextProvider?.Invoke() ?? new CommandExecutionContext(ResolveEnvironment());
 
         /// <summary>
         ///     Internal test hook. When set, <see cref="Current"/> delegates to
@@ -42,10 +41,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         /// </summary>
         public object UserContext { get; }
 
-        public CommandExecutionContext(
-            CommandExecutionContexts environment,
-            object userContext = null
-        )
+        public CommandExecutionContext(CommandExecutionContexts environment, object userContext = null)
         {
             Environment = environment;
             UserContext = userContext;
@@ -54,9 +50,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         private static CommandExecutionContexts ResolveEnvironment()
         {
 #if UNITY_EDITOR
-            return EditorApplication.isPlaying
-                ? CommandExecutionContexts.EditorPlayMode
-                : CommandExecutionContexts.EditorEditMode;
+            return EditorApplication.isPlaying ? CommandExecutionContexts.EditorPlayMode : CommandExecutionContexts.EditorEditMode;
 #else
             return CommandExecutionContexts.Player;
 #endif
@@ -64,10 +58,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         public bool IsEligibleFor(CommandExecutionContexts allowedContexts)
         {
-            return Environment
-                    is CommandExecutionContexts.EditorEditMode
-                        or CommandExecutionContexts.EditorPlayMode
-                        or CommandExecutionContexts.Player
+            return Environment is CommandExecutionContexts.EditorEditMode or CommandExecutionContexts.EditorPlayMode or CommandExecutionContexts.Player
                 && allowedContexts.HasFlagNoAlloc(Environment);
         }
     }

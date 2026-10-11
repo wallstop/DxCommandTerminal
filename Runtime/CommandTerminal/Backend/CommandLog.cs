@@ -22,10 +22,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             stays functional; CopyTo is the supported read and every in-repo
             reader uses it.
          */
-        [Obsolete(
-            "Count-then-index over the live ring can throw under a concurrent log, clear, or resize."
-                + " Copy the window with CopyTo for a one-call consistent read."
-        )]
+        [Obsolete("Count-then-index over the live ring can throw under a concurrent log, clear, or resize." + " Copy the window with CopyTo for a one-call consistent read.")]
         public IReadOnlyList<LogItem> Logs => _logs;
         public int Capacity => _logs.Capacity;
 
@@ -100,9 +97,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         public CommandLog(int maxItems, IEnumerable<TerminalLogType> ignoredLogTypes = null)
         {
             _logs = new CyclicBuffer<LogItem>(maxItems);
-            _ignoredLogTypes = new HashSet<TerminalLogType>(
-                ignoredLogTypes ?? Array.Empty<TerminalLogType>()
-            );
+            _ignoredLogTypes = new HashSet<TerminalLogType>(ignoredLogTypes ?? Array.Empty<TerminalLogType>());
         }
 
         public bool HandleLog(string message, TerminalLogType type, bool includeStackTrace = true)
@@ -149,11 +144,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 callback, and direct callers - so this is the one place log
                 text is normalized.
              */
-            LogItem log = new(
-                type,
-                LogTextSanitizer.Sanitize(message),
-                CapturesStackTrace(type) ? LogTextSanitizer.Sanitize(stackTrace) : string.Empty
-            );
+            LogItem log = new(type, LogTextSanitizer.Sanitize(message), CapturesStackTrace(type) ? LogTextSanitizer.Sanitize(stackTrace) : string.Empty);
 
             lock (_logs.SyncRoot)
             {
@@ -322,12 +313,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
                     if (skipping && 0 < lineNumber)
                     {
-                        int markerIndex = fullStackTrace.IndexOf(
-                            PackageMarker,
-                            lineStart,
-                            lineEnd - lineStart,
-                            StringComparison.OrdinalIgnoreCase
-                        );
+                        int markerIndex = fullStackTrace.IndexOf(PackageMarker, lineStart, lineEnd - lineStart, StringComparison.OrdinalIgnoreCase);
                         skipping = 0 <= markerIndex;
                     }
 
@@ -349,11 +335,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                     }
 
                     lineStart = lineEnd + 1;
-                    if (
-                        fullStackTrace[lineEnd] == '\r'
-                        && lineStart < length
-                        && fullStackTrace[lineStart] == '\n'
-                    )
+                    if (fullStackTrace[lineEnd] == '\r' && lineStart < length && fullStackTrace[lineStart] == '\n')
                     {
                         ++lineStart;
                     }
@@ -376,11 +358,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 case TerminalStackTraceMode.Disabled:
                     return false;
                 case TerminalStackTraceMode.ErrorsAndWarnings:
-                    return type
-                        is TerminalLogType.Error
-                            or TerminalLogType.Assert
-                            or TerminalLogType.Exception
-                            or TerminalLogType.Warning;
+                    return type is TerminalLogType.Error or TerminalLogType.Assert or TerminalLogType.Exception or TerminalLogType.Warning;
                 default:
                     return true;
             }

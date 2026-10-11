@@ -34,10 +34,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.IsFalse(view.IsEmpty);
             Assert.AreEqual("a", view[0].contents);
             Assert.AreEqual("b", view[1].contents);
-            CollectionAssert.AreEqual(
-                new[] { "a", "b" },
-                view.Select(argument => argument.contents).ToArray()
-            );
+            CollectionAssert.AreEqual(new[] { "a", "b" }, view.Select(argument => argument.contents).ToArray());
         }
 
         [Test]
@@ -47,10 +44,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             BorrowedCommandArguments view = CreateView(source);
 
             Assert.AreEqual(3, view.Count);
-            CollectionAssert.AreEqual(
-                new[] { "x", "y", "z" },
-                view.Select(argument => argument.contents).ToArray()
-            );
+            CollectionAssert.AreEqual(new[] { "x", "y", "z" }, view.Select(argument => argument.contents).ToArray());
         }
 
         [Test]
@@ -81,10 +75,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.Throws<ArgumentOutOfRangeException>(() => _ = arrayView[1]);
             Assert.Throws<ArgumentOutOfRangeException>(() => _ = listView[-1]);
             Assert.Throws<ArgumentOutOfRangeException>(() => _ = listView[1]);
-            Assert.Throws<ArgumentOutOfRangeException>(
-                () => _ = default(BorrowedCommandArguments)[0],
-                "A default view has no arguments"
-            );
+            Assert.Throws<ArgumentOutOfRangeException>(() => _ = default(BorrowedCommandArguments)[0], "A default view has no arguments");
         }
 
         [Test]
@@ -115,22 +106,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             List<CommandArg> listSource = new(arraySource);
             ListWrapper fallbackSource = new(arraySource);
 
-            foreach (
-                BorrowedCommandArguments view in new[]
-                {
-                    CreateView(arraySource),
-                    CreateView(listSource),
-                    CreateView(fallbackSource),
-                }
-            )
+            foreach (BorrowedCommandArguments view in new[] { CreateView(arraySource), CreateView(listSource), CreateView(fallbackSource) })
             {
                 BorrowedCommandArguments tail = view.Slice(1);
 
                 Assert.AreEqual(2, tail.Count, "The slice window excludes the offset");
-                CollectionAssert.AreEqual(
-                    new[] { "one", "two" },
-                    tail.Select(argument => argument.contents).ToArray()
-                );
+                CollectionAssert.AreEqual(new[] { "one", "two" }, tail.Select(argument => argument.contents).ToArray());
                 Assert.AreEqual("one", tail[0].contents);
                 Assert.AreEqual("two", tail[1].contents);
 
@@ -151,11 +132,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreEqual(2, tail.Count);
 
             source[1] = new CommandArg("changed");
-            Assert.AreEqual(
-                "changed",
-                tail[0].contents,
-                "The slice aliases the same backing storage"
-            );
+            Assert.AreEqual("changed", tail[0].contents, "The slice aliases the same backing storage");
 
             List<CommandArg> enumerated = new();
             foreach (CommandArg argument in tail)

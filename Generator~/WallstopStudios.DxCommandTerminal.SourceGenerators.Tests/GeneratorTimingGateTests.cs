@@ -93,26 +93,18 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators.Tests
             {
                 if (i % 100 == 99)
                 {
-                    fixture.AppendLine(
-                        "        [RegisterCommand] public static void Rejected"
-                            + i.ToString(System.Globalization.CultureInfo.InvariantCulture)
-                            + "(int wrong) { }"
-                    );
+                    fixture.AppendLine("        [RegisterCommand] public static void Rejected" + i.ToString(System.Globalization.CultureInfo.InvariantCulture) + "(int wrong) { }");
                 }
                 else if (i % 50 == 49)
                 {
                     fixture.AppendLine(
-                        "        [RegisterCommand] private static void Private"
-                            + i.ToString(System.Globalization.CultureInfo.InvariantCulture)
-                            + "(CommandArg[] args) { }"
+                        "        [RegisterCommand] private static void Private" + i.ToString(System.Globalization.CultureInfo.InvariantCulture) + "(CommandArg[] args) { }"
                     );
                 }
                 else
                 {
                     fixture.AppendLine(
-                        "        [RegisterCommand] public static void Public"
-                            + i.ToString(System.Globalization.CultureInfo.InvariantCulture)
-                            + "(CommandArg[] args) { }"
+                        "        [RegisterCommand] public static void Public" + i.ToString(System.Globalization.CultureInfo.InvariantCulture) + "(CommandArg[] args) { }"
                     );
                 }
             }
@@ -125,14 +117,9 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators.Tests
         [Fact]
         public void GeneratorExecutionStaysUnderTheTimingGate()
         {
-            CSharpCompilation compilation = TestCompilationFactory.CreateCompilation(
-                "GeneratorTimingGate",
-                BuildReferenceFixture()
-            );
+            CSharpCompilation compilation = TestCompilationFactory.CreateCompilation("GeneratorTimingGate", BuildReferenceFixture());
 
-            CSharpGeneratorDriver driver = CSharpGeneratorDriver.Create(
-                new WallstopStudios.DxCommandTerminal.SourceGenerators.CommandCatalogGenerator()
-            );
+            CSharpGeneratorDriver driver = CSharpGeneratorDriver.Create(new WallstopStudios.DxCommandTerminal.SourceGenerators.CommandCatalogGenerator());
 
             for (int i = 0; i < WarmupRuns; ++i)
             {

@@ -45,16 +45,9 @@ namespace WallstopStudios.DxCommandTerminal.Editor
             (none here) and takes bytes from the encoding, so one stateless
             UTF8Encoding serves every write instead of allocating per write.
          */
-        private static readonly UTF8Encoding Utf8NoBom = new(
-            encoderShouldEmitUTF8Identifier: false
-        );
+        private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
 
-        private static void OnPostprocessAllAssets(
-            string[] importedAssets,
-            string[] deletedAssets,
-            string[] movedAssets,
-            string[] movedFromAssetPaths
-        )
+        private static void OnPostprocessAllAssets(string[] importedAssets, string[] deletedAssets, string[] movedAssets, string[] movedFromAssetPaths)
         {
             foreach (string assetPath in importedAssets)
             {
@@ -123,10 +116,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor
 
         private static bool TryLoadThemeAsset(string assetPath, out TerminalThemeAsset themeAsset)
         {
-            if (
-                string.IsNullOrEmpty(assetPath)
-                || !assetPath.EndsWith(".asset", StringComparison.OrdinalIgnoreCase)
-            )
+            if (string.IsNullOrEmpty(assetPath) || !assetPath.EndsWith(".asset", StringComparison.OrdinalIgnoreCase))
             {
                 themeAsset = null;
                 return false;
@@ -175,11 +165,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
-                Debug.LogWarning(
-                    LogTextSanitizer.Sanitize(
-                        $"Could not delete generated theme sheet leftover '{path}': {e}"
-                    )
-                );
+                Debug.LogWarning(LogTextSanitizer.Sanitize($"Could not delete generated theme sheet leftover '{path}': {e}"));
             }
         }
 
@@ -198,13 +184,9 @@ namespace WallstopStudios.DxCommandTerminal.Editor
             UnityEngine.Object oldSheet = AssetDatabase.LoadMainAssetAtPath(oldSheetPath);
             UnityEngine.Object newSheet = AssetDatabase.LoadMainAssetAtPath(newSheetPath);
 #if UNITY_6000_4_OR_NEWER
-            return oldSheet != null
-                && newSheet != null
-                && oldSheet.GetEntityId() == newSheet.GetEntityId();
+            return oldSheet != null && newSheet != null && oldSheet.GetEntityId() == newSheet.GetEntityId();
 #else
-            return oldSheet != null
-                && newSheet != null
-                && oldSheet.GetInstanceID() == newSheet.GetInstanceID();
+            return oldSheet != null && newSheet != null && oldSheet.GetInstanceID() == newSheet.GetInstanceID();
 #endif
         }
 
@@ -246,23 +228,12 @@ namespace WallstopStudios.DxCommandTerminal.Editor
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
-                Debug.LogError(
-                    LogTextSanitizer.Sanitize(
-                        $"Could not write generated theme sheet '{sheetPath}' for "
-                            + $"'{themeAsset.name}': {e}"
-                    ),
-                    themeAsset
-                );
+                Debug.LogError(LogTextSanitizer.Sanitize($"Could not write generated theme sheet '{sheetPath}' for " + $"'{themeAsset.name}': {e}"), themeAsset);
                 return;
             }
 
             AssetDatabase.ImportAsset(sheetPath);
-            Debug.Log(
-                LogTextSanitizer.Sanitize(
-                    $"Generated theme sheet '{sheetPath}' for '{themeAsset.name}'."
-                ),
-                themeAsset
-            );
+            Debug.Log(LogTextSanitizer.Sanitize($"Generated theme sheet '{sheetPath}' for '{themeAsset.name}'."), themeAsset);
         }
 
         /*

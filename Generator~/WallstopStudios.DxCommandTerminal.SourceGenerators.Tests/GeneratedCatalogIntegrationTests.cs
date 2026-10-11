@@ -21,12 +21,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators.Tests
         public static int PublicInvocations;
         public static int SecretInvocations;
 
-        [RegisterCommand(
-            Name = "fixture-public",
-            Help = "Public fixture command",
-            MinArgCount = 0,
-            MaxArgCount = 1
-        )]
+        [RegisterCommand(Name = "fixture-public", Help = "Public fixture command", MinArgCount = 0, MaxArgCount = 1)]
         public static void FixturePublicCommand(CommandArg[] args)
         {
             PublicInvocations++;
@@ -47,27 +42,20 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators.Tests
 
     public sealed class GeneratedCatalogIntegrationTests
     {
-        private const string CatalogTypeName =
-            "WallstopStudios.DxCommandTerminal.Generated.CommandCatalog";
+        private const string CatalogTypeName = "WallstopStudios.DxCommandTerminal.Generated.CommandCatalog";
 
         /*
             The reflection oracle: what the compatibility discovery path sees
             for this assembly's declared commands, one entry per attributed
             static method.
          */
-        private static List<(
-            MethodInfo method,
-            RegisterCommandAttribute attribute
-        )> CollectLegacyAttributes()
+        private static List<(MethodInfo method, RegisterCommandAttribute attribute)> CollectLegacyAttributes()
         {
-            List<(MethodInfo, RegisterCommandAttribute)> legacy =
-                new List<(MethodInfo, RegisterCommandAttribute)>();
-            const BindingFlags discoveryFlags =
-                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+            List<(MethodInfo, RegisterCommandAttribute)> legacy = new List<(MethodInfo, RegisterCommandAttribute)>();
+            const BindingFlags discoveryFlags = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
             foreach (MethodInfo method in typeof(CatalogFixtureCommands).GetMethods(discoveryFlags))
             {
-                RegisterCommandAttribute attribute =
-                    method.GetCustomAttribute<RegisterCommandAttribute>(inherit: false);
+                RegisterCommandAttribute attribute = method.GetCustomAttribute<RegisterCommandAttribute>(inherit: false);
                 if (attribute == null)
                 {
                     continue;
@@ -82,18 +70,14 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators.Tests
 
         private static Type BindCatalogType()
         {
-            Type catalogType = typeof(GeneratedCatalogIntegrationTests).Assembly.GetType(
-                CatalogTypeName,
-                false
-            );
+            Type catalogType = typeof(GeneratedCatalogIntegrationTests).Assembly.GetType(CatalogTypeName, false);
             Assert.NotNull(catalogType);
             return catalogType;
         }
 
         private static List<CommandCatalogEntry> Collect()
         {
-            MethodInfo collect = BindCatalogType()
-                .GetMethod("Collect", BindingFlags.Public | BindingFlags.Static);
+            MethodInfo collect = BindCatalogType().GetMethod("Collect", BindingFlags.Public | BindingFlags.Static);
             Assert.NotNull(collect);
             List<CommandCatalogEntry> entries = new List<CommandCatalogEntry>();
             collect.Invoke(null, new object[] { entries });
@@ -119,22 +103,15 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators.Tests
         [Fact]
         public void EntryNamesMatchLegacyAttributeNormalization()
         {
-            Dictionary<string, string> legacyNames = new Dictionary<string, string>(
-                StringComparer.Ordinal
-            );
-            foreach (
-                (MethodInfo method, RegisterCommandAttribute attribute) in CollectLegacyAttributes()
-            )
+            Dictionary<string, string> legacyNames = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach ((MethodInfo method, RegisterCommandAttribute attribute) in CollectLegacyAttributes())
             {
                 legacyNames[method.Name] = attribute.Name;
             }
 
             foreach (CommandCatalogEntry entry in Collect())
             {
-                Assert.True(
-                    legacyNames.TryGetValue(entry.MethodName, out string legacyName),
-                    $"Method {entry.MethodName} has no legacy-discovered counterpart."
-                );
+                Assert.True(legacyNames.TryGetValue(entry.MethodName, out string legacyName), $"Method {entry.MethodName} has no legacy-discovered counterpart.");
                 Assert.Equal(legacyName, entry.Name);
             }
         }
@@ -142,13 +119,8 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators.Tests
         [Fact]
         public void EntryMetadataMatchesLegacyAttributes()
         {
-            Dictionary<string, RegisterCommandAttribute> legacy = new Dictionary<
-                string,
-                RegisterCommandAttribute
-            >(StringComparer.Ordinal);
-            foreach (
-                (MethodInfo method, RegisterCommandAttribute attribute) in CollectLegacyAttributes()
-            )
+            Dictionary<string, RegisterCommandAttribute> legacy = new Dictionary<string, RegisterCommandAttribute>(StringComparer.Ordinal);
+            foreach ((MethodInfo method, RegisterCommandAttribute attribute) in CollectLegacyAttributes())
             {
                 legacy[method.Name] = attribute;
             }
@@ -169,17 +141,10 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators.Tests
         [Fact]
         public void RejectedSignaturesResolveTheSameMethodAsLegacyReflection()
         {
-            Dictionary<string, MethodInfo> legacy = new Dictionary<string, MethodInfo>(
-                StringComparer.Ordinal
-            );
-            foreach (
-                (MethodInfo method, RegisterCommandAttribute attribute) in CollectLegacyAttributes()
-            )
+            Dictionary<string, MethodInfo> legacy = new Dictionary<string, MethodInfo>(StringComparer.Ordinal);
+            foreach ((MethodInfo method, RegisterCommandAttribute attribute) in CollectLegacyAttributes())
             {
-                bool validSignature =
-                    method.GetParameters().Length == 1
-                    && method.GetParameters()[0].ParameterType == typeof(CommandArg[])
-                    && !method.IsGenericMethod;
+                bool validSignature = method.GetParameters().Length == 1 && method.GetParameters()[0].ParameterType == typeof(CommandArg[]) && !method.IsGenericMethod;
                 if (!validSignature)
                 {
                     legacy[attribute.Name] = method;
@@ -198,20 +163,14 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators.Tests
 
                 MethodInfo accessorMethod = entry.MethodAccessor();
                 Assert.NotNull(accessorMethod);
-                Assert.True(
-                    legacy.TryGetValue(entry.Name, out MethodInfo legacyMethod),
-                    $"Rejected command {entry.Name} was not discovered by the reflection oracle."
-                );
+                Assert.True(legacy.TryGetValue(entry.Name, out MethodInfo legacyMethod), $"Rejected command {entry.Name} was not discovered by the reflection oracle.");
                 Assert.Equal(legacyMethod.Name, accessorMethod.Name);
                 ParameterInfo[] accessorParameters = accessorMethod.GetParameters();
                 ParameterInfo[] legacyParameters = legacyMethod.GetParameters();
                 Assert.Equal(legacyParameters.Length, accessorParameters.Length);
                 for (int i = 0; i < accessorParameters.Length; i++)
                 {
-                    Assert.Equal(
-                        legacyParameters[i].ParameterType,
-                        accessorParameters[i].ParameterType
-                    );
+                    Assert.Equal(legacyParameters[i].ParameterType, accessorParameters[i].ParameterType);
                 }
             }
         }
@@ -225,8 +184,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators.Tests
                 is covered by BindersExecutePublicAndPrivateCommands.
             */
             Type companion = typeof(GeneratedCatalogIntegrationTests).Assembly.GetType(
-                "WallstopStudios.DxCommandTerminal.SourceGenerators.Tests"
-                    + ".CatalogFixtureCommands+DxCommandTerminalBinder",
+                "WallstopStudios.DxCommandTerminal.SourceGenerators.Tests" + ".CatalogFixtureCommands+DxCommandTerminalBinder",
                 false
             );
             Assert.NotNull(companion);
@@ -236,9 +194,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators.Tests
         public void BindersExecutePublicAndPrivateCommands()
         {
             List<CommandCatalogEntry> entries = Collect();
-            CommandCatalogEntry publicEntry = entries.Single(entry =>
-                entry.Name == "fixture-public"
-            );
+            CommandCatalogEntry publicEntry = entries.Single(entry => entry.Name == "fixture-public");
             CommandCatalogEntry secretEntry = entries.Single(entry => entry.Name == "Secret");
 
             Assert.Equal(0, CatalogFixtureCommands.PublicInvocations);

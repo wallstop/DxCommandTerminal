@@ -3,11 +3,7 @@ namespace WallstopStudios.DxCommandTerminal.Themes
     using System.Collections.Generic;
     using UnityEngine;
 
-    [CreateAssetMenu(
-        menuName = "Wallstop Studios/DxCommandTerminal/Font Pack",
-        fileName = nameof(TerminalFontPack),
-        order = 1_111_123
-    )]
+    [CreateAssetMenu(menuName = "Wallstop Studios/DxCommandTerminal/Font Pack", fileName = nameof(TerminalFontPack), order = 1_111_123)]
     public class TerminalFontPack : ScriptableObject
     {
         public virtual IReadOnlyList<Font> Fonts => _fonts;

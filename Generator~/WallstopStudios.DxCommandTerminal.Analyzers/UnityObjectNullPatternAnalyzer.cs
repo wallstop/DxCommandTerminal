@@ -43,65 +43,53 @@ namespace WallstopStudios.DxCommandTerminal.Analyzers
 
         private const string ReferenceEqualsName = "ReferenceEquals";
 
-        private static readonly DiagnosticDescriptor ConditionalAccessDescriptor =
-            new DiagnosticDescriptor(
-                "DxCmd0001",
-                "Conditional access on a Unity fake-null receiver",
-                "'?.' bypasses Unity fake-null checks on '{0}'; use explicit == null / != null",
-                Category,
-                DiagnosticSeverity.Warning,
-                isEnabledByDefault: true
-            );
-
-        private static readonly DiagnosticDescriptor CoalesceDescriptor = new DiagnosticDescriptor(
-            "DxCmd0002",
-            "Null coalescing on a Unity fake-null operand",
-            "'??' keeps destroyed Unity objects because fake null is not managed null; "
-                + "use explicit == null / != null",
+        private static readonly DiagnosticDescriptor ConditionalAccessDescriptor = new DiagnosticDescriptor(
+            "DxCmd0001",
+            "Conditional access on a Unity fake-null receiver",
+            "'?.' bypasses Unity fake-null checks on '{0}'; use explicit == null / != null",
             Category,
             DiagnosticSeverity.Warning,
             isEnabledByDefault: true
         );
 
-        private static readonly DiagnosticDescriptor TruthinessDescriptor =
-            new DiagnosticDescriptor(
-                "DxCmd0003",
-                "Unity fake-null receiver used as a bool",
-                "'{0}' used as a bool bypasses Unity fake-null checks; use explicit == null / != null",
-                Category,
-                DiagnosticSeverity.Warning,
-                isEnabledByDefault: true
-            );
+        private static readonly DiagnosticDescriptor CoalesceDescriptor = new DiagnosticDescriptor(
+            "DxCmd0002",
+            "Null coalescing on a Unity fake-null operand",
+            "'??' keeps destroyed Unity objects because fake null is not managed null; " + "use explicit == null / != null",
+            Category,
+            DiagnosticSeverity.Warning,
+            isEnabledByDefault: true
+        );
 
-        private static readonly DiagnosticDescriptor NullPatternDescriptor =
-            new DiagnosticDescriptor(
-                "DxCmd0004",
-                "Null pattern on a Unity fake-null receiver",
-                "'is null' / 'is not null' / 'is { }', null case labels, and null switch arms use "
-                    + "reference equality and bypass Unity fake-null checks; use == null / != null",
-                Category,
-                DiagnosticSeverity.Warning,
-                isEnabledByDefault: true
-            );
+        private static readonly DiagnosticDescriptor TruthinessDescriptor = new DiagnosticDescriptor(
+            "DxCmd0003",
+            "Unity fake-null receiver used as a bool",
+            "'{0}' used as a bool bypasses Unity fake-null checks; use explicit == null / != null",
+            Category,
+            DiagnosticSeverity.Warning,
+            isEnabledByDefault: true
+        );
 
-        private static readonly DiagnosticDescriptor ReferenceEqualsDescriptor =
-            new DiagnosticDescriptor(
-                "DxCmd0005",
-                "ReferenceEquals on a Unity fake-null argument",
-                "ReferenceEquals bypasses Unity fake-null checks; use == null / != null",
-                Category,
-                DiagnosticSeverity.Warning,
-                isEnabledByDefault: true
-            );
+        private static readonly DiagnosticDescriptor NullPatternDescriptor = new DiagnosticDescriptor(
+            "DxCmd0004",
+            "Null pattern on a Unity fake-null receiver",
+            "'is null' / 'is not null' / 'is { }', null case labels, and null switch arms use " + "reference equality and bypass Unity fake-null checks; use == null / != null",
+            Category,
+            DiagnosticSeverity.Warning,
+            isEnabledByDefault: true
+        );
+
+        private static readonly DiagnosticDescriptor ReferenceEqualsDescriptor = new DiagnosticDescriptor(
+            "DxCmd0005",
+            "ReferenceEquals on a Unity fake-null argument",
+            "ReferenceEquals bypasses Unity fake-null checks; use == null / != null",
+            Category,
+            DiagnosticSeverity.Warning,
+            isEnabledByDefault: true
+        );
 
         public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics =>
-            ImmutableArray.Create(
-                ConditionalAccessDescriptor,
-                CoalesceDescriptor,
-                TruthinessDescriptor,
-                NullPatternDescriptor,
-                ReferenceEqualsDescriptor
-            );
+            ImmutableArray.Create(ConditionalAccessDescriptor, CoalesceDescriptor, TruthinessDescriptor, NullPatternDescriptor, ReferenceEqualsDescriptor);
 
         private static void AnalyzeConditionalAccess(SyntaxNodeAnalysisContext context)
         {
@@ -110,8 +98,7 @@ namespace WallstopStudios.DxCommandTerminal.Analyzers
                 return;
             }
 
-            ConditionalAccessExpressionSyntax expression = (ConditionalAccessExpressionSyntax)
-                context.Node;
+            ConditionalAccessExpressionSyntax expression = (ConditionalAccessExpressionSyntax)context.Node;
             ITypeSymbol receiverType = GetTypeOfTypeExpression(context, expression.Expression);
             if (!IsFakeNullType(receiverType))
             {
@@ -180,13 +167,7 @@ namespace WallstopStudios.DxCommandTerminal.Analyzers
                 return;
             }
 
-            context.ReportDiagnostic(
-                Diagnostic.Create(
-                    TruthinessDescriptor,
-                    operation.Syntax.GetLocation(),
-                    operandType.ToDisplayString()
-                )
-            );
+            context.ReportDiagnostic(Diagnostic.Create(TruthinessDescriptor, operation.Syntax.GetLocation(), operandType.ToDisplayString()));
         }
 
         private static void AnalyzeReferenceEquals(SyntaxNodeAnalysisContext context)
@@ -202,10 +183,7 @@ namespace WallstopStudios.DxCommandTerminal.Analyzers
                 return;
             }
 
-            SymbolInfo symbolInfo = context.SemanticModel.GetSymbolInfo(
-                invocation.Expression,
-                context.CancellationToken
-            );
+            SymbolInfo symbolInfo = context.SemanticModel.GetSymbolInfo(invocation.Expression, context.CancellationToken);
             if (
                 !(symbolInfo.Symbol is IMethodSymbol method)
                 || !string.Equals(method.Name, ReferenceEqualsName, StringComparison.Ordinal)
@@ -220,9 +198,7 @@ namespace WallstopStudios.DxCommandTerminal.Analyzers
             {
                 if (IsFakeNullType(GetTypeOfTypeExpression(context, arguments[i].Expression)))
                 {
-                    context.ReportDiagnostic(
-                        Diagnostic.Create(ReferenceEqualsDescriptor, invocation.GetLocation())
-                    );
+                    context.ReportDiagnostic(Diagnostic.Create(ReferenceEqualsDescriptor, invocation.GetLocation()));
                     return;
                 }
             }
@@ -312,11 +288,7 @@ namespace WallstopStudios.DxCommandTerminal.Analyzers
             ReportNullPattern(context, arm, GoverningExpression(arm));
         }
 
-        private static void ReportNullPattern(
-            SyntaxNodeAnalysisContext context,
-            SyntaxNode node,
-            ExpressionSyntax governingExpression
-        )
+        private static void ReportNullPattern(SyntaxNodeAnalysisContext context, SyntaxNode node, ExpressionSyntax governingExpression)
         {
             if (governingExpression == null)
             {
@@ -360,12 +332,7 @@ namespace WallstopStudios.DxCommandTerminal.Analyzers
                 expression = memberAccess.Name;
             }
 
-            return expression is IdentifierNameSyntax identifier
-                && string.Equals(
-                    identifier.Identifier.ValueText,
-                    ReferenceEqualsName,
-                    StringComparison.Ordinal
-                );
+            return expression is IdentifierNameSyntax identifier && string.Equals(identifier.Identifier.ValueText, ReferenceEqualsName, StringComparison.Ordinal);
         }
 
         /*
@@ -421,10 +388,7 @@ namespace WallstopStudios.DxCommandTerminal.Analyzers
                 && 0 == recursivePattern.PropertyPatternClause.Subpatterns.Count;
         }
 
-        private static ITypeSymbol GetTypeOfTypeExpression(
-            SyntaxNodeAnalysisContext context,
-            ExpressionSyntax expression
-        )
+        private static ITypeSymbol GetTypeOfTypeExpression(SyntaxNodeAnalysisContext context, ExpressionSyntax expression)
         {
             return context.SemanticModel.GetTypeInfo(expression, context.CancellationToken).Type;
         }
@@ -432,8 +396,7 @@ namespace WallstopStudios.DxCommandTerminal.Analyzers
         private static bool IsRepoCompilation(Compilation compilation)
         {
             string assemblyName = compilation.Assembly?.Name;
-            return assemblyName != null
-                && assemblyName.StartsWith(RepoAssemblyNamePrefix, StringComparison.Ordinal);
+            return assemblyName != null && assemblyName.StartsWith(RepoAssemblyNamePrefix, StringComparison.Ordinal);
         }
 
         private static bool IsFakeNullType(ITypeSymbol type)
@@ -477,49 +440,26 @@ namespace WallstopStudios.DxCommandTerminal.Analyzers
 
         private static bool HasFullName(ITypeSymbol type, string displayFullName)
         {
-            return string.Equals(
-                type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                displayFullName,
-                StringComparison.Ordinal
-            );
+            return string.Equals(type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), displayFullName, StringComparison.Ordinal);
         }
 
-        private static void Report(
-            SyntaxNodeAnalysisContext context,
-            DiagnosticDescriptor descriptor,
-            SyntaxNode node,
-            ITypeSymbol receiverType
-        )
+        private static void Report(SyntaxNodeAnalysisContext context, DiagnosticDescriptor descriptor, SyntaxNode node, ITypeSymbol receiverType)
         {
-            context.ReportDiagnostic(
-                Diagnostic.Create(descriptor, node.GetLocation(), receiverType.ToDisplayString())
-            );
+            context.ReportDiagnostic(Diagnostic.Create(descriptor, node.GetLocation(), receiverType.ToDisplayString()));
         }
 
         public override void Initialize(AnalysisContext context)
         {
             context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
             context.EnableConcurrentExecution();
-            context.RegisterSyntaxNodeAction(
-                AnalyzeConditionalAccess,
-                SyntaxKind.ConditionalAccessExpression
-            );
+            context.RegisterSyntaxNodeAction(AnalyzeConditionalAccess, SyntaxKind.ConditionalAccessExpression);
             context.RegisterSyntaxNodeAction(AnalyzeCoalesce, SyntaxKind.CoalesceExpression);
-            context.RegisterSyntaxNodeAction(
-                AnalyzeCoalesceAssignment,
-                SyntaxKind.CoalesceAssignmentExpression
-            );
+            context.RegisterSyntaxNodeAction(AnalyzeCoalesceAssignment, SyntaxKind.CoalesceAssignmentExpression);
             context.RegisterOperationAction(AnalyzeConversion, OperationKind.Conversion);
-            context.RegisterSyntaxNodeAction(
-                AnalyzeReferenceEquals,
-                SyntaxKind.InvocationExpression
-            );
+            context.RegisterSyntaxNodeAction(AnalyzeReferenceEquals, SyntaxKind.InvocationExpression);
             context.RegisterSyntaxNodeAction(AnalyzeNullPattern, SyntaxKind.IsPatternExpression);
             context.RegisterSyntaxNodeAction(AnalyzeNullCaseLabel, SyntaxKind.CaseSwitchLabel);
-            context.RegisterSyntaxNodeAction(
-                AnalyzePatternCaseLabel,
-                SyntaxKind.CasePatternSwitchLabel
-            );
+            context.RegisterSyntaxNodeAction(AnalyzePatternCaseLabel, SyntaxKind.CasePatternSwitchLabel);
             context.RegisterSyntaxNodeAction(AnalyzeNullSwitchArm, SyntaxKind.SwitchExpressionArm);
         }
     }

@@ -23,13 +23,7 @@ namespace WallstopStudios.DxCommandTerminal.Samples
                          */
                         spec => spec.Required()
                     )
-                    .Handler(
-                        (context, arguments) =>
-                            Terminal.Log(
-                                "Message: {0}",
-                                string.Join(" ", arguments.Get<string[]>("message"))
-                            )
-                    )
+                    .Handler((context, arguments) => Terminal.Log("Message: {0}", string.Join(" ", arguments.Get<string[]>("message"))))
             );
         }
     }

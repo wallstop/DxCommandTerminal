@@ -35,19 +35,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
         /// </summary>
         public bool IsZeroAllocation
         {
-            get
-            {
-                return Status == AllocationMeasurementStatus.Measured
-                    && !DetectedAllocations
-                    && (AllocatedBytes == Unavailable || AllocatedBytes == 0);
-            }
+            get { return Status == AllocationMeasurementStatus.Measured && !DetectedAllocations && (AllocatedBytes == Unavailable || AllocatedBytes == 0); }
         }
 
-        private AllocationMeasurement(
-            AllocationMeasurementStatus status,
-            bool detectedAllocations,
-            long allocatedBytes
-        )
+        private AllocationMeasurement(AllocationMeasurementStatus status, bool detectedAllocations, long allocatedBytes)
         {
             Status = status;
             DetectedAllocations = detectedAllocations;
@@ -56,20 +47,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
 
         public static AllocationMeasurement Measured(bool detectedAllocations, long allocatedBytes)
         {
-            return new AllocationMeasurement(
-                AllocationMeasurementStatus.Measured,
-                detectedAllocations,
-                allocatedBytes
-            );
+            return new AllocationMeasurement(AllocationMeasurementStatus.Measured, detectedAllocations, allocatedBytes);
         }
 
         public static AllocationMeasurement Invalid(long diagnosticBytes)
         {
-            return new AllocationMeasurement(
-                AllocationMeasurementStatus.InstrumentInvalid,
-                false,
-                diagnosticBytes
-            );
+            return new AllocationMeasurement(AllocationMeasurementStatus.InstrumentInvalid, false, diagnosticBytes);
         }
 
         public string Describe()
@@ -78,15 +61,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
             {
                 case AllocationMeasurementStatus.Measured:
                 {
-                    return DetectedAllocations
-                        ? $"measured: allocations detected ({AllocatedBytes} trusted byte(s))"
-                        : "measured: no allocations detected";
+                    return DetectedAllocations ? $"measured: allocations detected ({AllocatedBytes} trusted byte(s))" : "measured: no allocations detected";
                 }
 
                 default:
                 {
-                    return "instrument unvalidated for this domain; readings are "
-                        + $"diagnostics only ({AllocatedBytes} byte(s))";
+                    return "instrument unvalidated for this domain; readings are " + $"diagnostics only ({AllocatedBytes} byte(s))";
                 }
             }
         }

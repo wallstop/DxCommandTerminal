@@ -13,8 +13,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
      */
     public sealed class CommandBuilderRemainingTests
     {
-        private static readonly Func<CommandExecutionContext> GameplayContext = () =>
-            new CommandExecutionContext(CommandExecutionContexts.EditorPlayMode);
+        private static readonly Func<CommandExecutionContext> GameplayContext = () => new CommandExecutionContext(CommandExecutionContexts.EditorPlayMode);
 
         private Func<CommandExecutionContext> _previousAmbientProvider;
 
@@ -45,20 +44,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             List<string[]> observed = new();
             Assert.IsTrue(
                 shell.AddCommand(
-                    CommandBuilder
-                        .Create("say")
-                        .Remaining<string>("message")
-                        .Handler(
-                            (context, arguments) => observed.Add(arguments.Get<string[]>("message"))
-                        ),
+                    CommandBuilder.Create("say").Remaining<string>("message").Handler((context, arguments) => observed.Add(arguments.Get<string[]>("message"))),
                     out _
                 ),
                 "The builder should register cleanly"
             );
-            Assert.That(
-                shell.Commands["say"].maxArgCount == null,
-                "A remaining argument leaves the command unbounded"
-            );
+            Assert.That(shell.Commands["say"].maxArgCount == null, "A remaining argument leaves the command unbounded");
 
             Assert.IsTrue(shell.RunCommand("say hello big world"));
             Assert.IsTrue(shell.RunCommand("say"));
@@ -81,33 +72,20 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     CommandBuilder
                         .Create("say")
                         .Remaining<string>("message", spec => spec.Required())
-                        .Handler(
-                            (context, arguments) => observed.Add(arguments.Get<string[]>("message"))
-                        ),
+                        .Handler((context, arguments) => observed.Add(arguments.Get<string[]>("message"))),
                     out _
                 )
             );
 
-            Assert.IsFalse(
-                shell.RunCommand("say"),
-                "A required remaining argument with no tokens must not dispatch"
-            );
+            Assert.IsFalse(shell.RunCommand("say"), "A required remaining argument with no tokens must not dispatch");
             string error = ConsumeError(shell);
             Assert.That(error != null, "The bounds violation queues an error");
             Assert.That(error, Does.Contain("at least 1 argument"));
-            Assert.That(
-                error,
-                Does.Contain("<message:string...>"),
-                "The derived usage hint marks the remaining argument"
-            );
+            Assert.That(error, Does.Contain("<message:string...>"), "The derived usage hint marks the remaining argument");
             Assert.IsEmpty(observed, "The handler must not run");
 
             Assert.IsTrue(shell.RunCommand("say hi"));
-            CollectionAssert.AreEqual(
-                new[] { new[] { "hi" } },
-                observed,
-                "One token satisfies a required remaining argument"
-            );
+            CollectionAssert.AreEqual(new[] { new[] { "hi" } }, observed, "One token satisfies a required remaining argument");
             Assert.That(ConsumeError(shell) == null);
         }
 
@@ -140,11 +118,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.IsTrue(shell.RunCommand("heal 5 red green"));
             Assert.AreEqual(5, amount);
             Assert.AreEqual("red", target, "A provided optional argument consumes its token");
-            CollectionAssert.AreEqual(
-                new[] { "green" },
-                tags,
-                "Tokens after the fixed arguments collect as the remaining array"
-            );
+            CollectionAssert.AreEqual(new[] { "green" }, tags, "Tokens after the fixed arguments collect as the remaining array");
 
             Assert.IsTrue(shell.RunCommand("heal 9"));
             Assert.AreEqual(9, amount);
@@ -160,15 +134,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             CommandShell shell = new(History());
             int invocations = 0;
-            Assert.IsTrue(
-                shell.AddCommand(
-                    CommandBuilder
-                        .Create("add")
-                        .Remaining<int>("values")
-                        .Handler((context, arguments) => ++invocations),
-                    out _
-                )
-            );
+            Assert.IsTrue(shell.AddCommand(CommandBuilder.Create("add").Remaining<int>("values").Handler((context, arguments) => ++invocations), out _));
 
             Assert.IsTrue(shell.RunCommand($"add {input}"));
             string error = ConsumeError(shell);
@@ -184,22 +150,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             List<int[]> observed = new();
             Assert.IsTrue(
                 shell.AddCommand(
-                    CommandBuilder
-                        .Create("buff")
-                        .Remaining<int>("levels", spec => spec.Range(1, 10))
-                        .Handler(
-                            (context, arguments) => observed.Add(arguments.Get<int[]>("levels"))
-                        ),
+                    CommandBuilder.Create("buff").Remaining<int>("levels", spec => spec.Range(1, 10)).Handler((context, arguments) => observed.Add(arguments.Get<int[]>("levels"))),
                     out _
                 )
             );
 
             Assert.IsTrue(shell.RunCommand("buff 3 10 1"));
-            CollectionAssert.AreEqual(
-                new[] { new[] { 3, 10, 1 } },
-                observed,
-                "Every element inside the range passes"
-            );
+            CollectionAssert.AreEqual(new[] { new[] { 3, 10, 1 } }, observed, "Every element inside the range passes");
 
             Assert.IsTrue(shell.RunCommand("buff 5 0 7"));
             string error = ConsumeError(shell);
@@ -223,10 +180,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                             (context, arguments) =>
                             {
                                 message = arguments.Get<string[]>("message");
-                                Assert.IsTrue(
-                                    arguments.TryGet<string[]>("message", out string[] _),
-                                    "TryGet reads the remaining array"
-                                );
+                                Assert.IsTrue(arguments.TryGet<string[]>("message", out string[] _), "TryGet reads the remaining array");
                                 try
                                 {
                                     arguments.Get<string>("message");
@@ -243,26 +197,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Assert.IsTrue(shell.RunCommand("say hi"));
             CollectionAssert.AreEqual(new[] { "hi" }, message);
-            Assert.That(
-                mismatch != null,
-                "Reading a remaining argument as its element type is a programming error"
-            );
-            Assert.IsTrue(
-                mismatch is CommandArgumentTypeMismatchException,
-                "The element-type read throws the typed binder exception"
-            );
-            CommandArgumentTypeMismatchException typed =
-                (CommandArgumentTypeMismatchException)mismatch;
-            Assert.AreEqual(
-                typeof(string[]),
-                typed.StoredType,
-                "The remaining argument's slot holds the element-type array"
-            );
-            Assert.AreEqual(
-                typeof(string),
-                typed.RequestedType,
-                "The element-type read requested the bare element type"
-            );
+            Assert.That(mismatch != null, "Reading a remaining argument as its element type is a programming error");
+            Assert.IsTrue(mismatch is CommandArgumentTypeMismatchException, "The element-type read throws the typed binder exception");
+            CommandArgumentTypeMismatchException typed = (CommandArgumentTypeMismatchException)mismatch;
+            Assert.AreEqual(typeof(string[]), typed.StoredType, "The remaining argument's slot holds the element-type array");
+            Assert.AreEqual(typeof(string), typed.RequestedType, "The element-type read requested the bare element type");
         }
 
         [TestCase("", ExpectedResult = "say [message:string...]")]
@@ -272,13 +211,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             CommandShell shell = new(History());
             Assert.IsTrue(
                 shell.AddCommand(
-                    CommandBuilder
-                        .Create("say")
-                        .Remaining<string>(
-                            "message",
-                            spec => requiredSuffix.Length == 0 ? spec : spec.Required()
-                        )
-                        .Handler((context, arguments) => { }),
+                    CommandBuilder.Create("say").Remaining<string>("message", spec => requiredSuffix.Length == 0 ? spec : spec.Required()).Handler((context, arguments) => { }),
                     out _
                 )
             );
@@ -290,16 +223,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void ArgumentsAfterRemainingFailAtDefinitionTime()
         {
             CommandShell shell = new(History());
-            CommandConfigurationException exception = Assert.Throws<CommandConfigurationException>(
-                () =>
-                    shell.AddCommand(
-                        CommandBuilder
-                            .Create("mixed")
-                            .Remaining<string>("rest")
-                            .Arg<int>("count")
-                            .Handler((context, arguments) => { }),
-                        out _
-                    )
+            CommandConfigurationException exception = Assert.Throws<CommandConfigurationException>(() =>
+                shell.AddCommand(CommandBuilder.Create("mixed").Remaining<string>("rest").Arg<int>("count").Handler((context, arguments) => { }), out _)
             );
             Assert.That(exception.Message, Does.Contain("count"));
         }
@@ -308,16 +233,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void SecondRemainingArgumentFailsAtDefinitionTime()
         {
             CommandShell shell = new(History());
-            CommandConfigurationException exception = Assert.Throws<CommandConfigurationException>(
-                () =>
-                    shell.AddCommand(
-                        CommandBuilder
-                            .Create("double")
-                            .Remaining<string>("first")
-                            .Remaining<string>("second")
-                            .Handler((context, arguments) => { }),
-                        out _
-                    )
+            CommandConfigurationException exception = Assert.Throws<CommandConfigurationException>(() =>
+                shell.AddCommand(CommandBuilder.Create("double").Remaining<string>("first").Remaining<string>("second").Handler((context, arguments) => { }), out _)
             );
             Assert.That(exception.Message, Does.Contain("remaining"));
         }
@@ -326,15 +243,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void DefaultOnRemainingArgumentFailsAtDefinitionTime()
         {
             CommandShell shell = new(History());
-            CommandConfigurationException exception = Assert.Throws<CommandConfigurationException>(
-                () =>
-                    shell.AddCommand(
-                        CommandBuilder
-                            .Create("say")
-                            .Remaining<string>("message", spec => spec.Default("none"))
-                            .Handler((context, arguments) => { }),
-                        out _
-                    )
+            CommandConfigurationException exception = Assert.Throws<CommandConfigurationException>(() =>
+                shell.AddCommand(CommandBuilder.Create("say").Remaining<string>("message", spec => spec.Default("none")).Handler((context, arguments) => { }), out _)
             );
             Assert.That(exception.Message, Does.Contain("default"));
         }
@@ -343,22 +253,17 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void RequiredRemainingAfterOptionalArgumentFailsAtDefinitionTime()
         {
             CommandShell shell = new(History());
-            CommandConfigurationException exception = Assert.Throws<CommandConfigurationException>(
-                () =>
-                    shell.AddCommand(
-                        CommandBuilder
-                            .Create("say")
-                            .Arg<string>("target", spec => spec.Default("all"))
-                            .Remaining<string>("message", spec => spec.Required())
-                            .Handler((context, arguments) => { }),
-                        out _
-                    )
+            CommandConfigurationException exception = Assert.Throws<CommandConfigurationException>(() =>
+                shell.AddCommand(
+                    CommandBuilder
+                        .Create("say")
+                        .Arg<string>("target", spec => spec.Default("all"))
+                        .Remaining<string>("message", spec => spec.Required())
+                        .Handler((context, arguments) => { }),
+                    out _
+                )
             );
-            Assert.That(
-                exception.Message,
-                Does.Contain("before every optional argument"),
-                "A required remaining argument after an optional one is ambiguous with the optional"
-            );
+            Assert.That(exception.Message, Does.Contain("before every optional argument"), "A required remaining argument after an optional one is ambiguous with the optional");
         }
 
         [Test]
@@ -375,37 +280,21 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                             add =>
                                 add.Arg<string>("item", spec => spec.Required())
                                     .Remaining<string>("extras")
-                                    .Handler(
-                                        (context, arguments) =>
-                                            dropped = arguments.Get<string[]>("extras")
-                                    )
+                                    .Handler((context, arguments) => dropped = arguments.Get<string[]>("extras"))
                         )
-                        .Subcommand(
-                            "count",
-                            count =>
-                                count
-                                    .Arg<string>("item", spec => spec.Required())
-                                    .Handler((context, arguments) => { })
-                        )
+                        .Subcommand("count", count => count.Arg<string>("item", spec => spec.Required()).Handler((context, arguments) => { }))
                         .Handler((context, arguments) => { }),
                     out _
                 )
             );
 
             Assert.IsTrue(shell.RunCommand("inventory add pickaxe torch rope"));
-            CollectionAssert.AreEqual(
-                new[] { "torch", "rope" },
-                dropped,
-                "The routed subcommand collects its trailing tokens"
-            );
+            CollectionAssert.AreEqual(new[] { "torch", "rope" }, dropped, "The routed subcommand collects its trailing tokens");
 
             Assert.IsTrue(shell.RunCommand("inventory add pickaxe"));
             Assert.IsEmpty(dropped, "No trailing tokens read as an empty array");
 
-            Assert.IsTrue(
-                shell.RunCommand("inventory count pickaxe torch"),
-                "A sibling route without a remaining argument still overflows its bounds"
-            );
+            Assert.IsTrue(shell.RunCommand("inventory count pickaxe torch"), "A sibling route without a remaining argument still overflows its bounds");
             string error = ConsumeError(shell);
             Assert.That(error != null, "The fixed sibling route rejects surplus arguments");
             Assert.That(error, Does.Contain("at most 1 argument"));
@@ -429,18 +318,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             List<CommandCompletion> results = new();
             CommandExecutionContext context = CommandExecutionContext.Current;
             Assert.IsTrue(shell.TryComplete(context, "summon ", 7, results, out _));
-            CollectionAssert.AreEqual(
-                new[] { "dog", "cat" },
-                results.ConvertAll(completion => completion.InsertionText),
-                "Stage 0 completes the fixed argument"
-            );
+            CollectionAssert.AreEqual(new[] { "dog", "cat" }, results.ConvertAll(completion => completion.InsertionText), "Stage 0 completes the fixed argument");
 
             Assert.IsTrue(shell.TryComplete(context, "summon dog ", 11, results, out _));
-            CollectionAssert.AreEqual(
-                new[] { "red", "blue" },
-                results.ConvertAll(completion => completion.InsertionText),
-                "Stage 1 completes the remaining argument"
-            );
+            CollectionAssert.AreEqual(new[] { "red", "blue" }, results.ConvertAll(completion => completion.InsertionText), "Stage 1 completes the remaining argument");
 
             Assert.IsTrue(shell.TryComplete(context, "summon dog red ", 15, results, out _));
             CollectionAssert.AreEqual(
@@ -486,9 +367,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 "The routed subcommand completes its remaining argument"
             );
 
-            Assert.IsTrue(
-                shell.TryComplete(context, "inventory add pickaxe red b", 27, results, out _)
-            );
+            Assert.IsTrue(shell.TryComplete(context, "inventory add pickaxe red b", 27, results, out _));
             CollectionAssert.AreEqual(
                 new[] { "blue" },
                 results.ConvertAll(completion => completion.InsertionText),

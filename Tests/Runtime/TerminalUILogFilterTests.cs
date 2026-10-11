@@ -97,9 +97,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             {
                 bool hit = line % 3 == 0;
                 Terminal.Log(
-                    hit
-                        ? $"line {line.ToString(CultureInfo.InvariantCulture)} with {HitMarker} in it"
-                        : $"line {line.ToString(CultureInfo.InvariantCulture)} {MissMarker}"
+                    hit ? $"line {line.ToString(CultureInfo.InvariantCulture)} with {HitMarker} in it" : $"line {line.ToString(CultureInfo.InvariantCulture)} {MissMarker}"
                 );
             }
 
@@ -153,11 +151,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return RunCommand("find " + HitMarker);
             yield return WaitForDrawnText("the hit", "A search draws the line it found");
 
-            Assert.That(
-                DrawnText(),
-                Does.Not.Contain(MissMarker),
-                "A line that does not hold the text is not what the developer asked to see"
-            );
+            Assert.That(DrawnText(), Does.Not.Contain(MissMarker), "A line that does not hold the text is not what the developer asked to see");
         }
 
         [UnityTest]
@@ -170,10 +164,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return RunCommand("find " + HitMarker);
             yield return WaitForDrawnText("the hit", "The search landed");
             yield return RunCommand("clear-filter");
-            yield return WaitForDrawnText(
-                MissMarker,
-                "Clearing a search brings back the lines it hid, including the newest"
-            );
+            yield return WaitForDrawnText(MissMarker, "Clearing a search brings back the lines it hid, including the newest");
         }
 
         [UnityTest]
@@ -190,10 +181,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 phrase and got a search for its first word.
              */
             yield return RunCommand("find \"" + HitMarker + "\"");
-            yield return WaitForLastLogLine(
-                "of 240 log lines",
-                "A quoted query is one string, so the phrase is what was searched"
-            );
+            yield return WaitForLastLogLine("of 240 log lines", "A quoted query is one string, so the phrase is what was searched");
         }
 
         [UnityTest]
@@ -203,10 +191,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return FillTheLog();
 
             yield return RunCommand("find " + HitMarker);
-            yield return WaitForLastLogLine(
-                "of 240 log lines",
-                "The count is the answer to whether the search hit, which a view showing some lines cannot give"
-            );
+            yield return WaitForLastLogLine("of 240 log lines", "The count is the answer to whether the search hit, which a view showing some lines cannot give");
         }
 
         [UnityTest]
@@ -217,17 +202,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return WaitForDrawnCount(FillLines, "The log draws every line before a search");
 
             yield return RunCommand("find nothing-holds-this-text");
-            yield return WaitForLastLogLine(
-                "No log line matches",
-                "A search that hit nothing says so"
-            );
+            yield return WaitForLastLogLine("No log line matches", "A search that hit nothing says so");
 
             yield return Settle();
-            Assert.That(
-                DrawnText(),
-                Is.Empty,
-                "A search with no match shows nothing rather than the log it did not find in"
-            );
+            Assert.That(DrawnText(), Is.Empty, "A search with no match shows nothing rather than the log it did not find in");
         }
 
         [UnityTest]
@@ -239,17 +217,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return WaitForDrawnText("the hit", "The search landed");
 
             yield return RunCommand("find \"\"");
-            yield return WaitForLastLogLine(
-                "Nothing to search for",
-                "An empty query cannot be a search, and cannot silently drop the one that is set"
-            );
+            yield return WaitForLastLogLine("Nothing to search for", "An empty query cannot be a search, and cannot silently drop the one that is set");
 
             yield return Settle();
-            Assert.That(
-                DrawnText(),
-                Does.Contain("the hit"),
-                "The search the developer set survives a query that was not one"
-            );
+            Assert.That(DrawnText(), Does.Contain("the hit"), "The search the developer set survives a query that was not one");
         }
 
         [UnityTest]
@@ -261,10 +232,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return WaitForDrawnText("the hit", "The search landed");
 
             yield return RunCommand("find");
-            yield return WaitForLastLogLine(
-                "Match 2 of 80",
-                "A repeat steps to the next match, and reports which one"
-            );
+            yield return WaitForLastLogLine("Match 2 of 80", "A repeat steps to the next match, and reports which one");
         }
 
         [UnityTest]
@@ -274,10 +242,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return FillTheLog();
 
             yield return RunCommand("find");
-            yield return WaitForLastLogLine(
-                "No search is set",
-                "A command that reached the console and did nothing says so"
-            );
+            yield return WaitForLastLogLine("No search is set", "A command that reached the console and did nothing says so");
         }
 
         [UnityTest]
@@ -290,10 +255,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return WaitForDrawnText("the hit", "The search landed");
 
             yield return SendKey(KeyCode.F3);
-            yield return WaitForLastLogLine(
-                "Match 2 of 80",
-                "The key the field holds focus for reaches the search"
-            );
+            yield return WaitForLastLogLine("Match 2 of 80", "The key the field holds focus for reaches the search");
         }
 
         [UnityTest]
@@ -321,25 +283,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return WaitForDrawnText("the hit", "The search landed");
 
             yield return SendKey(KeyCode.F3);
-            yield return WaitForLastLogLine(
-                "Match 2 of 80",
-                "F3 moved the search while one was set"
-            );
+            yield return WaitForLastLogLine("Match 2 of 80", "F3 moved the search while one was set");
 
             yield return RunCommand("clear-filter");
-            yield return WaitForDrawnText(
-                MissMarker,
-                "Clearing the search brought the rest of the log back"
-            );
+            yield return WaitForDrawnText(MissMarker, "Clearing the search brought the rest of the log back");
 
             yield return SendKey(KeyCode.F3);
             yield return Settle();
 
-            Assert.That(
-                DrawnText(),
-                Does.Contain(MissMarker),
-                "A key with no search set is left to the field, which does nothing with it either"
-            );
+            Assert.That(DrawnText(), Does.Contain(MissMarker), "A key with no search set is left to the field, which does nothing with it either");
         }
 
         [UnityTest]
@@ -353,16 +305,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Terminal.Log("output that arrived after the search and does not match");
             yield return Settle();
 
-            Assert.That(
-                DrawnText(),
-                Does.Contain("the hit"),
-                "New output does not end a search the developer is reading"
-            );
-            Assert.That(
-                DrawnText(),
-                Does.Not.Contain("arrived after the search"),
-                "A line that does not match stays out of the view while the search is set"
-            );
+            Assert.That(DrawnText(), Does.Contain("the hit"), "New output does not end a search the developer is reading");
+            Assert.That(DrawnText(), Does.Not.Contain("arrived after the search"), "A line that does not match stays out of the view while the search is set");
         }
 
         [UnityTest]
@@ -374,10 +318,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return WaitForDrawnText("the hit", "The search landed");
 
             Terminal.Log("a later line with " + HitMarker + " in it");
-            yield return WaitForDrawnText(
-                "a later line with",
-                "Output that matches joins the search"
-            );
+            yield return WaitForDrawnText("a later line with", "Output that matches joins the search");
         }
 
         [UnityTest]
@@ -402,16 +343,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return WaitForLastLogLine("of 240 log lines", "The first run reports a count");
 
             yield return RunThroughConsole("find " + HitMarker);
-            yield return WaitForLastLogLine(
-                "of 240 log lines",
-                "The second run reports the same count, so the first answer is in neither half"
-            );
+            yield return WaitForLastLogLine("of 240 log lines", "The second run reports the same count, so the first answer is in neither half");
 
             yield return RunThroughConsole("find " + HitMarker);
-            yield return WaitForLastLogLine(
-                "of 240 log lines",
-                "The third run too, so neither answer moved the number"
-            );
+            yield return WaitForLastLogLine("of 240 log lines", "The third run too, so neither answer moved the number");
         }
 
         [UnityTest]
@@ -443,16 +378,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             DefaultTerminalInput.Instance.CommandText = "find " + HitMarker;
             _terminal.EnterCommand();
 
-            Assert.That(
-                _terminal.FindScrollQueued,
-                Is.True,
-                "The jump the search queued survived the run that queued it"
-            );
-            Assert.That(
-                _terminal.WantsScrollToEnd,
-                Is.False,
-                "The run did not re-assert a scroll to the end over the search's jump"
-            );
+            Assert.That(_terminal.FindScrollQueued, Is.True, "The jump the search queued survived the run that queued it");
+            Assert.That(_terminal.WantsScrollToEnd, Is.False, "The run did not re-assert a scroll to the end over the search's jump");
         }
 
         [UnityTest]
@@ -473,26 +400,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return FillTheLog();
 
             yield return RunThroughConsole("find search");
-            yield return WaitForLastLogLine(
-                "No log line matches",
-                "Nothing in the log holds the word the search looked for"
-            );
+            yield return WaitForLastLogLine("No log line matches", "Nothing in the log holds the word the search looked for");
             yield return Settle();
 
-            Assert.That(
-                DrawnText(),
-                Is.Empty,
-                "The answer to a search that hit nothing is not itself a result"
-            );
+            Assert.That(DrawnText(), Is.Empty, "The answer to a search that hit nothing is not itself a result");
 
             yield return RunThroughConsole("find");
             yield return Settle();
 
-            Assert.That(
-                LastLogText(),
-                Does.Contain("No log line matches"),
-                "A repeat of the search does not find the answer the first one wrote"
-            );
+            Assert.That(LastLogText(), Does.Contain("No log line matches"), "A repeat of the search does not find the answer the first one wrote");
         }
 
         [UnityTest]
@@ -507,16 +423,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Scroller scroller = LogScroller();
             float highValue = scroller.highValue;
-            Assert.That(
-                0f < highValue,
-                Is.True,
-                "The filtered log overflows the view, so the jump has somewhere to go"
-            );
-            Assert.That(
-                scroller.value,
-                Is.EqualTo(0f).Within(Tolerance),
-                "A search lands on its first match, which is the top of the filtered log"
-            );
+            Assert.That(0f < highValue, Is.True, "The filtered log overflows the view, so the jump has somewhere to go");
+            Assert.That(scroller.value, Is.EqualTo(0f).Within(Tolerance), "A search lands on its first match, which is the top of the filtered log");
         }
 
         [UnityTest]
@@ -529,23 +437,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             yield return RequireLaidOutLog();
 
-            Assert.That(
-                0f < LogScroller().highValue,
-                Is.True,
-                "The filtered log overflows the view, so the step has somewhere to go"
-            );
+            Assert.That(0f < LogScroller().highValue, Is.True, "The filtered log overflows the view, so the step has somewhere to go");
 
             yield return RunCommand("find");
-            yield return WaitForLogScrolledToChild(
-                1,
-                "Stepping to the next match moves the view to it"
-            );
+            yield return WaitForLogScrolledToChild(1, "Stepping to the next match moves the view to it");
 
-            Assert.That(
-                LogScroller().value,
-                Is.GreaterThan(0f),
-                "The second match is below the first, so the view left the top for it"
-            );
+            Assert.That(LogScroller().value, Is.GreaterThan(0f), "The second match is below the first, so the view left the top for it");
         }
 
         /*
@@ -570,11 +467,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 yield return null;
             }
 
-            Assert.That(
-                scroller.value,
-                Is.EqualTo(ExpectedScrollForChild(childIndex)).Within(Tolerance),
-                message
-            );
+            Assert.That(scroller.value, Is.EqualTo(ExpectedScrollForChild(childIndex)).Within(Tolerance), message);
         }
 
         /*
@@ -626,11 +519,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 yield return null;
             }
 
-            Assert.That(
-                _terminal._commandInput,
-                Is.Not.Null,
-                "The terminal input field exists once it is open"
-            );
+            Assert.That(_terminal._commandInput, Is.Not.Null, "The terminal input field exists once it is open");
             DefaultTerminalInput.Instance.CommandText = string.Empty;
         }
 
@@ -669,10 +558,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private IEnumerator RequireReachableKeys()
         {
             bool reached = false;
-            _terminal._commandInput.RegisterCallback<KeyDownEvent>(
-                _ => reached = true,
-                TrickleDown.TrickleDown
-            );
+            _terminal._commandInput.RegisterCallback<KeyDownEvent>(_ => reached = true, TrickleDown.TrickleDown);
 
             using (KeyDownEvent key = KeyDownEvent.GetPooled('\0', KeyCode.F3, EventModifiers.None))
             {
@@ -693,8 +579,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         private ScrollView LogView()
         {
-            ScrollView logView =
-                _terminal._uiDocument.rootVisualElement.Q("LogScrollView") as ScrollView;
+            ScrollView logView = _terminal._uiDocument.rootVisualElement.Q("LogScrollView") as ScrollView;
             Assert.That(logView, Is.Not.Null, "The log scroll view exists on an open terminal");
             return logView;
         }
@@ -829,8 +714,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             while (0 < frameBudget-- && stableFrames < 5)
             {
                 ScrollView view = LogView();
-                bool laidOut =
-                    0f < LogScroller().highValue && 0f < view.contentViewport.layout.height;
+                bool laidOut = 0f < LogScroller().highValue && 0f < view.contentViewport.layout.height;
                 stableFrames = laidOut ? stableFrames + 1 : 0;
                 yield return null;
             }

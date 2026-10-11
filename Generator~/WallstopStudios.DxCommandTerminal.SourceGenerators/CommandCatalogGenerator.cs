@@ -12,8 +12,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
     [Generator]
     public sealed class CommandCatalogGenerator : ISourceGenerator
     {
-        internal const string ArgumentMetadataName =
-            "WallstopStudios.DxCommandTerminal.Backend.CommandArg";
+        internal const string ArgumentMetadataName = "WallstopStudios.DxCommandTerminal.Backend.CommandArg";
 
         /*
            Matches RegisterCommandAttribute's Contexts default so attributed
@@ -21,17 +20,13 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
         */
         internal const int AllExecutionContexts = 7;
 
-        private const string AttributeMetadataName =
-            "WallstopStudios.DxCommandTerminal.Attributes.RegisterCommandAttribute";
+        private const string AttributeMetadataName = "WallstopStudios.DxCommandTerminal.Attributes.RegisterCommandAttribute";
 
-        private const string EntryMetadataName =
-            "WallstopStudios.DxCommandTerminal.Backend.CommandCatalogEntry";
+        private const string EntryMetadataName = "WallstopStudios.DxCommandTerminal.Backend.CommandCatalogEntry";
 
-        private const string ContextsMetadataName =
-            "WallstopStudios.DxCommandTerminal.Backend.CommandExecutionContexts";
+        private const string ContextsMetadataName = "WallstopStudios.DxCommandTerminal.Backend.CommandExecutionContexts";
 
-        private const string PreserveAttributeMetadataName =
-            "UnityEngine.Scripting.PreserveAttribute";
+        private const string PreserveAttributeMetadataName = "UnityEngine.Scripting.PreserveAttribute";
 
         private const string GeneratedHintName = "DxCommandTerminalCommandCatalog.g.cs";
 
@@ -48,28 +43,15 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                 display string that resolves the namespace qualification is
                 only built when the simple name already matches.
              */
-            if (
-                !string.Equals(
-                    attributeClass.Name,
-                    "RegisterCommandAttribute",
-                    StringComparison.Ordinal
-                )
-            )
+            if (!string.Equals(attributeClass.Name, "RegisterCommandAttribute", StringComparison.Ordinal))
             {
                 return false;
             }
 
-            return string.Equals(
-                attributeClass.ToDisplayString(),
-                AttributeMetadataName,
-                StringComparison.Ordinal
-            );
+            return string.Equals(attributeClass.ToDisplayString(), AttributeMetadataName, StringComparison.Ordinal);
         }
 
-        private static bool TryParseAttribute(
-            IMethodSymbol method,
-            out CommandAttributeData attribute
-        )
+        private static bool TryParseAttribute(IMethodSymbol method, out CommandAttributeData attribute)
         {
             foreach (AttributeData attributeData in method.GetAttributes())
             {
@@ -87,10 +69,8 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                 attribute = new CommandAttributeData();
                 INamedTypeSymbol attributeClass = attributeData.AttributeClass;
                 IMethodSymbol attributeConstructor = attributeData.AttributeConstructor;
-                ImmutableArray<IParameterSymbol> constructorParameters =
-                    attributeConstructor.Parameters;
-                ImmutableArray<TypedConstant> constructorArguments =
-                    attributeData.ConstructorArguments;
+                ImmutableArray<IParameterSymbol> constructorParameters = attributeConstructor.Parameters;
+                ImmutableArray<TypedConstant> constructorArguments = attributeData.ConstructorArguments;
                 for (int i = 0; i < constructorArguments.Length; i++)
                 {
                     /*
@@ -98,19 +78,10 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                        of type, so overload or order changes in the attribute
                        cannot silently bind to the wrong field.
                     */
-                    ApplyArgument(
-                        attribute,
-                        constructorParameters[i].Name,
-                        constructorArguments[i]
-                    );
+                    ApplyArgument(attribute, constructorParameters[i].Name, constructorArguments[i]);
                 }
 
-                foreach (
-                    KeyValuePair<
-                        string,
-                        TypedConstant
-                    > namedArgument in attributeData.NamedArguments
-                )
+                foreach (KeyValuePair<string, TypedConstant> namedArgument in attributeData.NamedArguments)
                 {
                     ApplyArgument(attribute, namedArgument.Key, namedArgument.Value);
                 }
@@ -122,11 +93,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             return false;
         }
 
-        private static void ApplyArgument(
-            CommandAttributeData attribute,
-            string argumentName,
-            TypedConstant argument
-        )
+        private static void ApplyArgument(CommandAttributeData attribute, string argumentName, TypedConstant argument)
         {
             switch (argumentName)
             {
@@ -157,13 +124,10 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                     attribute.EditorOnly = argument.Value is bool editorOnly && editorOnly;
                     break;
                 case "DevelopmentOnly":
-                    attribute.DevelopmentOnly =
-                        argument.Value is bool developmentOnly && developmentOnly;
+                    attribute.DevelopmentOnly = argument.Value is bool developmentOnly && developmentOnly;
                     break;
                 case "Contexts":
-                    attribute.Contexts = argument.Value is int contexts
-                        ? contexts
-                        : AllExecutionContexts;
+                    attribute.Contexts = argument.Value is int contexts ? contexts : AllExecutionContexts;
                     break;
             }
         }
@@ -190,9 +154,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                 breaking the consumer build.
              */
             ITypeSymbol entryType = compilation.GetTypeByMetadataName(EntryMetadataName);
-            ITypeSymbol commandArgumentType = compilation.GetTypeByMetadataName(
-                ArgumentMetadataName
-            );
+            ITypeSymbol commandArgumentType = compilation.GetTypeByMetadataName(ArgumentMetadataName);
             ITypeSymbol contextsType = compilation.GetTypeByMetadataName(ContextsMetadataName);
             if (entryType == null || commandArgumentType == null || contextsType == null)
             {
@@ -208,21 +170,15 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                 the attribute type actually resolving; without it the catalog
                 keeps today's stripping behavior.
              */
-            bool preserveCatalog =
-                compilation.GetTypeByMetadataName(PreserveAttributeMetadataName) != null;
+            bool preserveCatalog = compilation.GetTypeByMetadataName(PreserveAttributeMetadataName) != null;
 
             List<CommandModel> commands = new List<CommandModel>();
-            HashSet<IMethodSymbol> seenMethods = new HashSet<IMethodSymbol>(
-                SymbolEqualityComparer.Default
-            );
+            HashSet<IMethodSymbol> seenMethods = new HashSet<IMethodSymbol>(SymbolEqualityComparer.Default);
             foreach (MethodDeclarationSyntax candidate in receiver.Candidates)
             {
                 context.CancellationToken.ThrowIfCancellationRequested();
                 SemanticModel semanticModel = compilation.GetSemanticModel(candidate.SyntaxTree);
-                IMethodSymbol method = semanticModel.GetDeclaredSymbol(
-                    candidate,
-                    context.CancellationToken
-                );
+                IMethodSymbol method = semanticModel.GetDeclaredSymbol(candidate, context.CancellationToken);
                 if (method == null)
                 {
                     /*
@@ -249,12 +205,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                     continue;
                 }
 
-                CommandModel model = CommandModelBuilder.Build(
-                    method,
-                    attribute,
-                    commandArgumentType,
-                    candidate
-                );
+                CommandModel model = CommandModelBuilder.Build(method, attribute, commandArgumentType, candidate);
                 if (model != null)
                 {
                     commands.Add(model);
@@ -419,12 +370,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
 
     internal static class CommandModelBuilder
     {
-        public static CommandModel Build(
-            IMethodSymbol method,
-            CommandAttributeData attribute,
-            ITypeSymbol commandArgumentType,
-            MethodDeclarationSyntax methodDeclaration
-        )
+        public static CommandModel Build(IMethodSymbol method, CommandAttributeData attribute, ITypeSymbol commandArgumentType, MethodDeclarationSyntax methodDeclaration)
         {
             /*
                Legacy discovery walks static methods only (BindingFlags.Static);
@@ -452,10 +398,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                 MethodNameIdentifierDisplay = EscapeIdentifier(method.Name),
                 IsMethodGeneric = method.IsGenericMethod,
                 DeclaringTypeName = BuildDeclaringTypeName(method.ContainingType),
-                ContainingTypeDisplay = BuildContainingTypeDisplay(
-                    method.ContainingType,
-                    out bool containingTypeIsUnbound
-                ),
+                ContainingTypeDisplay = BuildContainingTypeDisplay(method.ContainingType, out bool containingTypeIsUnbound),
                 ContainingTypeIsUnbound = containingTypeIsUnbound,
             };
 
@@ -534,11 +477,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
         */
         private static bool HasFileLevelDeclaration(MethodDeclarationSyntax methodDeclaration)
         {
-            for (
-                SyntaxNode current = methodDeclaration.Parent;
-                current is TypeDeclarationSyntax typeDeclaration;
-                current = current.Parent
-            )
+            for (SyntaxNode current = methodDeclaration.Parent; current is TypeDeclarationSyntax typeDeclaration; current = current.Parent)
             {
                 foreach (SyntaxToken modifier in typeDeclaration.Modifiers)
                 {
@@ -561,18 +500,9 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             linker. Generic chains cannot bind a closed delegate anyway, and
             file-local levels cannot be merged from another file.
         */
-        private static bool TryBuildPartialBindable(
-            IMethodSymbol method,
-            MethodDeclarationSyntax methodDeclaration,
-            CommandModel model
-        )
+        private static bool TryBuildPartialBindable(IMethodSymbol method, MethodDeclarationSyntax methodDeclaration, CommandModel model)
         {
-            if (
-                !model.HasValidSignature
-                || !method.ReturnsVoid
-                || IsAccessibleFromCatalog(method)
-                || !model.TypeChainNameable
-            )
+            if (!model.HasValidSignature || !method.ReturnsVoid || IsAccessibleFromCatalog(method) || !model.TypeChainNameable)
             {
                 return false;
             }
@@ -587,17 +517,10 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             return true;
         }
 
-        private static bool TryBuildPartialChain(
-            MethodDeclarationSyntax methodDeclaration,
-            out PartialChainLevel[] chain
-        )
+        private static bool TryBuildPartialChain(MethodDeclarationSyntax methodDeclaration, out PartialChainLevel[] chain)
         {
             List<PartialChainLevel> levels = null;
-            for (
-                SyntaxNode current = methodDeclaration.Parent;
-                current is TypeDeclarationSyntax typeDeclaration;
-                current = current.Parent
-            )
+            for (SyntaxNode current = methodDeclaration.Parent; current is TypeDeclarationSyntax typeDeclaration; current = current.Parent)
             {
                 if (typeDeclaration is not (ClassDeclarationSyntax or StructDeclarationSyntax))
                 {
@@ -631,12 +554,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                     return false;
                 }
 
-                (levels ??= new List<PartialChainLevel>()).Add(
-                    new PartialChainLevel(
-                        EscapeIdentifier(typeDeclaration.Identifier.Text),
-                        typeDeclaration.Keyword.ValueText
-                    )
-                );
+                (levels ??= new List<PartialChainLevel>()).Add(new PartialChainLevel(EscapeIdentifier(typeDeclaration.Identifier.Text), typeDeclaration.Keyword.ValueText));
             }
 
             if (levels == null)
@@ -675,9 +593,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             {
                 if (i == namespaceName.Length || namespaceName[i] == '.')
                 {
-                    escapedSegments.Add(
-                        EscapeIdentifier(namespaceName.Substring(segmentStart, i - segmentStart))
-                    );
+                    escapedSegments.Add(EscapeIdentifier(namespaceName.Substring(segmentStart, i - segmentStart)));
                     segmentStart = i + 1;
                 }
             }
@@ -685,12 +601,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             return string.Join(".", escapedSegments);
         }
 
-        private static void BuildSignature(
-            IMethodSymbol method,
-            ITypeSymbol commandArgumentType,
-            bool containingTypeIsUnbound,
-            CommandModel model
-        )
+        private static void BuildSignature(IMethodSymbol method, ITypeSymbol commandArgumentType, bool containingTypeIsUnbound, CommandModel model)
         {
             /*
                Methods inside open generic types (or open generic methods
@@ -709,13 +620,9 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                 parameter type CommandArg[]&).
              */
             model.HasValidSignature =
-                signatureAddressable
-                && parameterList.Count == 1
-                && parameterList[0].RefKind == RefKind.None
-                && IsCommandArgArray(parameterList[0].Type, commandArgumentType);
+                signatureAddressable && parameterList.Count == 1 && parameterList[0].RefKind == RefKind.None && IsCommandArgArray(parameterList[0].Type, commandArgumentType);
 
-            model.DirectlyBindable =
-                model.HasValidSignature && method.ReturnsVoid && IsAccessibleFromCatalog(method);
+            model.DirectlyBindable = model.HasValidSignature && method.ReturnsVoid && IsAccessibleFromCatalog(method);
 
             /*
                 Exact-signature addressability drives the rejected-command
@@ -747,11 +654,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             foreach (IParameterSymbol parameter in method.Parameters)
             {
                 string display = parameter.Type.ToDisplayString(CatalogEmitter.FullyQualified);
-                parameterExpressions.Add(
-                    parameter.RefKind == RefKind.None
-                        ? "typeof(" + display + ")"
-                        : "typeof(" + display + ").MakeByRefType()"
-                );
+                parameterExpressions.Add(parameter.RefKind == RefKind.None ? "typeof(" + display + ")" : "typeof(" + display + ").MakeByRefType()");
             }
 
             model.ParameterTypeExpressions = parameterExpressions.ToArray();
@@ -764,19 +667,12 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                 return false;
             }
 
-            if (
-                commandArgumentType != null
-                && SymbolEqualityComparer.Default.Equals(arrayType.ElementType, commandArgumentType)
-            )
+            if (commandArgumentType != null && SymbolEqualityComparer.Default.Equals(arrayType.ElementType, commandArgumentType))
             {
                 return true;
             }
 
-            return string.Equals(
-                arrayType.ElementType.ToDisplayString(),
-                CommandCatalogGenerator.ArgumentMetadataName,
-                StringComparison.Ordinal
-            );
+            return string.Equals(arrayType.ElementType.ToDisplayString(), CommandCatalogGenerator.ArgumentMetadataName, StringComparison.Ordinal);
         }
 
         private static bool IsAddressableType(ITypeSymbol type)
@@ -854,11 +750,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
          */
         private static bool IsTypeChainNameable(INamedTypeSymbol containingType)
         {
-            for (
-                INamedTypeSymbol current = containingType;
-                current != null;
-                current = current.ContainingType
-            )
+            for (INamedTypeSymbol current = containingType; current != null; current = current.ContainingType)
             {
                 if (!IsAccessibleDeclaration(current.DeclaredAccessibility))
                 {
@@ -907,16 +799,11 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                 containingNamespace = containingNamespace.ContainingNamespace
             )
             {
-                namespaceName =
-                    containingNamespace.Name + (namespaceName == null ? "" : "." + namespaceName);
+                namespaceName = containingNamespace.Name + (namespaceName == null ? "" : "." + namespaceName);
             }
 
             string typeName = containingType.Name;
-            for (
-                INamedTypeSymbol outer = containingType.ContainingType;
-                outer != null;
-                outer = outer.ContainingType
-            )
+            for (INamedTypeSymbol outer = containingType.ContainingType; outer != null; outer = outer.ContainingType)
             {
                 typeName = outer.Name + "+" + typeName;
             }
@@ -924,10 +811,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             return namespaceName == null ? typeName : namespaceName + "." + typeName;
         }
 
-        private static string BuildContainingTypeDisplay(
-            INamedTypeSymbol containingType,
-            out bool isUnbound
-        )
+        private static string BuildContainingTypeDisplay(INamedTypeSymbol containingType, out bool isUnbound)
         {
             isUnbound = HasOpenTypeChain(containingType);
             if (!isUnbound)
@@ -1052,8 +936,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
      */
     internal sealed class CommandSyntaxReceiver : ISyntaxReceiver
     {
-        public readonly List<MethodDeclarationSyntax> Candidates =
-            new List<MethodDeclarationSyntax>();
+        public readonly List<MethodDeclarationSyntax> Candidates = new List<MethodDeclarationSyntax>();
 
         public void OnVisitSyntaxNode(SyntaxNode syntaxNode)
         {

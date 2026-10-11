@@ -50,15 +50,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
                 _shell.AddCommand($"bench-cmd-{i:D4}", HandleNoop);
             }
 
-            AllocationAssertions.AssertZeroAllocations(
-                "typing completion (lowercase commands)",
-                () => _autoComplete.Complete(TypedPrefix, _completionBuffer)
-            );
-            Assert.LessOrEqual(
-                CommandCount,
-                _completionBuffer.Count,
-                "Sanity: every lowercase command should complete"
-            );
+            AllocationAssertions.AssertZeroAllocations("typing completion (lowercase commands)", () => _autoComplete.Complete(TypedPrefix, _completionBuffer));
+            Assert.LessOrEqual(CommandCount, _completionBuffer.Count, "Sanity: every lowercase command should complete");
         }
 
         [Test]
@@ -66,15 +59,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
         {
             _shell.AddCommand(CasedCommandName, HandleNoop);
 
-            AllocationAssertions.AssertZeroAllocations(
-                "typing completion (cased command name)",
-                () => _autoComplete.Complete(TypedPrefix, _completionBuffer)
-            );
-            Assert.LessOrEqual(
-                1,
-                _completionBuffer.Count,
-                "Sanity: the cased command should complete"
-            );
+            AllocationAssertions.AssertZeroAllocations("typing completion (cased command name)", () => _autoComplete.Complete(TypedPrefix, _completionBuffer));
+            Assert.LessOrEqual(1, _completionBuffer.Count, "Sanity: the cased command should complete");
         }
 
         [Test]
@@ -82,15 +68,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
         {
             FillLogToCapacity();
 
-            AllocationAssertions.AssertZeroAllocations(
-                "log write (empty stack trace)",
-                () => _log.HandleLog("bench message", string.Empty, TerminalLogType.ShellMessage)
-            );
-            Assert.AreEqual(
-                LogCapacity,
-                _log.Count,
-                "Sanity: the write must land in the wrapped buffer"
-            );
+            AllocationAssertions.AssertZeroAllocations("log write (empty stack trace)", () => _log.HandleLog("bench message", string.Empty, TerminalLogType.ShellMessage));
+            Assert.AreEqual(LogCapacity, _log.Count, "Sanity: the write must land in the wrapped buffer");
         }
 
         [Test]
@@ -103,10 +82,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
                 its split/join cleanup) is the deliberate cost of attributing
                 a direct Terminal.Log call to its caller.
              */
-            AllocationAssertions.AssertDetectsAllocation(
-                "log write (stack-trace extraction)",
-                () => _log.HandleLog("bench message", TerminalLogType.ShellMessage)
-            );
+            AllocationAssertions.AssertDetectsAllocation("log write (stack-trace extraction)", () => _log.HandleLog("bench message", TerminalLogType.ShellMessage));
         }
 
         [Test]
@@ -115,16 +91,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
             _log.StackTraceMode = TerminalStackTraceMode.Disabled;
             FillLogToCapacity();
 
-            AllocationAssertions.AssertZeroAllocations(
-                "log write (stack-trace mode Disabled)",
-                () => _log.HandleLog("bench message", TerminalLogType.ShellMessage)
-            );
+            AllocationAssertions.AssertZeroAllocations("log write (stack-trace mode Disabled)", () => _log.HandleLog("bench message", TerminalLogType.ShellMessage));
             _log.TryGetLast(out LogItem stored);
-            Assert.AreEqual(
-                string.Empty,
-                stored.stackTrace,
-                "Sanity: mode Disabled must store no trace"
-            );
+            Assert.AreEqual(string.Empty, stored.stackTrace, "Sanity: mode Disabled must store no trace");
         }
 
         [Test]
@@ -155,10 +124,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
                 string. The borrowed-view no-history path is pinned
                 allocation-free in DispatchAllocationTests.
              */
-            AllocationAssertions.AssertDetectsAllocation(
-                "text command execution (parse + history line)",
-                () => _shell.RunCommand("bench-cmd 5")
-            );
+            AllocationAssertions.AssertDetectsAllocation("text command execution (parse + history line)", () => _shell.RunCommand("bench-cmd 5"));
             Assert.Less(0, _history.Count, "Sanity: execution must push history");
         }
 
@@ -181,9 +147,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
                 "history enumeration (GetHistory)",
                 () =>
                 {
-                    foreach (
-                        string text in _history.GetHistory(onlySuccess: true, onlyErrorFree: false)
-                    )
+                    foreach (string text in _history.GetHistory(onlySuccess: true, onlyErrorFree: false))
                     {
                         if (string.IsNullOrEmpty(text))
                         {
@@ -192,11 +156,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
                     }
                 }
             );
-            Assert.LessOrEqual(
-                8,
-                _history.Count,
-                "Sanity: the pushed entries must be in the history"
-            );
+            Assert.LessOrEqual(8, _history.Count, "Sanity: the pushed entries must be in the history");
         }
 
         private void FillLogToCapacity()

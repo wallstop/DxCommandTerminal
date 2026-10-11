@@ -39,18 +39,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             hotkey the package polls by default, so one no-keyboard frame
             covers them all.
          */
-        private static readonly string[] DefaultHotkeys =
-        {
-            "`",
-            "#`",
-            "tab",
-            "#tab",
-            "up",
-            "down",
-            "enter",
-            "return",
-            "escape",
-        };
+        private static readonly string[] DefaultHotkeys = { "`", "#`", "tab", "#tab", "up", "down", "enter", "return", "escape" };
 
         private static void PollAllDefaultHotkeys()
         {
@@ -149,10 +138,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.IsFalse(shiftChordFired, "shift+backquote must not fire on a bare backquote");
 
             InputSystem.QueueStateEvent(Keyboard.current, default(KeyboardState));
-            InputSystem.QueueStateEvent(
-                Keyboard.current,
-                new KeyboardState(Key.LeftShift, Key.Backquote)
-            );
+            InputSystem.QueueStateEvent(Keyboard.current, new KeyboardState(Key.LeftShift, Key.Backquote));
             yield return PollPress("#`", "shift+backquote fires with shift held");
 
             InputSystem.QueueStateEvent(Keyboard.current, default(KeyboardState));
@@ -193,10 +179,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             InputSystem.RemoveDevice(keyboard);
             try
             {
-                Assert.That(
-                    Keyboard.current == null,
-                    "Sanity: the removal left no current keyboard"
-                );
+                Assert.That(Keyboard.current == null, "Sanity: the removal left no current keyboard");
                 foreach (string hotkey in DefaultHotkeys)
                 {
                     bool pressed = InputHelpers.IsKeyPressed(hotkey, InputMode.NewInputSystem);
@@ -209,10 +192,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             }
 
             Assert.That(Keyboard.current != null, "The re-added keyboard answers polls again");
-            Assert.IsFalse(
-                InputHelpers.IsKeyPressed("`", InputMode.NewInputSystem),
-                "A re-added keyboard starts with no press held"
-            );
+            Assert.IsFalse(InputHelpers.IsKeyPressed("`", InputMode.NewInputSystem), "A re-added keyboard starts with no press held");
             yield return null;
         }
 
@@ -230,11 +210,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             PollAllDefaultHotkeys();
 
-            Assert.AreEqual(
-                resolutionsAfterFirstPass,
-                InputHelpers.ControlResolutionsForTesting,
-                "A pass over unchanged hotkeys must resolve no new controls"
-            );
+            Assert.AreEqual(resolutionsAfterFirstPass, InputHelpers.ControlResolutionsForTesting, "A pass over unchanged hotkeys must resolve no new controls");
 
             /*
                 A keyboard change re-resolves: the memo's controls belong to
@@ -244,10 +220,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             InputSystem.RemoveDevice(Keyboard.current);
             InputSystem.AddDevice<Keyboard>();
             PollAllDefaultHotkeys();
-            Assert.That(
-                resolutionsAfterFirstPass < InputHelpers.ControlResolutionsForTesting,
-                "A different keyboard re-resolves the controls"
-            );
+            Assert.That(resolutionsAfterFirstPass < InputHelpers.ControlResolutionsForTesting, "A different keyboard re-resolves the controls");
 
             yield return null;
         }

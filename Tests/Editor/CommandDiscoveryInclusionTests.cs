@@ -19,8 +19,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     {
         private const string CommandName = "probe-included";
 
-        private const string ProbeHolderTypeName =
-            "WallstopStudios.DxCommandTerminal.Tests.ProbeCommands";
+        private const string ProbeHolderTypeName = "WallstopStudios.DxCommandTerminal.Tests.ProbeCommands";
 
 #if UNITY_EDITOR
         /*
@@ -34,37 +33,18 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private static Assembly CreateCommandAssembly()
         {
             AssemblyName name = new($"DiscoveryInclusionTestDynamic-{Guid.NewGuid():N}");
-            AssemblyBuilder assembly = AssemblyBuilder.DefineDynamicAssembly(
-                name,
-                AssemblyBuilderAccess.Run
-            );
+            AssemblyBuilder assembly = AssemblyBuilder.DefineDynamicAssembly(name, AssemblyBuilderAccess.Run);
             ModuleBuilder module = assembly.DefineDynamicModule("Commands");
-            TypeBuilder type = module.DefineType(
-                ProbeHolderTypeName,
-                TypeAttributes.Public | TypeAttributes.Sealed
-            );
-            FieldBuilder invoked = type.DefineField(
-                "Invoked",
-                typeof(bool),
-                FieldAttributes.Public | FieldAttributes.Static
-            );
-            MethodBuilder method = type.DefineMethod(
-                "ProbeIncludedCommand",
-                MethodAttributes.Public | MethodAttributes.Static,
-                typeof(void),
-                new[] { typeof(CommandArg[]) }
-            );
+            TypeBuilder type = module.DefineType(ProbeHolderTypeName, TypeAttributes.Public | TypeAttributes.Sealed);
+            FieldBuilder invoked = type.DefineField("Invoked", typeof(bool), FieldAttributes.Public | FieldAttributes.Static);
+            MethodBuilder method = type.DefineMethod("ProbeIncludedCommand", MethodAttributes.Public | MethodAttributes.Static, typeof(void), new[] { typeof(CommandArg[]) });
             method.DefineParameter(1, ParameterAttributes.None, "args");
             ILGenerator body = method.GetILGenerator();
             body.Emit(OpCodes.Ldc_I4_1);
             body.Emit(OpCodes.Stsfld, invoked);
             body.Emit(OpCodes.Ret);
-            ConstructorInfo attributeConstructor = typeof(RegisterCommandAttribute).GetConstructor(
-                new[] { typeof(string) }
-            );
-            method.SetCustomAttribute(
-                new CustomAttributeBuilder(attributeConstructor, new object[] { CommandName })
-            );
+            ConstructorInfo attributeConstructor = typeof(RegisterCommandAttribute).GetConstructor(new[] { typeof(string) });
+            method.SetCustomAttribute(new CustomAttributeBuilder(attributeConstructor, new object[] { CommandName }));
             type.CreateType();
             return assembly;
         }
@@ -122,20 +102,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                path never walks every assembly; this pin shows the emitted
                command is dropped until it is explicitly included.
              */
-            Assert.IsFalse(
-                CommandShell.MayContainCommands(
-                    DynamicAssembly,
-                    typeof(BuiltInCommands).Assembly.GetName()
-                ),
-                "Sanity: dynamic assemblies fail the reference filter"
-            );
+            Assert.IsFalse(CommandShell.MayContainCommands(DynamicAssembly, typeof(BuiltInCommands).Assembly.GetName()), "Sanity: dynamic assemblies fail the reference filter");
 
             CommandShell shell = CreateShell();
 
-            Assert.IsFalse(
-                shell.Commands.ContainsKey(CommandName),
-                "An excluded assembly's commands must not register by default"
-            );
+            Assert.IsFalse(shell.Commands.ContainsKey(CommandName), "An excluded assembly's commands must not register by default");
         }
 
         [Test]
@@ -145,21 +116,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             CommandShell shell = CreateShell();
 
-            Assert.IsTrue(
-                shell.Commands.ContainsKey(CommandName),
-                "An included assembly's attributed command should register"
-            );
-            Assert.IsTrue(
-                shell.AutoRegisteredCommands.Contains(CommandName),
-                "Included commands should register through the shared pipeline"
-            );
+            Assert.IsTrue(shell.Commands.ContainsKey(CommandName), "An included assembly's attributed command should register");
+            Assert.IsTrue(shell.AutoRegisteredCommands.Contains(CommandName), "Included commands should register through the shared pipeline");
 
             shell.RunCommand(CommandName);
 
-            Assert.IsTrue(
-                DynamicCommandInvoked(),
-                "The included command should bind and run through readiness"
-            );
+            Assert.IsTrue(DynamicCommandInvoked(), "The included command should bind and run through readiness");
         }
 
         [Test]
@@ -168,18 +130,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             IDisposable handle = Register(DynamicAssembly);
 
             CommandShell shell = CreateShell();
-            Assert.IsTrue(
-                shell.Commands.ContainsKey(CommandName),
-                "Sanity: the included command should register before dispose"
-            );
+            Assert.IsTrue(shell.Commands.ContainsKey(CommandName), "Sanity: the included command should register before dispose");
 
             handle.Dispose();
             CommandShell shellAfterDispose = CreateShell();
 
-            Assert.IsFalse(
-                shellAfterDispose.Commands.ContainsKey(CommandName),
-                "A disposed inclusion must stop scanning the assembly"
-            );
+            Assert.IsFalse(shellAfterDispose.Commands.ContainsKey(CommandName), "A disposed inclusion must stop scanning the assembly");
         }
 
         [Test]
@@ -189,40 +145,25 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Register(DynamicAssembly);
 
             CommandShell shell = CreateShell();
-            Assert.IsTrue(
-                shell.Commands.ContainsKey(CommandName),
-                "Duplicate inclusions must not break registration"
-            );
+            Assert.IsTrue(shell.Commands.ContainsKey(CommandName), "Duplicate inclusions must not break registration");
 
             _handles[1].Dispose();
             CommandShell shellAfterSecondDispose = CreateShell();
-            Assert.IsFalse(
-                shellAfterSecondDispose.Commands.ContainsKey(CommandName),
-                "The first dispose must remove the inclusion, like provider handles"
-            );
+            Assert.IsFalse(shellAfterSecondDispose.Commands.ContainsKey(CommandName), "The first dispose must remove the inclusion, like provider handles");
         }
 
         [Test]
         public void LateInclusionAppliesOnNextRegistrationCycle()
         {
             CommandShell shell = CreateShell();
-            Assert.IsTrue(
-                shell.AutoCommandsRegistered,
-                "Sanity: expected the fresh shell's registration to be applied"
-            );
-            Assert.IsFalse(
-                shell.Commands.ContainsKey(CommandName),
-                "Sanity: without inclusion the command must not register"
-            );
+            Assert.IsTrue(shell.AutoCommandsRegistered, "Sanity: expected the fresh shell's registration to be applied");
+            Assert.IsFalse(shell.Commands.ContainsKey(CommandName), "Sanity: without inclusion the command must not register");
 
             Register(DynamicAssembly);
 
             shell.ClearAutoRegisteredCommands();
             shell.InitializeAutoRegisteredCommands();
-            Assert.IsTrue(
-                shell.Commands.ContainsKey(CommandName),
-                "The next registration cycle should honor a late inclusion"
-            );
+            Assert.IsTrue(shell.Commands.ContainsKey(CommandName), "The next registration cycle should honor a late inclusion");
         }
 #endif
 

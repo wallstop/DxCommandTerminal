@@ -38,10 +38,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 return true;
             }
 
-            return CharUnicodeInfo.GetUnicodeCategory(c)
-                is UnicodeCategory.Format
-                    or UnicodeCategory.LineSeparator
-                    or UnicodeCategory.ParagraphSeparator;
+            return CharUnicodeInfo.GetUnicodeCategory(c) is UnicodeCategory.Format or UnicodeCategory.LineSeparator or UnicodeCategory.ParagraphSeparator;
         }
 
         [Test]
@@ -56,18 +53,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     c == '\r' ? "\n"
                     : IsReserved(c) ? Escape(c)
                     : source;
-                Assert.AreEqual(
-                    expected,
-                    actual,
-                    $"U+{code:X4} should render as '{expected}', not '{actual}'"
-                );
+                Assert.AreEqual(expected, actual, $"U+{code:X4} should render as '{expected}', not '{actual}'");
 
                 /* Idempotence is load-bearing: trace re-logs stored text. */
-                Assert.AreSame(
-                    actual,
-                    LogTextSanitizer.Sanitize(actual),
-                    $"U+{code:X4} was not stable under a second pass"
-                );
+                Assert.AreSame(actual, LogTextSanitizer.Sanitize(actual), $"U+{code:X4} was not stable under a second pass");
             }
         }
 
@@ -84,11 +73,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 character. \u plus four digits would print \uE0001, a
                 different character from the one that was logged.
              */
-            Assert.AreEqual(
-                $"\\U{scalar:X8}",
-                LogTextSanitizer.Sanitize(char.ConvertFromUtf32(scalar)),
-                $"U+{scalar:X} is Format and must render as an eight-digit escape"
-            );
+            Assert.AreEqual($"\\U{scalar:X8}", LogTextSanitizer.Sanitize(char.ConvertFromUtf32(scalar)), $"U+{scalar:X} is Format and must render as an eight-digit escape");
         }
 
         [TestCase(0x1F1FA, 0x1F1F8, TestName = "Scalar.EmojiFlag")]
@@ -101,11 +86,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 and mangle every non-BMP character it meets.
              */
             string source = new string(new[] { (char)high, (char)low });
-            Assert.AreSame(
-                source,
-                LogTextSanitizer.Sanitize(source),
-                "A symbol outside the reserved categories must be returned untouched"
-            );
+            Assert.AreSame(source, LogTextSanitizer.Sanitize(source), "A symbol outside the reserved categories must be returned untouched");
         }
 
         [Test]
@@ -124,11 +105,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void OrdinaryTextIsNotRebuilt()
         {
             string message = "Player took 12 damage (health 88/100) at (3.5, -2.0, 0.0)";
-            Assert.AreSame(
-                message,
-                LogTextSanitizer.Sanitize(message),
-                "A clean message must return the same reference so a routine log write allocates nothing"
-            );
+            Assert.AreSame(message, LogTextSanitizer.Sanitize(message), "A clean message must return the same reference so a routine log write allocates nothing");
         }
 
         [Test]
@@ -141,21 +118,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void CarriageReturnBecomesOneLineBreak()
         {
-            Assert.AreEqual(
-                "one\ntwo",
-                LogTextSanitizer.Sanitize("one\r\ntwo"),
-                "A CRLF pair is one line break, never a visible escape"
-            );
-            Assert.AreEqual(
-                "one\ntwo",
-                LogTextSanitizer.Sanitize("one\rtwo"),
-                "A lone carriage return is still a line break"
-            );
-            Assert.AreEqual(
-                "one\ntwo\nthree",
-                LogTextSanitizer.Sanitize("one\r\ntwo\r\nthree"),
-                "Every frame of a multi-frame trace must stay clean"
-            );
+            Assert.AreEqual("one\ntwo", LogTextSanitizer.Sanitize("one\r\ntwo"), "A CRLF pair is one line break, never a visible escape");
+            Assert.AreEqual("one\ntwo", LogTextSanitizer.Sanitize("one\rtwo"), "A lone carriage return is still a line break");
+            Assert.AreEqual("one\ntwo\nthree", LogTextSanitizer.Sanitize("one\r\ntwo\r\nthree"), "Every frame of a multi-frame trace must stay clean");
         }
 
         [Test]
@@ -167,11 +132,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 log lines that must read exactly as they were written.
              */
             string message = @"loaded C:\Users\dev\file.txt with \d+ and ""escaped"" \n";
-            Assert.AreSame(
-                message,
-                LogTextSanitizer.Sanitize(message),
-                "A readable line must return the same reference, unescaped"
-            );
+            Assert.AreSame(message, LogTextSanitizer.Sanitize(message), "A readable line must return the same reference, unescaped");
         }
 
         [Test]
@@ -185,11 +146,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             string source = "Admin\u202Eexe\u0007 path C:\\temp\r\nnext";
             string once = LogTextSanitizer.Sanitize(source);
             Assert.AreEqual(once, LogTextSanitizer.Sanitize(once), "Escapes must be stable");
-            Assert.AreSame(
-                once,
-                LogTextSanitizer.Sanitize(once),
-                "A sanitized message re-entering the funnel must return the same reference"
-            );
+            Assert.AreSame(once, LogTextSanitizer.Sanitize(once), "A sanitized message re-entering the funnel must return the same reference");
         }
 
         [Test]
@@ -207,11 +164,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             string[] copy = Array.Empty<string>();
             LogTextSanitizer.SanitizeInto(names, ref copy);
             Assert.AreEqual(new[] { "Admin\\u202Eexe", "plain" }, copy, "Both names escape");
-            Assert.AreEqual(
-                "Admin\u202Eexe",
-                names[0],
-                "The caller's own name stays raw: the popup index selects it"
-            );
+            Assert.AreEqual("Admin\u202Eexe", names[0], "The caller's own name stays raw: the popup index selects it");
             Assert.AreSame("plain", copy[1], "A clean name passes through by reference");
 
             LogTextSanitizer.SanitizeInto(new[] { "one", "two", "three" }, ref copy);
@@ -225,11 +178,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             string[] fromNull = null;
             LogTextSanitizer.SanitizeInto(names, ref fromNull);
-            Assert.AreEqual(
-                new[] { "Admin\\u202Eexe", "plain" },
-                fromNull,
-                "A null copy is allocated and filled from the caller's names"
-            );
+            Assert.AreEqual(new[] { "Admin\\u202Eexe", "plain" }, fromNull, "A null copy is allocated and filled from the caller's names");
             Assert.AreNotSame(names, fromNull, "The caller's array is never the copy");
         }
 
@@ -243,54 +192,32 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 survive whole.
              */
             string message = new string('a', 5000);
-            Assert.AreSame(
-                message,
-                LogTextSanitizer.Sanitize(message),
-                "Log data must never be truncated at the funnel"
-            );
+            Assert.AreSame(message, LogTextSanitizer.Sanitize(message), "Log data must never be truncated at the funnel");
         }
 
         [Test]
         public void TheWholeMessageRunsThroughTheBuffer()
         {
             CommandLog log = new(4);
-            Assert.IsTrue(
-                log.HandleLog("Admin\u202Eexe", string.Empty, TerminalLogType.Message),
-                "Sanity: the write must land"
-            );
+            Assert.IsTrue(log.HandleLog("Admin\u202Eexe", string.Empty, TerminalLogType.Message), "Sanity: the write must land");
             log.TryGetLast(out LogItem stored);
-            Assert.AreEqual(
-                "Admin\\u202Eexe",
-                stored.message,
-                "The shared funnel must sanitize, not just the terminal view"
-            );
+            Assert.AreEqual("Admin\\u202Eexe", stored.message, "The shared funnel must sanitize, not just the terminal view");
         }
 
         [Test]
         public void TheStackTraceIsNormalizedToo()
         {
             CommandLog log = new(4) { StackTraceMode = TerminalStackTraceMode.All };
-            Assert.IsTrue(
-                log.HandleLog("boom", "at Frame\u202E()", TerminalLogType.Error),
-                "Sanity: the write must land"
-            );
+            Assert.IsTrue(log.HandleLog("boom", "at Frame\u202E()", TerminalLogType.Error), "Sanity: the write must land");
             log.TryGetLast(out LogItem stored);
-            Assert.AreEqual(
-                "at Frame\\u202E()",
-                stored.stackTrace,
-                "A trace reaches the log list through the same command, so it funnels too"
-            );
+            Assert.AreEqual("at Frame\\u202E()", stored.stackTrace, "A trace reaches the log list through the same command, so it funnels too");
         }
 
         [Test]
         public void ShortPaletteOutputIsUntouched()
         {
             string text = "ok\ndone";
-            Assert.AreSame(
-                text,
-                CommandPaletteUI.ClampOutputLength(text, 512),
-                "Output inside the budget must return the same reference"
-            );
+            Assert.AreSame(text, CommandPaletteUI.ClampOutputLength(text, 512), "Output inside the budget must return the same reference");
         }
 
         [Test]

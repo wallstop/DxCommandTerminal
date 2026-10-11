@@ -88,16 +88,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             yield return SpawnOpenTerminal();
             yield return FillTheLog();
-            yield return WaitForLogAtEnd(
-                FillMarker,
-                "A burst of output leaves the view at its end"
-            );
+            yield return WaitForLogAtEnd(FillMarker, "A burst of output leaves the view at its end");
 
             Terminal.Log("arrived after the buffer was full");
-            yield return WaitForLogAtEnd(
-                "arrived after the buffer was full",
-                "A log that rotates a full buffer is followed"
-            );
+            yield return WaitForLogAtEnd("arrived after the buffer was full", "A log that rotates a full buffer is followed");
 
             /*
                 A line taller than the one it replaced grows the extent with no
@@ -107,15 +101,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
              */
             float extentBefore = LogScroller().highValue;
             Terminal.Log(WrappingLine);
-            yield return WaitForLogAtEnd(
-                WrapMarker,
-                "A line taller than the one it replaced is followed"
-            );
-            Assert.That(
-                LogScroller().highValue,
-                Is.GreaterThan(extentBefore),
-                "The wrapping line really did make the log content taller"
-            );
+            yield return WaitForLogAtEnd(WrapMarker, "A line taller than the one it replaced is followed");
+            Assert.That(LogScroller().highValue, Is.GreaterThan(extentBefore), "The wrapping line really did make the log content taller");
         }
 
         [UnityTest]
@@ -127,21 +114,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Scroller scroller = LogScroller();
             float parked = (scroller.lowValue + scroller.value) / 2f;
-            Assert.That(
-                parked,
-                Is.GreaterThan(scroller.lowValue),
-                "The fill really overflowed the view, so a scroll away has somewhere to go"
-            );
+            Assert.That(parked, Is.GreaterThan(scroller.lowValue), "The fill really overflowed the view, so a scroll away has somewhere to go");
             scroller.value = parked;
             yield return WaitForLogValue(parked, "The developer's scroll landed");
 
             Terminal.Log("arrived while parked");
             yield return Settle();
-            Assert.That(
-                scroller.value,
-                Is.EqualTo(parked).Within(Tolerance),
-                "Output that arrives at a scrolled-up view does not yank it to the end"
-            );
+            Assert.That(scroller.value, Is.EqualTo(parked).Within(Tolerance), "Output that arrives at a scrolled-up view does not yank it to the end");
         }
 
         [UnityTest]
@@ -159,10 +138,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return WaitForLogAtEnd(FillMarker, "Reaching the end re-attaches the tail");
 
             Terminal.Log("arrived after re-attaching");
-            yield return WaitForLogAtEnd(
-                "arrived after re-attaching",
-                "A re-attached tail follows the next line"
-            );
+            yield return WaitForLogAtEnd("arrived after re-attaching", "A re-attached tail follows the next line");
         }
 
         [UnityTest]
@@ -177,16 +153,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             scroller.value = parked;
             yield return WaitForLogValue(parked, "The developer's scroll landed");
 
-            Assert.IsTrue(
-                Terminal.Shell.AddCommand(
-                    ProbeName,
-                    _ => Terminal.Log(ProbeLine),
-                    minArgs: 0,
-                    maxArgs: 0,
-                    help: "Log tail probe"
-                ),
-                "The probe command registers"
-            );
+            Assert.IsTrue(Terminal.Shell.AddCommand(ProbeName, _ => Terminal.Log(ProbeLine), minArgs: 0, maxArgs: 0, help: "Log tail probe"), "The probe command registers");
 
             DefaultTerminalInput.Instance.CommandText = ProbeName;
             _terminal.EnterCommand();
@@ -195,8 +162,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         private ScrollView LogView()
         {
-            ScrollView logView =
-                _terminal._uiDocument.rootVisualElement.Q("LogScrollView") as ScrollView;
+            ScrollView logView = _terminal._uiDocument.rootVisualElement.Q("LogScrollView") as ScrollView;
             Assert.That(logView, Is.Not.Null, "The log scroll view exists on an open terminal");
             return logView;
         }
@@ -230,12 +196,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             for (int line = 1; line <= FillLines; ++line)
             {
-                Terminal.Log(
-                    "fill "
-                        + line.ToString(CultureInfo.InvariantCulture)
-                        + " of "
-                        + FillLines.ToString(CultureInfo.InvariantCulture)
-                );
+                Terminal.Log("fill " + line.ToString(CultureInfo.InvariantCulture) + " of " + FillLines.ToString(CultureInfo.InvariantCulture));
             }
 
             yield return null;
@@ -261,8 +222,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             while (0 < frameBudget-- && stableFrames < StableLayoutFrames)
             {
                 ScrollView view = LogView();
-                bool laidOut =
-                    0f < LogScroller().highValue && 0f < view.contentViewport.layout.height;
+                bool laidOut = 0f < LogScroller().highValue && 0f < view.contentViewport.layout.height;
                 stableFrames = laidOut ? stableFrames + 1 : 0;
                 yield return null;
             }
@@ -283,11 +243,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             while (0 < frameBudget--)
             {
                 Scroller scroller = LogScroller();
-                if (
-                    0f < scroller.highValue
-                    && scroller.highValue - scroller.value < Tolerance
-                    && LastLogText().Contains(expectedLastLine, StringComparison.Ordinal)
-                )
+                if (0f < scroller.highValue && scroller.highValue - scroller.value < Tolerance && LastLogText().Contains(expectedLastLine, StringComparison.Ordinal))
                 {
                     break;
                 }
@@ -296,17 +252,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             }
 
             Scroller settled = LogScroller();
-            Assert.That(
-                0f < settled.highValue,
-                Is.True,
-                "The log content overflows the view so the scroller engages"
-            );
+            Assert.That(0f < settled.highValue, Is.True, "The log content overflows the view so the scroller engages");
             Assert.That(settled.highValue - settled.value, Is.LessThan(Tolerance), message);
-            Assert.That(
-                LastLogText(),
-                Does.Contain(expectedLastLine),
-                $"The log line '{expectedLastLine}' is the one in view at the end"
-            );
+            Assert.That(LastLogText(), Does.Contain(expectedLastLine), $"The log line '{expectedLastLine}' is the one in view at the end");
         }
 
         private IEnumerator WaitForLogValue(float expected, string message)
@@ -353,21 +301,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return null;
 
             int frameBudget = 600;
-            while (
-                0 < frameBudget--
-                && (
-                    _terminal._commandInput == null
-                    || _terminal._commandInput.resolvedStyle.display != DisplayStyle.Flex
-                )
-            )
+            while (0 < frameBudget-- && (_terminal._commandInput == null || _terminal._commandInput.resolvedStyle.display != DisplayStyle.Flex))
             {
                 yield return null;
             }
 
-            Assert.That(
-                _terminal._commandInput != null,
-                "The terminal input field exists after the terminal opens"
-            );
+            Assert.That(_terminal._commandInput != null, "The terminal input field exists after the terminal opens");
         }
 
 #if UNITY_EDITOR

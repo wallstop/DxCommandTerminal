@@ -44,15 +44,10 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
 
         private readonly HashSet<string> _allCommands = new(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _defaultCommands = new(StringComparer.OrdinalIgnoreCase);
-        private readonly HashSet<string> _nonDefaultCommands = new(
-            StringComparer.OrdinalIgnoreCase
-        );
+        private readonly HashSet<string> _nonDefaultCommands = new(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _seenCommands = new(StringComparer.OrdinalIgnoreCase);
-        private readonly SortedSet<string> _intermediateResults = new(
-            StringComparer.OrdinalIgnoreCase
-        );
-        private readonly SortedDictionary<string, SortedDictionary<string, Font>> _fontsByPrefix =
-            new(StringComparer.OrdinalIgnoreCase);
+        private readonly SortedSet<string> _intermediateResults = new(StringComparer.OrdinalIgnoreCase);
+        private readonly SortedDictionary<string, SortedDictionary<string, Font>> _fontsByPrefix = new(StringComparer.OrdinalIgnoreCase);
 
         private readonly Dictionary<TerminalLogType, int> _seenLogTypes = new();
         private readonly List<TerminalFontPack> _fontPacks = new();
@@ -98,15 +93,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                 if (terminal._themePack == null)
                 {
                     TerminalThemePack[] themePacks = LoadAll<TerminalThemePack>();
-                    int themePackIndex = Array.FindIndex(
-                        themePacks,
-                        themePack =>
-                            string.Equals(
-                                themePack.name,
-                                "Minimal",
-                                StringComparison.OrdinalIgnoreCase
-                            )
-                    );
+                    int themePackIndex = Array.FindIndex(themePacks, themePack => string.Equals(themePack.name, "Minimal", StringComparison.OrdinalIgnoreCase));
                     if (themePackIndex < 0)
                     {
                         themePackIndex = themePacks.Length - 1;
@@ -123,15 +110,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                 if (terminal._fontPack == null)
                 {
                     TerminalFontPack[] fontPacks = LoadAll<TerminalFontPack>();
-                    int fontPackIndex = Array.FindIndex(
-                        fontPacks,
-                        fontPack =>
-                            string.Equals(
-                                fontPack.name,
-                                "Minimal",
-                                StringComparison.OrdinalIgnoreCase
-                            )
-                    );
+                    int fontPackIndex = Array.FindIndex(fontPacks, fontPack => string.Equals(fontPack.name, "Minimal", StringComparison.OrdinalIgnoreCase));
                     if (fontPackIndex < 0)
                     {
                         fontPackIndex = fontPacks.Length - 1;
@@ -156,8 +135,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
             {
                 switch (addedComponent)
                 {
-                    case TerminalKeyboardController keyboardController
-                        when keyboardController != null:
+                    case TerminalKeyboardController keyboardController when keyboardController != null:
                     {
                         if (keyboardController.TryGetComponent(out terminal))
                         {
@@ -184,25 +162,16 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                     {
                         if (playerInput.TryGetComponent(out terminal))
                         {
-                            if (
-                                !playerInput.TryGetComponent(
-                                    out TerminalPlayerInputController playerInputController
-                                )
-                            )
+                            if (!playerInput.TryGetComponent(out TerminalPlayerInputController playerInputController))
                             {
-                                playerInputController =
-                                    playerInput.gameObject.AddComponent<TerminalPlayerInputController>();
+                                playerInputController = playerInput.gameObject.AddComponent<TerminalPlayerInputController>();
                                 playerInputController.terminal = terminal;
                                 EditorUtility.SetDirty(playerInputController);
                                 EditorUtility.SetDirty(playerInput.gameObject);
                                 anyChange = true;
                             }
 
-                            if (
-                                playerInput.TryGetComponent(
-                                    out TerminalKeyboardController keyboardController
-                                )
-                            )
+                            if (playerInput.TryGetComponent(out TerminalKeyboardController keyboardController))
                             {
                                 keyboardController.enabled = false;
                                 EditorUtility.SetDirty(keyboardController);
@@ -253,10 +222,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
 
             HashSet<T> unique = new();
             List<T> ordered = new();
-            string[] assetGuids = AssetDatabase.FindAssets(
-                $"t:{typeof(T).Name}",
-                directories.ToArray()
-            );
+            string[] assetGuids = AssetDatabase.FindAssets($"t:{typeof(T).Name}", directories.ToArray());
             foreach (string guid in assetGuids)
             {
                 string assetPath = AssetDatabase.GUIDToAssetPath(guid);
@@ -280,9 +246,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
             bool anyChanged = false;
             if (terminal._uiDocument == null)
             {
-                terminal._uiDocument = terminal.TryGetComponent(out UIDocument uiDocument)
-                    ? uiDocument
-                    : terminal.gameObject.AddComponent<UIDocument>();
+                terminal._uiDocument = terminal.TryGetComponent(out UIDocument uiDocument) ? uiDocument : terminal.gameObject.AddComponent<UIDocument>();
                 anyChanged = true;
             }
 
@@ -295,10 +259,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
             string absoluteStylesPath = DirectoryHelper.FindAbsolutePathToDirectory("Styles");
             if (!string.IsNullOrWhiteSpace(absoluteStylesPath))
             {
-                panelSettingGuids = AssetDatabase.FindAssets(
-                    "t:PanelSettings",
-                    new[] { absoluteStylesPath }
-                );
+                panelSettingGuids = AssetDatabase.FindAssets("t:PanelSettings", new[] { absoluteStylesPath });
                 TryFindTerminalSettings();
                 if (terminal._uiDocument.panelSettings != null)
                 {
@@ -337,9 +298,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                         continue;
                     }
 
-                    PanelSettings panelSettings = AssetDatabase.LoadAssetAtPath<PanelSettings>(
-                        assetPath
-                    );
+                    PanelSettings panelSettings = AssetDatabase.LoadAssetAtPath<PanelSettings>(assetPath);
 
                     if (panelSettings == null)
                     {
@@ -360,16 +319,9 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
             EditorGUILayout.LabelField("Command Manipulation", EditorStyles.boldLabel);
         }
 
-        private static void CollectFonts(
-            TerminalUI terminal,
-            SortedDictionary<string, SortedDictionary<string, Font>> fontsByPrefix
-        )
+        private static void CollectFonts(TerminalUI terminal, SortedDictionary<string, SortedDictionary<string, Font>> fontsByPrefix)
         {
-            if (
-                terminal == null
-                || terminal._fontPack == null
-                || terminal._fontPack._fonts is not { Count: > 0 }
-            )
+            if (terminal == null || terminal._fontPack == null || terminal._fontPack._fonts is not { Count: > 0 })
             {
                 return;
             }
@@ -408,9 +360,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
 
                 if (!fontsByPrefix.TryGetValue(key, out SortedDictionary<string, Font> fontMapping))
                 {
-                    fontMapping = new SortedDictionary<string, Font>(
-                        StringComparer.OrdinalIgnoreCase
-                    );
+                    fontMapping = new SortedDictionary<string, Font>(StringComparer.OrdinalIgnoreCase);
                     fontsByPrefix[key] = fontMapping;
                 }
 
@@ -433,11 +383,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
 
         private static bool TrySetupDefaultTheme(TerminalUI terminal)
         {
-            if (
-                !string.IsNullOrWhiteSpace(terminal.CurrentTheme)
-                && terminal._themePack != null
-                && NamesContain(terminal._themePack._themeNames, terminal.CurrentTheme)
-            )
+            if (!string.IsNullOrWhiteSpace(terminal.CurrentTheme) && terminal._themePack != null && NamesContain(terminal._themePack._themeNames, terminal.CurrentTheme))
             {
                 return false;
             }
@@ -453,11 +399,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
             return true;
         }
 
-        private static string FindThemeName(
-            List<string> names,
-            string firstMarker,
-            string secondMarker
-        )
+        private static string FindThemeName(List<string> names, string firstMarker, string secondMarker)
         {
             string name = FindName(names, firstMarker);
             if (string.IsNullOrWhiteSpace(name))
@@ -486,11 +428,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
             return null;
         }
 
-        private static string FindFontName(
-            List<Font> fonts,
-            string firstMarker,
-            string secondMarker
-        )
+        private static string FindFontName(List<Font> fonts, string firstMarker, string secondMarker)
         {
             foreach (Font font in fonts)
             {
@@ -502,10 +440,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                 string fontName = font.name;
                 if (
                     fontName.Contains(firstMarker, StringComparison.OrdinalIgnoreCase)
-                    && (
-                        secondMarker == null
-                        || fontName.Contains(secondMarker, StringComparison.OrdinalIgnoreCase)
-                    )
+                    && (secondMarker == null || fontName.Contains(secondMarker, StringComparison.OrdinalIgnoreCase))
                 )
                 {
                     return fontName;
@@ -517,11 +452,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
 
         private static bool TrySetupDefaultFont(TerminalUI terminal)
         {
-            if (
-                terminal.CurrentFont != null
-                && terminal._fontPack != null
-                && terminal._fontPack._fonts.Contains(terminal.CurrentFont)
-            )
+            if (terminal.CurrentFont != null && terminal._fontPack != null && terminal._fontPack._fonts.Contains(terminal.CurrentFont))
             {
                 return false;
             }
@@ -564,14 +495,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                 defaultFont = null;
                 foreach (Font font in fonts)
                 {
-                    if (
-                        font != null
-                        && string.Equals(
-                            font.name,
-                            defaultFontName,
-                            StringComparison.OrdinalIgnoreCase
-                        )
-                    )
+                    if (font != null && string.Equals(font.name, defaultFontName, StringComparison.OrdinalIgnoreCase))
                     {
                         defaultFont = font;
                         break;
@@ -588,18 +512,9 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
             the source list changes (reference + count stamps) and otherwise
             hands back the cached array, so OnGUI never allocates per frame.
          */
-        private static string[] RefreshCache<T>(
-            List<T> source,
-            Func<T, string> nameOf,
-            ref List<T> cachedSource,
-            ref string[] cached
-        )
+        private static string[] RefreshCache<T>(List<T> source, Func<T, string> nameOf, ref List<T> cachedSource, ref string[] cached)
         {
-            if (
-                cached == null
-                || !ReferenceEquals(cachedSource, source)
-                || cached.Length != source.Count
-            )
+            if (cached == null || !ReferenceEquals(cachedSource, source) || cached.Length != source.Count)
             {
                 string[] names = new string[source.Count];
                 int position = 0;
@@ -617,32 +532,17 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
 
         private static string[] PackNames(List<TerminalThemePack> themePacks)
         {
-            return RefreshCache(
-                themePacks,
-                static pack => LogTextSanitizer.Sanitize(pack.name),
-                ref _themePackNamesSource,
-                ref _themePackNames
-            );
+            return RefreshCache(themePacks, static pack => LogTextSanitizer.Sanitize(pack.name), ref _themePackNamesSource, ref _themePackNames);
         }
 
         private static string[] PackNames(List<TerminalFontPack> fontPacks)
         {
-            return RefreshCache(
-                fontPacks,
-                static pack => LogTextSanitizer.Sanitize(pack.name),
-                ref _fontPackNamesSource,
-                ref _fontPackNames
-            );
+            return RefreshCache(fontPacks, static pack => LogTextSanitizer.Sanitize(pack.name), ref _fontPackNamesSource, ref _fontPackNames);
         }
 
         private static string[] FriendlyThemeNames(List<string> themeNames)
         {
-            return RefreshCache(
-                themeNames,
-                static name => FriendlyThemeName(name),
-                ref _themeDisplayNameSource,
-                ref _themeDisplayNames
-            );
+            return RefreshCache(themeNames, static name => FriendlyThemeName(name), ref _themeDisplayNameSource, ref _themeDisplayNames);
         }
 
         /*
@@ -652,15 +552,10 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
          */
         private static string FriendlyThemeName(string themeName)
         {
-            if (
-                themeName.Contains("-theme", StringComparison.OrdinalIgnoreCase)
-                || themeName.Contains("theme-", StringComparison.OrdinalIgnoreCase)
-            )
+            if (themeName.Contains("-theme", StringComparison.OrdinalIgnoreCase) || themeName.Contains("theme-", StringComparison.OrdinalIgnoreCase))
             {
                 return LogTextSanitizer.Sanitize(
-                    themeName
-                        .Replace("-theme", string.Empty, StringComparison.OrdinalIgnoreCase)
-                        .Replace("theme-", string.Empty, StringComparison.OrdinalIgnoreCase)
+                    themeName.Replace("-theme", string.Empty, StringComparison.OrdinalIgnoreCase).Replace("theme-", string.Empty, StringComparison.OrdinalIgnoreCase)
                 );
             }
 
@@ -679,13 +574,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
             change of contents is a pre-existing limit of the count stamp,
             and it hits both arrays equally.
          */
-        private static string[] RefreshKeyCache(
-            ICollection<string> keys,
-            bool force,
-            ref bool stale,
-            ref string[] cached,
-            ref string[] labels
-        )
+        private static string[] RefreshKeyCache(ICollection<string> keys, bool force, ref bool stale, ref string[] cached, ref string[] labels)
         {
             if (!force && !stale && cached.Length == keys.Count)
             {
@@ -703,20 +592,12 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
         {
             if (_impactButtonStyle == null)
             {
-                _impactButtonStyle = new GUIStyle(GUI.skin.button)
-                {
-                    normal = { textColor = Color.yellow },
-                    fontStyle = FontStyle.Bold,
-                };
+                _impactButtonStyle = new GUIStyle(GUI.skin.button) { normal = { textColor = Color.yellow }, fontStyle = FontStyle.Bold };
             }
 
             if (_impactLabelStyle == null)
             {
-                _impactLabelStyle = new GUIStyle(GUI.skin.label)
-                {
-                    normal = { textColor = new Color(1f, 0.3f, 0.3f, 1f) },
-                    fontStyle = FontStyle.Bold,
-                };
+                _impactLabelStyle = new GUIStyle(GUI.skin.label) { normal = { textColor = new Color(1f, 0.3f, 0.3f, 1f) }, fontStyle = FontStyle.Bold };
             }
 
             if (_allCommands.Count == 0 || _defaultCommands.Count == 0)
@@ -772,24 +653,12 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
 
         private string[] FontKeys()
         {
-            return RefreshKeyCache(
-                _fontsByPrefix.Keys,
-                force: false,
-                ref _fontKeyCacheStale,
-                ref _fontKeyCache,
-                ref _fontKeyLabels
-            );
+            return RefreshKeyCache(_fontsByPrefix.Keys, force: false, ref _fontKeyCacheStale, ref _fontKeyCache, ref _fontKeyLabels);
         }
 
         private string[] SecondFontKeys(SortedDictionary<string, Font> availableFonts)
         {
-            return RefreshKeyCache(
-                availableFonts.Keys,
-                force: _fontKeyCacheStale,
-                ref _secondFontKeyCacheStale,
-                ref _secondFontKeyCache,
-                ref _secondFontKeyLabels
-            );
+            return RefreshKeyCache(availableFonts.Keys, force: _fontKeyCacheStale, ref _secondFontKeyCacheStale, ref _secondFontKeyCache, ref _secondFontKeyLabels);
         }
 
         private void OnEnable()
@@ -877,10 +746,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                     int themeCount = terminal._themePack._themeNames.Count;
                     int newThemeIndex = ((_themeIndex ?? -1) + 1) % themeCount;
                     newThemeIndex = (newThemeIndex + themeCount) % themeCount;
-                    terminal.SetTheme(
-                        terminal._themePack._themeNames[newThemeIndex],
-                        persist: _persistThemeChanges
-                    );
+                    terminal.SetTheme(terminal._themePack._themeNames[newThemeIndex], persist: _persistThemeChanges);
                     _themeIndex = newThemeIndex;
                 }
 
@@ -975,10 +841,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
             {
                 EditorGUILayout.LabelField("Preview", EditorStyles.boldLabel);
                 bool oldPersistThemeChanges = _persistThemeChanges;
-                _persistThemeChanges = GUILayout.Toggle(
-                    _persistThemeChanges,
-                    "Persist Theme Changes"
-                );
+                _persistThemeChanges = GUILayout.Toggle(_persistThemeChanges, "Persist Theme Changes");
 
                 if (oldPersistThemeChanges != _persistThemeChanges)
                 {
@@ -1026,32 +889,19 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                 return;
             }
 
-            bool clicked = _persistThemeChanges
-                ? GUILayout.Button("Set Random Theme", _impactButtonStyle)
-                : GUILayout.Button("Set Random Theme ");
+            bool clicked = _persistThemeChanges ? GUILayout.Button("Set Random Theme", _impactButtonStyle) : GUILayout.Button("Set Random Theme ");
 
             if (clicked)
             {
                 TerminalUI terminal = target as TerminalUI;
-                if (
-                    terminal != null
-                    && terminal._themePack != null
-                    && terminal._themePack._themeNames is { Count: > 0 }
-                )
+                if (terminal != null && terminal._themePack != null && terminal._themePack._themeNames is { Count: > 0 })
                 {
                     int newThemeIndex;
                     do
                     {
-                        newThemeIndex = ThreadLocalRandom.Instance.Next(
-                            terminal._themePack._themeNames.Count
-                        );
-                    } while (
-                        newThemeIndex == _themeIndex && terminal._themePack._themeNames.Count != 1
-                    );
-                    terminal.SetTheme(
-                        terminal._themePack._themeNames[newThemeIndex],
-                        persist: _persistThemeChanges
-                    );
+                        newThemeIndex = ThreadLocalRandom.Instance.Next(terminal._themePack._themeNames.Count);
+                    } while (newThemeIndex == _themeIndex && terminal._themePack._themeNames.Count != 1);
+                    terminal.SetTheme(terminal._themePack._themeNames[newThemeIndex], persist: _persistThemeChanges);
                     _themeIndex = newThemeIndex;
                 }
             }
@@ -1064,18 +914,12 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                 return;
             }
 
-            bool clicked = _persistThemeChanges
-                ? GUILayout.Button("Set Random Font", _impactButtonStyle)
-                : GUILayout.Button("Set Random Font ");
+            bool clicked = _persistThemeChanges ? GUILayout.Button("Set Random Font", _impactButtonStyle) : GUILayout.Button("Set Random Font ");
 
             if (clicked)
             {
                 TerminalUI terminal = target as TerminalUI;
-                if (
-                    terminal != null
-                    && terminal._fontPack != null
-                    && terminal._fontPack._fonts is { Count: > 0 }
-                )
+                if (terminal != null && terminal._fontPack != null && terminal._fontPack._fonts is { Count: > 0 })
                 {
                     Font newFont = terminal.SetRandomFont(persist: _persistThemeChanges);
                     if (newFont != null)
@@ -1097,9 +941,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
             }
             else
             {
-                bool clicked = _persistThemeChanges
-                    ? GUILayout.Button("Start Cycling Fonts", _impactButtonStyle)
-                    : GUILayout.Button("Start Cycling Fonts");
+                bool clicked = _persistThemeChanges ? GUILayout.Button("Start Cycling Fonts", _impactButtonStyle) : GUILayout.Button("Start Cycling Fonts");
                 if (clicked)
                 {
                     StartCyclingFonts();
@@ -1133,9 +975,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
             }
             else
             {
-                bool clicked = _persistThemeChanges
-                    ? GUILayout.Button("Start Cycling Themes", _impactButtonStyle)
-                    : GUILayout.Button("Start Cycling Themes");
+                bool clicked = _persistThemeChanges ? GUILayout.Button("Start Cycling Themes", _impactButtonStyle) : GUILayout.Button("Start Cycling Themes");
                 if (clicked)
                 {
                     StartCyclingThemes();
@@ -1163,9 +1003,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
         {
             int firstIndex = 0;
             bool foundFont = false;
-            foreach (
-                KeyValuePair<string, SortedDictionary<string, Font>> fontKeyEntry in _fontsByPrefix
-            )
+            foreach (KeyValuePair<string, SortedDictionary<string, Font>> fontKeyEntry in _fontsByPrefix)
             {
                 int secondIndex = 0;
                 foreach (KeyValuePair<string, Font> secondFontKeyEntry in fontKeyEntry.Value)
@@ -1216,30 +1054,18 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                         GUILayout.Label("Select Theme Pack:");
                     }
 
-                    int selectedThemePackIndex = EditorGUILayout.Popup(
-                        _themePackIndex.GetValueOrDefault(-1),
-                        PackNames(_themePacks)
-                    );
+                    int selectedThemePackIndex = EditorGUILayout.Popup(_themePackIndex.GetValueOrDefault(-1), PackNames(_themePacks));
                     _themePackIndex = selectedThemePackIndex < 0 ? null : selectedThemePackIndex;
-                    if (
-                        _themePackIndex is int themePackIndex
-                        && 0 <= themePackIndex
-                        && themePackIndex < _themePacks.Count
-                    )
+                    if (_themePackIndex is int themePackIndex && 0 <= themePackIndex && themePackIndex < _themePacks.Count)
                     {
                         TerminalThemePack themePack = _themePacks[themePackIndex];
-                        bool clicked =
-                            themePack != terminal._themePack
-                                ? GUILayout.Button("Set Theme Pack", _impactButtonStyle)
-                                : GUILayout.Button("Set Theme Pack");
+                        bool clicked = themePack != terminal._themePack ? GUILayout.Button("Set Theme Pack", _impactButtonStyle) : GUILayout.Button("Set Theme Pack");
                         if (clicked)
                         {
                             if (themePack != terminal._themePack)
                             {
                                 terminal._themePack = themePack;
-                                int foundThemeIndex = themePack._themeNames.IndexOf(
-                                    terminal.CurrentTheme
-                                );
+                                int foundThemeIndex = themePack._themeNames.IndexOf(terminal.CurrentTheme);
                                 _themeIndex = foundThemeIndex < 0 ? null : foundThemeIndex;
                                 if (!_themeIndex.HasValue)
                                 {
@@ -1277,22 +1103,12 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                         GUILayout.Label("Select Font Pack:");
                     }
 
-                    int selectedFontPackIndex = EditorGUILayout.Popup(
-                        _fontPackIndex.GetValueOrDefault(-1),
-                        PackNames(_fontPacks)
-                    );
+                    int selectedFontPackIndex = EditorGUILayout.Popup(_fontPackIndex.GetValueOrDefault(-1), PackNames(_fontPacks));
                     _fontPackIndex = selectedFontPackIndex < 0 ? null : selectedFontPackIndex;
-                    if (
-                        _fontPackIndex is int fontPackIndex
-                        && 0 <= fontPackIndex
-                        && fontPackIndex < _fontPacks.Count
-                    )
+                    if (_fontPackIndex is int fontPackIndex && 0 <= fontPackIndex && fontPackIndex < _fontPacks.Count)
                     {
                         TerminalFontPack fontPack = _fontPacks[fontPackIndex];
-                        bool clicked =
-                            fontPack != terminal._fontPack
-                                ? GUILayout.Button("Set Font Pack", _impactButtonStyle)
-                                : GUILayout.Button("Set Font Pack");
+                        bool clicked = fontPack != terminal._fontPack ? GUILayout.Button("Set Font Pack", _impactButtonStyle) : GUILayout.Button("Set Font Pack");
                         if (clicked)
                         {
                             if (fontPack != terminal._fontPack)
@@ -1327,9 +1143,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                 {
                     if (!_themeIndex.HasValue)
                     {
-                        int foundThemeIndex = terminal._themePack._themeNames.IndexOf(
-                            terminal.CurrentTheme
-                        );
+                        int foundThemeIndex = terminal._themePack._themeNames.IndexOf(terminal.CurrentTheme);
                         _themeIndex = foundThemeIndex < 0 ? null : foundThemeIndex;
                     }
 
@@ -1338,28 +1152,14 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                         GUILayout.Label("Select Theme:");
                     }
 
-                    int selectedThemeIndex = EditorGUILayout.Popup(
-                        _themeIndex.GetValueOrDefault(-1),
-                        FriendlyThemeNames(terminal._themePack._themeNames)
-                    );
+                    int selectedThemeIndex = EditorGUILayout.Popup(_themeIndex.GetValueOrDefault(-1), FriendlyThemeNames(terminal._themePack._themeNames));
                     _themeIndex = selectedThemeIndex < 0 ? null : selectedThemeIndex;
 
-                    if (
-                        _themeIndex is int themeIndex
-                        && 0 <= themeIndex
-                        && themeIndex < terminal._themePack._themeNames.Count
-                    )
+                    if (_themeIndex is int themeIndex && 0 <= themeIndex && themeIndex < terminal._themePack._themeNames.Count)
                     {
                         string selectedTheme = terminal._themePack._themeNames[themeIndex];
-                        GUIContent setThemeContent = new(
-                            "Set Theme",
-                            $"Will set the current theme to {LogTextSanitizer.Sanitize(selectedTheme)}"
-                        );
-                        bool clicked = !string.Equals(
-                            selectedTheme,
-                            terminal._persistedTheme,
-                            StringComparison.OrdinalIgnoreCase
-                        )
+                        GUIContent setThemeContent = new("Set Theme", $"Will set the current theme to {LogTextSanitizer.Sanitize(selectedTheme)}");
+                        bool clicked = !string.Equals(selectedTheme, terminal._persistedTheme, StringComparison.OrdinalIgnoreCase)
                             ? GUILayout.Button(setThemeContent, _impactButtonStyle)
                             : GUILayout.Button(setThemeContent);
                         if (clicked)
@@ -1402,10 +1202,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
             {
                 TerminalLogType logType = terminal._ignoredLogTypes[i];
                 int count = 0;
-                if (
-                    Enum.IsDefined(typeof(TerminalLogType), logType)
-                    && (!_seenLogTypes.TryGetValue(logType, out count) || count <= 1)
-                )
+                if (Enum.IsDefined(typeof(TerminalLogType), logType) && (!_seenLogTypes.TryGetValue(logType, out count) || count <= 1))
                 {
                     _seenLogTypes[logType] = count + 1;
                     continue;
@@ -1444,10 +1241,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                     if (0 <= _commandIndex && _commandIndex < ignorableCommands.Length)
                     {
                         string ignorableCommand = ignorableCommands[_commandIndex];
-                        GUIContent ignoreContent = new(
-                            "Ignore Command",
-                            $"Ignores the {LogTextSanitizer.Sanitize(ignorableCommand)} command"
-                        );
+                        GUIContent ignoreContent = new("Ignore Command", $"Ignores the {LogTextSanitizer.Sanitize(ignorableCommand)} command");
                         if (GUILayout.Button(ignoreContent))
                         {
                             terminal._disabledCommands.Add(ignorableCommand);
@@ -1470,10 +1264,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
             _seenCommands.Clear();
             _seenCommands.UnionWith(terminal._disabledCommands);
 
-            if (
-                _seenCommands.Count != terminal._disabledCommands.Count
-                || terminal._disabledCommands.Exists(command => !_allCommands.Contains(command))
-            )
+            if (_seenCommands.Count != terminal._disabledCommands.Count || terminal._disabledCommands.Exists(command => !_allCommands.Contains(command)))
             {
                 EditorGUILayout.BeginHorizontal();
                 try
@@ -1543,10 +1334,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                     }
 
                     string[] fontKeys = FontKeys();
-                    int selectedFontKeyIndex = EditorGUILayout.Popup(
-                        _fontKey.GetValueOrDefault(-1),
-                        _fontKeyLabels
-                    );
+                    int selectedFontKeyIndex = EditorGUILayout.Popup(_fontKey.GetValueOrDefault(-1), _fontKeyLabels);
                     _fontKey = selectedFontKeyIndex < 0 ? null : selectedFontKeyIndex;
 
                     if (currentFontKey != _fontKey)
@@ -1554,16 +1342,10 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                         _secondFontKey = null;
                     }
 
-                    if (
-                        _fontKey is int fontKeyIndex
-                        && 0 <= fontKeyIndex
-                        && fontKeyIndex < _fontKeyCache.Length
-                    )
+                    if (_fontKey is int fontKeyIndex && 0 <= fontKeyIndex && fontKeyIndex < _fontKeyCache.Length)
                     {
                         string selectedFontKey = fontKeys[fontKeyIndex];
-                        SortedDictionary<string, Font> availableFonts = _fontsByPrefix[
-                            selectedFontKey
-                        ];
+                        SortedDictionary<string, Font> availableFonts = _fontsByPrefix[selectedFontKey];
                         string[] secondFontKeys = SecondFontKeys(availableFonts);
 
                         Font selectedFont = null;
@@ -1571,24 +1353,12 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                         {
                             case > 1:
                             {
-                                int selectedSecondFontKeyIndex = EditorGUILayout.Popup(
-                                    _secondFontKey.GetValueOrDefault(-1),
-                                    _secondFontKeyLabels
-                                );
-                                _secondFontKey =
-                                    selectedSecondFontKeyIndex < 0
-                                        ? null
-                                        : selectedSecondFontKeyIndex;
+                                int selectedSecondFontKeyIndex = EditorGUILayout.Popup(_secondFontKey.GetValueOrDefault(-1), _secondFontKeyLabels);
+                                _secondFontKey = selectedSecondFontKeyIndex < 0 ? null : selectedSecondFontKeyIndex;
 
-                                if (
-                                    _secondFontKey is int secondFontKeyIndex
-                                    && 0 <= secondFontKeyIndex
-                                    && secondFontKeyIndex < secondFontKeys.Length
-                                )
+                                if (_secondFontKey is int secondFontKeyIndex && 0 <= secondFontKeyIndex && secondFontKeyIndex < secondFontKeys.Length)
                                 {
-                                    selectedFont = availableFonts[
-                                        secondFontKeys[secondFontKeyIndex]
-                                    ];
+                                    selectedFont = availableFonts[secondFontKeys[secondFontKeyIndex]];
                                 }
 
                                 break;
@@ -1607,14 +1377,8 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
 
                         if (selectedFont != null)
                         {
-                            GUIContent setFontContent = new(
-                                "Set Font",
-                                $"Update the terminal's font to {LogTextSanitizer.Sanitize(selectedFont.name)}"
-                            );
-                            bool clicked =
-                                selectedFont != terminal._persistedFont
-                                    ? GUILayout.Button(setFontContent, _impactButtonStyle)
-                                    : GUILayout.Button(setFontContent);
+                            GUIContent setFontContent = new("Set Font", $"Update the terminal's font to {LogTextSanitizer.Sanitize(selectedFont.name)}");
+                            bool clicked = selectedFont != terminal._persistedFont ? GUILayout.Button(setFontContent, _impactButtonStyle) : GUILayout.Button(setFontContent);
                             if (clicked)
                             {
                                 terminal.SetFont(selectedFont, persist: true);

@@ -66,16 +66,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                         Handler = (context, arguments) => { },
                         CompletionProvider = CommandCompletionProviders.Staged(
                             InventoryProvider(),
-                            (
-                                in CommandCompletionContext context,
-                                List<CommandCompletion> results
-                            ) =>
+                            (in CommandCompletionContext context, List<CommandCompletion> results) =>
                             {
                                 CollectionAssert.AreEqual(
                                     new[] { "pickaxe" },
-                                    context
-                                        .PrecedingArguments.Select(argument => argument.contents)
-                                        .ToArray(),
+                                    context.PrecedingArguments.Select(argument => argument.contents).ToArray(),
                                     "Stage 1 receives the completed first argument"
                                 );
                                 results.Add(new CommandCompletion("sharpened"));
@@ -91,29 +86,17 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             // Stage 0: completing the first argument.
             Assert.IsTrue(Terminal.Shell.TryComplete(context, "pickup ", 7, results, out _));
-            CollectionAssert.AreEqual(
-                Inventory,
-                results.Select(completion => completion.InsertionText).ToArray(),
-                "Stage 0 completes from the inventory"
-            );
+            CollectionAssert.AreEqual(Inventory, results.Select(completion => completion.InsertionText).ToArray(), "Stage 0 completes from the inventory");
 
             // Stage 1: 'pickaxe' is a preceding argument, the caret opens a new one.
-            Assert.IsTrue(
-                Terminal.Shell.TryComplete(context, "pickup pickaxe ", 15, results, out _)
-            );
-            CollectionAssert.AreEqual(
-                new[] { "sharpened", "broken" },
-                results.Select(completion => completion.InsertionText).ToArray(),
-                "Stage 1 completes the second argument"
-            );
+            Assert.IsTrue(Terminal.Shell.TryComplete(context, "pickup pickaxe ", 15, results, out _));
+            CollectionAssert.AreEqual(new[] { "sharpened", "broken" }, results.Select(completion => completion.InsertionText).ToArray(), "Stage 1 completes the second argument");
 
             /*
                Requests past the last stage produce no candidates but still
                count as provider-answered.
             */
-            Assert.IsTrue(
-                Terminal.Shell.TryComplete(context, "pickup pickaxe sharpened ", 25, results, out _)
-            );
+            Assert.IsTrue(Terminal.Shell.TryComplete(context, "pickup pickaxe sharpened ", 25, results, out _));
             Assert.IsEmpty(results, "Stages beyond the provider list produce nothing");
         }
 
@@ -129,10 +112,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     {
                         Name = "ctx-complete",
                         Handler = (context, arguments) => { },
-                        CompletionProvider = (
-                            in CommandCompletionContext context,
-                            List<CommandCompletion> results
-                        ) => observed.Add(context),
+                        CompletionProvider = (in CommandCompletionContext context, List<CommandCompletion> results) => observed.Add(context),
                     }
                 )
             );
@@ -144,52 +124,21 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                Mid-token inside a quoted argument: the caret completes an
                unclosed quoted token, so the request is quoted.
             */
-            Assert.IsTrue(
-                Terminal.Shell.TryComplete(
-                    context,
-                    "ctx-complete \"pick axe\" \"to",
-                    27,
-                    results,
-                    out CommandCompletionContext completionContext
-                )
-            );
+            Assert.IsTrue(Terminal.Shell.TryComplete(context, "ctx-complete \"pick axe\" \"to", 27, results, out CommandCompletionContext completionContext));
             Assert.AreEqual(1, observed.Count);
             CommandCompletionContext recorded = observed[0];
             Assert.AreEqual("to", recorded.Token, "The token text runs to the caret");
-            Assert.AreEqual(
-                25,
-                recorded.ReplacementStart,
-                "The quoted token starts after its quote"
-            );
+            Assert.AreEqual(25, recorded.ReplacementStart, "The quoted token starts after its quote");
             Assert.AreEqual(2, recorded.ReplacementLength, "The replacement covers the raw token");
             Assert.IsTrue(recorded.IsQuoted);
             Assert.AreEqual('"', recorded.QuoteCharacter);
             Assert.AreEqual(1, recorded.ActiveArgumentIndex, "The second argument is stage 1");
-            CollectionAssert.AreEqual(
-                new[] { "pick axe" },
-                recorded.PrecedingArguments.Select(argument => argument.contents).ToArray()
-            );
-            Assert.AreEqual(
-                '"',
-                recorded.PrecedingArguments[0].startQuote,
-                "Preceding arguments preserve their quoting"
-            );
-            Assert.AreSame(
-                completionContext.Token,
-                recorded.Token,
-                "The returned context is the one the provider saw"
-            );
+            CollectionAssert.AreEqual(new[] { "pick axe" }, recorded.PrecedingArguments.Select(argument => argument.contents).ToArray());
+            Assert.AreEqual('"', recorded.PrecedingArguments[0].startQuote, "Preceding arguments preserve their quoting");
+            Assert.AreSame(completionContext.Token, recorded.Token, "The returned context is the one the provider saw");
 
             // New argument at a whitespace boundary.
-            Assert.IsTrue(
-                Terminal.Shell.TryComplete(
-                    context,
-                    "ctx-complete pick ",
-                    18,
-                    results,
-                    out completionContext
-                )
-            );
+            Assert.IsTrue(Terminal.Shell.TryComplete(context, "ctx-complete pick ", 18, results, out completionContext));
             Assert.AreEqual(2, observed.Count);
             recorded = observed[1];
             Assert.IsEmpty(recorded.Token, "A boundary token has no text yet");
@@ -197,10 +146,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreEqual(0, recorded.ReplacementLength);
             Assert.IsFalse(recorded.IsQuoted);
             Assert.That(recorded.QuoteCharacter == null);
-            CollectionAssert.AreEqual(
-                new[] { "pick" },
-                recorded.PrecedingArguments.Select(argument => argument.contents).ToArray()
-            );
+            CollectionAssert.AreEqual(new[] { "pick" }, recorded.PrecedingArguments.Select(argument => argument.contents).ToArray());
         }
 
         [UnityTest]
@@ -214,10 +160,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     {
                         Name = "ctx-plain",
                         Handler = (context, arguments) => { },
-                        CompletionProvider = (
-                            in CommandCompletionContext context,
-                            List<CommandCompletion> results
-                        ) =>
+                        CompletionProvider = (in CommandCompletionContext context, List<CommandCompletion> results) =>
                         {
                             results.Add(new CommandCompletion("alpha"));
                             results.Add(new CommandCompletion("beta", description: "second"));
@@ -228,15 +171,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
 
             List<CommandCompletion> results = new();
-            Assert.IsTrue(
-                Terminal.Shell.TryComplete(
-                    CommandExecutionContext.Current,
-                    "ctx-plain ",
-                    10,
-                    results,
-                    out _
-                )
-            );
+            Assert.IsTrue(Terminal.Shell.TryComplete(CommandExecutionContext.Current, "ctx-plain ", 10, results, out _));
             Assert.AreEqual(2, results.Count, "Duplicate insertion texts are deduplicated");
             Assert.AreEqual("alpha", results[0].InsertionText, "First occurrence wins");
             Assert.That(results[0].Description == null);
@@ -256,10 +191,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     {
                         Name = "ctx-empty",
                         Handler = (context, arguments) => { },
-                        CompletionProvider = (
-                            in CommandCompletionContext context,
-                            List<CommandCompletion> results
-                        ) =>
+                        CompletionProvider = (in CommandCompletionContext context, List<CommandCompletion> results) =>
                         {
                             results.Add(new CommandCompletion(string.Empty));
                             results.Add(new CommandCompletion("kept"));
@@ -269,20 +201,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
 
             List<CommandCompletion> results = new();
-            Assert.IsTrue(
-                Terminal.Shell.TryComplete(
-                    CommandExecutionContext.Current,
-                    "ctx-empty ",
-                    10,
-                    results,
-                    out _
-                )
-            );
-            CollectionAssert.AreEqual(
-                new[] { "kept" },
-                results.Select(completion => completion.InsertionText).ToArray(),
-                "Empty insertions are filtered out"
-            );
+            Assert.IsTrue(Terminal.Shell.TryComplete(CommandExecutionContext.Current, "ctx-empty ", 10, results, out _));
+            CollectionAssert.AreEqual(new[] { "kept" }, results.Select(completion => completion.InsertionText).ToArray(), "Empty insertions are filtered out");
         }
 
         [UnityTest]
@@ -297,10 +217,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     {
                         Name = "ctx-throwing",
                         Handler = (context, arguments) => { },
-                        CompletionProvider = (
-                            in CommandCompletionContext context,
-                            List<CommandCompletion> results
-                        ) =>
+                        CompletionProvider = (in CommandCompletionContext context, List<CommandCompletion> results) =>
                         {
                             ++invocations;
                             results.Add(new CommandCompletion("before-failure"));
@@ -316,38 +233,18 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             List<CommandCompletion> results = new();
             LogAssert.Expect(
                 LogType.Error,
-                new Regex(
-                    @"\[DxCommandTerminal\] Completion provider for 'ctx-throwing' failed: "
-                        + @"System\.InvalidOperationException: provider exploded"
-                )
+                new Regex(@"\[DxCommandTerminal\] Completion provider for 'ctx-throwing' failed: " + @"System\.InvalidOperationException: provider exploded")
             );
             Assert.IsTrue(
-                Terminal.Shell.TryComplete(
-                    CommandExecutionContext.Current,
-                    "ctx-throwing ",
-                    13,
-                    results,
-                    out _
-                ),
+                Terminal.Shell.TryComplete(CommandExecutionContext.Current, "ctx-throwing ", 13, results, out _),
                 "A throwing provider still counts as provider-answered"
             );
             Assert.IsEmpty(results, "Partial results from a throwing provider are discarded");
             Assert.AreEqual(1, invocations);
 
             // Later requests are unaffected.
-            Assert.IsTrue(
-                Terminal.Shell.TryComplete(
-                    CommandExecutionContext.Current,
-                    "ctx-throwing ",
-                    13,
-                    results,
-                    out _
-                )
-            );
-            CollectionAssert.AreEqual(
-                new[] { "before-failure" },
-                results.Select(completion => completion.InsertionText).ToArray()
-            );
+            Assert.IsTrue(Terminal.Shell.TryComplete(CommandExecutionContext.Current, "ctx-throwing ", 13, results, out _));
+            CollectionAssert.AreEqual(new[] { "before-failure" }, results.Select(completion => completion.InsertionText).ToArray());
             Assert.AreEqual(2, invocations);
         }
 
@@ -362,10 +259,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     {
                         Name = "ctx-reuse",
                         Handler = (context, arguments) => { },
-                        CompletionProvider = (
-                            in CommandCompletionContext context,
-                            List<CommandCompletion> results
-                        ) => results.Add(new CommandCompletion("candidate")),
+                        CompletionProvider = (in CommandCompletionContext context, List<CommandCompletion> results) => results.Add(new CommandCompletion("candidate")),
                     }
                 )
             );
@@ -376,11 +270,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreEqual(1, results.Count);
 
             Assert.IsTrue(Terminal.Shell.TryComplete(context, "ctx-reuse ", 10, results, out _));
-            Assert.AreEqual(
-                1,
-                results.Count,
-                "Reusing the buffer must not accumulate stale results"
-            );
+            Assert.AreEqual(1, results.Count, "Reusing the buffer must not accumulate stale results");
         }
 
         [UnityTest]
@@ -392,26 +282,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             List<CommandCompletion> results = new();
             CommandExecutionContext context = CommandExecutionContext.Current;
-            Assert.IsFalse(
-                Terminal.Shell.TryComplete(context, "ctx-missing ", 12, results, out _),
-                "An unknown command has no provider to answer"
-            );
-            Assert.IsFalse(
-                Terminal.Shell.TryComplete(context, "ctx-plain-legacy ", 17, results, out _),
-                "Commands without a provider keep history-based completion"
-            );
-            Assert.IsFalse(
-                Terminal.Shell.TryComplete(context, "ctx", 3, results, out _),
-                "Completing the command name itself is not provider territory"
-            );
-            Assert.IsFalse(
-                Terminal.Shell.TryComplete(context, string.Empty, 0, results, out _),
-                "Empty input has nothing to complete"
-            );
-            Assert.IsFalse(
-                Terminal.Shell.TryComplete(context, "ctx-missing x ", 14, results, out _),
-                "An unknown command keeps returning false regardless of the argument stage"
-            );
+            Assert.IsFalse(Terminal.Shell.TryComplete(context, "ctx-missing ", 12, results, out _), "An unknown command has no provider to answer");
+            Assert.IsFalse(Terminal.Shell.TryComplete(context, "ctx-plain-legacy ", 17, results, out _), "Commands without a provider keep history-based completion");
+            Assert.IsFalse(Terminal.Shell.TryComplete(context, "ctx", 3, results, out _), "Completing the command name itself is not provider territory");
+            Assert.IsFalse(Terminal.Shell.TryComplete(context, string.Empty, 0, results, out _), "Empty input has nothing to complete");
+            Assert.IsFalse(Terminal.Shell.TryComplete(context, "ctx-missing x ", 14, results, out _), "An unknown command keeps returning false regardless of the argument stage");
         }
 
         [UnityTest]
@@ -420,14 +295,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return SpawnTerminal();
 
             Assert.Throws<ArgumentNullException>(
-                () =>
-                    Terminal.Shell.TryComplete(
-                        CommandExecutionContext.Current,
-                        "help ",
-                        5,
-                        null,
-                        out _
-                    ),
+                () => Terminal.Shell.TryComplete(CommandExecutionContext.Current, "help ", 5, null, out _),
                 "A null results buffer is a caller error"
             );
         }
@@ -444,37 +312,21 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                         Name = "ctx-ineligible",
                         Contexts = CommandExecutionContexts.Player,
                         Handler = (context, arguments) => { },
-                        CompletionProvider = (
-                            in CommandCompletionContext context,
-                            List<CommandCompletion> results
-                        ) => results.Add(new CommandCompletion("suggestion")),
+                        CompletionProvider = (in CommandCompletionContext context, List<CommandCompletion> results) => results.Add(new CommandCompletion("suggestion")),
                     }
                 )
             );
 
-            CommandExecutionContext.AmbientContextProvider = () =>
-                new CommandExecutionContext(CommandExecutionContexts.EditorEditMode);
+            CommandExecutionContext.AmbientContextProvider = () => new CommandExecutionContext(CommandExecutionContexts.EditorEditMode);
 
             List<CommandCompletion> results = new();
             Assert.IsTrue(
-                Terminal.Shell.TryComplete(
-                    CommandExecutionContext.Current,
-                    "ctx-ineligible ",
-                    15,
-                    results,
-                    out _
-                ),
+                Terminal.Shell.TryComplete(CommandExecutionContext.Current, "ctx-ineligible ", 15, results, out _),
                 "Completion may surface candidates that execution later rejects"
             );
-            CollectionAssert.AreEqual(
-                new[] { "suggestion" },
-                results.Select(completion => completion.InsertionText).ToArray()
-            );
+            CollectionAssert.AreEqual(new[] { "suggestion" }, results.Select(completion => completion.InsertionText).ToArray());
 
-            Assert.IsFalse(
-                Terminal.Shell.RunCommand("ctx-ineligible"),
-                "Execution re-validates availability independently of completion"
-            );
+            Assert.IsFalse(Terminal.Shell.RunCommand("ctx-ineligible"), "Execution re-validates availability independently of completion");
             StringAssert.Contains(
                 "not available in the current execution context",
                 Terminal.Shell.TryConsumeErrorMessage(out string error) ? error : string.Empty,
@@ -487,22 +339,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             yield return SpawnTerminal();
 
-            Terminal.Shell.InitializeAutoRegisteredCommands(
-                new[] { "help" },
-                ignoreDefaultCommands: false
-            );
+            Terminal.Shell.InitializeAutoRegisteredCommands(new[] { "help" }, ignoreDefaultCommands: false);
 
             List<CommandCompletion> results = new();
-            Assert.IsFalse(
-                Terminal.Shell.TryComplete(
-                    CommandExecutionContext.Current,
-                    "help ",
-                    5,
-                    results,
-                    out _
-                ),
-                "Ignored commands are not discoverable for completion"
-            );
+            Assert.IsFalse(Terminal.Shell.TryComplete(CommandExecutionContext.Current, "help ", 5, results, out _), "Ignored commands are not discoverable for completion");
         }
     }
 }

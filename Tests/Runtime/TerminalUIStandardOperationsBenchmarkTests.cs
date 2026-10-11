@@ -118,11 +118,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             statistic, the sample count, the margin, and the whole series
             (#170).
          */
-        private static void AssertP95UnderTripwire(
-            OperationReport report,
-            float budgetMilliseconds,
-            string operation
-        )
+        private static void AssertP95UnderTripwire(OperationReport report, float budgetMilliseconds, string operation)
         {
             Assert.Less(
                 report.Percentile95Milliseconds,
@@ -195,11 +191,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 _terminal._commandInput.value = tier.Token;
                 yield return null;
                 OperationReport sweep = Measure(() => _terminal.ResetAutoComplete(), tier.Samples);
-                LogScale(
-                    "ui-keystroke-sweep",
-                    $"commands={tier.Commands} token='{tier.Token}' mode=Always",
-                    sweep
-                );
+                LogScale("ui-keystroke-sweep", $"commands={tier.Commands} token='{tier.Token}' mode=Always", sweep);
 
                 /*
                     Empty the hint buffer so no player-loop frame
@@ -220,16 +212,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     tier.Samples
                 );
                 string finalValue = tier.Samples % 2 == 1 ? tier.Token : alternate;
-                Assert.AreEqual(
-                    finalValue,
-                    _terminal._commandInput.value,
-                    "Sanity: every measured keystroke must reach the field"
-                );
-                LogScale(
-                    "ui-keystroke-field",
-                    $"commands={tier.Commands} token='{tier.Token}' mode=Always",
-                    field
-                );
+                Assert.AreEqual(finalValue, _terminal._commandInput.value, "Sanity: every measured keystroke must reach the field");
+                LogScale("ui-keystroke-field", $"commands={tier.Commands} token='{tier.Token}' mode=Always", field);
                 ParkCompletionState();
                 yield return null;
             }
@@ -247,14 +231,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 _terminal._commandInput.value = tier.Token;
                 yield return null;
 
-                OperationReport report = Measure(
-                    () => _terminal.CompleteCommand(true),
-                    tier.Samples
-                );
-                Assert.That(
-                    _terminal._commandInput.value.StartsWith(tier.Token, StringComparison.Ordinal),
-                    "Sanity: the legacy cycle must keep the input on a prefix completion"
-                );
+                OperationReport report = Measure(() => _terminal.CompleteCommand(true), tier.Samples);
+                Assert.That(_terminal._commandInput.value.StartsWith(tier.Token, StringComparison.Ordinal), "Sanity: the legacy cycle must keep the input on a prefix completion");
                 LogScale("ui-tab-legacy", $"commands={tier.Commands} token='{tier.Token}'", report);
                 ParkCompletionState();
                 yield return null;
@@ -275,22 +253,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 _terminal._commandInput.value = input;
                 yield return null;
 
-                OperationReport report = Measure(
-                    () => _terminal.CompleteCommand(true),
-                    tier.Samples
-                );
-                Assert.That(
-                    _terminal._commandInput.value.StartsWith(
-                        ProviderCommandName,
-                        StringComparison.Ordinal
-                    ),
-                    "Sanity: the provider cycle must apply token completions"
-                );
-                LogScale(
-                    "ui-tab-provider",
-                    $"commands={tier.Commands} candidates={ProviderCandidateCount}",
-                    report
-                );
+                OperationReport report = Measure(() => _terminal.CompleteCommand(true), tier.Samples);
+                Assert.That(_terminal._commandInput.value.StartsWith(ProviderCommandName, StringComparison.Ordinal), "Sanity: the provider cycle must apply token completions");
+                LogScale("ui-tab-provider", $"commands={tier.Commands} candidates={ProviderCandidateCount}", report);
                 ParkCompletionState();
                 yield return null;
             }
@@ -317,11 +282,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 DefaultSampleCount
             );
 
-            Assert.AreEqual(
-                alternate,
-                _terminal._commandInput.value,
-                "Sanity: every measured keystroke must reach the field"
-            );
+            Assert.AreEqual(alternate, _terminal._commandInput.value, "Sanity: every measured keystroke must reach the field");
             AssertP95UnderTripwire(report, KeystrokeTripwireMilliseconds, "Per-keystroke input");
         }
 
@@ -360,32 +321,20 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return null;
 
             OperationReport clean = Measure(() => _terminal.RefreshUI(), DefaultSampleCount);
-            LogScale(
-                "ui-refresh-clean",
-                $"state=open hints={SelectiveMatchCount} logs={SteadyStateLogCount}",
-                clean
-            );
+            LogScale("ui-refresh-clean", $"state=open hints={SelectiveMatchCount} logs={SteadyStateLogCount}", clean);
 
             int logSequence = 0;
             OperationReport logSync = Measure(
                 () =>
                 {
-                    Terminal.Buffer.HandleLog(
-                        $"bench live {logSequence++}",
-                        string.Empty,
-                        TerminalLogType.Message
-                    );
+                    Terminal.Buffer.HandleLog($"bench live {logSequence++}", string.Empty, TerminalLogType.Message);
                     _terminal.RefreshUI();
                 },
                 DefaultSampleCount
             );
             LogItem[] logs = new LogItem[Terminal.Buffer.Capacity];
             int loggedCount = Terminal.Buffer.CopyTo(logs);
-            Assert.AreEqual(
-                $"bench live {logSequence - 1}",
-                logs[loggedCount - 1].message,
-                "Sanity: every measured write must land in the buffer"
-            );
+            Assert.AreEqual($"bench live {logSequence - 1}", logs[loggedCount - 1].message, "Sanity: every measured write must land in the buffer");
             LogScale("ui-refresh-logsync", "state=open adds=1/pass", logSync);
 
             ParkCompletionState();
@@ -396,10 +345,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 yield return null;
             }
 
-            Assert.IsTrue(
-                _terminal.IsClosed,
-                "Sanity: the terminal must settle closed before the idle row"
-            );
+            Assert.IsTrue(_terminal.IsClosed, "Sanity: the terminal must settle closed before the idle row");
             OperationReport closed = Measure(() => _terminal.RefreshUI(), DefaultSampleCount);
             LogScale("ui-refresh-closed", "gate=LateUpdate-skips-this-pass", closed);
         }
@@ -426,20 +372,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
             LogScale("ui-first-open-build", "tree=full rebuild", firstOpen);
 
-            OperationReport openToggle = Measure(
-                () => _terminal.SetState(TerminalState.OpenFull),
-                DefaultSampleCount
-            );
+            OperationReport openToggle = Measure(() => _terminal.SetState(TerminalState.OpenFull), DefaultSampleCount);
             LogScale("ui-open-toggle", "tree=prebuilt", openToggle);
 
-            OperationReport closeToggle = Measure(
-                () => _terminal.SetState(TerminalState.Closed),
-                DefaultSampleCount
-            );
-            Assert.That(
-                _terminal._commandInput != null,
-                "Sanity: closing keeps the built tree (teardown happens on disable)"
-            );
+            OperationReport closeToggle = Measure(() => _terminal.SetState(TerminalState.Closed), DefaultSampleCount);
+            Assert.That(_terminal._commandInput != null, "Sanity: closing keeps the built tree (teardown happens on disable)");
             LogScale("ui-close-toggle", "tree=kept", closeToggle);
         }
 
@@ -472,21 +409,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return null;
 
             int frameBudget = 600;
-            while (
-                0 < frameBudget--
-                && (
-                    _terminal._commandInput == null
-                    || _terminal._commandInput.resolvedStyle.display != DisplayStyle.Flex
-                )
-            )
+            while (0 < frameBudget-- && (_terminal._commandInput == null || _terminal._commandInput.resolvedStyle.display != DisplayStyle.Flex))
             {
                 yield return null;
             }
 
-            Assert.That(
-                _terminal._commandInput != null,
-                "The terminal input field should exist after the terminal opens"
-            );
+            Assert.That(_terminal._commandInput != null, "The terminal input field should exist after the terminal opens");
         }
 
         /*
@@ -507,10 +435,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Debug.unityLogger.logEnabled = false;
             try
             {
-                Assert.IsTrue(
-                    Terminal.Shell.RunCommand(NoopCommandName),
-                    "The warmed no-op command must run"
-                );
+                Assert.IsTrue(Terminal.Shell.RunCommand(NoopCommandName), "The warmed no-op command must run");
             }
             finally
             {
@@ -528,15 +453,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             CommandBuilder builder = CommandBuilder
                 .Create(ProviderCommandName)
-                .Arg<string>(
-                    "candidate",
-                    spec => spec.Required().Choices(context => candidates, value => value)
-                )
+                .Arg<string>("candidate", spec => spec.Required().Choices(context => candidates, value => value))
                 .Handler((context, arguments) => { });
-            Assert.IsTrue(
-                Terminal.Shell.AddCommand(builder, out _),
-                "The provider command should register"
-            );
+            Assert.IsTrue(Terminal.Shell.AddCommand(builder, out _), "The provider command should register");
         }
 
         /*
@@ -562,13 +481,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             public int Gen0Collections { get; }
 
-            public OperationReport(
-                int sampleCount,
-                double medianMilliseconds,
-                double percentile95Milliseconds,
-                double maximumMilliseconds,
-                int gen0Collections
-            )
+            public OperationReport(int sampleCount, double medianMilliseconds, double percentile95Milliseconds, double maximumMilliseconds, int gen0Collections)
             {
                 SampleCount = sampleCount;
                 MedianMilliseconds = medianMilliseconds;

@@ -54,15 +54,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [TestCase("give item 42", Description = "A pasted block splits into arguments")]
         [TestCase("give\titem\t42", Description = "Pasted tabs split like spaces")]
         [TestCase("give\nitem\n42", Description = "Pasted newlines split like spaces")]
-        [TestCase(
-            "give \r\n item \t 42",
-            Description = "A pasted CRLF and tab run is one separator"
-        )]
+        [TestCase("give \r\n item \t 42", Description = "A pasted CRLF and tab run is one separator")]
         [TestCase("give\u00a0item", Description = "A non-breaking space separates too")]
-        [TestCase(
-            "set name \"two\nlines\"",
-            Description = "A newline inside quotes stays one argument"
-        )]
+        [TestCase("set name \"two\nlines\"", Description = "A newline inside quotes stays one argument")]
         public void TokenizeMatchesTryEatArgument(string line)
         {
             List<CommandArg> expected = ParseWithTryEatArgument(line);
@@ -73,21 +67,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             {
                 CommandArg argument = expected[i];
                 CommandToken token = actual[i];
-                Assert.AreEqual(
-                    argument.contents,
-                    token.Contents,
-                    $"Contents mismatch for token {i} of '{line}'"
-                );
-                Assert.AreEqual(
-                    argument.startQuote,
-                    token.StartQuote,
-                    $"Start quote mismatch for token {i} of '{line}'"
-                );
-                Assert.AreEqual(
-                    argument.endQuote,
-                    token.EndQuote,
-                    $"End quote mismatch for token {i} of '{line}'"
-                );
+                Assert.AreEqual(argument.contents, token.Contents, $"Contents mismatch for token {i} of '{line}'");
+                Assert.AreEqual(argument.startQuote, token.StartQuote, $"Start quote mismatch for token {i} of '{line}'");
+                Assert.AreEqual(argument.endQuote, token.EndQuote, $"End quote mismatch for token {i} of '{line}'");
             }
         }
 
@@ -176,14 +158,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [TestCase("inspect \"abc\" tail", 9, 1, "x", true, "inspect \"xbc\" tail")]
         [TestCase("inspect abc tail", 8, 1, "torch pick", false, "inspect \"torch pick\"bc tail")]
         [TestCase("inspect \"ax\" tail", 10, 1, "$n", true, "inspect \"a$n\" tail")]
-        public void CustomRangeReplacesRawSubstringPreservingTail(
-            string input,
-            int start,
-            int length,
-            string value,
-            bool tokenQuoted,
-            string expectedLine
-        )
+        public void CustomRangeReplacesRawSubstringPreservingTail(string input, int start, int length, string value, bool tokenQuoted, string expectedLine)
         {
             Assert.IsTrue(
                 CommandTokenizer.TryPrepareInsertion(
@@ -211,16 +186,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             CommandToken active = Tokenize(input)[1];
             Assert.IsFalse(
-                CommandTokenizer.TryPrepareInsertion(
-                    input,
-                    value,
-                    active.Start,
-                    active.End - active.Start,
-                    active.StartQuote != null,
-                    out string insertion,
-                    out _,
-                    out _
-                )
+                CommandTokenizer.TryPrepareInsertion(input, value, active.Start, active.End - active.Start, active.StartQuote != null, out string insertion, out _, out _)
             );
             Assert.IsEmpty(insertion);
         }
@@ -235,21 +201,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             {
                 CommandArg.Quotes.Clear();
                 CommandArg.Quotes.AddRange(delimiters);
-                Assert.IsTrue(
-                    CommandTokenizer.TryPrepareInsertion(
-                        "inspect x",
-                        value,
-                        8,
-                        1,
-                        false,
-                        out string insertion,
-                        out int start,
-                        out int length
-                    )
-                );
-                List<CommandToken> tokens = Tokenize(
-                    "inspect x".Remove(start, length).Insert(start, insertion)
-                );
+                Assert.IsTrue(CommandTokenizer.TryPrepareInsertion("inspect x", value, 8, 1, false, out string insertion, out int start, out int length));
+                List<CommandToken> tokens = Tokenize("inspect x".Remove(start, length).Insert(start, insertion));
                 Assert.AreEqual(2, tokens.Count);
                 Assert.AreEqual(value, tokens[1].Contents);
                 Assert.That(tokens[1].EndQuote != null);
@@ -286,19 +239,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [TestCase("give\u00a0item\u00a042", 3, "give|item|42")]
         [TestCase("  give \t item  42  ", 3, "give|item|42")]
         [TestCase("give \"pick axe\" 42", 3, "give|pick axe|42")]
-        public void PastedBlockSplitsIntoArguments(
-            string line,
-            int expectedCount,
-            string expectedContents
-        )
+        public void PastedBlockSplitsIntoArguments(string line, int expectedCount, string expectedContents)
         {
             List<CommandToken> tokens = Tokenize(line);
 
-            Assert.AreEqual(
-                expectedCount,
-                tokens.Count,
-                $"Token count for the pasted block '{line}'"
-            );
+            Assert.AreEqual(expectedCount, tokens.Count, $"Token count for the pasted block '{line}'");
             List<string> contents = new();
             foreach (CommandToken token in tokens)
             {
@@ -333,15 +278,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void EmptyLineFindsNoToken()
         {
-            bool found = CommandTokenizer.TryFindActiveToken(
-                string.Empty,
-                0,
-                new List<CommandToken>(),
-                out _,
-                out _,
-                out _,
-                out _
-            );
+            bool found = CommandTokenizer.TryFindActiveToken(string.Empty, 0, new List<CommandToken>(), out _, out _, out _, out _);
 
             Assert.IsFalse(found, "An empty line has no tokens to complete");
         }
@@ -399,28 +336,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
 
             Assert.IsTrue(found, $"Expected a result for caret {caret} in '{line}'");
-            Assert.IsFalse(
-                isNewArgument,
-                $"Caret {caret} in '{line}' should edit an existing token"
-            );
-            Assert.AreEqual(
-                expectedIndex,
-                activeTokenIndex,
-                $"Active token index for caret {caret} in '{line}'"
-            );
+            Assert.IsFalse(isNewArgument, $"Caret {caret} in '{line}' should edit an existing token");
+            Assert.AreEqual(expectedIndex, activeTokenIndex, $"Active token index for caret {caret} in '{line}'");
             Assert.AreEqual(expectedStart, replacementStart);
             Assert.AreEqual(expectedLength, replacementLength);
-            Assert.AreEqual(
-                expectedQuoted,
-                tokens[activeTokenIndex].StartQuote != null,
-                $"Quoted state for caret {caret} in '{line}'"
-            );
+            Assert.AreEqual(expectedQuoted, tokens[activeTokenIndex].StartQuote != null, $"Quoted state for caret {caret} in '{line}'");
             Assert.AreEqual(
                 expectedTokenPrefix,
-                line.Substring(
-                    tokens[activeTokenIndex].Start,
-                    caret - tokens[activeTokenIndex].Start
-                ),
+                line.Substring(tokens[activeTokenIndex].Start, caret - tokens[activeTokenIndex].Start),
                 $"Token text up to the caret for caret {caret} in '{line}'"
             );
         }
@@ -454,23 +377,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             const string line = "log foo  ";
             List<CommandToken> tokens = Tokenize(line);
 
-            bool found = CommandTokenizer.TryFindActiveToken(
-                line,
-                9,
-                tokens,
-                out int activeTokenIndex,
-                out _,
-                out _,
-                out bool isNewArgument
-            );
+            bool found = CommandTokenizer.TryFindActiveToken(line, 9, tokens, out int activeTokenIndex, out _, out _, out bool isNewArgument);
 
             Assert.IsTrue(found);
             Assert.IsTrue(isNewArgument);
-            Assert.AreEqual(
-                2,
-                activeTokenIndex,
-                "A boundary after 'foo' completes the argument after 'foo'"
-            );
+            Assert.AreEqual(2, activeTokenIndex, "A boundary after 'foo' completes the argument after 'foo'");
         }
 
         [Test]
@@ -479,24 +390,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             const string line = "log foo ";
             List<CommandToken> tokens = Tokenize(line);
 
-            bool foundNegative = CommandTokenizer.TryFindActiveToken(
-                line,
-                -10,
-                tokens,
-                out int negativeIndex,
-                out int negativeStart,
-                out int negativeLength,
-                out bool negativeNew
-            );
-            bool foundLarge = CommandTokenizer.TryFindActiveToken(
-                line,
-                999,
-                tokens,
-                out int largeIndex,
-                out int largeStart,
-                out int largeLength,
-                out bool largeNew
-            );
+            bool foundNegative = CommandTokenizer.TryFindActiveToken(line, -10, tokens, out int negativeIndex, out int negativeStart, out int negativeLength, out bool negativeNew);
+            bool foundLarge = CommandTokenizer.TryFindActiveToken(line, 999, tokens, out int largeIndex, out int largeStart, out int largeLength, out bool largeNew);
 
             Assert.IsTrue(foundNegative);
             Assert.AreEqual(0, negativeIndex, "A clamped caret on 'log' selects the name token");

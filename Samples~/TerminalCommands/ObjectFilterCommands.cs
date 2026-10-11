@@ -23,10 +23,7 @@ namespace WallstopStudios.DxCommandTerminal.Samples
 #if UNITY_6000_4_OR_NEWER
             return Object.FindObjectsByType<GameObject>(FindObjectsInactive.Exclude);
 #elif UNITY_2022_2_OR_NEWER
-            return Object.FindObjectsByType<GameObject>(
-                FindObjectsInactive.Exclude,
-                FindObjectsSortMode.InstanceID
-            );
+            return Object.FindObjectsByType<GameObject>(FindObjectsInactive.Exclude, FindObjectsSortMode.InstanceID);
 #else
             return Object.FindObjectsOfType<GameObject>(false);
 #endif
@@ -81,13 +78,7 @@ namespace WallstopStudios.DxCommandTerminal.Samples
                                 report.Append("\n  ").Append(candidate.name);
                             }
 
-                            Terminal.Log(
-                                "{0} active object(s) on layer '{1}' ({2}):{3}",
-                                count,
-                                LayerMask.LayerToName(layer),
-                                layer,
-                                report
-                            );
+                            Terminal.Log("{0} active object(s) on layer '{1}' ({2}):{3}", count, LayerMask.LayerToName(layer), layer, report);
                         }
                     )
             );
@@ -129,12 +120,7 @@ namespace WallstopStudios.DxCommandTerminal.Samples
                                 report.Append("\n  ").Append(candidate.name);
                             }
 
-                            Terminal.Log(
-                                "{0} active object(s) tagged '{1}':{2}",
-                                count,
-                                tag,
-                                report
-                            );
+                            Terminal.Log("{0} active object(s) tagged '{1}':{2}", count, tag, report);
                         }
                     )
             );

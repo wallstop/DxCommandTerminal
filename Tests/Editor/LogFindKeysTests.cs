@@ -30,16 +30,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [TestCase(KeyCode.Tab, false, false, false)]
         public void OnlyF3StepsASearch(KeyCode keyCode, bool shiftKey, bool forward, bool backward)
         {
-            Assert.That(
-                LogFindKeys.IsStepForward(keyCode, shiftKey),
-                Is.EqualTo(forward),
-                $"{keyCode} with shift={shiftKey} moves the search forward"
-            );
-            Assert.That(
-                LogFindKeys.IsStepBackward(keyCode, shiftKey),
-                Is.EqualTo(backward),
-                $"{keyCode} with shift={shiftKey} moves the search backward"
-            );
+            Assert.That(LogFindKeys.IsStepForward(keyCode, shiftKey), Is.EqualTo(forward), $"{keyCode} with shift={shiftKey} moves the search forward");
+            Assert.That(LogFindKeys.IsStepBackward(keyCode, shiftKey), Is.EqualTo(backward), $"{keyCode} with shift={shiftKey} moves the search backward");
         }
     }
 }

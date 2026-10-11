@@ -22,10 +22,7 @@ namespace WallstopStudios.DxCommandTerminal.Samples
                         command is deliberately unavailable from an Edit Mode
                         terminal session.
                      */
-                    .Handler(
-                        (context, arguments) =>
-                            SceneManager.LoadScene(SceneManager.GetActiveScene().name)
-                    )
+                    .Handler((context, arguments) => SceneManager.LoadScene(SceneManager.GetActiveScene().name))
             );
 
             Register(
@@ -36,10 +33,7 @@ namespace WallstopStudios.DxCommandTerminal.Samples
                         from an Edit Mode terminal session too.
                      */
                     .Contexts(CommandExecutionContextSets.All)
-                    .Handler(
-                        (context, arguments) =>
-                            Terminal.Log("Active scene: {0}", SceneManager.GetActiveScene().name)
-                    )
+                    .Handler((context, arguments) => Terminal.Log("Active scene: {0}", SceneManager.GetActiveScene().name))
             );
         }
     }

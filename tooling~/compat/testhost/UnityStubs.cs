@@ -243,9 +243,7 @@ namespace UnityEngine
                 return;
             }
 
-            Console.WriteLine(
-                $"[{logType}] " + string.Format(CultureInfo.InvariantCulture, format, args)
-            );
+            Console.WriteLine($"[{logType}] " + string.Format(CultureInfo.InvariantCulture, format, args));
         }
 
         public void LogException(Exception exception)
@@ -463,20 +461,15 @@ namespace UnityEngine
 
         public static float Min(float a, float b) => (double)a <= (double)b ? a : b;
 
-        public static int Clamp(int value, int min, int max) =>
-            value < min ? min : (value > max ? max : value);
+        public static int Clamp(int value, int min, int max) => value < min ? min : (value > max ? max : value);
 
-        public static float Clamp(float value, float min, float max) =>
-            (double)value < (double)min ? min : ((double)value > (double)max ? max : value);
+        public static float Clamp(float value, float min, float max) => (double)value < (double)min ? min : ((double)value > (double)max ? max : value);
 
         public static float Clamp01(float value) => Clamp(value, 0f, 1f);
 
-        public static bool Approximately(float a, float b) =>
-            Math.Abs((double)a - b)
-            <= Math.Max(1e-6 * Math.Max(Math.Abs((double)a), Math.Abs((double)b)), 1e-44);
+        public static bool Approximately(float a, float b) => Math.Abs((double)a - b) <= Math.Max(1e-6 * Math.Max(Math.Abs((double)a), Math.Abs((double)b)), 1e-44);
 
-        public static int RoundToInt(float value) =>
-            (int)Math.Round((double)value, MidpointRounding.AwayFromZero);
+        public static int RoundToInt(float value) => (int)Math.Round((double)value, MidpointRounding.AwayFromZero);
 
         public static float Lerp(float a, float b, float t) => a + (b - a) * Clamp01(t);
 
@@ -587,8 +580,7 @@ namespace UnityEngine
 
         public override int GetHashCode() => (x.GetHashCode() * 397) ^ y.GetHashCode();
 
-        public override string ToString() =>
-            $"({x.ToString(CultureInfo.InvariantCulture)}, {y.ToString(CultureInfo.InvariantCulture)})";
+        public override string ToString() => $"({x.ToString(CultureInfo.InvariantCulture)}, {y.ToString(CultureInfo.InvariantCulture)})";
 
         public static Vector2 operator +(Vector2 a, Vector2 b) => new Vector2(a.x + b.x, a.y + b.y);
 
@@ -655,11 +647,9 @@ namespace UnityEngine
 
         public static Vector3 back => new Vector3(0f, 0f, -1f);
 
-        public static Vector3 positiveInfinity =>
-            new Vector3(float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity);
+        public static Vector3 positiveInfinity => new Vector3(float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity);
 
-        public static Vector3 negativeInfinity =>
-            new Vector3(float.NegativeInfinity, float.NegativeInfinity, float.NegativeInfinity);
+        public static Vector3 negativeInfinity => new Vector3(float.NegativeInfinity, float.NegativeInfinity, float.NegativeInfinity);
 
         public float magnitude => MathF.Sqrt((x * x) + (y * y) + (z * z));
 
@@ -691,28 +681,22 @@ namespace UnityEngine
 
         public override bool Equals(object other) => other is Vector3 v && Equals(v);
 
-        public override int GetHashCode() =>
-            (x.GetHashCode() * 397) ^ (y.GetHashCode() * 31) ^ z.GetHashCode();
+        public override int GetHashCode() => (x.GetHashCode() * 397) ^ (y.GetHashCode() * 31) ^ z.GetHashCode();
 
         public override string ToString() =>
             $"({x.ToString(CultureInfo.InvariantCulture)}, {y.ToString(CultureInfo.InvariantCulture)}, {z.ToString(CultureInfo.InvariantCulture)})";
 
-        public static Vector3 operator +(Vector3 a, Vector3 b) =>
-            new Vector3(a.x + b.x, a.y + b.y, a.z + b.z);
+        public static Vector3 operator +(Vector3 a, Vector3 b) => new Vector3(a.x + b.x, a.y + b.y, a.z + b.z);
 
-        public static Vector3 operator -(Vector3 a, Vector3 b) =>
-            new Vector3(a.x - b.x, a.y - b.y, a.z - b.z);
+        public static Vector3 operator -(Vector3 a, Vector3 b) => new Vector3(a.x - b.x, a.y - b.y, a.z - b.z);
 
         public static Vector3 operator -(Vector3 a) => new Vector3(-a.x, -a.y, -a.z);
 
-        public static Vector3 operator *(Vector3 a, float d) =>
-            new Vector3(a.x * d, a.y * d, a.z * d);
+        public static Vector3 operator *(Vector3 a, float d) => new Vector3(a.x * d, a.y * d, a.z * d);
 
-        public static Vector3 operator *(float d, Vector3 a) =>
-            new Vector3(a.x * d, a.y * d, a.z * d);
+        public static Vector3 operator *(float d, Vector3 a) => new Vector3(a.x * d, a.y * d, a.z * d);
 
-        public static Vector3 operator /(Vector3 a, float d) =>
-            new Vector3(a.x / d, a.y / d, a.z / d);
+        public static Vector3 operator /(Vector3 a, float d) => new Vector3(a.x / d, a.y / d, a.z / d);
 
         public static bool operator ==(Vector3 a, Vector3 b) => a.Equals(b);
 
@@ -756,21 +740,9 @@ namespace UnityEngine
 
         public static Vector4 one => new Vector4(1f, 1f, 1f, 1f);
 
-        public static Vector4 positiveInfinity =>
-            new Vector4(
-                float.PositiveInfinity,
-                float.PositiveInfinity,
-                float.PositiveInfinity,
-                float.PositiveInfinity
-            );
+        public static Vector4 positiveInfinity => new Vector4(float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity);
 
-        public static Vector4 negativeInfinity =>
-            new Vector4(
-                float.NegativeInfinity,
-                float.NegativeInfinity,
-                float.NegativeInfinity,
-                float.NegativeInfinity
-            );
+        public static Vector4 negativeInfinity => new Vector4(float.NegativeInfinity, float.NegativeInfinity, float.NegativeInfinity, float.NegativeInfinity);
 
         public float magnitude => MathF.Sqrt((x * x) + (y * y) + (z * z) + (w * w));
 
@@ -798,36 +770,26 @@ namespace UnityEngine
             }
         }
 
-        public bool Equals(Vector4 other) =>
-            x == other.x && y == other.y && z == other.z && w == other.w;
+        public bool Equals(Vector4 other) => x == other.x && y == other.y && z == other.z && w == other.w;
 
         public override bool Equals(object other) => other is Vector4 v && Equals(v);
 
-        public override int GetHashCode() =>
-            (x.GetHashCode() * 397)
-            ^ (y.GetHashCode() * 31)
-            ^ (z.GetHashCode() * 17)
-            ^ w.GetHashCode();
+        public override int GetHashCode() => (x.GetHashCode() * 397) ^ (y.GetHashCode() * 31) ^ (z.GetHashCode() * 17) ^ w.GetHashCode();
 
         public override string ToString() =>
             $"({x.ToString(CultureInfo.InvariantCulture)}, {y.ToString(CultureInfo.InvariantCulture)}, {z.ToString(CultureInfo.InvariantCulture)}, {w.ToString(CultureInfo.InvariantCulture)})";
 
-        public static Vector4 operator +(Vector4 a, Vector4 b) =>
-            new Vector4(a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w);
+        public static Vector4 operator +(Vector4 a, Vector4 b) => new Vector4(a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w);
 
-        public static Vector4 operator -(Vector4 a, Vector4 b) =>
-            new Vector4(a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w);
+        public static Vector4 operator -(Vector4 a, Vector4 b) => new Vector4(a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w);
 
         public static Vector4 operator -(Vector4 a) => new Vector4(-a.x, -a.y, -a.z, -a.w);
 
-        public static Vector4 operator *(Vector4 a, float d) =>
-            new Vector4(a.x * d, a.y * d, a.z * d, a.w * d);
+        public static Vector4 operator *(Vector4 a, float d) => new Vector4(a.x * d, a.y * d, a.z * d, a.w * d);
 
-        public static Vector4 operator *(float d, Vector4 a) =>
-            new Vector4(a.x * d, a.y * d, a.z * d, a.w * d);
+        public static Vector4 operator *(float d, Vector4 a) => new Vector4(a.x * d, a.y * d, a.z * d, a.w * d);
 
-        public static Vector4 operator /(Vector4 a, float d) =>
-            new Vector4(a.x / d, a.y / d, a.z / d, a.w / d);
+        public static Vector4 operator /(Vector4 a, float d) => new Vector4(a.x / d, a.y / d, a.z / d, a.w / d);
 
         public static bool operator ==(Vector4 a, Vector4 b) => a.Equals(b);
 
@@ -877,25 +839,19 @@ namespace UnityEngine
 
         public override string ToString() => $"({x}, {y})";
 
-        public static Vector2Int operator +(Vector2Int a, Vector2Int b) =>
-            new Vector2Int(a.x + b.x, a.y + b.y);
+        public static Vector2Int operator +(Vector2Int a, Vector2Int b) => new Vector2Int(a.x + b.x, a.y + b.y);
 
-        public static Vector2Int operator -(Vector2Int a, Vector2Int b) =>
-            new Vector2Int(a.x - b.x, a.y - b.y);
+        public static Vector2Int operator -(Vector2Int a, Vector2Int b) => new Vector2Int(a.x - b.x, a.y - b.y);
 
         public static Vector2Int operator -(Vector2Int a) => new Vector2Int(-a.x, -a.y);
 
-        public static Vector2Int operator *(Vector2Int a, int d) =>
-            new Vector2Int(a.x * d, a.y * d);
+        public static Vector2Int operator *(Vector2Int a, int d) => new Vector2Int(a.x * d, a.y * d);
 
-        public static Vector2Int operator *(int d, Vector2Int a) =>
-            new Vector2Int(a.x * d, a.y * d);
+        public static Vector2Int operator *(int d, Vector2Int a) => new Vector2Int(a.x * d, a.y * d);
 
-        public static Vector2Int operator *(Vector2Int a, Vector2Int b) =>
-            new Vector2Int(a.x * b.x, a.y * b.y);
+        public static Vector2Int operator *(Vector2Int a, Vector2Int b) => new Vector2Int(a.x * b.x, a.y * b.y);
 
-        public static Vector2Int operator /(Vector2Int a, int d) =>
-            new Vector2Int(a.x / d, a.y / d);
+        public static Vector2Int operator /(Vector2Int a, int d) => new Vector2Int(a.x / d, a.y / d);
 
         public static bool operator ==(Vector2Int a, Vector2Int b) => a.Equals(b);
 
@@ -954,25 +910,19 @@ namespace UnityEngine
 
         public override string ToString() => $"({x}, {y}, {z})";
 
-        public static Vector3Int operator +(Vector3Int a, Vector3Int b) =>
-            new Vector3Int(a.x + b.x, a.y + b.y, a.z + b.z);
+        public static Vector3Int operator +(Vector3Int a, Vector3Int b) => new Vector3Int(a.x + b.x, a.y + b.y, a.z + b.z);
 
-        public static Vector3Int operator -(Vector3Int a, Vector3Int b) =>
-            new Vector3Int(a.x - b.x, a.y - b.y, a.z - b.z);
+        public static Vector3Int operator -(Vector3Int a, Vector3Int b) => new Vector3Int(a.x - b.x, a.y - b.y, a.z - b.z);
 
         public static Vector3Int operator -(Vector3Int a) => new Vector3Int(-a.x, -a.y, -a.z);
 
-        public static Vector3Int operator *(Vector3Int a, int d) =>
-            new Vector3Int(a.x * d, a.y * d, a.z * d);
+        public static Vector3Int operator *(Vector3Int a, int d) => new Vector3Int(a.x * d, a.y * d, a.z * d);
 
-        public static Vector3Int operator *(int d, Vector3Int a) =>
-            new Vector3Int(a.x * d, a.y * d, a.z * d);
+        public static Vector3Int operator *(int d, Vector3Int a) => new Vector3Int(a.x * d, a.y * d, a.z * d);
 
-        public static Vector3Int operator *(Vector3Int a, Vector3Int b) =>
-            new Vector3Int(a.x * b.x, a.y * b.y, a.z * b.z);
+        public static Vector3Int operator *(Vector3Int a, Vector3Int b) => new Vector3Int(a.x * b.x, a.y * b.y, a.z * b.z);
 
-        public static Vector3Int operator /(Vector3Int a, int d) =>
-            new Vector3Int(a.x / d, a.y / d, a.z / d);
+        public static Vector3Int operator /(Vector3Int a, int d) => new Vector3Int(a.x / d, a.y / d, a.z / d);
 
         public static bool operator ==(Vector3Int a, Vector3Int b) => a.Equals(b);
 
@@ -1018,16 +968,11 @@ namespace UnityEngine
 
         public static Color clear => new Color(0f, 0f, 0f, 0f);
 
-        public bool Equals(Color other) =>
-            r == other.r && g == other.g && b == other.b && a == other.a;
+        public bool Equals(Color other) => r == other.r && g == other.g && b == other.b && a == other.a;
 
         public override bool Equals(object other) => other is Color c && Equals(c);
 
-        public override int GetHashCode() =>
-            (r.GetHashCode() * 397)
-            ^ (g.GetHashCode() * 31)
-            ^ (b.GetHashCode() * 17)
-            ^ a.GetHashCode();
+        public override int GetHashCode() => (r.GetHashCode() * 397) ^ (g.GetHashCode() * 31) ^ (b.GetHashCode() * 17) ^ a.GetHashCode();
 
         public override string ToString() =>
             $"RGBA({r.ToString(CultureInfo.InvariantCulture)}, {g.ToString(CultureInfo.InvariantCulture)}, {b.ToString(CultureInfo.InvariantCulture)}, {a.ToString(CultureInfo.InvariantCulture)})";
@@ -1054,16 +999,11 @@ namespace UnityEngine
 
         public static Rect zero => new Rect(0f, 0f, 0f, 0f);
 
-        public bool Equals(Rect other) =>
-            x == other.x && y == other.y && width == other.width && height == other.height;
+        public bool Equals(Rect other) => x == other.x && y == other.y && width == other.width && height == other.height;
 
         public override bool Equals(object other) => other is Rect r && Equals(r);
 
-        public override int GetHashCode() =>
-            (x.GetHashCode() * 397)
-            ^ (y.GetHashCode() * 31)
-            ^ (width.GetHashCode() * 17)
-            ^ height.GetHashCode();
+        public override int GetHashCode() => (x.GetHashCode() * 397) ^ (y.GetHashCode() * 31) ^ (width.GetHashCode() * 17) ^ height.GetHashCode();
 
         public override string ToString() =>
             $"(x:{x.ToString(CultureInfo.InvariantCulture)}, y:{y.ToString(CultureInfo.InvariantCulture)}, width:{width.ToString(CultureInfo.InvariantCulture)}, height:{height.ToString(CultureInfo.InvariantCulture)})";
@@ -1099,11 +1039,9 @@ namespace UnityEngine
             this.height = height;
         }
 
-        public bool Contains(Vector2Int point) =>
-            point.x >= x && point.y >= y && point.x < (x + width) && point.y < (y + height);
+        public bool Contains(Vector2Int point) => point.x >= x && point.y >= y && point.x < (x + width) && point.y < (y + height);
 
-        public bool Equals(RectInt other) =>
-            x == other.x && y == other.y && width == other.width && height == other.height;
+        public bool Equals(RectInt other) => x == other.x && y == other.y && width == other.width && height == other.height;
 
         public override bool Equals(object other) => other is RectInt r && Equals(r);
 
@@ -1138,13 +1076,7 @@ namespace UnityEngine
             this.size = size;
         }
 
-        public bool Contains(Vector3 point) =>
-            point.x >= min.x
-            && point.x <= max.x
-            && point.y >= min.y
-            && point.y <= max.y
-            && point.z >= min.z
-            && point.z <= max.z;
+        public bool Contains(Vector3 point) => point.x >= min.x && point.x <= max.x && point.y >= min.y && point.y <= max.y && point.z >= min.z && point.z <= max.z;
 
         public bool Equals(Bounds other) => center == other.center && size == other.size;
 
@@ -1188,13 +1120,7 @@ namespace UnityEngine
             this.size = size;
         }
 
-        public bool Contains(Vector3Int point) =>
-            point.x >= min.x
-            && point.y >= min.y
-            && point.z >= min.z
-            && point.x < max.x
-            && point.y < max.y
-            && point.z < max.z;
+        public bool Contains(Vector3Int point) => point.x >= min.x && point.y >= min.y && point.z >= min.z && point.x < max.x && point.y < max.y && point.z < max.z;
 
         public bool Equals(BoundsInt other) => position == other.position && size == other.size;
 
@@ -1203,8 +1129,7 @@ namespace UnityEngine
         public override int GetHashCode() => (position.GetHashCode() * 397) ^ size.GetHashCode();
 
         /* Unity's labeled form; the parser strips these very labels. */
-        public override string ToString() =>
-            $"Position: {position.ToString()}, Size: {size.ToString()}";
+        public override string ToString() => $"Position: {position.ToString()}, Size: {size.ToString()}";
 
         public static bool operator ==(BoundsInt a, BoundsInt b) => a.Equals(b);
 
@@ -1279,16 +1204,11 @@ namespace UnityEngine
 
         public static Quaternion identity => new Quaternion(0f, 0f, 0f, 1f);
 
-        public bool Equals(Quaternion other) =>
-            x == other.x && y == other.y && z == other.z && w == other.w;
+        public bool Equals(Quaternion other) => x == other.x && y == other.y && z == other.z && w == other.w;
 
         public override bool Equals(object other) => other is Quaternion q && Equals(q);
 
-        public override int GetHashCode() =>
-            (x.GetHashCode() * 397)
-            ^ (y.GetHashCode() * 31)
-            ^ (z.GetHashCode() * 17)
-            ^ w.GetHashCode();
+        public override int GetHashCode() => (x.GetHashCode() * 397) ^ (y.GetHashCode() * 31) ^ (z.GetHashCode() * 17) ^ w.GetHashCode();
 
         public override string ToString() =>
             $"({x.ToString(CultureInfo.InvariantCulture)}, {y.ToString(CultureInfo.InvariantCulture)}, {z.ToString(CultureInfo.InvariantCulture)}, {w.ToString(CultureInfo.InvariantCulture)})";
@@ -1353,11 +1273,7 @@ namespace UnityEngine.UIElements
 
         public bool altKey => (modifiers & EventModifiers.Alt) != 0;
 
-        public static KeyDownEvent GetPooled(
-            char character,
-            KeyCode keyCode,
-            EventModifiers modifiers
-        )
+        public static KeyDownEvent GetPooled(char character, KeyCode keyCode, EventModifiers modifiers)
         {
             return new KeyDownEvent
             {
@@ -1455,10 +1371,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
         public TerminalFontPack _fontPack;
 
         private static InvalidOperationException NoSurface() =>
-            new InvalidOperationException(
-                "The Unity-free test host has no Terminal UI surface; "
-                    + "run this fixture in a live editor."
-            );
+            new InvalidOperationException("The Unity-free test host has no Terminal UI surface; " + "run this fixture in a live editor.");
 
         public Font CurrentFont => throw NoSurface();
 

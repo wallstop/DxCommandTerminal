@@ -82,10 +82,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             string uss = asset.BuildUss();
             foreach (string token in RequiredTokens)
             {
-                Assert.IsTrue(
-                    uss.Contains(token + ":", StringComparison.Ordinal),
-                    $"Generated sheet must define '{token}'"
-                );
+                Assert.IsTrue(uss.Contains(token + ":", StringComparison.Ordinal), $"Generated sheet must define '{token}'");
             }
         }
 
@@ -93,42 +90,22 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void GeneratedSheetCarriesTheOwnershipMarker()
         {
             TerminalThemeAsset asset = CreateAsset("Marked");
-            StringAssert.StartsWith(
-                TerminalThemeAsset.GeneratedMarkerPrefix,
-                asset.BuildUss(),
-                "Generated sheets must identify themselves as generated"
-            );
+            StringAssert.StartsWith(TerminalThemeAsset.GeneratedMarkerPrefix, asset.BuildUss(), "Generated sheets must identify themselves as generated");
         }
 
         [Test]
         public void GeneratedSheetCheckTreatsMissingAndUnreadablePathsAsNotGenerated()
         {
-            string missingPath = Path.Combine(
-                Path.GetTempPath(),
-                $"no-such-theme-sheet-{Guid.NewGuid():N}.uss"
-            );
-            Assert.IsFalse(
-                TerminalThemeAsset.IsGeneratedSheet(missingPath),
-                "A missing file is not a generated sheet (and must not throw)"
-            );
-            Assert.That(
-                TerminalThemeAsset.TryReadText(missingPath),
-                Is.Null,
-                "A missing file reads as null (and must not throw)"
-            );
+            string missingPath = Path.Combine(Path.GetTempPath(), $"no-such-theme-sheet-{Guid.NewGuid():N}.uss");
+            Assert.IsFalse(TerminalThemeAsset.IsGeneratedSheet(missingPath), "A missing file is not a generated sheet (and must not throw)");
+            Assert.That(TerminalThemeAsset.TryReadText(missingPath), Is.Null, "A missing file reads as null (and must not throw)");
 
             /*
                 A directory read fails with a filesystem error, not a missing
                 file; the check must classify it as not-generated either way.
              */
-            string directoryPath = Path.Combine(
-                Path.GetTempPath(),
-                $"no-such-theme-dir-{Guid.NewGuid():N}"
-            );
-            Assert.IsFalse(
-                TerminalThemeAsset.IsGeneratedSheet(directoryPath),
-                "An unreadable path is not a generated sheet (and must not throw)"
-            );
+            string directoryPath = Path.Combine(Path.GetTempPath(), $"no-such-theme-dir-{Guid.NewGuid():N}");
+            Assert.IsFalse(TerminalThemeAsset.IsGeneratedSheet(directoryPath), "An unreadable path is not a generated sheet (and must not throw)");
         }
 
         [Test]
@@ -148,16 +125,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             )
             {
                 TerminalThemeAsset asset = CreateAsset(assetName);
-                Assert.AreEqual(
-                    expectedClass,
-                    asset.CssClassName,
-                    $"CSS class derived from asset name '{assetName}'"
-                );
-                StringAssert.Contains(
-                    "." + expectedClass + " {",
-                    asset.BuildUss(),
-                    $"Generated sheet selector for asset '{assetName}'"
-                );
+                Assert.AreEqual(expectedClass, asset.CssClassName, $"CSS class derived from asset name '{assetName}'");
+                StringAssert.Contains("." + expectedClass + " {", asset.BuildUss(), $"Generated sheet selector for asset '{assetName}'");
             }
         }
 
@@ -199,23 +168,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
              */
             AssetDatabase.CreateAsset(CreateAsset("ProbeTheme"), assetPath);
 
-            Assert.IsTrue(
-                File.Exists(sheetPath),
-                "Creating a theme asset auto-writes the sibling .uss"
-            );
+            Assert.IsTrue(File.Exists(sheetPath), "Creating a theme asset auto-writes the sibling .uss");
             TerminalThemeAsset asset = AssetDatabase.LoadAssetAtPath<TerminalThemeAsset>(assetPath);
-            Assert.AreEqual(
-                asset.BuildUss(),
-                File.ReadAllText(sheetPath),
-                "Sheet content matches the asset"
-            );
+            Assert.AreEqual(asset.BuildUss(), File.ReadAllText(sheetPath), "Sheet content matches the asset");
 
             SetColor(asset, "_textError", new Color(1f, 0f, 0f, 1f));
-            Assert.AreEqual(
-                asset.BuildUss(),
-                File.ReadAllText(sheetPath),
-                "Editing the asset rewrites the sheet"
-            );
+            Assert.AreEqual(asset.BuildUss(), File.ReadAllText(sheetPath), "Editing the asset rewrites the sheet");
         }
 
         [Test]
@@ -230,10 +188,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             AssetDatabase.DeleteAsset(assetPath);
 
-            Assert.IsFalse(
-                File.Exists(sheetPath),
-                "Deleting the asset removes the generated sheet with it"
-            );
+            Assert.IsFalse(File.Exists(sheetPath), "Deleting the asset removes the generated sheet with it");
         }
 
         [Test]
@@ -248,10 +203,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             AssetDatabase.CreateAsset(CreateAsset("ProbeTheme"), assetPath);
             Assert.IsTrue(File.Exists(oldSheetPath), "Sanity: the sheet exists after create");
 
-            Assert.IsTrue(
-                string.IsNullOrEmpty(AssetDatabase.MoveAsset(assetPath, movedAssetPath)),
-                "Sanity: the asset rename succeeds"
-            );
+            Assert.IsTrue(string.IsNullOrEmpty(AssetDatabase.MoveAsset(assetPath, movedAssetPath)), "Sanity: the asset rename succeeds");
 
             Assert.IsFalse(File.Exists(oldSheetPath), "The stale old-name sheet is cleaned up");
             Assert.IsTrue(File.Exists(newSheetPath), "The sheet follows the rename");
@@ -277,11 +229,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             LogAssert.Expect(LogType.Warning, new Regex("Skipping generated theme sheet"));
             AssetDatabase.CreateAsset(CreateAsset("ProbeTheme"), assetPath);
 
-            Assert.AreEqual(
-                handWritten,
-                File.ReadAllText(sheetPath),
-                "A hand-written sheet sharing the asset name must not be clobbered"
-            );
+            Assert.AreEqual(handWritten, File.ReadAllText(sheetPath), "A hand-written sheet sharing the asset name must not be clobbered");
         }
 #endif
 

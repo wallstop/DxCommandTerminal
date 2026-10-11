@@ -25,8 +25,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     {
         private const string CounterCommandName = "binding-counter";
 
-        private const string CounterHolderTypeName =
-            "WallstopStudios.DxCommandTerminal.Tests.BindingCounterCommands";
+        private const string CounterHolderTypeName = "WallstopStudios.DxCommandTerminal.Tests.BindingCounterCommands";
 
         private const string GenericCommandName = "binding-generic";
 
@@ -63,33 +62,17 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         private static void AttachCommand(MethodBuilder method, string commandName)
         {
-            ConstructorInfo attributeConstructor = typeof(RegisterCommandAttribute).GetConstructor(
-                new[] { typeof(string) }
-            );
-            method.SetCustomAttribute(
-                new CustomAttributeBuilder(attributeConstructor, new object[] { commandName })
-            );
+            ConstructorInfo attributeConstructor = typeof(RegisterCommandAttribute).GetConstructor(new[] { typeof(string) });
+            method.SetCustomAttribute(new CustomAttributeBuilder(attributeConstructor, new object[] { commandName }));
         }
 
         private static Assembly CreateCounterAssembly()
         {
             AssemblyBuilder assembly = BeginAssembly("BindingCounter");
             ModuleBuilder module = assembly.DefineDynamicModule("Commands");
-            TypeBuilder type = module.DefineType(
-                CounterHolderTypeName,
-                TypeAttributes.Public | TypeAttributes.Sealed
-            );
-            FieldBuilder counter = type.DefineField(
-                "Invocations",
-                typeof(int),
-                FieldAttributes.Public | FieldAttributes.Static
-            );
-            MethodBuilder method = type.DefineMethod(
-                "CountCommand",
-                MethodAttributes.Public | MethodAttributes.Static,
-                typeof(void),
-                new[] { typeof(CommandArg[]) }
-            );
+            TypeBuilder type = module.DefineType(CounterHolderTypeName, TypeAttributes.Public | TypeAttributes.Sealed);
+            FieldBuilder counter = type.DefineField("Invocations", typeof(int), FieldAttributes.Public | FieldAttributes.Static);
+            MethodBuilder method = type.DefineMethod("CountCommand", MethodAttributes.Public | MethodAttributes.Static, typeof(void), new[] { typeof(CommandArg[]) });
             method.DefineParameter(1, ParameterAttributes.None, "args");
             ILGenerator body = method.GetILGenerator();
             body.Emit(OpCodes.Ldsfld, counter);
@@ -106,16 +89,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             AssemblyBuilder assembly = BeginAssembly("BindingGenericMethod");
             ModuleBuilder module = assembly.DefineDynamicModule("Commands");
-            TypeBuilder type = module.DefineType(
-                $"{HolderNamespace}.BindingGenericMethodCommands",
-                TypeAttributes.Public | TypeAttributes.Sealed
-            );
-            MethodBuilder method = type.DefineMethod(
-                "GenericCommand",
-                MethodAttributes.Public | MethodAttributes.Static,
-                typeof(void),
-                new[] { typeof(CommandArg[]) }
-            );
+            TypeBuilder type = module.DefineType($"{HolderNamespace}.BindingGenericMethodCommands", TypeAttributes.Public | TypeAttributes.Sealed);
+            MethodBuilder method = type.DefineMethod("GenericCommand", MethodAttributes.Public | MethodAttributes.Static, typeof(void), new[] { typeof(CommandArg[]) });
             method.DefineGenericParameters("T");
             method.DefineParameter(1, ParameterAttributes.None, "args");
             method.GetILGenerator().Emit(OpCodes.Ret);
@@ -128,17 +103,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             AssemblyBuilder assembly = BeginAssembly("BindingGenericHolder");
             ModuleBuilder module = assembly.DefineDynamicModule("Commands");
-            TypeBuilder type = module.DefineType(
-                $"{HolderNamespace}.BindingGenericHolderCommands`1",
-                TypeAttributes.Public | TypeAttributes.Sealed
-            );
+            TypeBuilder type = module.DefineType($"{HolderNamespace}.BindingGenericHolderCommands`1", TypeAttributes.Public | TypeAttributes.Sealed);
             type.DefineGenericParameters("T");
-            MethodBuilder method = type.DefineMethod(
-                "HolderCommand",
-                MethodAttributes.Public | MethodAttributes.Static,
-                typeof(void),
-                new[] { typeof(CommandArg[]) }
-            );
+            MethodBuilder method = type.DefineMethod("HolderCommand", MethodAttributes.Public | MethodAttributes.Static, typeof(void), new[] { typeof(CommandArg[]) });
             method.DefineParameter(1, ParameterAttributes.None, "args");
             method.GetILGenerator().Emit(OpCodes.Ret);
             AttachCommand(method, GenericHolderCommandName);
@@ -150,18 +117,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             AssemblyBuilder assembly = BeginAssembly("BindingAbstract");
             ModuleBuilder module = assembly.DefineDynamicModule("Commands");
-            TypeBuilder type = module.DefineType(
-                $"{HolderNamespace}.BindingAbstractCommands",
-                TypeAttributes.Interface | TypeAttributes.Abstract
-            );
+            TypeBuilder type = module.DefineType($"{HolderNamespace}.BindingAbstractCommands", TypeAttributes.Interface | TypeAttributes.Abstract);
             MethodBuilder method = type.DefineMethod(
                 "AbstractCommand",
-                MethodAttributes.Public
-                    | MethodAttributes.Static
-                    | MethodAttributes.Abstract
-                    | MethodAttributes.Virtual
-                    | MethodAttributes.NewSlot
-                    | MethodAttributes.HideBySig,
+                MethodAttributes.Public | MethodAttributes.Static | MethodAttributes.Abstract | MethodAttributes.Virtual | MethodAttributes.NewSlot | MethodAttributes.HideBySig,
                 typeof(void),
                 new[] { typeof(CommandArg[]) }
             );
@@ -179,24 +138,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
              */
             AssemblyBuilder assembly = BeginAssembly("BindingBlankName");
             ModuleBuilder module = assembly.DefineDynamicModule("Commands");
-            TypeBuilder type = module.DefineType(
-                $"{HolderNamespace}.BindingBlankNameCommands",
-                TypeAttributes.Public | TypeAttributes.Sealed
-            );
-            MethodBuilder method = type.DefineMethod(
-                "Command",
-                MethodAttributes.Public | MethodAttributes.Static,
-                typeof(void),
-                new[] { typeof(CommandArg[]) }
-            );
+            TypeBuilder type = module.DefineType($"{HolderNamespace}.BindingBlankNameCommands", TypeAttributes.Public | TypeAttributes.Sealed);
+            MethodBuilder method = type.DefineMethod("Command", MethodAttributes.Public | MethodAttributes.Static, typeof(void), new[] { typeof(CommandArg[]) });
             method.DefineParameter(1, ParameterAttributes.None, "args");
             method.GetILGenerator().Emit(OpCodes.Ret);
-            ConstructorInfo attributeConstructor = typeof(RegisterCommandAttribute).GetConstructor(
-                new[] { typeof(string) }
-            );
-            method.SetCustomAttribute(
-                new CustomAttributeBuilder(attributeConstructor, new object[] { null })
-            );
+            ConstructorInfo attributeConstructor = typeof(RegisterCommandAttribute).GetConstructor(new[] { typeof(string) });
+            method.SetCustomAttribute(new CustomAttributeBuilder(attributeConstructor, new object[] { null }));
             type.CreateType();
             return assembly;
         }
@@ -210,10 +157,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                The emitted counter lives in a non-collectible dynamic
                assembly, so its value persists across runs in one domain.
              */
-            CounterAssembly
-                .GetType(CounterHolderTypeName)
-                .GetField("Invocations", BindingFlags.Public | BindingFlags.Static)
-                .SetValue(null, 0);
+            CounterAssembly.GetType(CounterHolderTypeName).GetField("Invocations", BindingFlags.Public | BindingFlags.Static).SetValue(null, 0);
 #endif
         }
 
@@ -236,28 +180,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             CommandShell shell = CreateShell();
 
-            Assert.IsTrue(
-                shell.Commands.ContainsKey(CounterCommandName),
-                "The reflected command should register at readiness without binding"
-            );
+            Assert.IsTrue(shell.Commands.ContainsKey(CounterCommandName), "The reflected command should register at readiness without binding");
 
-            FieldInfo counter = CounterAssembly
-                .GetType(CounterHolderTypeName)
-                .GetField("Invocations", BindingFlags.Public | BindingFlags.Static);
+            FieldInfo counter = CounterAssembly.GetType(CounterHolderTypeName).GetField("Invocations", BindingFlags.Public | BindingFlags.Static);
             Assert.That(counter != null, "Sanity: expected the emitted counter field");
-            Assert.AreEqual(
-                0,
-                counter.GetValue(null),
-                "Readiness must not invoke or bind the command's handler"
-            );
+            Assert.AreEqual(0, counter.GetValue(null), "Readiness must not invoke or bind the command's handler");
 
             Assert.IsTrue(shell.RunCommand(CounterCommandName));
             Assert.IsTrue(shell.RunCommand(CounterCommandName));
-            Assert.AreEqual(
-                2,
-                counter.GetValue(null),
-                "Both invocations should run through the one-time bound delegate"
-            );
+            Assert.AreEqual(2, counter.GetValue(null), "Both invocations should run through the one-time bound delegate");
 
             /*
                One DeferredCommandHandler lives per AutoCommand (cached per
@@ -266,10 +197,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
              */
             CommandShell secondShell = CreateShell();
             Assert.IsTrue(
-                ReferenceEquals(
-                    shell.Commands[CounterCommandName].proc,
-                    secondShell.Commands[CounterCommandName].proc
-                ),
+                ReferenceEquals(shell.Commands[CounterCommandName].proc, secondShell.Commands[CounterCommandName].proc),
                 "Both shells should dispatch through the same bound handler"
             );
         }
@@ -281,14 +209,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             CommandShell shell = CreateShell();
 
-            Assert.IsTrue(
-                shell.AutoCommandsRegistered,
-                "Sanity: readiness should complete with an unbindable signature present"
-            );
-            Assert.IsFalse(
-                shell.Commands.ContainsKey(GenericCommandName),
-                "A generic method definition must not register a runnable command"
-            );
+            Assert.IsTrue(shell.AutoCommandsRegistered, "Sanity: readiness should complete with an unbindable signature present");
+            Assert.IsFalse(shell.Commands.ContainsKey(GenericCommandName), "A generic method definition must not register a runnable command");
             Assert.IsFalse(shell.RunCommand(GenericCommandName));
 
             bool reported = false;
@@ -305,10 +227,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 }
             }
 
-            Assert.IsTrue(
-                reported,
-                $"Expected the invalid-signature diagnostics for {GenericCommandName}"
-            );
+            Assert.IsTrue(reported, $"Expected the invalid-signature diagnostics for {GenericCommandName}");
         }
 
         [Test]
@@ -331,14 +250,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             CommandShell shell = CreateShell();
 
-            Assert.IsTrue(
-                shell.AutoCommandsRegistered,
-                "Degenerate signatures must not break readiness"
-            );
-            Assert.IsTrue(
-                shell.Commands.ContainsKey(GenericHolderCommandName),
-                "A bindable command in an open generic type must stay registered"
-            );
+            Assert.IsTrue(shell.AutoCommandsRegistered, "Degenerate signatures must not break readiness");
+            Assert.IsTrue(shell.Commands.ContainsKey(GenericHolderCommandName), "A bindable command in an open generic type must stay registered");
 
             /*
                 A contained failure still goes to Unity's logger, which is
@@ -347,33 +260,20 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
              */
             LogAssert.Expect(LogType.Exception, new Regex("not fully instantiated"));
 
-            Assert.IsTrue(
-                shell.RunCommand(GenericHolderCommandName),
-                "The command dispatches; the failure is the handler's, not dispatch's"
-            );
+            Assert.IsTrue(shell.RunCommand(GenericHolderCommandName), "The command dispatches; the failure is the handler's, not dispatch's");
 
             bool reported = false;
             while (shell.TryConsumeErrorMessage(out string errorMessage))
             {
-                if (
-                    errorMessage != null
-                    && errorMessage.Contains(GenericHolderCommandName, StringComparison.Ordinal)
-                    && errorMessage.Contains("threw", StringComparison.Ordinal)
-                )
+                if (errorMessage != null && errorMessage.Contains(GenericHolderCommandName, StringComparison.Ordinal) && errorMessage.Contains("threw", StringComparison.Ordinal))
                 {
                     reported = true;
                     break;
                 }
             }
 
-            Assert.IsTrue(
-                reported,
-                $"A contained handler failure must be queued for {GenericHolderCommandName}"
-            );
-            Assert.IsTrue(
-                shell.Commands.ContainsKey(AbstractCommandName),
-                "An abstract static command stays registered where the backend binds it"
-            );
+            Assert.IsTrue(reported, $"A contained handler failure must be queued for {GenericHolderCommandName}");
+            Assert.IsTrue(shell.Commands.ContainsKey(AbstractCommandName), "An abstract static command stays registered where the backend binds it");
         }
 
         [Test]
@@ -389,18 +289,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             CommandShell shell = CreateShell();
 
             Assert.IsTrue(shell.AutoCommandsRegistered);
-            Assert.IsFalse(
-                shell.Commands.ContainsKey(string.Empty),
-                "A blank auto command name must not register"
-            );
+            Assert.IsFalse(shell.Commands.ContainsKey(string.Empty), "A blank auto command name must not register");
 
             bool reported = false;
             while (shell.TryConsumeErrorMessage(out string errorMessage))
             {
-                if (
-                    errorMessage != null
-                    && errorMessage.StartsWith("Invalid Command Name", StringComparison.Ordinal)
-                )
+                if (errorMessage != null && errorMessage.StartsWith("Invalid Command Name", StringComparison.Ordinal))
                 {
                     reported = true;
                     break;
