@@ -21,10 +21,12 @@ more, and `list-fonts` prints them by these names:
 - `NanumGothicCoding-Regular` - Hangul and kana. In `Everything-Basic` and
   `Everything-All`.
 
-No shipped family carries emoji: parsed across every shipped font's
-character map, the count of emoji glyphs is zero, so an emoji always shows
-a box. To see one, add a font that carries it to a pack and set that font.
-The console keeps the text whole either way.
+Emoji coverage is scattered: 30 of the shipped font files carry 167
+emoji-range glyphs between them - arrows, check marks, and pictographs such
+as a musical note, a lock, or a penguin - and no shipped family carries the
+common emoji set (smileys, gestures, hearts, flags), so most emoji show a
+missing-glyph box. To see one the font lacks, add a font that carries it to
+a pack and set that font. The console keeps the text whole either way.
 
 ## Switching at runtime
 

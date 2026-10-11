@@ -542,6 +542,14 @@
 
         internal static bool CanParse(Type type)
         {
+            /*
+                Build-time parseability probe for the typed command builder: a
+                definition is only accepted when its argument types can parse
+                at execution. Mirrors the ordinary TryGet paths (registered
+                parsers, built-in parsers, strings, enums); types that rely
+                solely on the named-constant fallback need an explicit parser
+                registration.
+             */
             return type == typeof(string)
                 || type.IsEnum
                 || BuiltInParsers.ContainsKey(type)
@@ -573,13 +581,6 @@
             }
         }
 
-        /*
-            Build-time parseability probe for the typed command builder: a
-            definition is only accepted when its argument types can parse at
-            execution. Mirrors the ordinary TryGet paths (registered parsers,
-            built-in parsers, strings, enums); types that rely solely on the
-            named-constant fallback need an explicit parser registration.
-         */
         private static ReadOnlyCollection<T> CopyOf<T>(IEnumerable<T> source)
         {
             /*
