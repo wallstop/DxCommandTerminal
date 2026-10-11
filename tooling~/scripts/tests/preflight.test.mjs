@@ -497,6 +497,19 @@ test("the run's key computer answers the live key and moves with its inputs", ()
       ownKey,
       "the second declared root's content must move the key"
     );
+
+    /*
+        Two checks on one root with different excludes key differently:
+        the memo key is root AND excludes, so a future simplification to
+        keying by root alone cannot serve one check the other's state.
+     */
+    const excludedCheck = {
+      name: "excluded",
+      command: "node excluded.mjs",
+      cachePaths: [root],
+      cacheExcludes: [own]
+    };
+    assert.notEqual(computer.keyFor(excludedCheck, context), ownKey);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

@@ -72,6 +72,17 @@ function hashText(value) {
 }
 
 /*
+    Untracked files at or below this many bytes are hashed by content in
+    the repo snapshot; larger ones hash their stat signature instead (see
+    repositorySnapshot).
+ */
+const UNTRACKED_CONTENT_HASH_LIMIT = 1024 * 1024;
+
+function statSignature(stat) {
+  return `${stat.mode}\0${stat.size}\0${stat.mtimeMs}\0${stat.ino}\0`;
+}
+
+/*
     File identities are content hashes behind a cheap identity walk: the
     per-entry cost that made the old keying take 112 s serial was
     realpathSync plus readlinkSync on every entry - three metadata syscalls
@@ -212,8 +223,13 @@ function repositorySnapshot() {
       while the check inputs move - and node-tests reads files outside its
       declared roots (.github/, .devcontainer/, .llm/), where a draft file
       would age a cached pass. The untracked set is hashed by content to
-      close that gap; it is small by nature (nothing ignored, nothing
-      committed), so the read stays cheap.
+      close that gap. The hash is incremental over raw bytes - a UTF-8
+      string join would decode two different binary files to the same
+      replacement-character string - and a file above the size cap hashes
+      its stat signature instead of its bytes, so an un-ignored dump in
+      the worktree cannot reintroduce the keying wall. The cap trades the
+      same documented coin as every stat key here: a same-size, same-mtime
+      content edit to one huge untracked file defeats its part of the key.
 
       Stated limit: a tracked file flagged assume-unchanged or
       skip-worktree hides its edits from status, and this snapshot does not
@@ -230,18 +246,27 @@ function repositorySnapshot() {
       encoding: "utf8"
     }
   );
-  const parts = [output];
+  const hash = crypto.createHash("sha256");
+  hash.update(output);
   const untracked = output.split("\0").filter((entry) => entry.startsWith("?? "));
   for (const entry of untracked) {
     /* -z paths are literal (never quoted), so the slice is the path. */
     const relative = entry.slice(3);
+    hash.update(relative);
+    hash.update("\0");
+    const absolute = path.join(REPO_ROOT, relative);
     try {
-      parts.push(`${relative}\0${fs.readFileSync(path.join(REPO_ROOT, relative))}`);
+      const stat = fs.statSync(absolute);
+      if (stat.isFile() && stat.size <= UNTRACKED_CONTENT_HASH_LIMIT) {
+        hash.update(fs.readFileSync(absolute));
+        continue;
+      }
+      hash.update(statSignature(stat));
     } catch {
-      parts.push(`${relative}\0unreadable`);
+      hash.update("unreadable");
     }
   }
-  return hashText(parts.join("\0"));
+  return hash.digest("hex");
 }
 
 export function dependencyState(
