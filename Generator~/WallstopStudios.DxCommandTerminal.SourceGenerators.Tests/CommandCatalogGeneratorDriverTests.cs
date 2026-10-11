@@ -101,6 +101,28 @@ namespace Fixtures
     }
 }";
 
+        private const string NestedHolderFixture =
+            @"
+namespace Fixtures
+{
+    using WallstopStudios.DxCommandTerminal.Attributes;
+    using WallstopStudios.DxCommandTerminal.Backend;
+
+    public static class Holders
+    {
+        public static class Inner
+        {
+            public static int Invocations;
+
+            [RegisterCommand]
+            public static void NestedCommand(CommandArg[] args)
+            {
+                Invocations++;
+            }
+        }
+    }
+}";
+
         private const string RejectionFixture =
             @"
 namespace Fixtures
@@ -761,6 +783,135 @@ namespace Fixtures
             Assert.Equal("First", catalog.NameOf(catalog.Entries[0]));
             Assert.Equal("Second", catalog.NameOf(catalog.Entries[1]));
             Assert.Equal("Third", catalog.NameOf(catalog.Entries[2]));
+        }
+
+        /*
+            The name form is the one Assembly.GetType resolves: the nested
+            chain joins with plus signs (Type.FullName shape). A dot-joined
+            name compiled and looked correct while failing the lookup on
+            Mono - the live-editor failure this fixture pins.
+        */
+        [Fact]
+        public void NestedHolderNamesResolveThroughAssemblyGetType()
+        {
+            Assembly assembly = TestCompilationFactory.CompileAndLoad(
+                TestCompilationFactory
+                    .RunGenerator(
+                        TestCompilationFactory.CreateCompilation(
+                            "NestedHolderName",
+                            NestedHolderFixture
+                        )
+                    )
+                    .output
+            );
+
+            CatalogView catalog = CatalogView.Load(assembly);
+            object entry = Assert.Single(catalog.Entries);
+            Assert.True(catalog.HasValidSignature(entry));
+            string holderName = catalog.DeclaringTypeNameOf(entry);
+            Assert.Equal("Fixtures.Holders+Inner", holderName);
+
+            Type holder = assembly.GetType(holderName);
+            Assert.NotNull(holder);
+            Type argumentArrayType = assembly.GetType(
+                "WallstopStudios.DxCommandTerminal.Backend.CommandArg"
+            );
+            MethodInfo method = holder.GetMethod(
+                catalog.MethodNameOf(entry),
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic,
+                null,
+                new[] { argumentArrayType.MakeArrayType() },
+                null
+            );
+            Assert.NotNull(method);
+
+            FieldInfo counter = holder.GetField("Invocations");
+            Assert.NotNull(counter);
+            int before = (int)counter.GetValue(null);
+            catalog.BinderOf(entry)(new object[] { Array.CreateInstance(argumentArrayType, 0) });
+            Assert.Equal(before + 1, (int)counter.GetValue(null));
+        }
+
+        [Fact]
+        public void ValidEntriesResolveTheirHandlerThroughTheDeclaringTypeName()
+        {
+            Assembly assembly = TestCompilationFactory.CompileAndLoad(
+                TestCompilationFactory
+                    .RunGenerator(
+                        TestCompilationFactory.CreateCompilation("HolderName", StandardFixture)
+                    )
+                    .output
+            );
+
+            CatalogView catalog = CatalogView.Load(assembly);
+            BindingFlags discoveryFlags =
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+            foreach (object entry in catalog.Entries)
+            {
+                if (!catalog.HasValidSignature(entry))
+                {
+                    Assert.Null(catalog.DeclaringTypeNameOf(entry));
+                    continue;
+                }
+
+                string holderName = catalog.DeclaringTypeNameOf(entry);
+                Type holder = assembly.GetType(holderName);
+                Assert.NotNull(holder);
+                Type argumentArrayType = assembly.GetType(
+                    "WallstopStudios.DxCommandTerminal.Backend.CommandArg"
+                );
+                MethodInfo method = holder.GetMethod(
+                    catalog.MethodNameOf(entry),
+                    discoveryFlags,
+                    null,
+                    new[] { argumentArrayType.MakeArrayType() },
+                    null
+                );
+                Assert.NotNull(method);
+
+                /*
+                    The resolved handler must be the one the binder binds: it
+                    writes to the fixture's invocation counter.
+                */
+                if (method.Name == "Greet")
+                {
+                    FieldInfo counter = holder.GetField("PublicInvocations");
+                    Assert.NotNull(counter);
+                    int before = (int)counter.GetValue(null);
+                    object[] args = { Array.CreateInstance(argumentArrayType, 0) };
+                    catalog.BinderOf(entry)(args);
+                    Assert.Equal(before + 1, (int)counter.GetValue(null));
+                }
+            }
+        }
+
+        [Fact]
+        public void GetHandlerReturnsTheSameDelegateInstanceOnASecondCall()
+        {
+            Assembly assembly = TestCompilationFactory.CompileAndLoad(
+                TestCompilationFactory
+                    .RunGenerator(
+                        TestCompilationFactory.CreateCompilation("HandlerMemo", StandardFixture)
+                    )
+                    .output
+            );
+
+            CatalogView catalog = CatalogView.Load(assembly);
+            foreach (object entry in catalog.Entries)
+            {
+                (object first, object second) = catalog.GetHandlerPairOf(entry);
+                if (!catalog.HasValidSignature(entry))
+                {
+                    Assert.Null(first);
+                    continue;
+                }
+
+                Assert.NotNull(first);
+                Assert.True(
+                    ReferenceEquals(first, second),
+                    $"Command '{catalog.NameOf(entry)}' re-bound its handler on a second call"
+                );
+            }
         }
 
         [Fact]

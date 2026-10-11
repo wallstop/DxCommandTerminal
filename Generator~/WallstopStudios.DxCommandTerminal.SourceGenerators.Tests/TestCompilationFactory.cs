@@ -357,6 +357,30 @@
             return (MethodInfo)accessorFactory.DynamicInvoke();
         }
 
+        public string DeclaringTypeNameOf(object entry) =>
+            (string)GetValue(entry, "DeclaringTypeName");
+
+        /*
+            Invokes the entry's memoized bind (GetHandler) twice and returns
+            both products: the first call binds, the second must answer the
+            same delegate instance.
+        */
+        public (object first, object second) GetHandlerPairOf(object entry)
+        {
+            MethodInfo getHandler = _entryType.GetMethod(
+                "GetHandler",
+                BindingFlags.Public | BindingFlags.Instance
+            );
+            if (getHandler == null)
+            {
+                throw new InvalidOperationException(
+                    "The entry type does not expose a public GetHandler bind."
+                );
+            }
+
+            return (getHandler.Invoke(entry, null), getHandler.Invoke(entry, null));
+        }
+
         public bool HasValidSignature(object entry) => (bool)GetValue(entry, "IsValid");
 
         private object GetValue(object entry, string propertyName)

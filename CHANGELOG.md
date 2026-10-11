@@ -15,6 +15,13 @@ the issue reference at the end. Details live in the docs and the linked issue.
 
 ### Added
 
+- Add `CommandCatalogEntry.GetHandler`, which binds a catalog entry's handler at most once
+  per entry so a registration cycle re-reads one delegate instead of re-allocating it
+  ([#223](https://github.com/wallstop/DxCommandTerminal/issues/223)).
+- Add `CommandArg` parsing-configuration setters - `SetDelimiters`, `SetQuotes`,
+  `SetIgnoredValuesForCleanedTypes`, `SetDoNotCleanTypes`, `SetIgnoredValuesForComplexTypes` -
+  and `ResetParsingConfiguration`, replacing each set's contents in place; the raw sets stay
+  public and mutable ([#229](https://github.com/wallstop/DxCommandTerminal/issues/229)).
 - Add Ctrl+C and Ctrl+X copy and cut of the selected text on both console surfaces' input
   fields; a cut updates the command text and re-ranks the palette, and a clipboard that will
   not take the text leaves the selection in the field instead of deleting it
@@ -22,6 +29,10 @@ the issue reference at the end. Details live in the docs and the linked issue.
 
 ### Changed
 
+- Answer `CommandShell.RegisteredCommands` from generated catalogs, one exact-signature
+  lookup per command, where a catalog exists; assemblies without a catalog keep the
+  reflection sweep with identical results
+  ([#223](https://github.com/wallstop/DxCommandTerminal/issues/223)).
 - Stop the open terminal from re-reading the log every frame: the window copy and the search
   pass now run only when the buffer, its capacity, or the search query changed, so an idle
   console costs no per-frame read even with a `find` query standing

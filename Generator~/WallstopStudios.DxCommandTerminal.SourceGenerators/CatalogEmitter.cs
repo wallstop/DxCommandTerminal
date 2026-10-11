@@ -22,8 +22,6 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
 
         private const string BinderType = "global::System.Action<" + HandlerType + ">";
 
-        private const string BinderFactoryType = "global::System.Func<" + BinderType + ">";
-
         private const string EntryType =
             "global::WallstopStudios.DxCommandTerminal.Backend.CommandCatalogEntry";
 
@@ -95,6 +93,37 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                 }
             }
 
+            /*
+                Valid entries carry their declaring type's reflection-style
+                name through the shared HolderNames table: catalogs answer for
+                many commands in few types, so per-entry text stays a table
+                read and the emission does not grow with the namespace depth.
+             */
+            List<string> holderNames = new List<string>();
+            Dictionary<string, int> holderIndices = new Dictionary<string, int>(
+                StringComparer.Ordinal
+            );
+            int[] holderIndicesByCommand = new int[commandCount];
+            for (int i = 0; i < commandCount; i++)
+            {
+                CommandModel command = commands[i];
+                string holderName = command.DeclaringTypeName;
+                if (!command.HasValidSignature || holderName == null)
+                {
+                    holderIndicesByCommand[i] = -1;
+                    continue;
+                }
+
+                if (!holderIndices.TryGetValue(holderName, out int holderIndex))
+                {
+                    holderIndex = holderNames.Count;
+                    holderIndices.Add(holderName, holderIndex);
+                    holderNames.Add(holderName);
+                }
+
+                holderIndicesByCommand[i] = holderIndex;
+            }
+
             AppendHeader(builder);
             if (preserveCatalog)
             {
@@ -113,6 +142,26 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             }
             builder.Append(Indent2).AppendLine("internal static class CommandCatalog");
             builder.Append(Indent2).AppendLine("{");
+            if (0 < holderNames.Count)
+            {
+                builder
+                    .Append(Indent3)
+                    .AppendLine(
+                        "private static readonly global::System.String[] HolderNames = "
+                            + "new global::System.String[]"
+                    );
+                builder.Append(Indent3).AppendLine("{");
+                foreach (string holderName in holderNames)
+                {
+                    builder
+                        .Append(Indent4)
+                        .AppendLine(SymbolDisplay.FormatLiteral(holderName, quote: true) + ",");
+                }
+
+                builder.Append(Indent3).AppendLine("};");
+                builder.AppendLine();
+            }
+
             builder
                 .Append(Indent3)
                 .Append("private static readonly ")
@@ -152,7 +201,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
 
             for (int i = 0; i < commandCount; i++)
             {
-                EmitCommand(builder, i, commands[i]);
+                EmitCommand(builder, i, commands[i], holderIndicesByCommand[i]);
             }
 
             builder.AppendLine();
@@ -219,7 +268,8 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
         private static void EmitCommand(
             StringBuilder builder,
             int commandIndex,
-            CommandModel command
+            CommandModel command,
+            int holderIndex
         )
         {
             builder.AppendLine();
@@ -266,11 +316,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             {
                 if (command.DirectlyBindable)
                 {
-                    builder
-                        .Append(Indent4)
-                        .Append("    new ")
-                        .Append(BinderFactoryType)
-                        .AppendLine("(delegate");
+                    builder.Append(Indent4).Append("    delegate");
                     builder.Append(Indent4).AppendLine("    {");
                     builder
                         .Append(Indent5)
@@ -281,30 +327,24 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                         .Append(".")
                         .Append(command.MethodNameIdentifierDisplay)
                         .AppendLine(");");
-                    builder.Append(Indent4).AppendLine("    }),");
+                    builder.Append(Indent4).AppendLine("    },");
                     builder.Append(Indent4).AppendLine("    null,");
                 }
                 else
                 {
                     builder
                         .Append(Indent4)
-                        .Append("    new ")
-                        .Append(BinderFactoryType)
-                        .Append("(")
+                        .Append("    ")
                         .Append(BinderMethodPrefix)
                         .Append(commandIndex)
-                        .AppendLine("),");
+                        .AppendLine(",");
                     builder.Append(Indent4).AppendLine("    null,");
                 }
             }
             else
             {
                 builder.Append(Indent4).AppendLine("    null,");
-                builder
-                    .Append(Indent4)
-                    .Append("    new global::System.Func<")
-                    .Append(MethodInfoType)
-                    .AppendLine(">(delegate");
+                builder.Append(Indent4).AppendLine("    delegate");
                 builder.Append(Indent4).AppendLine("    {");
                 if (command.ExactSignatureAddressable)
                 {
@@ -345,17 +385,25 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                     builder.Append(Indent5).AppendLine(");");
                 }
 
-                builder.Append(Indent4).AppendLine("    }),");
+                builder.Append(Indent4).AppendLine("    },");
             }
 
             /*
                 The execution-context set is emitted as a numeric cast: the
                 catalog must not depend on enum member names staying stable
                 across runtime versions, and the cast round-trips any
-                combination the attribute carried.
+                combination the attribute carried. The declaring type rides
+                the shared HolderNames table so the shell can resolve valid
+                handlers by exact signature for catalog-backed discovery
+                without re-scanning assembly types; rejected commands resolve
+                through their accessor and carry no holder.
              */
             builder.Append(Indent4).Append("    (").Append(ContextsType).Append(")");
-            builder.Append(command.Contexts).AppendLine();
+            builder.Append(command.Contexts).AppendLine(",");
+            builder
+                .Append(Indent4)
+                .Append("    ")
+                .AppendLine(0 <= holderIndex ? $"HolderNames[{holderIndex}]" : "null");
             builder.Append(Indent4).AppendLine("));");
         }
 

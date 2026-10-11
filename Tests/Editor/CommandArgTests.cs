@@ -3808,29 +3808,110 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             }
         }
 
-        private readonly struct TestStruct1 : IEquatable<TestStruct1>
+        [Test]
+        public void SettersReplaceControlSetContentsInPlace()
         {
-            private readonly Guid _id;
+            CommandArg.SetDelimiters('|');
+            CommandArg.SetQuotes('^');
+            CommandArg.SetIgnoredValuesForCleanedTypes("\t");
+            CommandArg.SetDoNotCleanTypes(typeof(float));
+            CommandArg.SetIgnoredValuesForComplexTypes("@");
 
-            public TestStruct1(Guid id)
+            CollectionAssert.AreEquivalent(
+                new[] { '|' },
+                CommandArg.Delimiters,
+                "SetDelimiters must replace the delimiter contents"
+            );
+            CollectionAssert.AreEquivalent(new[] { '^' }, CommandArg.Quotes);
+            CollectionAssert.AreEquivalent(new[] { "\t" }, CommandArg.IgnoredValuesForCleanedTypes);
+            CollectionAssert.AreEquivalent(new[] { typeof(float) }, CommandArg.DoNotCleanTypes);
+            CollectionAssert.AreEquivalent(new[] { "@" }, CommandArg.IgnoredValuesForComplexTypes);
+
+            /*
+                The sets are the same instances the tokenizer and parsers read;
+                a replacement that swapped in a new collection would silently
+                un-configure every reader holding the old one.
+            */
+            HashSet<char> delimiters = CommandArg.Delimiters;
+            List<char> quotes = CommandArg.Quotes;
+            CommandArg.SetDelimiters('~', '!');
+            CommandArg.SetQuotes('`');
+            Assert.AreSame(delimiters, CommandArg.Delimiters);
+            Assert.AreSame(quotes, CommandArg.Quotes);
+            CollectionAssert.AreEquivalent(new[] { '~', '!' }, CommandArg.Delimiters);
+        }
+
+        [Test]
+        public void SetterArraysMayNotBeNull()
+        {
+            void AssertNamesThePublicParameter(TestDelegate call, string expected)
             {
-                _id = id;
+                ArgumentNullException thrown = Assert.Throws<ArgumentNullException>(call);
+                Assert.AreEqual(
+                    expected,
+                    thrown.ParamName,
+                    "A null setter array must name the public parameter the caller passed"
+                );
             }
 
-            public override bool Equals(object obj)
-            {
-                return obj is TestStruct1 other && Equals(other);
-            }
+            AssertNamesThePublicParameter(() => CommandArg.SetDelimiters(null), "delimiters");
+            AssertNamesThePublicParameter(() => CommandArg.SetQuotes(null), "quotes");
+            AssertNamesThePublicParameter(
+                () => CommandArg.SetIgnoredValuesForCleanedTypes(null),
+                "values"
+            );
+            AssertNamesThePublicParameter(() => CommandArg.SetDoNotCleanTypes(null), "types");
+            AssertNamesThePublicParameter(
+                () => CommandArg.SetIgnoredValuesForComplexTypes(null),
+                "values"
+            );
+        }
 
-            public bool Equals(TestStruct1 other)
-            {
-                return _id.Equals(other._id);
-            }
+        [Test]
+        public void SetDelimitersConfiguresTheComplexTypeSplit()
+        {
+            CommandArg.SetDelimiters('~');
+            CommandArg arg = new CommandArg("3~4");
+            Assert.IsTrue(arg.TryGet(out Vector2 vector), $"Failed to parse {arg.contents}");
+            Assert.IsTrue(
+                Approximately(3f, vector.x) && Approximately(4f, vector.y),
+                $"Expected (3, 4), got {vector}"
+            );
+        }
 
-            public override int GetHashCode()
-            {
-                return _id.GetHashCode();
-            }
+        [Test]
+        public void ResetParsingConfigurationRestoresAllControlSets()
+        {
+            CommandArg.SetDelimiters('|');
+            CommandArg.SetQuotes('^');
+            CommandArg.SetIgnoredValuesForCleanedTypes("\t");
+            CommandArg.SetDoNotCleanTypes(typeof(float));
+            CommandArg.SetIgnoredValuesForComplexTypes("@");
+
+            CommandArg.ResetParsingConfiguration();
+
+            CollectionAssert.AreEquivalent(
+                new[] { ',', ';', ':', '_', '/', '\\' },
+                CommandArg.Delimiters,
+                $"Delimiters after reset: [{string.Join(string.Empty, CommandArg.Delimiters)}]"
+            );
+            CollectionAssert.AreEquivalent(
+                new[] { '"', '\'' },
+                CommandArg.Quotes,
+                $"Quotes after reset: [{string.Join(string.Empty, CommandArg.Quotes)}]"
+            );
+            CollectionAssert.AreEquivalent(
+                new[] { "\r", "\n" },
+                CommandArg.IgnoredValuesForCleanedTypes
+            );
+            CollectionAssert.AreEquivalent(
+                new[] { typeof(string), typeof(char), typeof(DateTime), typeof(DateTimeOffset) },
+                CommandArg.DoNotCleanTypes
+            );
+            CollectionAssert.AreEquivalent(
+                new[] { "(", ")", "[", "]", "'", "`", "|", "{", "}", "<", ">" },
+                CommandArg.IgnoredValuesForComplexTypes
+            );
         }
 
         private enum TestEnum1
@@ -3882,6 +3963,31 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             [UsedImplicitly]
             Value8 = 7,
+        }
+
+        private readonly struct TestStruct1 : IEquatable<TestStruct1>
+        {
+            private readonly Guid _id;
+
+            public TestStruct1(Guid id)
+            {
+                _id = id;
+            }
+
+            public override bool Equals(object obj)
+            {
+                return obj is TestStruct1 other && Equals(other);
+            }
+
+            public bool Equals(TestStruct1 other)
+            {
+                return _id.Equals(other._id);
+            }
+
+            public override int GetHashCode()
+            {
+                return _id.GetHashCode();
+            }
         }
     }
 }

@@ -13,6 +13,11 @@
     using Vector3 = UnityEngine.Vector3;
     using Vector4 = UnityEngine.Vector4;
 
+    /*
+        Configuration is mutating these five sets through the Set methods or
+        in place; the play-session reset restores all of them from the
+        defaults snapshotted below.
+     */
     public readonly struct CommandArg
     {
         // Public to allow custom-mutation, if desired
@@ -444,6 +449,77 @@
             return parserCount;
         }
 
+        /// <summary>
+        ///     Replaces the contents of <see cref="Delimiters" /> with
+        ///     <paramref name="delimiters" />. The set stays the same instance,
+        ///     so references to it keep working; a null array throws, and an
+        ///     empty one leaves no delimiter configured.
+        /// </summary>
+        public static void SetDelimiters(params char[] delimiters)
+        {
+            ReplaceContents(Delimiters, delimiters, nameof(delimiters));
+        }
+
+        /// <summary>
+        ///     Replaces the contents of <see cref="Quotes" /> with
+        ///     <paramref name="quotes" />. The list stays the same instance; a
+        ///     null array throws, and an empty one disables quote grouping.
+        /// </summary>
+        public static void SetQuotes(params char[] quotes)
+        {
+            ReplaceContents(Quotes, quotes, nameof(quotes));
+        }
+
+        /// <summary>
+        ///     Replaces the contents of <see cref="IgnoredValuesForCleanedTypes" />
+        ///     with <paramref name="values" />. The set stays the same instance;
+        ///     a null array throws.
+        /// </summary>
+        public static void SetIgnoredValuesForCleanedTypes(params string[] values)
+        {
+            ReplaceContents(IgnoredValuesForCleanedTypes, values, nameof(values));
+        }
+
+        /// <summary>
+        ///     Replaces the contents of <see cref="DoNotCleanTypes" /> with
+        ///     <paramref name="types" />. The set stays the same instance; a
+        ///     null array throws.
+        /// </summary>
+        public static void SetDoNotCleanTypes(params Type[] types)
+        {
+            ReplaceContents(DoNotCleanTypes, types, nameof(types));
+        }
+
+        /// <summary>
+        ///     Replaces the contents of <see cref="IgnoredValuesForComplexTypes" />
+        ///     with <paramref name="values" />. The set stays the same instance;
+        ///     a null array throws.
+        /// </summary>
+        public static void SetIgnoredValuesForComplexTypes(params string[] values)
+        {
+            ReplaceContents(IgnoredValuesForComplexTypes, values, nameof(values));
+        }
+
+        /// <summary>
+        ///     Restores every parsing control set to its default contents, the
+        ///     same restore the play-session reset applies. A game that
+        ///     re-applies its configuration per session calls this first, then
+        ///     the Set methods.
+        /// </summary>
+        public static void ResetParsingConfiguration()
+        {
+            Delimiters.Clear();
+            Delimiters.UnionWith(DefaultDelimiters);
+            Quotes.Clear();
+            Quotes.AddRange(DefaultQuotes);
+            IgnoredValuesForCleanedTypes.Clear();
+            IgnoredValuesForCleanedTypes.UnionWith(DefaultIgnoredValuesForCleanedTypes);
+            DoNotCleanTypes.Clear();
+            DoNotCleanTypes.UnionWith(DefaultDoNotCleanTypes);
+            IgnoredValuesForComplexTypes.Clear();
+            IgnoredValuesForComplexTypes.UnionWith(DefaultIgnoredValuesForComplexTypes);
+        }
+
         /*
             Runs once per Play Mode session (TerminalUI.ResetForNextPlaySession,
             SubsystemRegistration), so with disabled domain reload the
@@ -460,32 +536,54 @@
         internal static int ResetForNextPlaySession()
         {
             int parserCount = UnregisterAllParsers();
-            Delimiters.Clear();
-            Delimiters.UnionWith(DefaultDelimiters);
-            Quotes.Clear();
-            Quotes.AddRange(DefaultQuotes);
-            IgnoredValuesForCleanedTypes.Clear();
-            IgnoredValuesForCleanedTypes.UnionWith(DefaultIgnoredValuesForCleanedTypes);
-            DoNotCleanTypes.Clear();
-            DoNotCleanTypes.UnionWith(DefaultDoNotCleanTypes);
-            IgnoredValuesForComplexTypes.Clear();
-            IgnoredValuesForComplexTypes.UnionWith(DefaultIgnoredValuesForComplexTypes);
+            ResetParsingConfiguration();
             return parserCount;
         }
 
-        /*
-            Build-time parseability probe for the typed command builder: a
-            definition is only accepted when its argument types can parse at
-            execution. Mirrors the ordinary TryGet paths (registered parsers,
-            built-in parsers, strings, enums); types that rely solely on the
-            named-constant fallback need an explicit parser registration.
-         */
         internal static bool CanParse(Type type)
         {
+            /*
+                Build-time parseability probe for the typed command builder: a
+                definition is only accepted when its argument types can parse
+                at execution. Mirrors the ordinary TryGet paths (registered
+                parsers, built-in parsers, strings, enums); types that rely
+                solely on the named-constant fallback need an explicit parser
+                registration.
+             */
             return type == typeof(string)
                 || type.IsEnum
                 || BuiltInParsers.ContainsKey(type)
                 || RegisteredParsers.ContainsKey(type);
+        }
+
+        private static void ReplaceContents<T>(
+            ICollection<T> contents,
+            T[] replacement,
+            string name
+        )
+        {
+            /*
+                `name` carries the caller's parameter name as its value: the
+                exception must read it (ArgumentNullException(name)), not
+                nameof(name), which is always the literal "name".
+             */
+            if (replacement == null)
+            {
+                throw new ArgumentNullException(name);
+            }
+
+            contents.Clear();
+            if (contents is HashSet<T> set)
+            {
+                set.UnionWith(replacement);
+            }
+            else
+            {
+                foreach (T item in replacement)
+                {
+                    contents.Add(item);
+                }
+            }
         }
 
         private static ReadOnlyCollection<T> CopyOf<T>(IEnumerable<T> source)

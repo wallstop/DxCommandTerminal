@@ -343,6 +343,15 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
         public bool ContainingTypeIsUnbound;
 
         /*
+            The reflection-style declaring type name (containing namespace and
+            nested chain joined by dots, no C# keyword escaping). Emitted into
+            the entry so the shell can resolve valid handlers by exact
+            signature for catalog-backed discovery; reflection-style because
+            it feeds Assembly.GetType, not C# name resolution.
+        */
+        public string DeclaringTypeName;
+
+        /*
             The handler method name escaped for use as a C# identifier
             (keyword names such as `@params`).
         */
@@ -442,6 +451,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
                 Contexts = attribute.Contexts,
                 MethodNameIdentifierDisplay = EscapeIdentifier(method.Name),
                 IsMethodGeneric = method.IsGenericMethod,
+                DeclaringTypeName = BuildDeclaringTypeName(method.ContainingType),
                 ContainingTypeDisplay = BuildContainingTypeDisplay(
                     method.ContainingType,
                     out bool containingTypeIsUnbound
@@ -879,6 +889,39 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
 
             // Method is prefixed, suffixed with, or contains "COMMAND".
             return 0 <= index ? methodName.Remove(index, commandId.Length) : methodName;
+        }
+
+        /*
+            The declaring type's name in reflection form: the containing
+            namespace, then the nested-type chain joined by plus signs -
+            Type.FullName shape, which Assembly.GetType resolves on every
+            scripting backend. Plain symbol names, not C#-escaped displays -
+            Assembly.GetType consumes this, so `@object` must read `object`.
+        */
+        private static string BuildDeclaringTypeName(INamedTypeSymbol containingType)
+        {
+            string namespaceName = null;
+            for (
+                INamespaceSymbol containingNamespace = containingType.ContainingNamespace;
+                containingNamespace != null && !containingNamespace.IsGlobalNamespace;
+                containingNamespace = containingNamespace.ContainingNamespace
+            )
+            {
+                namespaceName =
+                    containingNamespace.Name + (namespaceName == null ? "" : "." + namespaceName);
+            }
+
+            string typeName = containingType.Name;
+            for (
+                INamedTypeSymbol outer = containingType.ContainingType;
+                outer != null;
+                outer = outer.ContainingType
+            )
+            {
+                typeName = outer.Name + "+" + typeName;
+            }
+
+            return namespaceName == null ? typeName : namespaceName + "." + typeName;
         }
 
         private static string BuildContainingTypeDisplay(

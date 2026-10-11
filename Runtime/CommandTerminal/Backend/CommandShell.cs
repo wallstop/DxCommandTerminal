@@ -44,6 +44,18 @@
 
             foreach (Assembly assembly in scanCandidates)
             {
+                /*
+                    Catalog-first, matching what registration collects: an
+                    assembly with a non-empty catalog answers from its entries
+                    (one exact-signature lookup per command) and reflection
+                    never walks its types; assemblies without one fall back to
+                    the full reflection sweep with identical results.
+                 */
+                if (TryCollectCatalogRegisteredCommands(assembly, commands))
+                {
+                    continue;
+                }
+
                 CollectReflectedCommands(assembly, commands);
             }
 
@@ -59,6 +71,13 @@
 
             return commands.ToArray();
         });
+
+        /*
+            Exact-signature probe for catalog-built discovery: a valid command
+            is exactly one static (CommandArg[]) handler, so the holder type
+            plus the method name resolve it without walking every type.
+        */
+        private static readonly Type[] CatalogHandlerSignature = { typeof(CommandArg[]) };
 
         private static readonly ConditionalWeakTable<Assembly, DiscoveryCache> DiscoveryCaches =
             new ConditionalWeakTable<Assembly, DiscoveryCache>();
@@ -654,6 +673,133 @@
                     return new AssemblyClassification(name, referencedAssemblies);
                 }
             );
+        }
+
+        /*
+            Catalog-built discovery for the public RegisteredCommands surface:
+            an assembly with a non-empty catalog answers from its entries, one
+            exact-signature lookup per command, and reflection never walks its
+            types. Mirrors CollectAutoCommands' precedence so the surface
+            previews what registration registers: an empty or failed catalog
+            falls back to the reflection sweep, and the per-command failures
+            are contained exactly as they are there.
+        */
+        private static bool TryCollectCatalogRegisteredCommands(
+            Assembly assembly,
+            List<(MethodInfo method, RegisterCommandAttribute attribute)> commands
+        )
+        {
+            if (
+                !TryGetCatalogCollector(
+                    assembly,
+                    GetOrCreateDiscoveryCache(assembly),
+                    out Action<List<CommandCatalogEntry>> collector
+                )
+            )
+            {
+                return false;
+            }
+
+            List<CommandCatalogEntry> entries = new();
+            bool collected = false;
+            try
+            {
+                collector(entries);
+                collected = true;
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning(
+                    LogTextSanitizer.Sanitize(
+                        $"[DxCommandTerminal] Generated command catalog in "
+                            + $"{assembly.GetName().Name} failed to collect: {e}; "
+                            + $"falling back to reflection discovery"
+                    )
+                );
+            }
+
+            if (!collected || entries.Count == 0)
+            {
+                return false;
+            }
+
+            foreach (CommandCatalogEntry entry in entries)
+            {
+                MethodInfo method = ResolveCatalogMethod(assembly, entry);
+                if (method == null)
+                {
+                    continue;
+                }
+
+                RegisterCommandAttribute attribute;
+                try
+                {
+                    attribute =
+                        Attribute.GetCustomAttribute(method, typeof(RegisterCommandAttribute))
+                        as RegisterCommandAttribute;
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError(
+                        LogTextSanitizer.Sanitize(
+                            $"Failed to resolve attribute for method {method.Name} of type "
+                                + $"{method.DeclaringType?.FullName} with exception {e}"
+                        )
+                    );
+                    continue;
+                }
+
+                if (attribute == null)
+                {
+                    continue;
+                }
+
+                attribute.NormalizeName(method);
+                commands.Add((method, attribute));
+            }
+
+            return true;
+        }
+
+        private static MethodInfo ResolveCatalogMethod(Assembly assembly, CommandCatalogEntry entry)
+        {
+            try
+            {
+                if (entry.Binder != null)
+                {
+                    /*
+                        Valid handler: the declaring type name and the exact
+                        (CommandArg[]) signature address the method directly.
+                     */
+                    if (string.IsNullOrEmpty(entry.DeclaringTypeName))
+                    {
+                        /* Hand-built entry without a declaring type: no contract. */
+                        return entry.MethodAccessor?.Invoke();
+                    }
+
+                    Type holder = assembly.GetType(entry.DeclaringTypeName, false);
+                    return holder?.GetMethod(
+                        entry.MethodName,
+                        CatalogBindingFlags,
+                        null,
+                        CatalogHandlerSignature,
+                        null
+                    );
+                }
+
+                /* Rejected command: the generated accessor is the contract. */
+                return entry.MethodAccessor?.Invoke();
+            }
+            catch (Exception e)
+            {
+                Debug.LogError(
+                    LogTextSanitizer.Sanitize(
+                        $"Failed to resolve method {entry.MethodName} of type "
+                            + $"{entry.DeclaringTypeName ?? "unknown holder"} with exception {e}"
+                    )
+                );
+                return null;
+            }
         }
 
         private static void CollectReflectedCommands(
@@ -1580,7 +1726,9 @@
                     Reflection-discovered commands register without binding:
                     the first invocation pays their one-time
                     Delegate.CreateDelegate, so readiness cost no longer scales
-                    with the number of declared commands.
+                    with the number of declared commands. Catalog commands
+                    bind through their entry's memoized handler: the first
+                    cycle pays the bind, later cycles re-read one delegate.
                  */
                 Action<CommandArg[]> proc;
                 if (command.DeferredProc != null)
@@ -1591,7 +1739,10 @@
                 {
                     try
                     {
-                        proc = command.Binder();
+                        proc =
+                            command.CatalogEntry != null
+                                ? command.CatalogEntry.GetHandler()
+                                : command.Binder();
                     }
                     catch (Exception e)
                     {
@@ -2017,10 +2168,18 @@
             public readonly Func<MethodInfo> MethodAccessor;
 
             /*
+               The catalog entry the command came from, when it came from one.
+               Registration binds through the entry's memoized GetHandler so a
+               registration cycle never re-allocates a handler delegate. Null
+               for reflection-discovered commands.
+            */
+            public readonly CommandCatalogEntry CatalogEntry;
+
+            /*
                Ready-to-register handler for reflection-discovered commands: it
                binds on its first invocation, so readiness never pays one
                Delegate.CreateDelegate per declared command. Null for catalog
-               commands (their binders are static-field reads) and rejected
+               commands (their binders are entry-memoized reads) and rejected
                commands. Shared across shells; the first invocation anywhere in
                the domain performs the one-time bind.
             */
@@ -2040,7 +2199,8 @@
                 CommandExecutionContexts contexts,
                 Func<Action<CommandArg[]>> binder,
                 Func<MethodInfo> methodAccessor,
-                Action<CommandArg[]> deferredProc
+                Action<CommandArg[]> deferredProc,
+                CommandCatalogEntry catalogEntry = null
             )
             {
                 Name = name;
@@ -2057,6 +2217,7 @@
                 Binder = binder;
                 MethodAccessor = methodAccessor;
                 DeferredProc = deferredProc;
+                CatalogEntry = catalogEntry;
             }
 
             public static AutoCommand FromCatalog(CommandCatalogEntry entry)
@@ -2075,7 +2236,8 @@
                     entry.Contexts,
                     entry.Binder,
                     entry.MethodAccessor,
-                    null
+                    null,
+                    entry
                 );
             }
 

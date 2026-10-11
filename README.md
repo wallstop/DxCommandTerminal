@@ -170,6 +170,8 @@ In this case the command name (`add`) will be inferred from the method name, you
 [RegisterCommand(Name = "MyAdd", Help = "Adds 2 numbers", MinArgCount = 2, MaxArgCount = 2)]
 ```
 
+Note: a package-internal source generator emits a command catalog for every assembly that declares `[RegisterCommand]` methods, and a non-empty catalog replaces attribute reflection for that whole assembly. Commands emitted into the same assembly by a *different* source generator are invisible to this catalog and would be dropped; register those manually or give them their own catalog-compatible surface.
+
 ### 2. Manually adding Commands:
 
 `RegisterCommand` only works for static methods. If you want to use a non-static method, you may add the command manually.
@@ -437,6 +439,8 @@ By default, command parameter input is stripped of whitespace characters. This, 
 **DoNotCleanTypes**: A set of types for which input cleaning is not enabled.
 
 **IgnoredValuesForComplexTypes**: For complex, multi-value types like `Vector2`, `Quaternion`, `Color`, etc, the parameter input will replace all strings found in this set with the empty string.
+
+Each set also has a setter - `CommandArg.SetDelimiters(...)`, `SetQuotes(...)`, `SetIgnoredValuesForCleanedTypes(...)`, `SetDoNotCleanTypes(...)`, and `SetIgnoredValuesForComplexTypes(...)` - that replaces the contents in place, and `CommandArg.ResetParsingConfiguration()` restores all five to their defaults. The play-session reset applies that same restore, so a game that re-applies its configuration per session calls the setters again in `Awake` or a `RuntimeInitializeOnLoadMethod` hook.
 
 # Hotkeys
 All actions are now fully configurable by either explicit keybindings, for keyboard controls, or via [new Input System](#new-input-system) bindings.

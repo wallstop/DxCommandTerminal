@@ -95,8 +95,20 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         /// </summary>
         public Func<MethodInfo> MethodAccessor { get; }
 
+        /// <summary>
+        ///     The declaring type's reflection-style full name (containing
+        ///     namespace and nested chain joined by dots), as emitted by the
+        ///     source generator. Catalog-backed discovery resolves valid
+        ///     handlers from it by exact signature without re-scanning the
+        ///     assembly's types. Null in hand-built entries and for rejected
+        ///     commands, which resolve through their accessor instead.
+        /// </summary>
+        public string DeclaringTypeName { get; }
+
         /// <summary>Whether the handler has a valid <c>(CommandArg[])</c> signature.</summary>
         public bool IsValid => Binder != null;
+
+        private Action<CommandArg[]> _boundHandler;
 
         public CommandCatalogEntry(
             string name,
@@ -111,7 +123,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             bool isDefault,
             Func<Action<CommandArg[]>> binder,
             Func<MethodInfo> methodAccessor,
-            CommandExecutionContexts contexts = CommandExecutionContextSets.All
+            CommandExecutionContexts contexts = CommandExecutionContextSets.All,
+            string declaringTypeName = null
         )
         {
             /*
@@ -155,6 +168,37 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             Binder = binder;
             MethodAccessor = methodAccessor;
             Contexts = contexts;
+            DeclaringTypeName = declaringTypeName;
+        }
+
+        /// <summary>
+        ///     Binds the handler at most once per entry instance: the first
+        ///     call invokes <see cref="Binder"/>, later calls return the same
+        ///     delegate. Entries from generated catalogs are constructed once
+        ///     per domain, so a registration cycle never re-allocates a
+        ///     handler; a throwing <see cref="Binder"/> (stripped handler)
+        ///     caches nothing and throws again on the next call. A racing
+        ///     first pair of calls may build two delegates, one of which
+        ///     wins - both bind the same static handler, so the loser is
+        ///     unobservable. Null when the entry has no <see cref="Binder"/>.
+        /// </summary>
+        public Action<CommandArg[]> GetHandler()
+        {
+            Action<CommandArg[]> handler = _boundHandler;
+            if (handler != null)
+            {
+                return handler;
+            }
+
+            Func<Action<CommandArg[]>> binder = Binder;
+            if (binder == null)
+            {
+                return null;
+            }
+
+            handler = binder();
+            _boundHandler = handler;
+            return handler;
         }
     }
 }
