@@ -21,10 +21,10 @@ more, and `list-fonts` prints them by these names:
 - `NanumGothicCoding-Regular` - Hangul and kana. In `Everything-Basic` and
   `Everything-All`.
 
-Six families carry between one and five emoji between them, so an emoji
-usually shows a box. To see a script the font does not have, add a font
-that carries it to a pack and set that font. The console keeps the text
-whole either way.
+No shipped family carries emoji: parsed across every shipped font's
+character map, the count of emoji glyphs is zero, so an emoji always shows
+a box. To see one, add a font that carries it to a pack and set that font.
+The console keeps the text whole either way.
 
 ## Switching at runtime
 
