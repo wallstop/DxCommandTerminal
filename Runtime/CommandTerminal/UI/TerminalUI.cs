@@ -3130,13 +3130,19 @@
                 {
                     /*
                         Every log line this view builds is a Label (created
-                        above), so the switch has one live arm. A TextField
-                        and a Button arm used to sit beside it for element
-                        kinds no code path creates any more (#194); dead
-                        arms over a hot refresh pass cost a type test per
-                        line and read as if the view supported them.
+                        above), so this loop has one kind to serve. A
+                        TextField and a Button arm used to sit here for
+                        element kinds no code path creates any more (#194);
+                        a foreign child is skipped, not thrown over - the
+                        content container is reachable, and an exception in
+                        the refresh pass would take the update loop's rest,
+                        the hotkey polls included, down with it.
                      */
-                    Label logLabel = (Label)content[i];
+                    if (content[i] is not Label logLabel)
+                    {
+                        continue;
+                    }
+
                     LogItem logItem = rendered[i];
                     SetupLogText(logLabel, logItem);
                     logLabel.text = logItem.message;

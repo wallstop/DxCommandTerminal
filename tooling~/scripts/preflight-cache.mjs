@@ -201,14 +201,25 @@ function hashPathEntry(entry, excludes) {
 
 function repositorySnapshot() {
   /*
-      One git call instead of a stat per file: `git status --porcelain` is
-      index-backed and answers the same question the per-file walk
-      re-implemented - which tracked files changed and which untracked
-      files exist - in one process on every filesystem, where the walk
-      cost tens of seconds of metadata syscalls on the dev container
-      before a single check spawned. A content edit that restores the
-      index's own stat answer can hide from status; that is git's own
-      documented limit, and it is stronger than any pure-stat key.
+      One git call instead of a stat per tracked file: `git status
+      --porcelain` is index-backed and answers which tracked files changed
+      and which untracked files exist, in one process on every filesystem,
+      where the per-file walk cost tens of seconds of metadata syscalls on
+      the dev container before a single check spawned.
+
+      Status encodes an untracked file as a bare `?? <path>` line, so an
+      edit to an untracked file's CONTENT leaves the output byte-identical
+      while the check inputs move - and node-tests reads files outside its
+      declared roots (.github/, .devcontainer/, .llm/), where a draft file
+      would age a cached pass. The untracked set is hashed by content to
+      close that gap; it is small by nature (nothing ignored, nothing
+      committed), so the read stays cheap.
+
+      Stated limit: a tracked file flagged assume-unchanged or
+      skip-worktree hides its edits from status, and this snapshot does not
+      re-hash tracked contents to catch it - that flag is a deliberate,
+      per-developer opt-in, and re-walking every tracked file is the cost
+      this snapshot exists to remove.
    */
   const output = execFileSync(
     "git",
@@ -219,7 +230,18 @@ function repositorySnapshot() {
       encoding: "utf8"
     }
   );
-  return hashText(output);
+  const parts = [output];
+  const untracked = output.split("\0").filter((entry) => entry.startsWith("?? "));
+  for (const entry of untracked) {
+    /* -z paths are literal (never quoted), so the slice is the path. */
+    const relative = entry.slice(3);
+    try {
+      parts.push(`${relative}\0${fs.readFileSync(path.join(REPO_ROOT, relative))}`);
+    } catch {
+      parts.push(`${relative}\0unreadable`);
+    }
+  }
+  return hashText(parts.join("\0"));
 }
 
 export function dependencyState(

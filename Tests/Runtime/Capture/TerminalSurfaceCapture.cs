@@ -275,8 +275,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 return null;
             }
 
+            /*
+                Reported in the PNG's row space (top-down) so the coordinate
+                can be found with an image tool: the readback's rows count
+                from the visual bottom, which is the space the compare runs
+                in.
+             */
             int x = firstIndex % expected.Width;
-            int y = firstIndex / expected.Width;
+            int y = expected.Height - 1 - firstIndex / expected.Width;
             Color32 expectedPixel = expectedPixels[firstIndex];
             Color32 actualPixel = actualPixels[firstIndex];
             return $"{mismatchCount} pixel(s) exceed a per-channel delta of {maxChannelDelta} "

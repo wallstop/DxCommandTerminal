@@ -22,6 +22,8 @@ const {
   cacheKeyForCheck,
   cachePathForCheck,
   clearCacheForCheck,
+  createCacheContext,
+  createCacheKeyComputer,
   dependencyState,
   dotnetToolState,
   isCacheableCheck,
@@ -434,6 +436,67 @@ test("cache keys hash declared files and ignore unrelated filesystem state", () 
     assert.notEqual(changed, missing);
     fs.mkdirSync(input);
     assert.notEqual(missing, cacheKeyForCheck(check, context));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("the run's key computer answers the live key and moves with its inputs", () => {
+  const cacheDirectory = path.join(toolingRoot, "scripts", ".preflight-cache");
+  fs.mkdirSync(cacheDirectory, { recursive: true });
+  const root = fs.mkdtempSync(path.join(cacheDirectory, "computer-"));
+  const shared = path.join(root, "shared");
+  const own = path.join(root, "own");
+  fs.mkdirSync(shared);
+  fs.mkdirSync(own);
+  const sharedFile = path.join(shared, "common.cs");
+  const ownFile = path.join(own, "own.cs");
+  const context = {
+    node: "node",
+    platform: "linux",
+    arch: "x64",
+    files: []
+  };
+  const sharedCheck = { name: "shared", command: "node shared.mjs", cachePaths: [shared] };
+  const ownCheck = { name: "own", command: "node own.mjs", cachePaths: [own, shared] };
+  try {
+    fs.writeFileSync(sharedFile, "one");
+    fs.writeFileSync(ownFile, "one");
+    const computer = createCacheKeyComputer();
+
+    /*
+        The computer's answer must be the live path's answer - a drift
+        between them would let main() key the cache on something no
+        contract test ever pinned.
+     */
+    assert.equal(computer.keyFor(sharedCheck, context), cacheKeyForCheck(sharedCheck, context));
+
+    /*
+        The memo is per fresh computer: a file edit after one key must move
+        a NEW computer's key (each preflight run builds a new one), while
+        the same run's repeat reads stay served from the memo.
+     */
+    const before = computer.keyFor(sharedCheck, context);
+    assert.equal(computer.keyFor(sharedCheck, context), before);
+    fs.writeFileSync(sharedFile, "two");
+    assert.notEqual(
+      createCacheKeyComputer().keyFor(sharedCheck, context),
+      before,
+      "a fresh computer must observe the edited input"
+    );
+
+    /*
+        The memo is keyed by root, so a check declaring an extra root pays
+        for that root's own state, not for whichever check walked first.
+     */
+    fs.writeFileSync(ownFile, "three");
+    const ownKey = computer.keyFor(ownCheck, context);
+    fs.writeFileSync(ownFile, "four");
+    assert.notEqual(
+      createCacheKeyComputer().keyFor(ownCheck, context),
+      ownKey,
+      "the second declared root's content must move the key"
+    );
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

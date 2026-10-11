@@ -91,11 +91,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 the environment.
              */
             bool pasteRouted = false;
+            bool syncReadEverHeld = false;
             for (int attempt = 0; attempt < 8; ++attempt)
             {
                 GUIUtility.systemCopyBuffer = "give\titem\n42";
                 _vReached = false;
                 _syncReadHeld = TerminalClipboard.Read() == "give\titem\n42";
+                syncReadEverHeld |= _syncReadHeld;
                 using (
                     KeyDownEvent key = KeyDownEvent.GetPooled(
                         '\0',
@@ -120,9 +122,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 A key the field never saw and a clipboard a synchronous read
                 cannot see are both the environment; only a field that
                 received the V with a clipboard the same dispatch can read
-                names a defect the retries must not absorb.
+                names a defect the retries must not absorb. Both verdicts
+                span all eight attempts: one healthy attempt proves the
+                surface, one dropped attempt proves the race.
              */
-            if (pasteRouted && _syncReadHeld)
+            if (pasteRouted && syncReadEverHeld)
             {
                 Assert.Fail(
                     "The V reached the field and the clipboard answered a synchronous "
