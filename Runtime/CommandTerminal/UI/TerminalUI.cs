@@ -3128,29 +3128,18 @@
                 int childCount = content.childCount;
                 for (int i = 0; i < logCount && i < childCount; ++i)
                 {
-                    VisualElement item = content[i];
+                    /*
+                        Every log line this view builds is a Label (created
+                        above), so the switch has one live arm. A TextField
+                        and a Button arm used to sit beside it for element
+                        kinds no code path creates any more (#194); dead
+                        arms over a hot refresh pass cost a type test per
+                        line and read as if the view supported them.
+                     */
+                    Label logLabel = (Label)content[i];
                     LogItem logItem = rendered[i];
-                    switch (item)
-                    {
-                        case TextField logText:
-                        {
-                            SetupLogText(logText, logItem);
-                            logText.value = logItem.message;
-                            break;
-                        }
-                        case Label logLabel:
-                        {
-                            SetupLogText(logLabel, logItem);
-                            logLabel.text = logItem.message;
-                            break;
-                        }
-                        case Button button:
-                        {
-                            SetupLogText(button, logItem);
-                            button.text = logItem.message;
-                            break;
-                        }
-                    }
+                    SetupLogText(logLabel, logItem);
+                    logLabel.text = logItem.message;
                 }
 
                 if (logCount == content.childCount)
