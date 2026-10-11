@@ -308,6 +308,21 @@
             return $"{text.Substring(0, cut)}\n(+{dropped} more chars)";
         }
 
+        /*
+            Runs once per Play Mode session (TerminalUI.ResetForNextPlaySession,
+            SubsystemRegistration), so a session that ended without a clean
+            OnDisable - a crash, an exception mid-teardown, an editor stop
+            that skipped the disable - leaves nothing behind: the static
+            Instance and the live-palette registry would otherwise hold
+            destroyed components into the next session (#224).
+         */
+        internal static void ResetForNextPlaySession()
+        {
+            Instance = null;
+            _livePalettes.Clear();
+            _logCaretPasses = false;
+        }
+
         public void Open()
         {
             if (_isOpen)

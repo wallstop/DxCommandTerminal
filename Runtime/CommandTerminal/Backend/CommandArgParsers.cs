@@ -15,6 +15,12 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     {
         public static bool Float(string input, out float parsed)
         {
+            if (input == null)
+            {
+                parsed = 0f;
+                return false;
+            }
+
             if (
                 !float.TryParse(
                     input,
@@ -38,6 +44,12 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         public static bool Double(string input, out double parsed)
         {
+            if (input == null)
+            {
+                parsed = 0d;
+                return false;
+            }
+
             if (
                 !double.TryParse(
                     input,

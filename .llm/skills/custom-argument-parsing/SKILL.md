@@ -61,6 +61,11 @@ Built-in parser functions cannot be unregistered; user registrations can. Custom
 Mutate these sets only during initialization, not per-frame or per-command, and document any
 non-default configuration - it changes parsing for every terminal in the process.
 
+With domain reload off, the package resets these sets and user-registered parsers at every
+play-session boundary. Re-apply any registration or non-default configuration in `Awake` or a
+`RuntimeInitializeOnLoadMethod` hook at `BeforeSplashScreen` or later; a `SubsystemRegistration`
+hook runs in unspecified order against the package's reset and can be wiped for the session.
+
 ## Identifier and completion boundaries
 
 - Scene-object names reject null, empty, and whitespace-only input; preserve meaningful

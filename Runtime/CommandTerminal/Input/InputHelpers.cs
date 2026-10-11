@@ -11,6 +11,15 @@
 
     public static class InputHelpers
     {
+#if ENABLE_INPUT_SYSTEM
+        /*
+            How many control resolutions the memo has had to run. Diagnostics
+            for the memo's contract: a pass over unchanged hotkeys after the
+            first leaves this where it was (see InputHelpersDeviceTests).
+         */
+        internal static int ControlResolutionsForTesting { get; private set; }
+#endif
+
         private static readonly string[] ShiftModifiers = { "shift+", "#" };
 
         private static readonly string[] CtrlModifiers = { "ctrl+", "control+" };
@@ -33,6 +42,21 @@
         private static readonly HashSet<string> NonTypedKeyNames = BuildNonTypedKeyNames();
 
         private static readonly Dictionary<string, CachedKeyName> CachedKeys = new();
+
+#if ENABLE_INPUT_SYSTEM
+        /*
+            The keyboard the control memo below was resolved against, and one
+            resolved control per rewritten hotkey name: a poll then reads the
+            press off a held reference instead of running string-keyed
+            lookups every frame (#222). The memo clears whenever the current
+            keyboard instance changes, so an unplug, a re-plug, or a device
+            switch re-resolves against the keyboard that is actually
+            attached.
+         */
+        private static Keyboard _memoControlsKeyboard;
+
+        private static readonly Dictionary<string, KeyControl> _memoControls = new();
+#endif
 
         private static readonly Dictionary<string, KeyCode> KeyCodeMapping = new(
             StringComparer.OrdinalIgnoreCase
@@ -315,26 +339,26 @@
 #pragma warning restore CS0612 // Type or member is obsolete
             {
 #if ENABLE_LEGACY_INPUT_MANAGER
-                if (
-                    Enum.TryParse(resolvedName, ignoreCase: true, out KeyCode keyCode)
-                    || KeyCodeMapping.TryGetValue(resolvedName, out keyCode)
-                )
-                {
-                    return Input.GetKeyDown(keyCode)
-                        && (
-                            !cached.ShiftRequired
-                            || Input.GetKey(KeyCode.LeftShift)
-                            || Input.GetKey(KeyCode.RightShift)
-                        )
-                        && (
-                            !cached.CtrlRequired
-                            || Input.GetKey(KeyCode.LeftControl)
-                            || Input.GetKey(KeyCode.RightControl)
-                        );
-                }
-#endif
-
+                /*
+                    The KeyCode was resolved once into the cache entry, so a
+                    poll is a numeric comparison, not a per-frame string
+                    parse (#222).
+                 */
+                return cached.LegacyKeyCode.HasValue
+                    && Input.GetKeyDown(cached.LegacyKeyCode.Value)
+                    && (
+                        !cached.ShiftRequired
+                        || Input.GetKey(KeyCode.LeftShift)
+                        || Input.GetKey(KeyCode.RightShift)
+                    )
+                    && (
+                        !cached.CtrlRequired
+                        || Input.GetKey(KeyCode.LeftControl)
+                        || Input.GetKey(KeyCode.RightControl)
+                    );
+#else
                 return false;
+#endif
             }
 #pragma warning disable CS0612 // Type or member is obsolete
             if (inputMode == InputMode.NewInputSystem)
@@ -357,17 +381,49 @@
                     lookupName = shiftedKeyName;
                 }
 
+                /*
+                    No keyboard, no press: a gamepad-only setup, a console, or
+                    the frame a keyboard is unplugged answers every polled
+                    hotkey with false, not the NullReferenceException the
+                    unguarded dereference threw every frame (#221).
+                 */
                 Keyboard currentKeyboard = Keyboard.current;
-                return (!shiftRequired || currentKeyboard.shiftKey.isPressed)
-                    && (!cached.CtrlRequired || currentKeyboard.ctrlKey.isPressed)
-                    && (
+                if (currentKeyboard == null)
+                {
+                    return false;
+                }
+
+                /*
+                    A control belongs to one keyboard instance, so each
+                    hotkey's string-keyed lookup resolves once against it and
+                    the memo resets whenever the keyboard changes - an
+                    unplug, a re-plug, a different current device (#222).
+                 */
+                if (!ReferenceEquals(currentKeyboard, _memoControlsKeyboard))
+                {
+                    _memoControls.Clear();
+                    _memoControlsKeyboard = currentKeyboard;
+                }
+
+                if (!_memoControls.TryGetValue(lookupName, out KeyControl control))
+                {
+                    ++ControlResolutionsForTesting;
+                    control =
                         currentKeyboard.TryGetChildControl<KeyControl>(
                             SpecialKeyCodeMap.GetValueOrDefault(lookupName, lookupName)
-                        )
-                            is { wasPressedThisFrame: true }
-                        || currentKeyboard.TryGetChildControl<KeyControl>(lookupName)
-                            is { wasPressedThisFrame: true }
-                    );
+                        ) ?? currentKeyboard.TryGetChildControl<KeyControl>(lookupName);
+                    _memoControls[lookupName] = control;
+                }
+
+                /*
+                    The modifiers read live off the current keyboard, not the
+                    memo: a chord fires only with its modifiers held, on the
+                    same frame the key itself presses.
+                 */
+                return control != null
+                    && control.wasPressedThisFrame
+                    && (!shiftRequired || currentKeyboard.shiftKey.isPressed)
+                    && (!cached.CtrlRequired || currentKeyboard.ctrlKey.isPressed);
 #endif
             }
             return false;
@@ -432,12 +488,23 @@
 
             /*
                 Modifier stripping and special-key rewriting are deterministic
-                per input string; the resolved name and its modifier
-                requirements are cached so repeated per-frame polling never
-                allocates. Invalid keys keep an empty name so they also skip
-                the parse on later calls.
+                per input string; the resolved name, its modifier
+                requirements, and the legacy KeyCode it parses to are cached
+                so repeated per-frame polling never repeats the string work.
+                Invalid keys keep an empty name (and a null KeyCode) so they
+                also skip the parse on later calls.
              */
-            return new CachedKeyName(keyName, shiftRequired, ctrlRequired);
+            KeyCode? legacyKeyCode = null;
+            if (Enum.TryParse(keyName, ignoreCase: true, out KeyCode parsedKeyCode))
+            {
+                legacyKeyCode = parsedKeyCode;
+            }
+            else if (KeyCodeMapping.TryGetValue(keyName, out KeyCode mappedKeyCode))
+            {
+                legacyKeyCode = mappedKeyCode;
+            }
+
+            return new CachedKeyName(keyName, shiftRequired, ctrlRequired, legacyKeyCode);
         }
 
         /// <summary>
@@ -506,6 +573,18 @@
             }
 
             return ProducesTypedText(keyControl.name);
+        }
+
+        /*
+            Clears the control memo and its counter, so a test starts from an
+            empty memo against whatever keyboard is current, whatever ran
+            before it.
+         */
+        internal static void ResetControlMemoForTesting()
+        {
+            _memoControls.Clear();
+            _memoControlsKeyboard = null;
+            ControlResolutionsForTesting = 0;
         }
 #endif
 
@@ -684,11 +763,25 @@
             public readonly bool ShiftRequired;
             public readonly bool CtrlRequired;
 
-            public CachedKeyName(string name, bool shiftRequired, bool ctrlRequired)
+            /*
+                The KeyCode the name parses to under the legacy input
+                manager, resolved once at cache-fill time; null when nothing
+                parses. KeyCode.None is a real answer (the `none` binding),
+                so the resolution needs the nullable, not the enum default.
+             */
+            public readonly KeyCode? LegacyKeyCode;
+
+            public CachedKeyName(
+                string name,
+                bool shiftRequired,
+                bool ctrlRequired,
+                KeyCode? legacyKeyCode
+            )
             {
                 Name = name;
                 ShiftRequired = shiftRequired;
                 CtrlRequired = ctrlRequired;
+                LegacyKeyCode = legacyKeyCode;
             }
         }
     }

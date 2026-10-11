@@ -4,6 +4,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     using System.Collections;
     using System.Collections.Generic;
     using System.Linq;
+    using System.Reflection;
     using Backend;
     using Components;
     using NUnit.Framework;
@@ -44,6 +45,21 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 #else
             return null;
 #endif
+        }
+
+        /*
+            The palette registry is a private static; the count is the
+            contract the play-session reset pins, and reflecting the list out
+            is test-only (the TerminalKeyboardControllerTests precedent).
+         */
+        private static IEnumerable LivePalettes()
+        {
+            FieldInfo field = typeof(CommandPaletteUI).GetField(
+                "_livePalettes",
+                BindingFlags.Static | BindingFlags.NonPublic
+            );
+            Assert.That(field != null, "_livePalettes field should exist");
+            return (IEnumerable)field.GetValue(null);
         }
 
         /*
@@ -1270,6 +1286,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             CommandHistory originalHistory = Terminal.History;
             CommandShell originalShell = Terminal.Shell;
             CommandAutoComplete originalAutoComplete = Terminal.AutoComplete;
+            GameObject paletteObject = null;
             try
             {
                 Assert.That(
@@ -1277,10 +1294,53 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     "Sanity: the shared session has backends before the reset"
                 );
 
+                /*
+                    Seed the state a game leaves in one session: a live
+                    palette (the static Instance and the registry point at
+                    it) and a registered parser plus a delimiter edit (#224).
+                    The palette sits on its own object so the teardown
+                    destroys it even on a failed assert.
+                 */
+                Assert.IsTrue(
+                    CommandArg.RegisterParser<int>(
+                        (string input, out int parsed) =>
+                        {
+                            parsed = 0;
+                            return true;
+                        }
+                    ),
+                    "Sanity: the parser registered"
+                );
+                CommandArg.Delimiters.Add('x');
+                paletteObject = new GameObject("PlaySessionResetPalette");
+                paletteObject.AddComponent<CommandPaletteUI>();
+                Assert.AreSame(
+                    paletteObject.GetComponent<CommandPaletteUI>(),
+                    CommandPaletteUI.Instance,
+                    "Sanity: the spawned palette owns the static instance"
+                );
+
                 TerminalUI.ResetForNextPlaySession();
                 Assert.That(
                     TerminalUI.Instance == null,
                     "The play-session reset must clear the stale static Instance"
+                );
+                Assert.That(
+                    CommandPaletteUI.Instance == null,
+                    "The play-session reset must clear the palette's static instance"
+                );
+                Assert.IsEmpty(
+                    LivePalettes(),
+                    "The play-session reset must clear the live-palette registry"
+                );
+                Assert.IsFalse(
+                    CommandArg.TryGetParser(out CommandArgParser<int> _),
+                    "The play-session reset must drop registered parsers"
+                );
+                CollectionAssert.AreEquivalent(
+                    new[] { ',', ';', ':', '_', '/', '\\' },
+                    CommandArg.Delimiters,
+                    "The play-session reset must restore the default delimiters"
                 );
                 Assert.That(
                     Terminal.Buffer == null,
@@ -1295,6 +1355,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
                 TerminalUI.ResetForNextPlaySession();
                 Assert.That(Terminal.Buffer == null, "A repeated play-session reset stays cleared");
+                Assert.IsEmpty(
+                    LivePalettes(),
+                    "A repeated play-session reset leaves the palette registry empty"
+                );
 
                 TerminalSession.Current.Apply(
                     new TerminalSession.Config(64, 64, null, null, false),
@@ -1307,10 +1371,16 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             }
             finally
             {
+                if (paletteObject != null)
+                {
+                    UnityEngine.Object.Destroy(paletteObject);
+                }
+
                 Terminal.Buffer = originalBuffer;
                 Terminal.History = originalHistory;
                 Terminal.Shell = originalShell;
                 Terminal.AutoComplete = originalAutoComplete;
+                CommandArg.ResetForNextPlaySession();
             }
         }
 

@@ -78,7 +78,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [TearDown]
         public void CleanUp()
         {
-            int unregistered = CommandArg.UnregisterAllParsers();
+            /*
+                The play-session reset, not bare UnregisterAllParsers: tests
+                here also edit the public control sets, and only the reset
+                puts those back too, so a failing test cannot leak its
+                mutation into the next one.
+             */
+            int unregistered = CommandArg.ResetForNextPlaySession();
             if (0 < unregistered)
             {
                 Debug.Log(
@@ -3638,6 +3644,73 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             {
                 parsed = 2;
                 return false;
+            }
+        }
+
+        [Test]
+        public void PlaySessionResetRestoresDefaults()
+        {
+            /*
+                The state a game leaves behind in one play session: a custom
+                parser and edits to the public control sets. With domain
+                reload off, none of it clears on its own - the reset is what
+                a session boundary costs (#224).
+             */
+            Assert.IsTrue(
+                CommandArg.RegisterParser<int>(StaticResetIntParser),
+                "Sanity: the parser registered"
+            );
+            CommandArg.Delimiters.Add('x');
+            CommandArg.Quotes.Add('^');
+            CommandArg.IgnoredValuesForCleanedTypes.Add("\t");
+            CommandArg.DoNotCleanTypes.Add(typeof(float));
+            CommandArg.IgnoredValuesForComplexTypes.Add("@");
+
+            CommandArg.ResetForNextPlaySession();
+
+            Assert.IsFalse(
+                CommandArg.TryGetParser(out CommandArgParser<int> _),
+                "The play-session reset must drop registered parsers"
+            );
+            CollectionAssert.AreEquivalent(
+                new[] { ',', ';', ':', '_', '/', '\\' },
+                CommandArg.Delimiters,
+                $"Delimiters after reset: [{string.Join(string.Empty, CommandArg.Delimiters)}]"
+            );
+            CollectionAssert.AreEquivalent(
+                new[] { '"', '\'' },
+                CommandArg.Quotes,
+                $"Quotes after reset: [{string.Join(string.Empty, CommandArg.Quotes)}]"
+            );
+            CollectionAssert.AreEquivalent(
+                new[] { "\r", "\n" },
+                CommandArg.IgnoredValuesForCleanedTypes,
+                $"IgnoredValuesForCleanedTypes after reset: [{string.Join(string.Empty, CommandArg.IgnoredValuesForCleanedTypes)}]"
+            );
+            CollectionAssert.AreEquivalent(
+                new[] { typeof(string), typeof(char), typeof(DateTime), typeof(DateTimeOffset) },
+                CommandArg.DoNotCleanTypes,
+                $"DoNotCleanTypes after reset: [{string.Join(", ", CommandArg.DoNotCleanTypes)}]"
+            );
+            CollectionAssert.AreEquivalent(
+                new[] { "(", ")", "[", "]", "'", "`", "|", "{", "}", "<", ">" },
+                CommandArg.IgnoredValuesForComplexTypes,
+                "IgnoredValuesForComplexTypes after reset"
+            );
+
+            CommandArg arg = new("1");
+            Assert.IsTrue(
+                arg.TryGet(out int parsed),
+                "Built-in parsing keeps working across the reset"
+            );
+            Assert.AreEqual(1, parsed);
+
+            return;
+
+            static bool StaticResetIntParser(string input, out int parsed)
+            {
+                parsed = 3;
+                return true;
             }
         }
 
