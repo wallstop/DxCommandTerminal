@@ -144,7 +144,7 @@ function sha256Hex(buffer) {
     walk cannot know which files a pattern matches, and guessing would
     answer stale bytes for the files it missed.
  */
-const GLOB_CHARACTERS = /[*?[\]]/u;
+const GLOB_CHARACTERS = /[*?[\]{}]/u;
 
 function packagedInputPaths(packageRoot, files) {
   const negated = new Set();

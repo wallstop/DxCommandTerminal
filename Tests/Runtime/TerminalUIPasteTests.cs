@@ -34,6 +34,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private GameObject _terminalObject;
         private PanelSettings _panelSettings;
         private string _originalClipboard;
+        private bool _clipboardProbeHeld;
 
         private static T LoadAsset<T>(string relativePath)
             where T : ScriptableObject
@@ -105,13 +106,21 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             /*
                 A host that holds a direct probe twice in a row is healthy,
                 so eight straight failures name a paste-routing defect, not
-                the environment; a host stuck in a bad window ignores from
-                the probe.
+                the environment; a host stuck in a bad window ignores as the
+                #207 environment.
              */
             yield return ProbeClipboard();
-            Assert.Fail(
-                "The host clipboard holds a direct write, but no paste held "
-                    + "the flattened text; the V did not route to the field"
+            if (_clipboardProbeHeld)
+            {
+                Assert.Fail(
+                    "The host clipboard holds a direct write, but no paste held "
+                        + "the flattened text; the V did not route to the field"
+                );
+            }
+
+            Assert.Ignore(
+                "The host clipboard did not hold a direct probe twice in a row; "
+                    + "the paste fixtures need a platform that answers (#207)"
             );
         }
 
@@ -234,7 +243,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             is a failure the retry must not absorb. The two-pass hold is
             what keeps a host that drops writes in windows (#207) from being
             called healthy because its bad window ended between the attempts
-            and the probe.
+            and the probe. The probe records its verdict on a field and the
+            assertions run in the test's own enumerator, where the test
+            framework is guaranteed to record them.
          */
         private IEnumerator SendClipboardKey(
             KeyCode keyCode,
@@ -262,19 +273,25 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             }
 
             yield return ProbeClipboard();
-            Assert.Fail(
-                $"The host clipboard holds a direct write, but a {keyCode} never produced "
-                    + $"\"{expectedClipboard}\" on \"{expectedValue}\"; the key did not route"
+            if (_clipboardProbeHeld)
+            {
+                Assert.Fail(
+                    $"The host clipboard holds a direct write, but a {keyCode} never produced "
+                        + $"\"{expectedClipboard}\" on \"{expectedValue}\"; the key did not route"
+                );
+            }
+
+            Assert.Ignore(
+                "The host clipboard did not hold a direct probe twice in a row; "
+                    + "the paste fixtures need a platform that answers (#207)"
             );
         }
 
         /*
             Writes and reads back a probe string through the system clipboard,
             the same evidence TerminalClipboard.TryWrite uses, until it holds
-            on two consecutive passes. A host that never holds ignores from
-            here - the #207 environment, not a regression - and one that
-            holds twice lets the caller's Assert.Fail stand as a defect
-            verdict.
+            on two consecutive passes. Sets _clipboardProbeHeld; the caller
+            asserts in its own enumerator.
          */
         private IEnumerator ProbeClipboard()
         {
@@ -288,15 +305,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 heldPasses = GUIUtility.systemCopyBuffer == probe ? heldPasses + 1 : 0;
             }
 
-            if (heldPasses < 2)
-            {
-                GUIUtility.systemCopyBuffer = original;
-                Assert.Ignore(
-                    "The host clipboard did not hold a direct probe twice in a row; "
-                        + "the paste fixtures need a platform that answers (#207)"
-                );
-            }
-
+            _clipboardProbeHeld = 2 <= heldPasses;
             GUIUtility.systemCopyBuffer = original;
         }
 
