@@ -562,9 +562,14 @@
             string name
         )
         {
+            /*
+                `name` carries the caller's parameter name as its value: the
+                exception must read it (ArgumentNullException(name)), not
+                nameof(name), which is always the literal "name".
+             */
             if (replacement == null)
             {
-                throw new ArgumentNullException(nameof(name));
+                throw new ArgumentNullException(name);
             }
 
             contents.Clear();

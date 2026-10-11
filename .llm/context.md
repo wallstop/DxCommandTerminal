@@ -110,11 +110,11 @@ frontmatter validity, index freshness, and pointer-file delegation; see
    `Dictionary`/`HashSet` constructions state their comparer too (`StringComparer.Ordinal` when
    the default is meant). Enforced by `npm --prefix tooling~ run lint:string-equality` (pre-commit
    + CI; identifier-vs-identifier equality and collection comparers are review conventions).
-8. Use `nameof()` instead of magic strings.
-9. Internal APIs over reflection on our own code; `InternalsVisibleTo` is already granted to the
-   Editor and Tests.Runtime assemblies (`Runtime/AssemblyInfo.cs`).
-10. Annotate format-string methods with `[StringFormatMethod("...")]` (JetBrains) so callers get
-    format checking.
+8. Use `nameof()` instead of magic strings - and the inverse: a helper that receives a member's
+   name as a string throws with the value (`ArgumentNullException(name)`), never `nameof(name)`,
+   which names the helper's own parameter and always reads `"name"`.
+9. Internal APIs over reflection on our own code; `InternalsVisibleTo` covers the Editor and Tests.Runtime assemblies (`Runtime/AssemblyInfo.cs`).
+10. Annotate format-string methods with `[StringFormatMethod("...")]` (JetBrains) for caller format checking.
 11. `foreach` over value-typed enumerables (`List<T>`, arrays, structs, spans); counting `for`
     only when the index is used, the collection is `IReadonlyList`, or the direction/skip
     matters. Last-element separator logic becomes a first/last flag. `string` is never one of
@@ -123,8 +123,8 @@ frontmatter validity, index freshness, and pointer-file delegation; see
 12. One top-level type (class/struct/enum/delegate) per file. Nested helper types are fine.
 13. Assign `out` parameters immediately before each `return`, per path; never blanket-assign at method entry - that
     defeats the compiler's definite-assignment bugcheck. Enforced by `npm --prefix tooling~ run lint:out-param-discipline` (pre-commit + CI, #119).
-14. Flags enums hold single-bit members only. Named composites (`Gameplay`, `All`) live in a
-    static presets class; never compose members inside the enum.
+14. Flags enums hold single-bit members only; named composites (`Gameplay`, `All`) live in a
+    static presets class - never compose members inside the enum.
 15. No raw bitwise flag math at call sites; use the allocation-free `EnumExtensions.HasFlagNoAlloc` helper (unity-helpers, MIT).
 16. No sentinel/magic values where the type system can express optionality: use nullable
     types (`int?`, nullable structs). `CommandInfo.maxArgCount`/`AddCommand` use `int?`
@@ -135,8 +135,8 @@ frontmatter validity, index freshness, and pointer-file delegation; see
     not int x` (lifted `null < 0` is `false`); IMGUI `Popup` takes/returns `int` (`-1` =
     none) - coalesce there via `GetValueOrDefault(-1)`. Null helper returns banned too
     (`TryXxx`/`out`/`Array.Empty`, PR #67); prefer `Math.Max`/`Math.Clamp` over `?:` clamps.
-17. No `params` on frequently-called APIs; provide fixed-arity overloads (`params` allocates).
-    One-time configuration APIs may use `params`.
+17. No `params` on frequently-called APIs (it allocates); provide fixed-arity overloads. One-time
+    configuration APIs may use `params`.
 18. Hot-path collection access avoids interface dispatch: specialize arrays and `List<T>`
     (Unity does not de-virtualize `IReadOnlyList` indexers); arrays are preferred. Copy with
     `Array.Copy` / `CopyTo`, not element loops, and let one hoisted count size both the copy

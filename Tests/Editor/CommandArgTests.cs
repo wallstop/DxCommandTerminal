@@ -3844,14 +3844,26 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void SetterArraysMayNotBeNull()
         {
-            Assert.Throws<ArgumentNullException>(() => CommandArg.SetDelimiters(null));
-            Assert.Throws<ArgumentNullException>(() => CommandArg.SetQuotes(null));
-            Assert.Throws<ArgumentNullException>(() =>
-                CommandArg.SetIgnoredValuesForCleanedTypes(null)
+            void AssertNamesThePublicParameter(TestDelegate call, string expected)
+            {
+                ArgumentNullException thrown = Assert.Throws<ArgumentNullException>(call);
+                Assert.AreEqual(
+                    expected,
+                    thrown.ParamName,
+                    "A null setter array must name the public parameter the caller passed"
+                );
+            }
+
+            AssertNamesThePublicParameter(() => CommandArg.SetDelimiters(null), "delimiters");
+            AssertNamesThePublicParameter(() => CommandArg.SetQuotes(null), "quotes");
+            AssertNamesThePublicParameter(
+                () => CommandArg.SetIgnoredValuesForCleanedTypes(null),
+                "values"
             );
-            Assert.Throws<ArgumentNullException>(() => CommandArg.SetDoNotCleanTypes(null));
-            Assert.Throws<ArgumentNullException>(() =>
-                CommandArg.SetIgnoredValuesForComplexTypes(null)
+            AssertNamesThePublicParameter(() => CommandArg.SetDoNotCleanTypes(null), "types");
+            AssertNamesThePublicParameter(
+                () => CommandArg.SetIgnoredValuesForComplexTypes(null),
+                "values"
             );
         }
 
