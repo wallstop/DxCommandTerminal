@@ -62,11 +62,10 @@ tooling~/                             # Unity-hidden tooling (tilde-suffixed; no
 
 ### Dev tooling (tooling~/scripts/, .devcontainer/)
 
-`npm run unity:mcp:probe|configure|bridge|capture` drives the host Unity editor
-over the authenticated MCP bridge in `tooling~/scripts/mcp/unity-mcp.mjs` (see the
-[unity-mcp](./skills/unity-mcp/SKILL.md) and
-[capture-unity-state](./skills/capture-unity-state/SKILL.md) skills). Credentials
-live in gitignored `.env.local` (see `.env.example`); agent MCP configs are
+`npm run unity:mcp:probe|configure|bridge|capture` drives the host Unity editor over the
+authenticated MCP bridge in `tooling~/scripts/mcp/unity-mcp.mjs` (see the
+[unity-mcp](./skills/unity-mcp/SKILL.md) and [capture-unity-state](./skills/capture-unity-state/SKILL.md)
+skills). Credentials live in gitignored `.env.local` (see `.env.example`); agent MCP configs are
 generated, never hand-edited; `npm test` runs the Node suite; `npm run preflight` = all gates.
 
 ## Skills Reference
@@ -101,12 +100,16 @@ frontmatter validity, index freshness, and pointer-file delegation; see
    default - mutable access only when necessary.
 5. Zero warnings. No dead code, no commented-out code. A Debug.Log-family call logs the exception itself, never `.Message` (the in-game funnel renders the message by design; enforced by `npm --prefix tooling~ run lint:exception-tostring`).
 6. Prefer `TryXxx` patterns over exceptions for expected failures; validate inputs on all public
-   methods (see `CommandArg.TryGet<T>` for the canonical example).
+   methods (see `CommandArg.TryGet<T>`) with guards .NET analyzers can see: the Generator Tests
+   lane compiles `Runtime/` at warnings-as-errors, so a public method forwarding a parameter
+   into another method needs its own null check - `compat:check` misses that gap (CA1062 did).
 7. String comparisons state their rule: `string.Equals(a, b, StringComparison.Ordinal|OrdinalIgnoreCase)`;
    string-typed `IndexOf`/`StartsWith`/`EndsWith`/`Contains`/`Replace` take an explicit `StringComparison` - never
    culture-sensitive defaults, never `==`/`!=` on string values (`== null`, enums, and Unity references stay legal).
-   Name-shaped identifiers (font/theme/command names) are `OrdinalIgnoreCase`. Enforced by
-   `npm --prefix tooling~ run lint:string-equality` (pre-commit + CI; identifier-vs-identifier equality is a review convention).
+   Name-shaped identifiers (font/theme/command names) are `OrdinalIgnoreCase`; string-keyed
+   `Dictionary`/`HashSet` constructions state their comparer too (`StringComparer.Ordinal` when
+   the default is meant). Enforced by `npm --prefix tooling~ run lint:string-equality` (pre-commit
+   + CI; identifier-vs-identifier equality and collection comparers are review conventions).
 8. Use `nameof()` instead of magic strings.
 9. Internal APIs over reflection on our own code; `InternalsVisibleTo` is already granted to the
    Editor and Tests.Runtime assemblies (`Runtime/AssemblyInfo.cs`).
@@ -122,8 +125,7 @@ frontmatter validity, index freshness, and pointer-file delegation; see
     defeats the compiler's definite-assignment bugcheck. Enforced by `npm --prefix tooling~ run lint:out-param-discipline` (pre-commit + CI, #119).
 14. Flags enums hold single-bit members only. Named composites (`Gameplay`, `All`) live in a
     static presets class; never compose members inside the enum.
-15. No raw bitwise flag math at call sites; use the allocation-free
-    `EnumExtensions.HasFlagNoAlloc` helper (adapted from unity-helpers, MIT).
+15. No raw bitwise flag math at call sites; use the allocation-free `EnumExtensions.HasFlagNoAlloc` helper (unity-helpers, MIT).
 16. No sentinel/magic values where the type system can express optionality: use nullable
     types (`int?`, nullable structs). `CommandInfo.maxArgCount`/`AddCommand` use `int?`
     (legacy negatives normalize); `RegisterCommandAttribute.MaxArgCount` stays `int`
@@ -146,13 +148,11 @@ frontmatter validity, index freshness, and pointer-file delegation; see
     to that: [hot-path-allocations](./skills/hot-path-allocations/SKILL.md).
 19. Comparison operators read left-to-right in ascending order: only `<`, `<=` and `==`. Never
     `>` or `>=` -- write `0 <= index` and `b < a`, not `index >= 0` or `a > b` (issue #51).
-    Enforced by `npm --prefix tooling~ run lint:comparison-direction` (pre-commit + CI; `:fix`
-    swaps operands, refusing rewrites where both sides can have side effects).
+    Enforced by `npm --prefix tooling~ run lint:comparison-direction` (pre-commit + CI; `:fix` swaps operands, refusing side-effect rewrites).
 20. One member ordering across every C# type: const, events, delegates, static properties,
     static fields, properties, fields, constructors, static methods, methods; each tier
     public > protected > internal > private; nested types go at the END of their containing
-    type (issue #50). Enforced by `npm --prefix tooling~ run lint:member-ordering` (pre-commit
-    + CI; `:fix` is a permutation-only reorder that never crosses `#if` boundaries).
+    type (issue #50). Enforced by `npm --prefix tooling~ run lint:member-ordering` (pre-commit + CI; `:fix` is a permutation-only reorder that never crosses `#if` boundaries).
 21. Multi-line comments are block comments: two or more consecutive comment-only `//` lines
     must be one `/* ... */` block; single `//` lines and `///` doc comments stay legal. Two
     adjacent block comments whose words mostly repeat are one comment written twice - revise
