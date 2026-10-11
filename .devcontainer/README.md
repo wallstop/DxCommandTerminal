@@ -198,15 +198,6 @@ can inspect host code and capture tooling can be installed into `Assets/Editor`.
 It is excluded from workspace watching; the workspace itself remains the package
 repository.
 
-The workspace bind is the shape that explains this container's performance
-profile: `/workspaces/package` is the Windows checkout (`C:\`) over 9p/drvfs, so
-every metadata call costs milliseconds and the host editor's project *is* this
-working tree - an edit here is the editor's file, no sync step. Everything
-metadata-heavy therefore lives off the 9p path (`tooling~/node_modules` is an
-ext4 volume), and the preflight cache keys tracked files by git index blob
-instead of re-reading bytes. This lane (devcontainer-build) is what builds and
-verifies the image the first time, in CI.
-
 ## Verify
 
 ```bash
