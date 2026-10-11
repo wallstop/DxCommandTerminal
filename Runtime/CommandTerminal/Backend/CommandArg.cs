@@ -51,6 +51,28 @@
             "<",
             ">",
         };
+
+        /*
+            The five sets above are public mutable configuration, so a play
+            session can edit them. The snapshots below hold each set's
+            contents as first constructed, so ResetForNextPlaySession can
+            restore them when domain reload is off - a static initializer
+            runs once per domain, not once per session.
+         */
+        private static readonly char[] DefaultDelimiters = CopyOf(Delimiters);
+
+        private static readonly char[] DefaultQuotes = CopyOf(Quotes);
+
+        private static readonly string[] DefaultIgnoredValuesForCleanedTypes = CopyOf(
+            IgnoredValuesForCleanedTypes
+        );
+
+        private static readonly Type[] DefaultDoNotCleanTypes = CopyOf(DoNotCleanTypes);
+
+        private static readonly string[] DefaultIgnoredValuesForComplexTypes = CopyOf(
+            IgnoredValuesForComplexTypes
+        );
+
         private static readonly Dictionary<Type, object> RegisteredParsers = new();
 
         /*
@@ -412,6 +434,32 @@
         }
 
         /*
+            Runs once per Play Mode session (TerminalUI.ResetForNextPlaySession,
+            SubsystemRegistration), so with disabled domain reload the
+            registrations and control-set edits a previous session made do
+            not leak into this one: user parsers drop, and every public
+            control set returns to its default contents. A game that
+            configures a set or registers a parser re-applies it for the new
+            session, in Awake or a RuntimeInitializeOnLoadMethod - exactly
+            what it must already do when domain reload is on (#224).
+         */
+        internal static int ResetForNextPlaySession()
+        {
+            int parserCount = UnregisterAllParsers();
+            Delimiters.Clear();
+            Delimiters.UnionWith(DefaultDelimiters);
+            Quotes.Clear();
+            Quotes.AddRange(DefaultQuotes);
+            IgnoredValuesForCleanedTypes.Clear();
+            IgnoredValuesForCleanedTypes.UnionWith(DefaultIgnoredValuesForCleanedTypes);
+            DoNotCleanTypes.Clear();
+            DoNotCleanTypes.UnionWith(DefaultDoNotCleanTypes);
+            IgnoredValuesForComplexTypes.Clear();
+            IgnoredValuesForComplexTypes.UnionWith(DefaultIgnoredValuesForComplexTypes);
+            return parserCount;
+        }
+
+        /*
             Build-time parseability probe for the typed command builder: a
             definition is only accepted when its argument types can parse at
             execution. Mirrors the ordinary TryGet paths (registered parsers,
@@ -424,6 +472,12 @@
                 || type.IsEnum
                 || BuiltInParsers.ContainsKey(type)
                 || RegisteredParsers.ContainsKey(type);
+        }
+
+        private static T[] CopyOf<T>(IEnumerable<T> source)
+        {
+            List<T> copy = new(source);
+            return copy.ToArray();
         }
 
         private static Dictionary<string, PropertyInfo> LoadStaticPropertiesForType(Type type)
