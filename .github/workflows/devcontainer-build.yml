@@ -46,6 +46,9 @@ jobs:
 
       # The docker-container driver is what supports the gha cache backend;
       # the preinstalled buildx CLI provides it, no third-party action needed.
+      # The driver is created per run, so the Dockerfile's BuildKit
+      # --mount=type=cache layers (apt/pip/npm downloads) do not persist
+      # across runs - only the layer cache below does.
       - name: Set up the buildx builder
         run: docker buildx create --name dxt --driver docker-container --use
 

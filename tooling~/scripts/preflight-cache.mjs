@@ -79,23 +79,37 @@ const UNTRACKED_CONTENT_HASH_LIMIT = 1024 * 1024;
 
 /*
     Content identity for tracked files comes from git's index, not from
-    re-reading bytes: a clean tracked file's worktree content is by
-    definition its index blob (git status answers "worktree matches index"
-    with the same stat machinery every caller would otherwise duplicate),
-    so keying on `git ls-files -s` blob ids replaces thousands of file
-    reads per preflight with one index listing (~25 ms for ~1,200 files)
-    and one status call. The dirty set is taken from
-    `status --untracked-files=no`, which skips the untracked walk entirely;
-    dirty and untracked files fall back to byte reads exactly as before.
+    re-reading bytes: git status answers "worktree matches index" with
+    the same stat machinery every caller would otherwise duplicate, so a
+    clean tracked file keys at its index blob (one `ls-files -s`
+    listing, ~25 ms for ~1,200 files) and only status-flagged files fall
+    back to byte reads. The status call uses
+    `--untracked-files=no`, which skips the untracked walk entirely.
+    The state is computed lazily once per process (CI and --no-cache
+    runs never key anything and never pay the spawns).
+
+    The index-eol configuration (core.autocrlf, core.eol) is folded into
+    the blob marker: with a clean/smudge filter the worktree bytes and
+    the index blob genuinely differ while status says clean, so flipping
+    the configuration must move keys, not age a cached pass.
 
     Stated limits, all inherited from the snapshot's existing contract:
     a file flagged assume-unchanged or skip-worktree hides its edits from
     status and is keyed at its index blob; the state is computed once per
     process, so an edit landing after the first keyed check in the same
-    run is seen by the next run (the per-run memo contract). When git is
-    unavailable the whole identity falls back to byte reads.
+    run is seen by the next run (the per-run memo contract); and an LFS
+    or custom filter driving the worktree bytes means the blob key stands
+    for filtered content, not worktree bytes - this repository carries no
+    such filter over keyed roots today, and a filter landing here needs
+    to join this key before it can be trusted. When git is unavailable
+    the whole identity falls back to byte reads.
  */
-const GIT_FILE_IDENTITY = (() => {
+let gitFileIdentityState = null;
+
+function gitFileIdentity() {
+  if (gitFileIdentityState !== null) {
+    return gitFileIdentityState;
+  }
   try {
     const tracked = new Map();
     const listing = execFileSync("git", ["ls-files", "-s", "-z"], {
@@ -136,11 +150,23 @@ const GIT_FILE_IDENTITY = (() => {
         index++;
       }
     }
-    return { tracked, dirty };
+    let eol = "";
+    try {
+      eol = [
+        execFileSync("git", ["config", "--get", "core.autocrlf"], { cwd: REPO_ROOT, encoding: "utf8" }),
+        execFileSync("git", ["config", "--get", "core.eol"], { cwd: REPO_ROOT, encoding: "utf8" })
+      ]
+        .join("\0")
+        .trim();
+    } catch {
+      eol = "unset";
+    }
+    gitFileIdentityState = { tracked, dirty, eol };
   } catch {
-    return null;
+    gitFileIdentityState = { tracked: null, dirty: null, eol: "" };
   }
-})();
+  return gitFileIdentityState;
+}
 
 /** Maps an absolute path inside the repo to its slash-separated repo-relative path; null outside. */
 function repoRelativePath(target) {
@@ -225,11 +251,12 @@ function updatePathHash(hash, target, label, visited, excludes) {
   }
 
   if (stat.isFile()) {
+    const identity = gitFileIdentity();
     const relative = repoRelativePath(target);
-    if (relative !== null && GIT_FILE_IDENTITY !== null) {
-      const blob = GIT_FILE_IDENTITY.tracked.get(relative);
-      if (blob !== undefined && !GIT_FILE_IDENTITY.dirty.has(relative)) {
-        hash.update(`git-blob\0${blob}\0`);
+    if (relative !== null && identity.tracked !== null) {
+      const blob = identity.tracked.get(relative);
+      if (blob !== undefined && !identity.dirty.has(relative)) {
+        hash.update(`git-blob\0${blob}\0${identity.eol}\0`);
         return;
       }
     }

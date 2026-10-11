@@ -82,6 +82,7 @@ export function buildChecks() {
         "Generator~",
         "Documentation~",
         "tooling~/scripts",
+        "tooling~/package.json",
         "tooling~/docs/build.mjs",
         "tooling~/docs/docfx.json",
         "tooling~/docs/refs.csproj",
@@ -198,16 +199,27 @@ export function buildChecks() {
       cacheNpm: true,
       cacheDotnet: true,
       cacheRuntimeEnvironment: true,
-      cachePaths: ["Runtime", "tooling~/compat/runtime-2021.3.csproj"]
+      cachePaths: [
+        "Runtime",
+        "tooling~/package.json",
+        "tooling~/compat/runtime-2021.3.csproj"
+      ]
     },
+    /*
+        test:editor builds tests-2021.3 (the compile gate) and testhost
+        (the execution host), and the testhost build applies the source
+        generator, so the key spans everything those projects compile:
+        the two csproj files, their exact sources (the compat tests stub,
+        the testhost directory), Runtime, Tests/Editor, the generator
+        sources, and the npm manifest whose scripts define the command.
+        The generator's test project, compat's T13 fixture project, and
+        matrix.json compile nowhere here and are excluded or simply not
+        rooted; obj/bin are excluded - they are the builds' own outputs,
+        and keying them would invalidate the cache on every run the
+        builds themselves run - and so is the NUnitLite result XML a
+        direct testhost run drops into the keyed tree.
+     */
     {
-      // test:editor builds tests-2021.3 (the compile gate) and testhost
-      // (the execution host), and the testhost build applies the source
-      // generator, so the key spans everything those three projects
-      // compile: Runtime, Tests/Editor, the compat projects and stubs,
-      // and the generator sources. obj/bin are excluded - they are the
-      // builds' own outputs, and keying them would invalidate the cache
-      // on every run the builds themselves run.
       name: "test-editor",
       command: "npm --prefix tooling~ run test:editor",
       lane: "dotnet",
@@ -218,19 +230,22 @@ export function buildChecks() {
         "Runtime",
         "Tests/Editor",
         "Generator~",
-        "tooling~/compat"
+        "tooling~/package.json",
+        "tooling~/compat/tests-2021.3.csproj",
+        "tooling~/compat/tests",
+        "tooling~/compat/testhost"
       ],
       cacheExcludes: [
         "tooling~/compat/obj",
         "tooling~/compat/bin",
         "tooling~/compat/testhost/obj",
         "tooling~/compat/testhost/bin",
+        "tooling~/compat/testhost/TestResult.xml",
         "Generator~/WallstopStudios.DxCommandTerminal.Analyzers/obj",
         "Generator~/WallstopStudios.DxCommandTerminal.Analyzers/bin",
         "Generator~/WallstopStudios.DxCommandTerminal.SourceGenerators/obj",
         "Generator~/WallstopStudios.DxCommandTerminal.SourceGenerators/bin",
-        "Generator~/WallstopStudios.DxCommandTerminal.SourceGenerators.Tests/obj",
-        "Generator~/WallstopStudios.DxCommandTerminal.SourceGenerators.Tests/bin"
+        "Generator~/WallstopStudios.DxCommandTerminal.SourceGenerators.Tests"
       ]
     },
     csharpCheck(

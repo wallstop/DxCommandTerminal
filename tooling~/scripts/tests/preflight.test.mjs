@@ -82,16 +82,32 @@ test("buildChecks: unique names, non-empty commands, expected canaries", () => {
   const compatCheck = checks.find((check) => check.name === "compat-check");
   assert.equal(compatCheck.lane, "dotnet", "the dotnet builds must share one lane");
   assert.equal(compatCheck.cacheDotnet, true);
-  assert.deepEqual(compatCheck.cachePaths, ["Runtime", "tooling~/compat/runtime-2021.3.csproj"]);
+  assert.deepEqual(compatCheck.cachePaths, [
+    "Runtime",
+    "tooling~/package.json",
+    "tooling~/compat/runtime-2021.3.csproj"
+  ]);
   const editorCheck = checks.find((check) => check.name === "test-editor");
   assert.equal(editorCheck.lane, "dotnet", "the dotnet builds must share one lane");
   assert.equal(editorCheck.cacheDotnet, true);
   assert.ok(editorCheck.cachePaths.includes("Tests/Editor"));
   assert.ok(editorCheck.cachePaths.includes("Generator~"));
-  for (const buildOutput of ["tooling~/compat/obj", "tooling~/compat/testhost/bin"]) {
+  assert.ok(
+    editorCheck.cachePaths.includes("tooling~/package.json"),
+    "the lane must key the manifest whose scripts define its commands"
+  );
+  for (const buildOutput of ["tooling~/compat/obj", "tooling~/compat/testhost/bin", "tooling~/compat/testhost/TestResult.xml"]) {
     assert.ok(
       editorCheck.cacheExcludes.includes(buildOutput),
       `test-editor must not key its own build output ${buildOutput}`
+    );
+  }
+  for (const keyedManifest of checks.filter((check) =>
+    check.command.startsWith("npm --prefix tooling~")
+  )) {
+    assert.ok(
+      keyedManifest.cachePaths.includes("tooling~/package.json"),
+      `${keyedManifest.name} runs npm scripts; it must key the manifest defining them`
     );
   }
   const linterCheck = checks.find((check) => check.name === "lint-linq-production");
@@ -469,6 +485,13 @@ test("a dirty tracked file outside declared roots moves keys by content", async 
       must fold each flagged file's content (under the size cap) into the
       hash; this runs in a child process so the per-process git identity
       observes the edit from a clean index.
+
+      Stated trade: the probe dirties the real tracked `.gitattributes`
+      (chosen as the tracked file nothing else reads) and restores its
+      exact bytes in `finally`. A hermetic scratch repo cannot stand in -
+      the module derives REPO_ROOT from its own location, so the probe
+      must live in the keyed tree. A SIGKILL mid-test leaves the probe
+      line behind; `git status` shows it and the restore is one checkout.
    */
   const tracked = path.join(toolingRoot, "..", ".gitattributes");
   const original = fs.readFileSync(tracked, "utf8");
@@ -505,7 +528,8 @@ test("a dirty tracked file outside declared roots moves keys by content", async 
   assert.equal(await run(), clean, "restoring the bytes must restore the key");
 });
 
-test("the run's key computer answers the live key and moves with its inputs", () => {  const cacheDirectory = path.join(toolingRoot, "scripts", ".preflight-cache");
+test("the run's key computer answers the live key and moves with its inputs", () => {
+  const cacheDirectory = path.join(toolingRoot, "scripts", ".preflight-cache");
   fs.mkdirSync(cacheDirectory, { recursive: true });
   const root = fs.mkdtempSync(path.join(cacheDirectory, "computer-"));
   const shared = path.join(root, "shared");
