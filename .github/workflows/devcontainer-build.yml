@@ -1,0 +1,86 @@
+name: Devcontainer Build
+
+# Issue #160: the image was never built anywhere - a broken Dockerfile or a
+# broken lifecycle script was only discovered when a developer rebuilt. This
+# lane builds the image exactly as devcontainer.json declares it (repo root as
+# build context, .devcontainer/Dockerfile), re-runs the OpenCode verification
+# the Dockerfile runs in its install and verification layers, and executes the
+# real postCreateCommand script against a bind mount shaped like the real
+# workspace mount. It is path-filtered to the files that define the image, so
+# every other PR skips it and no CI minutes are spent.
+#
+# Not covered here (needs a real dev-container runtime): the VS Code rebuild
+# flow itself, waitFor gating the first terminal, and postAttachCommand. Those
+# stay a host-side drill; everything that can fail in the Dockerfile or the
+# lifecycle scripts fails here.
+on:
+  push:
+    branches:
+      - master
+      - main
+    paths:
+      - ".devcontainer/**"
+      - "tooling~/package.json"
+      - ".github/workflows/devcontainer-build.yml"
+  pull_request:
+    paths:
+      - ".devcontainer/**"
+      - "tooling~/package.json"
+      - ".github/workflows/devcontainer-build.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    name: build-and-verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # The docker-container driver is what supports the gha cache backend;
+      # the preinstalled buildx CLI provides it, no third-party action needed.
+      - name: Set up the buildx builder
+        run: docker buildx create --name dxt --driver docker-container --use
+
+      - name: Build the image
+        run: >-
+          docker buildx build
+          --file .devcontainer/Dockerfile
+          --tag dxt-devcontainer:ci
+          --cache-from type=gha
+          --cache-to type=gha,mode=max
+          --load
+          .
+
+      # The Dockerfile already runs /tmp/verify-opencode.sh in the install
+      # layer and again in the verification layer; this re-runs it against the
+      # final image state and prints the agreement the script enforces.
+      - name: Verify OpenCode in the built image
+        run: |
+          docker run --rm dxt-devcontainer:ci bash -euo pipefail -c '
+            bash /tmp/verify-opencode.sh
+            printf "opencode:  %s\n" "$(opencode --version)"
+            if command -v opencode2 >/dev/null 2>&1; then
+              printf "opencode2: %s\n" "$(opencode2 --version)"
+            fi
+          '
+
+      # The real postCreateCommand (devcontainer.json: waitFor gates on it),
+      # against a bind mount shaped like the real workspace mount. The chown
+      # replicates what updateRemoteUserUID does on a real rebuild: the
+      # container's vscode user owns the workspace.
+      - name: Run the post-create lifecycle
+        run: |
+          sudo chown -R 1000:1000 .
+          docker run --rm \
+            --workdir /workspaces/package \
+            --volume "$PWD:/workspaces/package" \
+            dxt-devcontainer:ci \
+            bash .devcontainer/post-create.sh
