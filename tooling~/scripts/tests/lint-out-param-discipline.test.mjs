@@ -421,12 +421,18 @@ test("an unparseable parameter list is a violation, not a silent skip", () => {
 });
 
 test("a body too deeply nested to walk is reported, never a crash", () => {
+  /*
+      4000 levels is well past the recursion depth where the statement walk
+      overflows (measured at ~1000-2000 on the default V8 stack), at a
+      fraction of the string the 20000-level probe built; the contract is
+      the contained report, not the depth number.
+  */
   let source = "class D { bool T(out int v) { v = 0; ";
-  for (let i = 0; i < 20000; i += 1) {
+  for (let i = 0; i < 4000; i += 1) {
     source += "if (a) { ";
   }
   source += "v = 1; ";
-  for (let i = 0; i < 20000; i += 1) {
+  for (let i = 0; i < 4000; i += 1) {
     source += "} ";
   }
   source += "return true; } }";
