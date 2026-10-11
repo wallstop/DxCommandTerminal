@@ -87,6 +87,7 @@ test("buildChecks: unique names, non-empty commands, expected canaries", () => {
     "tooling~/package.json",
     "tooling~/compat/runtime-2021.3.csproj"
   ]);
+  assert.deepEqual(compatCheck.cacheExcludes, ["Runtime/Analyzers"]);
   const editorCheck = checks.find((check) => check.name === "test-editor");
   assert.equal(editorCheck.lane, "dotnet", "the dotnet builds must share one lane");
   assert.equal(editorCheck.cacheDotnet, true);
@@ -96,7 +97,7 @@ test("buildChecks: unique names, non-empty commands, expected canaries", () => {
     editorCheck.cachePaths.includes("tooling~/package.json"),
     "the lane must key the manifest whose scripts define its commands"
   );
-  for (const buildOutput of ["tooling~/compat/obj", "tooling~/compat/testhost/bin", "tooling~/compat/testhost/TestResult.xml"]) {
+  for (const buildOutput of ["Runtime/Analyzers", "tooling~/compat/obj", "tooling~/compat/testhost/bin", "tooling~/compat/testhost/TestResult.xml"]) {
     assert.ok(
       editorCheck.cacheExcludes.includes(buildOutput),
       `test-editor must not key its own build output ${buildOutput}`

@@ -203,7 +203,11 @@ export function buildChecks() {
         "Runtime",
         "tooling~/package.json",
         "tooling~/compat/runtime-2021.3.csproj"
-      ]
+      ],
+      // The analyzer payload copied into Runtime/Analyzers is the
+      // generator build's own output, excluded from both projects'
+      // compilation - keying it would let the lane invalidate itself.
+      cacheExcludes: ["Runtime/Analyzers"]
     },
     /*
         test:editor builds tests-2021.3 (the compile gate) and testhost
@@ -236,6 +240,7 @@ export function buildChecks() {
         "tooling~/compat/testhost"
       ],
       cacheExcludes: [
+        "Runtime/Analyzers",
         "tooling~/compat/obj",
         "tooling~/compat/bin",
         "tooling~/compat/testhost/obj",

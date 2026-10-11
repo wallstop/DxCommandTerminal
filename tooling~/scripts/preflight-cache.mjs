@@ -97,12 +97,17 @@ const UNTRACKED_CONTENT_HASH_LIMIT = 1024 * 1024;
     a file flagged assume-unchanged or skip-worktree hides its edits from
     status and is keyed at its index blob; the state is computed once per
     process, so an edit landing after the first keyed check in the same
-    run is seen by the next run (the per-run memo contract); and an LFS
-    or custom filter driving the worktree bytes means the blob key stands
-    for filtered content, not worktree bytes - this repository carries no
-    such filter over keyed roots today, and a filter landing here needs
-    to join this key before it can be trusted. When git is unavailable
-    the whole identity falls back to byte reads.
+    run is seen by the next run (the per-run memo contract); the folded
+    configuration covers core.autocrlf and core.eol, while `text`/`eol`/
+    `ident`/`working-tree-encoding` ATTRIBUTES and any LFS or custom
+    clean/smudge filter drive worktree-vs-index divergence the marker
+    does not see - this repository carries only `text eol=lf` over its
+    own tooling paths and no filter over keyed roots today, and either
+    landing over keyed roots needs to join this key before it can be
+    trusted; and the dotnet lane keys pinned package versions, not the
+    global NuGet cache contents, the same accepted limit a lockfile-keyed
+    CI cache takes. When git is unavailable the whole identity falls
+    back to byte reads.
  */
 let gitFileIdentityState = null;
 
@@ -151,15 +156,19 @@ function gitFileIdentity() {
       }
     }
     let eol = "";
+    const configGet = (key) => {
+      try {
+        return execFileSync("git", ["config", "--get", key], { cwd: REPO_ROOT, encoding: "utf8" }).trim();
+      } catch {
+        /* Exit code 1: the key is unset. Distinguish per key - a set
+           autocrlf next to an unset eol must not read as both-unset. */
+        return "<unset>";
+      }
+    };
     try {
-      eol = [
-        execFileSync("git", ["config", "--get", "core.autocrlf"], { cwd: REPO_ROOT, encoding: "utf8" }),
-        execFileSync("git", ["config", "--get", "core.eol"], { cwd: REPO_ROOT, encoding: "utf8" })
-      ]
-        .join("\0")
-        .trim();
+      eol = [configGet("core.autocrlf"), configGet("core.eol")].join("\0");
     } catch {
-      eol = "unset";
+      eol = "unreadable";
     }
     gitFileIdentityState = { tracked, dirty, eol };
   } catch {
