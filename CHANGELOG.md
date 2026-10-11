@@ -18,6 +18,10 @@ the issue reference at the end. Details live in the docs and the linked issue.
 - Add `CommandCatalogEntry.GetHandler`, which binds a catalog entry's handler at most once
   per entry so a registration cycle re-reads one delegate instead of re-allocating it
   ([#223](https://github.com/wallstop/DxCommandTerminal/issues/223)).
+- Add `CommandArg` parsing-configuration setters - `SetDelimiters`, `SetQuotes`,
+  `SetIgnoredValuesForCleanedTypes`, `SetDoNotCleanTypes`, `SetIgnoredValuesForComplexTypes` -
+  and `ResetParsingConfiguration`, replacing each set's contents in place; the raw sets stay
+  public and mutable ([#229](https://github.com/wallstop/DxCommandTerminal/issues/229)).
 - Add Ctrl+C and Ctrl+X copy and cut of the selected text on both console surfaces' input
   fields; a cut updates the command text and re-ranks the palette, and a clipboard that will
   not take the text leaves the selection in the field instead of deleting it

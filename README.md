@@ -440,6 +440,8 @@ By default, command parameter input is stripped of whitespace characters. This, 
 
 **IgnoredValuesForComplexTypes**: For complex, multi-value types like `Vector2`, `Quaternion`, `Color`, etc, the parameter input will replace all strings found in this set with the empty string.
 
+Each set also has a setter - `CommandArg.SetDelimiters(...)`, `SetQuotes(...)`, `SetIgnoredValuesForCleanedTypes(...)`, `SetDoNotCleanTypes(...)`, and `SetIgnoredValuesForComplexTypes(...)` - that replaces the contents in place, and `CommandArg.ResetParsingConfiguration()` restores all five to their defaults. The play-session reset applies that same restore, so a game that re-applies its configuration per session calls the setters again in `Awake` or a `RuntimeInitializeOnLoadMethod` hook.
+
 # Hotkeys
 All actions are now fully configurable by either explicit keybindings, for keyboard controls, or via [new Input System](#new-input-system) bindings.
 
