@@ -2,6 +2,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 {
     using System;
     using System.Collections;
+    using Backend;
     using Components;
     using Input;
     using NUnit.Framework;
@@ -35,6 +36,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private PanelSettings _panelSettings;
         private string _originalClipboard;
         private bool _clipboardProbeHeld;
+        private bool _vReached;
+        private bool _syncReadHeld;
 
         private static T LoadAsset<T>(string relativePath)
             where T : ScriptableObject
@@ -78,12 +81,21 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 this host drops clipboard writes intermittently (#207), and a
                 write that vanished between the set and the V the handler
                 reads would fail the fixture for the environment's sake.
-                Eight exhausted attempts probe the host; the probe decides
-                whether exhaustion was the environment or a routing defect.
+                Eight exhausted attempts leave two measured verdicts behind,
+                because a paste that read a stale buffer looks exactly like a
+                key that never routed: _vReached says whether the V arrived
+                at the field at all, and _syncReadHeld says whether the
+                clipboard answered a write through the same synchronous read
+                the paste performs. Exhaustion with both healthy names a
+                paste-routing defect; either one answering wrong ignores as
+                the environment.
              */
+            bool pasteRouted = false;
             for (int attempt = 0; attempt < 8; ++attempt)
             {
                 GUIUtility.systemCopyBuffer = "give\titem\n42";
+                _vReached = false;
+                _syncReadHeld = TerminalClipboard.Read() == "give\titem\n42";
                 using (
                     KeyDownEvent key = KeyDownEvent.GetPooled(
                         '\0',
@@ -95,6 +107,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     _terminal._uiDocument.rootVisualElement.SendEvent(key);
                 }
 
+                pasteRouted |= _vReached;
                 yield return null;
                 if (_terminal._commandInput.value == "give item 42")
                 {
@@ -104,23 +117,27 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             }
 
             /*
-                A host that holds a direct probe twice in a row is healthy,
-                so eight straight failures name a paste-routing defect, not
-                the environment; a host stuck in a bad window ignores as the
-                #207 environment.
+                A key the field never saw and a clipboard a synchronous read
+                cannot see are both the environment; only a field that
+                received the V with a clipboard the same dispatch can read
+                names a defect the retries must not absorb.
              */
-            yield return ProbeClipboard();
-            if (_clipboardProbeHeld)
+            if (pasteRouted && _syncReadHeld)
             {
                 Assert.Fail(
-                    "The host clipboard holds a direct write, but no paste held "
-                        + "the flattened text; the V did not route to the field"
+                    "The V reached the field and the clipboard answered a synchronous "
+                        + "read, but no paste held the flattened text"
                 );
             }
 
             Assert.Ignore(
-                "The host clipboard did not hold a direct probe twice in a row; "
-                    + "the paste fixtures need a platform that answers (#207)"
+                !pasteRouted
+                    ? "A synthetic V does not reach the command field in this environment, "
+                        + "so delivery cannot be measured here: a key that never arrives "
+                        + "looks exactly like routing that is broken (#207)"
+                    : "The clipboard did not answer the synchronous read the paste performs "
+                        + "in any of eight attempts, so the paste read a stale buffer; the "
+                        + "fixtures need a platform that answers (#207)"
             );
         }
 
@@ -254,14 +271,17 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         )
         {
             EventModifiers modifiers = EventModifiers.Control;
+            bool keyRouted = false;
             for (int attempt = 0; attempt < 8; ++attempt)
             {
                 SetCommandSelection("spawn item torch", 6, 16);
+                _vReached = false;
                 using (KeyDownEvent key = KeyDownEvent.GetPooled('\0', keyCode, modifiers))
                 {
                     _terminal._uiDocument.rootVisualElement.SendEvent(key);
                 }
 
+                keyRouted |= _vReached;
                 yield return null;
                 if (
                     GUIUtility.systemCopyBuffer == expectedClipboard
@@ -270,6 +290,20 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 {
                     yield break;
                 }
+            }
+
+            /*
+                Same discriminator as the paste fixture: a key the field never
+                saw is the environment, whatever the clipboard answered; only
+                a field that received the key names a routing defect.
+             */
+            if (!keyRouted)
+            {
+                Assert.Ignore(
+                    $"A synthetic {keyCode} does not reach the command field in this "
+                        + "environment, so delivery cannot be measured here: a key that "
+                        + "never arrives looks exactly like routing that is broken (#207)"
+                );
             }
 
             yield return ProbeClipboard();
@@ -359,6 +393,19 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.That(
                 _terminal._commandInput != null,
                 "The terminal input field should exist after the terminal opens"
+            );
+
+            /*
+                Delivery witness for the clipboard keys: set on every V/C/X
+                the field's own trickle-down sees, it is what tells a key
+                that never routed apart from a clipboard that never answered.
+                StopPropagation does not stop same-element callbacks, so the
+                witness fires even when the product consumes the key.
+             */
+            _vReached = false;
+            _terminal._commandInput.RegisterCallback<KeyDownEvent>(
+                _ => _vReached = true,
+                TrickleDown.TrickleDown
             );
         }
 

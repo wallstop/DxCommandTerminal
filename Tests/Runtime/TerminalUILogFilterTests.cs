@@ -685,9 +685,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 Assert.Ignore(
                     "A synthetic key does not reach the command field in this environment, so "
                         + "nothing about key routing can be measured here: a key that never arrives "
-                        + "looks exactly like routing that is broken. "
-                        + "TerminalUIPasteTests.PasteReachesTheCommandTextAsAUserEdit fails on "
-                        + "unmodified master on this host for the same reason. Run these where a "
+                        + "looks exactly like routing that is broken. Run these where a "
                         + "panel routes keys."
                 );
             }

@@ -102,74 +102,23 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             string pngOutputPath
         )
         {
-            if (target == null)
-            {
-                throw new ArgumentNullException(nameof(target));
-            }
+            return CaptureFrame(target, contentRoot, pngOutputPath, null, false).Metrics;
+        }
 
-            if (target.width < 1 || target.height < 1)
-            {
-                throw new ArgumentException(
-                    $"Capture target must have positive dimensions, got {target.width}x{target.height}.",
-                    nameof(target)
-                );
-            }
-
-            if (string.IsNullOrWhiteSpace(pngOutputPath))
-            {
-                throw new ArgumentException("Capture needs an output path.", nameof(pngOutputPath));
-            }
-
-            RenderTexture previousTarget = RenderTexture.active;
-            Texture2D readback = null;
-            try
-            {
-                RenderTexture.active = target;
-                if (contentRoot != null)
-                {
-                    ForcePanelRender(contentRoot);
-                }
-
-                readback = new Texture2D(
-                    target.width,
-                    target.height,
-                    TextureFormat.RGB24,
-                    false,
-                    false
-                )
-                {
-                    name = "T4CaptureReadback",
-                    hideFlags = HideFlags.HideAndDontSave,
-                };
-                readback.ReadPixels(new Rect(0, 0, target.width, target.height), 0, 0, false);
-                readback.Apply(false, false);
-
-                CapturePixelMetrics metrics = ReadMetrics(readback);
-                byte[] png = readback.EncodeToPNG();
-                if (png == null || png.Length < 1)
-                {
-                    throw new InvalidOperationException(
-                        $"PNG encoding produced no bytes for {pngOutputPath}."
-                    );
-                }
-
-                string directory = Path.GetDirectoryName(pngOutputPath);
-                if (!string.IsNullOrEmpty(directory))
-                {
-                    Directory.CreateDirectory(directory);
-                }
-
-                File.WriteAllBytes(pngOutputPath, png);
-                return metrics.WithPngBytes(png.Length);
-            }
-            finally
-            {
-                RenderTexture.active = previousTarget;
-                if (readback != null)
-                {
-                    Object.DestroyImmediate(readback);
-                }
-            }
+        /*
+            Same read, keeping the readback pixels so a scenario can compare
+            two of its own captures pixel against pixel. The PNG on disk stays
+            the shared record; the in-memory pixels are what the invariance
+            asserts read, because decoding the PNGs back would need a decoder
+            the test assembly does not ship.
+         */
+        public static CapturedFrame CaptureFrame(
+            RenderTexture target,
+            VisualElement contentRoot,
+            string pngOutputPath
+        )
+        {
+            return CaptureFrame(target, contentRoot, pngOutputPath, null, true);
         }
 
         /*
@@ -263,6 +212,161 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public static CursorFreezeScope FreezeCursor(TextField field)
         {
             return new CursorFreezeScope(field);
+        }
+
+        /*
+            Pixel-level invariance report: null when every channel of every
+            pixel of both frames is within maxChannelDelta, otherwise one line
+            naming the exceedance count, the worst delta, and the first
+            mismatching pixel. Reads the frames' own pixels, so no PNG decode
+            is involved.
+         */
+        public static string DescribeFrameMismatch(
+            CapturedFrame expected,
+            CapturedFrame actual,
+            int maxChannelDelta
+        )
+        {
+            if (expected.Width != actual.Width || expected.Height != actual.Height)
+            {
+                return $"size {actual.Width}x{actual.Height} != expected "
+                    + $"{expected.Width}x{expected.Height}";
+            }
+
+            Color32[] expectedPixels = expected.Pixels;
+            Color32[] actualPixels = actual.Pixels;
+            if (expectedPixels == null || actualPixels == null)
+            {
+                throw new InvalidOperationException(
+                    "Frame compare needs both captures taken with pixels kept."
+                );
+            }
+
+            int mismatchCount = 0;
+            int worstDelta = 0;
+            int firstIndex = -1;
+            for (int index = 0; index < expectedPixels.Length; ++index)
+            {
+                Color32 a = expectedPixels[index];
+                Color32 b = actualPixels[index];
+                int delta = Math.Max(
+                    Math.Abs(a.r - b.r),
+                    Math.Max(Math.Abs(a.g - b.g), Math.Abs(a.b - b.b))
+                );
+                if (delta <= maxChannelDelta)
+                {
+                    continue;
+                }
+
+                ++mismatchCount;
+                if (worstDelta < delta)
+                {
+                    worstDelta = delta;
+                }
+
+                if (firstIndex < 0)
+                {
+                    firstIndex = index;
+                }
+            }
+
+            if (mismatchCount == 0)
+            {
+                return null;
+            }
+
+            int x = firstIndex % expected.Width;
+            int y = firstIndex / expected.Width;
+            Color32 expectedPixel = expectedPixels[firstIndex];
+            Color32 actualPixel = actualPixels[firstIndex];
+            return $"{mismatchCount} pixel(s) exceed a per-channel delta of {maxChannelDelta} "
+                + $"(worst {worstDelta}); first at ({x},{y}): expected "
+                + $"#{expectedPixel.r:X2}{expectedPixel.g:X2}{expectedPixel.b:X2} got "
+                + $"#{actualPixel.r:X2}{actualPixel.g:X2}{actualPixel.b:X2}";
+        }
+
+        internal static CapturedFrame CaptureFrame(
+            RenderTexture target,
+            VisualElement contentRoot,
+            string pngOutputPath,
+            Rect? metricsRegion,
+            bool keepPixels
+        )
+        {
+            if (target == null)
+            {
+                throw new ArgumentNullException(nameof(target));
+            }
+
+            if (target.width < 1 || target.height < 1)
+            {
+                throw new ArgumentException(
+                    $"Capture target must have positive dimensions, got {target.width}x{target.height}.",
+                    nameof(target)
+                );
+            }
+
+            if (string.IsNullOrWhiteSpace(pngOutputPath))
+            {
+                throw new ArgumentException("Capture needs an output path.", nameof(pngOutputPath));
+            }
+
+            RenderTexture previousTarget = RenderTexture.active;
+            Texture2D readback = null;
+            try
+            {
+                RenderTexture.active = target;
+                if (contentRoot != null)
+                {
+                    ForcePanelRender(contentRoot);
+                }
+
+                readback = new Texture2D(
+                    target.width,
+                    target.height,
+                    TextureFormat.RGB24,
+                    false,
+                    false
+                )
+                {
+                    name = "T4CaptureReadback",
+                    hideFlags = HideFlags.HideAndDontSave,
+                };
+                readback.ReadPixels(new Rect(0, 0, target.width, target.height), 0, 0, false);
+                readback.Apply(false, false);
+
+                CapturePixelMetrics metrics = ReadMetrics(readback, metricsRegion);
+                byte[] png = readback.EncodeToPNG();
+                if (png == null || png.Length < 1)
+                {
+                    throw new InvalidOperationException(
+                        $"PNG encoding produced no bytes for {pngOutputPath}."
+                    );
+                }
+
+                CapturedFrame frame = new CapturedFrame(
+                    metrics.WithPngBytes(png.Length),
+                    keepPixels ? readback.GetPixels32() : null,
+                    readback.width,
+                    readback.height
+                );
+                string directory = Path.GetDirectoryName(pngOutputPath);
+                if (!string.IsNullOrEmpty(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                }
+
+                File.WriteAllBytes(pngOutputPath, png);
+                return frame;
+            }
+            finally
+            {
+                RenderTexture.active = previousTarget;
+                if (readback != null)
+                {
+                    Object.DestroyImmediate(readback);
+                }
+            }
         }
 
         /*
@@ -475,22 +579,47 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             return builder.ToString();
         }
 
-        private static CapturePixelMetrics ReadMetrics(Texture2D readback)
+        /*
+            Pixel measurements over a region of the readback. A null region is
+            the whole target; otherwise the rect is already in the readback's
+            pixel space - GetPixels32 rows count from the visual bottom - and
+            is clamped to the target. The reported width/height/background
+            fraction describe the region, so bounds evaluated against these
+            metrics are bounds on the region's surface. The PNG that the
+            capture writes alongside is always the whole frame.
+         */
+        private static CapturePixelMetrics ReadMetrics(Texture2D readback, Rect? region)
         {
+            RectInt bounds = ResolvePixelRegion(readback, region);
             Color32[] pixels = readback.GetPixels32();
             Dictionary<int, int> counts = new Dictionary<int, int>(1024);
-            for (int index = 0; index < pixels.Length; ++index)
+            int sampleCount = 0;
+            for (int row = 0; row < bounds.height; ++row)
             {
-                Color32 pixel = pixels[index];
-                int key = (pixel.r << 16) | (pixel.g << 8) | pixel.b;
-                if (counts.TryGetValue(key, out int count))
+                int rowStart = (bounds.y + row) * readback.width + bounds.x;
+                for (int column = 0; column < bounds.width; ++column)
                 {
-                    counts[key] = count + 1;
+                    Color32 pixel = pixels[rowStart + column];
+                    int key = (pixel.r << 16) | (pixel.g << 8) | pixel.b;
+                    if (counts.TryGetValue(key, out int count))
+                    {
+                        counts[key] = count + 1;
+                    }
+                    else
+                    {
+                        counts[key] = 1;
+                    }
+
+                    ++sampleCount;
                 }
-                else
-                {
-                    counts[key] = 1;
-                }
+            }
+
+            if (sampleCount < 1)
+            {
+                throw new InvalidOperationException(
+                    $"Metrics region {bounds} is empty on a {readback.width}x{readback.height} "
+                        + "readback."
+                );
             }
 
             int backgroundKey = 0;
@@ -505,15 +634,30 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             }
 
             return new CapturePixelMetrics(
-                readback.width,
-                readback.height,
+                bounds.width,
+                bounds.height,
                 counts.Count,
-                (float)backgroundCount / pixels.Length,
+                (float)backgroundCount / sampleCount,
                 (backgroundKey >> 16) & 0xFF,
                 (backgroundKey >> 8) & 0xFF,
                 backgroundKey & 0xFF,
                 0
             );
+        }
+
+        private static RectInt ResolvePixelRegion(Texture2D readback, Rect? region)
+        {
+            if (region == null)
+            {
+                return new RectInt(0, 0, readback.width, readback.height);
+            }
+
+            Rect requested = region.Value;
+            int x = Mathf.Clamp(Mathf.FloorToInt(requested.x), 0, readback.width);
+            int y = Mathf.Clamp(Mathf.FloorToInt(requested.y), 0, readback.height);
+            int width = Mathf.Clamp(Mathf.CeilToInt(requested.width), 0, readback.width - x);
+            int height = Mathf.Clamp(Mathf.CeilToInt(requested.height), 0, readback.height - y);
+            return new RectInt(x, y, width, height);
         }
 
         private static string FormatPercent(float fraction)
@@ -659,6 +803,34 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             }
         }
 #endif
+
+        /*
+            One capture's readback: the metrics the bounds check consumes plus,
+            when the scenario asked for them, the raw pixels an invariance
+            assert compares. Pixels are the whole target regardless of the
+            metrics region, so frame compares always see the same surface the
+            PNG records.
+         */
+        public readonly struct CapturedFrame
+        {
+            public CapturePixelMetrics Metrics { get; }
+            public Color32[] Pixels { get; }
+            public int Width { get; }
+            public int Height { get; }
+
+            public CapturedFrame(
+                CapturePixelMetrics metrics,
+                Color32[] pixels,
+                int width,
+                int height
+            )
+            {
+                Metrics = metrics;
+                Pixels = pixels;
+                Width = width;
+                Height = height;
+            }
+        }
 
         public sealed class CursorFreezeScope : IDisposable
         {

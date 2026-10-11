@@ -63,6 +63,18 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             an uncapped editor frame rate would make a frame count vacuous.
          */
         private const float BlinkSettleSeconds = 0.7f;
+
+        /*
+            Rasterization-noise budget for the invariance compares: two forced
+            renders of one frozen surface measured at most a 2/255 per-channel
+            drift on 8 of ~634k pixels (the palette divider's anti-aliased
+            edge on the D3D12 host), while a caret ghost or any layout shift
+            moves pixels by tens of levels. 8/255 keeps several times the
+            observed wobble's margin and stays far under the smallest real
+            change the proofs exist to catch.
+         */
+        private const int MaxInvarianceChannelDelta = 8;
+
         private const float InspectorWidth = 520f;
         private const float InspectorHeight = 780f;
         private const int InspectorRepaintFloor = 3;
@@ -161,6 +173,18 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     element.worldBound.height
                 )
                 : "null";
+        }
+
+        private static string FormatRegion(Rect region)
+        {
+            return string.Format(
+                CultureInfo.InvariantCulture,
+                "({0:0},{1:0} {2:0}x{3:0})",
+                region.x,
+                region.y,
+                region.width,
+                region.height
+            );
         }
 
         private static string DescribeFocus(Focusable focused)
@@ -679,10 +703,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         /*
             The palette's native TextField caret is frozen through its
             cursorColor for the capture; a repeat capture past the native
-            blink interval must be byte-identical, proving the pixels no
-            longer move with the blink phase. Hosts where the freeze cannot
-            engage skip the invariance proof instead of asserting against an
-            unfrozen caret.
+            blink interval must match within the rasterization-noise budget,
+            proving the pixels no longer move with the blink phase. Hosts
+            where the freeze cannot engage skip the invariance proof instead
+            of asserting against an unfrozen caret.
          */
         [UnityTest]
         public IEnumerator CapturesCommandPaletteSurface()
@@ -707,7 +731,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     scenario,
                     target,
                     CaptureBounds.Default(),
-                    _terminal._uiDocument.rootVisualElement
+                    _terminal._uiDocument.rootVisualElement,
+                    keepFrame: true
                 );
                 AssertAcceptable(_lastOutcome);
                 if (!cursorFreeze.Engaged)
@@ -723,14 +748,27 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     scenario + "-repeat",
                     target,
                     CaptureBounds.Default(),
-                    _terminal._uiDocument.rootVisualElement
+                    _terminal._uiDocument.rootVisualElement,
+                    keepFrame: true
                 );
                 AssertAcceptable(repeat);
-                byte[] expected = File.ReadAllBytes(_lastOutcome.PngPath);
-                byte[] actual = File.ReadAllBytes(repeat.PngPath);
+
+                /*
+                    The compare reads both captures' own pixels with the
+                    rasterization-noise budget instead of demanding byte-equal
+                    PNGs: the frozen surface's anti-aliased edges re-rasterize
+                    within a couple of levels between forced renders (8 pixels
+                    of the divider on the D3D12 host, issue #207), while a
+                    caret ghost or any real repaint moves pixels by tens of
+                    levels and still fails.
+                 */
                 Assert.That(
-                    actual,
-                    Is.EqualTo(expected),
+                    TerminalSurfaceCapture.DescribeFrameMismatch(
+                        _lastOutcome.Frame.Value,
+                        repeat.Frame.Value,
+                        MaxInvarianceChannelDelta
+                    ),
+                    Is.Null,
                     "The palette render must be blink-invariant with the caret frozen"
                 );
             }
@@ -759,18 +797,23 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Terminal.Log("capture-themes ready");
             Terminal.Log(WrappedLine);
             _terminal.SetCursorBlinkPaused(true);
+            Rect band = TerminalBandRegion();
             List<CaptureOutcome> themed = new List<CaptureOutcome>(2);
-            yield return CaptureThemedSurface(LightThemeName, LightScenarioName, themed);
-            yield return CaptureThemedSurface(DarkThemeName, DarkScenarioName, themed);
+            yield return CaptureThemedSurface(LightThemeName, LightScenarioName, themed, band);
+            yield return CaptureThemedSurface(DarkThemeName, DarkScenarioName, themed, band);
             AssertAcceptable(themed[0]);
             AssertAcceptable(themed[1]);
 
             /*
                 The distinct-background assert reads the modal color of the
-                whole frame and is host-robust because the terminal panel's
-                root paints the active theme's background across the frame
-                (backgroundFraction ~0.66 on the pinned host with the
-                content sharing the rest), not just the small-state band.
+                terminal band, the surface the package actually paints. The
+                whole frame is not that surface: the capture target's cleared
+                remainder keeps the clear color, which here is black - it
+                merges with the dark theme's band and swamps the light
+                theme's, so a whole-frame modal read answered #000000 for
+                both themes on the D3D12 host while both bands rendered
+                correctly (issue #207). The manifest records the region next
+                to every themed capture.
              */
             CapturePixelMetrics light = themed[0].Metrics;
             CapturePixelMetrics dark = themed[1].Metrics;
@@ -921,8 +964,19 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             the frame again. Focus is asserted in the frame that processes the
             input and again after a frame boundary, so a later focus steal fails
             too. The reopen frame must render exactly like the first open; the
-            byte proof needs the caret freeze, and falls back to the frame
+            pixel proof needs the caret freeze, and falls back to the frame
             metrics when a host cannot freeze the caret.
+
+            The panel is given a frame boundary after the capture target
+            attaches, and must measure the target's width before the palette
+            opens. UITK re-measures a retargeted panel on its next update, and
+            a palette opened inside the same frame lays out against the stale
+            panel size - the D3D12 host rendered the whole palette at the
+            stale 1106x573 layout squeezed into the fresh 397x489 target, so
+            the cold open could never match the warm one (issue #207). In a
+            real session the palette opens against an already-sized panel, so
+            the settle reproduces the product sequence instead of weakening
+            the claim.
 
             The controls record no manifest: an incomplete capture is only legal
             for a registered negative-control scenario, and these names are
@@ -943,6 +997,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
             try
             {
+                yield return WaitForPanelMeasuredToTarget();
                 CapturePixelMetrics closed = CaptureRender(target, scenario + "-closed");
                 AssertRendersNothing(closed, "a closed terminal renders nothing");
 
@@ -951,12 +1006,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 AssertInputOwnsFocus(
                     "the palette input owns focus in the frame the input is processed"
                 );
-                CapturePixelMetrics firstFrame = CaptureRender(target, scenario);
+                TerminalSurfaceCapture.CapturedFrame firstFrame = CaptureRenderFrame(
+                    target,
+                    scenario
+                );
                 CapturePixelMetrics settledFrame = CaptureSettledRender(
                     target,
                     scenario + "-settled"
                 );
-                AssertFrameComplete(firstFrame, settledFrame, "first palette interaction");
+                AssertFrameComplete(firstFrame.Metrics, settledFrame, "first palette interaction");
 
                 /*
                     A focus steal, a deferred re-layout, or a palette that
@@ -974,24 +1032,27 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
                 _palette.Open();
                 AssertInputOwnsFocus("the reopened palette input owns focus immediately");
-                CapturePixelMetrics reopenFrame = CaptureRender(target, scenario + "-reopen");
+                TerminalSurfaceCapture.CapturedFrame reopenFrame = CaptureRenderFrame(
+                    target,
+                    scenario + "-reopen"
+                );
                 CapturePixelMetrics reopenSettled = CaptureSettledRender(
                     target,
                     scenario + "-reopen-settled"
                 );
-                AssertFrameComplete(reopenFrame, reopenSettled, "reopened palette");
-                AssertRendersIdentically(scenario, scenario + "-reopen", firstFrame, reopenFrame);
+                AssertFrameComplete(reopenFrame.Metrics, reopenSettled, "reopened palette");
+                AssertRendersIdentically(firstFrame, reopenFrame);
 
                 WriteFrameTimingManifest(
                     scenario,
-                    firstFrame,
-                    FirstFrameViolations(firstFrame, settledFrame),
+                    firstFrame.Metrics,
+                    FirstFrameViolations(firstFrame.Metrics, settledFrame),
                     warm: false
                 );
                 WriteFrameTimingManifest(
                     scenario + "-reopen",
-                    reopenFrame,
-                    FirstFrameViolations(reopenFrame, reopenSettled),
+                    reopenFrame.Metrics,
+                    FirstFrameViolations(reopenFrame.Metrics, reopenSettled),
                     warm: true
                 );
             }
@@ -1007,6 +1068,62 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     DetachRenderTarget(target);
                 }
             }
+        }
+
+        /*
+            The terminal's painted band, in the readback's row space. Themed
+            captures are judged inside this band because the rest of the frame
+            is the capture target's cleared remainder, whose color belongs to
+            the host harness and not the product - black here, where it merges
+            with the dark theme and swamps the light one (issue #207).
+
+            Coordinates: UI Toolkit worldBound counts points downward from
+            the panel's top-left, while GetPixels32 (what the metrics read)
+            counts rows from the visual bottom - the PNGs the harness writes
+            look upright because EncodeToPNG applies that flip on encode. The
+            band's row range is therefore measured from the target height,
+            panel points map to pixels through the panel scale, and the
+            region is clamped to the target.
+         */
+        private Rect TerminalBandRegion()
+        {
+            /*
+                Themed captures attach a Screen-sized target, so the clamp uses
+                Screen, not the capture fields: this runs before any target
+                attach, and ResolvePixelRegion clamps the region against the
+                actual readback anyway.
+             */
+            float scale = _panelSettings != null ? _panelSettings.scale : 1f;
+            Rect points = _terminal._uiDocument.rootVisualElement.worldBound;
+            float pixelWidth = points.width * scale;
+            float pixelX = points.x * scale;
+            float pixelTop = points.y * scale;
+            float pixelBottom = pixelTop + points.height * scale;
+            float screenTop = 0f;
+            float screenBottom = Screen.height;
+            Rect region = Rect.MinMaxRect(
+                Mathf.Max(pixelX, 0f),
+                Mathf.Max(screenBottom - pixelBottom, screenTop),
+                Mathf.Min(pixelX + pixelWidth, Screen.width),
+                Mathf.Min(screenBottom - pixelTop, screenBottom)
+            );
+            Assert.GreaterOrEqual(
+                region.width,
+                1f,
+                "The open terminal paints a measurable band to read theme pixels from: "
+                    + $"worldBound={FormatBound(_terminal._uiDocument.rootVisualElement)} "
+                    + $"scale={scale:0.###} screen={Screen.width}x{Screen.height} "
+                    + $"region={region}"
+            );
+            Assert.GreaterOrEqual(
+                region.height,
+                1f,
+                "The open terminal paints a measurable band to read theme pixels from: "
+                    + $"worldBound={FormatBound(_terminal._uiDocument.rootVisualElement)} "
+                    + $"scale={scale:0.###} screen={Screen.width}x{Screen.height} "
+                    + $"region={region}"
+            );
+            return region;
         }
 
         private IEnumerator SpawnTerminal(
@@ -1253,14 +1370,30 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         private IEnumerator CaptureSurface(string scenario, CaptureBounds bounds)
         {
-            yield return CaptureSurface(scenario, bounds, Screen.width, Screen.height);
+            yield return CaptureSurface(scenario, bounds, Screen.width, Screen.height, null);
+        }
+
+        private IEnumerator CaptureSurface(
+            string scenario,
+            CaptureBounds bounds,
+            Rect metricsRegion
+        )
+        {
+            yield return CaptureSurface(
+                scenario,
+                bounds,
+                Screen.width,
+                Screen.height,
+                metricsRegion
+            );
         }
 
         private IEnumerator CaptureSurface(
             string scenario,
             CaptureBounds bounds,
             int width,
-            int height
+            int height,
+            Rect? metricsRegion = null
         )
         {
             RenderTexture target = AttachRenderTarget(scenario, width, height);
@@ -1271,7 +1404,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     scenario,
                     target,
                     bounds,
-                    _terminal._uiDocument.rootVisualElement
+                    _terminal._uiDocument.rootVisualElement,
+                    metricsRegion
                 );
             }
             finally
@@ -1402,12 +1536,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private IEnumerator CaptureThemedSurface(
             string friendlyTheme,
             string scenario,
-            List<CaptureOutcome> outcomes
+            List<CaptureOutcome> outcomes,
+            Rect metricsRegion
         )
         {
             _terminal.SetTheme(friendlyTheme);
             yield return WaitForTheme(friendlyTheme);
-            yield return CaptureSurface(scenario, CaptureBounds.Default());
+            _diagnosticsSuffix = "metricsRegion=" + FormatRegion(metricsRegion);
+            yield return CaptureSurface(scenario, CaptureBounds.Default(), metricsRegion);
             outcomes.Add(_lastOutcome);
         }
 
@@ -1452,6 +1588,59 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         /*
+            The same one-pass read, keeping the readback pixels so two of the
+            scenario's first-frame reads can be compared pixel against pixel.
+         */
+        private TerminalSurfaceCapture.CapturedFrame CaptureRenderFrame(
+            RenderTexture target,
+            string scenario
+        )
+        {
+            ClearCaptureTarget(target);
+            TerminalSurfaceCapture.ForcePanelRender(
+                _terminal._uiDocument.rootVisualElement,
+                FirstRenderPasses
+            );
+            return TerminalSurfaceCapture.CaptureFrame(
+                target,
+                null,
+                Path.Combine(_runDirectory, scenario + ".png")
+            );
+        }
+
+        /*
+            A freshly attached capture target resizes the panel, and UITK
+            re-measures the panel on its next update - one player-loop frame
+            later. A surface opened inside the same frame lays out against
+            the stale panel size, so the wait (bounded like every readiness
+            poll) requires the root to measure the target's width before the
+            scenario proceeds. Width is the discriminator: the terminal is
+            closed here, so the root's height legitimately reads zero.
+         */
+        private IEnumerator WaitForPanelMeasuredToTarget()
+        {
+            int frameBudget = FrameBudget;
+            float measured = _terminal._uiDocument.rootVisualElement.layout.width;
+            while (0 < frameBudget-- && !PanelMeasuredTargetWidth(measured))
+            {
+                yield return null;
+                measured = _terminal._uiDocument.rootVisualElement.layout.width;
+            }
+
+            Assert.IsTrue(
+                PanelMeasuredTargetWidth(measured),
+                $"The panel measured {measured:0.#}px wide against the {_captureWidth}px "
+                    + "capture target within the frame budget; a capture opened against a "
+                    + "stale panel layout would compare frames of different surfaces"
+            );
+        }
+
+        private bool PanelMeasuredTargetWidth(float measuredWidth)
+        {
+            return Mathf.Abs(measuredWidth - _captureWidth) <= 0.5f;
+        }
+
+        /*
             The same read once the panel has had its settling passes, so a
             first-frame read has a reference for "this surface, fully drawn"
             instead of a flat pixel floor.
@@ -1491,31 +1680,36 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         /*
-            The warm open must render exactly like the cold one. The byte proof
-            needs the caret freeze: without it the native caret blinks and the
-            two frames land in different phases, so those hosts compare the
-            frame metrics instead (and the manifest records why).
+            The warm open must render exactly like the cold one. The pixel
+            proof needs the caret freeze: without it the native caret blinks
+            and the two frames land in different phases, so those hosts
+            compare the frame metrics instead (and the manifest records why).
+            The pixel compare allows the rasterization-noise budget per
+            channel, so re-rasterized anti-aliasing passes and a caret ghost
+            or stale layout still fails.
          */
         private void AssertRendersIdentically(
-            string coldScenario,
-            string warmScenario,
-            CapturePixelMetrics coldFrame,
-            CapturePixelMetrics warmFrame
+            TerminalSurfaceCapture.CapturedFrame coldFrame,
+            TerminalSurfaceCapture.CapturedFrame warmFrame
         )
         {
             if (_firstInteractionCaretFreeze != null && !_firstInteractionCaretFreeze.Engaged)
             {
                 Assert.AreEqual(
-                    coldFrame.DistinctColors,
-                    warmFrame.DistinctColors,
+                    coldFrame.Metrics.DistinctColors,
+                    warmFrame.Metrics.DistinctColors,
                     "A warm open must render as richly as the cold open"
                 );
                 return;
             }
 
             Assert.That(
-                File.ReadAllBytes(Path.Combine(_runDirectory, warmScenario + ".png")),
-                Is.EqualTo(File.ReadAllBytes(Path.Combine(_runDirectory, coldScenario + ".png"))),
+                TerminalSurfaceCapture.DescribeFrameMismatch(
+                    coldFrame,
+                    warmFrame,
+                    MaxInvarianceChannelDelta
+                ),
+                Is.Null,
                 "A warm open must render the same first frame as the cold open"
             );
         }
@@ -1557,21 +1751,30 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             string scenario,
             RenderTexture target,
             CaptureBounds bounds,
-            VisualElement contentRoot
+            VisualElement contentRoot,
+            Rect? metricsRegion = null,
+            bool keepFrame = false
         )
         {
             string pngPath = Path.Combine(_runDirectory, scenario + ".png");
-            CapturePixelMetrics metrics = TerminalSurfaceCapture.CaptureToPng(
+            TerminalSurfaceCapture.CapturedFrame frame = TerminalSurfaceCapture.CaptureFrame(
                 target,
                 contentRoot,
-                pngPath
+                pngPath,
+                metricsRegion,
+                keepFrame
             );
+            CapturePixelMetrics metrics = frame.Metrics;
             CaptureOutcome outcome = new CaptureOutcome
             {
                 Metrics = metrics,
                 Violations = TerminalSurfaceCapture.Evaluate(metrics, bounds),
                 PngPath = pngPath,
             };
+            if (keepFrame)
+            {
+                outcome.Frame = frame;
+            }
             outcome.Manifest = BuildManifest(scenario, bounds, outcome);
             TerminalSurfaceCapture.WriteManifest(
                 outcome.Manifest,
@@ -1708,6 +1911,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             public List<string> Violations { get; set; }
             public string PngPath { get; set; }
             public CaptureManifest Manifest { get; set; }
+
+            /*
+                The capture's own readback pixels, kept only when a scenario
+                asked to compare this frame against another one taken later in
+                the same test; every other capture leaves it null so the
+                readback buffer does not outlive the capture.
+             */
+            public TerminalSurfaceCapture.CapturedFrame? Frame { get; set; }
         }
     }
 }
