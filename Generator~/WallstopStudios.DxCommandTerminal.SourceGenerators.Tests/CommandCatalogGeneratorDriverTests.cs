@@ -764,6 +764,88 @@ namespace Fixtures
         }
 
         [Fact]
+        public void ValidEntriesResolveTheirHandlerThroughTheDeclaringTypeName()
+        {
+            Assembly assembly = TestCompilationFactory.CompileAndLoad(
+                TestCompilationFactory
+                    .RunGenerator(
+                        TestCompilationFactory.CreateCompilation("HolderName", StandardFixture)
+                    )
+                    .output
+            );
+
+            CatalogView catalog = CatalogView.Load(assembly);
+            BindingFlags discoveryFlags =
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+            foreach (object entry in catalog.Entries)
+            {
+                if (!catalog.HasValidSignature(entry))
+                {
+                    Assert.Null(catalog.DeclaringTypeNameOf(entry));
+                    continue;
+                }
+
+                string holderName = catalog.DeclaringTypeNameOf(entry);
+                Type holder = assembly.GetType(holderName);
+                Assert.NotNull(holder);
+                Type argumentArrayType = assembly.GetType(
+                    "WallstopStudios.DxCommandTerminal.Backend.CommandArg"
+                );
+                MethodInfo method = holder.GetMethod(
+                    catalog.MethodNameOf(entry),
+                    discoveryFlags,
+                    null,
+                    new[] { argumentArrayType.MakeArrayType() },
+                    null
+                );
+                Assert.NotNull(method);
+
+                /*
+                    The resolved handler must be the one the binder binds: it
+                    writes to the fixture's invocation counter.
+                */
+                if (method.Name == "Greet")
+                {
+                    FieldInfo counter = holder.GetField("PublicInvocations");
+                    Assert.NotNull(counter);
+                    int before = (int)counter.GetValue(null);
+                    object[] args = { Array.CreateInstance(argumentArrayType, 0) };
+                    catalog.BinderOf(entry)(args);
+                    Assert.Equal(before + 1, (int)counter.GetValue(null));
+                }
+            }
+        }
+
+        [Fact]
+        public void GetHandlerReturnsTheSameDelegateInstanceOnASecondCall()
+        {
+            Assembly assembly = TestCompilationFactory.CompileAndLoad(
+                TestCompilationFactory
+                    .RunGenerator(
+                        TestCompilationFactory.CreateCompilation("HandlerMemo", StandardFixture)
+                    )
+                    .output
+            );
+
+            CatalogView catalog = CatalogView.Load(assembly);
+            foreach (object entry in catalog.Entries)
+            {
+                (object first, object second) = catalog.GetHandlerPairOf(entry);
+                if (!catalog.HasValidSignature(entry))
+                {
+                    Assert.Null(first);
+                    continue;
+                }
+
+                Assert.NotNull(first);
+                Assert.True(
+                    ReferenceEquals(first, second),
+                    $"Command '{catalog.NameOf(entry)}' re-bound its handler on a second call"
+                );
+            }
+        }
+
+        [Fact]
         public void RegistersDefaultishInternalConstructor()
         {
             Assembly assembly = TestCompilationFactory.CompileAndLoad(
