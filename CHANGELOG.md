@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Stop the open terminal from re-reading the log every frame: the window copy and the search pass now run only when the buffer, its capacity, or the search query changed, so an idle console costs no per-frame read even with a `find` query standing (#222).
 - The console key opens and closes the console on every press, even while the command line or the palette search has focus (#218). A toggle binding is reserved by the surface it opens: backtick and shift+backtick toggle their surface instead of typing their character into a focused field, on the polled hotkeys, on `PlayerInput` toggle messages, and on a `CommandPaletteUI` character toggle binding. The cost of the reservation is the character: a toggle press that closes the console clears the line, so nothing typed survives it, and a character cannot be typed onto a bound toggle key. Every non-toggle character binding keeps the typing-wins rule.
 - Deprecate `CommandLog.Logs` in favor of the safe `CopyTo`, `Count`, and `TryGetLast` reads.
 - Make `CommandHistory.GetHistory` return an allocation-free live view of the history.
@@ -17,6 +18,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Make the polled hotkeys safe on a host with no keyboard: a gamepad-only setup, a console, or the frame a keyboard is unplugged used to throw a `NullReferenceException` from every poller on every frame, and now answers no press instead (#221).
+- Reset the palette statics and `CommandArg`'s parsers, delimiters, quotes, and cleaning sets at every play-session boundary, so a session that ends without a clean disable no longer leaves destroyed palettes behind and a game's parser registrations and control-set edits no longer leak into the next session when domain reload is off (#224).
 - Make the float and double argument parsers answer the same on every runtime: a numeric literal too large for the type (`1e39`) parses to an infinity with a `true` answer on .NET Core 3.0+ hosts and `false` on Unity's runtime. The overflowed literal is now refused everywhere, so an argument that is not a number is never read as one; the named spellings (`Infinity`, `PositiveInfinity`, `NaN`, and friends) still parse.
 - Escape the text the package writes to Unity's Console window and the player log: a font, theme, command, or file name carrying invisible control or bidirectional characters now prints as its `\u202E` escape instead of reading as a name the project does not hold. The in-game console already showed that text and still does.
 - Fix ignored log entries landing when the ignore filter changed mid-write.
