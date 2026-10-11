@@ -2,6 +2,7 @@
 {
     using System;
     using System.Collections.Generic;
+    using System.Collections.ObjectModel;
     using System.Net;
     using System.Numerics;
     using System.Reflection;
@@ -65,21 +66,23 @@
             session can edit them. The snapshots below hold each set's
             contents as first constructed, so ResetForNextPlaySession can
             restore them when domain reload is off - a static initializer
-            runs once per domain, not once per session.
+            runs once per domain, not once per session. Read-only on
+            purpose: the defaults are invariants, and a stray write to one
+            should not compile.
          */
-        private static readonly char[] DefaultDelimiters = CopyOf(Delimiters);
+        private static readonly ReadOnlyCollection<char> DefaultDelimiters = CopyOf(Delimiters);
 
-        private static readonly char[] DefaultQuotes = CopyOf(Quotes);
+        private static readonly ReadOnlyCollection<char> DefaultQuotes = CopyOf(Quotes);
 
-        private static readonly string[] DefaultIgnoredValuesForCleanedTypes = CopyOf(
-            IgnoredValuesForCleanedTypes
+        private static readonly ReadOnlyCollection<string> DefaultIgnoredValuesForCleanedTypes =
+            CopyOf(IgnoredValuesForCleanedTypes);
+
+        private static readonly ReadOnlyCollection<Type> DefaultDoNotCleanTypes = CopyOf(
+            DoNotCleanTypes
         );
 
-        private static readonly Type[] DefaultDoNotCleanTypes = CopyOf(DoNotCleanTypes);
-
-        private static readonly string[] DefaultIgnoredValuesForComplexTypes = CopyOf(
-            IgnoredValuesForComplexTypes
-        );
+        private static readonly ReadOnlyCollection<string> DefaultIgnoredValuesForComplexTypes =
+            CopyOf(IgnoredValuesForComplexTypes);
 
         private static readonly Dictionary<Type, object> RegisteredParsers = new();
 
@@ -485,15 +488,16 @@
                 || RegisteredParsers.ContainsKey(type);
         }
 
-        /*
-            Enumerable.ToArray is banned in shipped code (lint:linq-production,
-            PR #60: every LINQ operator allocates), so the snapshot goes
-            through the List<T> constructor and its instance ToArray instead.
-         */
-        private static T[] CopyOf<T>(IEnumerable<T> source)
+        private static ReadOnlyCollection<T> CopyOf<T>(IEnumerable<T> source)
         {
-            List<T> copy = new(source);
-            return copy.ToArray();
+            /*
+                Enumerable.ToArray is banned in shipped code
+                (lint:linq-production, PR #60: every LINQ operator
+                allocates), so the snapshot goes through the List<T>
+                constructor and a read-only wrapper instead - the defaults
+                are invariants, and a stray write to one should not compile.
+             */
+            return new ReadOnlyCollection<T>(new List<T>(source));
         }
 
         private static Dictionary<string, PropertyInfo> LoadStaticPropertiesForType(Type type)
