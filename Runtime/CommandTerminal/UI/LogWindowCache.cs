@@ -12,11 +12,11 @@ namespace WallstopStudios.DxCommandTerminal.UI
         with a find query set, rescan every line - on every pass, whether or
         not anything had changed. The memo keys on the four inputs the read
         depends on - the buffer instance, its version, its capacity, and the
-        search query - and answers an unchanged frame from the previous
-        pass's arrays: no copy, no scan, no allocation. A log write bumps the
-        version, a resize moves the capacity, a find or clear-filter rewrites
-        the query, and a session reset swaps the buffer; any of them misses,
-        and the read runs again.
+        filter's generation - and answers an unchanged frame from the
+        previous pass's arrays: no copy, no scan, no allocation. A log write
+        bumps the version, a resize moves the capacity, a find or
+        clear-filter bumps the generation, and a session reset swaps the
+        buffer; any of them misses, and the read runs again.
 
         The arrays grow with the buffer's capacity and never shrink, so a
         terminal whose log buffer is resized reallocates once rather than per
@@ -58,7 +58,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
         private CommandLog _readBuffer;
         private long _readVersion;
         private int _readCapacity;
-        private string _readQuery;
+        private long _readFilterGeneration;
         private int _readCount;
         private bool _readFiltered;
 
@@ -80,14 +80,20 @@ namespace WallstopStudios.DxCommandTerminal.UI
          */
         public int Read(CommandLog buffer, out LogItem[] rendered)
         {
+            if (buffer == null)
+            {
+                rendered = Array.Empty<LogItem>();
+                return 0;
+            }
+
             long version = buffer.Version;
             int capacity = buffer.Capacity;
-            string query = _filter.Query;
+            long filterGeneration = _filter.Generation;
             if (
                 ReferenceEquals(buffer, _readBuffer)
                 && version == _readVersion
                 && capacity == _readCapacity
-                && string.Equals(query, _readQuery, StringComparison.Ordinal)
+                && filterGeneration == _readFilterGeneration
             )
             {
                 LastReadReused = true;
@@ -132,7 +138,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             _readBuffer = buffer;
             _readVersion = version;
             _readCapacity = capacity;
-            _readQuery = query;
+            _readFilterGeneration = filterGeneration;
             _readCount = count;
             _readFiltered = _filter.IsActive;
             return count;

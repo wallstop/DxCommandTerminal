@@ -30,6 +30,15 @@ namespace WallstopStudios.DxCommandTerminal.UI
     {
         public string Query { get; private set; }
 
+        /*
+            Bumped by every change to the filter's inputs - a query set or
+            cleared, and every own-reply registration. Readers that cache a
+            result computed from this filter key on it: a re-set of an equal
+            query changes nothing the window holds but resets the counts and
+            the position, so the next Apply must run to restore them.
+         */
+        public long Generation { get; private set; }
+
         public bool IsActive => !string.IsNullOrEmpty(Query);
 
         /* Kept lines, and the lines the window held, from the same pass. */
@@ -120,6 +129,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             if (!string.IsNullOrEmpty(message))
             {
                 _ownReplies.Add(message);
+                ++Generation;
             }
         }
 
@@ -145,6 +155,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             CurrentMatch = null;
             MatchCount = 0;
             TotalCount = 0;
+            ++Generation;
             return true;
         }
 
@@ -154,6 +165,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
             CurrentMatch = null;
             MatchCount = 0;
             TotalCount = 0;
+            ++Generation;
         }
 
         /*

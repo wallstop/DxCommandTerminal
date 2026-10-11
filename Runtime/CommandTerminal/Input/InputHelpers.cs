@@ -17,6 +17,11 @@
             first leaves this where it was (see InputHelpersDeviceTests).
          */
 #if ENABLE_INPUT_SYSTEM
+        /*
+            How many control resolutions the memo has had to run. Diagnostics
+            for the memo's contract: a pass over unchanged hotkeys after the
+            first leaves this where it was (see InputHelpersDeviceTests).
+         */
         internal static int ControlResolutionsForTesting { get; private set; }
 #endif
 
@@ -415,7 +420,15 @@
                     _memoControls[lookupName] = control;
                 }
 
-                return control != null && control.wasPressedThisFrame;
+                /*
+                    The modifiers read live off the current keyboard, not the
+                    memo: a chord fires only with its modifiers held, on the
+                    same frame the key itself presses.
+                 */
+                return control != null
+                    && control.wasPressedThisFrame
+                    && (!shiftRequired || currentKeyboard.shiftKey.isPressed)
+                    && (!cached.CtrlRequired || currentKeyboard.ctrlKey.isPressed);
 #endif
             }
             return false;
@@ -565,6 +578,18 @@
             }
 
             return ProducesTypedText(keyControl.name);
+        }
+
+        /*
+            Clears the control memo and its counter, so a test starts from an
+            empty memo against whatever keyboard is current, whatever ran
+            before it.
+         */
+        internal static void ResetControlMemoForTesting()
+        {
+            _memoControls.Clear();
+            _memoControlsKeyboard = null;
+            ControlResolutionsForTesting = 0;
         }
 #endif
 

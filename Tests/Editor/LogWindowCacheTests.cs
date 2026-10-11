@@ -155,6 +155,29 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Editor
         }
 
         [Test]
+        public void EqualContentQueryResetStillRereads()
+        {
+            /*
+                Re-setting the same query changes no window content, but the
+                filter resets its counts and position on the set: the re-run
+                restores them, and a memo hit here would answer "3 of 0"
+                (TerminalUI's find reply reads the counts the Apply wrote).
+             */
+            Write("hit one", "miss", "hit two");
+            Assert.IsTrue(_filter.SetQuery("hit"));
+            _cache.Read(_buffer, out _);
+
+            Assert.IsTrue(_filter.SetQuery("hit"));
+            int count = _cache.Read(_buffer, out LogItem[] rendered);
+
+            Assert.IsFalse(_cache.LastReadReused, "A re-set query must re-run the search");
+            Assert.AreEqual(2, count, $"Kept lines: [{Names(rendered, count)}]");
+            Assert.AreEqual(2, _filter.MatchCount, "The re-run restores the kept count");
+            Assert.AreEqual(3, _filter.TotalCount, "The re-run restores the ranged-over count");
+            Assert.AreEqual(1, _filter.CurrentMatch, "The re-run restores the position");
+        }
+
+        [Test]
         public void ClearedFilterRereadsWholeWindow()
         {
             Write("one", "two");

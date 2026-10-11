@@ -4,6 +4,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
     using System.Collections;
     using System.Collections.Generic;
     using System.Linq;
+    using System.Reflection;
     using Backend;
     using Components;
     using NUnit.Framework;
@@ -51,14 +52,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             contract the play-session reset pins, and reflecting the list out
             is test-only (the TerminalKeyboardControllerTests precedent).
          */
-        private static System.Collections.IEnumerable LivePalettes()
+        private static IEnumerable LivePalettes()
         {
-            System.Reflection.FieldInfo field = typeof(CommandPaletteUI).GetField(
+            FieldInfo field = typeof(CommandPaletteUI).GetField(
                 "_livePalettes",
-                System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic
+                BindingFlags.Static | BindingFlags.NonPublic
             );
             Assert.That(field != null, "_livePalettes field should exist");
-            return (System.Collections.IEnumerable)field.GetValue(null);
+            return (IEnumerable)field.GetValue(null);
         }
 
         /*
