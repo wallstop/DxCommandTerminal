@@ -77,10 +77,28 @@ test("buildChecks: unique names, non-empty commands, expected canaries", () => {
     assert.ok(names.includes(name), `expected check '${name}' in the default set`);
   }
   for (const check of checks) {
-    if (check.name !== "compat-check" && check.name !== "test-editor") {
-      assert.equal(check.cacheRuntimeEnvironment, true, `${check.name} must key inherited runtime state`);
-    }
+    assert.equal(check.cacheRuntimeEnvironment, true, `${check.name} must key inherited runtime state`);
   }
+  const compatCheck = checks.find((check) => check.name === "compat-check");
+  assert.equal(compatCheck.lane, "dotnet", "the dotnet builds must share one lane");
+  assert.equal(compatCheck.cacheDotnet, true);
+  assert.deepEqual(compatCheck.cachePaths, ["Runtime", "tooling~/compat/runtime-2021.3.csproj"]);
+  const editorCheck = checks.find((check) => check.name === "test-editor");
+  assert.equal(editorCheck.lane, "dotnet", "the dotnet builds must share one lane");
+  assert.equal(editorCheck.cacheDotnet, true);
+  assert.ok(editorCheck.cachePaths.includes("Tests/Editor"));
+  assert.ok(editorCheck.cachePaths.includes("Generator~"));
+  for (const buildOutput of ["tooling~/compat/obj", "tooling~/compat/testhost/bin"]) {
+    assert.ok(
+      editorCheck.cacheExcludes.includes(buildOutput),
+      `test-editor must not key its own build output ${buildOutput}`
+    );
+  }
+  const linterCheck = checks.find((check) => check.name === "lint-linq-production");
+  assert.ok(
+    linterCheck.cacheExcludes.includes("Generator~/WallstopStudios.DxCommandTerminal.SourceGenerators/obj"),
+    "the C# linters must not key generator build outputs"
+  );
   const packageCheck = checks.find((check) => check.name === "package-validate");
   assert.equal(packageCheck.cacheGitTracked, true);
   assert.equal(packageCheck.cacheNpm, true);
@@ -441,8 +459,53 @@ test("cache keys hash declared files and ignore unrelated filesystem state", () 
   }
 });
 
-test("the run's key computer answers the live key and moves with its inputs", () => {
-  const cacheDirectory = path.join(toolingRoot, "scripts", ".preflight-cache");
+test("a dirty tracked file outside declared roots moves keys by content", async () => {
+  /*
+      The repo snapshot backs checks that read files outside their declared
+      roots. Status encodes a dirty tracked file as ` M <path>`, which is
+      byte-identical across two rewrites of the same file - so keying the
+      snapshot on the status output alone ages a cached pass when the
+      second rewrite lands after the first one was cached. The snapshot
+      must fold each flagged file's content (under the size cap) into the
+      hash; this runs in a child process so the per-process git identity
+      observes the edit from a clean index.
+   */
+  const tracked = path.join(toolingRoot, "..", ".gitattributes");
+  const original = fs.readFileSync(tracked, "utf8");
+  const subject = writeTempScript(`
+      const { cacheKeyForCheck } = await import(${JSON.stringify(
+        pathToFileURL(path.join(toolingRoot, "scripts", "preflight-cache.mjs")).href
+      )});
+      const check = { name: "snapshot", command: "node snapshot.mjs", cacheTrackedFiles: true };
+      const key = () => cacheKeyForCheck(check, { node: "node", platform: "linux", arch: "x64", files: [] });
+      console.log(key());
+    `);
+  const run = async () => {
+    const { execFile } = await import("node:child_process");
+    const { promisify } = await import("node:util");
+    const { stdout } = await promisify(execFile)(process.execPath, [subject]);
+    return stdout.trim();
+  };
+  let clean = "";
+  try {
+    clean = await run();
+    fs.writeFileSync(tracked, `${original}\n# preflight identity probe one\n`);
+    const dirtyOnce = await run();
+    assert.notEqual(dirtyOnce, clean, "a dirty tracked file must move the snapshot key");
+    fs.writeFileSync(tracked, `${original}\n# preflight identity probe two\n`);
+    const dirtyAgain = await run();
+    assert.notEqual(
+      dirtyAgain,
+      dirtyOnce,
+      "a second rewrite with identical status output must still move the snapshot key"
+    );
+  } finally {
+    fs.writeFileSync(tracked, original);
+  }
+  assert.equal(await run(), clean, "restoring the bytes must restore the key");
+});
+
+test("the run's key computer answers the live key and moves with its inputs", () => {  const cacheDirectory = path.join(toolingRoot, "scripts", ".preflight-cache");
   fs.mkdirSync(cacheDirectory, { recursive: true });
   const root = fs.mkdtempSync(path.join(cacheDirectory, "computer-"));
   const shared = path.join(root, "shared");

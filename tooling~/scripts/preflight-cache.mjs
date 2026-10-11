@@ -6,7 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const CACHE_VERSION = 4;
+const CACHE_VERSION = 5;
 const CACHE_DIRECTORY = path.join(path.dirname(fileURLToPath(import.meta.url)), ".preflight-cache");
 const CHECKOUT_ID = (() => {
   try {
@@ -15,7 +15,6 @@ const CHECKOUT_ID = (() => {
     return REPO_ROOT;
   }
 })();
-const CACHE_DISABLED_CHECKS = new Set(["compat-check", "test-editor"]);
 const CACHE_PATH_KEYS = new Set([
   "COMPARISON_DIRECTION_ROOTS",
   "NESTED_TYPE_PLACEMENT_ROOTS",
@@ -77,6 +76,80 @@ function hashText(value) {
     repositorySnapshot).
  */
 const UNTRACKED_CONTENT_HASH_LIMIT = 1024 * 1024;
+
+/*
+    Content identity for tracked files comes from git's index, not from
+    re-reading bytes: a clean tracked file's worktree content is by
+    definition its index blob (git status answers "worktree matches index"
+    with the same stat machinery every caller would otherwise duplicate),
+    so keying on `git ls-files -s` blob ids replaces thousands of file
+    reads per preflight with one index listing (~25 ms for ~1,200 files)
+    and one status call. The dirty set is taken from
+    `status --untracked-files=no`, which skips the untracked walk entirely;
+    dirty and untracked files fall back to byte reads exactly as before.
+
+    Stated limits, all inherited from the snapshot's existing contract:
+    a file flagged assume-unchanged or skip-worktree hides its edits from
+    status and is keyed at its index blob; the state is computed once per
+    process, so an edit landing after the first keyed check in the same
+    run is seen by the next run (the per-run memo contract). When git is
+    unavailable the whole identity falls back to byte reads.
+ */
+const GIT_FILE_IDENTITY = (() => {
+  try {
+    const tracked = new Map();
+    const listing = execFileSync("git", ["ls-files", "-s", "-z"], {
+      cwd: REPO_ROOT,
+      maxBuffer: 256 * 1024 * 1024,
+      encoding: "utf8"
+    });
+    for (const record of listing.split("\0")) {
+      const tab = record.indexOf("\t");
+      if (tab < 0) {
+        continue;
+      }
+      const meta = record.slice(0, tab).split(" ");
+      if (meta.length < 3) {
+        continue;
+      }
+      tracked.set(record.slice(tab + 1), meta[1]);
+    }
+
+    const dirty = new Set();
+    const status = execFileSync("git", ["status", "--porcelain=v1", "-z", "--untracked-files=no"], {
+      cwd: REPO_ROOT,
+      maxBuffer: 256 * 1024 * 1024,
+      encoding: "utf8"
+    });
+    const records = status.split("\0");
+    for (let index = 0; index < records.length; index++) {
+      const record = records[index];
+      if (record.length < 4 || record[2] !== " ") {
+        continue;
+      }
+      if (record[1] !== " ") {
+        dirty.add(record.slice(3));
+      }
+      if (record[0] === "R" || record[0] === "C") {
+        /* Rename and copy records carry their destination as the next
+             -z record; it is not a status line of its own. */
+        index++;
+      }
+    }
+    return { tracked, dirty };
+  } catch {
+    return null;
+  }
+})();
+
+/** Maps an absolute path inside the repo to its slash-separated repo-relative path; null outside. */
+function repoRelativePath(target) {
+  const relative = path.relative(REPO_ROOT, target);
+  if (relative === "" || relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+    return null;
+  }
+  return relative.split(path.sep).join("/");
+}
 
 function statSignature(stat) {
   return `${stat.mode}\0${stat.size}\0${stat.mtimeMs}\0${stat.ino}\0`;
@@ -152,6 +225,27 @@ function updatePathHash(hash, target, label, visited, excludes) {
   }
 
   if (stat.isFile()) {
+    const relative = repoRelativePath(target);
+    if (relative !== null && GIT_FILE_IDENTITY !== null) {
+      const blob = GIT_FILE_IDENTITY.tracked.get(relative);
+      if (blob !== undefined && !GIT_FILE_IDENTITY.dirty.has(relative)) {
+        hash.update(`git-blob\0${blob}\0`);
+        return;
+      }
+    }
+    /*
+        Above the size cap the key hashes the stat signature instead of
+        the bytes - the same documented coin the snapshot already flips
+        for huge untracked files. The walk's wall was file reads, and the
+        only regular victims here are build outputs and tool binaries
+        (Generator~ obj/bin, /usr/bin/node, the npm install), which are
+        immutable between real changes; a same-size, same-mtime edit to
+        one huge file defeats its slice of the key.
+     */
+    if (stat.size > UNTRACKED_CONTENT_HASH_LIMIT) {
+      hash.update(statSignature(stat));
+      return;
+    }
     hash.update(fs.readFileSync(target));
     return;
   }
@@ -222,14 +316,17 @@ function repositorySnapshot() {
       edit to an untracked file's CONTENT leaves the output byte-identical
       while the check inputs move - and node-tests reads files outside its
       declared roots (.github/, .devcontainer/, .llm/), where a draft file
-      would age a cached pass. The untracked set is hashed by content to
-      close that gap. The hash is incremental over raw bytes - a UTF-8
-      string join would decode two different binary files to the same
-      replacement-character string - and a file above the size cap hashes
-      its stat signature instead of its bytes, so an un-ignored dump in
-      the worktree cannot reintroduce the keying wall. The cap trades the
-      same documented coin as every stat key here: a same-size, same-mtime
-      content edit to one huge untracked file defeats its part of the key.
+      would age a cached pass. The same holds for a DIRTY tracked file
+      outside those roots: a second rewrite keeps the ` M <path>` line
+      byte-identical while the content moves again. So every file status
+      flags as changed - untracked or tracked - is hashed by content: the
+      hash is incremental over raw bytes (a UTF-8 string join would decode
+      two different binary files to the same replacement-character
+      string), and a file above the size cap hashes its stat signature
+      instead of its bytes, so an un-ignored dump in the worktree cannot
+      reintroduce the keying wall. The cap trades the same documented coin
+      as every stat key here: a same-size, same-mtime content edit to one
+      huge file defeats its part of the key.
 
       Stated limit: a tracked file flagged assume-unchanged or
       skip-worktree hides its edits from status, and this snapshot does not
@@ -239,7 +336,7 @@ function repositorySnapshot() {
    */
   const output = execFileSync(
     "git",
-    ["status", "--porcelain", "-z", "--untracked-files=all"],
+    ["status", "--porcelain=v1", "-z", "--untracked-files=all"],
     {
       cwd: REPO_ROOT,
       maxBuffer: 256 * 1024 * 1024,
@@ -248,10 +345,34 @@ function repositorySnapshot() {
   );
   const hash = crypto.createHash("sha256");
   hash.update(output);
-  const untracked = output.split("\0").filter((entry) => entry.startsWith("?? "));
-  for (const entry of untracked) {
-    /* -z paths are literal (never quoted), so the slice is the path. */
-    const relative = entry.slice(3);
+  const changed = [];
+  const records = output.split("\0");
+  for (let index = 0; index < records.length; index++) {
+    const record = records[index];
+    if (record === "") {
+      continue;
+    }
+    if (record.startsWith("?? ")) {
+      /* -z paths are literal (never quoted), so the slice is the path. */
+      changed.push(record.slice(3));
+      continue;
+    }
+    if (record.length < 4 || record[2] !== " ") {
+      continue;
+    }
+    if (record[1] !== " ") {
+      /* The worktree half (Y) is what content identity needs: any
+         non-space Y means worktree differs from index, whatever the
+         index-vs-HEAD half (X) says. */
+      changed.push(record.slice(3));
+    }
+    if (record[0] === "R" || record[0] === "C") {
+      /* Rename and copy records carry their destination as the next
+         -z record; it is not a status line of its own. */
+      index++;
+    }
+  }
+  for (const relative of changed) {
     hash.update(relative);
     hash.update("\0");
     const absolute = path.join(REPO_ROOT, relative);
@@ -672,9 +793,6 @@ function readRegularFile(filePath) {
 }
 
 export function isCacheableCheck(check) {
-  if (CACHE_DISABLED_CHECKS.has(check.name)) {
-    return false;
-  }
   if (check.cacheRuntimeEnvironment === true && (process.env.NODE_OPTIONS || process.env.NODE_PATH)) {
     return false;
   }
