@@ -320,6 +320,14 @@
         {
             Instance = null;
             _livePalettes.Clear();
+
+            /*
+                A plain write is the whole tool here: a bool cannot tear, and
+                every writer and reader of the flag - this reset, the tests
+                and editor evals that enable it, the caret passes that read
+                it - runs on the main thread, so there is no race for a
+                compare-and-swap to arbitrate.
+             */
             _logCaretPasses = false;
         }
 

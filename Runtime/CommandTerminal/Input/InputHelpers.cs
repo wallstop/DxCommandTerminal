@@ -41,7 +41,9 @@
          */
         private static readonly HashSet<string> NonTypedKeyNames = BuildNonTypedKeyNames();
 
-        private static readonly Dictionary<string, CachedKeyName> CachedKeys = new();
+        private static readonly Dictionary<string, CachedKeyName> CachedKeys = new(
+            StringComparer.Ordinal
+        );
 
 #if ENABLE_INPUT_SYSTEM
         /*
@@ -55,7 +57,9 @@
          */
         private static Keyboard _memoControlsKeyboard;
 
-        private static readonly Dictionary<string, KeyControl> _memoControls = new();
+        private static readonly Dictionary<string, KeyControl> _memoControls = new(
+            StringComparer.Ordinal
+        );
 #endif
 
         private static readonly Dictionary<string, KeyCode> KeyCodeMapping = new(

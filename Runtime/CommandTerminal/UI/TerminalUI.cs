@@ -216,7 +216,7 @@
         private IInputHandler[] _inputHandlers;
 
 #if UNITY_EDITOR
-        private readonly Dictionary<string, object> _propertyValues = new();
+        private readonly Dictionary<string, object> _propertyValues = new(StringComparer.Ordinal);
         private readonly List<SerializedProperty> _uiProperties = new();
         private readonly List<SerializedProperty> _themeProperties = new();
         private readonly List<SerializedProperty> _cursorBlinkProperties = new();

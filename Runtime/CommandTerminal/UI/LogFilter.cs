@@ -36,6 +36,12 @@ namespace WallstopStudios.DxCommandTerminal.UI
             result computed from this filter key on it: a re-set of an equal
             query changes nothing the window holds but resets the counts and
             the position, so the next Apply must run to restore them.
+
+            A plain increment on purpose: every mutator and reader runs on
+            the main thread (the find command handlers, the palette search
+            input, the per-frame log refresh), so there is no cross-thread
+            tear to guard - this is view state, not the log buffer, whose
+            version is Interlocked because log writes land from any thread.
          */
         public long Generation { get; private set; }
 

@@ -29,7 +29,13 @@
 
         public static readonly HashSet<char> Delimiters = new() { ',', ';', ':', '_', '/', '\\' };
         public static readonly List<char> Quotes = new() { '"', '\'' };
-        public static readonly HashSet<string> IgnoredValuesForCleanedTypes = new() { "\r", "\n" };
+        public static readonly HashSet<string> IgnoredValuesForCleanedTypes = new(
+            StringComparer.Ordinal
+        )
+        {
+            "\r",
+            "\n",
+        };
         public static readonly HashSet<Type> DoNotCleanTypes = new()
         {
             typeof(string),
@@ -37,7 +43,9 @@
             typeof(DateTime),
             typeof(DateTimeOffset),
         };
-        public static readonly HashSet<string> IgnoredValuesForComplexTypes = new()
+        public static readonly HashSet<string> IgnoredValuesForComplexTypes = new(
+            StringComparer.Ordinal
+        )
         {
             "(",
             ")",
@@ -477,6 +485,11 @@
                 || RegisteredParsers.ContainsKey(type);
         }
 
+        /*
+            Enumerable.ToArray is banned in shipped code (lint:linq-production,
+            PR #60: every LINQ operator allocates), so the snapshot goes
+            through the List<T> constructor and its instance ToArray instead.
+         */
         private static T[] CopyOf<T>(IEnumerable<T> source)
         {
             List<T> copy = new(source);
