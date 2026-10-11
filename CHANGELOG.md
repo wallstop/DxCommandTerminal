@@ -22,6 +22,10 @@ the issue reference at the end. Details live in the docs and the linked issue.
 
 ### Changed
 
+- Stop the open terminal from re-reading the log every frame: the window copy and the search
+  pass now run only when the buffer, its capacity, or the search query changed, so an idle
+  console costs no per-frame read even with a `find` query standing
+  ([#222](https://github.com/wallstop/DxCommandTerminal/issues/222)).
 - Reserve the console key: backtick and shift+backtick open and close the console on every
   press, even while a field has focus, instead of typing their character into it. A close
   clears the line, and the character cannot be typed onto a bound toggle key
@@ -33,6 +37,12 @@ the issue reference at the end. Details live in the docs and the linked issue.
 
 ### Fixed
 
+- Fix the polled hotkeys throwing a `NullReferenceException` every frame on a host with no
+  keyboard; a gamepad-only setup, a console, or the frame an unplug lands now reads no press
+  ([#221](https://github.com/wallstop/DxCommandTerminal/issues/221)).
+- Fix parser registrations and control-set edits leaking across play sessions when domain
+  reload is off; the session reset now clears the palette statics and restores `CommandArg`'s
+  defaults ([#224](https://github.com/wallstop/DxCommandTerminal/issues/224)).
 - Fix the float and double argument parsers answering differently per runtime for literals too
   large for the type; the overflowed literal is now refused everywhere, and named spellings
   like `Infinity` and `NaN` still parse.

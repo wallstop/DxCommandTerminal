@@ -122,7 +122,9 @@ namespace WallstopStudios.DxCommandTerminal.Extensions
                             )
                         )
                         {
-                            fieldProducersByName = new Dictionary<string, Func<object, object>>();
+                            fieldProducersByName = new Dictionary<string, Func<object, object>>(
+                                StringComparer.Ordinal
+                            );
                             FieldProducersByType[type] = fieldProducersByName;
                         }
 

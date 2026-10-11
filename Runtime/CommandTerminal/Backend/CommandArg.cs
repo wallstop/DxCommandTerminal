@@ -2,6 +2,7 @@
 {
     using System;
     using System.Collections.Generic;
+    using System.Collections.ObjectModel;
     using System.Net;
     using System.Numerics;
     using System.Reflection;
@@ -29,7 +30,13 @@
 
         public static readonly HashSet<char> Delimiters = new() { ',', ';', ':', '_', '/', '\\' };
         public static readonly List<char> Quotes = new() { '"', '\'' };
-        public static readonly HashSet<string> IgnoredValuesForCleanedTypes = new() { "\r", "\n" };
+        public static readonly HashSet<string> IgnoredValuesForCleanedTypes = new(
+            StringComparer.Ordinal
+        )
+        {
+            "\r",
+            "\n",
+        };
         public static readonly HashSet<Type> DoNotCleanTypes = new()
         {
             typeof(string),
@@ -37,7 +44,9 @@
             typeof(DateTime),
             typeof(DateTimeOffset),
         };
-        public static readonly HashSet<string> IgnoredValuesForComplexTypes = new()
+        public static readonly HashSet<string> IgnoredValuesForComplexTypes = new(
+            StringComparer.Ordinal
+        )
         {
             "(",
             ")",
@@ -51,6 +60,30 @@
             "<",
             ">",
         };
+
+        /*
+            The five sets above are public mutable configuration, so a play
+            session can edit them. The snapshots below hold each set's
+            contents as first constructed, so ResetForNextPlaySession can
+            restore them when domain reload is off - a static initializer
+            runs once per domain, not once per session. Read-only on
+            purpose: the defaults are invariants, and a stray write to one
+            should not compile.
+         */
+        private static readonly ReadOnlyCollection<char> DefaultDelimiters = CopyOf(Delimiters);
+
+        private static readonly ReadOnlyCollection<char> DefaultQuotes = CopyOf(Quotes);
+
+        private static readonly ReadOnlyCollection<string> DefaultIgnoredValuesForCleanedTypes =
+            CopyOf(IgnoredValuesForCleanedTypes);
+
+        private static readonly ReadOnlyCollection<Type> DefaultDoNotCleanTypes = CopyOf(
+            DoNotCleanTypes
+        );
+
+        private static readonly ReadOnlyCollection<string> DefaultIgnoredValuesForComplexTypes =
+            CopyOf(IgnoredValuesForComplexTypes);
+
         private static readonly Dictionary<Type, object> RegisteredParsers = new();
 
         /*
@@ -412,6 +445,35 @@
         }
 
         /*
+            Runs once per Play Mode session (TerminalUI.ResetForNextPlaySession,
+            SubsystemRegistration), so with disabled domain reload the
+            registrations and control-set edits a previous session made do
+            not leak into this one: user parsers drop, and every public
+            control set returns to its default contents. A game that
+            configures a set or registers a parser re-applies it for the new
+            session in Awake or a RuntimeInitializeOnLoadMethod hook at
+            BeforeSplashScreen or later: a SubsystemRegistration hook runs in
+            the same phase as this reset, in unspecified order across
+            assemblies, so a registration made there can be wiped for the
+            whole session (#224).
+         */
+        internal static int ResetForNextPlaySession()
+        {
+            int parserCount = UnregisterAllParsers();
+            Delimiters.Clear();
+            Delimiters.UnionWith(DefaultDelimiters);
+            Quotes.Clear();
+            Quotes.AddRange(DefaultQuotes);
+            IgnoredValuesForCleanedTypes.Clear();
+            IgnoredValuesForCleanedTypes.UnionWith(DefaultIgnoredValuesForCleanedTypes);
+            DoNotCleanTypes.Clear();
+            DoNotCleanTypes.UnionWith(DefaultDoNotCleanTypes);
+            IgnoredValuesForComplexTypes.Clear();
+            IgnoredValuesForComplexTypes.UnionWith(DefaultIgnoredValuesForComplexTypes);
+            return parserCount;
+        }
+
+        /*
             Build-time parseability probe for the typed command builder: a
             definition is only accepted when its argument types can parse at
             execution. Mirrors the ordinary TryGet paths (registered parsers,
@@ -424,6 +486,18 @@
                 || type.IsEnum
                 || BuiltInParsers.ContainsKey(type)
                 || RegisteredParsers.ContainsKey(type);
+        }
+
+        private static ReadOnlyCollection<T> CopyOf<T>(IEnumerable<T> source)
+        {
+            /*
+                Enumerable.ToArray is banned in shipped code
+                (lint:linq-production, PR #60: every LINQ operator
+                allocates), so the snapshot goes through the List<T>
+                constructor and a read-only wrapper instead - the defaults
+                are invariants, and a stray write to one should not compile.
+             */
+            return new ReadOnlyCollection<T>(new List<T>(source));
         }
 
         private static Dictionary<string, PropertyInfo> LoadStaticPropertiesForType(Type type)
