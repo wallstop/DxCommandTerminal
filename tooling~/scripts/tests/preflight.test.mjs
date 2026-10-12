@@ -78,6 +78,9 @@ function scratchRepo() {
   git("init", "-q", "-b", "main");
   git("config", "user.email", "probe@example.invalid");
   git("config", "user.name", "preflight probe");
+  /* Repo-local: a developer machine with commit.gpgsign=true must not fail
+     the fixture commit (--no-verify skips hooks, not signing). */
+  git("config", "commit.gpgsign", "false");
   git("add", "-A");
   git("commit", "-q", "--no-verify", "-m", "scratch fixture");
   const scratchScripts = "tooling~/scripts";

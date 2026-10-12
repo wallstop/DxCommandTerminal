@@ -79,7 +79,10 @@ namespace UnityEngine
         Exception = 4,
     }
 
-    public class Component : Object { }
+    public class Component : Object
+    {
+        public GameObject gameObject => new GameObject();
+    }
 
     public struct Vector3
     {
@@ -90,8 +93,6 @@ namespace UnityEngine
 
     public class Transform : Component, System.Collections.IEnumerable
     {
-        public GameObject gameObject => new GameObject();
-
         public Vector3 localPosition => default;
 
         public int childCount => 0;
@@ -119,7 +120,15 @@ namespace UnityEngine
         public T[] GetComponents<T>() => Array.Empty<T>();
     }
 
-    public static class LayerMask
+    /// <summary>
+    /// The real kind: LayerMask is a struct in the editor, so a capture
+    /// reaching for default(LayerMask) or a LayerMask local answers here the
+    /// way the editor would answer. Application, Debug, and EditorUtility
+    /// stay static classes on purpose: the capture only ever touches their
+    /// static surface, and a static class refuses instantiation exactly the
+    /// way a type that cannot be constructed should.
+    /// </summary>
+    public struct LayerMask
     {
         public static string LayerToName(int layer) => string.Empty;
     }
@@ -216,16 +225,17 @@ namespace UnityEditor
         public MenuItemAttribute(string itemName) { }
     }
 
-    public delegate void CallbackFunction();
-
     public static class EditorApplication
     {
         /// <summary>
-        /// The real delegate type: CallbackFunction, not System.Action, so the
-        /// capture cannot drift onto a member the editor does not have. A
-        /// stand-in has no editor to pump this; the capture only subscribes and
-        /// unsubscribes, which is the whole of the usage the compile gates.
+        /// The real delegate, nested where the editor nests it, so a capture
+        /// referencing EditorApplication.CallbackFunction answers here the way
+        /// the editor would. A stand-in has no editor to pump this; the
+        /// capture only subscribes and unsubscribes, which is the whole of the
+        /// usage the compile gates.
         /// </summary>
+        public delegate void CallbackFunction();
+
 #pragma warning disable CS0067
         public static event CallbackFunction update;
 #pragma warning restore CS0067
