@@ -10,6 +10,8 @@ Entry style follows [unity-helpers](https://github.com/Ambiguous-Interactive/uni
 
 ## Unreleased
 
+## [1.0.2] - 2026-10-12
+
 ### Added
 
 - Add `CommandCatalogEntry.GetHandler`, which binds a catalog entry's handler at most once per entry so a registration cycle re-reads one delegate instead of re-allocating it
