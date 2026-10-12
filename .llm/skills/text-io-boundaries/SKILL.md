@@ -188,23 +188,18 @@ lands it, so the comment beside the helper should say which one it claims.
 
 **Re-derive the whole table, and run the derivation.** An expected value
 counted by hand out of an implementation is a second implementation of it,
-and it is wrong often enough to matter. Three of five rows in one paste
-table were wrong: a reported caret that held the insertion point instead of
-the position after the pasted text, and an expected value that kept the
-letter the caret had just moved in front of. Both were found in seconds by a
-throwaway program that models the arithmetic over the same inputs - and that
-is the mode to be in when the editor cannot run the suite at all, because the
-model is the one place the numbers live, so a corrected row never has to be
-derived by hand again.
+and it is wrong often enough to matter: three of five rows in one paste
+table were wrong, each found in seconds by a throwaway program that models
+the arithmetic over the same inputs. That is also the mode for when the
+editor cannot run the suite at all - the model is the one place the numbers
+live, so a corrected row never has to be derived by hand again.
 
 Assert the other direction too: a name a real suite produces (a quoted argument
 with a space, a quote, a comma, an equals, non-ASCII letters) must survive
 untouched, or the filter is only deleting information. A filter that mangles
-readable text is its own defect.
-
-State the one limit rather than implying full coverage: widening the production
-class to a category the oracle does not name is a semantic decision no test
-will second-guess.
+readable text is its own defect. State the one limit rather than implying full
+coverage: widening the production class to a category the oracle does not name
+is a semantic decision no test will second-guess.
 
 ## Pins are the fallback, not the goal
 
@@ -239,6 +234,18 @@ trace, or a test name holding one) added lines that read as further entries.
 
 For every writer in the family, ask: does this value carry a character the format
 reserves, and does anything print it back without asking again?
+
+## Read the record grammar from the wire, not a comment
+
+A NUL-delimited format paired by convention invites one wrong assumption, and
+a comment repeating it makes the bug look documented: porcelain v1 -z renames
+are `XY NEW\0OLD\0` - destination first, original trailing - and two-letter
+statuses carry two facts (index vs HEAD, worktree vs index); key on the half
+that answers the question. Catch each producer's absent-signal separately
+(`git config --get` exits 1 on unset; a shared catch collapses distinct
+states), and pin the record shapes in a data-driven matrix at the parser -
+states that need a commit come from synthetic fixtures, states that need a
+tree come from a child process.
 
 ## Checklist for a new field or format
 
