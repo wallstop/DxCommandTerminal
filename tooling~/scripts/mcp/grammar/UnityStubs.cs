@@ -66,22 +66,137 @@ namespace UnityEngine
         }
     }
 
+    /// <summary>
+    /// The real ordinals: the capture indexes a five-slot count array by this
+    /// cast, so a wrong ordinal would silently fold two categories together.
+    /// </summary>
+    public enum LogType
+    {
+        Error = 0,
+        Assert = 1,
+        Warning = 2,
+        Log = 3,
+        Exception = 4,
+    }
+
+    public class Component : Object { }
+
+    public struct Vector3
+    {
+        public float x;
+        public float y;
+        public float z;
+    }
+
+    public class Transform : Component, System.Collections.IEnumerable
+    {
+        public GameObject gameObject => new GameObject();
+
+        public Vector3 localPosition => default;
+
+        public int childCount => 0;
+
+        public System.Collections.IEnumerator GetEnumerator()
+        {
+            return Array.Empty<Transform>().GetEnumerator();
+        }
+    }
+
+    public class GameObject : Object
+    {
+        public string name => string.Empty;
+
+        public bool activeSelf => true;
+
+        public bool activeInHierarchy => true;
+
+        public string tag => string.Empty;
+
+        public int layer => 0;
+
+        public Transform transform => new Transform();
+
+        public T[] GetComponents<T>() => Array.Empty<T>();
+    }
+
+    public static class LayerMask
+    {
+        public static string LayerToName(int layer) => string.Empty;
+    }
+
+    public static class ScreenCapture
+    {
+        public static void CaptureScreenshot(string filename, int superSize) { }
+    }
+
     public static class Application
     {
+        public delegate void LogCallback(string condition, string stackTrace, LogType type);
+
         /// <summary>
         /// The editor's own project root, which a stand-in cannot know and the
         /// real API only reads. The seam is on TestProject, so nothing here is
         /// writable that is not writable in the editor.
         /// </summary>
         public static string dataPath => TestProject.DataPath;
+
+        /// <summary>
+        /// The editor version and product name are editor-read properties; a
+        /// stand-in has no editor to read them from, so they answer empty. The
+        /// capture only writes them into artifacts, and the node side pins the
+        /// fields it consumes.
+        /// </summary>
+        public static string unityVersion => string.Empty;
+
+        public static string productName => string.Empty;
+
+        /// <summary>
+        /// A stand-in has no editor to raise this, and the capture only ever
+        /// subscribes - which is the whole of the usage the compile gates.
+        /// </summary>
+#pragma warning disable CS0067
+        public static event LogCallback logMessageReceived;
+#pragma warning restore CS0067
     }
 
     public static class Debug
     {
+        public static void Log(object message)
+        {
+            TestProject.Warnings.Add(message?.ToString() ?? string.Empty);
+        }
+
         public static void LogWarning(object message)
         {
             TestProject.Warnings.Add(message?.ToString() ?? string.Empty);
         }
+    }
+}
+
+namespace UnityEngine.SceneManagement
+{
+    public struct Scene
+    {
+        public string path => string.Empty;
+
+        public string name => string.Empty;
+
+        public bool isLoaded => true;
+
+        public bool isDirty => false;
+
+        public int buildIndex => 0;
+
+        public GameObject[] GetRootGameObjects() => System.Array.Empty<GameObject>();
+    }
+
+    public static class SceneManager
+    {
+        public static int sceneCount => 0;
+
+        public static Scene GetActiveScene() => default;
+
+        public static Scene GetSceneAt(int index) => default;
     }
 }
 
@@ -91,6 +206,45 @@ namespace UnityEditor
 
     [AttributeUsage(AttributeTargets.Method)]
     public sealed class InitializeOnLoadMethodAttribute : Attribute { }
+
+    [AttributeUsage(AttributeTargets.Class)]
+    public sealed class InitializeOnLoadAttribute : Attribute { }
+
+    [AttributeUsage(AttributeTargets.Method)]
+    public sealed class MenuItemAttribute : Attribute
+    {
+        public MenuItemAttribute(string itemName) { }
+    }
+
+    public delegate void CallbackFunction();
+
+    public static class EditorApplication
+    {
+        /// <summary>
+        /// The real delegate type: CallbackFunction, not System.Action, so the
+        /// capture cannot drift onto a member the editor does not have. A
+        /// stand-in has no editor to pump this; the capture only subscribes and
+        /// unsubscribes, which is the whole of the usage the compile gates.
+        /// </summary>
+#pragma warning disable CS0067
+        public static event CallbackFunction update;
+#pragma warning restore CS0067
+
+        public static double timeSinceStartup => 0d;
+
+        public static bool isCompiling => false;
+
+        public static bool isUpdating => false;
+
+        public static bool isPlaying => false;
+
+        public static bool isPaused => false;
+    }
+
+    public static class EditorUtility
+    {
+        public static void RevealInFinder(string path) { }
+    }
 }
 
 namespace UnityEditor.TestTools.TestRunner.Api

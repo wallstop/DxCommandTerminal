@@ -1,15 +1,17 @@
 <!--
     The test run reporter's grammar, compiled and exercised without Unity
-    (issue #167).
+    (issue #167), plus the state capture, compiled without Unity (#164).
 
-    `DxTerminalTestRunReporter.cs.txt` is C# that only ever compiled inside a
-    host Unity project, so nothing in CI ran it: a rename, a moved cap or a
-    syntax error reached a developer machine first (#164). This project compiles
-    that exact file - linked, not copied, so it cannot drift - against a
-    hand-written stand-in for the Unity types it uses, drives the real callbacks
-    end to end, and writes the claims it produced. The node side
-    (`grammar.test.mjs`) decodes them with the real reader, which is the only
-    place the two halves of the contract meet.
+    `DxTerminalTestRunReporter.cs.txt` and `DxTerminalStateCapture.cs.txt` are
+    C# that only ever compiled inside a host Unity project, so nothing in CI
+    ran them: a rename, a moved cap or a syntax error reached a developer
+    machine first (#164). This project compiles those exact files - linked, not
+    copied, so they cannot drift - against a hand-written stand-in for the
+    Unity types they use, drives the reporter's real callbacks end to end, and
+    writes the claims it produced. The node side (`grammar.test.mjs`) decodes
+    them with the real reader, which is the only place the two halves of the
+    contract meet. The capture is a compile gate only; its runtime behavior is
+    the host matrix's to answer.
 
     The stand-in carries only members the real API has, so the compile is a gate
     rather than a mock. It is not a substitute for the host matrix: whether a
@@ -41,6 +43,10 @@
         <Compile
             Include="../DxTerminalTestRunReporter.cs.txt"
             Link="DxTerminalTestRunReporter.cs"
+        />
+        <Compile
+            Include="../DxTerminalStateCapture.cs.txt"
+            Link="DxTerminalStateCapture.cs"
         />
     </ItemGroup>
 </Project>
