@@ -134,42 +134,23 @@ function gitFileIdentity() {
       tracked.set(record.slice(tab + 1), meta[1]);
     }
 
-    const dirty = new Set();
     const status = execFileSync("git", ["status", "--porcelain=v1", "-z", "--untracked-files=no"], {
       cwd: REPO_ROOT,
       maxBuffer: 256 * 1024 * 1024,
       encoding: "utf8"
     });
-    const records = status.split("\0");
-    for (let index = 0; index < records.length; index++) {
-      const record = records[index];
-      if (record.length < 4 || record[2] !== " ") {
-        continue;
-      }
-      if (record[1] !== " ") {
-        dirty.add(record.slice(3));
-      }
-      if (record[0] === "R" || record[0] === "C") {
-        /* Rename and copy records carry their destination as the next
-             -z record; it is not a status line of its own. */
-        index++;
-      }
-    }
-    let eol = "";
+    const dirty = parseStatusRecords(status).worktreeDirty;
+    /* One spawn per key, each caught alone: `git config --get` exits 1
+       for an UNSET key, so a shared try/catch would let a set autocrlf
+       next to an unset eol read as both-unset and hide a real flip. */
     const configGet = (key) => {
       try {
         return execFileSync("git", ["config", "--get", key], { cwd: REPO_ROOT, encoding: "utf8" }).trim();
       } catch {
-        /* Exit code 1: the key is unset. Distinguish per key - a set
-           autocrlf next to an unset eol must not read as both-unset. */
         return "<unset>";
       }
     };
-    try {
-      eol = [configGet("core.autocrlf"), configGet("core.eol")].join("\0");
-    } catch {
-      eol = "unreadable";
-    }
+    const eol = [configGet("core.autocrlf"), configGet("core.eol")].join("\0");
     gitFileIdentityState = { tracked, dirty, eol };
   } catch {
     gitFileIdentityState = { tracked: null, dirty: null, eol: "" };
@@ -340,6 +321,57 @@ function hashPathEntry(entry, excludes) {
   return hash.digest("hex");
 }
 
+/*
+    Parses one `git status --porcelain=v1 -z --untracked-files=...` output
+    into the two views the cache needs.
+
+    Record shapes (empirically pinned in this repo's contract tests):
+    `XY path` for ordinary entries, `?? path` for untracked, and staged
+    renames/copies as TWO records: `XY NEW\0OLD\0` - the flagged path
+    (the destination, what exists on disk) comes first and carries the
+    Y code; the ORIGINAL path follows as a bare record that is not a
+    status line of its own.
+
+    `changed` lists every path whose state differs from HEAD - either
+    half dirty, or untracked. The snapshot folds those files' contents
+    because a later rewrite of the same file keeps the status output
+    byte-identical exactly as a worktree rewrite does.
+
+    `worktreeDirty` holds only paths whose WORKTREE half (Y) is not
+    space. The per-file identity uses this view on purpose: it answers
+    "what are this file's bytes", and a clean worktree half means those
+    bytes are the index blob, whatever the index-vs-HEAD half says.
+ */
+export function parseStatusRecords(output) {
+  const changed = [];
+  const worktreeDirty = new Set();
+  const records = output.split("\0");
+  for (let index = 0; index < records.length; index++) {
+    const record = records[index];
+    if (record === "") {
+      continue;
+    }
+    if (record.startsWith("?? ")) {
+      /* -z paths are literal (never quoted), so the slice is the path. */
+      changed.push(record.slice(3));
+      continue;
+    }
+    if (record.length < 4 || record[2] !== " ") {
+      continue;
+    }
+    if (record[0] !== " " || record[1] !== " ") {
+      changed.push(record.slice(3));
+    }
+    if (record[1] !== " ") {
+      worktreeDirty.add(record.slice(3));
+    }
+    if (record[0] === "R" || record[0] === "C") {
+      index++;
+    }
+  }
+  return { changed, worktreeDirty };
+}
+
 function repositorySnapshot() {
   /*
       One git call instead of a stat per tracked file: `git status
@@ -381,33 +413,7 @@ function repositorySnapshot() {
   );
   const hash = crypto.createHash("sha256");
   hash.update(output);
-  const changed = [];
-  const records = output.split("\0");
-  for (let index = 0; index < records.length; index++) {
-    const record = records[index];
-    if (record === "") {
-      continue;
-    }
-    if (record.startsWith("?? ")) {
-      /* -z paths are literal (never quoted), so the slice is the path. */
-      changed.push(record.slice(3));
-      continue;
-    }
-    if (record.length < 4 || record[2] !== " ") {
-      continue;
-    }
-    if (record[1] !== " ") {
-      /* The worktree half (Y) is what content identity needs: any
-         non-space Y means worktree differs from index, whatever the
-         index-vs-HEAD half (X) says. */
-      changed.push(record.slice(3));
-    }
-    if (record[0] === "R" || record[0] === "C") {
-      /* Rename and copy records carry their destination as the next
-         -z record; it is not a status line of its own. */
-      index++;
-    }
-  }
+  const { changed } = parseStatusRecords(output);
   for (const relative of changed) {
     hash.update(relative);
     hash.update("\0");

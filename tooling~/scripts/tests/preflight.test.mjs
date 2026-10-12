@@ -29,6 +29,7 @@ const {
   isCacheableCheck,
   npmConfigState,
   npmExecutableState,
+  parseStatusRecords,
   pathState,
   readCacheEntry,
   resolvedExecutableState,
@@ -473,6 +474,125 @@ test("cache keys hash declared files and ignore unrelated filesystem state", () 
     assert.notEqual(missing, cacheKeyForCheck(check, context));
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+/*
+    One record shape per case, from `git status --porcelain=v1 -z`. The
+    rename order is the trap: v1 -z emits `XY NEW\0OLD\0` (destination
+    first, original second), so a parser that stores ORIG and skips the
+    destination keys the renamed file at its index blob and ages a
+    cached pass across worktree edits.
+ */
+const statusRecordCases = [
+  case_("untracked is changed only", {
+    output: "?? new.rs",
+    changed: ["new.rs"],
+    worktreeDirty: []
+  }),
+  case_("worktree-dirty tracked is both", {
+    output: " M src.cs",
+    changed: ["src.cs"],
+    worktreeDirty: ["src.cs"]
+  }),
+  case_("index-only change is changed but not worktree-dirty", {
+    output: "M  src.cs",
+    changed: ["src.cs"],
+    worktreeDirty: []
+  }),
+  case_("staged add is changed but not worktree-dirty", {
+    output: "A  src.cs",
+    changed: ["src.cs"],
+    worktreeDirty: []
+  }),
+  case_("staged rename flags the destination, not the original", {
+    output: "R  moved.cs\0original.cs",
+    changed: ["moved.cs"],
+    worktreeDirty: []
+  }),
+  case_("staged rename plus worktree edit flags the destination twice over", {
+    output: "RM moved.cs\0original.cs",
+    changed: ["moved.cs"],
+    worktreeDirty: ["moved.cs"]
+  }),
+  case_("staged copy behaves like a rename", {
+    output: "C  copy.cs\0source.cs",
+    changed: ["copy.cs"],
+    worktreeDirty: []
+  }),
+  case_("staged delete is changed without a worktree half", {
+    output: "D  gone.cs",
+    changed: ["gone.cs"],
+    worktreeDirty: []
+  }),
+  case_("unmerged is both", {
+    output: "UU both.cs",
+    changed: ["both.cs"],
+    worktreeDirty: ["both.cs"]
+  })
+];
+
+for (const { name, output, changed, worktreeDirty } of statusRecordCases) {
+  test(`parseStatusRecords: ${name}`, () => {
+    const parsed = parseStatusRecords(output);
+    assert.deepEqual([...parsed.changed].sort(), [...changed].sort());
+    assert.deepEqual([...parsed.worktreeDirty].sort(), [...worktreeDirty].sort());
+  });
+}
+
+test("parseStatusRecords: the rename original never leaks in as its own entry", () => {
+  const parsed = parseStatusRecords("R  moved.cs\0original.cs\0?? tail.rs\0");
+  assert.deepEqual(parsed.changed.sort(), ["moved.cs", "tail.rs"]);
+});
+
+test("a staged rewrite moves the snapshot key where the status line stays identical", async () => {
+  /*
+      Thread-two class: an index-only change (`A `) contributes its
+      status line and nothing else, and a later staged rewrite of the
+      same path produces the byte-identical line again - so the snapshot
+      must fold the staged content, or node-tests reads a file outside
+      its declared roots through a cached pass from before the rewrite.
+      The probe is a dot-file at the repo root: Unity never sees it, and
+      a crash mid-test leaves exactly one staged dot-file that
+      `git rm --cached` + delete removes.
+   */
+  const { execFileSync } = await import("node:child_process");
+  const probe = path.join(toolingRoot, "..", ".dxct-snapshot-probe.tmp");
+  const git = (...args) => execFileSync("git", args, { cwd: path.join(toolingRoot, ".."), encoding: "utf8" });
+  const subject = writeTempScript(`
+      const { cacheKeyForCheck } = await import(${JSON.stringify(
+        pathToFileURL(path.join(toolingRoot, "scripts", "preflight-cache.mjs")).href
+      )});
+      const check = { name: "snapshot", command: "node snapshot.mjs", cacheTrackedFiles: true };
+      const key = () => cacheKeyForCheck(check, { node: "node", platform: "linux", arch: "x64", files: [] });
+      console.log(key());
+    `);
+  const run = async () => {
+    const { execFile } = await import("node:child_process");
+    const { promisify } = await import("node:util");
+    const { stdout } = await promisify(execFile)(process.execPath, [subject]);
+    return stdout.trim();
+  };
+  try {
+    fs.writeFileSync(probe, "staged content one\n");
+    git("add", ".dxct-snapshot-probe.tmp");
+    const stagedOnce = await run();
+    fs.writeFileSync(probe, "staged content two\n");
+    git("add", ".dxct-snapshot-probe.tmp");
+    const statusAfter = git("status", "--porcelain=v1", "--", ".dxct-snapshot-probe.tmp").trim();
+    assert.equal(statusAfter, "A  .dxct-snapshot-probe.tmp", "the probe must be index-only dirty");
+    assert.notEqual(
+      await run(),
+      stagedOnce,
+      "a second staged rewrite with an identical status line must move the snapshot key"
+    );
+  } finally {
+    try {
+      git("rm", "-q", "-f", "--cached", ".dxct-snapshot-probe.tmp");
+    } catch {
+      /* The probe never reached the index; removal below is enough. */
+    }
+    fs.rmSync(probe, { force: true });
   }
 });
 
