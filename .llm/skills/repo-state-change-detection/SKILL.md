@@ -45,9 +45,11 @@ module-scope `t11` imports, the manifest, and the workflow file itself. Derive t
 
 ### A workflow `paths:` filter
 
-Filters gate which lanes run, so each filter must cover every file its suite READS, not just the files it tests. The node suite reads `.github/workflows/*.yml` (docs-pages pins
-docs-build.yml; publish-release pins four workflows), so tooling-tests triggers on `.github/workflows/**`. When you add a test that reads a file class, join that class to the
-filter in the same change - `publish-release.test.mjs` pins the filter on purpose.
+Filters gate which lanes run, so each filter must cover BOTH halves of the lane's read surface: every file its suite READS, and every file its GATES enforce. The node suite reads
+`.github/workflows/*.yml` (docs-pages pins docs-build.yml; publish-release pins four workflows), so tooling-tests triggers on `.github/workflows/**`. The markdown gate enforces
+prettier over every tracked `.md` plus `.prettierrc.json`, so the same workflow triggers on `**/*.md`, `.prettierrc.json`, and `.github/copilot-instructions.md` - Bugbot caught the
+enforcement half after the read half landed, and a filter gap on an enforcement gate is a file class CI never checks. When you add a test that reads a file class or a gate that
+enforces one, join that class to the filter in the same change - `publish-release.test.mjs` pins the filters on purpose.
 
 ## Pinned by
 

@@ -19,9 +19,15 @@ on:
       - "Generator~/**"
       - "Documentation~/**"
       - "*.meta"
-      - "README.md"
+      # Every tracked markdown file: the lint-md-format gate (issue #215)
+      # enforces prettier at 180 over all of them, so a filter gap here is
+      # a file class CI never checks. Covers the root docs (README,
+      # CHANGELOG, doc.md, AGENTS.md, CLAUDE.md), .llm/**, Samples~, and
+      # tooling~ - the last two already matched their directory patterns.
+      - "**/*.md"
       - "LICENSE"
-      - "CHANGELOG.md"
+      - ".github/copilot-instructions.md"
+      - ".prettierrc.json"
       - ".gitignore"
       - ".npmignore"
       - ".gitattributes"
@@ -43,9 +49,15 @@ on:
       - "Generator~/**"
       - "Documentation~/**"
       - "*.meta"
-      - "README.md"
+      # Every tracked markdown file: the lint-md-format gate (issue #215)
+      # enforces prettier at 180 over all of them, so a filter gap here is
+      # a file class CI never checks. Covers the root docs (README,
+      # CHANGELOG, doc.md, AGENTS.md, CLAUDE.md), .llm/**, Samples~, and
+      # tooling~ - the last two already matched their directory patterns.
+      - "**/*.md"
       - "LICENSE"
-      - "CHANGELOG.md"
+      - ".github/copilot-instructions.md"
+      - ".prettierrc.json"
       - ".gitignore"
       - ".npmignore"
       - ".gitattributes"
