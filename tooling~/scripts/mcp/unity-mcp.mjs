@@ -168,6 +168,7 @@ const OPTION_NAMES = new Set([
   "token",
   "no-discover",
   "offline",
+  "no-install",
   "out",
   "project-container",
   "scenarios",

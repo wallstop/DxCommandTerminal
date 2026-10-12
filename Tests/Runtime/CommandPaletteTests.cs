@@ -1990,21 +1990,26 @@
         }
 
         /*
-            Writes and reads back a probe string through the system clipboard,
-            the same evidence TerminalClipboard.TryWrite uses, until it holds
-            on two consecutive passes. Sets _clipboardProbeHeld; the caller
+            Writes and reads back probe strings through the system clipboard
+            until it holds on two consecutive passes, the same evidence
+            TerminalClipboard.TryWrite uses. Every pass writes a DIFFERENT
+            value and demands the read-back name that same value: a host that
+            answers one write behind (#250) reads the previous pass's value
+            for every read, so a constant probe would falsely hold on the
+            echo, and the paste fixtures would ship against a clipboard no
+            product path can use. Sets _clipboardProbeHeld; the caller
             asserts in its own enumerator.
          */
         private IEnumerator ProbeClipboard()
         {
             string original = GUIUtility.systemCopyBuffer;
-            const string probe = "dxct-clipboard-probe";
             int heldPasses = 0;
             for (int attempt = 0; attempt < 10 && heldPasses < 2; ++attempt)
             {
+                string probe = $"dxct-clipboard-probe-{attempt}";
                 GUIUtility.systemCopyBuffer = probe;
                 yield return null;
-                heldPasses = GUIUtility.systemCopyBuffer == probe ? heldPasses + 1 : 0;
+                heldPasses = string.Equals(GUIUtility.systemCopyBuffer, probe, StringComparison.Ordinal) ? heldPasses + 1 : 0;
             }
 
             _clipboardProbeHeld = 2 <= heldPasses;

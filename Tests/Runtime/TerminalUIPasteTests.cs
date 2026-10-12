@@ -85,19 +85,32 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 because a paste that read a stale buffer looks exactly like a
                 key that never routed: _vReached says whether the V arrived
                 at the field at all, and _syncReadHeld says whether the
-                clipboard answered a write through the same synchronous read
-                the paste performs. Exhaustion with both healthy names a
-                paste-routing defect; either one answering wrong ignores as
-                the environment.
+                clipboard answered a fresh-value write through the same
+                synchronous read the paste performs (a lag host that echoes
+                the previous write must not count as held). Exhaustion with
+                both healthy names a paste-routing defect; either one
+                answering wrong ignores as the environment.
              */
             bool pasteRouted = false;
             bool syncReadEverHeld = false;
             for (int attempt = 0; attempt < 8; ++attempt)
             {
+                /*
+                    The clipboard-health probe writes a fresh throwaway value
+                    and demands the read-back name it: a host that answers one
+                    write behind (#250) reads the previous write's value, so a
+                    constant probe would falsely hold on its own echo and turn
+                    this environment into a routing defect. The probe is the
+                    write, so the value the V reads is the real paste text set
+                    right after.
+                 */
+                string probe = $"dxct-clipboard-probe-{attempt}";
+                GUIUtility.systemCopyBuffer = probe;
+                _syncReadHeld = TerminalClipboard.Read() == probe;
+                syncReadEverHeld |= _syncReadHeld;
+
                 GUIUtility.systemCopyBuffer = "give\titem\n42";
                 _vReached = false;
-                _syncReadHeld = TerminalClipboard.Read() == "give\titem\n42";
-                syncReadEverHeld |= _syncReadHeld;
                 using (KeyDownEvent key = KeyDownEvent.GetPooled('\0', KeyCode.V, EventModifiers.Control))
                 {
                     _terminal._uiDocument.rootVisualElement.SendEvent(key);
@@ -272,21 +285,26 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         /*
-            Writes and reads back a probe string through the system clipboard,
-            the same evidence TerminalClipboard.TryWrite uses, until it holds
-            on two consecutive passes. Sets _clipboardProbeHeld; the caller
+            Writes and reads back probe strings through the system clipboard
+            until it holds on two consecutive passes, the same evidence
+            TerminalClipboard.TryWrite uses. Every pass writes a DIFFERENT
+            value and demands the read-back name that same value: a host that
+            answers one write behind (#250) reads the previous pass's value
+            for every read, so a constant probe would falsely hold on the
+            echo, and the paste fixtures would ship against a clipboard no
+            product path can use. Sets _clipboardProbeHeld; the caller
             asserts in its own enumerator.
          */
         private IEnumerator ProbeClipboard()
         {
             string original = GUIUtility.systemCopyBuffer;
-            const string probe = "dxct-clipboard-probe";
             int heldPasses = 0;
             for (int attempt = 0; attempt < 10 && heldPasses < 2; ++attempt)
             {
+                string probe = $"dxct-clipboard-probe-{attempt}";
                 GUIUtility.systemCopyBuffer = probe;
                 yield return null;
-                heldPasses = GUIUtility.systemCopyBuffer == probe ? heldPasses + 1 : 0;
+                heldPasses = string.Equals(GUIUtility.systemCopyBuffer, probe, StringComparison.Ordinal) ? heldPasses + 1 : 0;
             }
 
             _clipboardProbeHeld = 2 <= heldPasses;
