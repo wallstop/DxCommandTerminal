@@ -142,6 +142,34 @@ jobs:
         # docfx API model, generated in the docs-build workflow instead).
         run: node tooling~/scripts/lint-docs-catalog.mjs
 
+      - name: Lint markdown format
+        # Issue #215: prettier at the 180-character measure. OS-neutral, so
+        # one leg checks it; the local preflight gate mirrors this lane.
+        if: matrix.os == 'ubuntu-latest'
+        run: node tooling~/scripts/lint-md-format.mjs
+
+      - name: Validate package contents
+        if: matrix.os == 'ubuntu-latest'
+        run: node tooling~/scripts/release/validate-package-contents.mjs
+
+  csharp-lints:
+    # The nine C#/asset linters (the pre-commit fleet's static scans) run once
+    # here, not inside both OS legs of node-tests. They read tracked bytes,
+    # which are OS-identical by checkout (no CRLF rewrite without a matching
+    # .gitattributes pin), so the second leg was a duplicate bill - Windows
+    # minutes cost twice - and a serial tail on the node-tests job's wall.
+    # Dependency-free node scripts: no npm install.
+    name: csharp-lints (ubuntu-latest)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+
       - name: Lint comparison direction
         run: node tooling~/scripts/lint-comparison-direction.mjs
 
@@ -166,15 +194,8 @@ jobs:
       - name: Lint Unity-object null assertions
         run: node tooling~/scripts/lint-unity-null-patterns.mjs
 
-      - name: Lint markdown format
-        # Issue #215: prettier at the 180-character measure. OS-neutral, so
-        # one leg checks it; the local preflight gate mirrors this lane.
-        if: matrix.os == 'ubuntu-latest'
-        run: node tooling~/scripts/lint-md-format.mjs
-
-      - name: Validate package contents
-        if: matrix.os == 'ubuntu-latest'
-        run: node tooling~/scripts/release/validate-package-contents.mjs
+      - name: Lint theme palette tokens
+        run: node tooling~/scripts/lint-theme-palette-tokens.mjs
 
   devtool-grammar:
     # DxTerminalTestRunReporter only ever compiled inside a host Unity project,
