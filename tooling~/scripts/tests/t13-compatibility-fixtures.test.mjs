@@ -7,6 +7,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runUnityProcess } from "../release/import-drill.mjs";
 import { exportUnityPackage } from "../release/export-unitypackage.mjs";
+import { makeFixturePackage } from "./support/fixture-package.mjs";
 import {
   loadMatrix,
   parseArgs,
@@ -160,14 +161,17 @@ test("Unity timeout resolves after close and spawn errors survive", async () => 
 test("matrix manifests record complete identity and reject stale reports", async () => {
   const root = temporaryRoot("run");
   const artifactPath = path.join(root, "artifact.unitypackage");
-  const artifact = exportUnityPackage({ packageRoot: path.resolve(TOOLING_ROOT, ".."), out: "", cache: true });
   /*
-      The freshness contract - the cache answers a fresh build byte-for-byte -
-      is owned by export-unitypackage-real, which runs a cold build and the
-      cached answer side by side in the same suite. This test keys the manifest
-      on the cached artifact and re-exports through the cache; a stale entry
-      misses there first, and the manifest's hash check fails in every leg.
+      The fixture carries the real checkout's package identity, so the
+      runner's source-vs-artifact compare holds without the real tree's
+      whole-package export. The freshness contract - the cache answers a
+      fresh build byte-for-byte - is owned by export-unitypackage-real;
+      a stale entry misses there first, and the manifest's hash check
+      fails in every leg.
    */
+  const source = JSON.parse(fs.readFileSync(path.resolve(TOOLING_ROOT, "..", "package.json"), "utf8"));
+  const packageRoot = makeFixturePackage(temporaryRoot("package"), { name: source.name, version: source.version });
+  const artifact = exportUnityPackage({ packageRoot, out: "", cache: true });
   fs.writeFileSync(artifactPath, artifact.buffer);
   const out = path.join(root, "reports");
   const options = { artifact: artifactPath, out, only: "unity-6", unity: "unity", unityById: new Map(), fixtureRoot: FIXTURE_ROOT, keep: true, timeoutMinutes: 5, expectedArtifactSha256: crypto.createHash("sha256").update(artifact.buffer).digest("hex") };

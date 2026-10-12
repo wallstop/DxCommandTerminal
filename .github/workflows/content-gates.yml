@@ -1,0 +1,95 @@
+name: Content Gates
+
+# The two Unity-free content checks whose inputs do not overlap the tooling
+# test suite's: lint-md-format (issue #215, prettier at the 180-character
+# measure over every tracked markdown file) and package-validate (the npm
+# pack allowlist paired with checked-in metas). Markdown and root .meta
+# changes stopped triggering the suite (nothing in it reads them), so these
+# gates moved here and keep their own trigger surface; the suite's ubuntu
+# leg keeps package-validate for the package-tree changes that trigger it.
+# One small ubuntu runner, no matrix, no dotnet, no Unity.
+on:
+  push:
+    branches:
+      - master
+      - main
+    paths:
+      - "**/*.md"
+      - "*.meta"
+      - "package.json"
+      - "LICENSE"
+      - ".npmignore"
+      - ".npmrc"
+      - ".prettierrc.json"
+      - "tooling~/.npmrc"
+      - "tooling~/package.json"
+      - "tooling~/scripts/lint-md-format.mjs"
+      - ".github/workflows/content-gates.yml"
+  pull_request:
+    paths:
+      - "**/*.md"
+      - "*.meta"
+      - "package.json"
+      - "LICENSE"
+      - ".npmignore"
+      - ".npmrc"
+      - ".prettierrc.json"
+      - "tooling~/.npmrc"
+      - "tooling~/package.json"
+      - "tooling~/scripts/lint-md-format.mjs"
+      - ".github/workflows/content-gates.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  content-gates:
+    name: content-gates (ubuntu-latest)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+
+      - name: Cache tooling node_modules
+        id: tooling-modules
+        # Pure-JS devDependencies pinned to exact versions and no lockfile, so
+        # a tree restored from package.json's hash is the tree npm install
+        # builds; the install below only runs on a miss (a manifest change).
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: tooling~/node_modules
+          key: ${{ runner.os }}-tooling-node_modules-${{ hashFiles('tooling~/package.json') }}
+
+      - name: Resolve npm cache directory
+        if: steps.tooling-modules.outputs.cache-hit != 'true'
+        id: npm-cache
+        shell: bash
+        run: echo "dir=$(npm config get cache)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache npm packages
+        if: steps.tooling-modules.outputs.cache-hit != 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.npm-cache.outputs.dir }}
+          key: ${{ runner.os }}-npm-${{ hashFiles('tooling~/package.json') }}
+          restore-keys: ${{ runner.os }}-npm-
+
+      - name: Install dependencies
+        if: steps.tooling-modules.outputs.cache-hit != 'true'
+        run: npm --prefix tooling~ install --no-audit --no-fund --prefer-offline
+
+      - name: Lint markdown format
+        # Issue #215: prettier at the 180-character measure.
+        run: node tooling~/scripts/lint-md-format.mjs
+
+      - name: Validate package contents
+        run: node tooling~/scripts/release/validate-package-contents.mjs

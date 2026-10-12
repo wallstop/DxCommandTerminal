@@ -18,19 +18,13 @@ on:
       - "Tests/**"
       - "Generator~/**"
       - "Documentation~/**"
-      - "*.meta"
-      # Every tracked markdown file: the lint-md-format gate (issue #215)
-      # enforces prettier at 180 over all of them, so a filter gap here is
-      # a file class CI never checks. Covers the root docs (README,
-      # CHANGELOG, doc.md, AGENTS.md, CLAUDE.md), .llm/**, Samples~, and
-      # tooling~ - the last two already matched their directory patterns.
-      - "**/*.md"
+      # Markdown and root .meta changes are gated by content-gates.yml
+      # (lint-md-format, issue #215, and package-validate); nothing in this
+      # suite reads them, so they do not buy a two-leg suite run.
       - "LICENSE"
-      - ".github/copilot-instructions.md"
-      - ".prettierrc.json"
       - ".gitignore"
-      - ".npmignore"
       - ".gitattributes"
+      - ".npmignore"
       - ".npmrc"
       - "tooling~/.npmrc"
       - ".github/workflows/**"
@@ -48,19 +42,13 @@ on:
       - "Tests/**"
       - "Generator~/**"
       - "Documentation~/**"
-      - "*.meta"
-      # Every tracked markdown file: the lint-md-format gate (issue #215)
-      # enforces prettier at 180 over all of them, so a filter gap here is
-      # a file class CI never checks. Covers the root docs (README,
-      # CHANGELOG, doc.md, AGENTS.md, CLAUDE.md), .llm/**, Samples~, and
-      # tooling~ - the last two already matched their directory patterns.
-      - "**/*.md"
+      # Markdown and root .meta changes are gated by content-gates.yml
+      # (lint-md-format, issue #215, and package-validate); nothing in this
+      # suite reads them, so they do not buy a two-leg suite run.
       - "LICENSE"
-      - ".github/copilot-instructions.md"
-      - ".prettierrc.json"
       - ".gitignore"
-      - ".npmignore"
       - ".gitattributes"
+      - ".npmignore"
       - ".npmrc"
       - "tooling~/.npmrc"
       - ".github/workflows/**"
@@ -102,12 +90,24 @@ jobs:
         with:
           node-version: 24
 
+      - name: Cache tooling node_modules
+        id: tooling-modules
+        # Pure-JS devDependencies pinned to exact versions and no lockfile, so
+        # a tree restored from package.json's hash is the tree npm install
+        # builds; the install below only runs on a miss (a manifest change).
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: tooling~/node_modules
+          key: ${{ runner.os }}-tooling-node_modules-${{ hashFiles('tooling~/package.json') }}
+
       - name: Resolve npm cache directory
+        if: steps.tooling-modules.outputs.cache-hit != 'true'
         id: npm-cache
         shell: bash
         run: echo "dir=$(npm config get cache)" >> "$GITHUB_OUTPUT"
 
       - name: Cache npm packages
+        if: steps.tooling-modules.outputs.cache-hit != 'true'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ steps.npm-cache.outputs.dir }}
@@ -115,6 +115,7 @@ jobs:
           restore-keys: ${{ runner.os }}-npm-
 
       - name: Install dependencies
+        if: steps.tooling-modules.outputs.cache-hit != 'true'
         run: npm --prefix tooling~ install --no-audit --no-fund --prefer-offline
 
       - name: Test tooling
@@ -141,12 +142,6 @@ jobs:
         # Issue #137: catalog drift/staleness + guide links (xrefs need the
         # docfx API model, generated in the docs-build workflow instead).
         run: node tooling~/scripts/lint-docs-catalog.mjs
-
-      - name: Lint markdown format
-        # Issue #215: prettier at the 180-character measure. OS-neutral, so
-        # one leg checks it; the local preflight gate mirrors this lane.
-        if: matrix.os == 'ubuntu-latest'
-        run: node tooling~/scripts/lint-md-format.mjs
 
       - name: Validate package contents
         if: matrix.os == 'ubuntu-latest'
@@ -286,13 +281,13 @@ jobs:
           restore-keys: ${{ runner.os }}-nuget-
 
       - name: Resolve npm cache directory
-        if: steps.grammar-inputs.outputs.changed == 'true'
+        if: steps.grammar-inputs.outputs.changed == 'true' && steps.tooling-modules.outputs.cache-hit != 'true'
         id: npm-cache
         shell: bash
         run: echo "dir=$(npm config get cache)" >> "$GITHUB_OUTPUT"
 
       - name: Cache npm packages
-        if: steps.grammar-inputs.outputs.changed == 'true'
+        if: steps.grammar-inputs.outputs.changed == 'true' && steps.tooling-modules.outputs.cache-hit != 'true'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ steps.npm-cache.outputs.dir }}
@@ -301,8 +296,16 @@ jobs:
 
       # The claim reader is imported from unity-mcp.mjs, so this job needs the
       # npm project even though it runs no node suite.
-      - name: Install dependencies
+      - name: Cache tooling node_modules
+        id: tooling-modules
         if: steps.grammar-inputs.outputs.changed == 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: tooling~/node_modules
+          key: ${{ runner.os }}-tooling-node_modules-${{ hashFiles('tooling~/package.json') }}
+
+      - name: Install dependencies
+        if: steps.grammar-inputs.outputs.changed == 'true' && steps.tooling-modules.outputs.cache-hit != 'true'
         run: npm --prefix tooling~ install --no-audit --no-fund --prefer-offline
 
       - name: Check the reporter compiles and its claim grammar round-trips

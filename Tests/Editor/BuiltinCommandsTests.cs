@@ -221,6 +221,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void CopyLastPutsTheNewestLineOnTheClipboard()
         {
+            ClipboardWitness.IgnoreWhenClipboardCannotServe();
             Run("log-terminal first");
             Run("log-terminal second");
             Run("copy-last");
@@ -237,6 +238,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void CopyLogPutsTheWholeWindowOnTheClipboard()
         {
+            ClipboardWitness.IgnoreWhenClipboardCannotServe();
             Run("log-terminal alpha");
             Run("log-terminal beta");
             Run("copy-log");
@@ -258,6 +260,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [TestCase("3")]
         public void CopyLogTakesTheNewestCount(string count)
         {
+            ClipboardWitness.IgnoreWhenClipboardCannotServe();
             for (int i = 0; i < 5; ++i)
             {
                 Run($"log-terminal line{i}");
@@ -278,6 +281,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void CopyLogRejectsACountItCannotRead()
         {
+            ClipboardWitness.IgnoreWhenClipboardCannotServe();
             string untouched = GUIUtility.systemCopyBuffer;
             Run("log-terminal alpha");
             Run("copy-log not-a-number");
@@ -294,6 +298,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void CopyLogRejectsAZeroCount()
         {
+            ClipboardWitness.IgnoreWhenClipboardCannotServe();
             string untouched = GUIUtility.systemCopyBuffer;
             Run("log-terminal alpha");
             Run("copy-log 0");
@@ -310,6 +315,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void CopyLastTakesTheLineAboveTheEchoOfTheCommandAskingForIt()
         {
+            ClipboardWitness.IgnoreWhenClipboardCannotServe();
             /*
                 The bug this file's `Run` helper hid. The console echoes the
                 typed line as `Input` before any handler runs, so from a real
@@ -331,6 +337,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void CopyLogDoesNotPutTheCommandAskingForItOnTheClipboard()
         {
+            ClipboardWitness.IgnoreWhenClipboardCannotServe();
             Run("log-terminal alpha");
             Run("log-terminal beta");
             Run("copy-log 2");
@@ -343,6 +350,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void CopyLogKeepsTheCommandsYouRanInTheTranscript()
         {
+            ClipboardWitness.IgnoreWhenClipboardCannotServe();
             /*
                 The other half of the rule, so it is not "drop every echo". A
                 bug report wants to show what was typed as much as what came
@@ -374,6 +382,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void ALogOfEmptyLinesIsNotReportedAsAClipboardRefusal()
         {
+            ClipboardWitness.IgnoreWhenClipboardCannotServe();
             /*
                 The distinction the whole report exists to make. A log whose
                 lines are empty has nothing to copy, which is not the same
@@ -400,6 +409,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void AnEmptyLineAmongRealOnesIsStillCopied()
         {
+            ClipboardWitness.IgnoreWhenClipboardCannotServe();
             Run("log-terminal alpha");
             _buffer.HandleLog(string.Empty, TerminalLogType.Message);
             Run("log-terminal beta");
@@ -426,6 +436,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void CopyLastTakesTheMessageAndNotTheTrace()
         {
+            ClipboardWitness.IgnoreWhenClipboardCannotServe();
             _buffer.HandleLog("boom", "at Frame", TerminalLogType.Error);
             Run("copy-last");
 

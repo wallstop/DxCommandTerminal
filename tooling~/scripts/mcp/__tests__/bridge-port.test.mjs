@@ -17,6 +17,11 @@ function tempRepo() {
 
 // The bridge options under test never spawn Unity: backend cli without an
 // editor only prepares the HTTP server.
+// A raw socket occupier never answers /healthz, so every conflict path waits
+// the health probe out; a short probe keeps the three conflict tests off real
+// timers (production keeps the second).
+const FAST_RUNTIME = { healthProbeTimeoutMs: 25 };
+
 function bridgeOptions(repoRoot, overrides = {}) {
   return {
     repoRoot,
@@ -96,7 +101,7 @@ test("a busy derived port moves to the next free port and persists the choice", 
   try {
     const busy = projectPort(repoRoot);
     occupier = await occupy(busy);
-    const running = await startBridge(bridgeOptions(repoRoot));
+    const running = await startBridge(bridgeOptions(repoRoot), FAST_RUNTIME);
     bridge = running.httpServer;
     assert.notEqual(running.alreadyRunning, true);
     assert.equal(running.options.port, busy + 1, "moves one port past the conflict");
@@ -118,7 +123,8 @@ test("a loopback-held port conflicts with a 0.0.0.0 bind and moves", async () =>
     const busy = projectPort(repoRoot);
     occupier = await occupy(busy);
     const running = await startBridge(
-      bridgeOptions(repoRoot, { bindHost: "0.0.0.0" })
+      bridgeOptions(repoRoot, { bindHost: "0.0.0.0" }),
+      FAST_RUNTIME
     );
     bridge = running.httpServer;
     assert.notEqual(running.options.port, busy, "must not bind the shadowed port");
@@ -170,7 +176,7 @@ test("an operator-supplied port fails fast instead of moving silently", async ()
     const busy = projectPort(repoRoot);
     occupier = await occupy(busy);
     await assert.rejects(
-      () => startBridge(bridgeOptions(repoRoot, { port: busy, portSource: "flag" })),
+      () => startBridge(bridgeOptions(repoRoot, { port: busy, portSource: "flag" }), FAST_RUNTIME),
       (error) => {
         assert.match(error.message, new RegExp(`Port ${busy} is unavailable`));
         assert.match(error.message, /UNITY_MCP_BRIDGE_PORT/);

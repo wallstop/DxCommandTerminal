@@ -59,6 +59,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void CopyCarriesTheSelectedSpanVerbatim()
         {
+            ClipboardWitness.IgnoreWhenClipboardCannotServe();
             TextField field = FieldWithArrangedSelection("spawn item torch 1", 6, 16);
             bool answered = TextFieldCopyCut.TryApply(field, KeyDown(KeyCode.C, EventModifiers.Control), out int? caret);
             Assert.That(answered, "A Ctrl+C over a selection is answered");
@@ -70,6 +71,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void CutTakesTheSelectedSpanOutOfTheField()
         {
+            ClipboardWitness.IgnoreWhenClipboardCannotServe();
             TextField field = FieldWithArrangedSelection("spawn item torch 1", 6, 16);
             bool answered = TextFieldCopyCut.TryApply(field, KeyDown(KeyCode.X, EventModifiers.Control), out int? caret);
             Assert.That(answered, "A Ctrl+X over a selection is answered");
@@ -81,6 +83,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void AnEmptySelectionLeavesTheKeyAlone()
         {
+            ClipboardWitness.IgnoreWhenClipboardCannotServe();
             GUIUtility.systemCopyBuffer = "untouched";
             TextField field = FieldWithArrangedSelection("spawn item", 6, 6);
             bool answered = TextFieldCopyCut.TryApply(field, KeyDown(KeyCode.C, EventModifiers.Control), out int? caret);
@@ -104,6 +107,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [TestCase(KeyCode.C, EventModifiers.Shift, Description = "Shift adds no clipboard meaning")]
         public void KeysThatAreNotThisHelperSAreLeftAlone(KeyCode keyCode, EventModifiers modifiers)
         {
+            ClipboardWitness.IgnoreWhenClipboardCannotServe();
             TextField field = FieldWithArrangedSelection("spawn item", 0, 5);
             GUIUtility.systemCopyBuffer = "untouched";
             Assert.That(!TextFieldCopyCut.TryApply(field, KeyDown(keyCode, modifiers), out _), $"{keyCode} with {modifiers} is not a copy or a cut");
@@ -121,6 +125,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void ASnappedSelectionCannotPutHalfACharacterOnTheClipboard()
         {
+            ClipboardWitness.IgnoreWhenClipboardCannotServe();
             /*
                 The field can report a caret inside a surrogate pair - "a😀b"
                 is a, a high surrogate, a low surrogate, b - and the copied

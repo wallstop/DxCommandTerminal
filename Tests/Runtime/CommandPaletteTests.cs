@@ -44,6 +44,19 @@
         private GameObject _paletteObject;
         private GameObject _terminalObject;
 
+        /*
+            Delivery witness and clipboard verdict for the clipboard-key
+            fixtures, the same two signals the terminal paste fixtures
+            measure: _keyRouted is set by a trickle-down KeyDownEvent
+            callback on the palette root (StopPropagation does not stop
+            same-element callbacks, so it fires even when the product
+            consumes the key), and _clipboardProbeHeld records whether the
+            host clipboard held a direct write across two consecutive
+            passes.
+         */
+        private bool _keyRouted;
+        private bool _clipboardProbeHeld;
+
         private PanelSettings _panelSettings;
         private TerminalUI _sharedTerminal;
         private GameObject _extraPaletteObject;
@@ -709,9 +722,14 @@
             {
                 _palette.Open();
                 yield return null;
-                yield return SetClipboard("palette\tping\n1 2");
+                ArmKeyDownWitness();
 
-                yield return SendKeyDown(KeyCode.V, EventModifiers.Control);
+                yield return SendPaletteClipboardKey(
+                    KeyCode.V,
+                    () => SetClipboard("palette\tping\n1 2"),
+                    () => string.Equals(_palette._input.value, "palette ping 1 2", StringComparison.Ordinal),
+                    "no paste held the flattened text"
+                );
 
                 Assert.AreEqual("palette ping 1 2", _palette._input.value, "A pasted block arrives as one line of arguments");
             }
@@ -737,6 +755,7 @@
         {
             yield return SpawnPalette();
             RegisterSpawnItemCommand();
+            ArmKeyDownWitness();
 
             string originalClipboard = GUIUtility.systemCopyBuffer;
             try
@@ -744,11 +763,15 @@
                 _palette.Open();
                 yield return null;
 
-                yield return SetQueryWithCaret("spawnitem torch 1", 15, 10);
-                Assert.IsTrue(_palette._completionMode, "Sanity: the parked caret ranks the first argument's candidates");
-
-                yield return SetClipboard("to");
-                yield return SendKeyDown(KeyCode.V, EventModifiers.Control);
+                yield return SendPaletteClipboardKey(
+                    KeyCode.V,
+                    ArrangePasteIntoParkedQuery,
+                    () =>
+                        string.Equals(_palette._input.value, "spawnitem to 1", StringComparison.Ordinal)
+                        && _palette._completionMode
+                        && _palette._completionContext.ReplacementStart == 10,
+                    "no paste left \"spawnitem to 1\" serving the argument the pasted caret sits in"
+                );
 
                 Assert.AreEqual(
                     "spawnitem to 1",
@@ -782,6 +805,7 @@
         {
             yield return SpawnPalette();
             RegisterSpawnItemCommand();
+            ArmKeyDownWitness();
 
             string originalClipboard = GUIUtility.systemCopyBuffer;
             try
@@ -789,9 +813,16 @@
                 _palette.Open();
                 yield return null;
 
-                yield return SetQueryWithCaret("spawnitem torch 1", 14, 10);
-
-                yield return SendKeyDown(KeyCode.X, EventModifiers.Control);
+                yield return SendPaletteClipboardKey(
+                    KeyCode.X,
+                    () => SetQueryWithCaret("spawnitem torch 1", 14, 10),
+                    () =>
+                        string.Equals(GUIUtility.systemCopyBuffer, "torc", StringComparison.Ordinal)
+                        && string.Equals(_palette._input.value, "spawnitem h 1", StringComparison.Ordinal)
+                        && _palette._completionMode
+                        && _palette._completionContext.ReplacementStart == 10,
+                    "no cut left \"torc\" on the clipboard and \"spawnitem h 1\" in the bar"
+                );
 
                 Assert.AreEqual("torc", GUIUtility.systemCopyBuffer, "The cut span reached the system clipboard");
                 Assert.AreEqual("spawnitem h 1", _palette._input.value, "The cut span is gone from the query");
@@ -1880,6 +1911,104 @@
             }
 
             Assert.Ignore($"The host clipboard did not hold \"{text}\" after five writes; " + "the paste fixture needs a platform that answers (#207)");
+        }
+
+        /*
+            The parked-caret arrange for the clipboard-key fixtures: the
+            selection is re-arranged every attempt, in the frames the key
+            is sent, so a caret the panel re-clamped between frames cannot
+            make the handler read a stale selection. The sanity assert
+            travels with it, where the parked caret is rebuilt.
+         */
+        private IEnumerator ArrangePasteIntoParkedQuery()
+        {
+            yield return SetQueryWithCaret("spawnitem torch 1", 15, 10);
+            Assert.IsTrue(_palette._completionMode, "Sanity: the parked caret ranks the first argument's candidates");
+            yield return SetClipboard("to");
+        }
+
+        /*
+            Delivery witness for the palette's clipboard keys: set on every
+            key the palette root's own trickle-down sees, it is what tells a
+            key that never routed apart from a clipboard that never
+            answered. StopPropagation does not stop same-element callbacks,
+            so the witness fires even when the product consumes the key.
+         */
+        private void ArmKeyDownWitness()
+        {
+            _keyRouted = false;
+            _palette._paletteRoot.RegisterCallback<KeyDownEvent>(_ => _keyRouted = true, TrickleDown.TrickleDown);
+        }
+
+        /*
+            Sends a palette clipboard key until the full postcondition holds,
+            the retry-and-verdict shape the terminal paste fixtures use: this
+            host drops synthetic keys (#250) and drops clipboard writes
+            (#207), and a paste that read a stale buffer or a cut whose write
+            never landed looks exactly like a key that never routed. The
+            arrange enumerator re-arms the query and the clipboard every
+            attempt, in the frames the key is sent.
+
+            Eight exhausted attempts leave two measured verdicts: _keyRouted
+            says whether any key reached the palette root at all, and
+            _clipboardProbeHeld says whether the host clipboard held a direct
+            write across two consecutive passes. A routed key against a
+            healthy clipboard names a routing or product defect; either one
+            answering wrong ignores as the environment.
+         */
+        private IEnumerator SendPaletteClipboardKey(KeyCode keyCode, Func<IEnumerator> arrange, Func<bool> satisfied, string satisfiedBecause)
+        {
+            bool keyRouted = false;
+            for (int attempt = 0; attempt < 8; ++attempt)
+            {
+                yield return arrange();
+                _keyRouted = false;
+                yield return SendKeyDown(keyCode, EventModifiers.Control);
+                keyRouted |= _keyRouted;
+                if (satisfied())
+                {
+                    yield break;
+                }
+            }
+
+            if (!keyRouted)
+            {
+                Assert.Ignore(
+                    $"A synthetic {keyCode} does not reach the palette in this environment, "
+                        + "so delivery cannot be measured here: a key that never arrives "
+                        + "looks exactly like routing that is broken (#207, #250)"
+                );
+            }
+
+            yield return ProbeClipboard();
+            if (_clipboardProbeHeld)
+            {
+                Assert.Fail($"{satisfiedBecause}; the key did route, so the verdict is a product defect (#207, #250)");
+            }
+
+            Assert.Ignore("The host clipboard did not hold a direct probe twice in a row; " + "the clipboard-key fixtures need a platform that answers (#207)");
+        }
+
+        /*
+            Writes and reads back a probe string through the system clipboard,
+            the same evidence TerminalClipboard.TryWrite uses, until it holds
+            on two consecutive passes. Sets _clipboardProbeHeld; the caller
+            asserts in its own enumerator.
+         */
+        private IEnumerator ProbeClipboard()
+        {
+            string original = GUIUtility.systemCopyBuffer;
+            const string probe = "dxct-clipboard-probe";
+            int heldPasses = 0;
+            for (int attempt = 0; attempt < 10 && heldPasses < 2; ++attempt)
+            {
+                GUIUtility.systemCopyBuffer = probe;
+                yield return null;
+                heldPasses = GUIUtility.systemCopyBuffer == probe ? heldPasses + 1 : 0;
+            }
+
+            _clipboardProbeHeld = 2 <= heldPasses;
+            GUIUtility.systemCopyBuffer = original;
         }
     }
 }

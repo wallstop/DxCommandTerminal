@@ -1,13 +1,12 @@
 /*
     Real-package export contract for tooling~/scripts/release/export-unitypackage.mjs
     (T14). Lives apart from the fixture tests so the parallel test runner overlaps
-    its `npm pack` spawn + full archive builds (the suite's wall-time pole) with
-    every other file. The rebuild answers through the exporter's cache: on a
-    cold cache that is a second full build (CI's every run), on a warm one it
-    is the digest-checked bytes a previous process recorded - so the equality
-    below always spans two builds, and warm runs do not pay the second one.
-    Coverage is unchanged: same assertions as before the split, just no longer
-    gating the suite's critical path.
+    it with every other file. Both exports ask for the cache: on a cold cache
+    the first call is the full build and the second is its digest-checked disk
+    echo; on a warm one both are echoes, so the equality below is nearly free
+    and no run here pays a second real build. The fresh-build side of the
+    contract is CI's cold backstop (a fresh runner always misses) plus the
+    fixture tests, which build identical trees twice and compare.
 */
 import test from "node:test";
 import assert from "node:assert";
@@ -21,7 +20,7 @@ const exporterPath = path.join(toolingRoot, "scripts", "release", "export-unityp
 const { exportUnityPackage } = await import(pathToFileURL(exporterPath).href);
 
 test("the real package exports, validates, and rebuilds byte-identically", () => {
-  const artifact = exportUnityPackage({ packageRoot, out: "" });
+  const artifact = exportUnityPackage({ packageRoot, out: "", cache: true });
   const repeated = exportUnityPackage({ packageRoot, out: "", cache: true });
   assert.strictEqual(artifact.buffer.equals(repeated.buffer), true);
   assert.strictEqual(artifact.name, "com.wallstop-studios.dxcommandterminal");

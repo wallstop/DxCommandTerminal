@@ -12,12 +12,12 @@ import os from "node:os";
 import path from "node:path";
 import zlib from "node:zlib";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { makeFixturePackage } from "./support/fixture-package.mjs";
 
 const drillScript = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "../release/import-drill.mjs"
 );
-const toolingRoot = path.resolve(path.dirname(drillScript), "../..");
 const {
   buildImportDriver,
   importUnityArgs,
@@ -844,20 +844,27 @@ test("runImportDrill fails closed on a corrupt artifact before touching Unity", 
   assert.strictEqual(unityTouched, false);
 });
 
-test("the reader parses the real exporter artifact", async () => {
+test("the reader parses an exporter artifact", async () => {
   const exporter = await import(
     pathToFileURL(path.join(path.dirname(drillScript), "export-unitypackage.mjs")).href
   );
-  const { buffer } = exporter.exportUnityPackage({ packageRoot: path.resolve(toolingRoot, ".."), out: "", cache: true });
+  /*
+      A fixture package carries the shape the reader must handle - the
+      input-system-referencing assembly, the Analyzers/ payload, the
+      Samples~ exclusion - without paying the real tree's whole-package
+      export (the real tree keeps one owner, export-unitypackage-real).
+   */
+  const packageRoot = makeFixturePackage(tempRoot("reader"), { name: "reader.pkg", version: "0.3.0" });
+  const { buffer } = exporter.exportUnityPackage({ packageRoot, out: "" });
   const artifact = listArtifact(buffer);
-  assert.strictEqual(artifact.root, "Packages/com.wallstop-studios.dxcommandterminal");
-  assert.ok(artifact.assets.length > 300, "the real artifact must carry the full production tree");
+  assert.strictEqual(artifact.root, "Packages/reader.pkg");
+  assert.ok(artifact.assets.length > 5, "the artifact must carry the packaged tree");
   assert.deepStrictEqual(artifact.scratchDependencies, {
     "com.unity.inputsystem": "1.7.0"
   });
   assert.ok(artifact.assets.every((asset) => !asset.pathname.includes("/Tests/")));
   const analyzers = artifact.assets.filter((asset) => asset.pathname.includes("/Analyzers/"));
-  assert.ok(analyzers.length > 0, "the analyzer payload must ride the artifact");
+  assert.ok(analyzers.length > 0, "the reader must surface the analyzer payload entries");
   assert.ok(artifact.assets.some((asset) => asset.pathname.endsWith(".asmdef")));
   assert.strictEqual(artifact.assets.filter((asset) => asset.pathname.includes("..")).length, 0);
 });
