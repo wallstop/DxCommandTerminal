@@ -186,6 +186,11 @@ tab_width = 4
 # reflowed every C# file to this measure.
 max_line_length = 180
 
+# Markdown prose wraps at the same 180-character measure (issue #215);
+# prettier is the formatter (.prettierrc.json), the editor config mirrors it.
+[*.md]
+max_line_length = 180
+
 # LLM context and tooling: UTF-8 without BOM + LF for byte-stable cross-OS
 # generation (enforced by tooling~/scripts/lint-llm-instructions.ps1). Overrides the
 # repo-wide BOM/CRLF defaults, which remain for C# assets.

@@ -4,31 +4,22 @@ DxCommandTerminal is a Unity package. It supports Unity 2021.3 and newer.
 
 ## Install the package
 
-- Git URL: `Window > Package Manager > + > Add package from git URL`, then
-  enter `https://github.com/wallstop/DxCommandTerminal.git`.
-- Tarball: download `com.wallstop-studios.dxcommandterminal-*.tgz` from the
-  repository's [Releases](https://github.com/wallstop/DxCommandTerminal/releases)
-  page, then `+ > Add package from tarball`.
-- Local checkout: `+ > Add package from disk...`, then pick the
-  `package.json` in a clone of this repository.
+- Git URL: `Window > Package Manager > + > Add package from git URL`, then enter `https://github.com/wallstop/DxCommandTerminal.git`.
+- Tarball: download `com.wallstop-studios.dxcommandterminal-*.tgz` from the repository's [Releases](https://github.com/wallstop/DxCommandTerminal/releases) page, then
+  `+ > Add package from tarball`.
+- Local checkout: `+ > Add package from disk...`, then pick the `package.json` in a clone of this repository.
 
 ## Open the terminal
 
-1. Add a `TerminalUI` component to any GameObject. Its inspector adds a
-   `UIDocument` for you and assigns the package's Panel Settings asset
-   (`Styles/TerminalSettings.asset`), which carries the terminal's theme
-   sheet - without a themed panel, nothing renders.
-2. Wiring it yourself instead? Add a `UIDocument`, and point its Panel
-   Settings at the package's `TerminalSettings` asset (or set your panel's
-   Theme Style Sheet to `Styles/TerminalThemeSettings-Base.tss`).
-3. Enter Play Mode. Press `` ` `` (backtick) to toggle the terminal,
-   `` #` `` for the full-height window. Once the terminal is open,
-   those keys type their characters instead, and Escape closes the terminal.
+1. Add a `TerminalUI` component to any GameObject. Its inspector adds a `UIDocument` for you and assigns the package's Panel Settings asset (`Styles/TerminalSettings.asset`), which
+   carries the terminal's theme sheet - without a themed panel, nothing renders.
+2. Wiring it yourself instead? Add a `UIDocument`, and point its Panel Settings at the package's `TerminalSettings` asset (or set your panel's Theme Style Sheet to
+   `Styles/TerminalThemeSettings-Base.tss`).
+3. Enter Play Mode. Press `` ` `` (backtick) to toggle the terminal, `` #` `` for the full-height window. Once the terminal is open, those keys type their characters instead, and
+   Escape closes the terminal.
 
-Every action is rebindable, and the [new Input System](https://docs.unity3d.com/Manual/InputSystem.html)
-can drive the terminal through `PlayerInput`. A `PlayerInput` message bound to a character key
-leaves that character to the open console's field instead of running. See the package README
-("Hotkeys" and "New Input System") for bindings and precedence.
+Every action is rebindable, and the [new Input System](https://docs.unity3d.com/Manual/InputSystem.html) can drive the terminal through `PlayerInput`. A `PlayerInput` message bound
+to a character key leaves that character to the open console's field instead of running. See the package README ("Hotkeys" and "New Input System") for bindings and precedence.
 
 ## Try it
 

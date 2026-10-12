@@ -8,3 +8,6 @@ CLAUDE.md text eol=lf
 .cursorrules text eol=lf
 .github/copilot-instructions.md text eol=lf
 .devcontainer/** text eol=lf
+# Markdown stays LF everywhere: the prettier gate formats with endOfLine lf,
+# so a CRLF-configured checkout must not re-flip whole files.
+*.md text eol=lf

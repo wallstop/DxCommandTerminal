@@ -3,15 +3,11 @@ DX Command Terminal
 
 # Disclosure
 
-> DxCommandTerminal builds on the original Command Terminal project. The initial development
-> of this fork was entirely human-authored, involving months of code study, refactoring,
-> testing, and refinement. Recent development is LLM-assisted, including generated code.
-> I, wallstop, heavily review user-facing code changes and will continue to do so, but those
-> changes should no longer be understood as entirely human-authored. This approach makes
-> continued development practical within the time I can commit and allows faster iteration.
+> DxCommandTerminal builds on the original Command Terminal project. The initial development of this fork was entirely human-authored, involving months of code study, refactoring,
+> testing, and refinement. Recent development is LLM-assisted, including generated code. I, wallstop, heavily review user-facing code changes and will continue to do so, but those
+> changes should no longer be understood as entirely human-authored. This approach makes continued development practical within the time I can commit and allows faster iteration.
 >
-> This project is MIT licensed and will remain so. There are no plans for paid features,
-> subscriptions, or mechanisms for charging users. This disclosure is provided so you can
+> This project is MIT licensed and will remain so. There are no plans for paid features, subscriptions, or mechanisms for charging users. This disclosure is provided so you can
 > decide whether the project fits your preferences.
 
 # Notice
@@ -19,28 +15,29 @@ DX Command Terminal
 This is a fork of [Command Terminal](https://github.com/stillwwater/command_terminal) for Unity, mainly to address usability gaps and add maintenance
 
 # Compatibility
-| Platform | Compatible |
-| --- | --- |
-| Unity 2021 | Likely, but untested |
-| Unity 2022 | &check; |
-| Unity 2023 | &check; |
-| Unity 6 | &check; |
-| URP | &check; |
-| HDRP | &check; |
-| .NET Standard 2.0 API level | &check; |
-| .NET Framework 4.x API level | &check; |
 
-The package ships no precompiled assemblies and uses only APIs available to both API
-compatibility levels; the full test suite passes with the project set to either
-`.NET Standard 2.0` or `.NET Framework` in Player Settings (verified on Unity
-6000.4.6f1).
+| Platform                     | Compatible           |
+| ---------------------------- | -------------------- |
+| Unity 2021                   | Likely, but untested |
+| Unity 2022                   | &check;              |
+| Unity 2023                   | &check;              |
+| Unity 6                      | &check;              |
+| URP                          | &check;              |
+| HDRP                         | &check;              |
+| .NET Standard 2.0 API level  | &check;              |
+| .NET Framework 4.x API level | &check;              |
+
+The package ships no precompiled assemblies and uses only APIs available to both API compatibility levels; the full test suite passes with the project set to either
+`.NET Standard 2.0` or `.NET Framework` in Player Settings (verified on Unity 6000.4.6f1).
 
 # Installation
 
 ## From Releases
+
 Check out the latest [Releases](https://github.com/wallstop/DxCommandTerminal/releases) to grab the Unity Package and import to your project.
 
 ## To Install as Unity Package
+
 1. Open Unity Package Manager
 2. (Optional) Enable Pre-release packages to get the latest, cutting-edge builds
 3. Open the Advanced Package Settings
@@ -51,21 +48,32 @@ Check out the latest [Releases](https://github.com/wallstop/DxCommandTerminal/re
 5. Resolve the latest `com.wallstop-studios.dxcommandterminal`
 
 ## From Source
-Grab a copy of this repo (either `git clone` or [download a zip of the source](https://github.com/wallstop/DxCommandTerminal/archive/refs/heads/master.zip)) and add it to your project as a local package: `Window > Package Manager > + > Add package from disk...`, then pick this folder's `package.json`. Copying folders into `Assets` also works, but they all have to come across: `Runtime` (the code), `Editor` (the custom inspectors, and the `Assets > Create` menu the theme-authoring flow uses), `Packs` (the theme and font packs, which reference the `.ttf` assets in `Fonts` by GUID, so a pack without `Fonts` is a pack of missing references), `Styles` (the sheet the panel settings point at), and `Fonts`. `Samples~` is optional. See [Install](Documentation~/install.md) for the Package Manager routes.
+
+Grab a copy of this repo (either `git clone` or [download a zip of the source](https://github.com/wallstop/DxCommandTerminal/archive/refs/heads/master.zip)) and add it to your
+project as a local package: `Window > Package Manager > + > Add package from disk...`, then pick this folder's `package.json`. Copying folders into `Assets` also works, but they
+all have to come across: `Runtime` (the code), `Editor` (the custom inspectors, and the `Assets > Create` menu the theme-authoring flow uses), `Packs` (the theme and font packs,
+which reference the `.ttf` assets in `Fonts` by GUID, so a pack without `Fonts` is a pack of missing references), `Styles` (the sheet the panel settings point at), and `Fonts`.
+`Samples~` is optional. See [Install](Documentation~/install.md) for the Package Manager routes.
 
 ## Improvements Over Baseline
+
 - [Enhanced Auto-Complete + Hint system + styling](#hints)
 - Fixed Input handling bugs related to [WebGL](#web-gl)
 - Fully integrated with Unity's [new Input System](#new-input-system)
 - Fully [configurable and bindable controls](#hotkeys) for every action
 - [Paste](#copy-cut-and-paste) on both the command line and the quick-launch bar, with a pasted block split into the arguments it reads as
 - [Copy and cut](#copy-cut-and-paste) on both surfaces: Ctrl+C / Ctrl+X take the selected command-line or query text to the system clipboard
-- Add ability to ignore commands that have been annotated with `RegisterCommandAttribute`. In this way, your terminals can ignore any built-in commands, for cleanliness. A custom editor has been added to provide users with the ability to identify what commands are available to ignore, and selectively ignore them.
+- Add ability to ignore commands that have been annotated with `RegisterCommandAttribute`. In this way, your terminals can ignore any built-in commands, for cleanliness. A custom
+  editor has been added to provide users with the ability to identify what commands are available to ignore, and selectively ignore them.
 - Add ability to ignore certain (or all) log levels, such that unwanted logs do not clutter terminal output
 - Add ability to optionally have Unity log messages routed to the terminal, default on, but can be turned off
 - Add ability to optionally ignore all default commands, such that you can write your own commands that conflict with the default provided ones, such as `HELP`, `TIME`, etc
-- CommandArg value parsing has been overhauled. Instead of specific properties like `Float` and `Int` that always return a value, regardless of if parsing succeeded or not, a singular `bool TryGet<T>(out T parsed)` method is supplied. This method provides robust parsing for all common types and has the ability to take in user-specified custom parsers for any fancy logic. See [Custom Parsing](#custom-parsing) for details.
-- CommandArgs can now have arguments with spaces passed to them, similar to how real terminals work. Any string values surrounded by single or double quotes will be interpreted as a single input (including spaces within those quotes). Single quotes must match single quotes and double quotes must match double quotes. If there is an unmatched (hanging) quote, the entire rest of the input will be interpreted as the command argument value.
+- CommandArg value parsing has been overhauled. Instead of specific properties like `Float` and `Int` that always return a value, regardless of if parsing succeeded or not, a
+  singular `bool TryGet<T>(out T parsed)` method is supplied. This method provides robust parsing for all common types and has the ability to take in user-specified custom parsers
+  for any fancy logic. See [Custom Parsing](#custom-parsing) for details.
+- CommandArgs can now have arguments with spaces passed to them, similar to how real terminals work. Any string values surrounded by single or double quotes will be interpreted as
+  a single input (including spaces within those quotes). Single quotes must match single quotes and double quotes must match double quotes. If there is an unmatched (hanging)
+  quote, the entire rest of the input will be interpreted as the command argument value.
 - Dynamic console resizing when Screen Size change is detected, implemented in a very performant fashion
 - Added Assembly Definitions, so that this project can be used cleanly in projects that utilize Assembly Definitions
 - Fixed a bug where commands annotated with `RegisterCommandAttribute` in other assemblies failed to be recognized. User assemblies have higher precedence.
@@ -80,7 +88,8 @@ Grab a copy of this repo (either `git clone` or [download a zip of the source](h
 - Fixed a bug related to input swallowing
 - Fixed a bug where transitioning from full to small terminal would instead, close the terminal
 - Added ability to skip same commands when navigating through history
-- Unified behavior around navigating up and down through command history. Previously, navigating up as far as possible would "stick" to the up-most command, while navigating down as far as possible would result in a "blank" command. Now, walking past either end of up/down results in a blank command.
+- Unified behavior around navigating up and down through command history. Previously, navigating up as far as possible would "stick" to the up-most command, while navigating down
+  as far as possible would result in a "blank" command. Now, walking past either end of up/down results in a blank command.
 - History is now filterable by execution success (command existence) as well as error status of the command
 - Minor performance benefits if there are terminals in multiple scenes
 - Minor performance benefits (O(n) -> O(1)) when the terminal buffer becomes full
@@ -88,11 +97,13 @@ Grab a copy of this repo (either `git clone` or [download a zip of the source](h
 - Minor performance benefits around using string interpolation and intelligent checking of parameters to only force `string.Format` when relevant in logging paths
 - Better invalid command identification and error messages
 - All string comparisons are now `OrdinalIgnoreCase` instead of relying on CurrentCulture
-- `Terminal` has been made to be Editor-Change-Aware. If the Editor is in Play mode, changes to the current terminal properties will take effect immediately. This functionality has a minor performance hit and can be disabled via un-checking `Track Changes In Editor` under the `System` header.
+- `Terminal` has been made to be Editor-Change-Aware. If the Editor is in Play mode, changes to the current terminal properties will take effect immediately. This functionality has
+  a minor performance hit and can be disabled via un-checking `Track Changes In Editor` under the `System` header.
 - Extra input validation has been added on all public methods, such that user code is sanitized where appropriate, or rejected if invalid.
 - The concept of "FrontCommands" has been exterminated
 
 ## Code changes
+
 - All code is formatted via [Csharpier](https://csharpier.com/)
 - All variables are now consistently named
 - Access modifiers have been explicitly applied to every field
@@ -104,9 +115,11 @@ Grab a copy of this repo (either `git clone` or [download a zip of the source](h
 - Validation around command ignoring and log level ignoring has been added to Terminal, to prevent invalid data
 
 ## The Future
+
 More improvements coming soon, stick around :)
 
 Planned improvements:
+
 - More and better documentation
 - Wikification
 - Command Groups
@@ -126,21 +139,42 @@ Command Terminal is based on [an implementation by Jonathan Blow](https://youtu.
 
 ## Usage
 
-Add a `TerminalUI` component to a game object. The console window can be toggled with a hotkey (default is backtick), and another hotkey can be used to toggle the full size window (default is shift+backtick); the same key both opens and closes, even while the command line has focus - see [Typing wins over a character binding, except the toggles](#typing-wins-over-a-character-binding-except-the-toggles). Escape closes it.
+Add a `TerminalUI` component to a game object. The console window can be toggled with a hotkey (default is backtick), and another hotkey can be used to toggle the full size window
+(default is shift+backtick); the same key both opens and closes, even while the command line has focus - see
+[Typing wins over a character binding, except the toggles](#typing-wins-over-a-character-binding-except-the-toggles). Escape closes it.
 
 Enter `help` in the console to view all available commands, use the up and down arrow keys to traverse the command history, and the tab key to autocomplete commands.
 
 ## Quick-Launch Bar
 
-Add a `CommandPaletteUI` component next to a `UIDocument` to get a launcher-style command bar with no terminal animation. Press Ctrl+Space (configurable via `toggleHotkey`) to open a compact search bar; results appear as you type, ranked exact-first, then prefix, then fuzzy subsequence, and run through the same shell as the terminal. Up/Down selects a result and auto-loads its name into the input (the match list stays put until you edit the text again), Tab commits the selected name, Enter runs it (a failed command keeps the bar open with visible feedback), and Escape closes while restoring the previous focus. Once the input names a command and reaches an argument, the bar shows that command's completion candidates (static choices and dynamic providers, staged across arguments): Tab applies the selected candidate to the active token — quoting values that contain spaces when the token is not already quoted — and clicking a row applies it without running. Commands that print output (`list-fonts`, `list-themes`, `help`, ...) clear the executed command from the bar, show their results inside the palette, and stay open, so the output is readable; Enter does not re-run until you type a new query. Opening the terminal closes the bar and vice versa, so a hotkey press can never execute twice, and the `Opened`/`Closed` events let gameplay code release its own input maps. Styling rides the terminal's stylesheet chain and every shipped `TerminalThemePack` theme, so the bar, its results, and its slim scrollbar follow whatever theme the terminal is using. As with the terminal itself, full visuals require the package's `BaseStyles.uss` on the panel settings; without it the bar falls back to engine defaults.
+Add a `CommandPaletteUI` component next to a `UIDocument` to get a launcher-style command bar with no terminal animation. Press Ctrl+Space (configurable via `toggleHotkey`) to open
+a compact search bar; results appear as you type, ranked exact-first, then prefix, then fuzzy subsequence, and run through the same shell as the terminal. Up/Down selects a result
+and auto-loads its name into the input (the match list stays put until you edit the text again), Tab commits the selected name, Enter runs it (a failed command keeps the bar open
+with visible feedback), and Escape closes while restoring the previous focus. Once the input names a command and reaches an argument, the bar shows that command's completion
+candidates (static choices and dynamic providers, staged across arguments): Tab applies the selected candidate to the active token — quoting values that contain spaces when the
+token is not already quoted — and clicking a row applies it without running. Commands that print output (`list-fonts`, `list-themes`, `help`, ...) clear the executed command from
+the bar, show their results inside the palette, and stay open, so the output is readable; Enter does not re-run until you type a new query. Opening the terminal closes the bar and
+vice versa, so a hotkey press can never execute twice, and the `Opened`/`Closed` events let gameplay code release its own input maps. Styling rides the terminal's stylesheet chain
+and every shipped `TerminalThemePack` theme, so the bar, its results, and its slim scrollbar follow whatever theme the terminal is using. As with the terminal itself, full visuals
+require the package's `BaseStyles.uss` on the panel settings; without it the bar falls back to engine defaults.
 
 ## Themes and Settings Assets
 
-Create a theme without hand-writing USS: `Assets > Create > Wallstop Studios > DxCommandTerminal > Theme Asset` makes a `TerminalThemeAsset` with color pickers for the 19 custom properties a terminal theme sheet needs. The Editor automatically writes a sibling `.uss` named after the asset and keeps it in sync when you recolor or rename it (a rename generates a fresh sheet file — Unity references assets by path-derived identity, so like renaming any stylesheet, packs using the old file need the new sheet re-assigned); drag that sheet into a `TerminalThemePack`'s Themes list and it behaves exactly like the shipped sheets — `set-theme <name>` (or the palette) picks it up. Hand-written `.uss` themes remain fully supported. Prefer asset names without "theme" in the middle (`DarkTheme`, `Neon Nights`); names like `Cool Theme 2` still work but their `set-theme` shorthand becomes ambiguous — the full class name always resolves.
+Create a theme without hand-writing USS: `Assets > Create > Wallstop Studios > DxCommandTerminal > Theme Asset` makes a `TerminalThemeAsset` with color pickers for the 19 custom
+properties a terminal theme sheet needs. The Editor automatically writes a sibling `.uss` named after the asset and keeps it in sync when you recolor or rename it (a rename
+generates a fresh sheet file — Unity references assets by path-derived identity, so like renaming any stylesheet, packs using the old file need the new sheet re-assigned); drag
+that sheet into a `TerminalThemePack`'s Themes list and it behaves exactly like the shipped sheets — `set-theme <name>` (or the palette) picks it up. Hand-written `.uss` themes
+remain fully supported. Prefer asset names without "theme" in the middle (`DarkTheme`, `Neon Nights`); names like `Cool Theme 2` still work but their `set-theme` shorthand becomes
+ambiguous — the full class name always resolves.
 
-To share one configuration across terminals, `Assets > Create > Wallstop Studios > DxCommandTerminal > Terminal Settings` makes a `TerminalSettings` asset. Assign it to a `TerminalUI` or `CommandPaletteUI` and its values (buffer sizes, input caret, caret blink rate, button text, hint mode, history dedup, ignored log types, disabled commands, Unity log forwarding, stack-trace capture mode, and the palette hotkey) win over the component's serialized values — applied when the component wakes and re-applied whenever the terminal rebuilds its UI. Leave the slot empty and behavior is unchanged. Window geometry, animation curves, terminal ids, and the player's persisted theme/font choices stay per-component.
+To share one configuration across terminals, `Assets > Create > Wallstop Studios > DxCommandTerminal > Terminal Settings` makes a `TerminalSettings` asset. Assign it to a
+`TerminalUI` or `CommandPaletteUI` and its values (buffer sizes, input caret, caret blink rate, button text, hint mode, history dedup, ignored log types, disabled commands, Unity
+log forwarding, stack-trace capture mode, and the palette hotkey) win over the component's serialized values — applied when the component wakes and re-applied whenever the terminal
+rebuilds its UI. Leave the slot empty and behavior is unchanged. Window geometry, animation curves, terminal ids, and the player's persisted theme/font choices stay per-component.
 
-Stack-trace capture (`stackTraceMode`): `All` (default) records a caller stack trace for every log entry, exactly as before. `ErrorsAndWarnings` records traces only for error, assert, exception, and warning entries. `Disabled` records none. Trace extraction is the most expensive part of a logged line, so games that log frequently during gameplay (per-frame state dumps, command chatter) can drop it for routine messages without losing diagnostics when something actually goes wrong.
+Stack-trace capture (`stackTraceMode`): `All` (default) records a caller stack trace for every log entry, exactly as before. `ErrorsAndWarnings` records traces only for error,
+assert, exception, and warning entries. `Disabled` records none. Trace extraction is the most expensive part of a logged line, so games that log frequently during gameplay
+(per-frame state dumps, command chatter) can drop it for routine messages without losing diagnostics when something actually goes wrong.
 
 ## Registering Commands
 
@@ -162,7 +196,9 @@ static void CommandAdd(CommandArg[] args) {
     Terminal.Log("{0} + {1} = {2}", a, b, result);
 }
 ```
-`MinArgCount` and `MaxArgCount` allows the Command Interpreter to issue an error if arguments have been passed incorrectly, this way you can index the `CommandArg` array, knowing the array will have the correct size.
+
+`MinArgCount` and `MaxArgCount` allows the Command Interpreter to issue an error if arguments have been passed incorrectly, this way you can index the `CommandArg` array, knowing
+the array will have the correct size.
 
 In this case the command name (`add`) will be inferred from the method name, you can override this by setting `Name` in `RegisterCommand`.
 
@@ -170,7 +206,9 @@ In this case the command name (`add`) will be inferred from the method name, you
 [RegisterCommand(Name = "MyAdd", Help = "Adds 2 numbers", MinArgCount = 2, MaxArgCount = 2)]
 ```
 
-Note: a package-internal source generator emits a command catalog for every assembly that declares `[RegisterCommand]` methods, and a non-empty catalog replaces attribute reflection for that whole assembly. Commands emitted into the same assembly by a *different* source generator are invisible to this catalog and would be dropped; register those manually or give them their own catalog-compatible surface.
+Note: a package-internal source generator emits a command catalog for every assembly that declares `[RegisterCommand]` methods, and a non-empty catalog replaces attribute
+reflection for that whole assembly. Commands emitted into the same assembly by a _different_ source generator are invisible to this catalog and would be dropped; register those
+manually or give them their own catalog-compatible surface.
 
 ### 2. Manually adding Commands:
 
@@ -182,7 +220,8 @@ Terminal.Shell.AddCommand("add", CommandAdd, 2, 2, "Adds 2 numbers");
 
 ### 3. Using the typed command builder:
 
-For instance-owned commands (per-player abilities, scene tools, debug overlays), the fluent `CommandBuilder` derives argument bounds, the usage hint, validation, and Tab completion from one declaration, and returns a disposable handle that removes exactly its own registration on dispose:
+For instance-owned commands (per-player abilities, scene tools, debug overlays), the fluent `CommandBuilder` derives argument bounds, the usage hint, validation, and Tab completion
+from one declaration, and returns a disposable handle that removes exactly its own registration on dispose:
 
 ```csharp
 // Register on enable, dispose on disable.
@@ -207,9 +246,12 @@ void OnEnable()
 void OnDisable() => handle?.Dispose();
 ```
 
-Arguments parse through the same `CommandArg` parsers as `[RegisterCommand]` methods (including your registered custom parsers). Bad user input - unknown values, out-of-range numbers, too many arguments - is rejected with a descriptive error before the handler runs. Static and dynamic choices feed Tab completion stage by stage: with `pickaxe` as a preceding argument, the second argument's provider sees it and completes the next stage.
+Arguments parse through the same `CommandArg` parsers as `[RegisterCommand]` methods (including your registered custom parsers). Bad user input - unknown values, out-of-range
+numbers, too many arguments - is rejected with a descriptive error before the handler runs. Static and dynamic choices feed Tab completion stage by stage: with `pickaxe` as a
+preceding argument, the second argument's provider sees it and completes the next stage.
 
-Subcommands route one registered command through its first argument, each with its own arguments, validation, and completion. `inventory` below registers once; `inventory add pickaxe 3` and `inventory remove pickaxe` route to their own handlers:
+Subcommands route one registered command through its first argument, each with its own arguments, validation, and completion. `inventory` below registers once;
+`inventory add pickaxe 3` and `inventory remove pickaxe` route to their own handlers:
 
 ```csharp
 Terminal.Shell.AddCommand(
@@ -233,9 +275,14 @@ Terminal.Shell.AddCommand(
 );
 ```
 
-Tab completion offers subcommand names at the first argument and the routed subcommand's choices beyond it. Bare invocations run the parent handler when one is set, otherwise a descriptive error lists the available subcommands. The parent's execution contexts and history policy govern every subcommand; declaring parent arguments on a command that has subcommands, or setting `Contexts`/`AddToHistory` on a subcommand, throws at definition time. Like any command with a completion provider, a routed command keeps provider-owned completion: history-based suggestions do not apply to its arguments.
+Tab completion offers subcommand names at the first argument and the routed subcommand's choices beyond it. Bare invocations run the parent handler when one is set, otherwise a
+descriptive error lists the available subcommands. The parent's execution contexts and history policy govern every subcommand; declaring parent arguments on a command that has
+subcommands, or setting `Contexts`/`AddToHistory` on a subcommand, throws at definition time. Like any command with a completion provider, a routed command keeps provider-owned
+completion: history-based suggestions do not apply to its arguments.
 
-`.Remaining<T>(name)` declares the command's unbounded trailing argument: every token after the declared arguments parses and validates with the same rules as any typed argument and collects, in order, into one array the handler reads with `arguments.Get<T[]>(name)`. An invocation without trailing tokens reads as an empty array; mark the argument `.Required()` to demand at least one token instead. The usage hint marks it (`announce <message:string...>`), and its choices complete every trailing stage:
+`.Remaining<T>(name)` declares the command's unbounded trailing argument: every token after the declared arguments parses and validates with the same rules as any typed argument
+and collects, in order, into one array the handler reads with `arguments.Get<T[]>(name)`. An invocation without trailing tokens reads as an empty array; mark the argument
+`.Required()` to demand at least one token instead. The usage hint marks it (`announce <message:string...>`), and its choices complete every trailing stage:
 
 ```csharp
 Terminal.Shell.AddCommand(
@@ -253,16 +300,26 @@ Terminal.Shell.AddCommand(
 
 The remaining argument must be the final declaration: arguments declared after it, a second remaining argument, or a default on it throw at definition time.
 
-Definition-time mistakes throw `CommandConfigurationException`, which carries structured data for programmatic handling: `Failure` classifies the problem (empty name, duplicate name, missing handler, argument ordering, remaining-argument misuse, unparseable argument type, unsupported argument feature, invalid choices or range or default, subcommand conflicts, null configure result), and `CommandName`, `ArgumentName`, `SubcommandName`, and `ArgumentType` identify what failed - no message parsing required. Reading a parsed argument with the wrong type inside a handler throws `CommandArgumentTypeMismatchException`, carrying `ArgumentName`, `StoredType`, and `RequestedType`; remaining arguments store an array of their element type, so reading the element type itself reports `StoredType` as that array type.
+Definition-time mistakes throw `CommandConfigurationException`, which carries structured data for programmatic handling: `Failure` classifies the problem (empty name, duplicate
+name, missing handler, argument ordering, remaining-argument misuse, unparseable argument type, unsupported argument feature, invalid choices or range or default, subcommand
+conflicts, null configure result), and `CommandName`, `ArgumentName`, `SubcommandName`, and `ArgumentType` identify what failed - no message parsing required. Reading a parsed
+argument with the wrong type inside a handler throws `CommandArgumentTypeMismatchException`, carrying `ArgumentName`, `StoredType`, and `RequestedType`; remaining arguments store
+an array of their element type, so reading the element type itself reports `StoredType` as that array type.
 
-Note: if your `TerminalUI` uses `Reset State On Init`, the terminal rebuilds its shell during its own startup. Register commands from `Start` (or after the terminal is ready) rather than from another component's `OnEnable`, or the registration can be discarded by that reset.
+Note: if your `TerminalUI` uses `Reset State On Init`, the terminal rebuilds its shell during its own startup. Register commands from `Start` (or after the terminal is ready)
+rather than from another component's `OnEnable`, or the registration can be discarded by that reset.
 
 ---
 
 # Custom Parsing
-One change from the original Command Parser is the usage / functionality exposed for parsing the parameters to the CommandArgs themselves. The original library exposed four methods for retrieving arguments - `String`, `Float`, `Int`, and `bool`. If the input was invalid, these parsing methods would simply return the default value and log an error, making it very difficult to programmatically react to bad input.
 
-To remedy this, DxCommandTerminal exposes a single method, `TryGet`, and a readonly string field `contents`. `contents` returns the original input parameters as-is. `TryGet` attempts to parse the provided input parameter as the given type, taking in an optional parser. You can also register and deregister parsers for any type, which will override the built-in ones, making use of whatever custom logic you want (JSON, for example).
+One change from the original Command Parser is the usage / functionality exposed for parsing the parameters to the CommandArgs themselves. The original library exposed four methods
+for retrieving arguments - `String`, `Float`, `Int`, and `bool`. If the input was invalid, these parsing methods would simply return the default value and log an error, making it
+very difficult to programmatically react to bad input.
+
+To remedy this, DxCommandTerminal exposes a single method, `TryGet`, and a readonly string field `contents`. `contents` returns the original input parameters as-is. `TryGet`
+attempts to parse the provided input parameter as the given type, taking in an optional parser. You can also register and deregister parsers for any type, which will override the
+built-in ones, making use of whatever custom logic you want (JSON, for example).
 
 ```csharp
 public bool TryGet<T>(out T parsed);
@@ -286,6 +343,7 @@ Assert.IsFalse(arg.TryGet(out int invalidInt)); // Failed to parse
 ```
 
 `TryGet<T>` supports the following types out of the box:
+
 - string
 - char
 - bool
@@ -310,6 +368,7 @@ Assert.IsFalse(arg.TryGet(out int invalidInt)); // Failed to parse
 - Enums
 
 **Unity Types**:
+
 - Vector2
 - Vector3
 - Vector4
@@ -326,33 +385,39 @@ Assert.IsFalse(arg.TryGet(out int invalidInt)); // Failed to parse
 - Ray
 
 **Other**:
+
 - `System.Numerics.Complex`
 
-In addition to parsing values directly, `TryGet` will automatically attempt to match `public static` or `public const` named fields. For example, all of the following will parse as doubles:
+In addition to parsing values directly, `TryGet` will automatically attempt to match `public static` or `public const` named fields. For example, all of the following will parse as
+doubles:
 
 - "1.2"
 - "MaxValue"
 - "MinValue"
 
 Similarly, for Colors:
+
 - "RGBA(0.7, 0.5, 0.1, 1.0)"
 - "(0.7, 0.5, 0.1, 1.0)"
 - "(0.7, 0.5, 0.1)"
 - "red"
 - "clear"
 
-For all built-in types, the parsers are guaranteed to work with the type's default `ToString()` implementation, as well as logical versions of the data structure. See `Color` sample parsable inputs for an example of this.
+For all built-in types, the parsers are guaranteed to work with the type's default `ToString()` implementation, as well as logical versions of the data structure. See `Color`
+sample parsable inputs for an example of this.
 
 If you would like to have built-in parsers for a type that is not listed above, please open an issue!
 
 ## Advanced Parsing - Custom Parsers
+
 `TryGet<T>` has an overload that takes a nullable `CommandArgParser<T>`, which is a function with the following definition:
 
 ```csharp
 bool CustomParser<T>(string input, out T value);
 ```
 
-If a custom parser is provided, it will be used instead of any of the built in parsing functions. Please note that, as input, if the type is not in the `DoNotCleanTypes` set, the function will be provided with a cleaned version of the input string.
+If a custom parser is provided, it will be used instead of any of the built in parsing functions. Please note that, as input, if the type is not in the `DoNotCleanTypes` set, the
+function will be provided with a cleaned version of the input string.
 
 ```csharp
 // Somewhere
@@ -370,9 +435,13 @@ Assert.IsFalse(arg.TryGet(out float invalidFloat)); // Failed to parse
 Assert.IsFalse(arg.TryGet(out Color invalidColor)); // Failed to parse
 ```
 
-Use `arg.TryGetRaw(out T value, parser)` when identifiers must retain CR, LF, spaces, and other original characters. It passes `contents` without cleaning and calls only the supplied parser. A null parser returns `false` with `default(T)`; null input and a default `CommandArg` pass an empty string. The parser's result and output are returned unchanged, with no fallback.
+Use `arg.TryGetRaw(out T value, parser)` when identifiers must retain CR, LF, spaces, and other original characters. It passes `contents` without cleaning and calls only the
+supplied parser. A null parser returns `false` with `default(T)`; null input and a default `CommandArg` pass an empty string. The parser's result and output are returned unchanged,
+with no fallback.
 
-Typed arguments opt in with `.RawParser(parser)`, including every token in `.Remaining<T>`. Fluent copies retain the policy; a later `.Parser(parser)` restores normal cleaning, and a later `.RawParser(parser)` selects raw input again. Neither API changes global registrations, built-in parsers, or cleaning sets. `.RawParser(null)` throws `ArgumentNullException`.
+Typed arguments opt in with `.RawParser(parser)`, including every token in `.Remaining<T>`. Fluent copies retain the policy; a later `.Parser(parser)` restores normal cleaning, and
+a later `.RawParser(parser)` selects raw input again. Neither API changes global registrations, built-in parsers, or cleaning sets. `.RawParser(null)` throws
+`ArgumentNullException`.
 
 Scene-object adapters need raw input so a name such as `"A\r\nB"` cannot resolve to an object named `"AB"`:
 
@@ -391,7 +460,8 @@ CommandBuilder command = CommandBuilder
     .Handler((context, arguments) => Terminal.Log("{0}", arguments.Get<GameObject>("target").name));
 ```
 
-The same setup works for component types. `FormatChoice` preserves the original name; it does not normalize line endings. Raw parsing does not bypass command tokenization or variable expansion: quote names that contain whitespace and use the shared completion insertion path.
+The same setup works for component types. `FormatChoice` preserves the original name; it does not normalize line endings. Raw parsing does not bypass command tokenization or
+variable expansion: quote names that contain whitespace and use the shared completion insertion path.
 
 If a parsing function is common enough, it can be registered via:
 
@@ -421,33 +491,47 @@ or even
 int CommandArgParser.UnregisterAllParsers();
 ```
 
-All of these unregistration functions will return you information on whether the unregistration functions were successful. 
+All of these unregistration functions will return you information on whether the unregistration functions were successful.
 
 Note: Built in parser functions cannot be unregistered.
 
-Note: With Enter Play Mode Options configured to skip domain reload, the package resets registered parsers and the control sets below at every play-session boundary. Re-apply any registration or non-default configuration in `Awake` or a `RuntimeInitializeOnLoadMethod` hook at `BeforeSplashScreen` or later; a `SubsystemRegistration` hook runs in unspecified order against the package's reset and can be wiped for the session.
+Note: With Enter Play Mode Options configured to skip domain reload, the package resets registered parsers and the control sets below at every play-session boundary. Re-apply any
+registration or non-default configuration in `Awake` or a `RuntimeInitializeOnLoadMethod` hook at `BeforeSplashScreen` or later; a `SubsystemRegistration` hook runs in unspecified
+order against the package's reset and can be wiped for the session.
 
 ## Advanced Parsing - Changing Control Sets
-By default, command parameter input is stripped of whitespace characters. This, along with several other parsing-specific behaviors, are controlled via public static sets on `CommandArg` itself. If you would like to change this behavior in your code, you can modify the contents of these sets to be whatever you'd like. Below are a description of the sets and what they control.
 
-**Delimiters**: For complex, multi-value types like `Vector2`, `Quaternion`, `Color`, etc, the parameter is split using the first match, if any, found in this set. ie, `1,2,3` will get split into the array `["1", "2", "3"]` for parsing
+By default, command parameter input is stripped of whitespace characters. This, along with several other parsing-specific behaviors, are controlled via public static sets on
+`CommandArg` itself. If you would like to change this behavior in your code, you can modify the contents of these sets to be whatever you'd like. Below are a description of the
+sets and what they control.
 
-**Quotes**: By default, parameter values are split using whitespace characters. ie, `mycommand 1 2` will call `mycommand` with the arguments `1` and `2`. Another augmentation of DxCommandTerminal is the ability to capture spaces, or any normally-ignored character as input, as long as they're surrounded by any of the characters found in the `Quotes` set. If there is a chunk of text that starts with a character found in the `Quotes` set, but has no matching terminating character, the input string from the first quote character to the end is considered as one parameter. For example, `my command "1 2"` will call `mycommand` with a single argument of `"1 2"`.
+**Delimiters**: For complex, multi-value types like `Vector2`, `Quaternion`, `Color`, etc, the parameter is split using the first match, if any, found in this set. ie, `1,2,3` will
+get split into the array `["1", "2", "3"]` for parsing
+
+**Quotes**: By default, parameter values are split using whitespace characters. ie, `mycommand 1 2` will call `mycommand` with the arguments `1` and `2`. Another augmentation of
+DxCommandTerminal is the ability to capture spaces, or any normally-ignored character as input, as long as they're surrounded by any of the characters found in the `Quotes` set. If
+there is a chunk of text that starts with a character found in the `Quotes` set, but has no matching terminating character, the input string from the first quote character to the
+end is considered as one parameter. For example, `my command "1 2"` will call `mycommand` with a single argument of `"1 2"`.
 
 **IgnoredValuesForCleanedTypes**: For cleaned types, string sequences in this set will be replaced with the empty string.
 
 **DoNotCleanTypes**: A set of types for which input cleaning is not enabled.
 
-**IgnoredValuesForComplexTypes**: For complex, multi-value types like `Vector2`, `Quaternion`, `Color`, etc, the parameter input will replace all strings found in this set with the empty string.
+**IgnoredValuesForComplexTypes**: For complex, multi-value types like `Vector2`, `Quaternion`, `Color`, etc, the parameter input will replace all strings found in this set with the
+empty string.
 
-Each set also has a setter - `CommandArg.SetDelimiters(...)`, `SetQuotes(...)`, `SetIgnoredValuesForCleanedTypes(...)`, `SetDoNotCleanTypes(...)`, and `SetIgnoredValuesForComplexTypes(...)` - that replaces the contents in place, and `CommandArg.ResetParsingConfiguration()` restores all five to their defaults. The play-session reset applies that same restore, so a game that re-applies its configuration per session calls the setters again in `Awake` or a `RuntimeInitializeOnLoadMethod` hook.
+Each set also has a setter - `CommandArg.SetDelimiters(...)`, `SetQuotes(...)`, `SetIgnoredValuesForCleanedTypes(...)`, `SetDoNotCleanTypes(...)`, and
+`SetIgnoredValuesForComplexTypes(...)` - that replaces the contents in place, and `CommandArg.ResetParsingConfiguration()` restores all five to their defaults. The play-session
+reset applies that same restore, so a game that re-applies its configuration per session calls the setters again in `Awake` or a `RuntimeInitializeOnLoadMethod` hook.
 
 # Hotkeys
+
 All actions are now fully configurable by either explicit keybindings, for keyboard controls, or via [new Input System](#new-input-system) bindings.
 
 ![png](https://raw.githubusercontent.com/wallstop/DxCommandTerminal/master/Media/Hotkeys.png)
 
 Keyboard hotkey bindings are now intelligent as they can be about shift key interaction. There are three ways to create a `shift+<binding>`:
+
 1. Prefix the binding with the `#` symbol. For example, `#tab` will be interpreted as `shift+tab`
 2. For keys with shifted versions, such as alpha numeric keys, simply use the shifted version. For example, `A` will be interpreted as `shift+a`
 3. When using the new input system, hotkeys can be represented as `shift+<binding>`. `shift+tab` will be interpreted as the combination `left shift` + `tab`.
@@ -456,21 +540,30 @@ The only combination keys that are supported without using custom bindings via t
 
 ## Copy, cut, and paste
 
-Both surfaces accept Ctrl+V (Cmd+V on macOS). A UI Toolkit text field has no clipboard of its own, so the terminal answers the key itself: it reads the system clipboard and writes the result into the field you are typing into, replacing the current selection.
+Both surfaces accept Ctrl+V (Cmd+V on macOS). A UI Toolkit text field has no clipboard of its own, so the terminal answers the key itself: it reads the system clipboard and writes
+the result into the field you are typing into, replacing the current selection.
 
-Ctrl+C and Ctrl+X (Cmd+C / Cmd+X on macOS) take the selected text out the same way: the exact span you selected, verbatim, onto the system clipboard. A cut also removes the span from the field, and it lands as a user edit for the same reason a paste does - the command text is read from that edit, and the palette re-ranks its rows against the caret the cut left. With nothing selected the keys do nothing.
+Ctrl+C and Ctrl+X (Cmd+C / Cmd+X on macOS) take the selected text out the same way: the exact span you selected, verbatim, onto the system clipboard. A cut also removes the span
+from the field, and it lands as a user edit for the same reason a paste does - the command text is read from that edit, and the palette re-ranks its rows against the caret the cut
+left. With nothing selected the keys do nothing.
 
-A clipboard that will not keep the text - tvOS has none, and a platform that wants a user gesture may refuse the write - is a refusal the package can detect: the copy reports nothing happened, and a cut leaves your selection in the field rather than deleting text the clipboard never took.
+A clipboard that will not keep the text - tvOS has none, and a platform that wants a user gesture may refuse the write - is a refusal the package can detect: the copy reports
+nothing happened, and a cut leaves your selection in the field rather than deleting text the clipboard never took.
 
-A pasted block arrives as the arguments it reads as. Every run of whitespace - newlines from a copied stack trace, tabs from a copied log line, the trailing newline of a copied command - collapses to the single space that separates arguments, so `give item 42` pastes as three arguments instead of one token holding two newlines. A run at the start of the field separates nothing and is dropped.
+A pasted block arrives as the arguments it reads as. Every run of whitespace - newlines from a copied stack trace, tabs from a copied log line, the trailing newline of a copied
+command - collapses to the single space that separates arguments, so `give item 42` pastes as three arguments instead of one token holding two newlines. A run at the start of the
+field separates nothing and is dropped.
 
-A quote still groups after a paste, so `set name "two words"` is one argument, not two. What the paste changes is the text inside the quotes: a newline inside a quoted argument becomes a space, because the paste normalizes the text before the tokenizer sees it. Quoted whitespace survives when you type, not when you paste.
+A quote still groups after a paste, so `set name "two words"` is one argument, not two. What the paste changes is the text inside the quotes: a newline inside a quoted argument
+becomes a space, because the paste normalizes the text before the tokenizer sees it. Quoted whitespace survives when you type, not when you paste.
 
 A completion candidate that contains whitespace is quoted rather than inserted bare, so a candidate like `two lines` still lands as one argument.
 
-The clipboard is unavailable on tvOS, and a platform that will not answer without a user gesture (a browser clipboard API) may read empty. Neither is an error: the key is left alone, and anything the platform does with it still happens. Neither is measured here - the degradation is the design, not a fallback that failed.
+The clipboard is unavailable on tvOS, and a platform that will not answer without a user gesture (a browser clipboard API) may read empty. Neither is an error: the key is left
+alone, and anything the platform does with it still happens. Neither is measured here - the degradation is the design, not a fallback that failed.
 
-One limit: a control character that is not whitespace is left in the field. A single line cannot show it, so it is invisible while you are typing, and it reaches the argument as the exact character you copied. Dropping it would lose your text; escaping it there would change the command. A command that prints it gets the visible escape from the log.
+One limit: a control character that is not whitespace is left in the field. A single line cannot show it, so it is invisible while you are typing, and it reaches the argument as
+the exact character you copied. Dropping it would lose your text; escaping it there would change the command. A command that prints it gets the visible escape from the log.
 
 ## Copying out of the console
 
@@ -479,9 +572,12 @@ The log view is the only place a message, a command echo, or a failing value eve
 - `copy-last` copies the newest line.
 - `copy-log` copies every buffered line; `copy-log 20` copies the last 20.
 
-A copied line is the line the log shows, so the stack trace is not included - `trace` is how you read one, and copying 256 lines does not carry 256 traces. Each command answers in the console like every other one: an empty log, a log with no text in it, a count that is not a number, and a count below one are each reported rather than ignored.
+A copied line is the line the log shows, so the stack trace is not included - `trace` is how you read one, and copying 256 lines does not carry 256 traces. Each command answers in
+the console like every other one: an empty log, a log with no text in it, a count that is not a number, and a count below one are each reported rather than ignored.
 
-A clipboard write is a request a platform can decline. tvOS has no clipboard, and a browser clipboard may refuse without a user gesture, so the write is read back and compared and a copy that did not happen says so instead of silently doing nothing. The read-back is not an acknowledgement: copying the same window twice reports success whether or not the second write landed, and a browser that accepts the write asynchronously can read back the old value.
+A clipboard write is a request a platform can decline. tvOS has no clipboard, and a browser clipboard may refuse without a user gesture, so the write is read back and compared and
+a copy that did not happen says so instead of silently doing nothing. The read-back is not an acknowledgement: copying the same window twice reports success whether or not the
+second write landed, and a browser that accepts the write asynchronously can read back the old value.
 
 ## Reading the log with the keyboard
 
@@ -490,9 +586,11 @@ The command line holds panel focus for as long as the console is open, so the te
 - **Page Up / Page Down** page the log by one viewport.
 - **Ctrl+Home** and **Ctrl+End** (Cmd on macOS) jump to its oldest and newest lines.
 
-Home and End without the modifier stay with the command line, where they move the caret as a text field should. Every other key is untouched - typing, history recall, completion, and closing work exactly as they did - except F3 and Shift+F3, which step a log search while one is set (see [Searching the log](#searching-the-log)).
+Home and End without the modifier stay with the command line, where they move the caret as a text field should. Every other key is untouched - typing, history recall, completion,
+and closing work exactly as they did - except F3 and Shift+F3, which step a log search while one is set (see [Searching the log](#searching-the-log)).
 
-Paging back detaches the tail exactly as scrolling back does, so new output does not pull the view to the end while you are reading. Ctrl+End is the way back to following. A log that has not been laid out - a headless editor, or a view with no rendered Game view - has nothing to page through and stays where it is.
+Paging back detaches the tail exactly as scrolling back does, so new output does not pull the view to the end while you are reading. Ctrl+End is the way back to following. A log
+that has not been laid out - a headless editor, or a view with no rendered Game view - has nothing to page through and stays where it is.
 
 ## Searching the log
 
@@ -502,39 +600,61 @@ The log holds the newest 256 lines by default and nothing else, so reaching one 
 - `find` on its own steps to the next match, wrapping at the end; **F3** and **Shift+F3** do the same from the keyboard.
 - `clear-filter` shows every line again.
 
-Each reports what it did - `Showing 20 of 240 log lines.`, or `Match 3 of 80.` - so a search that hit nothing says so instead of leaving you looking at an empty log, and the search stays set so a typo does not silently put everything back. A query is the arguments joined back into one string, so `find "two words"` searches for two words. An empty query is refused and leaves the search you had alone. The count does not move because the search talked: its own answer is not one of the results, so the same search reports the same number however many times you run it.
+Each reports what it did - `Showing 20 of 240 log lines.`, or `Match 3 of 80.` - so a search that hit nothing says so instead of leaving you looking at an empty log, and the search
+stays set so a typo does not silently put everything back. A query is the arguments joined back into one string, so `find "two words"` searches for two words. An empty query is
+refused and leaves the search you had alone. The count does not move because the search talked: its own answer is not one of the results, so the same search reports the same number
+however many times you run it.
 
 The search is over the text as the log shows it, so what you can see is what you can find, and it ignores case: `nullref` reaches `NullReferenceException`.
 
 Four limits worth knowing before you rely on it:
 
-- It does not find the commands you ran, or the console's own answers. Both surfaces echo the line you typed into the log, and a search that matched its own echo would report a hit for every query, including one that appears nowhere; the same goes for the line the search writes when it tells you what it found. Use `copy-log` for a transcript with your commands in it.
-- The query is only recorded as the `find` line in the log. Once that line rotates out of the buffer - or you run `clear-console` - nothing on screen says the view is filtered, and the query is gone. `clear-filter` is how you put the log back.
+- It does not find the commands you ran, or the console's own answers. Both surfaces echo the line you typed into the log, and a search that matched its own echo would report a hit
+  for every query, including one that appears nowhere; the same goes for the line the search writes when it tells you what it found. Use `copy-log` for a transcript with your
+  commands in it.
+- The query is only recorded as the `find` line in the log. Once that line rotates out of the buffer - or you run `clear-console` - nothing on screen says the view is filtered, and
+  the query is gone. `clear-filter` is how you put the log back.
 - `clear-console` does not drop the search. The view goes empty until the next `clear-filter` or a new `find`.
-- F3 and Shift+F3 need the command line to hold focus, as the paging keys do, and the jump to a match needs a log view that has been laid out. A view with no rendered Game view filters but does not scroll.
+- F3 and Shift+F3 need the command line to hold focus, as the paging keys do, and the jump to a match needs a log view that has been laid out. A view with no rendered Game view
+  filters but does not scroll.
 
 Binding a hotkey to `f3` fires that binding as well while a search is set; the terminal reads the key independently of your bindings.
 
 ## Typing wins over a character binding, except the toggles
 
-A binding that presses a character key is left to the field being typed into. While the command line or the palette search bar has focus, pressing the key types the character and does not run the binding.
+A binding that presses a character key is left to the field being typed into. While the command line or the palette search bar has focus, pressing the key types the character and
+does not run the binding.
 
-The toggle bindings are the exception: the console key is reserved by the surface it opens. `` ` `` (toggle) and `` #` `` (full) open and close their surface every press, even while a field has focus - the stroke that opens the console is the stroke that closes it. The cost of the reservation is the character: a toggle press that closes the console clears the line, so nothing typed survives it. If you need to type a backtick into a command, bind the toggles to keys that press no character (a function key, or any `ctrl+` chord).
+The toggle bindings are the exception: the console key is reserved by the surface it opens. `` ` `` (toggle) and `` #` `` (full) open and close their surface every press, even
+while a field has focus - the stroke that opens the console is the stroke that closes it. The cost of the reservation is the character: a toggle press that closes the console
+clears the line, so nothing typed survives it. If you need to type a backtick into a command, bind the toggles to keys that press no character (a function key, or any `ctrl+`
+chord).
 
-Each surface answers its own toggle key: the terminal's key toggles the terminal, the palette's key toggles the palette. Do not bind the same key to both surfaces' toggles - one press would then reach both polls in the same frame, and which surface ends up open depends on script execution order. (Opening one surface always closes the other, so the surfaces never stack; only the winner is unordered.)
+Each surface answers its own toggle key: the terminal's key toggles the terminal, the palette's key toggles the palette. Do not bind the same key to both surfaces' toggles - one
+press would then reach both polls in the same frame, and which surface ends up open depends on script execution order. (Opening one surface always closes the other, so the surfaces
+never stack; only the winner is unordered.)
 
-All other bindings that press no character keep working while you type: navigation and editing keys (arrows, Home, End, PageUp/PageDown, Enter, Tab, Escape, Backspace, Insert, Delete), function keys, modifiers, lock and media keys, and mouse or joystick buttons - plus any `ctrl+` chord. `TerminalKeyboardController` only reads `shift+` and `ctrl+`; a `cmd+`/`super+`/`alt+` prefix is not parsed, so such a binding never fires.
+All other bindings that press no character keep working while you type: navigation and editing keys (arrows, Home, End, PageUp/PageDown, Enter, Tab, Escape, Backspace, Insert,
+Delete), function keys, modifiers, lock and media keys, and mouse or joystick buttons - plus any `ctrl+` chord. `TerminalKeyboardController` only reads `shift+` and `ctrl+`; a
+`cmd+`/`super+`/`alt+` prefix is not parsed, so such a binding never fires.
 
-Keep `closeHotkey` on a key that presses no character (Escape by default): a character bound to it cannot close the terminal while the field has focus. Escape, or any `ctrl+` chord, closes from inside.
+Keep `closeHotkey` on a key that presses no character (Escape by default): a character bound to it cannot close the terminal while the field has focus. Escape, or any `ctrl+`
+chord, closes from inside.
 
-`PlayerInput` messages follow the same rule. The console asks the action which control performed it, so a `HandlePrevious` action bound to a character key leaves that character to the field instead of running. `ToggleSmall` and `ToggleFull` sit outside the rule: they run whatever holds focus, matching the polled console key. The control that fired decides for everything else, not the action's binding list: a gamepad button, a mouse button, a `ctrl+` chord, and a composite driven by any of those all keep working while you type.
+`PlayerInput` messages follow the same rule. The console asks the action which control performed it, so a `HandlePrevious` action bound to a character key leaves that character to
+the field instead of running. `ToggleSmall` and `ToggleFull` sit outside the rule: they run whatever holds focus, matching the polled console key. The control that fired decides
+for everything else, not the action's binding list: a gamepad button, a mouse button, a `ctrl+` chord, and a composite driven by any of those all keep working while you type.
 
-Bind a message to a `Button` action. A `Value` action also sends a message when the key is released: the rule covers both halves of a character binding, and a toggle on either kind of key runs both halves, so a Value-bound toggle opens the console and immediately closes it again. A message sent by hand, or one whose action the asset cannot resolve, runs as it always has.
+Bind a message to a `Button` action. A `Value` action also sends a message when the key is released: the rule covers both halves of a character binding, and a toggle on either kind
+of key runs both halves, so a Value-bound toggle opens the console and immediately closes it again. A message sent by hand, or one whose action the asset cannot resolve, runs as it
+always has.
 
 # New Input System
-DxCommandTerminal is now fully integrated with Unity's new Input System, if it is found in the project and enabled. 
+
+DxCommandTerminal is now fully integrated with Unity's new Input System, if it is found in the project and enabled.
 
 You can also use `PlayerInput` or similar to bind InputActions to all available command terminal behavior. The available message are:
+
 - `HandlePrevious`: Selects the previously issued command form current command history location.
 - `HandleNext`: Selects the next issued command from current command history location.
 - `Close`: If the terminal is open, closes it.
@@ -545,9 +665,12 @@ You can also use `PlayerInput` or similar to bind InputActions to all available 
 - `EnterCommand`: Takes the current buffer and attempts to execute it as a command + parameters.
 
 ## Note
-The package's inspector disables the polled `TerminalKeyboardController` for you when a `PlayerInput` is added to a GameObject that already has a `TerminalUI`, so the two input paths do not both fire. Add the `TerminalUI` first. If you add the `PlayerInput` at runtime, remove the polled controller yourself.
+
+The package's inspector disables the polled `TerminalKeyboardController` for you when a `PlayerInput` is added to a GameObject that already has a `TerminalUI`, so the two input
+paths do not both fire. Add the `TerminalUI` first. If you add the `PlayerInput` at runtime, remove the polled controller yourself.
 
 When InputActions are not bound, there is an order of precedence for input checking. It is:
+
 - Close
 - Enter Command
 - Previous
@@ -560,52 +683,63 @@ When InputActions are not bound, there is an order of precedence for input check
 This order is irrelevant when using PlayerInput.
 
 # Web GL
-The shipped source generator emits `[Preserve]` onto every generated command catalog - on the catalog type and on its `Collect` entry method - and the catalog binds accessible command methods through direct delegate creation. Private command handlers in partial types are bound through an emitted partial companion (no reflection), so they are inside the catalog's static reachability graph too. The linker keeps the rooted `Collect` entry and everything reachable from it, so commands registered with `RegisterCommandAttribute` keep working through managed code stripping (IL2CPP/WebGL players) at every Managed Stripping Level.
 
-At `Medium` or higher, commands reached only through reflection used to be strippable: handlers in private, non-partial types, and commands in precompiled DLLs without a generated catalog. Player builds now handle this automatically - the package's editor hook feeds the IL2CPP/WebGL linker an additional `link.xml` at build time that preserves exactly those reflection-bound handlers (and nothing else). Nothing is written under `Assets/`, no project files change, and nothing in your project persists. Manual `[Preserve]`, `link.xml`, or registration via `Terminal.Shell.AddCommand` remain available but are no longer required.
+The shipped source generator emits `[Preserve]` onto every generated command catalog - on the catalog type and on its `Collect` entry method - and the catalog binds accessible
+command methods through direct delegate creation. Private command handlers in partial types are bound through an emitted partial companion (no reflection), so they are inside the
+catalog's static reachability graph too. The linker keeps the rooted `Collect` entry and everything reachable from it, so commands registered with `RegisterCommandAttribute` keep
+working through managed code stripping (IL2CPP/WebGL players) at every Managed Stripping Level.
+
+At `Medium` or higher, commands reached only through reflection used to be strippable: handlers in private, non-partial types, and commands in precompiled DLLs without a generated
+catalog. Player builds now handle this automatically - the package's editor hook feeds the IL2CPP/WebGL linker an additional `link.xml` at build time that preserves exactly those
+reflection-bound handlers (and nothing else). Nothing is written under `Assets/`, no project files change, and nothing in your project persists. Manual `[Preserve]`, `link.xml`, or
+registration via `Terminal.Shell.AddCommand` remain available but are no longer required.
 
 ![png](https://raw.githubusercontent.com/wallstop/DxCommandTerminal/master/Media/ManagedStrippingLevel.png)
 
 See [Unity docs on Managed Stripping Level](https://docs.unity3d.com/2022.3/Documentation/ScriptReference/ManagedStrippingLevel.html) for more details.
 
 # Discovery Exclusions
-For performance, automatic command discovery scans only assemblies whose metadata references this package; it also skips dynamic (runtime-emitted) assemblies. An attributed command in an assembly outside that rule is silently skipped by default. Opt the assembly in explicitly before the first command request:
+
+For performance, automatic command discovery scans only assemblies whose metadata references this package; it also skips dynamic (runtime-emitted) assemblies. An attributed command
+in an assembly outside that rule is silently skipped by default. Opt the assembly in explicitly before the first command request:
 
 ```csharp
 IDisposable handle = CommandShell.IncludeDiscoveryAssembly(myPluginAssembly);
 ```
 
-The returned handle removes the assembly from discovery on `Dispose`. A registration made after commands registered applies on the next registration cycle (after `ClearCustomCommands`/`ClearAutoRegisteredCommands` re-runs readiness), the same as discovery providers. The default path never walks every assembly in the domain.
+The returned handle removes the assembly from discovery on `Dispose`. A registration made after commands registered applies on the next registration cycle (after
+`ClearCustomCommands`/`ClearAutoRegisteredCommands` re-runs readiness), the same as discovery providers. The default path never walks every assembly in the domain.
 
 # Hints
-AutoComplete has gotten a major upgrade in this fork. Completion is now not only case-insensitive, but it will now also search (unique) commands that have been executed, ignoring any irrelevant input. Pressing the complete key multiple times now selects available options in a persistent fashion. Completion can be walked both forward and backwards. Results are now presented in a new UI that intelligently adapts to screen space and current selection position. When completion is no longer relevant, the UI is disabled. However, you can opt to always show the available commands by setting `Hint Display Mode` to `Always` in the Terminal configuration. Hint colors come from the terminal's stylesheet chain, so they follow the active theme.
+
+AutoComplete has gotten a major upgrade in this fork. Completion is now not only case-insensitive, but it will now also search (unique) commands that have been executed, ignoring
+any irrelevant input. Pressing the complete key multiple times now selects available options in a persistent fashion. Completion can be walked both forward and backwards. Results
+are now presented in a new UI that intelligently adapts to screen space and current selection position. When completion is no longer relevant, the UI is disabled. However, you can
+opt to always show the available commands by setting `Hint Display Mode` to `Always` in the Terminal configuration. Hint colors come from the terminal's stylesheet chain, so they
+follow the active theme.
 
 ![png](https://raw.githubusercontent.com/wallstop/DxCommandTerminal/master/Media/AutoComplete.png)
 
-**Note**: Currently, if `Make Hints Clickable` is checked, there is a minor bug where, occasionally, for ~1 frame after auto-completing or deleting a character from a completed word, the text is selected and then unselected. I think it's something to do with the Layout v Repaint events, but I've tried a lot of solutions and none of them worked. Marking this as "won't fix" for now. Open to PRs!
+**Note**: Currently, if `Make Hints Clickable` is checked, there is a minor bug where, occasionally, for ~1 frame after auto-completing or deleting a character from a completed
+word, the text is selected and then unselected. I think it's something to do with the Layout v Repaint events, but I've tried a lot of solutions and none of them worked. Marking
+this as "won't fix" for now. Open to PRs!
 
 # Measured Performance
 
-Performance claims here are measured, not asserted. Every claim is pinned by a test in
-the package's automated suites. Timing numbers come from the maintainer's pinned editor
-(macOS, Unity 6000.4.6f1, Mono) except the generator's, which comes from the Unity-free
-.NET harness that CI runs; editor numbers never stand in for player numbers, and player
-stripping behavior is validated by local IL2CPP/WebGL build drills instead (evidence
-summarized on [issue #38](https://github.com/wallstop/DxCommandTerminal/issues/38)).
+Performance claims here are measured, not asserted. Every claim is pinned by a test in the package's automated suites. Timing numbers come from the maintainer's pinned editor
+(macOS, Unity 6000.4.6f1, Mono) except the generator's, which comes from the Unity-free .NET harness that CI runs; editor numbers never stand in for player numbers, and player
+stripping behavior is validated by local IL2CPP/WebGL build drills instead (evidence summarized on [issue #38](https://github.com/wallstop/DxCommandTerminal/issues/38)).
 
-| Claim | Pinning test |
-| --- | --- |
-| Designated hot paths allocate nothing when warmed: typing completion, history traversal + copy + wrap push, borrowed-view dispatch, log writes without stack traces, steady refresh passes, per-keystroke hint sweeps | `StandardOperationsAllocationTests`, `DispatchAllocationTests`, `TerminalUIAllocationTests` |
-| Text command execution allocates by design (tokenizing) and is asserted as such, never claimed zero | `StandardOperationsAllocationTests.TextCommandExecutionAllocatesByDesign` |
-| First command readiness in a 1,000-command domain: p95 4.498 ms warm (gate < 5 ms, pinned-environment evidence; suite tripwire: warm median < 8 ms, warm p95 < 32 ms) | `CommandDiscoveryScalingTests.MeasuresReadinessAcrossCommandVolume` |
-| Provider completion with 1,000 candidates: p95 0.105 ms (gate < 1 ms) | `StandardOperationsBenchmarkTests.MeasuresProviderCompletion`, `ProviderCompletionStaysUnderTripwire` |
-| Unused startup contribution: p95 0.001 ms (gate < 1 ms) | `StandardOperationsBenchmarkTests.BackendStartupReuseStaysUnderTripwire` |
-| Source generator execution: p95 5.99 ms per assembly (local gate p95 < 25 ms; CI gates median < 25 ms) | `GeneratorTimingGateTests.GeneratorExecutionStaysUnderTheTimingGate` |
-| Generated catalogs survive stripping at every level (`[Preserve]`); bake-preserved reflection-bound commands survive IL2CPP/WebGL Medium and High (build-level proof; runtime registration evidenced on a standalone IL2CPP player) | `CommandCompatibilityBakeTests` + local IL2CPP/WebGL strip drills |
+| Claim                                                                                                                                                                                                                               | Pinning test                                                                                          |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Designated hot paths allocate nothing when warmed: typing completion, history traversal + copy + wrap push, borrowed-view dispatch, log writes without stack traces, steady refresh passes, per-keystroke hint sweeps               | `StandardOperationsAllocationTests`, `DispatchAllocationTests`, `TerminalUIAllocationTests`           |
+| Text command execution allocates by design (tokenizing) and is asserted as such, never claimed zero                                                                                                                                 | `StandardOperationsAllocationTests.TextCommandExecutionAllocatesByDesign`                             |
+| First command readiness in a 1,000-command domain: p95 4.498 ms warm (gate < 5 ms, pinned-environment evidence; suite tripwire: warm median < 8 ms, warm p95 < 32 ms)                                                               | `CommandDiscoveryScalingTests.MeasuresReadinessAcrossCommandVolume`                                   |
+| Provider completion with 1,000 candidates: p95 0.105 ms (gate < 1 ms)                                                                                                                                                               | `StandardOperationsBenchmarkTests.MeasuresProviderCompletion`, `ProviderCompletionStaysUnderTripwire` |
+| Unused startup contribution: p95 0.001 ms (gate < 1 ms)                                                                                                                                                                             | `StandardOperationsBenchmarkTests.BackendStartupReuseStaysUnderTripwire`                              |
+| Source generator execution: p95 5.99 ms per assembly (local gate p95 < 25 ms; CI gates median < 25 ms)                                                                                                                              | `GeneratorTimingGateTests.GeneratorExecutionStaysUnderTheTimingGate`                                  |
+| Generated catalogs survive stripping at every level (`[Preserve]`); bake-preserved reflection-bound commands survive IL2CPP/WebGL Medium and High (build-level proof; runtime registration evidenced on a standalone IL2CPP player) | `CommandCompatibilityBakeTests` + local IL2CPP/WebGL strip drills                                     |
 
-Every zero-allocation claim first proves its instrument: a positive control must detect
-a forced allocation before a zero claim can pass, a window on an unvalidated instrument
-can never map to zero, and byte-level counters stay inert on Unity's Mono (reported as
-`Unavailable`) so zero claims there rest on the validated instrument alone. Timing
-tripwires in the benchmark suites guard against order-of-magnitude regressions; they
-are not substitute measurements.
+Every zero-allocation claim first proves its instrument: a positive control must detect a forced allocation before a zero claim can pass, a window on an unvalidated instrument can
+never map to zero, and byte-level counters stay inert on Unity's Mono (reported as `Unavailable`) so zero claims there rest on the validated instrument alone. Timing tripwires in
+the benchmark suites guard against order-of-magnitude regressions; they are not substitute measurements.

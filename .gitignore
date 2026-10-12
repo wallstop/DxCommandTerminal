@@ -13,6 +13,9 @@ package-lock.json
 
 # Tooling artifacts (Unity state captures, scratch outputs)
 .artifacts/
+# The T14 exporter's default output lands next to the package manifest
+# when --out is omitted; it is a build artifact, never source
+tooling~/*.unitypackage
 
 # Generated agent MCP configs (written by `npm run unity:mcp:configure`, contain tokens)
 .mcp.json
