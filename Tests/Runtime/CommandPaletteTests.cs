@@ -755,13 +755,13 @@
         {
             yield return SpawnPalette();
             RegisterSpawnItemCommand();
-            ArmKeyDownWitness();
 
             string originalClipboard = GUIUtility.systemCopyBuffer;
             try
             {
                 _palette.Open();
                 yield return null;
+                ArmKeyDownWitness();
 
                 yield return SendPaletteClipboardKey(
                     KeyCode.V,
@@ -805,13 +805,13 @@
         {
             yield return SpawnPalette();
             RegisterSpawnItemCommand();
-            ArmKeyDownWitness();
 
             string originalClipboard = GUIUtility.systemCopyBuffer;
             try
             {
                 _palette.Open();
                 yield return null;
+                ArmKeyDownWitness();
 
                 yield return SendPaletteClipboardKey(
                     KeyCode.X,
