@@ -142,6 +142,36 @@ jobs:
         # docfx API model, generated in the docs-build workflow instead).
         run: node tooling~/scripts/lint-docs-catalog.mjs
 
+      - name: Lint markdown format
+        # Issue #215: prettier at the 180-character measure. OS-neutral, so
+        # one leg checks it; the local preflight gate mirrors this lane.
+        if: matrix.os == 'ubuntu-latest'
+        run: node tooling~/scripts/lint-md-format.mjs
+
+      - name: Validate package contents
+        if: matrix.os == 'ubuntu-latest'
+        run: node tooling~/scripts/release/validate-package-contents.mjs
+
+  csharp-lints:
+    # The eight C# linters that ran inside both OS legs of node-tests run
+    # once here instead. They read tracked bytes,
+    # which are OS-identical by checkout (no CRLF rewrite without a matching
+    # .gitattributes pin), so the second leg was a duplicate bill - Windows
+    # minutes cost twice - and a serial tail on the node-tests job's wall.
+    # Dependency-free node scripts: no npm install. The ninth fleet member,
+    # the theme palette token lint, keeps its own theme-style-lint workflow
+    # and its Styles trigger, so it is not repeated here.
+    name: csharp-lints (ubuntu-latest)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+
       - name: Lint comparison direction
         run: node tooling~/scripts/lint-comparison-direction.mjs
 
@@ -165,16 +195,6 @@ jobs:
 
       - name: Lint Unity-object null assertions
         run: node tooling~/scripts/lint-unity-null-patterns.mjs
-
-      - name: Lint markdown format
-        # Issue #215: prettier at the 180-character measure. OS-neutral, so
-        # one leg checks it; the local preflight gate mirrors this lane.
-        if: matrix.os == 'ubuntu-latest'
-        run: node tooling~/scripts/lint-md-format.mjs
-
-      - name: Validate package contents
-        if: matrix.os == 'ubuntu-latest'
-        run: node tooling~/scripts/release/validate-package-contents.mjs
 
   devtool-grammar:
     # DxTerminalTestRunReporter only ever compiled inside a host Unity project,
@@ -207,9 +227,9 @@ jobs:
         id: grammar-inputs
         shell: bash
         run: |
-          # Everything the job reads: the grammar project and the reporter
-          # C# it compiles, the reader import plus its module-scope t11
-          # imports, the manifest defining the command, this workflow.
+          # Everything the job reads: the grammar project and the two dev
+          # tool C# files it compiles, the reader import plus its module-scope
+          # t11 imports, the npm inputs the install reads, this workflow.
           #
           # The base must span the event's WHOLE change range, not the
           # last commit: a PR diffs from its base SHA (the merge-ref
@@ -231,10 +251,12 @@ jobs:
           if git diff --name-only "$base" HEAD -- \
             tooling~/scripts/mcp/grammar \
             tooling~/scripts/mcp/DxTerminalTestRunReporter.cs.txt \
+            tooling~/scripts/mcp/DxTerminalStateCapture.cs.txt \
             tooling~/scripts/mcp/unity-mcp.mjs \
             tooling~/scripts/t11/comparator.mjs \
             tooling~/scripts/t11/scenarios.mjs \
             tooling~/package.json \
+            tooling~/.npmrc \
             .github/workflows/tooling-tests.yml | grep -q .; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi

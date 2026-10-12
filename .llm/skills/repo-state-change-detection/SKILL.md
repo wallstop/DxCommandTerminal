@@ -53,16 +53,19 @@ enforces one, join that class to the filter in the same change - `publish-releas
 
 ## Pinned by
 
-- `tooling~/scripts/tests/preflight.test.mjs`: the committed-probe test (commits on the real branch, resets in `finally`), the staged-rewrite test, the dirty-outside-roots test,
-  the ignored-coin and untracked tests.
+- `tooling~/scripts/tests/preflight.test.mjs`: the committed-edit, staged-rewrite, dirty-outside-roots, ignored-coin, and untracked tests, all on scratch repositories (below).
 - `tooling~/scripts/tests/publish-release.test.mjs`: the path-filter pins.
 
 ## Tests that drive repo git state
 
-A test that commits and `reset --hard`s must refuse to run on a dirty tree - compute the skip from `git status --porcelain --untracked-files=no` at registration. `reset --hard`
-restores HEAD, not the worktree: on a dirty tree it destroys uncommitted work (this ate its own fix once, in this skill's birth session). CI checkouts are clean, so the pin still
-runs there; locally it skips. In `finally`, restore HEAD first, then `rm` the probe file - it is untracked if the commit never landed. Pass the commit identity inline
-(`git -c user.name=... -c user.email=... commit`): CI runners ship none, and a global-config mutation would leak past the `finally`.
+Drive a SCRATCH repository, never the real checkout. The preflight-cache module derives REPO_ROOT from its own location, so a test copies `preflight-cache.mjs` into a three-file
+repo under `os.tmpdir()` and runs every key observation in a child that imports the copy - the scratch tree becomes the keyed repository, git spawns cost milliseconds on the local
+scratch filesystem instead of seconds on the 9p mount, and a probe can never touch real tracked state. Commit identity is repo-local `git config` inside the scratch repo.
+
+The real-branch era is the cautionary record: the committed-probe test once committed on the real branch and `reset --hard` in `finally`, so it had to refuse dirty trees (computed
+from `git status --porcelain --untracked-files=no` at registration) because the reset destroys uncommitted work - and it ate its own fix once in its birth session. If a future test
+genuinely cannot use a scratch repo (it must pin the real checkout's git behavior), that refusal pattern and the inline identity (`git -c user.name=... -c user.email=...`) are the
+recovery.
 
 ## Stated coins
 

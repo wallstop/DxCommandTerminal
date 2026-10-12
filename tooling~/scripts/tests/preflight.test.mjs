@@ -52,6 +52,51 @@ after(() => {
   for (const dir of tempDirs) fs.rmSync(dir, { recursive: true, force: true });
 });
 
+/*
+    A throwaway repository for the listing-identity contract tests. The
+    module derives REPO_ROOT from its own location, so a COPY of
+    preflight-cache.mjs inside the scratch tree makes the scratch tree the
+    keyed repository: every git spawn lands on a three-file repo on the
+    local scratch filesystem (milliseconds) instead of the real checkout
+    over a 9p mount (seconds each), and no probe ever touches real tracked
+    state. The per-process listing memo is why each observation still runs
+    in its own child importing that copy.
+ */
+function scratchRepo() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "preflight-repo-"));
+  tempDirs.push(root);
+  const scripts = path.join(root, "tooling~", "scripts");
+  fs.mkdirSync(scripts, { recursive: true });
+  fs.copyFileSync(
+    path.join(toolingRoot, "scripts", "preflight-cache.mjs"),
+    path.join(scripts, "preflight-cache.mjs")
+  );
+  fs.writeFileSync(path.join(root, ".gitignore"), ".preflight-cache/\nignored-scratch/\n");
+  fs.writeFileSync(path.join(root, ".gitattributes"), "*.txt text eol=lf\n");
+  fs.writeFileSync(path.join(scripts, "tracked-fixture.txt"), "tracked bytes\n");
+  const git = (...args) => execFileSync("git", args, { cwd: root, encoding: "utf8" });
+  git("init", "-q", "-b", "main");
+  git("config", "user.email", "probe@example.invalid");
+  git("config", "user.name", "preflight probe");
+  /* Repo-local: a developer machine with commit.gpgsign=true must not fail
+     the fixture commit (--no-verify skips hooks, not signing). */
+  git("config", "commit.gpgsign", "false");
+  git("add", "-A");
+  git("commit", "-q", "--no-verify", "-m", "scratch fixture");
+  const scratchScripts = "tooling~/scripts";
+  const run = async (body) => {
+    const { execFile } = await import("node:child_process");
+    const { promisify } = await import("node:util");
+    const moduleHref = pathToFileURL(path.join(scripts, "preflight-cache.mjs")).href;
+    const subject = writeTempScript(
+      `const module = await import(${JSON.stringify(moduleHref)});\n${body}`
+    );
+    const { stdout } = await promisify(execFile)(process.execPath, [subject]);
+    return stdout.trim();
+  };
+  return { root, git, scripts, scratchScripts, run };
+}
+
 function case_(name, overrides) {
   return { name, ...overrides };
 }
@@ -547,22 +592,23 @@ test("parseStatusRecords: the rename original never leaks in as its own entry", 
   assert.deepEqual(parsed.changed.sort(), ["moved.cs", "tail.rs"]);
 });
 
-test("a tracked root keys from the listings: an ignored file under it does not move the key", () => {
+test("a tracked root keys from the listings: an ignored file under it does not move the key", async () => {
   /*
-      Listing-based identity keys what git sees. The preflight cache
-      directory is ignored and lives under the tracked scripts root, and
-      the cache writes entries on every run - if those writes moved the
-      scripts root's key, every keying phase would invalidate the checks
-      keyed next to it. This pins the coin the module documents: ignored
-      content under a git-visible root is invisible to its key.
+      Listing-based identity keys what git sees. This pins the coin the
+      module documents on a path the module does NOT auto-exclude (the
+      scratch .gitignore ignores `ignored-scratch/` anywhere): an ignored
+      file under a git-visible root is invisible to its key, so scratch
+      and cache writes near keyed roots never invalidate them. Two
+      children: the per-process listing memo must not hide the recompute.
    */
-  const root = path.join(toolingRoot, "scripts");
-  const probe = path.join(root, ".preflight-cache", "listing-coin-probe.tmp");
+  const repo = scratchRepo();
+  const probe = path.join(repo.scripts, "ignored-scratch", "listing-coin-probe.tmp");
   fs.mkdirSync(path.dirname(probe), { recursive: true });
+  const observe = () => repo.run(`console.log(module.pathState(${JSON.stringify(repo.scratchScripts)}));`);
   try {
-    const before = pathState(root);
+    const before = await observe();
     fs.writeFileSync(probe, "ignored bytes one\n");
-    assert.equal(pathState(root), before, "an ignored file under a tracked root must not move the key");
+    assert.equal(await observe(), before, "an ignored file under a tracked root must not move the key");
   } finally {
     fs.rmSync(probe, { force: true });
   }
@@ -574,24 +620,13 @@ test("an untracked file under a tracked root moves the key", async () => {
       observation runs in a child: the probe file must exist before the
       child's identity forms for the child to see it.
    */
-  const root = path.join(toolingRoot, "scripts");
-  const probe = path.join(root, `listing-untracked-probe-${process.pid}.tmp`);
-  const subject = writeTempScript(`
-      const { pathState } = await import(${JSON.stringify(
-        pathToFileURL(path.join(toolingRoot, "scripts", "preflight-cache.mjs")).href
-      )});
-      console.log(pathState(${JSON.stringify("tooling~/scripts")}));
-    `);
-  const run = async () => {
-    const { execFile } = await import("node:child_process");
-    const { promisify } = await import("node:util");
-    const { stdout } = await promisify(execFile)(process.execPath, [subject]);
-    return stdout.trim();
-  };
+  const repo = scratchRepo();
+  const probe = path.join(repo.scripts, `listing-untracked-probe-${process.pid}.tmp`);
+  const observe = () => repo.run(`console.log(module.pathState(${JSON.stringify(repo.scratchScripts)}));`);
   try {
-    const before = await run();
+    const before = await observe();
     fs.writeFileSync(probe, "untracked bytes\n");
-    assert.notEqual(await run(), before, "an untracked file must move the root's key");
+    assert.notEqual(await observe(), before, "an untracked file must move the root's key");
   } finally {
     fs.rmSync(probe, { force: true });
   }
@@ -605,27 +640,17 @@ test("a dirty tracked file inside a tracked root moves the key by content", asyn
       observation runs in a child so the per-process identity observes
       the edit.
    */
-  const tracked = path.join(toolingRoot, "scripts", "lint-multiline-comments.mjs");
+  const repo = scratchRepo();
+  const tracked = path.join(repo.scripts, "tracked-fixture.txt");
   const original = fs.readFileSync(tracked, "utf8");
-  const subject = writeTempScript(`
-      const { pathState } = await import(${JSON.stringify(
-        pathToFileURL(path.join(toolingRoot, "scripts", "preflight-cache.mjs")).href
-      )});
-      console.log(pathState(${JSON.stringify("tooling~/scripts")}));
-    `);
-  const run = async () => {
-    const { execFile } = await import("node:child_process");
-    const { promisify } = await import("node:util");
-    const { stdout } = await promisify(execFile)(process.execPath, [subject]);
-    return stdout.trim();
-  };
+  const observe = () => repo.run(`console.log(module.pathState(${JSON.stringify(repo.scratchScripts)}));`);
   try {
-    const before = await run();
-    fs.writeFileSync(tracked, `${original}\n# listing identity probe one\n`);
-    const dirtyOnce = await run();
+    const before = await observe();
+    fs.writeFileSync(tracked, `${original}identity probe one\n`);
+    const dirtyOnce = await observe();
     assert.notEqual(dirtyOnce, before, "a dirty tracked file must move a root containing it");
-    fs.writeFileSync(tracked, `${original}\n# listing identity probe two\n`);
-    assert.notEqual(await run(), dirtyOnce, "a second rewrite with an identical status line must move the key again");
+    fs.writeFileSync(tracked, `${original}identity probe two\n`);
+    assert.notEqual(await observe(), dirtyOnce, "a second rewrite with an identical status line must move the key again");
   } finally {
     fs.writeFileSync(tracked, original);
   }
@@ -648,7 +673,7 @@ test("an ignored root still walks the filesystem: its content edits move the key
   }
 });
 
-test("a committed edit moves the snapshot key where status goes quiet", { skip: execFileSync("git", ["status", "--porcelain", "--untracked-files=no"], { cwd: path.join(toolingRoot, ".."), encoding: "utf8" }).trim().length > 0 ? "the tree is dirty; a reset-based probe would destroy uncommitted work" : false }, async () => {
+test("a committed edit moves the snapshot key where status goes quiet", async () => {
   /*
       The committed half of the snapshot class: status names only
       uncommitted state, so a commit is exactly the change the status
@@ -656,41 +681,31 @@ test("a committed edit moves the snapshot key where status goes quiet", { skip: 
       or a committed edit to a tracked file outside a check's declared
       roots ages the cached pass.
 
-      The probe commits on the real branch and resets to the captured
-      HEAD in `finally`, so it refuses to run on a dirty tree - the
-      reset would destroy uncommitted work (this exact test ate its own
-      fix once). On a clean tree a SIGKILL mid-test leaves one stray
-      probe commit; `git reset --hard <old HEAD>` is the whole recovery.
+      The probe commits in the scratch repository - the snapshot module
+      copy makes it the keyed tree - so the test is hermetic: nothing
+      touches the real checkout, and the skip the real-branch probe
+      needed (a reset-based cleanup would destroy uncommitted work) no
+      longer exists. A mid-test kill leaves the temp directory for the
+      suite's after() to remove.
    */
-  const probe = path.join(toolingRoot, "..", ".dxct-commit-probe.tmp");
-  const git = (...args) => execFileSync("git", args, { cwd: path.join(toolingRoot, ".."), encoding: "utf8" });
-  const subject = writeTempScript(`
-      const { cacheKeyForCheck } = await import(${JSON.stringify(
-        pathToFileURL(path.join(toolingRoot, "scripts", "preflight-cache.mjs")).href
-      )});
-      const check = { name: "snapshot", command: "node snapshot.mjs", cacheTrackedFiles: true };
-      const key = () => cacheKeyForCheck(check, { node: "node", platform: "linux", arch: "x64", files: [] });
-      console.log(key());
-    `);
-  const run = async () => {
-    const { execFile } = await import("node:child_process");
-    const { promisify } = await import("node:util");
-    const { stdout } = await promisify(execFile)(process.execPath, [subject]);
-    return stdout.trim();
-  };
-  const head = git("rev-parse", "HEAD").trim();
+  const repo = scratchRepo();
+  const probeRelative = ".dxct-commit-probe.tmp";
+  const probe = path.join(repo.root, probeRelative);
+  const observe = () =>
+    repo.run(`
+        const check = { name: "snapshot", command: "node snapshot.mjs", cacheTrackedFiles: true };
+        const key = () => module.cacheKeyForCheck(check, { node: "node", platform: "linux", arch: "x64", files: [] });
+        console.log(key());
+      `);
   try {
-    const before = await run();
+    const before = await observe();
     fs.writeFileSync(probe, "committed bytes\n");
-    git("add", ".dxct-commit-probe.tmp");
-    /* Inline identity: CI runners ship none, and mutating global config
-       from a test would leak past the finally. */
-    git("-c", "user.name=snapshot probe", "-c", "user.email=probe@example.invalid", "commit", "-q", "--no-verify", "-m", "snapshot commit probe");
-    const statusAfter = git("status", "--porcelain=v1", "--untracked-files=all", "--", ".dxct-commit-probe.tmp").trim();
+    repo.git("add", probeRelative);
+    repo.git("commit", "-q", "--no-verify", "-m", "snapshot commit probe");
+    const statusAfter = repo.git("status", "--porcelain=v1", "--untracked-files=all", "--", probeRelative).trim();
     assert.equal(statusAfter, "", "the probe must be committed-clean: status names nothing");
-    assert.notEqual(await run(), before, "a committed edit must move the snapshot key");
+    assert.notEqual(await observe(), before, "a committed edit must move the snapshot key");
   } finally {
-    git("reset", "-q", "--hard", head);
     fs.rmSync(probe, { force: true });
   }
 });
@@ -702,43 +717,34 @@ test("a staged rewrite moves the snapshot key where the status line stays identi
       same path produces the byte-identical line again - so the snapshot
       must fold the staged content, or node-tests reads a file outside
       its declared roots through a cached pass from before the rewrite.
-      The probe is a dot-file at the repo root: Unity never sees it, and
-      a crash mid-test leaves exactly one staged dot-file that
-      `git rm --cached` + delete removes.
+      The probe is a dot-file at the scratch root; the whole repository
+      is the suite's temp directory, so a crash leaves nothing behind.
    */
-  const { execFileSync } = await import("node:child_process");
-  const probe = path.join(toolingRoot, "..", ".dxct-snapshot-probe.tmp");
-  const git = (...args) => execFileSync("git", args, { cwd: path.join(toolingRoot, ".."), encoding: "utf8" });
-  const subject = writeTempScript(`
-      const { cacheKeyForCheck } = await import(${JSON.stringify(
-        pathToFileURL(path.join(toolingRoot, "scripts", "preflight-cache.mjs")).href
-      )});
-      const check = { name: "snapshot", command: "node snapshot.mjs", cacheTrackedFiles: true };
-      const key = () => cacheKeyForCheck(check, { node: "node", platform: "linux", arch: "x64", files: [] });
-      console.log(key());
-    `);
-  const run = async () => {
-    const { execFile } = await import("node:child_process");
-    const { promisify } = await import("node:util");
-    const { stdout } = await promisify(execFile)(process.execPath, [subject]);
-    return stdout.trim();
-  };
+  const repo = scratchRepo();
+  const probeRelative = ".dxct-snapshot-probe.tmp";
+  const probe = path.join(repo.root, probeRelative);
+  const observe = () =>
+    repo.run(`
+        const check = { name: "snapshot", command: "node snapshot.mjs", cacheTrackedFiles: true };
+        const key = () => module.cacheKeyForCheck(check, { node: "node", platform: "linux", arch: "x64", files: [] });
+        console.log(key());
+      `);
   try {
     fs.writeFileSync(probe, "staged content one\n");
-    git("add", ".dxct-snapshot-probe.tmp");
-    const stagedOnce = await run();
+    repo.git("add", probeRelative);
+    const stagedOnce = await observe();
     fs.writeFileSync(probe, "staged content two\n");
-    git("add", ".dxct-snapshot-probe.tmp");
-    const statusAfter = git("status", "--porcelain=v1", "--", ".dxct-snapshot-probe.tmp").trim();
-    assert.equal(statusAfter, "A  .dxct-snapshot-probe.tmp", "the probe must be index-only dirty");
+    repo.git("add", probeRelative);
+    const statusAfter = repo.git("status", "--porcelain=v1", "--", probeRelative).trim();
+    assert.equal(statusAfter, `A  ${probeRelative}`, "the probe must be index-only dirty");
     assert.notEqual(
-      await run(),
+      await observe(),
       stagedOnce,
       "a second staged rewrite with an identical status line must move the snapshot key"
     );
   } finally {
     try {
-      git("rm", "-q", "-f", "--cached", ".dxct-snapshot-probe.tmp");
+      repo.git("rm", "-q", "-f", "--cached", probeRelative);
     } catch {
       /* The probe never reached the index; removal below is enough. */
     }
@@ -754,40 +760,28 @@ test("a dirty tracked file outside declared roots moves keys by content", async 
       snapshot on the status output alone ages a cached pass when the
       second rewrite lands after the first one was cached. The snapshot
       must fold each flagged file's content (under the size cap) into the
-      hash; this runs in a child process so the per-process git identity
-      observes the edit from a clean index.
-
-      Stated trade: the probe dirties the real tracked `.gitattributes`
-      (chosen as the tracked file nothing else reads) and restores its
-      exact bytes in `finally`. A hermetic scratch repo cannot stand in -
-      the module derives REPO_ROOT from its own location, so the probe
-      must live in the keyed tree. A SIGKILL mid-test leaves the probe
-      line behind; `git status` shows it and the restore is one checkout.
+      hash; each observation runs in a child so the per-process git
+      identity observes the edit from a clean index. The probe dirties the
+      scratch repository's own tracked .gitattributes - the keyed tree is
+      the scratch tree, so no real tracked state is ever touched.
    */
-  const tracked = path.join(toolingRoot, "..", ".gitattributes");
+  const repo = scratchRepo();
+  const tracked = path.join(repo.root, ".gitattributes");
   const original = fs.readFileSync(tracked, "utf8");
-  const subject = writeTempScript(`
-      const { cacheKeyForCheck } = await import(${JSON.stringify(
-        pathToFileURL(path.join(toolingRoot, "scripts", "preflight-cache.mjs")).href
-      )});
-      const check = { name: "snapshot", command: "node snapshot.mjs", cacheTrackedFiles: true };
-      const key = () => cacheKeyForCheck(check, { node: "node", platform: "linux", arch: "x64", files: [] });
-      console.log(key());
-    `);
-  const run = async () => {
-    const { execFile } = await import("node:child_process");
-    const { promisify } = await import("node:util");
-    const { stdout } = await promisify(execFile)(process.execPath, [subject]);
-    return stdout.trim();
-  };
+  const observe = () =>
+    repo.run(`
+        const check = { name: "snapshot", command: "node snapshot.mjs", cacheTrackedFiles: true };
+        const key = () => module.cacheKeyForCheck(check, { node: "node", platform: "linux", arch: "x64", files: [] });
+        console.log(key());
+      `);
   let clean = "";
   try {
-    clean = await run();
-    fs.writeFileSync(tracked, `${original}\n# preflight identity probe one\n`);
-    const dirtyOnce = await run();
+    clean = await observe();
+    fs.writeFileSync(tracked, `${original}identity probe one\n`);
+    const dirtyOnce = await observe();
     assert.notEqual(dirtyOnce, clean, "a dirty tracked file must move the snapshot key");
-    fs.writeFileSync(tracked, `${original}\n# preflight identity probe two\n`);
-    const dirtyAgain = await run();
+    fs.writeFileSync(tracked, `${original}identity probe two\n`);
+    const dirtyAgain = await observe();
     assert.notEqual(
       dirtyAgain,
       dirtyOnce,
@@ -796,7 +790,7 @@ test("a dirty tracked file outside declared roots moves keys by content", async 
   } finally {
     fs.writeFileSync(tracked, original);
   }
-  assert.equal(await run(), clean, "restoring the bytes must restore the key");
+  assert.equal(await observe(), clean, "restoring the bytes must restore the key");
 });
 
 test("the run's key computer answers the live key and moves with its inputs", () => {

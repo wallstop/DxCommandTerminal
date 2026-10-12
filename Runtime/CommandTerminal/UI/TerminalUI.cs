@@ -3332,9 +3332,6 @@
                             case Label label:
                                 label.text = hintText;
                                 break;
-                            case TextField textField:
-                                textField.value = hintText;
-                                break;
                         }
 
                         bool isSelected = i == _lastCompletionIndex;

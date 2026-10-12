@@ -147,6 +147,7 @@ test('analyzer placement: no second copy anywhere Unity imports', () => {
     // A stray copy under a folder without its labeled .meta would shadow the
     // shipped payloads: Unity would load it with an auto-generated meta that
     // carries no RoslynAnalyzer label, and analysis would silently stop.
+    const payloads = payloadFiles();
     const strays = [];
     (function walk(directory) {
         for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
@@ -170,7 +171,7 @@ test('analyzer placement: no second copy anywhere Unity imports', () => {
                 full.startsWith(ANALYZERS_DIRECTORY + path.sep)
             ) {
                 // handled by the per-payload tests above
-            } else if (payloadFiles().includes(entry.name)) {
+            } else if (payloads.includes(entry.name)) {
                 strays.push(path.relative(repoRoot, full));
             }
         }
