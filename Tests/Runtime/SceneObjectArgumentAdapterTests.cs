@@ -18,34 +18,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         private static IEnumerable<TestCaseData> UnsupportedTypes()
         {
-            yield return new TestCaseData(
-                new TestDelegate(() => new SceneObjectArgumentAdapter<Texture2D>())
-            ).SetName("RejectsTexture2D");
-            yield return new TestCaseData(
-                new TestDelegate(() => new SceneObjectArgumentAdapter<Object>())
-            ).SetName("RejectsUnityObject");
-            yield return new TestCaseData(
-                new TestDelegate(() => new SceneObjectArgumentAdapter<ScriptableObject>())
-            ).SetName("RejectsScriptableObject");
-            yield return new TestCaseData(
-                new TestDelegate(() => new SceneObjectArgumentAdapter<Material>())
-            ).SetName("RejectsNonComponentAsset");
+            yield return new TestCaseData(new TestDelegate(() => new SceneObjectArgumentAdapter<Texture2D>())).SetName("RejectsTexture2D");
+            yield return new TestCaseData(new TestDelegate(() => new SceneObjectArgumentAdapter<Object>())).SetName("RejectsUnityObject");
+            yield return new TestCaseData(new TestDelegate(() => new SceneObjectArgumentAdapter<ScriptableObject>())).SetName("RejectsScriptableObject");
+            yield return new TestCaseData(new TestDelegate(() => new SceneObjectArgumentAdapter<Material>())).SetName("RejectsNonComponentAsset");
         }
 
         private static CommandCompletionContext CompletionContext()
         {
-            return new CommandCompletionContext(
-                default,
-                string.Empty,
-                0,
-                0,
-                new List<CommandArg>(),
-                string.Empty,
-                0,
-                0,
-                false,
-                null
-            );
+            return new CommandCompletionContext(default, string.Empty, 0, 0, new List<CommandArg>(), string.Empty, 0, 0, false, null);
         }
 
         [TearDown]
@@ -172,11 +153,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             CreateTarget();
             SceneObjectArgumentAdapter<T> adapter = new();
             List<T> choices = new(adapter.GetChoices(CompletionContext()));
-            Assert.GreaterOrEqual(
-                choices.Count,
-                3,
-                "Sanity: expected the fixture objects among the choices"
-            );
+            Assert.GreaterOrEqual(choices.Count, 3, "Sanity: expected the fixture objects among the choices");
             List<T> sorted = new(choices);
             sorted.Sort((left, right) =>
 #if UNITY_6000_4_OR_NEWER
@@ -185,11 +162,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     left.GetInstanceID().CompareTo(right.GetInstanceID())
 #endif
             );
-            CollectionAssert.AreEqual(
-                sorted,
-                choices,
-                "Choices must keep the engine's deterministic instance-id order"
-            );
+            CollectionAssert.AreEqual(sorted, choices, "Choices must keep the engine's deterministic instance-id order");
         }
 
         [Test]
@@ -236,23 +209,16 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             CommandShell shell = new(new CommandHistory(16));
             T[] resolved = null;
             int calls = 0;
-            CommandBuilder builder = CommandBuilder
-                .Create("inspect-object")
-                .Contexts(CommandExecutionContextSets.All);
+            CommandBuilder builder = CommandBuilder.Create("inspect-object").Contexts(CommandExecutionContextSets.All);
             builder = remaining
-                ? builder.Remaining<T>(
-                    "target",
-                    spec => spec.RawParser(adapter.TryParse).Required()
-                )
+                ? builder.Remaining<T>("target", spec => spec.RawParser(adapter.TryParse).Required())
                 : builder.Arg<T>("target", spec => spec.RawParser(adapter.TryParse).Required());
             Assert.IsTrue(
                 shell.AddCommand(
                     builder.Handler(
                         (context, arguments) =>
                         {
-                            resolved = remaining
-                                ? arguments.Get<T[]>("target")
-                                : new[] { arguments.Get<T>("target") };
+                            resolved = remaining ? arguments.Get<T[]>("target") : new[] { arguments.Get<T>("target") };
                             ++calls;
                         }
                     ),
@@ -284,10 +250,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         [TestCase(SceneObjectAmbiguityPolicy.FirstMatch, 1)]
         [TestCase(SceneObjectAmbiguityPolicy.RequireUnique, 0)]
-        public void BuilderUsesParserAndFreshNameChoices(
-            SceneObjectAmbiguityPolicy policy,
-            int expectedCalls
-        )
+        public void BuilderUsesParserAndFreshNameChoices(SceneObjectAmbiguityPolicy policy, int expectedCalls)
         {
             T target = CreateTarget();
             SceneObjectArgumentAdapter<T> adapter = new(policy);
@@ -298,13 +261,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     CommandBuilder
                         .Create("inspect-object")
                         .Contexts(CommandExecutionContextSets.All)
-                        .Arg<T>(
-                            "target",
-                            spec =>
-                                spec.Required()
-                                    .RawParser(adapter.TryParse)
-                                    .Choices(adapter.GetChoices, adapter.FormatChoice)
-                        )
+                        .Arg<T>("target", spec => spec.Required().RawParser(adapter.TryParse).Choices(adapter.GetChoices, adapter.FormatChoice))
                         .Handler(
                             (context, arguments) =>
                             {
@@ -319,37 +276,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             {
                 List<CommandCompletion> results = new();
                 const string input = "inspect-object dxadapter";
-                Assert.IsTrue(
-                    shell.TryComplete(
-                        CommandExecutionContext.Current,
-                        input,
-                        input.Length,
-                        results,
-                        out _
-                    )
-                );
-                CollectionAssert.AreEqual(
-                    new[] { TargetName },
-                    results.ConvertAll(choice => choice.InsertionText)
-                );
+                Assert.IsTrue(shell.TryComplete(CommandExecutionContext.Current, input, input.Length, results, out _));
+                CollectionAssert.AreEqual(new[] { TargetName }, results.ConvertAll(choice => choice.InsertionText));
                 CreateTarget();
                 shell.RunCommand($"inspect-object \"{TargetName}\"");
                 Assert.AreEqual(expectedCalls, calls);
                 Assert.AreEqual(expectedCalls == 0, shell.TryConsumeErrorMessage(out _));
                 target.name = "DxAdapter Renamed";
-                Assert.IsTrue(
-                    shell.TryComplete(
-                        CommandExecutionContext.Current,
-                        input,
-                        input.Length,
-                        results,
-                        out _
-                    )
-                );
-                CollectionAssert.AreEquivalent(
-                    new[] { TargetName, target.name },
-                    results.ConvertAll(choice => choice.InsertionText)
-                );
+                Assert.IsTrue(shell.TryComplete(CommandExecutionContext.Current, input, input.Length, results, out _));
+                CollectionAssert.AreEquivalent(new[] { TargetName, target.name }, results.ConvertAll(choice => choice.InsertionText));
             }
         }
 
@@ -373,11 +308,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [TestCase("DxAdapter\rTarget", "inspect-object \"DxAdapter\r\"", "DxAdapterTarget")]
         [TestCase("DxAdapter\nTarget", "inspect-object \"DxAdapter\n\"", "DxAdapterTarget")]
         [TestCase("DxAdapter\r\nTarget", "inspect-object \"DxAdapter\r\n\"", "DxAdapterTarget")]
-        public void AcceptedNameCompletionDispatchesSelectedObject(
-            string name,
-            string input,
-            string decoyName = "OtherTarget"
-        )
+        public void AcceptedNameCompletionDispatchesSelectedObject(string name, string input, string decoyName = "OtherTarget")
         {
             T target = CreateTarget();
             target.name = name;
@@ -393,13 +324,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     CommandBuilder
                         .Create("inspect-object")
                         .Contexts(CommandExecutionContextSets.All)
-                        .Arg<T>(
-                            "target",
-                            spec =>
-                                spec.Required()
-                                    .RawParser(adapter.TryParse)
-                                    .Choices(adapter.GetChoices, adapter.FormatChoice)
-                        )
+                        .Arg<T>("target", spec => spec.Required().RawParser(adapter.TryParse).Choices(adapter.GetChoices, adapter.FormatChoice))
                         .Handler(
                             (context, arguments) =>
                             {
@@ -414,15 +339,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             {
                 List<CommandCompletion> results = new();
                 int caret = input.Length - (input.EndsWith('"') || input.EndsWith('\'') ? 1 : 0);
-                Assert.IsTrue(
-                    shell.TryComplete(
-                        CommandExecutionContext.Current,
-                        input,
-                        caret,
-                        results,
-                        out CommandCompletionContext completionContext
-                    )
-                );
+                Assert.IsTrue(shell.TryComplete(CommandExecutionContext.Current, input, caret, results, out CommandCompletionContext completionContext));
                 Assert.AreEqual(1, results.Count);
                 Assert.AreEqual(name, results[0].InsertionText);
                 Assert.IsTrue(
@@ -437,9 +354,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                         out int replacementLength
                     )
                 );
-                string completed = input
-                    .Remove(replacementStart, replacementLength)
-                    .Insert(replacementStart, insertion);
+                string completed = input.Remove(replacementStart, replacementLength).Insert(replacementStart, insertion);
                 Assert.IsTrue(shell.RunCommand(completed));
                 Assert.IsFalse(shell.TryConsumeErrorMessage(out string error), error);
                 Assert.AreEqual(1, calls);
@@ -466,13 +381,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     CommandBuilder
                         .Create("inspect-object")
                         .Contexts(CommandExecutionContextSets.All)
-                        .Arg<T>(
-                            "target",
-                            spec =>
-                                spec.Required()
-                                    .RawParser(adapter.TryParse)
-                                    .Choices(adapter.GetChoices, adapter.FormatChoice)
-                        )
+                        .Arg<T>("target", spec => spec.Required().RawParser(adapter.TryParse).Choices(adapter.GetChoices, adapter.FormatChoice))
                         .Handler((context, arguments) => resolved = arguments.Get<T>("target")),
                     out CommandRegistrationHandle handle
                 )
@@ -481,15 +390,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             {
                 List<CommandCompletion> results = new();
                 int caret = input.Length - (input.EndsWith('\'') ? 1 : 0);
-                Assert.IsTrue(
-                    shell.TryComplete(
-                        CommandExecutionContext.Current,
-                        input,
-                        caret,
-                        results,
-                        out CommandCompletionContext context
-                    )
-                );
+                Assert.IsTrue(shell.TryComplete(CommandExecutionContext.Current, input, caret, results, out CommandCompletionContext context));
                 Assert.AreEqual(1, results.Count);
                 Assert.AreEqual(target.name, results[0].InsertionText);
                 Assert.IsFalse(
@@ -566,10 +467,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         [TestCase(SceneObjectAmbiguityPolicy.FirstMatch, true)]
         [TestCase(SceneObjectAmbiguityPolicy.RequireUnique, false)]
-        public void MultipleComponentsOnOneObjectFollowPolicy(
-            SceneObjectAmbiguityPolicy policy,
-            bool expected
-        )
+        public void MultipleComponentsOnOneObjectFollowPolicy(SceneObjectAmbiguityPolicy policy, bool expected)
         {
             CreateTarget();
             _objects[0].AddComponent<BoxCollider>();
@@ -591,9 +489,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [TestCase(int.MaxValue)]
         public void RejectsInvalidPolicies(int policy)
         {
-            ArgumentOutOfRangeException exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
-                new SceneObjectArgumentAdapter<T>((SceneObjectAmbiguityPolicy)policy)
-            );
+            ArgumentOutOfRangeException exception = Assert.Throws<ArgumentOutOfRangeException>(() => new SceneObjectArgumentAdapter<T>((SceneObjectAmbiguityPolicy)policy));
             Assert.AreEqual("ambiguityPolicy", exception.ParamName);
         }
 
@@ -669,15 +565,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     return matches;
                 }
             );
-            spec = dynamicChoices
-                ? spec.Choices(context => new[] { target })
-                : spec.Choices(target);
+            spec = dynamicChoices ? spec.Choices(context => new[] { target }) : spec.Choices(target);
             List<CommandCompletion> results = new();
             spec.AppendCompletions(CompletionContext(), results);
             Assert.AreEqual(identifier, results[0].InsertionText);
-            Assert.IsTrue(
-                spec.TryParse(new CommandArg(results[0].InsertionText), out object value)
-            );
+            Assert.IsTrue(spec.TryParse(new CommandArg(results[0].InsertionText), out object value));
             Assert.AreSame(target, value);
         }
 
@@ -688,23 +580,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             SceneObjectArgumentAdapter<T> adapter = new();
             CommandArgumentSpec<T> original = new("target");
             original = original.Choices(adapter.GetChoices, adapter.FormatChoice);
-            CommandArgumentSpec<T> copy = original
-                .Default(target)
-                .Required()
-                .Describe("target")
-                .Validate(value => null)
-                .RawParser(adapter.TryParse);
+            CommandArgumentSpec<T> copy = original.Default(target).Required().Describe("target").Validate(value => null).RawParser(adapter.TryParse);
             List<CommandCompletion> results = new();
             copy.AppendCompletions(CompletionContext(), results);
-            Assert.IsTrue(
-                results.Exists(choice =>
-                    string.Equals(choice.InsertionText, TargetName, StringComparison.Ordinal)
-                )
-            );
+            Assert.IsTrue(results.Exists(choice => string.Equals(choice.InsertionText, TargetName, StringComparison.Ordinal)));
             results.Clear();
-            original
-                .Choices(context => new[] { target })
-                .AppendCompletions(CompletionContext(), results);
+            original.Choices(context => new[] { target }).AppendCompletions(CompletionContext(), results);
             Assert.AreEqual(target.ToString(), results[0].InsertionText);
             Assert.AreEqual(string.Empty, adapter.FormatChoice(null));
             Object.DestroyImmediate(_objects[0]);
@@ -716,9 +597,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             CommandArgumentSpec<T> spec = new("target");
             Assert.Throws<ArgumentNullException>(() => spec.Choices(null, value => "name"));
-            Assert.Throws<ArgumentNullException>(() =>
-                spec.Choices(context => Array.Empty<T>(), null)
-            );
+            Assert.Throws<ArgumentNullException>(() => spec.Choices(context => Array.Empty<T>(), null));
         }
 
         private T CreateTarget()

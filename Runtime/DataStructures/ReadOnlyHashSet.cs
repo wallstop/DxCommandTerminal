@@ -16,10 +16,7 @@ namespace WallstopStudios.DxCommandTerminal.DataStructures
 
         public ReadOnlyHashSet(IEnumerable<T> source, IEqualityComparer<T> comparer = null)
         {
-            _set = new HashSet<T>(
-                source ?? throw new ArgumentNullException(nameof(source)),
-                comparer
-            );
+            _set = new HashSet<T>(source ?? throw new ArgumentNullException(nameof(source)), comparer);
         }
 
         public bool Contains(T item)

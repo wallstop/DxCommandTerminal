@@ -30,14 +30,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Components
             Random random = new();
             foreach (int i in Enumerable.Range(0, count).OrderBy(_ => random.Next()))
             {
-                Terminal.Shell?.RunCommand(
-                    "log " + string.Join("a", Enumerable.Range(0, i).Select(_ => string.Empty))
-                );
+                Terminal.Shell?.RunCommand("log " + string.Join("a", Enumerable.Range(0, i).Select(_ => string.Empty)));
             }
 
-            Terminal.Shell?.RunCommand(
-                "log " + string.Join("a", Enumerable.Range(0, 1_000).Select(_ => string.Empty))
-            );
+            Terminal.Shell?.RunCommand("log " + string.Join("a", Enumerable.Range(0, 1_000).Select(_ => string.Empty)));
         }
 
         //[RegisterCommand(MinArgCount = 0, MaxArgCount = 1, Name = "perf-test")]

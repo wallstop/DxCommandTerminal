@@ -31,11 +31,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
          */
         private int _disposed;
 
-        internal CommandRegistrationHandle(
-            CommandShell shell,
-            string name,
-            CommandHandler registration
-        )
+        internal CommandRegistrationHandle(CommandShell shell, string name, CommandHandler registration)
         {
             _shell = shell;
             _name = name;

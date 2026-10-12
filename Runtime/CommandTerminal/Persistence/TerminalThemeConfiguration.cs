@@ -33,15 +33,9 @@ namespace WallstopStudios.DxCommandTerminal.Persistence
             // Auto generated garbage
             unchecked
             {
-                int hashCode = (
-                    terminalId != null ? terminalId.ToLowerInvariant().GetHashCode() : 0
-                );
-                hashCode =
-                    (hashCode * HashBase)
-                    ^ (font != null ? font.ToLowerInvariant().GetHashCode() : 0);
-                hashCode =
-                    (hashCode * HashBase)
-                    ^ (theme != null ? theme.ToLowerInvariant().GetHashCode() : 0);
+                int hashCode = (terminalId != null ? terminalId.ToLowerInvariant().GetHashCode() : 0);
+                hashCode = (hashCode * HashBase) ^ (font != null ? font.ToLowerInvariant().GetHashCode() : 0);
+                hashCode = (hashCode * HashBase) ^ (theme != null ? theme.ToLowerInvariant().GetHashCode() : 0);
                 return hashCode;
             }
         }

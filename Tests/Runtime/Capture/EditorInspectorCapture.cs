@@ -29,21 +29,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         public static string UnsupportedReason =>
-            "Inspector capture drives UnityEditor.Editor.OnInspectorGUI through the game "
-            + "view's IMGUI pass; players have no editor to draw it with.";
+            "Inspector capture drives UnityEditor.Editor.OnInspectorGUI through the game " + "view's IMGUI pass; players have no editor to draw it with.";
 
         /*
             Creates an editor for target and attaches an InspectorDrawSurface
             to the fixture object that paints it into renderTarget. Dispose
             removes the component and destroys the editor.
          */
-        public static InspectorScope Attach(
-            GameObject host,
-            Object target,
-            RenderTexture renderTarget,
-            float width,
-            float height
-        )
+        public static InspectorScope Attach(GameObject host, Object target, RenderTexture renderTarget, float width, float height)
         {
             if (host == null)
             {

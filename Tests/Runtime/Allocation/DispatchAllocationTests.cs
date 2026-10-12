@@ -45,10 +45,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
                 AddToHistory = false,
                 Handler = HandleAllocFree,
             };
-            Assert.IsTrue(
-                _shell.AddCommand(definition),
-                "The allocation-free command should register"
-            );
+            Assert.IsTrue(_shell.AddCommand(definition), "The allocation-free command should register");
         }
 
         [Test]
@@ -59,22 +56,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
             Action dispatch = () => _shell.RunCommand(context, "alloc-free", arguments);
 
             AllocationAssertions.AssertZeroAllocations("borrowed-view dispatch", dispatch);
-            Assert.AreEqual(
-                AllocationAssertions.DefaultWarmupIterations + 1,
-                _invocations,
-                "The handler must run once per measured invocation"
-            );
+            Assert.AreEqual(AllocationAssertions.DefaultWarmupIterations + 1, _invocations, "The handler must run once per measured invocation");
         }
 
         [Test]
         public void HistoryTraversalIsAllocationFree()
         {
             FillHistory(DistinctHistoryEntries());
-            Assert.AreEqual(
-                "entry-31",
-                _history.Previous(false),
-                "Sanity: traversal must return entries, not degenerate empties"
-            );
+            Assert.AreEqual("entry-31", _history.Previous(false), "Sanity: traversal must return entries, not degenerate empties");
 
             Action traverse = () =>
             {
@@ -93,11 +82,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
 
             Action copy = () => _history.CopyHistory(false, false, buffer);
             AllocationAssertions.AssertZeroAllocations("history copy", copy);
-            Assert.AreEqual(
-                HistoryCapacity,
-                buffer.Count,
-                "Sanity: the copy must be complete after the measured window"
-            );
+            Assert.AreEqual(HistoryCapacity, buffer.Count, "Sanity: the copy must be complete after the measured window");
         }
 
         [Test]
@@ -108,11 +93,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
 
             Action push = () => _history.Push(wrappedEntry, true, true);
             AllocationAssertions.AssertZeroAllocations("fixed-capacity wrap push", push);
-            Assert.AreEqual(
-                HistoryCapacity,
-                _history.Count,
-                "Sanity: wrap pushes must land in the wrapped buffer, not grow it"
-            );
+            Assert.AreEqual(HistoryCapacity, _history.Count, "Sanity: wrap pushes must land in the wrapped buffer, not grow it");
         }
 
         private void FillHistory(List<string> entries)
@@ -123,10 +104,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
             }
         }
 
-        private void HandleAllocFree(
-            CommandExecutionContext context,
-            BorrowedCommandArguments arguments
-        )
+        private void HandleAllocFree(CommandExecutionContext context, BorrowedCommandArguments arguments)
         {
             ++_invocations;
         }

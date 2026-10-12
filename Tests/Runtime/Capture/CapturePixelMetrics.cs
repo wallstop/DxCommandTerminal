@@ -21,16 +21,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public int BackgroundBlue { get; }
         public int PngBytes { get; }
 
-        public CapturePixelMetrics(
-            int width,
-            int height,
-            int distinctColors,
-            float backgroundFraction,
-            int backgroundRed,
-            int backgroundGreen,
-            int backgroundBlue,
-            int pngBytes
-        )
+        public CapturePixelMetrics(int width, int height, int distinctColors, float backgroundFraction, int backgroundRed, int backgroundGreen, int backgroundBlue, int pngBytes)
         {
             Width = width;
             Height = height;
@@ -44,16 +35,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         public CapturePixelMetrics WithPngBytes(int pngBytes)
         {
-            return new CapturePixelMetrics(
-                Width,
-                Height,
-                DistinctColors,
-                BackgroundFraction,
-                BackgroundRed,
-                BackgroundGreen,
-                BackgroundBlue,
-                pngBytes
-            );
+            return new CapturePixelMetrics(Width, Height, DistinctColors, BackgroundFraction, BackgroundRed, BackgroundGreen, BackgroundBlue, pngBytes);
         }
     }
 }

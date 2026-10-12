@@ -88,11 +88,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [TestCase(null, false)]
         public void ProducesTypedTextMatchesTheBindingsThatTypeCharacters(string key, bool expected)
         {
-            Assert.That(
-                InputHelpers.ProducesTypedText(key),
-                Is.EqualTo(expected),
-                $"ProducesTypedText(\"{key}\") must be {expected}"
-            );
+            Assert.That(InputHelpers.ProducesTypedText(key), Is.EqualTo(expected), $"ProducesTypedText(\"{key}\") must be {expected}");
         }
     }
 }

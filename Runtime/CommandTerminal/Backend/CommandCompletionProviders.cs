@@ -32,10 +32,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         ///     (the k-th argument) is completed by the k-th provider; later
         ///     stages produce no candidates.
         /// </summary>
-        public static CommandCompletionProvider Staged(
-            CommandCompletionProvider stage0,
-            CommandCompletionProvider stage1
-        )
+        public static CommandCompletionProvider Staged(CommandCompletionProvider stage0, CommandCompletionProvider stage1)
         {
             if (stage0 == null)
             {
@@ -69,11 +66,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         ///     Builds a three-stage provider; stages beyond the third produce
         ///     no candidates.
         /// </summary>
-        public static CommandCompletionProvider Staged(
-            CommandCompletionProvider stage0,
-            CommandCompletionProvider stage1,
-            CommandCompletionProvider stage2
-        )
+        public static CommandCompletionProvider Staged(CommandCompletionProvider stage0, CommandCompletionProvider stage1, CommandCompletionProvider stage2)
         {
             if (stage0 == null)
             {

@@ -67,27 +67,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         private static IEnumerable<TestCaseData> TypingCases()
         {
-            yield return new TestCaseData(0, TypedAllMatchPrefix, DefaultSampleCount).SetName(
-                "Tier.Ambient.AllMatch"
-            );
-            yield return new TestCaseData(100, TypedAllMatchPrefix, DefaultSampleCount).SetName(
-                "Tier.Hundred.AllMatch"
-            );
-            yield return new TestCaseData(100, TypedSelectivePrefix, DefaultSampleCount).SetName(
-                "Tier.Hundred.Selective"
-            );
-            yield return new TestCaseData(1000, TypedAllMatchPrefix, StressSampleCount).SetName(
-                "Tier.Thousand.AllMatch"
-            );
-            yield return new TestCaseData(1000, TypedSelectivePrefix, DefaultSampleCount).SetName(
-                "Tier.Thousand.Selective"
-            );
-            yield return new TestCaseData(10000, TypedAllMatchPrefix, StressSampleCount).SetName(
-                "Tier.TenThousand.AllMatch"
-            );
-            yield return new TestCaseData(10000, TypedSelectivePrefix, StressSampleCount).SetName(
-                "Tier.TenThousand.Selective"
-            );
+            yield return new TestCaseData(0, TypedAllMatchPrefix, DefaultSampleCount).SetName("Tier.Ambient.AllMatch");
+            yield return new TestCaseData(100, TypedAllMatchPrefix, DefaultSampleCount).SetName("Tier.Hundred.AllMatch");
+            yield return new TestCaseData(100, TypedSelectivePrefix, DefaultSampleCount).SetName("Tier.Hundred.Selective");
+            yield return new TestCaseData(1000, TypedAllMatchPrefix, StressSampleCount).SetName("Tier.Thousand.AllMatch");
+            yield return new TestCaseData(1000, TypedSelectivePrefix, DefaultSampleCount).SetName("Tier.Thousand.Selective");
+            yield return new TestCaseData(10000, TypedAllMatchPrefix, StressSampleCount).SetName("Tier.TenThousand.AllMatch");
+            yield return new TestCaseData(10000, TypedSelectivePrefix, StressSampleCount).SetName("Tier.TenThousand.Selective");
         }
 
         private static IEnumerable<TestCaseData> ExecutionCases()
@@ -140,11 +126,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             count, the margin, and the whole series, so a trip says which
             statistic crossed and by how much.
          */
-        private static void AssertP95UnderTripwire(
-            OperationReport report,
-            float budgetMilliseconds,
-            string operation
-        )
+        private static void AssertP95UnderTripwire(OperationReport report, float budgetMilliseconds, string operation)
         {
             Assert.Less(
                 report.Percentile95Milliseconds,
@@ -190,24 +172,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void MeasuresBackendStartupCost()
         {
-            TerminalSession.Config config = new(
-                LogCapacity,
-                HistoryCapacity,
-                null,
-                null,
-                ignoreDefaultCommands: false
-            );
+            TerminalSession.Config config = new(LogCapacity, HistoryCapacity, null, null, ignoreDefaultCommands: false);
 
-            OperationReport create = Measure(
-                () => new TerminalSession().Apply(config, force: false),
-                DefaultSampleCount
-            );
+            OperationReport create = Measure(() => new TerminalSession().Apply(config, force: false), DefaultSampleCount);
             TerminalSession reused = new();
             reused.Apply(config, force: false);
-            OperationReport reuse = Measure(
-                () => reused.Apply(config, force: false),
-                DefaultSampleCount
-            );
+            OperationReport reuse = Measure(() => reused.Apply(config, force: false), DefaultSampleCount);
 
             Assert.That(reused.Shell != null, "Sanity: reuse must keep the backend alive");
             Assert.That(reused.AutoComplete != null, "Sanity: reuse must keep autocomplete");
@@ -219,20 +189,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void MeasuresLogHandling()
         {
             FillLogToCapacity();
-            OperationReport withStack = Measure(
-                () => _log.HandleLog("bench message", TerminalLogType.ShellMessage),
-                DefaultSampleCount
-            );
-            OperationReport withoutStack = Measure(
-                () => _log.HandleLog("bench message", string.Empty, TerminalLogType.ShellMessage),
-                DefaultSampleCount
-            );
+            OperationReport withStack = Measure(() => _log.HandleLog("bench message", TerminalLogType.ShellMessage), DefaultSampleCount);
+            OperationReport withoutStack = Measure(() => _log.HandleLog("bench message", string.Empty, TerminalLogType.ShellMessage), DefaultSampleCount);
 
-            Assert.AreEqual(
-                LogCapacity,
-                _log.Count,
-                "Sanity: every measured write must land in the wrapped buffer"
-            );
+            Assert.AreEqual(LogCapacity, _log.Count, "Sanity: every measured write must land in the wrapped buffer");
             LogScale("log-write", "stackTrace=true", withStack);
             LogScale("log-write", "stackTrace=false", withoutStack);
 
@@ -240,9 +200,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 Per-mode rows for issue #108: the extraction-path write under
                 each capture mode, same workload as the stackTrace=true row.
              */
-            OperationReport errorsAndWarnings = MeasureWithMode(
-                TerminalStackTraceMode.ErrorsAndWarnings
-            );
+            OperationReport errorsAndWarnings = MeasureWithMode(TerminalStackTraceMode.ErrorsAndWarnings);
             OperationReport none = MeasureWithMode(TerminalStackTraceMode.Disabled);
             LogScale("log-write", "mode=ErrorsAndWarnings type=ShellMessage", errorsAndWarnings);
             LogScale("log-write", "mode=Disabled type=ShellMessage", none);
@@ -269,16 +227,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             FillLogToCapacity();
 
             LogItem[] window = new LogItem[LogCapacity];
-            Assert.AreEqual(
-                LogCapacity,
-                _log.CopyTo(window),
-                "Sanity: the read must copy the full wrapped window"
-            );
+            Assert.AreEqual(LogCapacity, _log.CopyTo(window), "Sanity: the read must copy the full wrapped window");
 
-            OperationReport uncontendedRead = Measure(
-                () => _log.CopyTo(window),
-                DefaultSampleCount
-            );
+            OperationReport uncontendedRead = Measure(() => _log.CopyTo(window), DefaultSampleCount);
             LogScale("log-read", $"window={LogCapacity} writer=none", uncontendedRead);
 
             const int batch = 2_000;
@@ -298,11 +249,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     {
                         for (int j = 0; j < batch; ++j)
                         {
-                            _log.HandleLog(
-                                "bench message",
-                                string.Empty,
-                                TerminalLogType.ShellMessage
-                            );
+                            _log.HandleLog("bench message", string.Empty, TerminalLogType.ShellMessage);
                         }
 
                         total += batch;
@@ -339,11 +286,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             OperationReport contendedRead;
             try
             {
-                Assert.IsTrue(
-                    floodStartedInTime,
-                    "Sanity: the flood must start before the contended read is "
-                        + $"sampled (flood failure: {writerFailure})"
-                );
+                Assert.IsTrue(floodStartedInTime, "Sanity: the flood must start before the contended read is " + $"sampled (flood failure: {writerFailure})");
                 contendedRead = Measure(() => _log.CopyTo(window), DefaultSampleCount);
             }
             finally
@@ -370,53 +313,22 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             RegisterProviderCommand();
 
             string input = $"{ProviderCommandName} candidate-00";
-            bool completed = _shell.TryComplete(
-                CommandExecutionContext.Current,
-                input,
-                input.Length,
-                _providerResults,
-                out _
-            );
+            bool completed = _shell.TryComplete(CommandExecutionContext.Current, input, input.Length, _providerResults, out _);
 
             Assert.IsTrue(completed, "Sanity: the provider command must answer completion");
-            Assert.AreEqual(
-                SelectiveMatchCount,
-                _providerResults.Count,
-                "Sanity: the selective prefix must match its tier candidates"
-            );
+            Assert.AreEqual(SelectiveMatchCount, _providerResults.Count, "Sanity: the selective prefix must match its tier candidates");
 
-            OperationReport report = Measure(
-                () =>
-                    _shell.TryComplete(
-                        CommandExecutionContext.Current,
-                        input,
-                        input.Length,
-                        _providerResults,
-                        out _
-                    ),
-                DefaultSampleCount
-            );
-            LogScale(
-                "provider-completion",
-                $"candidates={ProviderCandidateCount} matches={_providerResults.Count}",
-                report
-            );
+            OperationReport report = Measure(() => _shell.TryComplete(CommandExecutionContext.Current, input, input.Length, _providerResults, out _), DefaultSampleCount);
+            LogScale("provider-completion", $"candidates={ProviderCandidateCount} matches={_providerResults.Count}", report);
         }
 
         [Test]
         public void TypingCompletionStaysUnderTripwire()
         {
             CreateBackends(1000);
-            OperationReport report = Measure(
-                () => _autoComplete.Complete(TypedSelectivePrefix, _completionBuffer),
-                DefaultSampleCount
-            );
+            OperationReport report = Measure(() => _autoComplete.Complete(TypedSelectivePrefix, _completionBuffer), DefaultSampleCount);
 
-            Assert.AreEqual(
-                SelectiveMatchCount,
-                _completionBuffer.Count,
-                "Every selective-tier command should complete"
-            );
+            Assert.AreEqual(SelectiveMatchCount, _completionBuffer.Count, "Every selective-tier command should complete");
             AssertP95UnderTripwire(report, TypingTripwireMilliseconds, "Typing completion");
         }
 
@@ -424,10 +336,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void TextCommandExecutionStaysUnderTripwire()
         {
             CreateBackends(10);
-            OperationReport report = Measure(
-                () => _shell.RunCommand("bench-cmd-0007 5"),
-                DefaultSampleCount
-            );
+            OperationReport report = Measure(() => _shell.RunCommand("bench-cmd-0007 5"), DefaultSampleCount);
 
             Assert.Less(0, _history.Count, "Sanity: the executed command must push history");
             AssertP95UnderTripwire(report, ExecutionTripwireMilliseconds, "Text execution");
@@ -440,47 +349,20 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             RegisterProviderCommand();
 
             string input = $"{ProviderCommandName} candidate-00";
-            OperationReport report = Measure(
-                () =>
-                    _shell.TryComplete(
-                        CommandExecutionContext.Current,
-                        input,
-                        input.Length,
-                        _providerResults,
-                        out _
-                    ),
-                DefaultSampleCount
-            );
+            OperationReport report = Measure(() => _shell.TryComplete(CommandExecutionContext.Current, input, input.Length, _providerResults, out _), DefaultSampleCount);
 
-            Assert.AreEqual(
-                SelectiveMatchCount,
-                _providerResults.Count,
-                "Every selective-tier candidate should complete"
-            );
-            AssertP95UnderTripwire(
-                report,
-                ProviderCompletionTripwireMilliseconds,
-                "Provider completion"
-            );
+            Assert.AreEqual(SelectiveMatchCount, _providerResults.Count, "Every selective-tier candidate should complete");
+            AssertP95UnderTripwire(report, ProviderCompletionTripwireMilliseconds, "Provider completion");
         }
 
         [Test]
         public void BackendStartupReuseStaysUnderTripwire()
         {
-            TerminalSession.Config config = new(
-                LogCapacity,
-                HistoryCapacity,
-                null,
-                null,
-                ignoreDefaultCommands: false
-            );
+            TerminalSession.Config config = new(LogCapacity, HistoryCapacity, null, null, ignoreDefaultCommands: false);
             TerminalSession reused = new();
             reused.Apply(config, force: false);
 
-            OperationReport report = Measure(
-                () => reused.Apply(config, force: false),
-                DefaultSampleCount
-            );
+            OperationReport report = Measure(() => reused.Apply(config, force: false), DefaultSampleCount);
 
             AssertP95UnderTripwire(report, StartupReuseTripwireMilliseconds, "Backend reuse");
         }
@@ -494,25 +376,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             OperationReport report = Measure(() => _shell.RunCommand(line), sampleCount);
 
-            Assert.IsTrue(
-                _shell.Commands.ContainsKey("bench-cmd-0007"),
-                "Sanity: the executed command must be registered"
-            );
+            Assert.IsTrue(_shell.Commands.ContainsKey("bench-cmd-0007"), "Sanity: the executed command must be registered");
             if (addToHistory)
             {
-                Assert.Less(
-                    historyBaseline,
-                    _history.Count,
-                    "Sanity: history-on execution must push an entry"
-                );
+                Assert.Less(historyBaseline, _history.Count, "Sanity: history-on execution must push an entry");
             }
             else
             {
-                Assert.AreEqual(
-                    historyBaseline,
-                    _history.Count,
-                    "Sanity: history-off execution must not push"
-                );
+                Assert.AreEqual(historyBaseline, _history.Count, "Sanity: history-off execution must not push");
             }
 
             LogScale("command-execution", $"history={addToHistory}", report);
@@ -524,17 +395,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             _history = new CommandHistory(entryCount);
             for (int i = 0; i < entryCount; ++i)
             {
-                Assert.IsTrue(
-                    _history.Push($"bench-entry-{i:D5}", true, true),
-                    $"History should accept entry {i}"
-                );
+                Assert.IsTrue(_history.Push($"bench-entry-{i:D5}", true, true), $"History should accept entry {i}");
             }
 
-            Assert.AreEqual(
-                $"bench-entry-{entryCount - 1:D5}",
-                _history.Previous(true),
-                "Sanity: traversal must start at the newest entry"
-            );
+            Assert.AreEqual($"bench-entry-{entryCount - 1:D5}", _history.Previous(true), "Sanity: traversal must start at the newest entry");
 
             /*
                 The first sweep normalizes the traversal position; every later
@@ -555,12 +419,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             };
 
             OperationReport report = Measure(sweep, sampleCount);
-            LogScale(
-                "history-traversal",
-                $"entries={entryCount} calls={entryCount * 2} "
-                    + $"perCallUs={report.MedianMilliseconds * 1000.0 / (entryCount * 2):F3}",
-                report
-            );
+            LogScale("history-traversal", $"entries={entryCount} calls={entryCount * 2} " + $"perCallUs={report.MedianMilliseconds * 1000.0 / (entryCount * 2):F3}", report);
         }
 
         [TestCaseSource(nameof(TypingCases))]
@@ -568,22 +427,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             CreateBackends(commandCount);
 
-            OperationReport report = Measure(
-                () => _autoComplete.Complete(token, _completionBuffer),
-                sampleCount
-            );
+            OperationReport report = Measure(() => _autoComplete.Complete(token, _completionBuffer), sampleCount);
 
             int minimumMatches = Math.Min(commandCount, SelectiveMatchCount);
-            Assert.LessOrEqual(
-                minimumMatches,
-                _completionBuffer.Count,
-                $"Sanity: typed prefix '{token}' should match its tier commands"
-            );
-            LogScale(
-                "typing-completion",
-                $"commands={commandCount} token='{token}' matches={_completionBuffer.Count}",
-                report
-            );
+            Assert.LessOrEqual(minimumMatches, _completionBuffer.Count, $"Sanity: typed prefix '{token}' should match its tier commands");
+            LogScale("typing-completion", $"commands={commandCount} token='{token}' matches={_completionBuffer.Count}", report);
         }
 
         private OperationReport MeasureWithMode(TerminalStackTraceMode mode)
@@ -592,10 +440,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             try
             {
                 FillLogToCapacity();
-                return Measure(
-                    () => _log.HandleLog("bench message", TerminalLogType.ShellMessage),
-                    DefaultSampleCount
-                );
+                return Measure(() => _log.HandleLog("bench message", TerminalLogType.ShellMessage), DefaultSampleCount);
             }
             finally
             {
@@ -623,10 +468,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Debug.unityLogger.logEnabled = false;
             try
             {
-                Assert.IsTrue(
-                    _shell.RunCommand(NoopCommandName),
-                    "The warmed no-op command must run"
-                );
+                Assert.IsTrue(_shell.RunCommand(NoopCommandName), "The warmed no-op command must run");
             }
             finally
             {
@@ -638,15 +480,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             CommandBuilder builder = CommandBuilder
                 .Create(ProviderCommandName)
-                .Arg<string>(
-                    "candidate",
-                    spec => spec.Required().Choices(context => _providerCandidates, value => value)
-                )
+                .Arg<string>("candidate", spec => spec.Required().Choices(context => _providerCandidates, value => value))
                 .Handler((context, arguments) => { });
-            Assert.IsTrue(
-                _shell.AddCommand(builder, out _),
-                "The provider command should register"
-            );
+            Assert.IsTrue(_shell.AddCommand(builder, out _), "The provider command should register");
         }
 
         private void FillLogToCapacity()
@@ -669,13 +505,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             public int Gen0Collections { get; }
 
-            public OperationReport(
-                int sampleCount,
-                double medianMilliseconds,
-                double percentile95Milliseconds,
-                double maximumMilliseconds,
-                int gen0Collections
-            )
+            public OperationReport(int sampleCount, double medianMilliseconds, double percentile95Milliseconds, double maximumMilliseconds, int gen0Collections)
             {
                 SampleCount = sampleCount;
                 MedianMilliseconds = medianMilliseconds;

@@ -19,12 +19,7 @@ namespace WallstopStudios.DxCommandTerminal.Samples
             Register(
                 CommandBuilder
                     .Create("inventory", "Manage the demo inventory")
-                    .Handler(
-                        (context, arguments) =>
-                            Terminal.Log(
-                                "Try: inventory add <item> [count], inventory remove <item>, inventory list"
-                            )
-                    )
+                    .Handler((context, arguments) => Terminal.Log("Try: inventory add <item> [count], inventory remove <item>, inventory list"))
                     .Subcommand(
                         "add",
                         add =>
@@ -54,10 +49,7 @@ namespace WallstopStudios.DxCommandTerminal.Samples
                                     remove completes only what the inventory
                                     actually holds right now.
                                  */
-                                .Arg<string>(
-                                    "item",
-                                    spec => spec.Required().Choices(context => _items)
-                                )
+                                .Arg<string>("item", spec => spec.Required().Choices(context => _items))
                                 .Handler(
                                     (context, arguments) =>
                                     {
@@ -79,10 +71,7 @@ namespace WallstopStudios.DxCommandTerminal.Samples
                 CommandBuilder
                     .Create("pickup", "Picks up an item")
                     .Arg<string>("item", spec => spec.Required().Choices(context => _items))
-                    .Arg<string>(
-                        "action",
-                        spec => spec.Required().Choices("equip", "inspect", "drop")
-                    )
+                    .Arg<string>("action", spec => spec.Required().Choices("equip", "inspect", "drop"))
                     .Handler(
                         (context, arguments) =>
                         {

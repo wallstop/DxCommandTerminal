@@ -172,21 +172,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             for (int i = 0; i < FillerAssemblyCount; ++i)
             {
                 AssemblyName name = new($"DiscoveryScalingFiller-{i:D4}-{Guid.NewGuid():N}");
-                AssemblyBuilder assembly = AssemblyBuilder.DefineDynamicAssembly(
-                    name,
-                    AssemblyBuilderAccess.Run
-                );
+                AssemblyBuilder assembly = AssemblyBuilder.DefineDynamicAssembly(name, AssemblyBuilderAccess.Run);
                 ModuleBuilder module = assembly.DefineDynamicModule("Filler");
-                TypeBuilder type = module.DefineType(
-                    $"FillerType{i:D4}",
-                    TypeAttributes.Public | TypeAttributes.Sealed
-                );
-                MethodBuilder method = type.DefineMethod(
-                    "FillerMethod",
-                    MethodAttributes.Public | MethodAttributes.Static,
-                    typeof(int),
-                    Type.EmptyTypes
-                );
+                TypeBuilder type = module.DefineType($"FillerType{i:D4}", TypeAttributes.Public | TypeAttributes.Sealed);
+                MethodBuilder method = type.DefineMethod("FillerMethod", MethodAttributes.Public | MethodAttributes.Static, typeof(int), Type.EmptyTypes);
                 ILGenerator body = method.GetILGenerator();
                 body.Emit(OpCodes.Ldc_I4, i);
                 body.Emit(OpCodes.Ret);
@@ -200,34 +189,16 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private static Assembly CreateVolumeAssembly(int commandCount)
         {
             AssemblyName name = new($"DiscoveryScalingVolume-{commandCount:D5}-{Guid.NewGuid():N}");
-            AssemblyBuilder assembly = AssemblyBuilder.DefineDynamicAssembly(
-                name,
-                AssemblyBuilderAccess.Run
-            );
+            AssemblyBuilder assembly = AssemblyBuilder.DefineDynamicAssembly(name, AssemblyBuilderAccess.Run);
             ModuleBuilder module = assembly.DefineDynamicModule("VolumeCommands");
-            TypeBuilder type = module.DefineType(
-                "WallstopStudios.DxCommandTerminal.Tests.VolumeCommands",
-                TypeAttributes.Public | TypeAttributes.Sealed
-            );
-            ConstructorInfo attributeConstructor = typeof(RegisterCommandAttribute).GetConstructor(
-                new[] { typeof(string) }
-            );
+            TypeBuilder type = module.DefineType("WallstopStudios.DxCommandTerminal.Tests.VolumeCommands", TypeAttributes.Public | TypeAttributes.Sealed);
+            ConstructorInfo attributeConstructor = typeof(RegisterCommandAttribute).GetConstructor(new[] { typeof(string) });
             for (int i = 0; i < commandCount; ++i)
             {
-                MethodBuilder method = type.DefineMethod(
-                    $"VolumeCommand{i:D6}",
-                    MethodAttributes.Public | MethodAttributes.Static,
-                    typeof(void),
-                    new[] { typeof(CommandArg[]) }
-                );
+                MethodBuilder method = type.DefineMethod($"VolumeCommand{i:D6}", MethodAttributes.Public | MethodAttributes.Static, typeof(void), new[] { typeof(CommandArg[]) });
                 method.DefineParameter(1, ParameterAttributes.None, "args");
                 method.GetILGenerator().Emit(OpCodes.Ret);
-                method.SetCustomAttribute(
-                    new CustomAttributeBuilder(
-                        attributeConstructor,
-                        new object[] { VolumeCommandName(i) }
-                    )
-                );
+                method.SetCustomAttribute(new CustomAttributeBuilder(attributeConstructor, new object[] { VolumeCommandName(i) }));
             }
 
             type.CreateType();
@@ -332,12 +303,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             return sortedMilliseconds[index];
         }
 
-        private static void AssertReadinessUnderTripwires(
-            ReadinessReport readiness,
-            int commandCount,
-            float coldBudgetMilliseconds,
-            float warmBudgetMilliseconds
-        )
+        private static void AssertReadinessUnderTripwires(ReadinessReport readiness, int commandCount, float coldBudgetMilliseconds, float warmBudgetMilliseconds)
         {
             /*
                 The cold tripwire stays absolute; a breach counts only when
@@ -363,29 +329,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 );
             }
 
-            AssertWarmStatisticUnderTripwire(
-                readiness,
-                commandCount,
-                "median",
-                readiness.Median,
-                warmBudgetMilliseconds
-            );
-            AssertWarmStatisticUnderTripwire(
-                readiness,
-                commandCount,
-                "p95",
-                readiness.Percentile95,
-                warmBudgetMilliseconds * TailTripwireMultiplier
-            );
+            AssertWarmStatisticUnderTripwire(readiness, commandCount, "median", readiness.Median, warmBudgetMilliseconds);
+            AssertWarmStatisticUnderTripwire(readiness, commandCount, "p95", readiness.Percentile95, warmBudgetMilliseconds * TailTripwireMultiplier);
         }
 
-        private static void AssertWarmStatisticUnderTripwire(
-            ReadinessReport readiness,
-            int commandCount,
-            string statistic,
-            double measuredMilliseconds,
-            float budgetMilliseconds
-        )
+        private static void AssertWarmStatisticUnderTripwire(ReadinessReport readiness, int commandCount, string statistic, double measuredMilliseconds, float budgetMilliseconds)
         {
             Assert.Less(
                 measuredMilliseconds,
@@ -401,18 +349,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
         }
 
-        private static void LogReadiness(
-            string detail,
-            ReadinessReport readiness,
-            float coldBudgetMilliseconds,
-            float warmBudgetMilliseconds
-        )
+        private static void LogReadiness(string detail, ReadinessReport readiness, float coldBudgetMilliseconds, float warmBudgetMilliseconds)
         {
             float tailBudgetMilliseconds = warmBudgetMilliseconds * TailTripwireMultiplier;
-            string coldConfirmations =
-                readiness.ColdConfirmationMilliseconds.Length == 0
-                    ? "none"
-                    : string.Join(", ", readiness.ColdConfirmationMilliseconds);
+            string coldConfirmations = readiness.ColdConfirmationMilliseconds.Length == 0 ? "none" : string.Join(", ", readiness.ColdConfirmationMilliseconds);
             Debug.Log(
                 $"[DxCommandTerminal][Scale] {detail} "
                     + $"assemblies={AppDomain.CurrentDomain.GetAssemblies().Length} "
@@ -440,49 +380,26 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         [TestCaseSource(nameof(VolumeCases))]
-        public void MeasuresReadinessAcrossCommandVolume(
-            int commandCount,
-            float coldBudgetMilliseconds,
-            float warmBudgetMilliseconds
-        )
+        public void MeasuresReadinessAcrossCommandVolume(int commandCount, float coldBudgetMilliseconds, float warmBudgetMilliseconds)
         {
             Assembly volumeAssembly = CreateVolumeAssembly(commandCount);
             _handles.Add(CommandShell.IncludeDiscoveryAssembly(volumeAssembly));
 
             ReadinessReport readiness = MeasureReadiness(coldBudgetMilliseconds);
 
-            Assert.IsTrue(
-                readiness.Shell.AutoCommandsRegistered,
-                "Sanity: expected the cold registration cycle to complete"
-            );
-            Assert.GreaterOrEqual(
-                readiness.Shell.AutoRegisteredCommands.Count,
-                commandCount,
-                "Every volume command should register alongside the domain baseline"
-            );
+            Assert.IsTrue(readiness.Shell.AutoCommandsRegistered, "Sanity: expected the cold registration cycle to complete");
+            Assert.GreaterOrEqual(readiness.Shell.AutoRegisteredCommands.Count, commandCount, "Every volume command should register alongside the domain baseline");
             if (0 < commandCount)
             {
                 string firstName = VolumeCommandName(0);
-                Assert.IsTrue(
-                    readiness.Shell.Commands.ContainsKey(firstName),
-                    "The first volume command should be registered"
-                );
-                Assert.IsTrue(
-                    readiness.Shell.RunCommand(firstName),
-                    "The first volume command should run after readiness"
-                );
+                Assert.IsTrue(readiness.Shell.Commands.ContainsKey(firstName), "The first volume command should be registered");
+                Assert.IsTrue(readiness.Shell.RunCommand(firstName), "The first volume command should run after readiness");
             }
 
-            AssertReadinessUnderTripwires(
-                readiness,
-                commandCount,
-                coldBudgetMilliseconds,
-                warmBudgetMilliseconds
-            );
+            AssertReadinessUnderTripwires(readiness, commandCount, coldBudgetMilliseconds, warmBudgetMilliseconds);
 
             LogReadiness(
-                $"readiness path=reflected commands={commandCount} "
-                    + $"registered={readiness.Shell.AutoRegisteredCommands.Count}",
+                $"readiness path=reflected commands={commandCount} " + $"registered={readiness.Shell.AutoRegisteredCommands.Count}",
                 readiness,
                 coldBudgetMilliseconds,
                 warmBudgetMilliseconds
@@ -494,9 +411,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             Assembly volumeAssembly = CreateVolumeAssembly(GateTierCommandCount);
             _handles.Add(CommandShell.IncludeDiscoveryAssembly(volumeAssembly));
-            _handles.Add(
-                CommandShell.RegisterDiscoveryProvider(new VolumeProvider(volumeAssembly))
-            );
+            _handles.Add(CommandShell.RegisterDiscoveryProvider(new VolumeProvider(volumeAssembly)));
 
             List<CommandShell.AutoCommand> collected = new();
             Assert.AreEqual(
@@ -504,29 +419,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 CommandShell.CollectAutoCommands(volumeAssembly, collected),
                 "Sanity: the volume provider should claim the tier assembly"
             );
-            Assert.AreEqual(
-                GateTierCommandCount,
-                collected.Count,
-                "Sanity: the provider should serve every volume command"
-            );
+            Assert.AreEqual(GateTierCommandCount, collected.Count, "Sanity: the provider should serve every volume command");
 
             ReadinessReport readiness = MeasureReadiness(GateTierColdBudgetMilliseconds);
 
-            Assert.GreaterOrEqual(
-                readiness.Shell.AutoRegisteredCommands.Count,
-                GateTierCommandCount,
-                "Every provider-served command should register"
-            );
-            AssertReadinessUnderTripwires(
-                readiness,
-                GateTierCommandCount,
-                GateTierColdBudgetMilliseconds,
-                GateTierWarmBudgetMilliseconds
-            );
+            Assert.GreaterOrEqual(readiness.Shell.AutoRegisteredCommands.Count, GateTierCommandCount, "Every provider-served command should register");
+            AssertReadinessUnderTripwires(readiness, GateTierCommandCount, GateTierColdBudgetMilliseconds, GateTierWarmBudgetMilliseconds);
 
             LogReadiness(
-                $"readiness path=provider commands={GateTierCommandCount} "
-                    + $"registered={readiness.Shell.AutoRegisteredCommands.Count}",
+                $"readiness path=provider commands={GateTierCommandCount} " + $"registered={readiness.Shell.AutoRegisteredCommands.Count}",
                 readiness,
                 GateTierColdBudgetMilliseconds,
                 GateTierWarmBudgetMilliseconds
@@ -565,17 +466,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             _handles.Add(CommandShell.IncludeDiscoveryAssembly(volumeAssembly));
             ReadinessReport readiness = MeasureReadiness(GateTierColdBudgetMilliseconds);
 
-            Assert.GreaterOrEqual(
-                readiness.Shell.AutoRegisteredCommands.Count,
-                GateTierCommandCount,
-                "Every volume command should register in the inflated domain"
-            );
-            AssertReadinessUnderTripwires(
-                readiness,
-                GateTierCommandCount,
-                GateTierColdBudgetMilliseconds,
-                GateTierWarmBudgetMilliseconds
-            );
+            Assert.GreaterOrEqual(readiness.Shell.AutoRegisteredCommands.Count, GateTierCommandCount, "Every volume command should register in the inflated domain");
+            AssertReadinessUnderTripwires(readiness, GateTierCommandCount, GateTierColdBudgetMilliseconds, GateTierWarmBudgetMilliseconds);
 
             LogReadiness(
                 $"domain fillers={FillerAssemblyCount} "
@@ -615,21 +507,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
                 foreach (Type type in assembly.GetTypes())
                 {
-                    foreach (
-                        MethodInfo method in type.GetMethods(
-                            BindingFlags.Public | BindingFlags.Static
-                        )
-                    )
+                    foreach (MethodInfo method in type.GetMethods(BindingFlags.Public | BindingFlags.Static))
                     {
                         if (!method.IsDefined(typeof(RegisterCommandAttribute), false))
                         {
                             continue;
                         }
 
-                        if (
-                            Attribute.GetCustomAttribute(method, typeof(RegisterCommandAttribute))
-                            is RegisterCommandAttribute attribute
-                        )
+                        if (Attribute.GetCustomAttribute(method, typeof(RegisterCommandAttribute)) is RegisterCommandAttribute attribute)
                         {
                             commands.Add(CommandShell.AutoCommand.FromReflected(method, attribute));
                         }
@@ -658,12 +543,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             private readonly double[] _sortedWarmMilliseconds;
 
-            public ReadinessReport(
-                CommandShell shell,
-                double coldMilliseconds,
-                double[] coldConfirmations,
-                double[] sortedWarmMilliseconds
-            )
+            public ReadinessReport(CommandShell shell, double coldMilliseconds, double[] coldConfirmations, double[] sortedWarmMilliseconds)
             {
                 Shell = shell;
                 ColdMilliseconds = coldMilliseconds;

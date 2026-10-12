@@ -177,21 +177,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         private static string FormatRegion(Rect region)
         {
-            return string.Format(
-                CultureInfo.InvariantCulture,
-                "({0:0},{1:0} {2:0}x{3:0})",
-                region.x,
-                region.y,
-                region.width,
-                region.height
-            );
+            return string.Format(CultureInfo.InvariantCulture, "({0:0},{1:0} {2:0}x{3:0})", region.x, region.y, region.width, region.height);
         }
 
         private static string DescribeFocus(Focusable focused)
         {
-            return focused == null
-                ? "nothing"
-                : focused.GetType().Name + "/" + (focused as VisualElement)?.name;
+            return focused == null ? "nothing" : focused.GetType().Name + "/" + (focused as VisualElement)?.name;
         }
 
         /*
@@ -200,22 +191,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             render that painted only part of the surface is not blank, so the
             bounds alone would let it through.
          */
-        private static List<string> FirstFrameViolations(
-            CapturePixelMetrics firstFrame,
-            CapturePixelMetrics settledFrame
-        )
+        private static List<string> FirstFrameViolations(CapturePixelMetrics firstFrame, CapturePixelMetrics settledFrame)
         {
-            List<string> violations = TerminalSurfaceCapture.Evaluate(
-                firstFrame,
-                CaptureBounds.Default()
-            );
+            List<string> violations = TerminalSurfaceCapture.Evaluate(firstFrame, CaptureBounds.Default());
             if (firstFrame.DistinctColors < settledFrame.DistinctColors)
             {
-                violations.Add(
-                    $"first render is poorer than the settled frame "
-                        + $"({firstFrame.DistinctColors} < {settledFrame.DistinctColors} "
-                        + "distinct colors)"
-                );
+                violations.Add($"first render is poorer than the settled frame " + $"({firstFrame.DistinctColors} < {settledFrame.DistinctColors} " + "distinct colors)");
             }
 
             return violations;
@@ -229,11 +210,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             RenderTexture.active = previousTarget;
         }
 
-        private static void AssertFrameComplete(
-            CapturePixelMetrics firstFrame,
-            CapturePixelMetrics settledFrame,
-            string label
-        )
+        private static void AssertFrameComplete(CapturePixelMetrics firstFrame, CapturePixelMetrics settledFrame, string label)
         {
             List<string> violations = FirstFrameViolations(firstFrame, settledFrame);
             Assert.That(
@@ -248,15 +225,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         private static void AssertAcceptable(CaptureOutcome outcome)
         {
-            Assert.That(
-                outcome.Violations,
-                Is.Empty,
-                "Capture met the pixel bounds: " + string.Join("; ", outcome.Violations)
-            );
-            Assert.That(
-                outcome.Manifest != null,
-                "Every capture records a manifest next to its PNG"
-            );
+            Assert.That(outcome.Violations, Is.Empty, "Capture met the pixel bounds: " + string.Join("; ", outcome.Violations));
+            Assert.That(outcome.Manifest != null, "Every capture records a manifest next to its PNG");
             Assert.That(0 < outcome.Metrics.PngBytes, "The PNG encoder produced a non-empty file");
         }
 
@@ -265,11 +235,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             for (int index = 0; index < names.Length; ++index)
             {
                 string commandName = names[index];
-                Terminal.Shell.AddCommand(
-                    commandName,
-                    _ => { },
-                    help: $"Capture fixture command {commandName}"
-                );
+                Terminal.Shell.AddCommand(commandName, _ => { }, help: $"Capture fixture command {commandName}");
             }
         }
 
@@ -324,11 +290,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
              */
             if (_renderTexturesBefore.HasValue)
             {
-                Assert.AreEqual(
-                    _renderTexturesBefore.Value,
-                    TerminalSurfaceCapture.CountRenderTextures(),
-                    "Capture left RenderTexture leaks behind"
-                );
+                Assert.AreEqual(_renderTexturesBefore.Value, TerminalSurfaceCapture.CountRenderTextures(), "Capture left RenderTexture leaks behind");
             }
         }
 
@@ -339,10 +301,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Terminal.Log("capture-small ready");
             Terminal.Log(WrappedLine);
             _terminal.SetCursorBlinkPaused(true);
-            yield return CaptureSurface(
-                nameof(CapturesTerminalSmallSurface),
-                CaptureBounds.Default()
-            );
+            yield return CaptureSurface(nameof(CapturesTerminalSmallSurface), CaptureBounds.Default());
             AssertAcceptable(_lastOutcome);
         }
 
@@ -355,10 +314,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Terminal.Log(TerminalLogType.Error, "capture-full error line");
             Terminal.Log(WrappedLine);
             _terminal.SetCursorBlinkPaused(true);
-            yield return CaptureSurface(
-                nameof(CapturesTerminalFullSurfaceWithErrors),
-                CaptureBounds.Default()
-            );
+            yield return CaptureSurface(nameof(CapturesTerminalFullSurfaceWithErrors), CaptureBounds.Default());
             AssertAcceptable(_lastOutcome);
         }
 
@@ -378,10 +334,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             _terminal.CompleteCommand();
             yield return WaitForCompletionHints(CompletionQuery);
             _terminal.SetCursorBlinkPaused(true);
-            yield return CaptureSurface(
-                nameof(CapturesCompletionHintsSurface),
-                CaptureBounds.Default()
-            );
+            yield return CaptureSurface(nameof(CapturesCompletionHintsSurface), CaptureBounds.Default());
             AssertAcceptable(_lastOutcome);
         }
 
@@ -397,22 +350,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return SpawnCalibratedTerminal(TerminalState.OpenSmall);
             for (int line = 1; line <= ScrollLineCount; ++line)
             {
-                Terminal.Log(
-                    "capture-scroll line "
-                        + line.ToString(CultureInfo.InvariantCulture)
-                        + " of "
-                        + ScrollLineCount.ToString(CultureInfo.InvariantCulture)
-                );
+                Terminal.Log("capture-scroll line " + line.ToString(CultureInfo.InvariantCulture) + " of " + ScrollLineCount.ToString(CultureInfo.InvariantCulture));
             }
 
             Terminal.Log(TerminalLogType.Error, "capture-scroll error line");
             Terminal.Log(WrappedLine);
             _terminal.SetCursorBlinkPaused(true);
             yield return WaitForLogScrollSettled();
-            yield return CaptureSurface(
-                nameof(CapturesScrollingLogSurface),
-                CaptureBounds.Default()
-            );
+            yield return CaptureSurface(nameof(CapturesScrollingLogSurface), CaptureBounds.Default());
             AssertAcceptable(_lastOutcome);
         }
 
@@ -431,10 +376,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             _terminal.CompleteCommand();
             yield return WaitForCompletionHints(LongNameQuery);
             _terminal.SetCursorBlinkPaused(true);
-            yield return CaptureSurface(
-                nameof(CapturesLongNameCompletionSurface),
-                CaptureBounds.Default()
-            );
+            yield return CaptureSurface(nameof(CapturesLongNameCompletionSurface), CaptureBounds.Default());
             AssertAcceptable(_lastOutcome);
         }
 
@@ -452,11 +394,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return null;
             _palette._input.value = PaletteEmptyQuery;
             yield return SettleRenders();
-            Assert.That(
-                _palette._matchNames,
-                Is.Empty,
-                $"The palette matched nothing for query '{PaletteEmptyQuery}'"
-            );
+            Assert.That(_palette._matchNames, Is.Empty, $"The palette matched nothing for query '{PaletteEmptyQuery}'");
             yield return CapturePaletteSurface(nameof(CapturesPaletteEmptyResultsSurface));
             AssertAcceptable(_lastOutcome);
         }
@@ -500,12 +438,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Terminal.Log("capture-narrow ready");
             Terminal.Log(WrappedLine);
             _terminal.SetCursorBlinkPaused(true);
-            yield return CaptureSurface(
-                nameof(CapturesNarrowScreenTerminalSmall),
-                CaptureBounds.Default(),
-                NarrowCaptureWidth,
-                NarrowCaptureHeight
-            );
+            yield return CaptureSurface(nameof(CapturesNarrowScreenTerminalSmall), CaptureBounds.Default(), NarrowCaptureWidth, NarrowCaptureHeight);
             AssertAcceptable(_lastOutcome);
         }
 
@@ -527,11 +460,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return null;
             _palette._input.value = PaletteLongHelpQuery;
             yield return WaitForPaletteRows(PaletteLongHelpQuery);
-            yield return CapturePaletteSurface(
-                nameof(CapturesWideScreenPaletteLongHelp),
-                WideCaptureWidth,
-                WideCaptureHeight
-            );
+            yield return CapturePaletteSurface(nameof(CapturesWideScreenPaletteLongHelp), WideCaptureWidth, WideCaptureHeight);
             AssertAcceptable(_lastOutcome);
         }
 
@@ -544,19 +473,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [UnityTest]
         public IEnumerator CapturesScaleTwoTerminalSmall()
         {
-            yield return SpawnCalibratedTerminal(
-                TerminalState.OpenSmall,
-                panelScale: VariantPanelScale
-            );
+            yield return SpawnCalibratedTerminal(TerminalState.OpenSmall, panelScale: VariantPanelScale);
             Terminal.Log("capture-scale-two ready");
             Terminal.Log(WrappedLine);
             _terminal.SetCursorBlinkPaused(true);
-            yield return CaptureSurface(
-                nameof(CapturesScaleTwoTerminalSmall),
-                CaptureBounds.Default(),
-                ScaleTwoCaptureWidth,
-                ScaleTwoCaptureHeight
-            );
+            yield return CaptureSurface(nameof(CapturesScaleTwoTerminalSmall), CaptureBounds.Default(), ScaleTwoCaptureWidth, ScaleTwoCaptureHeight);
             AssertAcceptable(_lastOutcome);
         }
 
@@ -568,19 +489,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [UnityTest]
         public IEnumerator CapturesAlternateFontTerminalSmall()
         {
-            yield return SpawnCalibratedTerminal(
-                TerminalState.OpenSmall,
-                fontPackPath: AltFontPackPath
-            );
+            yield return SpawnCalibratedTerminal(TerminalState.OpenSmall, fontPackPath: AltFontPackPath);
             Terminal.Log("capture-font ready");
             Terminal.Log(WrappedLine);
             _terminal.SetCursorBlinkPaused(true);
-            yield return CaptureSurface(
-                nameof(CapturesAlternateFontTerminalSmall),
-                CaptureBounds.Default(),
-                PinnedCaptureWidth,
-                PinnedCaptureHeight
-            );
+            yield return CaptureSurface(nameof(CapturesAlternateFontTerminalSmall), CaptureBounds.Default(), PinnedCaptureWidth, PinnedCaptureHeight);
             AssertAcceptable(_lastOutcome);
         }
 
@@ -600,12 +513,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Terminal.Log(TerminalLogType.Error, "capture-tall error line");
             Terminal.Log(WrappedLine);
             _terminal.SetCursorBlinkPaused(true);
-            yield return CaptureSurface(
-                nameof(CapturesTallScreenTerminalFull),
-                CaptureBounds.Default(),
-                TallCaptureWidth,
-                TallCaptureHeight
-            );
+            yield return CaptureSurface(nameof(CapturesTallScreenTerminalFull), CaptureBounds.Default(), TallCaptureWidth, TallCaptureHeight);
             AssertAcceptable(_lastOutcome);
         }
 
@@ -626,21 +534,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Terminal.Log(WrappedLine);
             _terminal.SetCursorBlinkPaused(true);
 
-            RenderTexture preResize = AttachRenderTarget(
-                nameof(CapturesResizedViewportTerminalSmall),
-                PinnedCaptureWidth,
-                PinnedCaptureHeight
-            );
+            RenderTexture preResize = AttachRenderTarget(nameof(CapturesResizedViewportTerminalSmall), PinnedCaptureWidth, PinnedCaptureHeight);
             yield return SettleRenders();
             VisualElement uiRoot = _terminal._uiDocument.rootVisualElement;
             float pinnedLayoutWidth = uiRoot.layout.width;
             DetachRenderTarget(preResize);
 
-            RenderTexture resized = AttachRenderTarget(
-                nameof(CapturesResizedViewportTerminalSmall),
-                ResizedCaptureWidth,
-                ResizedCaptureHeight
-            );
+            RenderTexture resized = AttachRenderTarget(nameof(CapturesResizedViewportTerminalSmall), ResizedCaptureWidth, ResizedCaptureHeight);
             try
             {
                 int frameBudget = FrameBudget;
@@ -649,18 +549,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     yield return null;
                 }
 
-                Assert.Greater(
-                    uiRoot.layout.width,
-                    pinnedLayoutWidth,
-                    "The panel re-laid out for the widened viewport before the capture"
-                );
+                Assert.Greater(uiRoot.layout.width, pinnedLayoutWidth, "The panel re-laid out for the widened viewport before the capture");
                 yield return SettleRenders();
-                _lastOutcome = FinishCapture(
-                    nameof(CapturesResizedViewportTerminalSmall),
-                    resized,
-                    CaptureBounds.Default(),
-                    uiRoot
-                );
+                _lastOutcome = FinishCapture(nameof(CapturesResizedViewportTerminalSmall), resized, CaptureBounds.Default(), uiRoot);
             }
             finally
             {
@@ -685,19 +576,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Terminal.Log("capture-close ready");
             _terminal.SetState(TerminalState.Closed);
             yield return WaitForTerminalClosed();
-            yield return CaptureSurface(
-                nameof(CapturesClosedTerminalRendersNothing),
-                CaptureBounds.Default()
-            );
-            Assert.That(
-                _lastOutcome.Violations,
-                Is.Not.Empty,
-                "A closed terminal must fail the capture bounds like the blank control"
-            );
-            Assert.IsFalse(
-                _lastOutcome.Manifest.Complete,
-                "A closed terminal must record an incomplete manifest"
-            );
+            yield return CaptureSurface(nameof(CapturesClosedTerminalRendersNothing), CaptureBounds.Default());
+            Assert.That(_lastOutcome.Violations, Is.Not.Empty, "A closed terminal must fail the capture bounds like the blank control");
+            Assert.IsFalse(_lastOutcome.Manifest.Complete, "A closed terminal must record an incomplete manifest");
         }
 
         /*
@@ -721,36 +602,20 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             string scenario = nameof(CapturesCommandPaletteSurface);
             RenderTexture target = AttachRenderTarget(scenario);
-            TerminalSurfaceCapture.CursorFreezeScope cursorFreeze =
-                TerminalSurfaceCapture.FreezeCursor(_palette._input);
+            TerminalSurfaceCapture.CursorFreezeScope cursorFreeze = TerminalSurfaceCapture.FreezeCursor(_palette._input);
             try
             {
                 _diagnosticsSuffix = "cursorFreeze=" + cursorFreeze.Describe();
                 yield return SettleRenders();
-                _lastOutcome = FinishCapture(
-                    scenario,
-                    target,
-                    CaptureBounds.Default(),
-                    _terminal._uiDocument.rootVisualElement,
-                    keepFrame: true
-                );
+                _lastOutcome = FinishCapture(scenario, target, CaptureBounds.Default(), _terminal._uiDocument.rootVisualElement, keepFrame: true);
                 AssertAcceptable(_lastOutcome);
                 if (!cursorFreeze.Engaged)
                 {
-                    Assert.Ignore(
-                        "The caret freeze could not engage; skipping the blink-invariance "
-                            + $"proof ({cursorFreeze.Describe()})"
-                    );
+                    Assert.Ignore("The caret freeze could not engage; skipping the blink-invariance " + $"proof ({cursorFreeze.Describe()})");
                 }
 
                 yield return WaitSeconds(BlinkSettleSeconds);
-                CaptureOutcome repeat = FinishCapture(
-                    scenario + "-repeat",
-                    target,
-                    CaptureBounds.Default(),
-                    _terminal._uiDocument.rootVisualElement,
-                    keepFrame: true
-                );
+                CaptureOutcome repeat = FinishCapture(scenario + "-repeat", target, CaptureBounds.Default(), _terminal._uiDocument.rootVisualElement, keepFrame: true);
                 AssertAcceptable(repeat);
 
                 /*
@@ -763,11 +628,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     levels and still fails.
                  */
                 Assert.That(
-                    TerminalSurfaceCapture.DescribeFrameMismatch(
-                        _lastOutcome.Frame.Value,
-                        repeat.Frame.Value,
-                        MaxInvarianceChannelDelta
-                    ),
+                    TerminalSurfaceCapture.DescribeFrameMismatch(_lastOutcome.Frame.Value, repeat.Frame.Value, MaxInvarianceChannelDelta),
                     Is.Null,
                     "The palette render must be blink-invariant with the caret frozen"
                 );
@@ -817,10 +678,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
              */
             CapturePixelMetrics light = themed[0].Metrics;
             CapturePixelMetrics dark = themed[1].Metrics;
-            bool distinctBackground =
-                light.BackgroundRed != dark.BackgroundRed
-                || light.BackgroundGreen != dark.BackgroundGreen
-                || light.BackgroundBlue != dark.BackgroundBlue;
+            bool distinctBackground = light.BackgroundRed != dark.BackgroundRed || light.BackgroundGreen != dark.BackgroundGreen || light.BackgroundBlue != dark.BackgroundBlue;
             Assert.IsTrue(
                 distinctBackground,
                 "The light and dark themes must render distinct backgrounds: "
@@ -845,10 +703,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             }
 
             yield return SpawnTerminal();
-            yield return CaptureInspectorSurface(
-                nameof(CapturesTerminalUIInspectorSurface),
-                _terminal
-            );
+            yield return CaptureInspectorSurface(nameof(CapturesTerminalUIInspectorSurface), _terminal);
             AssertAcceptable(_lastOutcome);
         }
 
@@ -861,10 +716,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             }
 
             yield return SpawnTerminal();
-            yield return CaptureInspectorSurface(
-                nameof(CapturesThemePackInspectorSurface),
-                LoadPack<TerminalThemePack>(ThemePackPath)
-            );
+            yield return CaptureInspectorSurface(nameof(CapturesThemePackInspectorSurface), LoadPack<TerminalThemePack>(ThemePackPath));
             AssertAcceptable(_lastOutcome);
         }
 
@@ -877,10 +729,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             }
 
             yield return SpawnTerminal();
-            yield return CaptureInspectorSurface(
-                nameof(CapturesFontPackInspectorSurface),
-                LoadPack<TerminalFontPack>(FontPackPath)
-            );
+            yield return CaptureInspectorSurface(nameof(CapturesFontPackInspectorSurface), LoadPack<TerminalFontPack>(FontPackPath));
             AssertAcceptable(_lastOutcome);
         }
 
@@ -908,27 +757,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             try
             {
                 yield return SettleRenders();
-                _lastOutcome = FinishCapture(
-                    nameof(BlankRenderFailsBounds),
-                    target,
-                    CaptureBounds.Default(),
-                    null
-                );
+                _lastOutcome = FinishCapture(nameof(BlankRenderFailsBounds), target, CaptureBounds.Default(), null);
             }
             finally
             {
                 DetachRenderTarget(target);
             }
 
-            Assert.That(
-                _lastOutcome.Violations,
-                Is.Not.Empty,
-                "A blank render must violate the capture bounds"
-            );
-            Assert.IsFalse(
-                _lastOutcome.Manifest.Complete,
-                "A blank render must record an incomplete manifest"
-            );
+            Assert.That(_lastOutcome.Violations, Is.Not.Empty, "A blank render must violate the capture bounds");
+            Assert.IsFalse(_lastOutcome.Manifest.Complete, "A blank render must record an incomplete manifest");
         }
 
         /*
@@ -990,11 +827,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             _terminal.Close();
             yield return WaitForTerminalClosed();
             string scenario = nameof(CapturesFirstPaletteInteractionFrame);
-            RenderTexture target = AttachRenderTarget(
-                scenario,
-                PinnedCaptureWidth,
-                PinnedCaptureHeight
-            );
+            RenderTexture target = AttachRenderTarget(scenario, PinnedCaptureWidth, PinnedCaptureHeight);
             try
             {
                 yield return WaitForPanelMeasuredToTarget();
@@ -1003,17 +836,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
                 _palette.Open();
                 _firstInteractionCaretFreeze = TerminalSurfaceCapture.FreezeCursor(_palette._input);
-                AssertInputOwnsFocus(
-                    "the palette input owns focus in the frame the input is processed"
-                );
-                TerminalSurfaceCapture.CapturedFrame firstFrame = CaptureRenderFrame(
-                    target,
-                    scenario
-                );
-                CapturePixelMetrics settledFrame = CaptureSettledRender(
-                    target,
-                    scenario + "-settled"
-                );
+                AssertInputOwnsFocus("the palette input owns focus in the frame the input is processed");
+                TerminalSurfaceCapture.CapturedFrame firstFrame = CaptureRenderFrame(target, scenario);
+                CapturePixelMetrics settledFrame = CaptureSettledRender(target, scenario + "-settled");
                 AssertFrameComplete(firstFrame.Metrics, settledFrame, "first palette interaction");
 
                 /*
@@ -1025,36 +850,17 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
                 _palette.Close();
                 CapturePixelMetrics afterClose = CaptureRender(target, scenario + "-after-close");
-                AssertRendersNothing(
-                    afterClose,
-                    "closing the palette detaches it, so the next render is empty"
-                );
+                AssertRendersNothing(afterClose, "closing the palette detaches it, so the next render is empty");
 
                 _palette.Open();
                 AssertInputOwnsFocus("the reopened palette input owns focus immediately");
-                TerminalSurfaceCapture.CapturedFrame reopenFrame = CaptureRenderFrame(
-                    target,
-                    scenario + "-reopen"
-                );
-                CapturePixelMetrics reopenSettled = CaptureSettledRender(
-                    target,
-                    scenario + "-reopen-settled"
-                );
+                TerminalSurfaceCapture.CapturedFrame reopenFrame = CaptureRenderFrame(target, scenario + "-reopen");
+                CapturePixelMetrics reopenSettled = CaptureSettledRender(target, scenario + "-reopen-settled");
                 AssertFrameComplete(reopenFrame.Metrics, reopenSettled, "reopened palette");
                 AssertRendersIdentically(firstFrame, reopenFrame);
 
-                WriteFrameTimingManifest(
-                    scenario,
-                    firstFrame.Metrics,
-                    FirstFrameViolations(firstFrame.Metrics, settledFrame),
-                    warm: false
-                );
-                WriteFrameTimingManifest(
-                    scenario + "-reopen",
-                    reopenFrame.Metrics,
-                    FirstFrameViolations(reopenFrame.Metrics, reopenSettled),
-                    warm: true
-                );
+                WriteFrameTimingManifest(scenario, firstFrame.Metrics, FirstFrameViolations(firstFrame.Metrics, settledFrame), warm: false);
+                WriteFrameTimingManifest(scenario + "-reopen", reopenFrame.Metrics, FirstFrameViolations(reopenFrame.Metrics, reopenSettled), warm: true);
             }
             finally
             {
@@ -1126,10 +932,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             return region;
         }
 
-        private IEnumerator SpawnTerminal(
-            float? panelScale = null,
-            string fontPackPath = FontPackPath
-        )
+        private IEnumerator SpawnTerminal(float? panelScale = null, string fontPackPath = FontPackPath)
         {
             _diagnosticsSuffix = string.Empty;
             _panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
@@ -1140,9 +943,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 Theme Style Sheet set" warning). The package's own base sheet
                 gives the fixture the real shipped look.
              */
-            _panelSettings.themeStyleSheet = LoadPack<ThemeStyleSheet>(
-                "Styles/TerminalThemeSettings-Base.tss"
-            );
+            _panelSettings.themeStyleSheet = LoadPack<ThemeStyleSheet>("Styles/TerminalThemeSettings-Base.tss");
 
             /*
                 The panel freezes its scale at creation, so a variant scale
@@ -1169,12 +970,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return new WaitUntil(() => _tracker.Started);
         }
 
-        private IEnumerator SpawnCalibratedTerminal(
-            TerminalState state,
-            bool withPalette = false,
-            float? panelScale = null,
-            string fontPackPath = FontPackPath
-        )
+        private IEnumerator SpawnCalibratedTerminal(TerminalState state, bool withPalette = false, float? panelScale = null, string fontPackPath = FontPackPath)
         {
             /*
                 The host game view's zoom and Retina backing decide how many
@@ -1203,26 +999,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private IEnumerator WaitForTerminalInputVisible()
         {
             int frameBudget = FrameBudget;
-            while (
-                0 < frameBudget--
-                && (
-                    _terminal._commandInput == null
-                    || _terminal._commandInput.resolvedStyle.display != DisplayStyle.Flex
-                )
-            )
+            while (0 < frameBudget-- && (_terminal._commandInput == null || _terminal._commandInput.resolvedStyle.display != DisplayStyle.Flex))
             {
                 yield return null;
             }
 
-            Assert.That(
-                _terminal._commandInput != null,
-                "The terminal input field exists after the terminal opens"
-            );
-            Assert.AreEqual(
-                DisplayStyle.Flex,
-                _terminal._commandInput.resolvedStyle.display,
-                "The terminal input is visible after the terminal opens"
-            );
+            Assert.That(_terminal._commandInput != null, "The terminal input field exists after the terminal opens");
+            Assert.AreEqual(DisplayStyle.Flex, _terminal._commandInput.resolvedStyle.display, "The terminal input is visible after the terminal opens");
         }
 
         private IEnumerator WaitForCompletionHints(string query)
@@ -1240,29 +1023,17 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             int frameBudget = FrameBudget;
             while (
                 0 < frameBudget--
-                && (
-                    _terminal._lastCompletionBuffer.Count == 0
-                    || hintPopup() == null
-                    || hintPopup().childCount == 0
-                    || DisplayStyle.Flex != hintPopup().resolvedStyle.display
-                )
+                && (_terminal._lastCompletionBuffer.Count == 0 || hintPopup() == null || hintPopup().childCount == 0 || DisplayStyle.Flex != hintPopup().resolvedStyle.display)
             )
             {
                 yield return null;
             }
 
-            Assert.That(
-                0 < _terminal._lastCompletionBuffer.Count,
-                $"Completion candidates were computed for '{query}'"
-            );
+            Assert.That(0 < _terminal._lastCompletionBuffer.Count, $"Completion candidates were computed for '{query}'");
             VisualElement popup = hintPopup();
             Assert.That(popup != null, "Completion hint popup exists for the query");
             Assert.That(0 < popup.childCount, "Completion hint rows were built for the query");
-            Assert.AreEqual(
-                DisplayStyle.Flex,
-                popup.resolvedStyle.display,
-                "Completion hints are visible for the query"
-            );
+            Assert.AreEqual(DisplayStyle.Flex, popup.resolvedStyle.display, "Completion hints are visible for the query");
         }
 
         private IEnumerator WaitForLogScrollSettled()
@@ -1282,10 +1053,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             while (0 < frameBudget--)
             {
                 Scroller scroller = LogView()?.verticalScroller;
-                bool settled =
-                    scroller != null
-                    && 0f < scroller.highValue
-                    && scroller.highValue - 0.5f <= scroller.value;
+                bool settled = scroller != null && 0f < scroller.highValue && scroller.highValue - 0.5f <= scroller.value;
                 if (settled && settledOnce)
                 {
                     break;
@@ -1296,36 +1064,20 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             }
 
             Scroller verticalScroller = LogView()?.verticalScroller;
-            Assert.That(
-                verticalScroller != null,
-                "The log scroll view exposes a vertical scroller"
-            );
-            Assert.Greater(
-                verticalScroller.highValue,
-                0f,
-                "The log content overflows the log view so the scrollbar engages"
-            );
-            Assert.Less(
-                verticalScroller.highValue - verticalScroller.value,
-                0.5f,
-                "The log view settled at the scrolled-to-end position"
-            );
+            Assert.That(verticalScroller != null, "The log scroll view exposes a vertical scroller");
+            Assert.Greater(verticalScroller.highValue, 0f, "The log content overflows the log view so the scrollbar engages");
+            Assert.Less(verticalScroller.highValue - verticalScroller.value, 0.5f, "The log view settled at the scrolled-to-end position");
         }
 
         private IEnumerator WaitForPaletteRows(string query)
         {
             int frameBudget = FrameBudget;
-            while (
-                0 < frameBudget-- && (_palette._matchNames.Count == 0 || _palette._rows.Count == 0)
-            )
+            while (0 < frameBudget-- && (_palette._matchNames.Count == 0 || _palette._rows.Count == 0))
             {
                 yield return null;
             }
 
-            Assert.That(
-                0 < _palette._matchNames.Count,
-                $"Palette matched commands for query '{query}'"
-            );
+            Assert.That(0 < _palette._matchNames.Count, $"Palette matched commands for query '{query}'");
             Assert.That(0 < _palette._rows.Count, "Palette built result rows for the query");
         }
 
@@ -1343,29 +1095,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             }
 
             int frameBudget = FrameBudget;
-            while (
-                0 < frameBudget--
-                && (
-                    !_terminal.IsClosed
-                    || inputContainer() == null
-                    || inputContainer().resolvedStyle.display != DisplayStyle.None
-                )
-            )
+            while (0 < frameBudget-- && (!_terminal.IsClosed || inputContainer() == null || inputContainer().resolvedStyle.display != DisplayStyle.None))
             {
                 yield return null;
             }
 
             Assert.IsTrue(_terminal.IsClosed, "The terminal reached the closed state");
             VisualElement closedInputContainer = inputContainer();
-            Assert.That(
-                closedInputContainer != null,
-                "The input container exists after the terminal closes"
-            );
-            Assert.AreEqual(
-                DisplayStyle.None,
-                closedInputContainer.resolvedStyle.display,
-                "The terminal input is hidden after the terminal closes"
-            );
+            Assert.That(closedInputContainer != null, "The input container exists after the terminal closes");
+            Assert.AreEqual(DisplayStyle.None, closedInputContainer.resolvedStyle.display, "The terminal input is hidden after the terminal closes");
         }
 
         private IEnumerator CaptureSurface(string scenario, CaptureBounds bounds)
@@ -1373,40 +1111,18 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return CaptureSurface(scenario, bounds, Screen.width, Screen.height, null);
         }
 
-        private IEnumerator CaptureSurface(
-            string scenario,
-            CaptureBounds bounds,
-            Rect metricsRegion
-        )
+        private IEnumerator CaptureSurface(string scenario, CaptureBounds bounds, Rect metricsRegion)
         {
-            yield return CaptureSurface(
-                scenario,
-                bounds,
-                Screen.width,
-                Screen.height,
-                metricsRegion
-            );
+            yield return CaptureSurface(scenario, bounds, Screen.width, Screen.height, metricsRegion);
         }
 
-        private IEnumerator CaptureSurface(
-            string scenario,
-            CaptureBounds bounds,
-            int width,
-            int height,
-            Rect? metricsRegion = null
-        )
+        private IEnumerator CaptureSurface(string scenario, CaptureBounds bounds, int width, int height, Rect? metricsRegion = null)
         {
             RenderTexture target = AttachRenderTarget(scenario, width, height);
             try
             {
                 yield return SettleRenders();
-                _lastOutcome = FinishCapture(
-                    scenario,
-                    target,
-                    bounds,
-                    _terminal._uiDocument.rootVisualElement,
-                    metricsRegion
-                );
+                _lastOutcome = FinishCapture(scenario, target, bounds, _terminal._uiDocument.rootVisualElement, metricsRegion);
             }
             finally
             {
@@ -1429,19 +1145,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private IEnumerator CapturePaletteSurface(string scenario, int width, int height)
         {
             RenderTexture target = AttachRenderTarget(scenario, width, height);
-            TerminalSurfaceCapture.CursorFreezeScope cursorFreeze =
-                TerminalSurfaceCapture.FreezeCursor(_palette._input);
+            TerminalSurfaceCapture.CursorFreezeScope cursorFreeze = TerminalSurfaceCapture.FreezeCursor(_palette._input);
             try
             {
                 _terminal.SetCursorBlinkPaused(true);
                 _diagnosticsSuffix = "cursorFreeze=" + cursorFreeze.Describe();
                 yield return SettleRenders();
-                _lastOutcome = FinishCapture(
-                    scenario,
-                    target,
-                    CaptureBounds.Default(),
-                    _terminal._uiDocument.rootVisualElement
-                );
+                _lastOutcome = FinishCapture(scenario, target, CaptureBounds.Default(), _terminal._uiDocument.rootVisualElement);
             }
             finally
             {
@@ -1466,35 +1176,20 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private IEnumerator CaptureInspectorSurface(string scenario, UnityEngine.Object target)
         {
             RenderTexture renderTarget = CreateRenderTarget(scenario);
-            EditorInspectorCapture.InspectorScope inspector = EditorInspectorCapture.Attach(
-                _surfaceObject,
-                target,
-                renderTarget,
-                InspectorWidth,
-                InspectorHeight
-            );
+            EditorInspectorCapture.InspectorScope inspector = EditorInspectorCapture.Attach(_surfaceObject, target, renderTarget, InspectorWidth, InspectorHeight);
             try
             {
                 InspectorDrawSurface surface = _surfaceObject.GetComponent<InspectorDrawSurface>();
                 Assert.That(surface != null, "Sanity: the inspector draw surface attached");
                 yield return WaitFrames(InspectorRepaintProbeFrames);
-                Assert.GreaterOrEqual(
-                    surface.RepaintCount,
-                    1,
-                    "The Game View repainted the inspector; inspector capture needs a "
-                        + "visible Game View"
-                );
+                Assert.GreaterOrEqual(surface.RepaintCount, 1, "The Game View repainted the inspector; inspector capture needs a " + "visible Game View");
                 int frameBudget = FrameBudget;
                 while (0 < frameBudget-- && surface.RepaintCount < InspectorRepaintFloor)
                 {
                     yield return null;
                 }
 
-                Assert.GreaterOrEqual(
-                    surface.RepaintCount,
-                    InspectorRepaintFloor,
-                    "The game view painted the inspector into the capture target"
-                );
+                Assert.GreaterOrEqual(surface.RepaintCount, InspectorRepaintFloor, "The game view painted the inspector into the capture target");
                 yield return WaitFrames(SettleFrames);
                 _lastOutcome = FinishCapture(scenario, renderTarget, CaptureBounds.Default(), null);
             }
@@ -1533,12 +1228,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             }
         }
 
-        private IEnumerator CaptureThemedSurface(
-            string friendlyTheme,
-            string scenario,
-            List<CaptureOutcome> outcomes,
-            Rect metricsRegion
-        )
+        private IEnumerator CaptureThemedSurface(string friendlyTheme, string scenario, List<CaptureOutcome> outcomes, Rect metricsRegion)
         {
             _terminal.SetTheme(friendlyTheme);
             yield return WaitForTheme(friendlyTheme);
@@ -1550,23 +1240,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private IEnumerator WaitForTheme(string friendlyTheme)
         {
             int frameBudget = FrameBudget;
-            while (
-                0 < frameBudget--
-                && !string.Equals(
-                    _terminal.CurrentFriendlyTheme,
-                    friendlyTheme,
-                    StringComparison.OrdinalIgnoreCase
-                )
-            )
+            while (0 < frameBudget-- && !string.Equals(_terminal.CurrentFriendlyTheme, friendlyTheme, StringComparison.OrdinalIgnoreCase))
             {
                 yield return null;
             }
 
-            Assert.AreEqual(
-                friendlyTheme,
-                _terminal.CurrentFriendlyTheme,
-                $"Theme '{friendlyTheme}' applied before capture"
-            );
+            Assert.AreEqual(friendlyTheme, _terminal.CurrentFriendlyTheme, $"Theme '{friendlyTheme}' applied before capture");
         }
 
         /*
@@ -1576,36 +1255,19 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private CapturePixelMetrics CaptureRender(RenderTexture target, string scenario)
         {
             ClearCaptureTarget(target);
-            TerminalSurfaceCapture.ForcePanelRender(
-                _terminal._uiDocument.rootVisualElement,
-                FirstRenderPasses
-            );
-            return TerminalSurfaceCapture.CaptureToPng(
-                target,
-                null,
-                Path.Combine(_runDirectory, scenario + ".png")
-            );
+            TerminalSurfaceCapture.ForcePanelRender(_terminal._uiDocument.rootVisualElement, FirstRenderPasses);
+            return TerminalSurfaceCapture.CaptureToPng(target, null, Path.Combine(_runDirectory, scenario + ".png"));
         }
 
         /*
             The same one-pass read, keeping the readback pixels so two of the
             scenario's first-frame reads can be compared pixel against pixel.
          */
-        private TerminalSurfaceCapture.CapturedFrame CaptureRenderFrame(
-            RenderTexture target,
-            string scenario
-        )
+        private TerminalSurfaceCapture.CapturedFrame CaptureRenderFrame(RenderTexture target, string scenario)
         {
             ClearCaptureTarget(target);
-            TerminalSurfaceCapture.ForcePanelRender(
-                _terminal._uiDocument.rootVisualElement,
-                FirstRenderPasses
-            );
-            return TerminalSurfaceCapture.CaptureFrame(
-                target,
-                null,
-                Path.Combine(_runDirectory, scenario + ".png")
-            );
+            TerminalSurfaceCapture.ForcePanelRender(_terminal._uiDocument.rootVisualElement, FirstRenderPasses);
+            return TerminalSurfaceCapture.CaptureFrame(target, null, Path.Combine(_runDirectory, scenario + ".png"));
         }
 
         /*
@@ -1648,20 +1310,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private CapturePixelMetrics CaptureSettledRender(RenderTexture target, string scenario)
         {
             ClearCaptureTarget(target);
-            return TerminalSurfaceCapture.CaptureToPng(
-                target,
-                _terminal._uiDocument.rootVisualElement,
-                Path.Combine(_runDirectory, scenario + ".png")
-            );
+            return TerminalSurfaceCapture.CaptureToPng(target, _terminal._uiDocument.rootVisualElement, Path.Combine(_runDirectory, scenario + ".png"));
         }
 
         private void AssertRendersNothing(CapturePixelMetrics metrics, string because)
         {
-            Assert.That(
-                TerminalSurfaceCapture.Evaluate(metrics, CaptureBounds.Default()),
-                Is.Not.Empty,
-                $"Sanity: {because} (distinctColors {metrics.DistinctColors})"
-            );
+            Assert.That(TerminalSurfaceCapture.Evaluate(metrics, CaptureBounds.Default()), Is.Not.Empty, $"Sanity: {because} (distinctColors {metrics.DistinctColors})");
         }
 
         /*
@@ -1688,38 +1342,22 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             channel, so re-rasterized anti-aliasing passes and a caret ghost
             or stale layout still fails.
          */
-        private void AssertRendersIdentically(
-            TerminalSurfaceCapture.CapturedFrame coldFrame,
-            TerminalSurfaceCapture.CapturedFrame warmFrame
-        )
+        private void AssertRendersIdentically(TerminalSurfaceCapture.CapturedFrame coldFrame, TerminalSurfaceCapture.CapturedFrame warmFrame)
         {
             if (_firstInteractionCaretFreeze != null && !_firstInteractionCaretFreeze.Engaged)
             {
-                Assert.AreEqual(
-                    coldFrame.Metrics.DistinctColors,
-                    warmFrame.Metrics.DistinctColors,
-                    "A warm open must render as richly as the cold open"
-                );
+                Assert.AreEqual(coldFrame.Metrics.DistinctColors, warmFrame.Metrics.DistinctColors, "A warm open must render as richly as the cold open");
                 return;
             }
 
             Assert.That(
-                TerminalSurfaceCapture.DescribeFrameMismatch(
-                    coldFrame,
-                    warmFrame,
-                    MaxInvarianceChannelDelta
-                ),
+                TerminalSurfaceCapture.DescribeFrameMismatch(coldFrame, warmFrame, MaxInvarianceChannelDelta),
                 Is.Null,
                 "A warm open must render the same first frame as the cold open"
             );
         }
 
-        private void WriteFrameTimingManifest(
-            string scenario,
-            CapturePixelMetrics metrics,
-            List<string> violations,
-            bool warm
-        )
+        private void WriteFrameTimingManifest(string scenario, CapturePixelMetrics metrics, List<string> violations, bool warm)
         {
             CaptureOutcome outcome = new CaptureOutcome
             {
@@ -1732,19 +1370,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 + " rendersToFirstCompleteFrame="
                 + FirstRenderPasses
                 + " cursorFreeze="
-                + (
-                    _firstInteractionCaretFreeze == null
-                        ? "unavailable"
-                        : _firstInteractionCaretFreeze.Describe()
-                )
+                + (_firstInteractionCaretFreeze == null ? "unavailable" : _firstInteractionCaretFreeze.Describe())
                 + " focus="
                 + DescribeFocus(_palette._input?.panel?.focusController?.focusedElement);
             outcome.Manifest = BuildManifest(scenario, CaptureBounds.Default(), outcome);
             outcome.Manifest.RendersToFirstCompleteFrame = FirstRenderPasses;
-            TerminalSurfaceCapture.WriteManifest(
-                outcome.Manifest,
-                Path.Combine(_runDirectory, scenario + ".manifest.json")
-            );
+            TerminalSurfaceCapture.WriteManifest(outcome.Manifest, Path.Combine(_runDirectory, scenario + ".manifest.json"));
         }
 
         private CaptureOutcome FinishCapture(
@@ -1757,13 +1388,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         )
         {
             string pngPath = Path.Combine(_runDirectory, scenario + ".png");
-            TerminalSurfaceCapture.CapturedFrame frame = TerminalSurfaceCapture.CaptureFrame(
-                target,
-                contentRoot,
-                pngPath,
-                metricsRegion,
-                keepFrame
-            );
+            TerminalSurfaceCapture.CapturedFrame frame = TerminalSurfaceCapture.CaptureFrame(target, contentRoot, pngPath, metricsRegion, keepFrame);
             CapturePixelMetrics metrics = frame.Metrics;
             CaptureOutcome outcome = new CaptureOutcome
             {
@@ -1776,10 +1401,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 outcome.Frame = frame;
             }
             outcome.Manifest = BuildManifest(scenario, bounds, outcome);
-            TerminalSurfaceCapture.WriteManifest(
-                outcome.Manifest,
-                Path.Combine(_runDirectory, scenario + ".manifest.json")
-            );
+            TerminalSurfaceCapture.WriteManifest(outcome.Manifest, Path.Combine(_runDirectory, scenario + ".manifest.json"));
             return outcome;
         }
 
@@ -1806,10 +1428,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         private RenderTexture CreateRenderTarget(string scenario, int width, int height)
         {
-            RenderTexture target = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32)
-            {
-                name = $"T4Capture-{scenario}",
-            };
+            RenderTexture target = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32) { name = $"T4Capture-{scenario}" };
             Assert.IsTrue(target.Create(), $"Sanity: the {width}x{height} capture target created");
             _captureWidth = width;
             _captureHeight = height;
@@ -1831,11 +1450,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Object.DestroyImmediate(target);
         }
 
-        private CaptureManifest BuildManifest(
-            string scenario,
-            CaptureBounds bounds,
-            CaptureOutcome outcome
-        )
+        private CaptureManifest BuildManifest(string scenario, CaptureBounds bounds, CaptureOutcome outcome)
         {
             Font currentFont = _terminal != null ? _terminal.CurrentFont : null;
             return new CaptureManifest
@@ -1894,11 +1509,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 + " inputBound="
                 + FormatBound(inputContainer)
                 + " inputDisplay="
-                + (
-                    inputContainer != null
-                        ? inputContainer.resolvedStyle.display.ToString()
-                        : "null"
-                )
+                + (inputContainer != null ? inputContainer.resolvedStyle.display.ToString() : "null")
                 + " input="
                 + (_terminal._commandInput != null ? _terminal._commandInput.value : "null")
                 + " hintPopupChildren="

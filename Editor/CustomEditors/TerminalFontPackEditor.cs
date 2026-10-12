@@ -52,11 +52,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
         {
             if (_impactButtonStyle == null)
             {
-                _impactButtonStyle = new GUIStyle(GUI.skin.button)
-                {
-                    normal = { textColor = Color.yellow },
-                    fontStyle = FontStyle.Bold,
-                };
+                _impactButtonStyle = new GUIStyle(GUI.skin.button) { normal = { textColor = Color.yellow }, fontStyle = FontStyle.Bold };
             }
 
             serializedObject.Update();
@@ -118,9 +114,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                     {
                         foreach (FontType fontType in Enum.GetValues(typeof(FontType)))
                         {
-                            int removed = fontPack._fonts.RemoveAll(font =>
-                                Matches(font, fontType)
-                            );
+                            int removed = fontPack._fonts.RemoveAll(font => Matches(font, fontType));
                             anyChanged |= removed != 0;
                         }
                     }
@@ -143,10 +137,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
 
                 string assetPath = AssetDatabase.GetAssetPath(activeObject);
                 string dataPath = Application.dataPath;
-                if (
-                    dataPath.EndsWith("/", StringComparison.OrdinalIgnoreCase)
-                    || dataPath.EndsWith("\\", StringComparison.OrdinalIgnoreCase)
-                )
+                if (dataPath.EndsWith("/", StringComparison.OrdinalIgnoreCase) || dataPath.EndsWith("\\", StringComparison.OrdinalIgnoreCase))
                 {
                     dataPath = dataPath.Substring(0, dataPath.Length - 1);
                 }
@@ -162,10 +153,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
 
                 assetPath = assetPath.Replace('\\', '/');
 
-                GUIContent loadFromCurrentDirectoryContent = new(
-                    "Load From Current Directory",
-                    $"Loads all fonts from '{LogTextSanitizer.Sanitize(assetPath)}'"
-                );
+                GUIContent loadFromCurrentDirectoryContent = new("Load From Current Directory", $"Loads all fonts from '{LogTextSanitizer.Sanitize(assetPath)}'");
 
                 if (GUILayout.Button(loadFromCurrentDirectoryContent))
                 {
@@ -175,9 +163,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                 {
                     _lastSelectedDirectory = EditorUtility.OpenFolderPanel(
                         "Select Directory",
-                        string.IsNullOrWhiteSpace(_lastSelectedDirectory)
-                            ? Application.dataPath
-                            : _lastSelectedDirectory,
+                        string.IsNullOrWhiteSpace(_lastSelectedDirectory) ? Application.dataPath : _lastSelectedDirectory,
                         string.Empty
                     );
                     UpdateFromDirectory(_lastSelectedDirectory);
@@ -188,13 +174,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                 EditorGUILayout.EndHorizontal();
             }
 
-            if (
-                anyChanged
-                || (
-                    !fontPack._fonts.IsSorted(UnityObjectNameComparer.Instance)
-                    && GUILayout.Button("Sort Fonts")
-                )
-            )
+            if (anyChanged || (!fontPack._fonts.IsSorted(UnityObjectNameComparer.Instance) && GUILayout.Button("Sort Fonts")))
             {
                 fontPack._fonts.SortByName();
                 EditorUtility.SetDirty(fontPack);

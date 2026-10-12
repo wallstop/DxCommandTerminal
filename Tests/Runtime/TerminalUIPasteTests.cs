@@ -98,13 +98,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 _vReached = false;
                 _syncReadHeld = TerminalClipboard.Read() == "give\titem\n42";
                 syncReadEverHeld |= _syncReadHeld;
-                using (
-                    KeyDownEvent key = KeyDownEvent.GetPooled(
-                        '\0',
-                        KeyCode.V,
-                        EventModifiers.Control
-                    )
-                )
+                using (KeyDownEvent key = KeyDownEvent.GetPooled('\0', KeyCode.V, EventModifiers.Control))
                 {
                     _terminal._uiDocument.rootVisualElement.SendEvent(key);
                 }
@@ -128,10 +122,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
              */
             if (pasteRouted && syncReadEverHeld)
             {
-                Assert.Fail(
-                    "The V reached the field and the clipboard answered a synchronous "
-                        + "read, but no paste held the flattened text"
-                );
+                Assert.Fail("The V reached the field and the clipboard answered a synchronous " + "read, but no paste held the flattened text");
             }
 
             Assert.Ignore(
@@ -154,16 +145,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return SendKey(KeyCode.V, EventModifiers.None);
             yield return null;
 
-            Assert.AreEqual(
-                string.Empty,
-                _terminal._commandInput.value,
-                "A V with no paste modifier leaves the field alone"
-            );
-            Assert.AreEqual(
-                string.Empty,
-                DefaultTerminalInput.Instance.CommandText,
-                "A V with no paste modifier leaves the command text alone"
-            );
+            Assert.AreEqual(string.Empty, _terminal._commandInput.value, "A V with no paste modifier leaves the field alone");
+            Assert.AreEqual(string.Empty, DefaultTerminalInput.Instance.CommandText, "A V with no paste modifier leaves the command text alone");
         }
 
         [UnityTest]
@@ -173,16 +156,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             yield return SendClipboardKey(KeyCode.C, "item torch", "spawn item torch");
 
-            Assert.AreEqual(
-                "item torch",
-                GUIUtility.systemCopyBuffer,
-                "The selected span reached the system clipboard"
-            );
-            Assert.AreEqual(
-                "spawn item torch",
-                _terminal._commandInput.value,
-                "A copy leaves the command line alone"
-            );
+            Assert.AreEqual("item torch", GUIUtility.systemCopyBuffer, "The selected span reached the system clipboard");
+            Assert.AreEqual("spawn item torch", _terminal._commandInput.value, "A copy leaves the command line alone");
         }
 
         [UnityTest]
@@ -193,16 +168,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return SendClipboardKey(KeyCode.X, "item torch", "spawn ");
             yield return null;
 
-            Assert.AreEqual(
-                "item torch",
-                GUIUtility.systemCopyBuffer,
-                "The cut span reached the system clipboard"
-            );
-            Assert.AreEqual(
-                "spawn ",
-                _terminal._commandInput.value,
-                "The cut span is gone from the field"
-            );
+            Assert.AreEqual("item torch", GUIUtility.systemCopyBuffer, "The cut span reached the system clipboard");
+            Assert.AreEqual("spawn ", _terminal._commandInput.value, "The cut span is gone from the field");
             yield return WaitForCommandText("spawn ");
         }
 
@@ -215,11 +182,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             _terminal._commandInput.value = "spawn item";
             yield return SendKey(KeyCode.C, EventModifiers.None);
             yield return null;
-            Assert.AreEqual(
-                "untouched",
-                GUIUtility.systemCopyBuffer,
-                "A bare C is a typed character, not a copy"
-            );
+            Assert.AreEqual("untouched", GUIUtility.systemCopyBuffer, "A bare C is a typed character, not a copy");
 
 #if UNITY_2022_1_OR_NEWER
             _terminal._commandInput.cursorIndex = 6;
@@ -227,11 +190,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 #endif
             yield return SendKey(KeyCode.C, EventModifiers.Control);
             yield return null;
-            Assert.AreEqual(
-                "untouched",
-                GUIUtility.systemCopyBuffer,
-                "A Ctrl+C with no selection copies nothing"
-            );
+            Assert.AreEqual("untouched", GUIUtility.systemCopyBuffer, "A Ctrl+C with no selection copies nothing");
             Assert.AreEqual("spawn item", _terminal._commandInput.value);
         }
 
@@ -268,11 +227,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             assertions run in the test's own enumerator, where the test
             framework is guaranteed to record them.
          */
-        private IEnumerator SendClipboardKey(
-            KeyCode keyCode,
-            string expectedClipboard,
-            string expectedValue
-        )
+        private IEnumerator SendClipboardKey(KeyCode keyCode, string expectedClipboard, string expectedValue)
         {
             EventModifiers modifiers = EventModifiers.Control;
             bool keyRouted = false;
@@ -287,10 +242,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
                 keyRouted |= _vReached;
                 yield return null;
-                if (
-                    GUIUtility.systemCopyBuffer == expectedClipboard
-                    && _terminal._commandInput.value == expectedValue
-                )
+                if (GUIUtility.systemCopyBuffer == expectedClipboard && _terminal._commandInput.value == expectedValue)
                 {
                     yield break;
                 }
@@ -313,16 +265,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return ProbeClipboard();
             if (_clipboardProbeHeld)
             {
-                Assert.Fail(
-                    $"The host clipboard holds a direct write, but a {keyCode} never produced "
-                        + $"\"{expectedClipboard}\" on \"{expectedValue}\"; the key did not route"
-                );
+                Assert.Fail($"The host clipboard holds a direct write, but a {keyCode} never produced " + $"\"{expectedClipboard}\" on \"{expectedValue}\"; the key did not route");
             }
 
-            Assert.Ignore(
-                "The host clipboard did not hold a direct probe twice in a row; "
-                    + "the paste fixtures need a platform that answers (#207)"
-            );
+            Assert.Ignore("The host clipboard did not hold a direct probe twice in a row; " + "the paste fixtures need a platform that answers (#207)");
         }
 
         /*
@@ -383,21 +329,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return null;
 
             int frameBudget = 600;
-            while (
-                0 < frameBudget--
-                && (
-                    _terminal._commandInput == null
-                    || _terminal._commandInput.resolvedStyle.display != DisplayStyle.Flex
-                )
-            )
+            while (0 < frameBudget-- && (_terminal._commandInput == null || _terminal._commandInput.resolvedStyle.display != DisplayStyle.Flex))
             {
                 yield return null;
             }
 
-            Assert.That(
-                _terminal._commandInput != null,
-                "The terminal input field should exist after the terminal opens"
-            );
+            Assert.That(_terminal._commandInput != null, "The terminal input field should exist after the terminal opens");
 
             /*
                 Delivery witness for the clipboard keys: set on every V/C/X
@@ -407,10 +344,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 witness fires even when the product consumes the key.
              */
             _vReached = false;
-            _terminal._commandInput.RegisterCallback<KeyDownEvent>(
-                _ => _vReached = true,
-                TrickleDown.TrickleDown
-            );
+            _terminal._commandInput.RegisterCallback<KeyDownEvent>(_ => _vReached = true, TrickleDown.TrickleDown);
         }
 
         private IEnumerator SendKey(KeyCode keyCode, EventModifiers modifiers)
@@ -426,23 +360,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private IEnumerator WaitForCommandText(string expected)
         {
             int frameBudget = 120;
-            while (
-                0 < frameBudget--
-                && !string.Equals(
-                    DefaultTerminalInput.Instance.CommandText,
-                    expected,
-                    StringComparison.Ordinal
-                )
-            )
+            while (0 < frameBudget-- && !string.Equals(DefaultTerminalInput.Instance.CommandText, expected, StringComparison.Ordinal))
             {
                 yield return null;
             }
 
-            Assert.AreEqual(
-                expected,
-                DefaultTerminalInput.Instance.CommandText,
-                "The pasted text is what Enter would run"
-            );
+            Assert.AreEqual(expected, DefaultTerminalInput.Instance.CommandText, "The pasted text is what Enter would run");
         }
     }
 }

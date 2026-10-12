@@ -29,6 +29,7 @@ const {
   isCacheableCheck,
   npmConfigState,
   npmExecutableState,
+  parseStatusRecords,
   pathState,
   readCacheEntry,
   resolvedExecutableState,
@@ -77,10 +78,45 @@ test("buildChecks: unique names, non-empty commands, expected canaries", () => {
     assert.ok(names.includes(name), `expected check '${name}' in the default set`);
   }
   for (const check of checks) {
-    if (check.name !== "compat-check" && check.name !== "test-editor") {
-      assert.equal(check.cacheRuntimeEnvironment, true, `${check.name} must key inherited runtime state`);
-    }
+    assert.equal(check.cacheRuntimeEnvironment, true, `${check.name} must key inherited runtime state`);
   }
+  const compatCheck = checks.find((check) => check.name === "compat-check");
+  assert.equal(compatCheck.lane, "dotnet", "the dotnet builds must share one lane");
+  assert.equal(compatCheck.cacheDotnet, true);
+  assert.deepEqual(compatCheck.cachePaths, [
+    "Runtime",
+    "tooling~/package.json",
+    "tooling~/compat/runtime-2021.3.csproj"
+  ]);
+  assert.deepEqual(compatCheck.cacheExcludes, ["Runtime/Analyzers"]);
+  const editorCheck = checks.find((check) => check.name === "test-editor");
+  assert.equal(editorCheck.lane, "dotnet", "the dotnet builds must share one lane");
+  assert.equal(editorCheck.cacheDotnet, true);
+  assert.ok(editorCheck.cachePaths.includes("Tests/Editor"));
+  assert.ok(editorCheck.cachePaths.includes("Generator~"));
+  assert.ok(
+    editorCheck.cachePaths.includes("tooling~/package.json"),
+    "the lane must key the manifest whose scripts define its commands"
+  );
+  for (const buildOutput of ["Runtime/Analyzers", "tooling~/compat/obj", "tooling~/compat/testhost/bin", "tooling~/compat/testhost/TestResult.xml"]) {
+    assert.ok(
+      editorCheck.cacheExcludes.includes(buildOutput),
+      `test-editor must not key its own build output ${buildOutput}`
+    );
+  }
+  for (const keyedManifest of checks.filter((check) =>
+    check.command.startsWith("npm --prefix tooling~")
+  )) {
+    assert.ok(
+      keyedManifest.cachePaths.includes("tooling~/package.json"),
+      `${keyedManifest.name} runs npm scripts; it must key the manifest defining them`
+    );
+  }
+  const linterCheck = checks.find((check) => check.name === "lint-linq-production");
+  assert.ok(
+    linterCheck.cacheExcludes.includes("Generator~/WallstopStudios.DxCommandTerminal.SourceGenerators/obj"),
+    "the C# linters must not key generator build outputs"
+  );
   const packageCheck = checks.find((check) => check.name === "package-validate");
   assert.equal(packageCheck.cacheGitTracked, true);
   assert.equal(packageCheck.cacheNpm, true);
@@ -439,6 +475,178 @@ test("cache keys hash declared files and ignore unrelated filesystem state", () 
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
+});
+
+/*
+    One record shape per case, from `git status --porcelain=v1 -z`. The
+    rename order is the trap: v1 -z emits `XY NEW\0OLD\0` (destination
+    first, original second), so a parser that stores ORIG and skips the
+    destination keys the renamed file at its index blob and ages a
+    cached pass across worktree edits.
+ */
+const statusRecordCases = [
+  case_("untracked is changed only", {
+    output: "?? new.rs",
+    changed: ["new.rs"],
+    worktreeDirty: []
+  }),
+  case_("worktree-dirty tracked is both", {
+    output: " M src.cs",
+    changed: ["src.cs"],
+    worktreeDirty: ["src.cs"]
+  }),
+  case_("index-only change is changed but not worktree-dirty", {
+    output: "M  src.cs",
+    changed: ["src.cs"],
+    worktreeDirty: []
+  }),
+  case_("staged add is changed but not worktree-dirty", {
+    output: "A  src.cs",
+    changed: ["src.cs"],
+    worktreeDirty: []
+  }),
+  case_("staged rename flags the destination, not the original", {
+    output: "R  moved.cs\0original.cs",
+    changed: ["moved.cs"],
+    worktreeDirty: []
+  }),
+  case_("staged rename plus worktree edit flags the destination twice over", {
+    output: "RM moved.cs\0original.cs",
+    changed: ["moved.cs"],
+    worktreeDirty: ["moved.cs"]
+  }),
+  case_("staged copy behaves like a rename", {
+    output: "C  copy.cs\0source.cs",
+    changed: ["copy.cs"],
+    worktreeDirty: []
+  }),
+  case_("staged delete is changed without a worktree half", {
+    output: "D  gone.cs",
+    changed: ["gone.cs"],
+    worktreeDirty: []
+  }),
+  case_("unmerged is both", {
+    output: "UU both.cs",
+    changed: ["both.cs"],
+    worktreeDirty: ["both.cs"]
+  })
+];
+
+for (const { name, output, changed, worktreeDirty } of statusRecordCases) {
+  test(`parseStatusRecords: ${name}`, () => {
+    const parsed = parseStatusRecords(output);
+    assert.deepEqual([...parsed.changed].sort(), [...changed].sort());
+    assert.deepEqual([...parsed.worktreeDirty].sort(), [...worktreeDirty].sort());
+  });
+}
+
+test("parseStatusRecords: the rename original never leaks in as its own entry", () => {
+  const parsed = parseStatusRecords("R  moved.cs\0original.cs\0?? tail.rs\0");
+  assert.deepEqual(parsed.changed.sort(), ["moved.cs", "tail.rs"]);
+});
+
+test("a staged rewrite moves the snapshot key where the status line stays identical", async () => {
+  /*
+      Thread-two class: an index-only change (`A `) contributes its
+      status line and nothing else, and a later staged rewrite of the
+      same path produces the byte-identical line again - so the snapshot
+      must fold the staged content, or node-tests reads a file outside
+      its declared roots through a cached pass from before the rewrite.
+      The probe is a dot-file at the repo root: Unity never sees it, and
+      a crash mid-test leaves exactly one staged dot-file that
+      `git rm --cached` + delete removes.
+   */
+  const { execFileSync } = await import("node:child_process");
+  const probe = path.join(toolingRoot, "..", ".dxct-snapshot-probe.tmp");
+  const git = (...args) => execFileSync("git", args, { cwd: path.join(toolingRoot, ".."), encoding: "utf8" });
+  const subject = writeTempScript(`
+      const { cacheKeyForCheck } = await import(${JSON.stringify(
+        pathToFileURL(path.join(toolingRoot, "scripts", "preflight-cache.mjs")).href
+      )});
+      const check = { name: "snapshot", command: "node snapshot.mjs", cacheTrackedFiles: true };
+      const key = () => cacheKeyForCheck(check, { node: "node", platform: "linux", arch: "x64", files: [] });
+      console.log(key());
+    `);
+  const run = async () => {
+    const { execFile } = await import("node:child_process");
+    const { promisify } = await import("node:util");
+    const { stdout } = await promisify(execFile)(process.execPath, [subject]);
+    return stdout.trim();
+  };
+  try {
+    fs.writeFileSync(probe, "staged content one\n");
+    git("add", ".dxct-snapshot-probe.tmp");
+    const stagedOnce = await run();
+    fs.writeFileSync(probe, "staged content two\n");
+    git("add", ".dxct-snapshot-probe.tmp");
+    const statusAfter = git("status", "--porcelain=v1", "--", ".dxct-snapshot-probe.tmp").trim();
+    assert.equal(statusAfter, "A  .dxct-snapshot-probe.tmp", "the probe must be index-only dirty");
+    assert.notEqual(
+      await run(),
+      stagedOnce,
+      "a second staged rewrite with an identical status line must move the snapshot key"
+    );
+  } finally {
+    try {
+      git("rm", "-q", "-f", "--cached", ".dxct-snapshot-probe.tmp");
+    } catch {
+      /* The probe never reached the index; removal below is enough. */
+    }
+    fs.rmSync(probe, { force: true });
+  }
+});
+
+test("a dirty tracked file outside declared roots moves keys by content", async () => {
+  /*
+      The repo snapshot backs checks that read files outside their declared
+      roots. Status encodes a dirty tracked file as ` M <path>`, which is
+      byte-identical across two rewrites of the same file - so keying the
+      snapshot on the status output alone ages a cached pass when the
+      second rewrite lands after the first one was cached. The snapshot
+      must fold each flagged file's content (under the size cap) into the
+      hash; this runs in a child process so the per-process git identity
+      observes the edit from a clean index.
+
+      Stated trade: the probe dirties the real tracked `.gitattributes`
+      (chosen as the tracked file nothing else reads) and restores its
+      exact bytes in `finally`. A hermetic scratch repo cannot stand in -
+      the module derives REPO_ROOT from its own location, so the probe
+      must live in the keyed tree. A SIGKILL mid-test leaves the probe
+      line behind; `git status` shows it and the restore is one checkout.
+   */
+  const tracked = path.join(toolingRoot, "..", ".gitattributes");
+  const original = fs.readFileSync(tracked, "utf8");
+  const subject = writeTempScript(`
+      const { cacheKeyForCheck } = await import(${JSON.stringify(
+        pathToFileURL(path.join(toolingRoot, "scripts", "preflight-cache.mjs")).href
+      )});
+      const check = { name: "snapshot", command: "node snapshot.mjs", cacheTrackedFiles: true };
+      const key = () => cacheKeyForCheck(check, { node: "node", platform: "linux", arch: "x64", files: [] });
+      console.log(key());
+    `);
+  const run = async () => {
+    const { execFile } = await import("node:child_process");
+    const { promisify } = await import("node:util");
+    const { stdout } = await promisify(execFile)(process.execPath, [subject]);
+    return stdout.trim();
+  };
+  let clean = "";
+  try {
+    clean = await run();
+    fs.writeFileSync(tracked, `${original}\n# preflight identity probe one\n`);
+    const dirtyOnce = await run();
+    assert.notEqual(dirtyOnce, clean, "a dirty tracked file must move the snapshot key");
+    fs.writeFileSync(tracked, `${original}\n# preflight identity probe two\n`);
+    const dirtyAgain = await run();
+    assert.notEqual(
+      dirtyAgain,
+      dirtyOnce,
+      "a second rewrite with identical status output must still move the snapshot key"
+    );
+  } finally {
+    fs.writeFileSync(tracked, original);
+  }
+  assert.equal(await run(), clean, "restoring the bytes must restore the key");
 });
 
 test("the run's key computer answers the live key and moves with its inputs", () => {

@@ -31,11 +31,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             arranged selection therefore ignores itself on 2021.3 with that
             reason and runs unchanged everywhere the setter exists.
          */
-        private static TextField FieldWithArrangedSelection(
-            string value,
-            int selectIndex,
-            int cursorIndex
-        )
+        private static TextField FieldWithArrangedSelection(string value, int selectIndex, int cursorIndex)
         {
             TextField field = new TextField();
             field.value = value;
@@ -43,10 +39,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             field.selectIndex = selectIndex;
             field.cursorIndex = cursorIndex;
 #else
-            Assert.Ignore(
-                "2021.3 exposes the caret getters only; the engine owns placement, "
-                    + "so this fixture's arranged selection cannot be built here"
-            );
+            Assert.Ignore("2021.3 exposes the caret getters only; the engine owns placement, " + "so this fixture's arranged selection cannot be built here");
 #endif
             return field;
         }
@@ -67,18 +60,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void CopyCarriesTheSelectedSpanVerbatim()
         {
             TextField field = FieldWithArrangedSelection("spawn item torch 1", 6, 16);
-            bool answered = TextFieldCopyCut.TryApply(
-                field,
-                KeyDown(KeyCode.C, EventModifiers.Control),
-                out int? caret
-            );
+            bool answered = TextFieldCopyCut.TryApply(field, KeyDown(KeyCode.C, EventModifiers.Control), out int? caret);
             Assert.That(answered, "A Ctrl+C over a selection is answered");
             Assert.That(caret == null, "A copy reports no caret, it changed no text");
-            Assert.AreEqual(
-                "item torch",
-                TerminalClipboard.Read(),
-                "The clipboard holds the selected span, byte for byte"
-            );
+            Assert.AreEqual("item torch", TerminalClipboard.Read(), "The clipboard holds the selected span, byte for byte");
             Assert.AreEqual("spawn item torch 1", field.value, "A copy leaves the field alone");
         }
 
@@ -86,11 +71,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void CutTakesTheSelectedSpanOutOfTheField()
         {
             TextField field = FieldWithArrangedSelection("spawn item torch 1", 6, 16);
-            bool answered = TextFieldCopyCut.TryApply(
-                field,
-                KeyDown(KeyCode.X, EventModifiers.Control),
-                out int? caret
-            );
+            bool answered = TextFieldCopyCut.TryApply(field, KeyDown(KeyCode.X, EventModifiers.Control), out int? caret);
             Assert.That(answered, "A Ctrl+X over a selection is answered");
             Assert.AreEqual(6, caret, "The caret reports where the cut left the field");
             Assert.AreEqual("item torch", TerminalClipboard.Read());
@@ -102,11 +83,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             GUIUtility.systemCopyBuffer = "untouched";
             TextField field = FieldWithArrangedSelection("spawn item", 6, 6);
-            bool answered = TextFieldCopyCut.TryApply(
-                field,
-                KeyDown(KeyCode.C, EventModifiers.Control),
-                out int? caret
-            );
+            bool answered = TextFieldCopyCut.TryApply(field, KeyDown(KeyCode.C, EventModifiers.Control), out int? caret);
             Assert.That(!answered, "A copy with nothing selected is not answered");
             Assert.That(caret == null);
             Assert.AreEqual("untouched", TerminalClipboard.Read());
@@ -117,14 +94,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void ACutOfAnEmptyFieldIsNotAnswered()
         {
             TextField field = FieldWithArrangedSelection(string.Empty, 0, 0);
-            Assert.That(
-                !TextFieldCopyCut.TryApply(
-                    field,
-                    KeyDown(KeyCode.X, EventModifiers.Control),
-                    out _
-                ),
-                "Nothing selected, nothing to take"
-            );
+            Assert.That(!TextFieldCopyCut.TryApply(field, KeyDown(KeyCode.X, EventModifiers.Control), out _), "Nothing selected, nothing to take");
             Assert.AreEqual(string.Empty, field.value);
         }
 
@@ -136,10 +106,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             TextField field = FieldWithArrangedSelection("spawn item", 0, 5);
             GUIUtility.systemCopyBuffer = "untouched";
-            Assert.That(
-                !TextFieldCopyCut.TryApply(field, KeyDown(keyCode, modifiers), out _),
-                $"{keyCode} with {modifiers} is not a copy or a cut"
-            );
+            Assert.That(!TextFieldCopyCut.TryApply(field, KeyDown(keyCode, modifiers), out _), $"{keyCode} with {modifiers} is not a copy or a cut");
             Assert.AreEqual("spawn item", field.value);
             Assert.AreEqual("untouched", TerminalClipboard.Read());
         }
@@ -147,9 +114,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void FieldsAndEventsThatCannotAnswerAreLeftAlone()
         {
-            Assert.That(
-                !TextFieldCopyCut.TryApply(null, KeyDown(KeyCode.C, EventModifiers.Control), out _)
-            );
+            Assert.That(!TextFieldCopyCut.TryApply(null, KeyDown(KeyCode.C, EventModifiers.Control), out _));
             Assert.That(!TextFieldCopyCut.TryApply(new TextField(), null, out _));
         }
 
@@ -164,9 +129,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 clipboard carries whole characters only.
              */
             TextField field = FieldWithArrangedSelection("a\ud83d\ude00b", 4, 2);
-            Assert.That(
-                TextFieldCopyCut.TryApply(field, KeyDown(KeyCode.C, EventModifiers.Control), out _)
-            );
+            Assert.That(TextFieldCopyCut.TryApply(field, KeyDown(KeyCode.C, EventModifiers.Control), out _));
             Assert.AreEqual("\ud83d\ude00b", TerminalClipboard.Read());
         }
     }

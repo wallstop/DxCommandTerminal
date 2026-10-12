@@ -12,8 +12,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
     public sealed class CommandDiscoveryTests
     {
-        private const BindingFlags DiscoveryFlags =
-            BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+        private const BindingFlags DiscoveryFlags = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
 
 #if UNITY_EDITOR
         /*
@@ -45,25 +44,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                MayContainCommands (production scans it last via a name match);
                that ordering is pinned by the equivalence sweep below.
             */
-            yield return new TestCaseData(testAssembly, true).SetName(
-                "testAssemblyMayContainCommands"
-            );
-            yield return new TestCaseData(coreAssembly, false).SetName(
-                "coreAssemblyMayNotContainCommands"
-            );
+            yield return new TestCaseData(testAssembly, true).SetName("testAssemblyMayContainCommands");
+            yield return new TestCaseData(coreAssembly, false).SetName("coreAssemblyMayNotContainCommands");
 #if UNITY_EDITOR
-            yield return new TestCaseData(DynamicAssembly, false).SetName(
-                "dynamicAssemblyMayNotContainCommands"
-            );
+            yield return new TestCaseData(DynamicAssembly, false).SetName("dynamicAssemblyMayNotContainCommands");
 #endif
         }
 
-        private static string Describe(
-            Assembly assembly,
-            Type type,
-            MethodInfo method,
-            RegisterCommandAttribute attribute
-        )
+        private static string Describe(Assembly assembly, Type type, MethodInfo method, RegisterCommandAttribute attribute)
         {
             return $"{assembly.GetName().Name}:{type.FullName}:{method.Name}:{attribute.Name}";
         }
@@ -79,11 +67,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void MayContainCommandsFiltersAssemblies(Assembly assembly, bool expected)
         {
             AssemblyName self = typeof(BuiltInCommands).Assembly.GetName();
-            Assert.AreEqual(
-                expected,
-                CommandShell.MayContainCommands(assembly, self),
-                $"Unexpected filter decision for assembly '{assembly.FullName}'"
-            );
+            Assert.AreEqual(expected, CommandShell.MayContainCommands(assembly, self), $"Unexpected filter decision for assembly '{assembly.FullName}'");
         }
 
         [Test]
@@ -115,9 +99,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void DiscoversCommandsFromConsumerAssemblies()
         {
-            (MethodInfo method, RegisterCommandAttribute attribute)[] discovered = CommandShell
-                .RegisteredCommands
-                .Value;
+            (MethodInfo method, RegisterCommandAttribute attribute)[] discovered = CommandShell.RegisteredCommands.Value;
 
             /*
                Command names are matched OrdinalIgnoreCase by the shell, so the
@@ -125,26 +107,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             */
             RegisterCommandAttribute inferred = discovered
                 .Select(tuple => tuple.attribute)
-                .FirstOrDefault(attribute =>
-                    string.Equals(attribute.Name, "test", StringComparison.OrdinalIgnoreCase)
-                );
-            Assert.That(
-                inferred != null,
-                "Expected the inferred-name command from this test assembly to be discovered"
-            );
-            Assert.AreEqual(
-                0,
-                inferred.MinArgCount,
-                "Attribute bounds should carry through discovery"
-            );
+                .FirstOrDefault(attribute => string.Equals(attribute.Name, "test", StringComparison.OrdinalIgnoreCase));
+            Assert.That(inferred != null, "Expected the inferred-name command from this test assembly to be discovered");
+            Assert.AreEqual(0, inferred.MinArgCount, "Attribute bounds should carry through discovery");
 
-            RegisterCommandAttribute named = discovered
-                .Select(tuple => tuple.attribute)
-                .FirstOrDefault(attribute => attribute.Name == "discovery-named");
-            Assert.That(
-                named != null,
-                "Expected the explicit-name command from this test assembly to be discovered"
-            );
+            RegisterCommandAttribute named = discovered.Select(tuple => tuple.attribute).FirstOrDefault(attribute => attribute.Name == "discovery-named");
+            Assert.That(named != null, "Expected the explicit-name command from this test assembly to be discovered");
         }
 
         [Test]
@@ -159,9 +127,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             List<string> legacy = new();
             Assembly ourAssembly = typeof(BuiltInCommands).Assembly;
             Assembly[] loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies();
-            IEnumerable<Assembly> legacyOrder = loadedAssemblies
-                .Where(assembly => !ReferenceEquals(assembly, ourAssembly))
-                .Append(ourAssembly);
+            IEnumerable<Assembly> legacyOrder = loadedAssemblies.Where(assembly => !ReferenceEquals(assembly, ourAssembly)).Append(ourAssembly);
 
             foreach (Assembly assembly in legacyOrder)
             {
@@ -212,11 +178,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                         RegisterCommandAttribute attribute;
                         try
                         {
-                            attribute =
-                                Attribute.GetCustomAttribute(
-                                    method,
-                                    typeof(RegisterCommandAttribute)
-                                ) as RegisterCommandAttribute;
+                            attribute = Attribute.GetCustomAttribute(method, typeof(RegisterCommandAttribute)) as RegisterCommandAttribute;
                         }
                         catch (Exception)
                         {
@@ -238,19 +200,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 }
             }
 
-            (MethodInfo method, RegisterCommandAttribute attribute)[] filtered = CommandShell
-                .RegisteredCommands
-                .Value;
+            (MethodInfo method, RegisterCommandAttribute attribute)[] filtered = CommandShell.RegisteredCommands.Value;
             List<string> actual = filtered
                 .Select(tuple =>
                 {
                     Type declaringType = tuple.method.DeclaringType;
-                    return Describe(
-                        declaringType.Assembly,
-                        declaringType,
-                        tuple.method,
-                        tuple.attribute
-                    );
+                    return Describe(declaringType.Assembly, declaringType, tuple.method, tuple.attribute);
                 })
                 .ToList();
 

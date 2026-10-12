@@ -184,17 +184,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             return texts;
         }
 
-        private static void AppendCandidate(
-            string text,
-            string description,
-            in CommandCompletionContext context,
-            List<CommandCompletion> results
-        )
+        private static void AppendCandidate(string text, string description, in CommandCompletionContext context, List<CommandCompletion> results)
         {
-            if (
-                !string.IsNullOrEmpty(text)
-                && text.StartsWith(context.Token, StringComparison.OrdinalIgnoreCase)
-            )
+            if (!string.IsNullOrEmpty(text) && text.StartsWith(context.Token, StringComparison.OrdinalIgnoreCase))
             {
                 results.Add(new CommandCompletion(text, description: description));
             }
@@ -273,22 +265,14 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         {
             if (values == null || values.Length == 0)
             {
-                throw new CommandConfigurationException(
-                    CommandConfigurationFailure.InvalidChoices,
-                    $"Argument '{Name}' needs at least one choice.",
-                    argumentName: Name
-                );
+                throw new CommandConfigurationException(CommandConfigurationFailure.InvalidChoices, $"Argument '{Name}' needs at least one choice.", argumentName: Name);
             }
 
             for (int i = 0; i < values.Length; ++i)
             {
                 if (values[i] == null)
                 {
-                    throw new CommandConfigurationException(
-                        CommandConfigurationFailure.InvalidChoices,
-                        $"Argument '{Name}' choices must not contain null.",
-                        argumentName: Name
-                    );
+                    throw new CommandConfigurationException(CommandConfigurationFailure.InvalidChoices, $"Argument '{Name}' choices must not contain null.", argumentName: Name);
                 }
             }
 
@@ -317,17 +301,12 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         ///     <see cref="Validate"/> and <see cref="Range"/> so an item that
         ///     disappeared between suggestion and Enter is still rejected.
         /// </summary>
-        public CommandArgumentSpec<T> Choices(
-            Func<CommandCompletionContext, IReadOnlyList<T>> provider
-        )
+        public CommandArgumentSpec<T> Choices(Func<CommandCompletionContext, IReadOnlyList<T>> provider)
         {
             return Choices(provider, FormatValue);
         }
 
-        public CommandArgumentSpec<T> Choices(
-            Func<CommandCompletionContext, IReadOnlyList<T>> provider,
-            Func<T, string> formatter
-        )
+        public CommandArgumentSpec<T> Choices(Func<CommandCompletionContext, IReadOnlyList<T>> provider, Func<T, string> formatter)
         {
             if (provider == null)
             {
@@ -411,10 +390,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         public CommandArgumentSpec<T> Range(T min, T max)
         {
             Type type = typeof(T);
-            if (
-                !typeof(IComparable<T>).IsAssignableFrom(type)
-                && !typeof(IComparable).IsAssignableFrom(type)
-            )
+            if (!typeof(IComparable<T>).IsAssignableFrom(type) && !typeof(IComparable).IsAssignableFrom(type))
             {
                 throw new CommandConfigurationException(
                     CommandConfigurationFailure.UnsupportedArgumentFeature,
@@ -426,10 +402,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
             if (min == null || max == null)
             {
-                throw new ArgumentNullException(
-                    min == null ? nameof(min) : nameof(max),
-                    $"Argument '{Name}' range bounds must not be null."
-                );
+                throw new ArgumentNullException(min == null ? nameof(min) : nameof(max), $"Argument '{Name}' range bounds must not be null.");
             }
 
             /*
@@ -461,8 +434,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                         return null;
                     }
 
-                    return $"Value '{FormatValue(value)}' for argument '{Name}' is out of range "
-                        + $"[{FormatValue(min)}, {FormatValue(max)}]";
+                    return $"Value '{FormatValue(value)}' for argument '{Name}' is out of range " + $"[{FormatValue(min)}, {FormatValue(max)}]";
                 },
                 _validator,
                 Description,
@@ -542,21 +514,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             return ok;
         }
 
-        internal override bool TryParseAll(
-            BorrowedCommandArguments arguments,
-            int start,
-            object[] parsedValues,
-            int slot,
-            out CommandArg failedToken,
-            out string validationError
-        )
+        internal override bool TryParseAll(BorrowedCommandArguments arguments, int start, object[] parsedValues, int slot, out CommandArg failedToken, out string validationError)
         {
             if (!IsRemaining)
             {
-                throw new InvalidOperationException(
-                    $"Argument '{Name}' is not a remaining argument; "
-                        + "TryParseAll collects only a command's unbounded trailing argument."
-                );
+                throw new InvalidOperationException($"Argument '{Name}' is not a remaining argument; " + "TryParseAll collects only a command's unbounded trailing argument.");
             }
 
             /*
@@ -604,10 +566,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         internal override string FormatParseError(CommandArg input)
         {
-            string expected =
-                _staticChoices == null
-                    ? TypeName
-                    : $"one of: {string.Join(", ", _staticChoiceTexts)}";
+            string expected = _staticChoices == null ? TypeName : $"one of: {string.Join(", ", _staticChoiceTexts)}";
             return $"Invalid value '{input.contents}' for argument '{Name}' (expected {expected})";
         }
 
@@ -625,10 +584,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             builder.Append(_required ? '>' : ']');
         }
 
-        internal override void AppendCompletions(
-            in CommandCompletionContext context,
-            List<CommandCompletion> results
-        )
+        internal override void AppendCompletions(in CommandCompletionContext context, List<CommandCompletion> results)
         {
             if (_staticChoices != null)
             {
@@ -685,9 +641,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         private bool TryParseValue(CommandArg input, out T value)
         {
-            return _useRawInput
-                ? input.TryGetRaw(out value, _parserOverride)
-                : input.TryGet(out value, _parserOverride);
+            return _useRawInput ? input.TryGetRaw(out value, _parserOverride) : input.TryGet(out value, _parserOverride);
         }
 
         private string ValidateValue(T value)
@@ -707,8 +661,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
                 if (!matches)
                 {
-                    return $"Invalid value '{FormatValue(value)}' for argument '{Name}' "
-                        + $"(expected one of: {string.Join(", ", _staticChoiceTexts)})";
+                    return $"Invalid value '{FormatValue(value)}' for argument '{Name}' " + $"(expected one of: {string.Join(", ", _staticChoiceTexts)})";
                 }
             }
 

@@ -43,8 +43,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         ///     execution requires explicit opt-in by including
         ///     <see cref="CommandExecutionContexts.EditorEditMode"/>.
         /// </summary>
-        public CommandExecutionContexts Contexts { get; set; } =
-            CommandExecutionContextSets.Gameplay;
+        public CommandExecutionContexts Contexts { get; set; } = CommandExecutionContextSets.Gameplay;
 
         /// <summary>
         ///     Context-aware handler receiving the execution context and a

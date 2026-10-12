@@ -38,45 +38,20 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return new TestCaseData(null).SetName("Corpus.Null");
             yield return new TestCaseData("").SetName("Corpus.Empty");
             yield return new TestCaseData(" ").SetName("Corpus.Whitespace");
-            yield return new TestCaseData("UnityEngine.Object:Nothing()").SetName(
-                "Corpus.SingleLineOnly"
+            yield return new TestCaseData("UnityEngine.Object:Nothing()").SetName("Corpus.SingleLineOnly");
+            yield return new TestCaseData("UnityEngine.Object:Nothing()\n" + $"{Marker}.CommandLog:HandleLog()\n" + $"{Marker}.Terminal:Log()\n" + "GamePlay:Update()").SetName(
+                "Corpus.SkipsCallerAndPackageLines"
             );
-            yield return new TestCaseData(
-                "UnityEngine.Object:Nothing()\n"
-                    + $"{Marker}.CommandLog:HandleLog()\n"
-                    + $"{Marker}.Terminal:Log()\n"
-                    + "GamePlay:Update()"
-            ).SetName("Corpus.SkipsCallerAndPackageLines");
-            yield return new TestCaseData("A\r\n" + $"{Marker}.X()\r\n" + "B").SetName(
-                "Corpus.CrlfSeparators"
-            );
-            yield return new TestCaseData("A\r" + $"{Marker}.X()\r" + "B").SetName(
-                "Corpus.CrOnlySeparators"
-            );
-            yield return new TestCaseData("A\n" + $"{Marker}.X()\n" + "B\n").SetName(
-                "Corpus.TrailingSeparatorKeepsFinalEmptyLine"
-            );
-            yield return new TestCaseData("A\n\n" + $"{Marker}.X()\n\n" + "B").SetName(
-                "Corpus.EmptyLinesBetweenKeptLinesArePreserved"
-            );
-            yield return new TestCaseData("A\n" + $"{Marker}.X()\n" + "").SetName(
-                "Corpus.TrailingEmptyPackageLineDropsToEmpty"
-            );
-            yield return new TestCaseData("Unity()\n" + $"{Marker}.X()").SetName(
-                "Corpus.AllPackageLinesReduceToEmpty"
-            );
-            yield return new TestCaseData($"{Marker}.X()\n" + "B").SetName(
-                "Corpus.MarkerInLineZeroIsUnconditionallyDropped"
-            );
-            yield return new TestCaseData("A\nfoo " + Marker + " bar\nB").SetName(
-                "Corpus.MarkerMidLineStillSkips"
-            );
-            yield return new TestCaseData("A\nwallstopstudios.dxcommandterminal x\nB").SetName(
-                "Corpus.MarkerMatchIsCaseInsensitive"
-            );
-            yield return new TestCaseData("A\n" + Marker + "\nB\n" + Marker + "\nC").SetName(
-                "Corpus.NonContiguousPackageLinesAllDrop"
-            );
+            yield return new TestCaseData("A\r\n" + $"{Marker}.X()\r\n" + "B").SetName("Corpus.CrlfSeparators");
+            yield return new TestCaseData("A\r" + $"{Marker}.X()\r" + "B").SetName("Corpus.CrOnlySeparators");
+            yield return new TestCaseData("A\n" + $"{Marker}.X()\n" + "B\n").SetName("Corpus.TrailingSeparatorKeepsFinalEmptyLine");
+            yield return new TestCaseData("A\n\n" + $"{Marker}.X()\n\n" + "B").SetName("Corpus.EmptyLinesBetweenKeptLinesArePreserved");
+            yield return new TestCaseData("A\n" + $"{Marker}.X()\n" + "").SetName("Corpus.TrailingEmptyPackageLineDropsToEmpty");
+            yield return new TestCaseData("Unity()\n" + $"{Marker}.X()").SetName("Corpus.AllPackageLinesReduceToEmpty");
+            yield return new TestCaseData($"{Marker}.X()\n" + "B").SetName("Corpus.MarkerInLineZeroIsUnconditionallyDropped");
+            yield return new TestCaseData("A\nfoo " + Marker + " bar\nB").SetName("Corpus.MarkerMidLineStillSkips");
+            yield return new TestCaseData("A\nwallstopstudios.dxcommandterminal x\nB").SetName("Corpus.MarkerMatchIsCaseInsensitive");
+            yield return new TestCaseData("A\n" + Marker + "\nB\n" + Marker + "\nC").SetName("Corpus.NonContiguousPackageLinesAllDrop");
             yield return new TestCaseData("A\r\n\nB").SetName("Corpus.EmptyLineAfterCrlfIsKept");
         }
 
@@ -96,17 +71,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             string[] lines = fullStackTrace.Split(NewlineSeparators, StringSplitOptions.None);
 
             int startIndex = 1;
-            while (
-                startIndex < lines.Length
-                && 0 <= lines[startIndex].IndexOf(Marker, StringComparison.OrdinalIgnoreCase)
-            )
+            while (startIndex < lines.Length && 0 <= lines[startIndex].IndexOf(Marker, StringComparison.OrdinalIgnoreCase))
             {
                 ++startIndex;
             }
 
-            return lines.Length <= startIndex
-                ? string.Empty
-                : string.Join(JoinSeparator, lines, startIndex, lines.Length - startIndex);
+            return lines.Length <= startIndex ? string.Empty : string.Join(JoinSeparator, lines, startIndex, lines.Length - startIndex);
         }
 
         private static IEnumerable<TestCaseData> StackTraceModeCases()
@@ -117,71 +87,19 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 under All. Both entry points (extraction and caller-supplied
                 traces) enforce the same rule.
              */
-            yield return new TestCaseData(
-                TerminalStackTraceMode.All,
-                TerminalLogType.ShellMessage,
-                true
-            ).SetName("Mode.All.CapturesRoutine");
-            yield return new TestCaseData(
-                TerminalStackTraceMode.All,
-                TerminalLogType.Error,
-                true
-            ).SetName("Mode.All.CapturesError");
-            yield return new TestCaseData(
-                (TerminalStackTraceMode)0,
-                TerminalLogType.ShellMessage,
-                true
-            ).SetName("Mode.StaleZero.CapturesLikeAll.Routine");
-            yield return new TestCaseData(
-                (TerminalStackTraceMode)0,
-                TerminalLogType.Error,
-                true
-            ).SetName("Mode.StaleZero.CapturesLikeAll.Error");
-            yield return new TestCaseData(
-                TerminalStackTraceMode.ErrorsAndWarnings,
-                TerminalLogType.ShellMessage,
-                false
-            ).SetName("Mode.ErrorsAndWarnings.SkipsRoutine");
-            yield return new TestCaseData(
-                TerminalStackTraceMode.ErrorsAndWarnings,
-                TerminalLogType.Input,
-                false
-            ).SetName("Mode.ErrorsAndWarnings.SkipsInput");
-            yield return new TestCaseData(
-                TerminalStackTraceMode.ErrorsAndWarnings,
-                TerminalLogType.Message,
-                false
-            ).SetName("Mode.ErrorsAndWarnings.SkipsMessage");
-            yield return new TestCaseData(
-                TerminalStackTraceMode.ErrorsAndWarnings,
-                TerminalLogType.Error,
-                true
-            ).SetName("Mode.ErrorsAndWarnings.CapturesError");
-            yield return new TestCaseData(
-                TerminalStackTraceMode.ErrorsAndWarnings,
-                TerminalLogType.Warning,
-                true
-            ).SetName("Mode.ErrorsAndWarnings.CapturesWarning");
-            yield return new TestCaseData(
-                TerminalStackTraceMode.ErrorsAndWarnings,
-                TerminalLogType.Assert,
-                true
-            ).SetName("Mode.ErrorsAndWarnings.CapturesAssert");
-            yield return new TestCaseData(
-                TerminalStackTraceMode.ErrorsAndWarnings,
-                TerminalLogType.Exception,
-                true
-            ).SetName("Mode.ErrorsAndWarnings.CapturesException");
-            yield return new TestCaseData(
-                TerminalStackTraceMode.Disabled,
-                TerminalLogType.Error,
-                false
-            ).SetName("Mode.Disabled.SkipsError");
-            yield return new TestCaseData(
-                TerminalStackTraceMode.Disabled,
-                TerminalLogType.ShellMessage,
-                false
-            ).SetName("Mode.Disabled.SkipsRoutine");
+            yield return new TestCaseData(TerminalStackTraceMode.All, TerminalLogType.ShellMessage, true).SetName("Mode.All.CapturesRoutine");
+            yield return new TestCaseData(TerminalStackTraceMode.All, TerminalLogType.Error, true).SetName("Mode.All.CapturesError");
+            yield return new TestCaseData((TerminalStackTraceMode)0, TerminalLogType.ShellMessage, true).SetName("Mode.StaleZero.CapturesLikeAll.Routine");
+            yield return new TestCaseData((TerminalStackTraceMode)0, TerminalLogType.Error, true).SetName("Mode.StaleZero.CapturesLikeAll.Error");
+            yield return new TestCaseData(TerminalStackTraceMode.ErrorsAndWarnings, TerminalLogType.ShellMessage, false).SetName("Mode.ErrorsAndWarnings.SkipsRoutine");
+            yield return new TestCaseData(TerminalStackTraceMode.ErrorsAndWarnings, TerminalLogType.Input, false).SetName("Mode.ErrorsAndWarnings.SkipsInput");
+            yield return new TestCaseData(TerminalStackTraceMode.ErrorsAndWarnings, TerminalLogType.Message, false).SetName("Mode.ErrorsAndWarnings.SkipsMessage");
+            yield return new TestCaseData(TerminalStackTraceMode.ErrorsAndWarnings, TerminalLogType.Error, true).SetName("Mode.ErrorsAndWarnings.CapturesError");
+            yield return new TestCaseData(TerminalStackTraceMode.ErrorsAndWarnings, TerminalLogType.Warning, true).SetName("Mode.ErrorsAndWarnings.CapturesWarning");
+            yield return new TestCaseData(TerminalStackTraceMode.ErrorsAndWarnings, TerminalLogType.Assert, true).SetName("Mode.ErrorsAndWarnings.CapturesAssert");
+            yield return new TestCaseData(TerminalStackTraceMode.ErrorsAndWarnings, TerminalLogType.Exception, true).SetName("Mode.ErrorsAndWarnings.CapturesException");
+            yield return new TestCaseData(TerminalStackTraceMode.Disabled, TerminalLogType.Error, false).SetName("Mode.Disabled.SkipsError");
+            yield return new TestCaseData(TerminalStackTraceMode.Disabled, TerminalLogType.ShellMessage, false).SetName("Mode.Disabled.SkipsRoutine");
         }
 
         [SetUp]
@@ -207,49 +125,26 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         [TestCaseSource(nameof(StackTraceModeCases))]
-        public void CaptureModeRulesByType(
-            TerminalStackTraceMode mode,
-            TerminalLogType type,
-            bool expectedCapture
-        )
+        public void CaptureModeRulesByType(TerminalStackTraceMode mode, TerminalLogType type, bool expectedCapture)
         {
             CommandLog log = new(16) { StackTraceMode = mode };
 
-            Assert.IsTrue(
-                log.HandleLog("extraction", type),
-                "Sanity: the extraction write must land"
-            );
+            Assert.IsTrue(log.HandleLog("extraction", type), "Sanity: the extraction write must land");
             log.TryGetLast(out LogItem extracted);
-            Assert.AreEqual(
-                expectedCapture,
-                !string.IsNullOrEmpty(extracted.stackTrace),
-                "Extraction-path capture must follow the mode rules"
-            );
+            Assert.AreEqual(expectedCapture, !string.IsNullOrEmpty(extracted.stackTrace), "Extraction-path capture must follow the mode rules");
 
             log.HandleLog("supplied", "frame-at-call-site", type);
             log.TryGetLast(out LogItem supplied);
-            Assert.AreEqual(
-                expectedCapture ? "frame-at-call-site" : string.Empty,
-                supplied.stackTrace,
-                "Caller-supplied traces must follow the same mode rules"
-            );
+            Assert.AreEqual(expectedCapture ? "frame-at-call-site" : string.Empty, supplied.stackTrace, "Caller-supplied traces must follow the same mode rules");
         }
 
         [Test]
         public void DefaultStackTraceModeIsAll()
         {
-            Assert.AreEqual(
-                TerminalStackTraceMode.All,
-                _log.StackTraceMode,
-                "Buffers created without an explicit mode must keep the capture-all behavior"
-            );
+            Assert.AreEqual(TerminalStackTraceMode.All, _log.StackTraceMode, "Buffers created without an explicit mode must keep the capture-all behavior");
             _log.HandleLog("traced", TerminalLogType.ShellMessage);
             _log.TryGetLast(out LogItem stored);
-            Assert.AreNotEqual(
-                string.Empty,
-                stored.stackTrace,
-                "Default buffers must capture traces exactly as before"
-            );
+            Assert.AreNotEqual(string.Empty, stored.stackTrace, "Default buffers must capture traces exactly as before");
         }
 
         [Test]
@@ -257,10 +152,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             CommandLog log = new(4);
             Assert.AreEqual(0, log.Count, "An empty window shows no entries");
-            Assert.IsFalse(
-                log.TryGetLast(out LogItem empty),
-                "TryGetLast on an empty window reports nothing"
-            );
+            Assert.IsFalse(log.TryGetLast(out LogItem empty), "TryGetLast on an empty window reports nothing");
             Assert.AreEqual(default, empty.message, "The out entry is default on a miss");
 
             log.HandleLog("first", string.Empty, TerminalLogType.Message);
@@ -285,40 +177,20 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void FilterReadsReflectTheAppliedFilter()
         {
             CommandLog log = new(8, new[] { TerminalLogType.Warning });
-            Assert.IsTrue(
-                log.IsIgnored(TerminalLogType.Warning),
-                "The constructor's filter must be applied"
-            );
+            Assert.IsTrue(log.IsIgnored(TerminalLogType.Warning), "The constructor's filter must be applied");
             Assert.IsFalse(log.IsIgnored(TerminalLogType.Error), "Untouched types stay readable");
 
-            Assert.IsFalse(
-                log.HandleLog("dropped", string.Empty, TerminalLogType.Warning),
-                "An ignored type's write is refused"
-            );
+            Assert.IsFalse(log.HandleLog("dropped", string.Empty, TerminalLogType.Warning), "An ignored type's write is refused");
             Assert.AreEqual(0, log.Count, "A refused write lands nothing");
 
-            log.ApplyFilter(
-                TerminalStackTraceMode.Disabled,
-                new[] { TerminalLogType.Error, TerminalLogType.Warning }
-            );
+            log.ApplyFilter(TerminalStackTraceMode.Disabled, new[] { TerminalLogType.Error, TerminalLogType.Warning });
 
-            Assert.AreEqual(
-                TerminalStackTraceMode.Disabled,
-                log.StackTraceMode,
-                "ApplyFilter replaces the stack-trace mode"
-            );
+            Assert.AreEqual(TerminalStackTraceMode.Disabled, log.StackTraceMode, "ApplyFilter replaces the stack-trace mode");
             foreach (TerminalLogType type in AllLogTypes)
             {
-                Assert.AreEqual(
-                    type is TerminalLogType.Error or TerminalLogType.Warning,
-                    log.IsIgnored(type),
-                    $"IsIgnored({type}) must match the applied filter"
-                );
+                Assert.AreEqual(type is TerminalLogType.Error or TerminalLogType.Warning, log.IsIgnored(type), $"IsIgnored({type}) must match the applied filter");
             }
-            Assert.IsTrue(
-                log.IsIgnored(TerminalLogType.Error),
-                "ApplyFilter's filter must be visible to the read path"
-            );
+            Assert.IsTrue(log.IsIgnored(TerminalLogType.Error), "ApplyFilter's filter must be visible to the read path");
         }
     }
 }

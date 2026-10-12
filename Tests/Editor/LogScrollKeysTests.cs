@@ -27,19 +27,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
      */
     public sealed class LogScrollKeysTests
     {
-        private static float ScrollTo(
-            KeyCode keyCode,
-            bool commandKey,
-            float value,
-            float highValue,
-            float page
-        )
+        private static float ScrollTo(KeyCode keyCode, bool commandKey, float value, float highValue, float page)
         {
-            Assert.That(
-                LogScrollKeys.TryResolve(keyCode, commandKey, out LogScrollIntent intent),
-                Is.True,
-                $"{keyCode} is the log's key to answer here"
-            );
+            Assert.That(LogScrollKeys.TryResolve(keyCode, commandKey, out LogScrollIntent intent), Is.True, $"{keyCode} is the log's key to answer here");
             return LogScrollKeys.Target(intent, value, highValue, page);
         }
 
@@ -60,11 +50,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             bool answered = LogScrollKeys.TryResolve(keyCode, commandKey: false, out _);
 
-            Assert.That(
-                answered,
-                Is.EqualTo(keyCode is KeyCode.PageUp or KeyCode.PageDown),
-                "Paging is the log's alone; every other key stays with the command line"
-            );
+            Assert.That(answered, Is.EqualTo(keyCode is KeyCode.PageUp or KeyCode.PageDown), "Paging is the log's alone; every other key stays with the command line");
         }
 
         [TestCase(KeyCode.PageUp)]
@@ -76,8 +62,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.That(
                 LogScrollKeys.TryResolve(keyCode, commandKey: true, out _),
                 Is.True,
-                "The command modifier is what makes Home and End the log's to answer "
-                    + "rather than the caret's; without it they stay with the field"
+                "The command modifier is what makes Home and End the log's to answer " + "rather than the caret's; without it they stay with the field"
             );
         }
 
@@ -88,13 +73,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [TestCase(KeyCode.PageUp, 50f, 1000f, 400f, 0f)]
         [TestCase(KeyCode.PageDown, 950f, 1000f, 400f, 1000f)]
         [TestCase(KeyCode.PageUp, 0f, 1000f, 0f, 0f)]
-        public void AKeyMovesTheLogByAPageAndClampsToItsScrollableRange(
-            KeyCode keyCode,
-            float value,
-            float highValue,
-            float page,
-            float expected
-        )
+        public void AKeyMovesTheLogByAPageAndClampsToItsScrollableRange(KeyCode keyCode, float value, float highValue, float page, float expected)
         {
             Assert.That(
                 ScrollTo(keyCode, commandKey: true, value, highValue, page),

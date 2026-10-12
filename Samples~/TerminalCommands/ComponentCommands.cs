@@ -17,9 +17,7 @@ namespace WallstopStudios.DxCommandTerminal.Samples
      */
     public sealed class ComponentCommands : TerminalCommandSample
     {
-        private readonly SceneObjectArgumentAdapter<GameObject> _objects = new(
-            includeInactive: true
-        );
+        private readonly SceneObjectArgumentAdapter<GameObject> _objects = new(includeInactive: true);
 
         private static bool HasMissingScript(GameObject target)
         {
@@ -40,10 +38,7 @@ namespace WallstopStudios.DxCommandTerminal.Samples
 #if UNITY_6000_4_OR_NEWER
             return Object.FindObjectsByType<GameObject>(FindObjectsInactive.Include);
 #elif UNITY_2022_2_OR_NEWER
-            return Object.FindObjectsByType<GameObject>(
-                FindObjectsInactive.Include,
-                FindObjectsSortMode.InstanceID
-            );
+            return Object.FindObjectsByType<GameObject>(FindObjectsInactive.Include, FindObjectsSortMode.InstanceID);
 #else
             return Object.FindObjectsOfType<GameObject>(true);
 #endif
@@ -54,13 +49,7 @@ namespace WallstopStudios.DxCommandTerminal.Samples
             Register(
                 CommandBuilder
                     .Create("list-components", "Lists every component on an object")
-                    .Arg<GameObject>(
-                        "target",
-                        spec =>
-                            spec.Required()
-                                .RawParser(_objects.TryParse)
-                                .Choices(_objects.GetChoices, _objects.FormatChoice)
-                    )
+                    .Arg<GameObject>("target", spec => spec.Required().RawParser(_objects.TryParse).Choices(_objects.GetChoices, _objects.FormatChoice))
                     .Handler(
                         (context, arguments) =>
                         {
@@ -76,16 +65,7 @@ namespace WallstopStudios.DxCommandTerminal.Samples
                             report.Append(target.name).Append(":\n");
                             for (int i = 0; i < components.Length; ++i)
                             {
-                                report
-                                    .Append("  [")
-                                    .Append(i)
-                                    .Append("] ")
-                                    .Append(
-                                        components[i] == null
-                                            ? "<missing script>"
-                                            : components[i].GetType().Name
-                                    )
-                                    .Append('\n');
+                                report.Append("  [").Append(i).Append("] ").Append(components[i] == null ? "<missing script>" : components[i].GetType().Name).Append('\n');
                             }
 
                             Terminal.Log(report.ToString().TrimEnd('\n'));

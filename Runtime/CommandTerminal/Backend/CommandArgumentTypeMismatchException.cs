@@ -29,12 +29,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         /// <summary>The type the read requested.</summary>
         public Type RequestedType { get; }
 
-        public CommandArgumentTypeMismatchException(
-            string message,
-            string argumentName,
-            Type storedType,
-            Type requestedType
-        )
+        public CommandArgumentTypeMismatchException(string message, string argumentName, Type storedType, Type requestedType)
             : base(message)
         {
             ArgumentName = argumentName;

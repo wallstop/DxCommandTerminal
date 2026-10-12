@@ -25,20 +25,12 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
         {
             if (_impactButtonStyle == null)
             {
-                _impactButtonStyle = new GUIStyle(GUI.skin.button)
-                {
-                    normal = { textColor = Color.yellow },
-                    fontStyle = FontStyle.Bold,
-                };
+                _impactButtonStyle = new GUIStyle(GUI.skin.button) { normal = { textColor = Color.yellow }, fontStyle = FontStyle.Bold };
             }
 
             serializedObject.Update();
             TerminalThemePack themePack = target as TerminalThemePack;
-            DrawPropertiesExcluding(
-                serializedObject,
-                "m_Script",
-                nameof(TerminalThemePack._themeNames)
-            );
+            DrawPropertiesExcluding(serializedObject, "m_Script", nameof(TerminalThemePack._themeNames));
 
             if (themePack == null)
             {
@@ -72,11 +64,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
             EditorGUILayout.Space(10);
             EditorGUILayout.LabelField("Data Manipulation", EditorStyles.boldLabel);
 
-            if (
-                anyInvalidTheme
-                || _styleCache.Count != themePack._themes.Count
-                || 0 < _invalidStyles.Count
-            )
+            if (anyInvalidTheme || _styleCache.Count != themePack._themes.Count || 0 < _invalidStyles.Count)
             {
                 if (GUILayout.Button("Fix Invalid Themes", _impactButtonStyle))
                 {
@@ -94,10 +82,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
 
             string assetPath = AssetDatabase.GetAssetPath(activeObject);
             string dataPath = Application.dataPath;
-            if (
-                dataPath.EndsWith("/", StringComparison.OrdinalIgnoreCase)
-                || dataPath.EndsWith("\\", StringComparison.OrdinalIgnoreCase)
-            )
+            if (dataPath.EndsWith("/", StringComparison.OrdinalIgnoreCase) || dataPath.EndsWith("\\", StringComparison.OrdinalIgnoreCase))
             {
                 dataPath = dataPath.Substring(0, dataPath.Length - 1);
             }
@@ -113,10 +98,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
 
             assetPath = assetPath.Replace('\\', '/');
 
-            GUIContent loadFromCurrentDirectoryContent = new(
-                "Load From Current Directory",
-                $"Loads all themes from '{LogTextSanitizer.Sanitize(assetPath)}'"
-            );
+            GUIContent loadFromCurrentDirectoryContent = new("Load From Current Directory", $"Loads all themes from '{LogTextSanitizer.Sanitize(assetPath)}'");
 
             if (GUILayout.Button(loadFromCurrentDirectoryContent))
             {
@@ -126,9 +108,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
             {
                 _lastSelectedDirectory = EditorUtility.OpenFolderPanel(
                     "Select Directory",
-                    string.IsNullOrWhiteSpace(_lastSelectedDirectory)
-                        ? Application.dataPath
-                        : _lastSelectedDirectory,
+                    string.IsNullOrWhiteSpace(_lastSelectedDirectory) ? Application.dataPath : _lastSelectedDirectory,
                     string.Empty
                 );
                 UpdateFromDirectory(_lastSelectedDirectory);
@@ -136,10 +116,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
 
             if (
                 anyChanged
-                || (
-                    !themePack._themes.IsSorted(UnityObjectNameComparer.Instance)
-                    && GUILayout.Button("Sort Themes")
-                )
+                || (!themePack._themes.IsSorted(UnityObjectNameComparer.Instance) && GUILayout.Button("Sort Themes"))
                 || (themePack._themes.Count != themePack._themeNames.Count)
             )
             {
@@ -157,9 +134,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                 themePack._themeNames.Clear();
                 foreach (StyleSheet theme in themePack._themes)
                 {
-                    themePack._themeNames.AddRange(
-                        TerminalThemeStyleSheetHelper.GetAvailableThemes(theme)
-                    );
+                    themePack._themeNames.AddRange(TerminalThemeStyleSheetHelper.GetAvailableThemes(theme));
                 }
             }
 
@@ -188,14 +163,8 @@ namespace WallstopStudios.DxCommandTerminal.Editor.CustomEditors
                         continue;
                     }
 
-                    StyleSheet styleSheet = AssetDatabase.LoadAssetAtPath<StyleSheet>(
-                        styleAssetPath
-                    );
-                    if (
-                        styleSheet != null
-                        && 0 < TerminalThemeStyleSheetHelper.GetAvailableThemes(styleSheet).Length
-                        && _styleCache.Add(styleSheet)
-                    )
+                    StyleSheet styleSheet = AssetDatabase.LoadAssetAtPath<StyleSheet>(styleAssetPath);
+                    if (styleSheet != null && 0 < TerminalThemeStyleSheetHelper.GetAvailableThemes(styleSheet).Length && _styleCache.Add(styleSheet))
                     {
                         anyChanged = true;
                         themePack._themes.Add(styleSheet);

@@ -116,8 +116,7 @@ namespace WallstopStudios.DxCommandTerminal.Helper
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static bool TryClaim(int slot, long generation)
         {
-            return Interlocked.CompareExchange(ref GenerationRef(slot), generation + 1, generation)
-                == generation;
+            return Interlocked.CompareExchange(ref GenerationRef(slot), generation + 1, generation) == generation;
         }
 
         /*

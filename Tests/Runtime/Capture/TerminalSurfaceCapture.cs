@@ -46,8 +46,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             extend on the second, and the third draws both settled sets.
          */
         private const int ForcedRenderPasses = 3;
-        private const BindingFlags InheritedInstanceMembers =
-            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+        private const BindingFlags InheritedInstanceMembers = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
 
         /*
             Offscreen rendering needs a real graphics device; a -nographics
@@ -56,8 +55,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public static bool IsSupported => SystemInfo.graphicsDeviceType != GraphicsDeviceType.Null;
 
         public static string UnsupportedReason =>
-            "Fixture capture needs a graphics device to rasterize into an offscreen target; "
-            + $"this editor reports {SystemInfo.graphicsDeviceType} (typically -nographics).";
+            "Fixture capture needs a graphics device to rasterize into an offscreen target; " + $"this editor reports {SystemInfo.graphicsDeviceType} (typically -nographics).";
 
         public static int CountRenderTextures()
         {
@@ -71,18 +69,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public static string CreateRunDirectory()
         {
             string projectRoot = Directory.GetParent(Application.dataPath).FullName;
-            string stamp = DateTime.UtcNow.ToString(
-                "yyyy-MM-dd'T'HH-mm-ss-fff'Z'",
-                CultureInfo.InvariantCulture
-            );
-            string directory = Path.Combine(
-                projectRoot,
-                "Packages",
-                PackageName,
-                ".artifacts",
-                ArtifactFolderName,
-                stamp
-            );
+            string stamp = DateTime.UtcNow.ToString("yyyy-MM-dd'T'HH-mm-ss-fff'Z'", CultureInfo.InvariantCulture);
+            string directory = Path.Combine(projectRoot, "Packages", PackageName, ".artifacts", ArtifactFolderName, stamp);
             Directory.CreateDirectory(directory);
             return directory;
         }
@@ -96,11 +84,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             the forced render. Restores RenderTexture.active on every path and
             destroys the readback texture before returning.
          */
-        public static CapturePixelMetrics CaptureToPng(
-            RenderTexture target,
-            VisualElement contentRoot,
-            string pngOutputPath
-        )
+        public static CapturePixelMetrics CaptureToPng(RenderTexture target, VisualElement contentRoot, string pngOutputPath)
         {
             return CaptureFrame(target, contentRoot, pngOutputPath, null, false).Metrics;
         }
@@ -112,11 +96,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             asserts read, because decoding the PNGs back would need a decoder
             the test assembly does not ship.
          */
-        public static CapturedFrame CaptureFrame(
-            RenderTexture target,
-            VisualElement contentRoot,
-            string pngOutputPath
-        )
+        public static CapturedFrame CaptureFrame(RenderTexture target, VisualElement contentRoot, string pngOutputPath)
         {
             return CaptureFrame(target, contentRoot, pngOutputPath, null, true);
         }
@@ -131,15 +111,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             List<string> violations = new List<string>();
             if (metrics.DistinctColors < bounds.MinDistinctColors)
             {
-                violations.Add(
-                    $"distinctColors {metrics.DistinctColors} < min {bounds.MinDistinctColors} "
-                        + "(blank or nearly blank render)"
-                );
+                violations.Add($"distinctColors {metrics.DistinctColors} < min {bounds.MinDistinctColors} " + "(blank or nearly blank render)");
             }
 
-            bool backgroundInRange =
-                bounds.MinBackgroundFraction <= metrics.BackgroundFraction
-                && metrics.BackgroundFraction <= bounds.MaxBackgroundFraction;
+            bool backgroundInRange = bounds.MinBackgroundFraction <= metrics.BackgroundFraction && metrics.BackgroundFraction <= bounds.MaxBackgroundFraction;
             if (!backgroundInRange)
             {
                 violations.Add(
@@ -189,9 +164,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
                 string output = process.StandardOutput.ReadToEnd().Trim();
                 process.WaitForExit(RevisionProbeTimeoutMilliseconds);
-                return process.HasExited && 0 == process.ExitCode && 0 < output.Length
-                    ? output
-                    : null;
+                return process.HasExited && 0 == process.ExitCode && 0 < output.Length ? output : null;
             }
             catch (Exception exception)
             {
@@ -221,25 +194,18 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             mismatching pixel. Reads the frames' own pixels, so no PNG decode
             is involved.
          */
-        public static string DescribeFrameMismatch(
-            CapturedFrame expected,
-            CapturedFrame actual,
-            int maxChannelDelta
-        )
+        public static string DescribeFrameMismatch(CapturedFrame expected, CapturedFrame actual, int maxChannelDelta)
         {
             if (expected.Width != actual.Width || expected.Height != actual.Height)
             {
-                return $"size {actual.Width}x{actual.Height} != expected "
-                    + $"{expected.Width}x{expected.Height}";
+                return $"size {actual.Width}x{actual.Height} != expected " + $"{expected.Width}x{expected.Height}";
             }
 
             Color32[] expectedPixels = expected.Pixels;
             Color32[] actualPixels = actual.Pixels;
             if (expectedPixels == null || actualPixels == null)
             {
-                throw new InvalidOperationException(
-                    "Frame compare needs both captures taken with pixels kept."
-                );
+                throw new InvalidOperationException("Frame compare needs both captures taken with pixels kept.");
             }
 
             int mismatchCount = 0;
@@ -249,10 +215,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             {
                 Color32 a = expectedPixels[index];
                 Color32 b = actualPixels[index];
-                int delta = Math.Max(
-                    Math.Abs(a.r - b.r),
-                    Math.Max(Math.Abs(a.g - b.g), Math.Abs(a.b - b.b))
-                );
+                int delta = Math.Max(Math.Abs(a.r - b.r), Math.Max(Math.Abs(a.g - b.g), Math.Abs(a.b - b.b)));
                 if (delta <= maxChannelDelta)
                 {
                     continue;
@@ -291,13 +254,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 + $"#{actualPixel.r:X2}{actualPixel.g:X2}{actualPixel.b:X2}";
         }
 
-        internal static CapturedFrame CaptureFrame(
-            RenderTexture target,
-            VisualElement contentRoot,
-            string pngOutputPath,
-            Rect? metricsRegion,
-            bool keepPixels
-        )
+        internal static CapturedFrame CaptureFrame(RenderTexture target, VisualElement contentRoot, string pngOutputPath, Rect? metricsRegion, bool keepPixels)
         {
             if (target == null)
             {
@@ -306,10 +263,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             if (target.width < 1 || target.height < 1)
             {
-                throw new ArgumentException(
-                    $"Capture target must have positive dimensions, got {target.width}x{target.height}.",
-                    nameof(target)
-                );
+                throw new ArgumentException($"Capture target must have positive dimensions, got {target.width}x{target.height}.", nameof(target));
             }
 
             if (string.IsNullOrWhiteSpace(pngOutputPath))
@@ -327,17 +281,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     ForcePanelRender(contentRoot);
                 }
 
-                readback = new Texture2D(
-                    target.width,
-                    target.height,
-                    TextureFormat.RGB24,
-                    false,
-                    false
-                )
-                {
-                    name = "T4CaptureReadback",
-                    hideFlags = HideFlags.HideAndDontSave,
-                };
+                readback = new Texture2D(target.width, target.height, TextureFormat.RGB24, false, false) { name = "T4CaptureReadback", hideFlags = HideFlags.HideAndDontSave };
                 readback.ReadPixels(new Rect(0, 0, target.width, target.height), 0, 0, false);
                 readback.Apply(false, false);
 
@@ -345,17 +289,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 byte[] png = readback.EncodeToPNG();
                 if (png == null || png.Length < 1)
                 {
-                    throw new InvalidOperationException(
-                        $"PNG encoding produced no bytes for {pngOutputPath}."
-                    );
+                    throw new InvalidOperationException($"PNG encoding produced no bytes for {pngOutputPath}.");
                 }
 
-                CapturedFrame frame = new CapturedFrame(
-                    metrics.WithPngBytes(png.Length),
-                    keepPixels ? readback.GetPixels32() : null,
-                    readback.width,
-                    readback.height
-                );
+                CapturedFrame frame = new CapturedFrame(metrics.WithPngBytes(png.Length), keepPixels ? readback.GetPixels32() : null, readback.width, readback.height);
                 string directory = Path.GetDirectoryName(pngOutputPath);
                 if (!string.IsNullOrEmpty(directory))
                 {
@@ -400,37 +337,18 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             if (passes < 1)
             {
-                throw new ArgumentOutOfRangeException(
-                    nameof(passes),
-                    passes,
-                    "A forced capture must drive at least one repaint/render pass."
-                );
+                throw new ArgumentOutOfRangeException(nameof(passes), passes, "A forced capture must drive at least one repaint/render pass.");
             }
 
             IPanel panel = contentRoot.panel;
             if (panel == null)
             {
-                throw new InvalidOperationException(
-                    "The capture surface has no live panel to render; attach the "
-                        + "render target while the surface is enabled and settled."
-                );
+                throw new InvalidOperationException("The capture surface has no live panel to render; attach the " + "render target while the surface is enabled and settled.");
             }
 
             Type panelType = panel.GetType();
-            MethodInfo renderMethod = panelType.GetMethod(
-                "Render",
-                InheritedInstanceMembers,
-                binder: null,
-                Type.EmptyTypes,
-                modifiers: null
-            );
-            MethodInfo repaintMethod = panelType.GetMethod(
-                "Repaint",
-                InheritedInstanceMembers,
-                binder: null,
-                new[] { typeof(Event) },
-                modifiers: null
-            );
+            MethodInfo renderMethod = panelType.GetMethod("Render", InheritedInstanceMembers, binder: null, Type.EmptyTypes, modifiers: null);
+            MethodInfo repaintMethod = panelType.GetMethod("Repaint", InheritedInstanceMembers, binder: null, new[] { typeof(Event) }, modifiers: null);
             if (renderMethod == null || repaintMethod == null)
             {
                 throw new InvalidOperationException(
@@ -442,10 +360,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             for (int pass = 0; pass < passes; ++pass)
             {
-                repaintMethod.Invoke(
-                    panel,
-                    new object[] { new Event { type = EventType.Repaint } }
-                );
+                repaintMethod.Invoke(panel, new object[] { new Event { type = EventType.Repaint } });
                 renderMethod.Invoke(panel, Array.Empty<object>());
             }
         }
@@ -462,15 +377,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
          */
         public static GameViewZoomScope PinGameViewZoom()
         {
-            Type gameViewType = typeof(UnityEditor.EditorWindow).Assembly.GetType(
-                "UnityEditor.GameView"
-            );
+            Type gameViewType = typeof(UnityEditor.EditorWindow).Assembly.GetType("UnityEditor.GameView");
             if (gameViewType == null)
             {
-                throw new InvalidOperationException(
-                    "The capture harness could not resolve UnityEditor.GameView; update the "
-                        + "harness for this Unity version."
-                );
+                throw new InvalidOperationException("The capture harness could not resolve UnityEditor.GameView; update the " + "harness for this Unity version.");
             }
 
             UnityEngine.Object[] existing = Resources.FindObjectsOfTypeAll(gameViewType);
@@ -482,10 +392,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     continue;
                 }
 
-                FieldInfo zoomField = gameViewType.GetField(
-                    "m_ZoomArea",
-                    BindingFlags.Instance | BindingFlags.NonPublic
-                );
+                FieldInfo zoomField = gameViewType.GetField("m_ZoomArea", BindingFlags.Instance | BindingFlags.NonPublic);
                 object zoomArea = zoomField?.GetValue(editorWindow);
                 if (zoomArea == null)
                 {
@@ -493,43 +400,20 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 }
 
                 Type zoomAreaType = zoomArea.GetType();
-                FieldInfo scaleField = zoomAreaType.GetField(
-                    "m_Scale",
-                    BindingFlags.Instance | BindingFlags.NonPublic
-                );
-                PropertyInfo minScaleProperty = zoomAreaType.GetProperty(
-                    "hScaleMin",
-                    BindingFlags.Instance | BindingFlags.Public
-                );
-                PropertyInfo minVScaleProperty = zoomAreaType.GetProperty(
-                    "vScaleMin",
-                    BindingFlags.Instance | BindingFlags.Public
-                );
+                FieldInfo scaleField = zoomAreaType.GetField("m_Scale", BindingFlags.Instance | BindingFlags.NonPublic);
+                PropertyInfo minScaleProperty = zoomAreaType.GetProperty("hScaleMin", BindingFlags.Instance | BindingFlags.Public);
+                PropertyInfo minVScaleProperty = zoomAreaType.GetProperty("vScaleMin", BindingFlags.Instance | BindingFlags.Public);
                 if (scaleField == null || minScaleProperty == null || minVScaleProperty == null)
                 {
-                    throw new InvalidOperationException(
-                        "ZoomableArea exposes no m_Scale/hScaleMin/vScaleMin; update the capture "
-                            + "harness for this Unity version."
-                    );
+                    throw new InvalidOperationException("ZoomableArea exposes no m_Scale/hScaleMin/vScaleMin; update the capture " + "harness for this Unity version.");
                 }
 
-                targets.Add(
-                    new GameViewZoomTarget(
-                        editorWindow,
-                        zoomArea,
-                        scaleField,
-                        minScaleProperty,
-                        minVScaleProperty
-                    )
-                );
+                targets.Add(new GameViewZoomTarget(editorWindow, zoomArea, scaleField, minScaleProperty, minVScaleProperty));
             }
 
             if (targets.Count < 1)
             {
-                throw new InvalidOperationException(
-                    "No Game View is open, so the capture harness cannot pin its zoom. Open a "
-                        + "Game View and retry."
-                );
+                throw new InvalidOperationException("No Game View is open, so the capture harness cannot pin its zoom. Open a " + "Game View and retry.");
             }
 
             return new GameViewZoomScope(targets);
@@ -566,11 +450,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     default:
                         if (character < ' ')
                         {
-                            builder
-                                .Append("\\u")
-                                .Append(
-                                    ((int)character).ToString("x4", CultureInfo.InvariantCulture)
-                                );
+                            builder.Append("\\u").Append(((int)character).ToString("x4", CultureInfo.InvariantCulture));
                         }
                         else
                         {
@@ -622,10 +502,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             if (sampleCount < 1)
             {
-                throw new InvalidOperationException(
-                    $"Metrics region {bounds} is empty on a {readback.width}x{readback.height} "
-                        + "readback."
-                );
+                throw new InvalidOperationException($"Metrics region {bounds} is empty on a {readback.width}x{readback.height} " + "readback.");
             }
 
             int backgroundKey = 0;
@@ -673,13 +550,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         private static string FormatRgb(CapturePixelMetrics metrics)
         {
-            return string.Format(
-                CultureInfo.InvariantCulture,
-                "#{0:X2}{1:X2}{2:X2}",
-                metrics.BackgroundRed,
-                metrics.BackgroundGreen,
-                metrics.BackgroundBlue
-            );
+            return string.Format(CultureInfo.InvariantCulture, "#{0:X2}{1:X2}{2:X2}", metrics.BackgroundRed, metrics.BackgroundGreen, metrics.BackgroundBlue);
         }
 
         /*
@@ -722,12 +593,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                         description.Append(';');
                     }
 
-                    description
-                        .Append(index)
-                        .Append(":scale=")
-                        .Append(Format(_targets[index].Scale))
-                        .Append(",min=")
-                        .Append(Format(_targets[index].MinScale));
+                    description.Append(index).Append(":scale=").Append(Format(_targets[index].Scale)).Append(",min=").Append(Format(_targets[index].MinScale));
                 }
 
                 return description.ToString();
@@ -764,13 +630,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             private readonly Vector2 _previousScale;
             private readonly float _previousMinScale;
 
-            internal GameViewZoomTarget(
-                UnityEditor.EditorWindow gameView,
-                object zoomArea,
-                FieldInfo scaleField,
-                PropertyInfo hMinScale,
-                PropertyInfo vMinScale
-            )
+            internal GameViewZoomTarget(UnityEditor.EditorWindow gameView, object zoomArea, FieldInfo scaleField, PropertyInfo hMinScale, PropertyInfo vMinScale)
             {
                 _gameView = gameView;
                 _zoomArea = zoomArea;
@@ -790,12 +650,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             internal void SetZoom(float zoom)
             {
                 _scaleField.SetValue(_zoomArea, new Vector2(zoom, zoom));
-                MethodInfo enforce = _zoomArea
-                    .GetType()
-                    .GetMethod(
-                        "EnforceScaleAndRange",
-                        BindingFlags.Instance | BindingFlags.NonPublic
-                    );
+                MethodInfo enforce = _zoomArea.GetType().GetMethod("EnforceScaleAndRange", BindingFlags.Instance | BindingFlags.NonPublic);
                 enforce?.Invoke(_zoomArea, null);
                 _gameView.Repaint();
             }
@@ -824,12 +679,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             public int Width { get; }
             public int Height { get; }
 
-            public CapturedFrame(
-                CapturePixelMetrics metrics,
-                Color32[] pixels,
-                int width,
-                int height
-            )
+            public CapturedFrame(CapturePixelMetrics metrics, Color32[] pixels, int width, int height)
             {
                 Metrics = metrics;
                 Pixels = pixels;

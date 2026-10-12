@@ -25,35 +25,20 @@ namespace DxCommandTerminal.T13.Compatibility.Tests
         public IEnumerator StoredPrefabPlayModeLifecycle()
         {
             Assert.That(Application.isPlaying, Is.True);
-            string expectedDomainReload = Environment.GetEnvironmentVariable(
-                "DX_T13_DOMAIN_RELOAD_ENABLED"
-            );
+            string expectedDomainReload = Environment.GetEnvironmentVariable("DX_T13_DOMAIN_RELOAD_ENABLED");
             if (expectedDomainReload != null)
             {
-                Assert.That(
-                    EditorSettings.enterPlayModeOptionsEnabled,
-                    Is.EqualTo(expectedDomainReload == "0")
-                );
+                Assert.That(EditorSettings.enterPlayModeOptionsEnabled, Is.EqualTo(expectedDomainReload == "0"));
                 if (expectedDomainReload == "0")
                 {
-                    Assert.That(
-                        (
-                            EditorSettings.enterPlayModeOptions
-                            & EnterPlayModeOptions.DisableDomainReload
-                        ) != 0,
-                        Is.True
-                    );
+                    Assert.That((EditorSettings.enterPlayModeOptions & EnterPlayModeOptions.DisableDomainReload) != 0, Is.True);
                 }
             }
             Scene originalScene = SceneManager.GetActiveScene();
             List<Scene> scenes = new();
             string persistenceFile = Environment.GetEnvironmentVariable("DX_T13_PERSISTENCE_FILE");
             Assert.That(string.IsNullOrEmpty(persistenceFile), Is.False);
-            string fixturePersistence = Path.Combine(
-                Application.dataPath,
-                "Compatibility",
-                "TerminalFixture.persistence.json"
-            );
+            string fixturePersistence = Path.Combine(Application.dataPath, "Compatibility", "TerminalFixture.persistence.json");
             try
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(persistenceFile));
@@ -61,14 +46,11 @@ namespace DxCommandTerminal.T13.Compatibility.Tests
                 Scene firstScene = SceneManager.CreateScene("DxCmdT13First");
                 SceneManager.SetActiveScene(firstScene);
                 scenes.Add(firstScene);
-                GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(
-                    $"{FixtureRoot}/TerminalFixture.prefab"
-                );
+                GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>($"{FixtureRoot}/TerminalFixture.prefab");
                 Assert.That(prefab != null, Is.True);
                 GameObject firstObject = Object.Instantiate(prefab);
                 TerminalUI firstTerminal = firstObject.GetComponent<TerminalUI>();
-                TerminalThemePersister persister =
-                    firstObject.GetComponent<TerminalThemePersister>();
+                TerminalThemePersister persister = firstObject.GetComponent<TerminalThemePersister>();
                 UIDocument document = firstObject.AddComponent<UIDocument>();
                 SerializedObject terminalObject = new SerializedObject(firstTerminal);
                 terminalObject.FindProperty("_uiDocument").objectReferenceValue = document;
@@ -84,21 +66,12 @@ namespace DxCommandTerminal.T13.Compatibility.Tests
                 Assert.That(Terminal.Buffer, Is.SameAs(buffer));
                 Assert.That(ContainsLog(buffer, "t13-early-log"), Is.True);
                 int frameBudget = 120;
-                while (
-                    0 < frameBudget--
-                    && !string.Equals(
-                        firstTerminal.CurrentTheme,
-                        "dark-theme",
-                        StringComparison.Ordinal
-                    )
-                )
+                while (0 < frameBudget-- && !string.Equals(firstTerminal.CurrentTheme, "dark-theme", StringComparison.Ordinal))
                 {
                     yield return null;
                 }
                 Assert.That(firstTerminal.CurrentTheme, Is.EqualTo("dark-theme"));
-                TerminalFontPack fontPack = AssetDatabase.LoadAssetAtPath<TerminalFontPack>(
-                    "Packages/com.wallstop-studios.dxcommandterminal/Packs/Fonts/Minimal.asset"
-                );
+                TerminalFontPack fontPack = AssetDatabase.LoadAssetAtPath<TerminalFontPack>("Packages/com.wallstop-studios.dxcommandterminal/Packs/Fonts/Minimal.asset");
                 Assert.That(fontPack != null, Is.True);
                 Font persistedFont = fontPack.Fonts[0];
                 firstTerminal.SetTheme("light-theme", persist: true);
@@ -106,9 +79,7 @@ namespace DxCommandTerminal.T13.Compatibility.Tests
                 persister.savePeriodically = true;
                 persister.savePeriod = 0;
                 frameBudget = 120;
-                while (
-                    0 < frameBudget-- && !PersistenceContains(persistenceFile, persistedFont.name)
-                )
+                while (0 < frameBudget-- && !PersistenceContains(persistenceFile, persistedFont.name))
                 {
                     yield return null;
                 }
@@ -126,13 +97,9 @@ namespace DxCommandTerminal.T13.Compatibility.Tests
                 TerminalUI secondTerminal = secondObject.GetComponent<TerminalUI>();
                 UIDocument secondDocument = secondObject.AddComponent<UIDocument>();
                 SerializedObject secondTerminalObject = new SerializedObject(secondTerminal);
-                secondTerminalObject.FindProperty("_uiDocument").objectReferenceValue =
-                    secondDocument;
+                secondTerminalObject.FindProperty("_uiDocument").objectReferenceValue = secondDocument;
                 secondTerminalObject.ApplyModifiedPropertiesWithoutUndo();
-                Assert.That(
-                    secondTerminalObject.FindProperty("resetStateOnInit").boolValue,
-                    Is.False
-                );
+                Assert.That(secondTerminalObject.FindProperty("resetStateOnInit").boolValue, Is.False);
                 Assert.That(Terminal.Buffer.Capacity, Is.EqualTo(64));
                 Assert.That(Terminal.History.Capacity, Is.EqualTo(32));
                 frameBudget = 120;
@@ -147,9 +114,7 @@ namespace DxCommandTerminal.T13.Compatibility.Tests
                 Assert.That(Terminal.Log("t13-before-reset"), Is.True);
                 GameObject resetObject = Object.Instantiate(prefab);
                 resetObject.SetActive(false);
-                SerializedObject resetObjectData = new SerializedObject(
-                    resetObject.GetComponent<TerminalUI>()
-                );
+                SerializedObject resetObjectData = new SerializedObject(resetObject.GetComponent<TerminalUI>());
                 resetObjectData.FindProperty("resetStateOnInit").boolValue = true;
                 resetObjectData.ApplyModifiedPropertiesWithoutUndo();
                 resetObject.SetActive(true);
@@ -190,8 +155,7 @@ namespace DxCommandTerminal.T13.Compatibility.Tests
 
         private static bool PersistenceContains(string path, string expected)
         {
-            return File.Exists(path)
-                && 0 <= File.ReadAllText(path).IndexOf(expected, StringComparison.Ordinal);
+            return File.Exists(path) && 0 <= File.ReadAllText(path).IndexOf(expected, StringComparison.Ordinal);
         }
     }
 }

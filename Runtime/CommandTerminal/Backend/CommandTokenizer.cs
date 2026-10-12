@@ -68,27 +68,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                            (excluding the opening quote), matching
                            TryEatArgument.
                         */
-                        tokens.Add(
-                            new CommandToken(
-                                line.Substring(index + 1),
-                                firstChar,
-                                null,
-                                index + 1,
-                                length
-                            )
-                        );
+                        tokens.Add(new CommandToken(line.Substring(index + 1), firstChar, null, index + 1, length));
                         return;
                     }
 
-                    tokens.Add(
-                        new CommandToken(
-                            line.Substring(index + 1, closingQuoteIndex - index - 1),
-                            firstChar,
-                            firstChar,
-                            index + 1,
-                            closingQuoteIndex
-                        )
-                    );
+                    tokens.Add(new CommandToken(line.Substring(index + 1, closingQuoteIndex - index - 1), firstChar, firstChar, index + 1, closingQuoteIndex));
                     index = closingQuoteIndex + 1;
                 }
                 else
@@ -99,9 +83,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                         ++end;
                     }
 
-                    tokens.Add(
-                        new CommandToken(line.Substring(index, end - index), null, null, index, end)
-                    );
+                    tokens.Add(new CommandToken(line.Substring(index, end - index), null, null, index, end));
                     index = end;
                 }
             }
@@ -190,14 +172,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             bool wholeToken = true
         )
         {
-            if (
-                input == null
-                || string.IsNullOrEmpty(value)
-                || start < 0
-                || length < 0
-                || input.Length < start
-                || input.Length - start < length
-            )
+            if (input == null || string.IsNullOrEmpty(value) || start < 0 || length < 0 || input.Length < start || input.Length - start < length)
             {
                 insertion = string.Empty;
                 replacementStart = start;
@@ -260,11 +235,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return false;
             }
 
-            if (
-                !quotedInsertion
-                && start + length < input.Length
-                && !IsSeparator(input[start + length])
-            )
+            if (!quotedInsertion && start + length < input.Length && !IsSeparator(input[start + length]))
             {
                 insertion = string.Empty;
                 replacementStart = start;
@@ -284,17 +255,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return insertion;
             }
 
-            TryPrepareInsertion(
-                string.Empty,
-                insertion,
-                0,
-                0,
-                false,
-                out string serialized,
-                out _,
-                out _,
-                wholeToken: false
-            );
+            TryPrepareInsertion(string.Empty, insertion, 0, 0, false, out string serialized, out _, out _, wholeToken: false);
             return serialized;
         }
 
@@ -312,11 +273,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             return char.IsWhiteSpace(c);
         }
 
-        private static bool TrySerializeValue(
-            string value,
-            out string insertion,
-            out bool quotedInsertion
-        )
+        private static bool TrySerializeValue(string value, out string insertion, out bool quotedInsertion)
         {
             bool requiresQuote = value[0] == '$' || CommandArg.Quotes.Contains(value[0]);
 

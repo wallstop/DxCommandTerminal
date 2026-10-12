@@ -382,8 +382,7 @@
             {
                 Debug.LogWarning(
                     LogTextSanitizer.Sanitize(
-                        $"Control Order is missing the following controls: [{string.Join(", ", missingControls)}]. "
-                            + "Input for these will not be handled. Is this intentional?"
+                        $"Control Order is missing the following controls: [{string.Join(", ", missingControls)}]. " + "Input for these will not be handled. Is this intentional?"
                     ),
                     this
                 );

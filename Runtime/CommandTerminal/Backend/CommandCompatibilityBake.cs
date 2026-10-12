@@ -63,9 +63,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         {
             List<AttributedCommand> commands = new();
             Dictionary<Assembly, bool> shippingAssemblies = new();
-            foreach (
-                MethodInfo method in TypeCache.GetMethodsWithAttribute<RegisterCommandAttribute>()
-            )
+            foreach (MethodInfo method in TypeCache.GetMethodsWithAttribute<RegisterCommandAttribute>())
             {
                 if (method == null || !method.IsStatic)
                 {
@@ -90,8 +88,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                     continue;
                 }
 
-                RegisterCommandAttribute attribute =
-                    method.GetCustomAttribute<RegisterCommandAttribute>(false);
+                RegisterCommandAttribute attribute = method.GetCustomAttribute<RegisterCommandAttribute>(false);
                 if (attribute == null)
                 {
                     continue;
@@ -114,9 +111,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             does not contain are inert through ignoreIfMissing="1".
          */
 
-        internal static List<PreservationEntry> CollectPreservations(
-            IReadOnlyList<AttributedCommand> commands
-        )
+        internal static List<PreservationEntry> CollectPreservations(IReadOnlyList<AttributedCommand> commands)
         {
             List<PreservationEntry> entries = new();
             if (commands == null || commands.Count == 0)
@@ -145,24 +140,14 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                     continue;
                 }
 
-                if (
-                    IsRootedByGeneratedCode(
-                        command.Assembly,
-                        declaringType,
-                        method,
-                        catalogAssemblies
-                    )
-                )
+                if (IsRootedByGeneratedCode(command.Assembly, declaringType, method, catalogAssemblies))
                 {
                     continue;
                 }
 
                 string assemblyName = command.Assembly.GetName().Name;
                 string typeFullName = declaringType.FullName;
-                if (
-                    string.IsNullOrWhiteSpace(assemblyName)
-                    || string.IsNullOrWhiteSpace(typeFullName)
-                )
+                if (string.IsNullOrWhiteSpace(assemblyName) || string.IsNullOrWhiteSpace(typeFullName))
                 {
                     continue;
                 }
@@ -190,10 +175,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             return typeFullName.Replace('+', '/');
         }
 
-        internal static bool TryBuildManifest(
-            IReadOnlyList<PreservationEntry> entries,
-            out string manifest
-        )
+        internal static bool TryBuildManifest(IReadOnlyList<PreservationEntry> entries, out string manifest)
         {
             if (entries == null || entries.Count == 0)
             {
@@ -218,9 +200,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             for (int i = 0; i < entryCount; )
             {
                 PreservationEntry entry = ordered[i];
-                lines.Add(
-                    $"  <assembly fullname=\"{SecurityElement.Escape(entry.AssemblyName)}\" ignoreIfMissing=\"1\">"
-                );
+                lines.Add($"  <assembly fullname=\"{SecurityElement.Escape(entry.AssemblyName)}\" ignoreIfMissing=\"1\">");
                 for (; i < entryCount; )
                 {
                     if (!IsSameAssembly(ordered[i], entry.AssemblyName))
@@ -229,16 +209,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                     }
 
                     PreservationEntry typeEntry = ordered[i];
-                    lines.Add(
-                        $"    <type fullname=\"{SecurityElement.Escape(ToLinkerTypeName(typeEntry.TypeFullName))}\" preserve=\"nothing\">"
-                    );
+                    lines.Add($"    <type fullname=\"{SecurityElement.Escape(ToLinkerTypeName(typeEntry.TypeFullName))}\" preserve=\"nothing\">");
                     string lastMethodName = null;
                     for (; i < entryCount; ++i)
                     {
-                        if (
-                            !IsSameAssembly(ordered[i], entry.AssemblyName)
-                            || !IsSameType(ordered[i], typeEntry.TypeFullName)
-                        )
+                        if (!IsSameAssembly(ordered[i], entry.AssemblyName) || !IsSameType(ordered[i], typeEntry.TypeFullName))
                         {
                             break;
                         }
@@ -250,9 +225,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                         }
 
                         lastMethodName = methodName;
-                        lines.Add(
-                            $"      <method name=\"{SecurityElement.Escape(methodName)}\" />"
-                        );
+                        lines.Add($"      <method name=\"{SecurityElement.Escape(methodName)}\" />");
                     }
 
                     lines.Add("    </type>");
@@ -299,12 +272,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
             catch (Exception e)
             {
-                Debug.LogWarning(
-                    LogTextSanitizer.Sanitize(
-                        $"[DxCommandTerminal] Player compatibility bake manifest write failed: "
-                            + $"{e}"
-                    )
-                );
+                Debug.LogWarning(LogTextSanitizer.Sanitize($"[DxCommandTerminal] Player compatibility bake manifest write failed: " + $"{e}"));
                 path = null;
                 return false;
             }
@@ -317,11 +285,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return false;
             }
 
-            for (
-                Type containing = method.DeclaringType;
-                containing != null;
-                containing = containing.DeclaringType
-            )
+            for (Type containing = method.DeclaringType; containing != null; containing = containing.DeclaringType)
             {
                 if (containing.IsGenericTypeDefinition)
                 {
@@ -333,12 +297,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             return parameters.Length == 1 && parameters[0].ParameterType == typeof(CommandArg[]);
         }
 
-        internal static bool IsRootedByGeneratedCode(
-            Assembly assembly,
-            Type declaringType,
-            MethodInfo method,
-            Dictionary<Assembly, bool> catalogAssemblies
-        )
+        internal static bool IsRootedByGeneratedCode(Assembly assembly, Type declaringType, MethodInfo method, Dictionary<Assembly, bool> catalogAssemblies)
         {
             if (!catalogAssemblies.TryGetValue(assembly, out bool hasCatalog))
             {
@@ -392,25 +351,15 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         private static bool HasCompanionBinder(Type declaringType)
         {
-            Type companion = declaringType.GetNestedType(
-                PartialCompanionTypeName,
-                BindingFlags.Public | BindingFlags.NonPublic
-            );
+            Type companion = declaringType.GetNestedType(PartialCompanionTypeName, BindingFlags.Public | BindingFlags.NonPublic);
             if (companion == null)
             {
                 return false;
             }
 
-            foreach (
-                MethodInfo binder in companion.GetMethods(
-                    BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic
-                )
-            )
+            foreach (MethodInfo binder in companion.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
             {
-                if (
-                    binder.ReturnType == typeof(Action<CommandArg[]>)
-                    && 0 == binder.GetParameters().Length
-                )
+                if (binder.ReturnType == typeof(Action<CommandArg[]>) && 0 == binder.GetParameters().Length)
                 {
                     return true;
                 }
@@ -454,10 +403,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                     continue;
                 }
 
-                if (
-                    string.Equals(name, "UnityEngine.TestRunner", StringComparison.Ordinal)
-                    || 0 <= name.IndexOf("nunit", StringComparison.OrdinalIgnoreCase)
-                )
+                if (string.Equals(name, "UnityEngine.TestRunner", StringComparison.Ordinal) || 0 <= name.IndexOf("nunit", StringComparison.OrdinalIgnoreCase))
                 {
                     return true;
                 }
@@ -535,18 +481,12 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             the exact handler set the player domain will hold.
          */
 
-        public string GenerateAdditionalLinkXmlFile(
-            BuildReport report,
-            UnityLinkerBuildPipelineData data
-        )
+        public string GenerateAdditionalLinkXmlFile(BuildReport report, UnityLinkerBuildPipelineData data)
         {
             List<PreservationEntry> entries = CollectPreservations(CollectAttributedCommands());
             if (!TryBuildManifest(entries, out string manifest))
             {
-                Debug.Log(
-                    "[DxCommandTerminal] Player compatibility bake: every discovered "
-                        + "command handler is rooted by generated code; nothing to preserve"
-                );
+                Debug.Log("[DxCommandTerminal] Player compatibility bake: every discovered " + "command handler is rooted by generated code; nothing to preserve");
                 return null;
             }
 
@@ -560,12 +500,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return null;
             }
 
-            Debug.Log(
-                LogTextSanitizer.Sanitize(
-                    $"[DxCommandTerminal] Player compatibility bake preserved {entries.Count} "
-                        + $"reflection-bound command handler(s) -> {path}"
-                )
-            );
+            Debug.Log(LogTextSanitizer.Sanitize($"[DxCommandTerminal] Player compatibility bake preserved {entries.Count} " + $"reflection-bound command handler(s) -> {path}"));
             return path;
         }
 
@@ -577,11 +512,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             public readonly MethodInfo Method;
             public readonly RegisterCommandAttribute Attribute;
 
-            public AttributedCommand(
-                Assembly assembly,
-                MethodInfo method,
-                RegisterCommandAttribute attribute
-            )
+            public AttributedCommand(Assembly assembly, MethodInfo method, RegisterCommandAttribute attribute)
             {
                 Assembly = assembly;
                 Method = method;

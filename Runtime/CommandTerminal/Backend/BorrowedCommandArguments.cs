@@ -267,13 +267,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             private int _index;
             private CommandArg _current;
 
-            internal Enumerator(
-                CommandArg[] array,
-                List<CommandArg> list,
-                IReadOnlyList<CommandArg> fallback,
-                int offset,
-                int count
-            )
+            internal Enumerator(CommandArg[] array, List<CommandArg> list, IReadOnlyList<CommandArg> fallback, int offset, int count)
             {
                 _array = array;
                 _list = list;

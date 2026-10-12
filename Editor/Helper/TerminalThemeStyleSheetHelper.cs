@@ -43,10 +43,7 @@
             }
 
             string assetPath = AssetDatabase.GetAssetPath(styleSheetAsset);
-            if (
-                string.IsNullOrWhiteSpace(assetPath)
-                || !assetPath.EndsWith(".uss", StringComparison.OrdinalIgnoreCase)
-            )
+            if (string.IsNullOrWhiteSpace(assetPath) || !assetPath.EndsWith(".uss", StringComparison.OrdinalIgnoreCase))
             {
                 return Array.Empty<string>();
             }
@@ -56,20 +53,10 @@
                 string ussContent = File.ReadAllText(assetPath);
 
                 // Remove block comments /* ... */
-                ussContent = Regex.Replace(
-                    ussContent,
-                    @"/\*.*?\*/",
-                    string.Empty,
-                    RegexOptions.Singleline
-                );
+                ussContent = Regex.Replace(ussContent, @"/\*.*?\*/", string.Empty, RegexOptions.Singleline);
 
                 // Remove line comments // ...
-                ussContent = Regex.Replace(
-                    ussContent,
-                    "//.*$",
-                    string.Empty,
-                    RegexOptions.Multiline
-                );
+                ussContent = Regex.Replace(ussContent, "//.*$", string.Empty, RegexOptions.Multiline);
 
                 SortedSet<string> selectors = new(StringComparer.OrdinalIgnoreCase);
 
@@ -83,16 +70,10 @@
                         break;
                     }
 
-                    int previousRuleEnd = ussContent.LastIndexOf(
-                        '}',
-                        braceIndex - 1,
-                        braceIndex - lastIndex
-                    );
+                    int previousRuleEnd = ussContent.LastIndexOf('}', braceIndex - 1, braceIndex - lastIndex);
                     int selectorStartIndex = previousRuleEnd < 0 ? lastIndex : previousRuleEnd + 1;
 
-                    string selectorPart = ussContent
-                        .Substring(selectorStartIndex, braceIndex - selectorStartIndex)
-                        .Trim();
+                    string selectorPart = ussContent.Substring(selectorStartIndex, braceIndex - selectorStartIndex).Trim();
 
                     if (!string.IsNullOrWhiteSpace(selectorPart))
                     {
@@ -117,19 +98,9 @@
                                 {
                                     nextObjectBraceIndex = contentLength;
                                 }
-                                string objectContents = ussContent.Substring(
-                                    selectorStartIndex,
-                                    nextObjectBraceIndex - selectorStartIndex
-                                );
+                                string objectContents = ussContent.Substring(selectorStartIndex, nextObjectBraceIndex - selectorStartIndex);
 
-                                if (
-                                    RequiredVariables.Exists(requiredVariable =>
-                                        !objectContents.Contains(
-                                            requiredVariable,
-                                            StringComparison.OrdinalIgnoreCase
-                                        )
-                                    )
-                                )
+                                if (RequiredVariables.Exists(requiredVariable => !objectContents.Contains(requiredVariable, StringComparison.OrdinalIgnoreCase)))
                                 {
                                     return Array.Empty<string>();
                                 }

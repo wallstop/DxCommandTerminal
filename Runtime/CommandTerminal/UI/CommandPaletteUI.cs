@@ -115,8 +115,7 @@
                     return false;
                 }
 
-                VisualElement focused =
-                    _input.panel?.focusController?.focusedElement as VisualElement;
+                VisualElement focused = _input.panel?.focusController?.focusedElement as VisualElement;
                 return focused != null && (focused == _input || _input.Contains(focused));
             }
         }
@@ -600,8 +599,7 @@
 
             if (_logCaretPasses)
             {
-                VisualElement focused =
-                    _input.panel?.focusController?.focusedElement as VisualElement;
+                VisualElement focused = _input.panel?.focusController?.focusedElement as VisualElement;
                 string focusOwner =
                     focused == null ? "none"
                     : focused == _input || _input.Contains(focused) ? "input"
@@ -678,15 +676,7 @@
                 return false;
             }
 
-            if (
-                !_inputUndo.Step(
-                    _input.value,
-                    _input.cursorIndex,
-                    forward,
-                    out string text,
-                    out int caret
-                )
-            )
+            if (!_inputUndo.Step(_input.value, _input.cursorIndex, forward, out string text, out int caret))
             {
                 return false;
             }
@@ -876,11 +866,7 @@
                 return;
             }
 
-            _paletteRoot = new VisualElement
-            {
-                name = PaletteRootName,
-                pickingMode = PickingMode.Position,
-            };
+            _paletteRoot = new VisualElement { name = PaletteRootName, pickingMode = PickingMode.Position };
             _paletteRoot.AddToClassList("palette-root");
             _paletteRoot.style.position = Position.Absolute;
             _paletteRoot.style.left = 0;
@@ -1045,10 +1031,7 @@
             }
         }
 
-        private void AppendEligibleCommand(
-            KeyValuePair<string, CommandInfo> entry,
-            CommandExecutionContext context
-        )
+        private void AppendEligibleCommand(KeyValuePair<string, CommandInfo> entry, CommandExecutionContext context)
         {
             if (!context.IsEligibleFor(entry.Value.executionContexts))
             {
@@ -1070,28 +1053,19 @@
                 if (_completionMode)
                 {
                     CommandCompletion completion = _completions[index];
-                    _rowNameLabels[index].text = LogTextSanitizer.Sanitize(
-                        completion.EffectiveDisplayLabel
-                    );
-                    _rowHelpLabels[index].text = LogTextSanitizer.Sanitize(
-                        completion.Description ?? string.Empty
-                    );
+                    _rowNameLabels[index].text = LogTextSanitizer.Sanitize(completion.EffectiveDisplayLabel);
+                    _rowHelpLabels[index].text = LogTextSanitizer.Sanitize(completion.Description ?? string.Empty);
                     continue;
                 }
 
                 _rowNameLabels[index].text = LogTextSanitizer.Sanitize(_matchNames[index]);
                 string help = null;
-                if (
-                    shell != null
-                    && shell.Commands.TryGetValue(_matchNames[index], out CommandInfo info)
-                )
+                if (shell != null && shell.Commands.TryGetValue(_matchNames[index], out CommandInfo info))
                 {
                     help = info.help;
                 }
 
-                _rowHelpLabels[index].text = string.IsNullOrWhiteSpace(help)
-                    ? string.Empty
-                    : LogTextSanitizer.Sanitize(help);
+                _rowHelpLabels[index].text = string.IsNullOrWhiteSpace(help) ? string.Empty : LogTextSanitizer.Sanitize(help);
             }
 
             int excessRowStart = matchCount;
@@ -1119,13 +1093,7 @@
             }
 
             _completionsBuffer.Clear();
-            bool hasProvider = shell.TryComplete(
-                CommandExecutionContext.Current,
-                query,
-                NormalizeCaret(caret, query),
-                _completionsBuffer,
-                out CommandCompletionContext context
-            );
+            bool hasProvider = shell.TryComplete(CommandExecutionContext.Current, query, NormalizeCaret(caret, query), _completionsBuffer, out CommandCompletionContext context);
             if (!hasProvider || !IsEligibleCompletionTarget(context, shell))
             {
                 ClearCompletionState();
@@ -1154,10 +1122,7 @@
             resolved command is verified here: an Editor-only command must not
             offer its argument candidates from a player or Edit Mode context.
          */
-        private bool IsEligibleCompletionTarget(
-            CommandCompletionContext context,
-            CommandShell shell
-        )
+        private bool IsEligibleCompletionTarget(CommandCompletionContext context, CommandShell shell)
         {
             _tokenBuffer.Clear();
             CommandTokenizer.Tokenize(context.Input, _tokenBuffer);
@@ -1166,8 +1131,7 @@
                 return false;
             }
 
-            return shell.Commands.TryGetValue(_tokenBuffer[0].Contents, out CommandInfo info)
-                && context.ExecutionContext.IsEligibleFor(info.executionContexts);
+            return shell.Commands.TryGetValue(_tokenBuffer[0].Contents, out CommandInfo info) && context.ExecutionContext.IsEligibleFor(info.executionContexts);
         }
 
         private void ApplyCompletion(CommandCompletion completion)
@@ -1186,12 +1150,7 @@
                 replacementLength = _completionContext.ReplacementLength;
             }
 
-            if (
-                replacementStart < 0
-                || replacementLength < 0
-                || input.Length < replacementStart
-                || input.Length - replacementStart < replacementLength
-            )
+            if (replacementStart < 0 || replacementLength < 0 || input.Length < replacementStart || input.Length - replacementStart < replacementLength)
             {
                 return;
             }
@@ -1206,16 +1165,13 @@
                     out string insertion,
                     out replacementStart,
                     out replacementLength,
-                    wholeToken: replacementStart == _completionContext.ReplacementStart
-                        && replacementLength == _completionContext.ReplacementLength
+                    wholeToken: replacementStart == _completionContext.ReplacementStart && replacementLength == _completionContext.ReplacementLength
                 )
             )
             {
                 return;
             }
-            string newInput = input
-                .Remove(replacementStart, replacementLength)
-                .Insert(replacementStart, insertion);
+            string newInput = input.Remove(replacementStart, replacementLength).Insert(replacementStart, insertion);
             /*
                 The value change rides SetValueWithoutNotify so exactly one
                 refresh runs, through SetQuery below; the caret lands after
@@ -1227,11 +1183,7 @@
             QueueCaret(caretIndex);
             _inputUndo.Observe(newInput, caretIndex);
             int completionCaret = caretIndex;
-            if (
-                1 < insertionLength
-                && CommandArg.Quotes.Contains(insertion[0])
-                && insertion[insertionLength - 1] == insertion[0]
-            )
+            if (1 < insertionLength && CommandArg.Quotes.Contains(insertion[0]) && insertion[insertionLength - 1] == insertion[0])
             {
                 --completionCaret;
             }
@@ -1387,9 +1339,7 @@
              */
             string previous = evt.previousValue ?? string.Empty;
             string updated = evt.newValue ?? string.Empty;
-            int caret = updated.StartsWith(previous, StringComparison.Ordinal)
-                ? updated.Length
-                : _input.cursorIndex;
+            int caret = updated.StartsWith(previous, StringComparison.Ordinal) ? updated.Length : _input.cursorIndex;
             /*
                 The developer's own edit, and the one place it is recorded. The
                 bar's own writes ride SetInputValue and the completion path, so
@@ -1666,10 +1616,7 @@
                 whole, so an unbounded error bar would push the bar off screen.
              */
             _output.style.display = DisplayStyle.None;
-            _feedback.text = ClampOutputLength(
-                LogTextSanitizer.Sanitize(message),
-                MaxOutputCharacters
-            );
+            _feedback.text = ClampOutputLength(LogTextSanitizer.Sanitize(message), MaxOutputCharacters);
             _feedback.style.display = DisplayStyle.Flex;
         }
 

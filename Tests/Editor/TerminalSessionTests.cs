@@ -41,14 +41,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             TerminalStackTraceMode stackTraceMode = TerminalStackTraceMode.All
         )
         {
-            return new TerminalSession.Config(
-                logBufferSize,
-                historyBufferSize,
-                ignoredLogTypes,
-                disabledCommands,
-                ignoreDefaultCommands,
-                stackTraceMode
-            );
+            return new TerminalSession.Config(logBufferSize, historyBufferSize, ignoredLogTypes, disabledCommands, ignoreDefaultCommands, stackTraceMode);
         }
 
         [SetUp]
@@ -79,16 +72,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.That(session.History != null, "History should be created when null");
             Assert.That(session.Shell != null, "Shell should be created when null");
             Assert.That(session.AutoComplete != null, "AutoComplete should be created when null");
-            Assert.AreEqual(
-                64,
-                session.Buffer.Capacity,
-                "Buffer capacity should match the configured log buffer size"
-            );
-            Assert.AreEqual(
-                64,
-                session.History.Capacity,
-                "History capacity should match the configured history buffer size"
-            );
+            Assert.AreEqual(64, session.Buffer.Capacity, "Buffer capacity should match the configured log buffer size");
+            Assert.AreEqual(64, session.History.Capacity, "History capacity should match the configured history buffer size");
         }
 
         [Test]
@@ -97,16 +82,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             TerminalSession session = new();
             session.Apply(Config(logBufferSize: -5, historyBufferSize: -1), force: false);
 
-            Assert.AreEqual(
-                0,
-                session.Buffer.Capacity,
-                "A negative log buffer size must clamp to zero"
-            );
-            Assert.AreEqual(
-                0,
-                session.History.Capacity,
-                "A negative history buffer size must clamp to zero"
-            );
+            Assert.AreEqual(0, session.Buffer.Capacity, "A negative log buffer size must clamp to zero");
+            Assert.AreEqual(0, session.History.Capacity, "A negative history buffer size must clamp to zero");
         }
 
         [Test]
@@ -123,10 +100,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             bool reconfigured = session.Apply(Config(), force: false);
 
-            Assert.IsFalse(
-                reconfigured,
-                "An unchanged configuration must not reconfigure the shell"
-            );
+            Assert.IsFalse(reconfigured, "An unchanged configuration must not reconfigure the shell");
             Assert.AreSame(buffer, session.Buffer, "Buffer should be reused");
             Assert.AreSame(history, session.History, "History should be reused");
             Assert.AreSame(shell, session.Shell, "Shell should be reused");
@@ -167,23 +141,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             TerminalSession session = new();
             session.Apply(Config(ignoredLogTypes: new[] { TerminalLogType.Error }), force: true);
             CommandLog buffer = session.Buffer;
-            Assert.IsFalse(
-                buffer.HandleLog("dropped", TerminalLogType.Error),
-                "Sanity: an ignored type must be dropped while configured"
-            );
+            Assert.IsFalse(buffer.HandleLog("dropped", TerminalLogType.Error), "Sanity: an ignored type must be dropped while configured");
             Assert.AreEqual(0, buffer.Count);
 
             session.Apply(Config(ignoredLogTypes: new[] { TerminalLogType.Warning }), force: false);
 
             Assert.AreSame(buffer, session.Buffer, "Buffer should be reused when syncing filters");
-            Assert.IsTrue(
-                buffer.HandleLog("kept", TerminalLogType.Error),
-                "A previously ignored type should be accepted after resync"
-            );
-            Assert.IsFalse(
-                buffer.HandleLog("dropped", TerminalLogType.Warning),
-                "A newly ignored type must be dropped after resync"
-            );
+            Assert.IsTrue(buffer.HandleLog("kept", TerminalLogType.Error), "A previously ignored type should be accepted after resync");
+            Assert.IsFalse(buffer.HandleLog("dropped", TerminalLogType.Warning), "A newly ignored type must be dropped after resync");
         }
 
         [Test]
@@ -192,36 +157,19 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             TerminalSession session = new();
             session.Apply(Config(stackTraceMode: TerminalStackTraceMode.All), force: true);
             CommandLog buffer = session.Buffer;
-            Assert.IsTrue(
-                buffer.HandleLog("traced", TerminalLogType.ShellMessage),
-                "Sanity: the traced write must land"
-            );
+            Assert.IsTrue(buffer.HandleLog("traced", TerminalLogType.ShellMessage), "Sanity: the traced write must land");
             buffer.TryGetLast(out LogItem traced);
-            Assert.AreNotEqual(
-                string.Empty,
-                traced.stackTrace,
-                "Sanity: mode All must capture a trace"
-            );
+            Assert.AreNotEqual(string.Empty, traced.stackTrace, "Sanity: mode All must capture a trace");
 
             session.Apply(Config(stackTraceMode: TerminalStackTraceMode.Disabled), force: false);
 
             Assert.AreSame(buffer, session.Buffer, "Buffer should be reused when syncing mode");
             Assert.AreEqual(TerminalStackTraceMode.Disabled, buffer.StackTraceMode);
-            Assert.IsTrue(
-                buffer.HandleLog("untraced", TerminalLogType.ShellMessage),
-                "Sanity: the untraced write must land"
-            );
+            Assert.IsTrue(buffer.HandleLog("untraced", TerminalLogType.ShellMessage), "Sanity: the untraced write must land");
             buffer.TryGetLast(out LogItem untraced);
-            Assert.AreEqual(
-                string.Empty,
-                untraced.stackTrace,
-                "Mode Disabled applied through resync must store no trace"
-            );
+            Assert.AreEqual(string.Empty, untraced.stackTrace, "Mode Disabled applied through resync must store no trace");
 
-            session.Apply(
-                Config(stackTraceMode: TerminalStackTraceMode.ErrorsAndWarnings),
-                force: false
-            );
+            session.Apply(Config(stackTraceMode: TerminalStackTraceMode.ErrorsAndWarnings), force: false);
 
             Assert.AreEqual(TerminalStackTraceMode.ErrorsAndWarnings, buffer.StackTraceMode);
         }
@@ -239,23 +187,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 replace) are gone: whatever a logging thread sees after the
                 apply is one applied configuration, never a half of two.
              */
-            session.Apply(
-                Config(
-                    stackTraceMode: TerminalStackTraceMode.Disabled,
-                    ignoredLogTypes: new[] { TerminalLogType.Warning }
-                ),
-                force: false
-            );
+            session.Apply(Config(stackTraceMode: TerminalStackTraceMode.Disabled, ignoredLogTypes: new[] { TerminalLogType.Warning }), force: false);
 
             Assert.AreSame(buffer, session.Buffer, "Buffer should be reused when syncing config");
             Assert.AreEqual(TerminalStackTraceMode.Disabled, buffer.StackTraceMode);
             foreach (TerminalLogType type in AllLogTypes)
             {
-                Assert.AreEqual(
-                    type == TerminalLogType.Warning,
-                    buffer.IsIgnored(type),
-                    $"The applied filter must replace the old one whole (IsIgnored({type}))"
-                );
+                Assert.AreEqual(type == TerminalLogType.Warning, buffer.IsIgnored(type), $"The applied filter must replace the old one whole (IsIgnored({type}))");
             }
         }
 
@@ -263,33 +201,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void ApplyTreatsNullListsAsEmpty()
         {
             TerminalSession session = new();
-            session.Apply(
-                Config(
-                    ignoredLogTypes: new[] { TerminalLogType.Error },
-                    disabledCommands: new[] { "help" }
-                ),
-                force: true
-            );
+            session.Apply(Config(ignoredLogTypes: new[] { TerminalLogType.Error }, disabledCommands: new[] { "help" }), force: true);
             session.Shell.EnsureAutoCommandsRegistered();
-            Assert.IsFalse(
-                session.Buffer.HandleLog("dropped", TerminalLogType.Error),
-                "Sanity: the ignored type must be dropped while configured"
-            );
-            Assert.IsTrue(
-                session.Shell.IgnoredCommands.Contains("help"),
-                "Sanity: the disabled command must be ignored while configured"
-            );
+            Assert.IsFalse(session.Buffer.HandleLog("dropped", TerminalLogType.Error), "Sanity: the ignored type must be dropped while configured");
+            Assert.IsTrue(session.Shell.IgnoredCommands.Contains("help"), "Sanity: the disabled command must be ignored while configured");
 
             session.Apply(Config(), force: false);
 
-            Assert.IsTrue(
-                session.Buffer.HandleLog("kept", TerminalLogType.Error),
-                "A null ignored list must clear the buffer's ignored types"
-            );
-            Assert.IsEmpty(
-                session.Shell.IgnoredCommands,
-                "A null disabled list must clear the shell's ignored commands"
-            );
+            Assert.IsTrue(session.Buffer.HandleLog("kept", TerminalLogType.Error), "A null ignored list must clear the buffer's ignored types");
+            Assert.IsEmpty(session.Shell.IgnoredCommands, "A null disabled list must clear the shell's ignored commands");
         }
 
         [Test]
@@ -298,35 +218,20 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             TerminalSession session = new();
             session.Apply(Config(), force: true);
             session.Shell.EnsureAutoCommandsRegistered();
-            Assert.IsTrue(
-                session.Shell.Commands.ContainsKey("log"),
-                "Sanity: 'log' should be registered before being disabled"
-            );
+            Assert.IsTrue(session.Shell.Commands.ContainsKey("log"), "Sanity: 'log' should be registered before being disabled");
 
-            bool reconfigured = session.Apply(
-                Config(disabledCommands: new[] { "log" }),
-                force: false
-            );
+            bool reconfigured = session.Apply(Config(disabledCommands: new[] { "log" }), force: false);
 
             Assert.IsTrue(reconfigured, "Changing disabled commands must reconfigure the shell");
             session.Shell.EnsureAutoCommandsRegistered();
-            Assert.IsFalse(
-                session.Shell.Commands.ContainsKey("log"),
-                "A disabled command must not be registered"
-            );
-            Assert.IsTrue(
-                session.Shell.IgnoredCommands.Contains("log"),
-                "The disabled command should be reported in IgnoredCommands"
-            );
+            Assert.IsFalse(session.Shell.Commands.ContainsKey("log"), "A disabled command must not be registered");
+            Assert.IsTrue(session.Shell.IgnoredCommands.Contains("log"), "The disabled command should be reported in IgnoredCommands");
 
             reconfigured = session.Apply(Config(), force: false);
 
             Assert.IsTrue(reconfigured, "Clearing disabled commands must reconfigure the shell");
             session.Shell.EnsureAutoCommandsRegistered();
-            Assert.IsTrue(
-                session.Shell.Commands.ContainsKey("log"),
-                "A re-enabled command should be registered again"
-            );
+            Assert.IsTrue(session.Shell.Commands.ContainsKey("log"), "A re-enabled command should be registered again");
         }
 
         [TestCase(true)]
@@ -337,15 +242,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             session.Apply(Config(ignoreDefaultCommands: ignoreDefaultCommands), force: true);
             session.Shell.EnsureAutoCommandsRegistered();
 
-            Assert.AreEqual(
-                ignoreDefaultCommands,
-                session.Shell.IgnoringDefaultCommands,
-                "Shell.IgnoringDefaultCommands should match the applied configuration"
-            );
-            Assert.IsNotEmpty(
-                KnownDefaultCommands,
-                "Sanity: expected at least one default command"
-            );
+            Assert.AreEqual(ignoreDefaultCommands, session.Shell.IgnoringDefaultCommands, "Shell.IgnoringDefaultCommands should match the applied configuration");
+            Assert.IsNotEmpty(KnownDefaultCommands, "Sanity: expected at least one default command");
             foreach (string command in KnownDefaultCommands)
             {
                 Assert.AreEqual(
@@ -371,24 +269,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             bool reconfigured = session.Apply(Config(), force: true);
 
-            Assert.IsTrue(
-                reconfigured,
-                "Force must reconfigure the recreated shell so its auto-command "
-                    + "configuration is applied"
-            );
+            Assert.IsTrue(reconfigured, "Force must reconfigure the recreated shell so its auto-command " + "configuration is applied");
             Assert.AreNotSame(buffer, session.Buffer, "Force must recreate the buffer");
             Assert.AreNotSame(history, session.History, "Force must recreate the history");
             Assert.AreNotSame(shell, session.Shell, "Force must recreate the shell");
-            Assert.AreNotSame(
-                autoComplete,
-                session.AutoComplete,
-                "Force must recreate the auto-complete"
-            );
-            Assert.AreEqual(
-                0,
-                session.Buffer.Count,
-                "A recreated buffer must not retain the previous buffer's logs"
-            );
+            Assert.AreNotSame(autoComplete, session.AutoComplete, "Force must recreate the auto-complete");
+            Assert.AreEqual(0, session.Buffer.Count, "A recreated buffer must not retain the previous buffer's logs");
         }
 
         [Test]
@@ -397,31 +283,16 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             TerminalSession session = new();
             session.Apply(Config(), force: true);
             session.Shell.EnsureAutoCommandsRegistered();
-            Assert.IsTrue(
-                session.Shell.RunCommand("log"),
-                "Sanity: 'log' should run to create a history entry"
-            );
+            Assert.IsTrue(session.Shell.RunCommand("log"), "Sanity: 'log' should run to create a history entry");
             CommandHistory history = session.History;
-            string[] events = session
-                .History.GetHistory(onlySuccess: true, onlyErrorFree: true)
-                .ToArray();
+            string[] events = session.History.GetHistory(onlySuccess: true, onlyErrorFree: true).ToArray();
             Assert.IsNotEmpty(events, "Sanity: expected a history entry after running 'log'");
 
             session.Apply(Config(disabledCommands: new[] { "log" }), force: false);
 
-            Assert.AreSame(
-                history,
-                session.History,
-                "A shell reconfiguration must preserve the history instance"
-            );
-            string[] currentEvents = session
-                .History.GetHistory(onlySuccess: true, onlyErrorFree: true)
-                .ToArray();
-            Assert.AreEqual(
-                events.Length,
-                currentEvents.Length,
-                "History entries must survive a shell reconfiguration"
-            );
+            Assert.AreSame(history, session.History, "A shell reconfiguration must preserve the history instance");
+            string[] currentEvents = session.History.GetHistory(onlySuccess: true, onlyErrorFree: true).ToArray();
+            Assert.AreEqual(events.Length, currentEvents.Length, "History entries must survive a shell reconfiguration");
             for (int i = 0; i < events.Length; ++i)
             {
                 Assert.AreEqual(events[i], currentEvents[i], $"History event {i} wasn't the same!");
@@ -434,21 +305,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             TerminalSession session = new();
             session.Apply(Config(), force: true);
 
-            Assert.IsFalse(
-                session.Shell.AutoCommandsRegistered,
-                "Apply must not walk the command catalog; registration is deferred"
-            );
+            Assert.IsFalse(session.Shell.AutoCommandsRegistered, "Apply must not walk the command catalog; registration is deferred");
 
             session.Shell.EnsureAutoCommandsRegistered();
 
-            Assert.IsTrue(
-                session.Shell.AutoCommandsRegistered,
-                "The first explicit readiness request should complete registration"
-            );
-            Assert.IsNotEmpty(
-                session.Shell.AutoRegisteredCommands,
-                "Deferred registration should surface auto commands"
-            );
+            Assert.IsTrue(session.Shell.AutoCommandsRegistered, "The first explicit readiness request should complete registration");
+            Assert.IsNotEmpty(session.Shell.AutoRegisteredCommands, "Deferred registration should surface auto commands");
         }
 
         [Test]
@@ -467,31 +329,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreSame(buffer, Terminal.Buffer, "Terminal.Buffer should round-trip");
             Assert.AreSame(history, Terminal.History, "Terminal.History should round-trip");
             Assert.AreSame(shell, Terminal.Shell, "Terminal.Shell should round-trip");
-            Assert.AreSame(
-                autoComplete,
-                Terminal.AutoComplete,
-                "Terminal.AutoComplete should round-trip"
-            );
-            Assert.AreSame(
-                buffer,
-                TerminalSession.Current.Buffer,
-                "Terminal.Buffer should delegate to the current session"
-            );
-            Assert.AreSame(
-                history,
-                TerminalSession.Current.History,
-                "Terminal.History should delegate to the current session"
-            );
-            Assert.AreSame(
-                shell,
-                TerminalSession.Current.Shell,
-                "Terminal.Shell should delegate to the current session"
-            );
-            Assert.AreSame(
-                autoComplete,
-                TerminalSession.Current.AutoComplete,
-                "Terminal.AutoComplete should delegate to the current session"
-            );
+            Assert.AreSame(autoComplete, Terminal.AutoComplete, "Terminal.AutoComplete should round-trip");
+            Assert.AreSame(buffer, TerminalSession.Current.Buffer, "Terminal.Buffer should delegate to the current session");
+            Assert.AreSame(history, TerminalSession.Current.History, "Terminal.History should delegate to the current session");
+            Assert.AreSame(shell, TerminalSession.Current.Shell, "Terminal.Shell should delegate to the current session");
+            Assert.AreSame(autoComplete, TerminalSession.Current.AutoComplete, "Terminal.AutoComplete should delegate to the current session");
         }
 
         [Test]
@@ -502,11 +344,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             bool reconfigured = session.Apply(Config(), force: false);
 
-            Assert.IsTrue(
-                reconfigured,
-                "A shell with pending registration must reapply its auto-command "
-                    + "configuration on every refresh"
-            );
+            Assert.IsTrue(reconfigured, "A shell with pending registration must reapply its auto-command " + "configuration on every refresh");
         }
 
         /*
@@ -525,14 +363,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.That(session.History != null, "EnsureReady must create the history");
             Assert.That(session.Shell != null, "EnsureReady must create the shell");
             Assert.That(session.AutoComplete != null, "EnsureReady must create the auto-complete");
-            Assert.IsTrue(
-                session.Shell.AutoCommandsRegistered,
-                "EnsureReady must complete deferred registration synchronously"
-            );
-            Assert.IsNotEmpty(
-                session.Shell.AutoRegisteredCommands,
-                "EnsureReady should surface auto commands"
-            );
+            Assert.IsTrue(session.Shell.AutoCommandsRegistered, "EnsureReady must complete deferred registration synchronously");
+            Assert.IsNotEmpty(session.Shell.AutoRegisteredCommands, "EnsureReady should surface auto commands");
         }
 
         [Test]
@@ -549,21 +381,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             session.EnsureReady(Config(), force: false);
 
             Assert.AreSame(buffer, session.Buffer, "A repeated readiness call reuses the buffer");
-            Assert.AreSame(
-                history,
-                session.History,
-                "A repeated readiness call reuses the history"
-            );
+            Assert.AreSame(history, session.History, "A repeated readiness call reuses the history");
             Assert.AreSame(shell, session.Shell, "A repeated readiness call reuses the shell");
-            Assert.AreSame(
-                autoComplete,
-                session.AutoComplete,
-                "A repeated readiness call reuses the auto-complete"
-            );
-            Assert.IsTrue(
-                session.Shell.AutoCommandsRegistered,
-                "A repeated readiness call keeps registration complete"
-            );
+            Assert.AreSame(autoComplete, session.AutoComplete, "A repeated readiness call reuses the auto-complete");
+            Assert.IsTrue(session.Shell.AutoCommandsRegistered, "A repeated readiness call keeps registration complete");
         }
     }
 }

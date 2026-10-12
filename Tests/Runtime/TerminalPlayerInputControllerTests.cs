@@ -89,11 +89,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private static List<string> RoutedMessages()
         {
             List<string> messages = new();
-            foreach (
-                MethodInfo method in typeof(TerminalPlayerInputController).GetMethods(
-                    BindingFlags.Public | BindingFlags.Instance
-                )
-            )
+            foreach (MethodInfo method in typeof(TerminalPlayerInputController).GetMethods(BindingFlags.Public | BindingFlags.Instance))
             {
                 if (!method.Name.StartsWith("On", StringComparison.Ordinal))
                 {
@@ -212,17 +208,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void ControlProducesTypedTextFollowsTheTypingRule(string controlName, bool expected)
         {
             InputControl control = ResolveControl(controlName);
-            Assert.That(
-                control,
-                Is.Not.Null,
-                $"Sanity: the live keyboard has a {controlName} control"
-            );
+            Assert.That(control, Is.Not.Null, $"Sanity: the live keyboard has a {controlName} control");
 
-            Assert.That(
-                InputHelpers.ControlProducesTypedText(control),
-                Is.EqualTo(expected),
-                $"ControlProducesTypedText({controlName}) must be {expected}"
-            );
+            Assert.That(InputHelpers.ControlProducesTypedText(control), Is.EqualTo(expected), $"ControlProducesTypedText({controlName}) must be {expected}");
         }
 
         /*
@@ -241,21 +229,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Bind("Close", CharacterKeyPath);
 
             InputSystem.QueueStateEvent(Keyboard.current, default(KeyboardState));
-            InputSystem.QueueStateEvent(
-                Keyboard.current,
-                new KeyboardState(Key.LeftCtrl, Key.Backquote)
-            );
+            InputSystem.QueueStateEvent(Keyboard.current, new KeyboardState(Key.LeftCtrl, Key.Backquote));
             yield return Settle();
 
-            Assert.That(
-                _performedControls,
-                Is.EqualTo(new[] { "backquote" }),
-                "Sanity: the chord's key performed its action"
-            );
-            Assert.IsTrue(
-                _terminal.IsClosed,
-                "A Ctrl chord inserts no character, so it must keep running its message while the field has focus"
-            );
+            Assert.That(_performedControls, Is.EqualTo(new[] { "backquote" }), "Sanity: the chord's key performed its action");
+            Assert.IsTrue(_terminal.IsClosed, "A Ctrl chord inserts no character, so it must keep running its message while the field has focus");
         }
 
         /*
@@ -266,11 +244,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void ControlProducesTypedTextTreatsAnUnnamedControlAsTypingNothing()
         {
-            Assert.That(
-                InputHelpers.ControlProducesTypedText(null),
-                Is.False,
-                "A null control names no key, so a message it drove must run rather than defer"
-            );
+            Assert.That(InputHelpers.ControlProducesTypedText(null), Is.False, "A null control names no key, so a message it drove must run rather than defer");
         }
 
         /*
@@ -289,13 +263,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             int runs = 0;
             Assert.IsTrue(
-                Terminal.Shell.AddCommand(
-                    ProbeCommand,
-                    _ => ++runs,
-                    minArgs: 0,
-                    maxArgs: 0,
-                    help: "test"
-                ),
+                Terminal.Shell.AddCommand(ProbeCommand, _ => ++runs, minArgs: 0, maxArgs: 0, help: "test"),
                 "Sanity: the probe command registers, so completion and Enter have work to do"
             );
 
@@ -320,31 +288,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             PressCharacterKey();
             yield return Settle();
 
-            Assert.That(
-                _performedControls.Count,
-                Is.EqualTo(deferredMessages.Count),
-                "Sanity: every deferred message reached the controller before the rule was applied"
-            );
-            Assert.That(
-                _performedControls,
-                Has.All.EqualTo("backquote"),
-                "Sanity: every action performed on the keyboard key that types its character"
-            );
-            Assert.AreEqual(
-                TerminalState.OpenFull,
-                _terminal.State,
-                "A character key must not change the terminal state while the field has focus"
-            );
-            Assert.AreEqual(
-                0,
-                runs,
-                "A character key must not run the staged command through EnterCommand"
-            );
-            Assert.AreEqual(
-                StagedText,
-                DefaultTerminalInput.Instance.CommandText,
-                "A character key must not complete or navigate the staged text either"
-            );
+            Assert.That(_performedControls.Count, Is.EqualTo(deferredMessages.Count), "Sanity: every deferred message reached the controller before the rule was applied");
+            Assert.That(_performedControls, Has.All.EqualTo("backquote"), "Sanity: every action performed on the keyboard key that types its character");
+            Assert.AreEqual(TerminalState.OpenFull, _terminal.State, "A character key must not change the terminal state while the field has focus");
+            Assert.AreEqual(0, runs, "A character key must not run the staged command through EnterCommand");
+            Assert.AreEqual(StagedText, DefaultTerminalInput.Instance.CommandText, "A character key must not complete or navigate the staged text either");
         }
 
         /*
@@ -364,15 +312,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             PressKey(Key.Escape);
             yield return Settle();
 
-            Assert.That(
-                _performedControls,
-                Is.EqualTo(new[] { "escape" }),
-                "Sanity: the escape action performed on the key that types no character"
-            );
-            Assert.IsTrue(
-                _terminal.IsClosed,
-                "A key that types no character must keep running its message while the field has focus"
-            );
+            Assert.That(_performedControls, Is.EqualTo(new[] { "escape" }), "Sanity: the escape action performed on the key that types no character");
+            Assert.IsTrue(_terminal.IsClosed, "A key that types no character must keep running its message while the field has focus");
         }
 
         /*
@@ -390,41 +331,23 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return WaitForFocusedInput("Sanity: the command field holds panel focus");
 
             InputAction close = _asset.FindAction("Close");
-            close
-                .AddCompositeBinding("1DAxis")
-                .With("Negative", "<Keyboard>/backquote")
-                .With("Positive", "<Keyboard>/escape");
+            close.AddCompositeBinding("1DAxis").With("Negative", "<Keyboard>/backquote").With("Positive", "<Keyboard>/escape");
             close.performed += OnActionPerformed;
             close.Enable();
             _actions.Add(close);
 
             PressKey(Key.Escape);
             yield return Settle();
-            Assert.That(
-                _performedControls,
-                Is.EqualTo(new[] { "escape" }),
-                "Sanity: the composite performed on the key that types no character"
-            );
-            Assert.IsTrue(
-                _terminal.IsClosed,
-                "A composite driven by the key that types no character must run its message"
-            );
+            Assert.That(_performedControls, Is.EqualTo(new[] { "escape" }), "Sanity: the composite performed on the key that types no character");
+            Assert.IsTrue(_terminal.IsClosed, "A composite driven by the key that types no character must run its message");
 
             _terminal.SetState(TerminalState.OpenSmall);
             yield return WaitForFocusedInput("Sanity: the field takes focus again");
             _performedControls.Clear();
             PressCharacterKey();
             yield return Settle();
-            Assert.That(
-                _performedControls,
-                Is.EqualTo(new[] { "backquote" }),
-                "Sanity: the same composite performed on the character key"
-            );
-            Assert.AreEqual(
-                TerminalState.OpenSmall,
-                _terminal.State,
-                "The same composite driven by a character key must defer its message"
-            );
+            Assert.That(_performedControls, Is.EqualTo(new[] { "backquote" }), "Sanity: the same composite performed on the character key");
+            Assert.AreEqual(TerminalState.OpenSmall, _terminal.State, "The same composite driven by a character key must defer its message");
         }
 
         /*
@@ -442,22 +365,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Bind("ToggleSmall", CharacterKeyPath);
 
-            TerminalPlayerInputController controller =
-                _terminalObject.GetComponent<TerminalPlayerInputController>();
+            TerminalPlayerInputController controller = _terminalObject.GetComponent<TerminalPlayerInputController>();
             Assert.That(controller != null, "Sanity: the rig has the controller under test");
-            Assert.IsTrue(
-                _asset.FindAction("ToggleSmall").activeControl == null,
-                "Sanity: no key has been pressed, so the action has no active control to classify"
-            );
+            Assert.IsTrue(_asset.FindAction("ToggleSmall").activeControl == null, "Sanity: no key has been pressed, so the action has no active control to classify");
 
             controller.OnToggleSmall(null);
             yield return null;
 
-            Assert.AreEqual(
-                TerminalState.OpenSmall,
-                _terminal.State,
-                "A message with no action behind it must run as it always has"
-            );
+            Assert.AreEqual(TerminalState.OpenSmall, _terminal.State, "A message with no action behind it must run as it always has");
         }
 
         /*
@@ -470,21 +385,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             yield return SpawnTerminal(open: false);
 
-            Assert.IsTrue(
-                _terminal.IsClosed,
-                "Sanity: nothing has focus while the terminal is closed"
-            );
+            Assert.IsTrue(_terminal.IsClosed, "Sanity: nothing has focus while the terminal is closed");
 
             Bind("ToggleSmall", CharacterKeyPath);
 
             PressCharacterKey();
             yield return Settle();
 
-            Assert.AreEqual(
-                TerminalState.OpenSmall,
-                _terminal.State,
-                "With no console field focused the console key must still open the terminal"
-            );
+            Assert.AreEqual(TerminalState.OpenSmall, _terminal.State, "With no console field focused the console key must still open the terminal");
         }
 
         /*
@@ -503,16 +411,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             PressCharacterKey();
             yield return Settle();
 
-            Assert.That(
-                _performedControls,
-                Is.EqualTo(new[] { "backquote" }),
-                "Sanity: the action performed on the keyboard key"
-            );
-            Assert.AreEqual(
-                TerminalState.OpenSmall,
-                _terminal.State,
-                "A character-bound toggle must run while the field has focus"
-            );
+            Assert.That(_performedControls, Is.EqualTo(new[] { "backquote" }), "Sanity: the action performed on the keyboard key");
+            Assert.AreEqual(TerminalState.OpenSmall, _terminal.State, "A character-bound toggle must run while the field has focus");
         }
 
         /*
@@ -534,18 +434,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Bind("ToggleSmall", NonTypingKeyPath);
             PressKey(Key.Escape);
             yield return Settle();
-            Assert.AreEqual(
-                TerminalState.OpenSmall,
-                _terminal.State,
-                "Sanity: the press runs, because Escape types no character"
-            );
+            Assert.AreEqual(TerminalState.OpenSmall, _terminal.State, "Sanity: the press runs, because Escape types no character");
 
             ReleaseKeys();
             yield return Settle();
-            Assert.IsTrue(
-                _terminal.IsClosed,
-                "A Value action's release runs its message too, so a toggle on such a binding undoes itself"
-            );
+            Assert.IsTrue(_terminal.IsClosed, "A Value action's release runs its message too, so a toggle on such a binding undoes itself");
 
             _terminal.SetState(TerminalState.OpenFull);
             yield return WaitForFocusedInput("Sanity: the field takes focus again");
@@ -553,18 +446,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Bind("ToggleFull", CharacterKeyPath);
             PressCharacterKey();
             yield return Settle();
-            Assert.IsTrue(
-                _terminal.IsClosed,
-                "A character-bound toggle runs its press half while the field has focus (#218)"
-            );
+            Assert.IsTrue(_terminal.IsClosed, "A character-bound toggle runs its press half while the field has focus (#218)");
 
             ReleaseKeys();
             yield return Settle();
-            Assert.AreEqual(
-                TerminalState.OpenFull,
-                _terminal.State,
-                "The release half runs too, so a Value-bound toggle undoes itself"
-            );
+            Assert.AreEqual(TerminalState.OpenFull, _terminal.State, "The release half runs too, so a Value-bound toggle undoes itself");
         }
 
         /*
@@ -586,16 +472,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 InputSystem.QueueStateEvent(gamepad, new GamepadState(GamepadButton.South));
                 yield return Settle();
 
-                Assert.That(
-                    _performedControls,
-                    Is.EqualTo(new[] { "buttonSouth" }),
-                    "Sanity: the gamepad action performed on the button that types no character"
-                );
-                Assert.AreEqual(
-                    TerminalState.OpenSmall,
-                    _terminal.State,
-                    "A gamepad binding must keep running its message while the field has focus"
-                );
+                Assert.That(_performedControls, Is.EqualTo(new[] { "buttonSouth" }), "Sanity: the gamepad action performed on the button that types no character");
+                Assert.AreEqual(TerminalState.OpenSmall, _terminal.State, "A gamepad binding must keep running its message while the field has focus");
             }
             finally
             {
@@ -677,22 +555,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private IEnumerator WaitForInputVisible(string message)
         {
             int frameBudget = FrameBudget;
-            while (
-                0 < frameBudget--
-                && (
-                    _terminal._commandInput == null
-                    || _terminal._commandInput.resolvedStyle.display != DisplayStyle.Flex
-                )
-            )
+            while (0 < frameBudget-- && (_terminal._commandInput == null || _terminal._commandInput.resolvedStyle.display != DisplayStyle.Flex))
             {
                 yield return null;
             }
 
-            Assert.AreEqual(
-                DisplayStyle.Flex,
-                _terminal._commandInput.resolvedStyle.display,
-                message
-            );
+            Assert.AreEqual(DisplayStyle.Flex, _terminal._commandInput.resolvedStyle.display, message);
         }
 
         private IEnumerator WaitForFocusedInput(string message)

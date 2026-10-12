@@ -41,9 +41,7 @@
          */
         private static readonly HashSet<string> NonTypedKeyNames = BuildNonTypedKeyNames();
 
-        private static readonly Dictionary<string, CachedKeyName> CachedKeys = new(
-            StringComparer.Ordinal
-        );
+        private static readonly Dictionary<string, CachedKeyName> CachedKeys = new(StringComparer.Ordinal);
 
 #if ENABLE_INPUT_SYSTEM
         /*
@@ -57,14 +55,10 @@
          */
         private static Keyboard _memoControlsKeyboard;
 
-        private static readonly Dictionary<string, KeyControl> _memoControls = new(
-            StringComparer.Ordinal
-        );
+        private static readonly Dictionary<string, KeyControl> _memoControls = new(StringComparer.Ordinal);
 #endif
 
-        private static readonly Dictionary<string, KeyCode> KeyCodeMapping = new(
-            StringComparer.OrdinalIgnoreCase
-        )
+        private static readonly Dictionary<string, KeyCode> KeyCodeMapping = new(StringComparer.OrdinalIgnoreCase)
         {
             { "~", KeyCode.BackQuote },
             { "`", KeyCode.BackQuote },
@@ -240,9 +234,7 @@
             { "none", KeyCode.None },
         };
 
-        private static readonly Dictionary<string, string> SpecialKeyCodeMap = new(
-            StringComparer.OrdinalIgnoreCase
-        )
+        private static readonly Dictionary<string, string> SpecialKeyCodeMap = new(StringComparer.OrdinalIgnoreCase)
         {
             { "`", "backquote" },
             { "-", "minus" },
@@ -272,9 +264,7 @@
             { " ", "space" },
         };
 
-        private static readonly Dictionary<string, string> SpecialShiftedKeyCodeMap = new(
-            StringComparer.OrdinalIgnoreCase
-        )
+        private static readonly Dictionary<string, string> SpecialShiftedKeyCodeMap = new(StringComparer.OrdinalIgnoreCase)
         {
             { "~", "backquote" },
             { "!", "digit1" },
@@ -299,20 +289,19 @@
             { "?", "slash" },
         };
 
-        private static readonly Dictionary<string, string> AlternativeSpecialShiftedKeyCodeMap =
-            new(StringComparer.OrdinalIgnoreCase)
-            {
-                { "!", "1" },
-                { "@", "2" },
-                { "#", "3" },
-                { "$", "4" },
-                { "^", "5" },
-                { "%", "6" },
-                { "&", "7" },
-                { "*", "8" },
-                { "(", "9" },
-                { ")", "0" },
-            };
+        private static readonly Dictionary<string, string> AlternativeSpecialShiftedKeyCodeMap = new(StringComparer.OrdinalIgnoreCase)
+        {
+            { "!", "1" },
+            { "@", "2" },
+            { "#", "3" },
+            { "$", "4" },
+            { "^", "5" },
+            { "%", "6" },
+            { "&", "7" },
+            { "*", "8" },
+            { "(", "9" },
+            { ")", "0" },
+        };
 
         public static bool IsKeyPressed(string key, InputMode inputMode)
         {
@@ -350,16 +339,8 @@
                  */
                 return cached.LegacyKeyCode.HasValue
                     && Input.GetKeyDown(cached.LegacyKeyCode.Value)
-                    && (
-                        !cached.ShiftRequired
-                        || Input.GetKey(KeyCode.LeftShift)
-                        || Input.GetKey(KeyCode.RightShift)
-                    )
-                    && (
-                        !cached.CtrlRequired
-                        || Input.GetKey(KeyCode.LeftControl)
-                        || Input.GetKey(KeyCode.RightControl)
-                    );
+                    && (!cached.ShiftRequired || Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift))
+                    && (!cached.CtrlRequired || Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl));
 #else
                 return false;
 #endif
@@ -374,10 +355,8 @@
                 if (
                     !shiftRequired
                     && (
-                        AlternativeSpecialShiftedKeyCodeMap.TryGetValue(
-                            lookupName,
-                            out string shiftedKeyName
-                        ) || SpecialShiftedKeyCodeMap.TryGetValue(lookupName, out shiftedKeyName)
+                        AlternativeSpecialShiftedKeyCodeMap.TryGetValue(lookupName, out string shiftedKeyName)
+                        || SpecialShiftedKeyCodeMap.TryGetValue(lookupName, out shiftedKeyName)
                     )
                 )
                 {
@@ -413,9 +392,8 @@
                 {
                     ++ControlResolutionsForTesting;
                     control =
-                        currentKeyboard.TryGetChildControl<KeyControl>(
-                            SpecialKeyCodeMap.GetValueOrDefault(lookupName, lookupName)
-                        ) ?? currentKeyboard.TryGetChildControl<KeyControl>(lookupName);
+                        currentKeyboard.TryGetChildControl<KeyControl>(SpecialKeyCodeMap.GetValueOrDefault(lookupName, lookupName))
+                        ?? currentKeyboard.TryGetChildControl<KeyControl>(lookupName);
                     _memoControls[lookupName] = control;
                 }
 
@@ -458,10 +436,7 @@
                     continue;
                 }
 
-                if (
-                    !shiftRequired
-                    && StripModifier(keyName, ShiftModifiers, out string withoutShift)
-                )
+                if (!shiftRequired && StripModifier(keyName, ShiftModifiers, out string withoutShift))
                 {
                     shiftRequired = true;
                     keyName = withoutShift;
@@ -478,12 +453,7 @@
                 {
                     shiftRequired = true;
                 }
-                else if (
-                    AlternativeSpecialShiftedKeyCodeMap.TryGetValue(
-                        keyName,
-                        out string legacyShiftedKeyName
-                    )
-                )
+                else if (AlternativeSpecialShiftedKeyCodeMap.TryGetValue(keyName, out string legacyShiftedKeyName))
                 {
                     shiftRequired = true;
                     keyName = legacyShiftedKeyName;
@@ -737,10 +707,7 @@
         {
             foreach (string modifier in modifiers)
             {
-                if (
-                    key.StartsWith(modifier, StringComparison.OrdinalIgnoreCase)
-                    && key.Length != modifier.Length
-                )
+                if (key.StartsWith(modifier, StringComparison.OrdinalIgnoreCase) && key.Length != modifier.Length)
                 {
                     stripped = key[modifier.Length..];
                     if (stripped.NeedsTrim())
@@ -775,12 +742,7 @@
              */
             public readonly KeyCode? LegacyKeyCode;
 
-            public CachedKeyName(
-                string name,
-                bool shiftRequired,
-                bool ctrlRequired,
-                KeyCode? legacyKeyCode
-            )
+            public CachedKeyName(string name, bool shiftRequired, bool ctrlRequired, KeyCode? legacyKeyCode)
             {
                 Name = name;
                 ShiftRequired = shiftRequired;

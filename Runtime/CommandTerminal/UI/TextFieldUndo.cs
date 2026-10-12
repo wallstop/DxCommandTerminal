@@ -144,13 +144,7 @@
             therefore must not act on the returned text alone, because an empty
             line and nothing to undo return the same one.
          */
-        public bool Step(
-            string fieldText,
-            int fieldCaret,
-            bool forward,
-            out string text,
-            out int caret
-        )
+        public bool Step(string fieldText, int fieldCaret, bool forward, out string text, out int caret)
         {
             Observe(fieldText, fieldCaret);
 

@@ -35,10 +35,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             _originalShell = Terminal.Shell;
             _originalHistory = Terminal.History;
             _originalAutoComplete = Terminal.AutoComplete;
-            _originalStackTraceMode =
-                Terminal.Buffer != null
-                    ? Terminal.Buffer.StackTraceMode
-                    : TerminalStackTraceMode.All;
+            _originalStackTraceMode = Terminal.Buffer != null ? Terminal.Buffer.StackTraceMode : TerminalStackTraceMode.All;
         }
 
         [TearDown]
@@ -93,68 +90,24 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreEqual(77, terminal._logBufferSize, "Log buffer follows the asset");
             Assert.AreEqual(88, terminal._historyBufferSize, "History buffer follows the asset");
             Assert.AreEqual("$", terminal._inputCaret, "Input caret follows the asset");
-            Assert.AreEqual(
-                123,
-                terminal._cursorBlinkRateMilliseconds,
-                "Caret blink rate follows the asset"
-            );
+            Assert.AreEqual(123, terminal._cursorBlinkRateMilliseconds, "Caret blink rate follows the asset");
             Assert.IsTrue(terminal.showGUIButtons, "showGUIButtons follows the asset");
             Assert.AreEqual("go", terminal.runButtonText, "Run button text follows the asset");
             Assert.AreEqual("bye", terminal.closeButtonText, "Close button text follows the asset");
-            Assert.AreEqual(
-                "shrink",
-                terminal.smallButtonText,
-                "Small button text follows the asset"
-            );
+            Assert.AreEqual("shrink", terminal.smallButtonText, "Small button text follows the asset");
             Assert.AreEqual("grow", terminal.fullButtonText, "Full button text follows the asset");
-            Assert.AreEqual(
-                HintDisplayMode.Never,
-                terminal.hintDisplayMode,
-                "Hint display mode follows the asset"
-            );
+            Assert.AreEqual(HintDisplayMode.Never, terminal.hintDisplayMode, "Hint display mode follows the asset");
             Assert.IsFalse(terminal.makeHintsClickable, "makeHintsClickable follows the asset");
-            Assert.IsFalse(
-                terminal.skipSameCommandsInHistory,
-                "skipSameCommandsInHistory follows the asset"
-            );
-            Assert.IsTrue(
-                terminal.ignoreDefaultCommands,
-                "ignoreDefaultCommands follows the asset"
-            );
-            Assert.AreEqual(
-                new List<TerminalLogType> { TerminalLogType.Warning, TerminalLogType.Error },
-                terminal._ignoredLogTypes,
-                "Ignored log types follow the asset"
-            );
-            Assert.AreEqual(
-                new List<string> { "help", "clear" },
-                terminal._disabledCommands,
-                "Disabled commands follow the asset"
-            );
-            Assert.IsFalse(
-                ReferenceEquals(settings.ignoredLogTypes, terminal._ignoredLogTypes),
-                "Ignored log types must be copied, not aliased from the asset"
-            );
-            Assert.IsFalse(
-                ReferenceEquals(settings.disabledCommands, terminal._disabledCommands),
-                "Disabled commands must be copied, not aliased from the asset"
-            );
+            Assert.IsFalse(terminal.skipSameCommandsInHistory, "skipSameCommandsInHistory follows the asset");
+            Assert.IsTrue(terminal.ignoreDefaultCommands, "ignoreDefaultCommands follows the asset");
+            Assert.AreEqual(new List<TerminalLogType> { TerminalLogType.Warning, TerminalLogType.Error }, terminal._ignoredLogTypes, "Ignored log types follow the asset");
+            Assert.AreEqual(new List<string> { "help", "clear" }, terminal._disabledCommands, "Disabled commands follow the asset");
+            Assert.IsFalse(ReferenceEquals(settings.ignoredLogTypes, terminal._ignoredLogTypes), "Ignored log types must be copied, not aliased from the asset");
+            Assert.IsFalse(ReferenceEquals(settings.disabledCommands, terminal._disabledCommands), "Disabled commands must be copied, not aliased from the asset");
             Assert.IsTrue(terminal._logUnityMessages, "logUnityMessages follows the asset");
-            Assert.AreEqual(
-                TerminalStackTraceMode.Disabled,
-                terminal._stackTraceMode,
-                "Stack-trace mode follows the asset"
-            );
-            Assert.AreEqual(
-                TerminalStackTraceMode.Disabled,
-                Terminal.Buffer.StackTraceMode,
-                "The asset's stack-trace mode reaches the shared session buffer"
-            );
-            Assert.AreEqual(
-                77,
-                Terminal.Buffer.Capacity,
-                "The asset's log buffer size reaches the shared session buffer"
-            );
+            Assert.AreEqual(TerminalStackTraceMode.Disabled, terminal._stackTraceMode, "Stack-trace mode follows the asset");
+            Assert.AreEqual(TerminalStackTraceMode.Disabled, Terminal.Buffer.StackTraceMode, "The asset's stack-trace mode reaches the shared session buffer");
+            Assert.AreEqual(77, Terminal.Buffer.Capacity, "The asset's log buffer size reaches the shared session buffer");
         }
 
         [Test]
@@ -165,30 +118,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreEqual(256, terminal._logBufferSize, "Default log buffer preserved");
             Assert.AreEqual(512, terminal._historyBufferSize, "Default history buffer preserved");
             Assert.AreEqual(">", terminal._inputCaret, "Default input caret preserved");
-            Assert.AreEqual(
-                666,
-                terminal._cursorBlinkRateMilliseconds,
-                "Default blink rate preserved"
-            );
+            Assert.AreEqual(666, terminal._cursorBlinkRateMilliseconds, "Default blink rate preserved");
             Assert.IsFalse(terminal.showGUIButtons, "Default button visibility preserved");
             Assert.AreEqual("run", terminal.runButtonText, "Default run button text preserved");
-            Assert.AreEqual(
-                HintDisplayMode.AutoCompleteOnly,
-                terminal.hintDisplayMode,
-                "Default hint mode preserved"
-            );
+            Assert.AreEqual(HintDisplayMode.AutoCompleteOnly, terminal.hintDisplayMode, "Default hint mode preserved");
             Assert.IsTrue(terminal.skipSameCommandsInHistory, "Default history dedup preserved");
-            Assert.IsFalse(
-                terminal.ignoreDefaultCommands,
-                "Default built-in command registration preserved"
-            );
+            Assert.IsFalse(terminal.ignoreDefaultCommands, "Default built-in command registration preserved");
             Assert.IsEmpty(terminal._ignoredLogTypes, "Default ignored log types preserved");
             Assert.IsEmpty(terminal._disabledCommands, "Default disabled commands preserved");
-            Assert.AreEqual(
-                TerminalStackTraceMode.All,
-                terminal._stackTraceMode,
-                "Default stack-trace capture preserved"
-            );
+            Assert.AreEqual(TerminalStackTraceMode.All, terminal._stackTraceMode, "Default stack-trace capture preserved");
         }
 
         [Test]
@@ -200,19 +138,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             CommandPaletteUI palette = gameObject.AddComponent<CommandPaletteUI>();
             palette._settings = CreateSettings();
 
-            Assert.AreEqual(
-                "ctrl+space",
-                palette.toggleHotkey,
-                "Sanity: the serialized component hotkey applies before enable"
-            );
+            Assert.AreEqual("ctrl+space", palette.toggleHotkey, "Sanity: the serialized component hotkey applies before enable");
 
             gameObject.SetActive(true);
 
-            Assert.AreEqual(
-                "ctrl+p",
-                palette.toggleHotkey,
-                "Palette hotkey follows the asset on wake"
-            );
+            Assert.AreEqual("ctrl+p", palette.toggleHotkey, "Palette hotkey follows the asset on wake");
         }
 
         private TerminalSettings CreateSettings()
@@ -231,11 +161,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             settings.makeHintsClickable = false;
             settings.skipSameCommandsInHistory = false;
             settings.ignoreDefaultCommands = true;
-            settings.ignoredLogTypes = new List<TerminalLogType>
-            {
-                TerminalLogType.Warning,
-                TerminalLogType.Error,
-            };
+            settings.ignoredLogTypes = new List<TerminalLogType> { TerminalLogType.Warning, TerminalLogType.Error };
             settings.disabledCommands = new List<string> { "help", "clear" };
             settings.logUnityMessages = true;
             settings.stackTraceMode = TerminalStackTraceMode.Disabled;

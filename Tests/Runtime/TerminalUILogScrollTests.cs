@@ -88,15 +88,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             float atEnd = LogScroller().value;
             yield return SendKey(KeyCode.PageUp);
 
-            yield return WaitForLogValue(
-                expected: atEnd - LogView().contentViewport.layout.height,
-                message: "Page Up moves the log back by what one viewport shows"
-            );
-            Assert.That(
-                LogScroller().value,
-                Is.LessThan(atEnd),
-                "A key the log answered moved it, so the route is not just a consumed key"
-            );
+            yield return WaitForLogValue(expected: atEnd - LogView().contentViewport.layout.height, message: "Page Up moves the log back by what one viewport shows");
+            Assert.That(LogScroller().value, Is.LessThan(atEnd), "A key the log answered moved it, so the route is not just a consumed key");
         }
 
         [UnityTest]
@@ -108,17 +101,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             float atEnd = LogScroller().value;
             yield return SendKey(KeyCode.PageUp);
-            yield return WaitForLogValue(
-                atEnd - LogView().contentViewport.layout.height,
-                "The first page lands before the second is measured against it"
-            );
+            yield return WaitForLogValue(atEnd - LogView().contentViewport.layout.height, "The first page lands before the second is measured against it");
 
             float paged = LogScroller().value;
             yield return SendKey(KeyCode.PageDown);
-            yield return WaitForLogValue(
-                paged + LogView().contentViewport.layout.height,
-                "Page Down moves forward by the same viewport, so the two are inverses"
-            );
+            yield return WaitForLogValue(paged + LogView().contentViewport.layout.height, "Page Down moves forward by the same viewport, so the two are inverses");
         }
 
         [UnityTest]
@@ -128,20 +115,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return FillTheLog();
             yield return WaitForLogAtEnd(FillMarker, "The log follows its own output to the end");
 
-            yield return PageAwayFromTheEnd(
-                "The page is where the developer put it before anything else happens"
-            );
+            yield return PageAwayFromTheEnd("The page is where the developer put it before anything else happens");
             float paged = LogScroller().value;
 
             Terminal.Log(LateLine);
             yield return null;
             yield return null;
 
-            Assert.That(
-                LogScroller().value,
-                Is.EqualTo(paged).Within(Tolerance),
-                "A developer reading an earlier line is not dragged to the newest one"
-            );
+            Assert.That(LogScroller().value, Is.EqualTo(paged).Within(Tolerance), "A developer reading an earlier line is not dragged to the newest one");
         }
 
         [UnityTest]
@@ -151,9 +132,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return FillTheLog();
             yield return WaitForLogAtEnd(FillMarker, "The log follows its own output to the end");
 
-            yield return PageAwayFromTheEnd(
-                "Ctrl+End is only meaningful if the page actually parked the view"
-            );
+            yield return PageAwayFromTheEnd("Ctrl+End is only meaningful if the page actually parked the view");
 
             yield return SendKey(KeyCode.End, EventModifiers.Command);
             yield return WaitForLogAtEnd(ParkedLine, "Ctrl+End is the way back to the tail");
@@ -167,10 +146,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
              */
             Terminal.Log(FollowedLine);
 
-            yield return WaitForLogAtEnd(
-                FollowedLine,
-                "After Ctrl+End the view follows new output again, which is what it is for"
-            );
+            yield return WaitForLogAtEnd(FollowedLine, "After Ctrl+End the view follows new output again, which is what it is for");
         }
 
         [UnityTest]
@@ -182,10 +158,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             yield return SendKey(KeyCode.Home, EventModifiers.Command);
 
-            yield return WaitForLogValue(
-                expected: 0f,
-                message: "Command+Home reaches the oldest line the buffer still holds"
-            );
+            yield return WaitForLogValue(expected: 0f, message: "Command+Home reaches the oldest line the buffer still holds");
         }
 
         [UnityTest]
@@ -222,10 +195,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return SendKey(KeyCode.PageDown);
             Terminal.Log(ParkedLine);
 
-            yield return WaitForLogAtEnd(
-                ParkedLine,
-                "A Page Down that reaches the end leaves the view following, not parked one line short"
-            );
+            yield return WaitForLogAtEnd(ParkedLine, "A Page Down that reaches the end leaves the view following, not parked one line short");
         }
 
         [UnityTest]
@@ -235,18 +205,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return FillTheLog();
             yield return WaitForLogAtEnd(FillMarker, "The log follows its own output to the end");
 
-            yield return PageAwayFromTheEnd(
-                "A negative test means nothing unless the log was parked to begin with"
-            );
+            yield return PageAwayFromTheEnd("A negative test means nothing unless the log was parked to begin with");
             float paged = LogScroller().value;
 
             yield return SendKey(KeyCode.DownArrow);
 
-            Assert.That(
-                LogScroller().value,
-                Is.EqualTo(paged).Within(Tolerance),
-                "History recall belongs to the command line, so the log does not answer it"
-            );
+            Assert.That(LogScroller().value, Is.EqualTo(paged).Within(Tolerance), "History recall belongs to the command line, so the log does not answer it");
         }
 
         [UnityTest]
@@ -256,9 +220,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return FillTheLog();
             yield return WaitForLogAtEnd(FillMarker, "The log follows its own output to the end");
 
-            yield return PageAwayFromTheEnd(
-                "A negative test means nothing unless the log was parked to begin with"
-            );
+            yield return PageAwayFromTheEnd("A negative test means nothing unless the log was parked to begin with");
             float paged = LogScroller().value;
 
             yield return SendKey(KeyCode.Home);
@@ -291,17 +253,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Scroller scroller = LogScroller();
             Assert.That(scroller.highValue - scroller.value, Is.GreaterThan(Tolerance), message);
-            Assert.That(
-                scroller.value,
-                Is.LessThan(atEnd),
-                "The page moved the view up rather than leaving it where it was"
-            );
+            Assert.That(scroller.value, Is.LessThan(atEnd), "The page moved the view up rather than leaving it where it was");
         }
 
         private ScrollView LogView()
         {
-            ScrollView logView =
-                _terminal._uiDocument.rootVisualElement.Q("LogScrollView") as ScrollView;
+            ScrollView logView = _terminal._uiDocument.rootVisualElement.Q("LogScrollView") as ScrollView;
             Assert.That(logView, Is.Not.Null, "The log scroll view exists on an open terminal");
             return logView;
         }
@@ -345,8 +302,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             while (0 < frameBudget-- && stableFrames < StableLayoutFrames)
             {
                 ScrollView view = LogView();
-                bool laidOut =
-                    0f < LogScroller().highValue && 0f < view.contentViewport.layout.height;
+                bool laidOut = 0f < LogScroller().highValue && 0f < view.contentViewport.layout.height;
                 stableFrames = laidOut ? stableFrames + 1 : 0;
                 yield return null;
             }
@@ -367,11 +323,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             while (0 < frameBudget--)
             {
                 Scroller scroller = LogScroller();
-                if (
-                    0f < scroller.highValue
-                    && scroller.highValue - scroller.value < Tolerance
-                    && LastLogText().Contains(expectedLastLine, StringComparison.Ordinal)
-                )
+                if (0f < scroller.highValue && scroller.highValue - scroller.value < Tolerance && LastLogText().Contains(expectedLastLine, StringComparison.Ordinal))
                 {
                     break;
                 }
@@ -446,22 +398,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return null;
 
             int frameBudget = 600;
-            while (
-                0 < frameBudget--
-                && (
-                    _terminal._commandInput == null
-                    || _terminal._commandInput.resolvedStyle.display != DisplayStyle.Flex
-                )
-            )
+            while (0 < frameBudget-- && (_terminal._commandInput == null || _terminal._commandInput.resolvedStyle.display != DisplayStyle.Flex))
             {
                 yield return null;
             }
 
-            Assert.That(
-                _terminal._commandInput,
-                Is.Not.Null,
-                "The terminal input field should exist after the terminal opens"
-            );
+            Assert.That(_terminal._commandInput, Is.Not.Null, "The terminal input field should exist after the terminal opens");
 
             DefaultTerminalInput.Instance.CommandText = string.Empty;
         }

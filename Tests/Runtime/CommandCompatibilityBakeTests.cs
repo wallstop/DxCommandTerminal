@@ -19,8 +19,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
      */
     public sealed class CommandCompatibilityBakeTests
     {
-        private const string CatalogLessHolderTypeName =
-            "WallstopStudios.DxCommandTerminal.Tests.BakeProbeCommands";
+        private const string CatalogLessHolderTypeName = "WallstopStudios.DxCommandTerminal.Tests.BakeProbeCommands";
 
 #if UNITY_EDITOR
         /*
@@ -35,60 +34,27 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         private static Assembly CreateCatalogLessAssembly()
         {
             AssemblyName name = new($"CompatibilityBakeTestDynamic-{Guid.NewGuid():N}");
-            AssemblyBuilder assembly = AssemblyBuilder.DefineDynamicAssembly(
-                name,
-                AssemblyBuilderAccess.Run
-            );
+            AssemblyBuilder assembly = AssemblyBuilder.DefineDynamicAssembly(name, AssemblyBuilderAccess.Run);
             ModuleBuilder module = assembly.DefineDynamicModule("Commands");
-            TypeBuilder type = module.DefineType(
-                CatalogLessHolderTypeName,
-                TypeAttributes.Public | TypeAttributes.Sealed
-            );
-            ConstructorInfo attributeConstructor = typeof(RegisterCommandAttribute).GetConstructor(
-                new[] { typeof(string) }
-            );
+            TypeBuilder type = module.DefineType(CatalogLessHolderTypeName, TypeAttributes.Public | TypeAttributes.Sealed);
+            ConstructorInfo attributeConstructor = typeof(RegisterCommandAttribute).GetConstructor(new[] { typeof(string) });
 
-            MethodBuilder preserved = type.DefineMethod(
-                "ProbePreservedCommand",
-                MethodAttributes.Public | MethodAttributes.Static,
-                typeof(void),
-                new[] { typeof(CommandArg[]) }
-            );
+            MethodBuilder preserved = type.DefineMethod("ProbePreservedCommand", MethodAttributes.Public | MethodAttributes.Static, typeof(void), new[] { typeof(CommandArg[]) });
             preserved.DefineParameter(1, ParameterAttributes.None, "args");
             preserved.GetILGenerator().Emit(OpCodes.Ret);
-            preserved.SetCustomAttribute(
-                new CustomAttributeBuilder(
-                    attributeConstructor,
-                    new object[] { "bake-probe-preserved" }
-                )
-            );
+            preserved.SetCustomAttribute(new CustomAttributeBuilder(attributeConstructor, new object[] { "bake-probe-preserved" }));
 
-            MethodBuilder instance = type.DefineMethod(
-                "ProbeInstanceCommand",
-                MethodAttributes.Public,
-                typeof(void),
-                new[] { typeof(CommandArg[]) }
-            );
+            MethodBuilder instance = type.DefineMethod("ProbeInstanceCommand", MethodAttributes.Public, typeof(void), new[] { typeof(CommandArg[]) });
             instance.DefineParameter(1, ParameterAttributes.None, "args");
             instance.GetILGenerator().Emit(OpCodes.Ret);
-            instance.SetCustomAttribute(
-                new CustomAttributeBuilder(
-                    attributeConstructor,
-                    new object[] { "bake-probe-instance" }
-                )
-            );
+            instance.SetCustomAttribute(new CustomAttributeBuilder(attributeConstructor, new object[] { "bake-probe-instance" }));
 
             /*
                 Unattributed shape probes: the exact signatures the shape
                 gate must classify, without the registration side effects a
                 compiled attributed fixture would bring.
             */
-            MethodBuilder nonVoid = type.DefineMethod(
-                "ProbeNonVoid",
-                MethodAttributes.Public | MethodAttributes.Static,
-                typeof(int),
-                new[] { typeof(CommandArg[]) }
-            );
+            MethodBuilder nonVoid = type.DefineMethod("ProbeNonVoid", MethodAttributes.Public | MethodAttributes.Static, typeof(int), new[] { typeof(CommandArg[]) });
             nonVoid.DefineParameter(1, ParameterAttributes.None, "args");
             nonVoid.GetILGenerator().Emit(OpCodes.Ldc_I4_0);
             nonVoid.GetILGenerator().Emit(OpCodes.Ret);
@@ -107,37 +73,20 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 #endif
 
-        private static List<CommandCompatibilityBake.PreservationEntry> Collect(
-            params MethodInfo[] methods
-        )
+        private static List<CommandCompatibilityBake.PreservationEntry> Collect(params MethodInfo[] methods)
         {
             List<CommandCompatibilityBake.AttributedCommand> commands = new();
             foreach (MethodInfo method in methods)
             {
-                RegisterCommandAttribute attribute =
-                    method.GetCustomAttribute<RegisterCommandAttribute>(false);
-                Assert.That(
-                    attribute != null,
-                    $"Sanity: expected [RegisterCommand] on {method.Name}"
-                );
-                commands.Add(
-                    new CommandCompatibilityBake.AttributedCommand(
-                        method.DeclaringType.Assembly,
-                        method,
-                        attribute
-                    )
-                );
+                RegisterCommandAttribute attribute = method.GetCustomAttribute<RegisterCommandAttribute>(false);
+                Assert.That(attribute != null, $"Sanity: expected [RegisterCommand] on {method.Name}");
+                commands.Add(new CommandCompatibilityBake.AttributedCommand(method.DeclaringType.Assembly, method, attribute));
             }
 
             return CommandCompatibilityBake.CollectPreservations(commands);
         }
 
-        private static bool ContainsEntry(
-            List<CommandCompatibilityBake.PreservationEntry> entries,
-            string assemblyName,
-            string typeFullName,
-            string methodName
-        )
+        private static bool ContainsEntry(List<CommandCompatibilityBake.PreservationEntry> entries, string assemblyName, string typeFullName, string methodName)
         {
             foreach (CommandCompatibilityBake.PreservationEntry entry in entries)
             {
@@ -158,45 +107,26 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [TestCase("TestDiscoveryNamed")]
         public void PrivateNonPartialHandlersInGeneratedAssembliesArePreserved(string methodName)
         {
-            MethodInfo method = typeof(CommandDiscoveryTests).GetMethod(
-                methodName,
-                BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static
-            );
-            Assert.That(
-                method != null,
-                $"Sanity: expected the {methodName} fixture on CommandDiscoveryTests"
-            );
+            MethodInfo method = typeof(CommandDiscoveryTests).GetMethod(methodName, BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static);
+            Assert.That(method != null, $"Sanity: expected the {methodName} fixture on CommandDiscoveryTests");
 
             List<CommandCompatibilityBake.PreservationEntry> entries = Collect(method);
 
             Assert.IsTrue(
-                ContainsEntry(
-                    entries,
-                    typeof(CommandDiscoveryTests).Assembly.GetName().Name,
-                    typeof(CommandDiscoveryTests).FullName,
-                    methodName
-                ),
-                $"Private non-partial handler {methodName} is bound through a "
-                    + "reflection-by-name cached binder and must be preserved"
+                ContainsEntry(entries, typeof(CommandDiscoveryTests).Assembly.GetName().Name, typeof(CommandDiscoveryTests).FullName, methodName),
+                $"Private non-partial handler {methodName} is bound through a " + "reflection-by-name cached binder and must be preserved"
             );
         }
 
         [Test]
         public void PublicHandlerBoundByGeneratedCodeIsNotPreserved()
         {
-            MethodInfo method = typeof(BakeFixtureRooted).GetMethod(
-                nameof(BakeFixtureRooted.RootedCommand),
-                BindingFlags.Public | BindingFlags.Static
-            );
+            MethodInfo method = typeof(BakeFixtureRooted).GetMethod(nameof(BakeFixtureRooted.RootedCommand), BindingFlags.Public | BindingFlags.Static);
             Assert.That(method != null, "Sanity: expected the rooted public fixture");
 
             List<CommandCompatibilityBake.PreservationEntry> entries = Collect(method);
 
-            Assert.IsEmpty(
-                entries,
-                "A public handler the catalog binds as a direct delegate is rooted "
-                    + "by generated code; preserving it is over-preservation"
-            );
+            Assert.IsEmpty(entries, "A public handler the catalog binds as a direct delegate is rooted " + "by generated code; preserving it is over-preservation");
         }
 
         [Test]
@@ -210,20 +140,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             List<CommandCompatibilityBake.PreservationEntry> entries = Collect(method);
 
-            Assert.IsEmpty(
-                entries,
-                "Protected internal is inside the generator's accessible-from-catalog "
-                    + "set; a valid-shape handler there binds as a direct delegate"
-            );
+            Assert.IsEmpty(entries, "Protected internal is inside the generator's accessible-from-catalog " + "set; a valid-shape handler there binds as a direct delegate");
         }
 
         [Test]
         public void CompanionProbeVerifiesBinderShapeNotTheName()
         {
-            MethodInfo method = typeof(BakeFixtureInaccessible).GetMethod(
-                "PrivateCommand",
-                BindingFlags.NonPublic | BindingFlags.Static
-            );
+            MethodInfo method = typeof(BakeFixtureInaccessible).GetMethod("PrivateCommand", BindingFlags.NonPublic | BindingFlags.Static);
             Assert.That(method != null, "Sanity: expected the private cached-binder probe");
 
             Assert.IsFalse(
@@ -242,60 +165,37 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void PartialCompanionHandlerIsNotPreserved()
         {
-            MethodInfo method = typeof(BakePartialFixtureCommands).GetMethod(
-                "PartialPrivateCommand",
-                BindingFlags.NonPublic | BindingFlags.Static
-            );
+            MethodInfo method = typeof(BakePartialFixtureCommands).GetMethod("PartialPrivateCommand", BindingFlags.NonPublic | BindingFlags.Static);
             Assert.That(method != null, "Sanity: expected the partial companion fixture");
 
             List<CommandCompatibilityBake.PreservationEntry> entries = Collect(method);
 
-            Assert.IsEmpty(
-                entries,
-                "A partial companion names the private handler directly, which "
-                    + "roots it for the linker; preserving it is over-preservation"
-            );
+            Assert.IsEmpty(entries, "A partial companion names the private handler directly, which " + "roots it for the linker; preserving it is over-preservation");
         }
 
         [Test]
         public void EditorOnlyHandlerIsNotPreserved()
         {
-            MethodInfo method = typeof(BakeFixtureEditorOnly).GetMethod(
-                "EditorOnlyCommand",
-                BindingFlags.NonPublic | BindingFlags.Static
-            );
+            MethodInfo method = typeof(BakeFixtureEditorOnly).GetMethod("EditorOnlyCommand", BindingFlags.NonPublic | BindingFlags.Static);
             Assert.That(method != null, "Sanity: expected the editor-only fixture");
 
             List<CommandCompatibilityBake.PreservationEntry> entries = Collect(method);
 
-            Assert.IsEmpty(
-                entries,
-                "Editor-only handlers never register in players, so their "
-                    + "preservation data would be dead weight"
-            );
+            Assert.IsEmpty(entries, "Editor-only handlers never register in players, so their " + "preservation data would be dead weight");
         }
 
         [TestCase("PrivateCommand")]
         [TestCase("ProtectedCommand")]
         public void InaccessibleNonPartialHandlersArePreserved(string methodName)
         {
-            MethodInfo method = typeof(BakeFixtureInaccessible).GetMethod(
-                methodName,
-                BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static
-            );
+            MethodInfo method = typeof(BakeFixtureInaccessible).GetMethod(methodName, BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static);
             Assert.That(method != null, $"Sanity: expected the {methodName} inaccessible fixture");
 
             List<CommandCompatibilityBake.PreservationEntry> entries = Collect(method);
 
             Assert.IsTrue(
-                ContainsEntry(
-                    entries,
-                    typeof(BakeFixtureInaccessible).Assembly.GetName().Name,
-                    typeof(BakeFixtureInaccessible).FullName,
-                    methodName
-                ),
-                $"Inaccessible non-partial handler {methodName} binds through a "
-                    + "reflection-by-name cached binder and must be preserved"
+                ContainsEntry(entries, typeof(BakeFixtureInaccessible).Assembly.GetName().Name, typeof(BakeFixtureInaccessible).FullName, methodName),
+                $"Inaccessible non-partial handler {methodName} binds through a " + "reflection-by-name cached binder and must be preserved"
             );
         }
 
@@ -323,19 +223,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     method,
                     new Dictionary<Assembly, bool>()
                 ),
-                "A handler the catalog cannot bind directly is reached by "
-                    + "reflection-by-name and must be preserved, whatever its "
-                    + "accessibility"
+                "A handler the catalog cannot bind directly is reached by " + "reflection-by-name and must be preserved, whatever its " + "accessibility"
             );
         }
 
         [Test]
         public void GenericMethodInPartialTypeIsNotRootedDespiteCompanion()
         {
-            MethodInfo method = typeof(BakePartialFixtureCommands).GetMethod(
-                "PartialGenericCommand",
-                BindingFlags.NonPublic | BindingFlags.Static
-            );
+            MethodInfo method = typeof(BakePartialFixtureCommands).GetMethod("PartialGenericCommand", BindingFlags.NonPublic | BindingFlags.Static);
             Assert.That(method != null, "Sanity: expected the partial generic probe");
 
             Assert.IsFalse(
@@ -350,10 +245,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     + "the companion type exists for a sibling"
             );
 
-            MethodInfo rooted = typeof(BakePartialFixtureCommands).GetMethod(
-                "PartialPrivateCommand",
-                BindingFlags.NonPublic | BindingFlags.Static
-            );
+            MethodInfo rooted = typeof(BakePartialFixtureCommands).GetMethod("PartialPrivateCommand", BindingFlags.NonPublic | BindingFlags.Static);
             Assert.That(rooted != null, "Sanity: expected the companion-rooted probe");
             Assert.IsTrue(
                 CommandCompatibilityBake.IsRootedByGeneratedCode(
@@ -374,17 +266,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.That(holder != null, "Sanity: expected the emitted command holder type");
 
             List<MethodInfo> declared = new();
-            foreach (
-                MethodInfo method in holder.GetMethods(
-                    BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance
-                )
-            )
+            foreach (MethodInfo method in holder.GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance))
             {
-                if (
-                    ReferenceEquals(method.DeclaringType, holder)
-                    && method.IsStatic
-                    && method.IsDefined(typeof(RegisterCommandAttribute), false)
-                )
+                if (ReferenceEquals(method.DeclaringType, holder) && method.IsStatic && method.IsDefined(typeof(RegisterCommandAttribute), false))
                 {
                     declared.Add(method);
                 }
@@ -392,16 +276,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             List<CommandCompatibilityBake.PreservationEntry> entries = Collect(declared.ToArray());
 
-            Assert.AreEqual(
-                1,
-                entries.Count,
-                "Exactly the attributed static handler in the catalog-less assembly is preserved"
-            );
-            Assert.AreEqual(
-                "ProbePreservedCommand",
-                entries[0].MethodName,
-                "The static handler is reflection-bound and must be preserved"
-            );
+            Assert.AreEqual(1, entries.Count, "Exactly the attributed static handler in the catalog-less assembly is preserved");
+            Assert.AreEqual("ProbePreservedCommand", entries[0].MethodName, "The static handler is reflection-bound and must be preserved");
         }
 
         [Test]
@@ -413,38 +289,19 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             MethodInfo valid = holder.GetMethod("ProbePreservedCommand");
             MethodInfo nonVoid = holder.GetMethod("ProbeNonVoid");
             MethodInfo byRefParameter = holder.GetMethod("ProbeByRefParameter");
-            MethodInfo generic = typeof(BakePartialFixtureCommands).GetMethod(
-                "PartialGenericCommand",
-                BindingFlags.NonPublic | BindingFlags.Static
-            );
-            Assert.That(
-                valid != null && nonVoid != null && byRefParameter != null && generic != null,
-                "Sanity: expected the shape probes"
-            );
+            MethodInfo generic = typeof(BakePartialFixtureCommands).GetMethod("PartialGenericCommand", BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.That(valid != null && nonVoid != null && byRefParameter != null && generic != null, "Sanity: expected the shape probes");
 
-            Assert.IsTrue(
-                CommandCompatibilityBake.HasDirectBindableShape(valid),
-                "Void + one by-value CommandArg[] parameter is the directly bindable shape"
-            );
-            Assert.IsFalse(
-                CommandCompatibilityBake.HasDirectBindableShape(nonVoid),
-                "A non-void return forces the cached reflection-by-name binder"
-            );
-            Assert.IsFalse(
-                CommandCompatibilityBake.HasDirectBindableShape(byRefParameter),
-                "A by-ref parameter type is not CommandArg[] by value"
-            );
-            Assert.IsFalse(
-                CommandCompatibilityBake.HasDirectBindableShape(generic),
-                "A generic method definition can never bind a closed delegate"
-            );
+            Assert.IsTrue(CommandCompatibilityBake.HasDirectBindableShape(valid), "Void + one by-value CommandArg[] parameter is the directly bindable shape");
+            Assert.IsFalse(CommandCompatibilityBake.HasDirectBindableShape(nonVoid), "A non-void return forces the cached reflection-by-name binder");
+            Assert.IsFalse(CommandCompatibilityBake.HasDirectBindableShape(byRefParameter), "A by-ref parameter type is not CommandArg[] by value");
+            Assert.IsFalse(CommandCompatibilityBake.HasDirectBindableShape(generic), "A generic method definition can never bind a closed delegate");
         }
 
         [Test]
         public void AttributedCommandCollectionExcludesTestAssemblies()
         {
-            List<CommandCompatibilityBake.AttributedCommand> commands =
-                CommandCompatibilityBake.CollectAttributedCommands();
+            List<CommandCompatibilityBake.AttributedCommand> commands = CommandCompatibilityBake.CollectAttributedCommands();
 
             foreach (CommandCompatibilityBake.AttributedCommand command in commands)
             {
@@ -457,17 +314,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     }
 
                     Assert.IsFalse(
-                        string.Equals(name, "UnityEngine.TestRunner", StringComparison.Ordinal)
-                            || 0 <= name.IndexOf("nunit", StringComparison.OrdinalIgnoreCase),
-                        $"{command.Assembly.GetName().Name} references {name}, so it "
-                            + "never ships in players and must not enter the bake"
+                        string.Equals(name, "UnityEngine.TestRunner", StringComparison.Ordinal) || 0 <= name.IndexOf("nunit", StringComparison.OrdinalIgnoreCase),
+                        $"{command.Assembly.GetName().Name} references {name}, so it " + "never ships in players and must not enter the bake"
                     );
                 }
 
-                Assert.IsTrue(
-                    command.Method.IsStatic,
-                    "Only static handlers are discovered and preserved"
-                );
+                Assert.IsTrue(command.Method.IsStatic, "Only static handlers are discovered and preserved");
             }
         }
 
@@ -475,41 +327,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void ManifestFileWritesUnderTemp()
         {
             Assert.IsTrue(
-                CommandCompatibilityBake.TryBuildManifest(
-                    new[]
-                    {
-                        new CommandCompatibilityBake.PreservationEntry(
-                            "Assembly-A",
-                            "Ns.Type",
-                            "Handler"
-                        ),
-                    },
-                    out string manifest
-                ),
+                CommandCompatibilityBake.TryBuildManifest(new[] { new CommandCompatibilityBake.PreservationEntry("Assembly-A", "Ns.Type", "Handler") }, out string manifest),
                 "The preservation set produces a manifest"
             );
 
-            Assert.IsTrue(
-                CommandCompatibilityBake.TryWriteManifestFile(manifest, out string path),
-                "The Temp manifest write succeeds"
-            );
+            Assert.IsTrue(CommandCompatibilityBake.TryWriteManifestFile(manifest, out string path), "The Temp manifest write succeeds");
             Assert.IsTrue(File.Exists(path), "The manifest file exists at the returned Temp path");
-            Assert.AreEqual(
-                manifest,
-                File.ReadAllText(path),
-                "The written file carries the manifest byte-for-byte"
-            );
-            Assert.That(
-                path.EndsWith(".link.xml", StringComparison.Ordinal),
-                "The manifest file is named as a linker payload"
-            );
-            Assert.That(
-                path.StartsWith(
-                    Path.Combine(Directory.GetCurrentDirectory(), "Temp"),
-                    StringComparison.Ordinal
-                ),
-                "The manifest is written under Temp, never under Assets"
-            );
+            Assert.AreEqual(manifest, File.ReadAllText(path), "The written file carries the manifest byte-for-byte");
+            Assert.That(path.EndsWith(".link.xml", StringComparison.Ordinal), "The manifest file is named as a linker payload");
+            Assert.That(path.StartsWith(Path.Combine(Directory.GetCurrentDirectory(), "Temp"), StringComparison.Ordinal), "The manifest is written under Temp, never under Assets");
         }
 #endif
 
@@ -517,16 +343,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void EmptyCommandListWritesNoManifest()
         {
             Assert.IsFalse(
-                CommandCompatibilityBake.TryBuildManifest(
-                    new List<CommandCompatibilityBake.PreservationEntry>(),
-                    out string manifest
-                ),
+                CommandCompatibilityBake.TryBuildManifest(new List<CommandCompatibilityBake.PreservationEntry>(), out string manifest),
                 "A build with nothing to preserve must not write a linker file"
             );
-            Assert.That(
-                manifest == null,
-                "No manifest text is produced for an empty preservation set"
-            );
+            Assert.That(manifest == null, "No manifest text is produced for an empty preservation set");
         }
 
         [Test]
@@ -535,39 +355,23 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreEqual(
                 "Ns.Outer/Inner",
                 CommandCompatibilityBake.ToLinkerTypeName("Ns.Outer+Inner"),
-                "Linker descriptors name nested types with the IL separator, not "
-                    + "the reflection + separator; a + entry never matches"
+                "Linker descriptors name nested types with the IL separator, not " + "the reflection + separator; a + entry never matches"
             );
-            Assert.AreEqual(
-                "TopLevel",
-                CommandCompatibilityBake.ToLinkerTypeName("TopLevel"),
-                "Top-level names pass through unchanged"
-            );
+            Assert.AreEqual("TopLevel", CommandCompatibilityBake.ToLinkerTypeName("TopLevel"), "Top-level names pass through unchanged");
         }
 
         [Test]
         public void ManifestWritesNestedTypesWithTheLinkerSeparator()
         {
             Assert.IsTrue(
-                CommandCompatibilityBake.TryBuildManifest(
-                    new[]
-                    {
-                        new CommandCompatibilityBake.PreservationEntry(
-                            "Assembly-A",
-                            "Ns.Outer+Inner",
-                            "Handler"
-                        ),
-                    },
-                    out string manifest
-                ),
+                CommandCompatibilityBake.TryBuildManifest(new[] { new CommandCompatibilityBake.PreservationEntry("Assembly-A", "Ns.Outer+Inner", "Handler") }, out string manifest),
                 "The preservation set produces a manifest"
             );
 
             StringAssert.Contains(
                 "    <type fullname=\"Ns.Outer/Inner\" preserve=\"nothing\">",
                 manifest,
-                "The nested type is written with the IL separator so the linker "
-                    + "entry actually matches"
+                "The nested type is written with the IL separator so the linker " + "entry actually matches"
             );
             StringAssert.DoesNotContain("+", manifest);
         }
@@ -618,20 +422,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         internal static class BakeFixtureRooted
         {
-            [RegisterCommand(
-                Help = "Bake fixture rooted by a direct generated delegate.",
-                Name = "bake-rooted"
-            )]
+            [RegisterCommand(Help = "Bake fixture rooted by a direct generated delegate.", Name = "bake-rooted")]
             public static void RootedCommand(CommandArg[] args) { }
         }
 
         internal static class BakeFixtureEditorOnly
         {
-            [RegisterCommand(
-                Help = "Bake fixture that never registers in players.",
-                Name = "bake-editor-only",
-                EditorOnly = true
-            )]
+            [RegisterCommand(Help = "Bake fixture that never registers in players.", Name = "bake-editor-only", EditorOnly = true)]
             private static void EditorOnlyCommand(CommandArg[] args) { }
         }
 
@@ -644,22 +441,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             */
             public static void WrongParamCommand(string args) { }
 
-            [RegisterCommand(
-                Help = "Bake fixture rooted by a direct generated delegate.",
-                Name = "bake-protected-internal"
-            )]
+            [RegisterCommand(Help = "Bake fixture rooted by a direct generated delegate.", Name = "bake-protected-internal")]
             protected internal static void ProtectedInternalCommand(CommandArg[] args) { }
 
-            [RegisterCommand(
-                Help = "Bake fixture bound through a cached binder.",
-                Name = "bake-protected"
-            )]
+            [RegisterCommand(Help = "Bake fixture bound through a cached binder.", Name = "bake-protected")]
             protected static void ProtectedCommand(CommandArg[] args) { }
 
-            [RegisterCommand(
-                Help = "Bake fixture bound through a cached binder.",
-                Name = "bake-private"
-            )]
+            [RegisterCommand(Help = "Bake fixture bound through a cached binder.", Name = "bake-private")]
             private static void PrivateCommand(CommandArg[] args) { }
         }
     }

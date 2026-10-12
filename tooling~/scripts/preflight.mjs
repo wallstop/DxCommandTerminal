@@ -36,6 +36,20 @@ export function buildChecks() {
     command,
     cacheEnvironment,
     cacheRuntimeEnvironment: true,
+    /*
+        Generator~'s obj/bin are build outputs the linters never read as
+        inputs; keying them made every first key pay a 3 s content walk
+        (now stat signatures) and invalidated linter keys on every local
+        generator build.
+     */
+    cacheExcludes: [
+      "Generator~/WallstopStudios.DxCommandTerminal.Analyzers/obj",
+      "Generator~/WallstopStudios.DxCommandTerminal.Analyzers/bin",
+      "Generator~/WallstopStudios.DxCommandTerminal.SourceGenerators/obj",
+      "Generator~/WallstopStudios.DxCommandTerminal.SourceGenerators/bin",
+      "Generator~/WallstopStudios.DxCommandTerminal.SourceGenerators.Tests/obj",
+      "Generator~/WallstopStudios.DxCommandTerminal.SourceGenerators.Tests/bin"
+    ],
     cachePaths: [
       ...roots,
       `tooling~/scripts/${script}`,
@@ -68,6 +82,7 @@ export function buildChecks() {
         "Generator~",
         "Documentation~",
         "tooling~/scripts",
+        "tooling~/package.json",
         "tooling~/docs/build.mjs",
         "tooling~/docs/docfx.json",
         "tooling~/docs/refs.csproj",
@@ -76,7 +91,15 @@ export function buildChecks() {
         "tooling~/docs/obj/api",
         ".config/dotnet-tools.json"
       ],
-      cacheExcludes: ["tooling~/scripts/.preflight-cache"]
+      cacheExcludes: [
+        "tooling~/scripts/.preflight-cache",
+        "Generator~/WallstopStudios.DxCommandTerminal.Analyzers/obj",
+        "Generator~/WallstopStudios.DxCommandTerminal.Analyzers/bin",
+        "Generator~/WallstopStudios.DxCommandTerminal.SourceGenerators/obj",
+        "Generator~/WallstopStudios.DxCommandTerminal.SourceGenerators/bin",
+        "Generator~/WallstopStudios.DxCommandTerminal.SourceGenerators.Tests/obj",
+        "Generator~/WallstopStudios.DxCommandTerminal.SourceGenerators.Tests/bin"
+      ]
     },
     {
       name: "t11-check",
@@ -154,16 +177,81 @@ export function buildChecks() {
         there scramble each other's references into a CS0246 storm
         (measured: a 1,294-error build failure that passes either build
         alone). The lane serializes them; everything else stays parallel.
+
+        Both are cached (keyed below on the sources each project compiles
+        plus the dotnet environment). The old reason not to - "the input
+        surface is the whole tree, so a key either hashes everything or
+        goes stale" - was the keying wall that git-index identity removed:
+        the key now costs one index listing and reads only dirty bytes.
+        A warm no-op build still pays ~10 s of MSBuild evaluation on this
+        host; a cache hit pays none.
+
+        Stated limit: the cache keys the check's inputs, not MSBuild's
+        obj state. A build killed mid-write (preflight's timeout) leaves
+        obj in a state the next build repairs by timestamp, and a cache
+        entry written before an external obj corruption would age a pass
+        until the inputs move; --no-cache bypasses the cache.
      */
-    { name: "compat-check", command: "npm --prefix tooling~ run compat:check", lane: "dotnet" },
     {
-      // Not cached, same as compat-check: both are dotnet builds whose
-      // input surface is the whole tree, and the lane is seconds. A
-      // cached key over that surface either hashes everything or goes
-      // stale; neither is worth it.
+      name: "compat-check",
+      command: "npm --prefix tooling~ run compat:check",
+      lane: "dotnet",
+      cacheNpm: true,
+      cacheDotnet: true,
+      cacheRuntimeEnvironment: true,
+      cachePaths: [
+        "Runtime",
+        "tooling~/package.json",
+        "tooling~/compat/runtime-2021.3.csproj"
+      ],
+      // The analyzer payload copied into Runtime/Analyzers is the
+      // generator build's own output, excluded from both projects'
+      // compilation - keying it would let the lane invalidate itself.
+      cacheExcludes: ["Runtime/Analyzers"]
+    },
+    /*
+        test:editor builds tests-2021.3 (the compile gate) and testhost
+        (the execution host), and the testhost build applies the source
+        generator, so the key spans everything those projects compile:
+        the two csproj files, their exact sources (the compat tests stub,
+        the testhost directory), Runtime, Tests/Editor, the generator
+        sources, and the npm manifest whose scripts define the command.
+        The generator's test project, compat's T13 fixture project, and
+        matrix.json compile nowhere here and are excluded or simply not
+        rooted; obj/bin are excluded - they are the builds' own outputs,
+        and keying them would invalidate the cache on every run the
+        builds themselves run - and so is the NUnitLite result XML a
+        direct testhost run drops into the keyed tree.
+     */
+    {
       name: "test-editor",
       command: "npm --prefix tooling~ run test:editor",
-      lane: "dotnet"
+      lane: "dotnet",
+      cacheNpm: true,
+      cacheDotnet: true,
+      cacheRuntimeEnvironment: true,
+      cachePaths: [
+        "Runtime",
+        "Tests/Editor",
+        "Generator~",
+        "tooling~/package.json",
+        "tooling~/compat/tests-2021.3.csproj",
+        "tooling~/compat/tests",
+        "tooling~/compat/testhost"
+      ],
+      cacheExcludes: [
+        "Runtime/Analyzers",
+        "tooling~/compat/obj",
+        "tooling~/compat/bin",
+        "tooling~/compat/testhost/obj",
+        "tooling~/compat/testhost/bin",
+        "tooling~/compat/testhost/TestResult.xml",
+        "Generator~/WallstopStudios.DxCommandTerminal.Analyzers/obj",
+        "Generator~/WallstopStudios.DxCommandTerminal.Analyzers/bin",
+        "Generator~/WallstopStudios.DxCommandTerminal.SourceGenerators/obj",
+        "Generator~/WallstopStudios.DxCommandTerminal.SourceGenerators/bin",
+        "Generator~/WallstopStudios.DxCommandTerminal.SourceGenerators.Tests"
+      ]
     },
     csharpCheck(
       "lint-comparison-direction",

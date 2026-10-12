@@ -187,9 +187,7 @@ namespace WallstopStudios.DxCommandTerminal.Helper
 
         private static bool IsSurrogatePairAt(string message, int index)
         {
-            return char.IsHighSurrogate(message[index])
-                && index + 1 < message.Length
-                && char.IsLowSurrogate(message[index + 1]);
+            return char.IsHighSurrogate(message[index]) && index + 1 < message.Length && char.IsLowSurrogate(message[index + 1]);
         }
 
         private static bool IsEscaped(char c)

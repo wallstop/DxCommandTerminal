@@ -45,62 +45,27 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 CommandShell shell = Terminal.Shell;
                 Assert.That(shell != null, "Terminal.Shell should not be null after SpawnTerminal");
                 CommandHistory history = Terminal.History;
-                Assert.That(
-                    history != null,
-                    "Terminal.History should not be null after SpawnTerminal"
-                );
+                Assert.That(history != null, "Terminal.History should not be null after SpawnTerminal");
 
                 int expectedLogCount = 0;
-                assertion = message =>
-                    Assert.AreEqual(
-                        string.Empty,
-                        message,
-                        "Expected empty log message for lone single-quote argument"
-                    );
+                assertion = message => Assert.AreEqual(string.Empty, message, "Expected empty log message for lone single-quote argument");
                 string command = "log '             ";
                 shell.RunCommand(command);
-                Assert.AreEqual(
-                    ++expectedLogCount,
-                    logCount,
-                    $"Log count mismatch after running: {command}"
-                );
+                Assert.AreEqual(++expectedLogCount, logCount, $"Log count mismatch after running: {command}");
                 Assert.That(exception == null, $"Error running {command}: {exception}");
                 string[] logs = history.GetHistory(true, true).ToArray();
-                Assert.AreEqual(
-                    expectedLogCount,
-                    logs.Length,
-                    $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}"
-                );
-                Assert.IsTrue(
-                    logs.Contains("log"),
-                    $"Expected history to contain 'log':{Environment.NewLine}{string.Join(Environment.NewLine, logs)}"
-                );
+                Assert.AreEqual(expectedLogCount, logs.Length, $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}");
+                Assert.IsTrue(logs.Contains("log"), $"Expected history to contain 'log':{Environment.NewLine}{string.Join(Environment.NewLine, logs)}");
 
                 string expected = "' abd      \"   ";
-                assertion = message =>
-                    Assert.AreEqual(
-                        expected.Substring(1),
-                        message,
-                        "Unescaped quote should consume rest of string excluding opening quote"
-                    );
+                assertion = message => Assert.AreEqual(expected.Substring(1), message, "Unescaped quote should consume rest of string excluding opening quote");
                 command = "log " + expected;
                 shell.RunCommand(command);
-                Assert.AreEqual(
-                    ++expectedLogCount,
-                    logCount,
-                    $"Log count mismatch after running: {command}"
-                );
+                Assert.AreEqual(++expectedLogCount, logCount, $"Log count mismatch after running: {command}");
                 Assert.That(exception == null, $"Error running {command}: {exception}");
                 logs = history.GetHistory(true, true).ToArray();
-                Assert.AreEqual(
-                    expectedLogCount,
-                    logs.Length,
-                    $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}"
-                );
-                Assert.IsTrue(
-                    logs.Contains("log " + expected),
-                    $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}"
-                );
+                Assert.AreEqual(expectedLogCount, logs.Length, $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}");
+                Assert.IsTrue(logs.Contains("log " + expected), $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}");
             }
             finally
             {
@@ -160,16 +125,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 Application.logMessageReceived -= HandleMessageReceived;
             }
 
-            Assert.AreEqual(
-                1,
-                messageCount,
-                $"Expected exactly one console message for 'log {hostile}'"
-            );
-            Assert.AreEqual(
-                expected,
-                consoleMessage,
-                "The log command must escape its arguments before Unity's Console shows them"
-            );
+            Assert.AreEqual(1, messageCount, $"Expected exactly one console message for 'log {hostile}'");
+            Assert.AreEqual(expected, consoleMessage, "The log command must escape its arguments before Unity's Console shows them");
 
             /*
                 The funnel captures this same Debug.Log call and sanitizes it
@@ -218,15 +175,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 Assert.That(exception == null, $"Error running {command}: {exception}");
                 Assert.AreEqual(++expectedLogCount, logCount);
                 string[] logs = history.GetHistory(true, true).ToArray();
-                Assert.AreEqual(
-                    expectedLogCount,
-                    logs.Length,
-                    $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}"
-                );
-                Assert.IsTrue(
-                    logs.Contains("log"),
-                    $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}"
-                );
+                Assert.AreEqual(expectedLogCount, logs.Length, $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}");
+                Assert.IsTrue(logs.Contains("log"), $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}");
 
                 assertion = message => Assert.AreEqual("test", message);
                 command = "log test";
@@ -234,19 +184,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 Assert.AreEqual(++expectedLogCount, logCount);
                 Assert.That(exception == null, $"Error running {command}: {exception}");
                 logs = history.GetHistory(true, true).ToArray();
-                Assert.AreEqual(
-                    expectedLogCount,
-                    logs.Length,
-                    $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}"
-                );
-                Assert.IsTrue(
-                    logs.Contains("log"),
-                    $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}"
-                );
-                Assert.IsTrue(
-                    logs.Contains("log test"),
-                    $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}"
-                );
+                Assert.AreEqual(expectedLogCount, logs.Length, $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}");
+                Assert.IsTrue(logs.Contains("log"), $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}");
+                Assert.IsTrue(logs.Contains("log test"), $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}");
 
                 assertion = message => Assert.AreEqual("quoted argument", message);
                 command = "log \"quoted argument\"";
@@ -254,23 +194,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 Assert.AreEqual(++expectedLogCount, logCount);
                 Assert.That(exception == null, $"Error running {command}: {exception}");
                 logs = history.GetHistory(true, true).ToArray();
-                Assert.AreEqual(
-                    expectedLogCount,
-                    logs.Length,
-                    $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}"
-                );
-                Assert.IsTrue(
-                    logs.Contains("log"),
-                    $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}"
-                );
-                Assert.IsTrue(
-                    logs.Contains("log test"),
-                    $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}"
-                );
-                Assert.IsTrue(
-                    logs.Contains("log \"quoted argument\""),
-                    $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}"
-                );
+                Assert.AreEqual(expectedLogCount, logs.Length, $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}");
+                Assert.IsTrue(logs.Contains("log"), $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}");
+                Assert.IsTrue(logs.Contains("log test"), $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}");
+                Assert.IsTrue(logs.Contains("log \"quoted argument\""), $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}");
 
                 assertion = message => Assert.AreEqual("multi argument", message);
                 command = "log multi argument";
@@ -278,27 +205,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 Assert.AreEqual(++expectedLogCount, logCount);
                 Assert.That(exception == null, $"Error running {command}: {exception}");
                 logs = history.GetHistory(true, true).ToArray();
-                Assert.AreEqual(
-                    expectedLogCount,
-                    logs.Length,
-                    $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}"
-                );
-                Assert.IsTrue(
-                    logs.Contains("log"),
-                    $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}"
-                );
-                Assert.IsTrue(
-                    logs.Contains("log test"),
-                    $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}"
-                );
-                Assert.IsTrue(
-                    logs.Contains("log \"quoted argument\""),
-                    $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}"
-                );
-                Assert.IsTrue(
-                    logs.Contains("log multi argument"),
-                    $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}"
-                );
+                Assert.AreEqual(expectedLogCount, logs.Length, $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}");
+                Assert.IsTrue(logs.Contains("log"), $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}");
+                Assert.IsTrue(logs.Contains("log test"), $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}");
+                Assert.IsTrue(logs.Contains("log \"quoted argument\""), $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}");
+                Assert.IsTrue(logs.Contains("log multi argument"), $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}");
 
                 assertion = message => Assert.AreEqual("a a a a a a aaaa aa aaa d", message);
                 command = "log a a a a a a aaaa aa aaa d";
@@ -306,27 +217,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 Assert.AreEqual(++expectedLogCount, logCount);
                 Assert.That(exception == null, $"Error running {command}: {exception}");
                 logs = history.GetHistory(true, true).ToArray();
-                Assert.AreEqual(
-                    expectedLogCount,
-                    logs.Length,
-                    $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}"
-                );
-                Assert.IsTrue(
-                    logs.Contains("log"),
-                    $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}"
-                );
-                Assert.IsTrue(
-                    logs.Contains("log test"),
-                    $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}"
-                );
-                Assert.IsTrue(
-                    logs.Contains("log \"quoted argument\""),
-                    $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}"
-                );
-                Assert.IsTrue(
-                    logs.Contains("log a a a a a a aaaa aa aaa d"),
-                    $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}"
-                );
+                Assert.AreEqual(expectedLogCount, logs.Length, $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}");
+                Assert.IsTrue(logs.Contains("log"), $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}");
+                Assert.IsTrue(logs.Contains("log test"), $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}");
+                Assert.IsTrue(logs.Contains("log \"quoted argument\""), $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}");
+                Assert.IsTrue(logs.Contains("log a a a a a a aaaa aa aaa d"), $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}");
 
                 char[] quotes = CommandArg.Quotes.ToArray();
                 CommandArg.Quotes.Clear();
@@ -337,8 +232,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     int simpleCommandCount = 1;
                     foreach (char quote in CommandArg.Quotes)
                     {
-                        string expected =
-                            $"{quote}     {quote} {quote} aa bbb ccc  {quote} {quote}{Environment.NewLine}abd {Environment.NewLine} \r \t \n__{quote}";
+                        string expected = $"{quote}     {quote} {quote} aa bbb ccc  {quote} {quote}{Environment.NewLine}abd {Environment.NewLine} \r \t \n__{quote}";
                         foreach (char otherQuote in CommandArg.Quotes.Except(new[] { quote }))
                         {
                             expected += $" {quote}  {otherQuote}ab {quote}";
@@ -356,9 +250,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                                     position, so a parse that dropped the CR still
                                     fails here.
                                 */
-                                LogTextSanitizer.Sanitize(
-                                    expected.Replace(quote.ToString(), string.Empty)
-                                ),
+                                LogTextSanitizer.Sanitize(expected.Replace(quote.ToString(), string.Empty)),
                                 message
                             );
                         command = "log " + expected;
@@ -366,15 +258,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                         Assert.AreEqual(++expectedLogCount, logCount);
                         Assert.That(exception == null, $"Error running {command}: {exception}");
                         logs = history.GetHistory(true, true).ToArray();
-                        Assert.AreEqual(
-                            expectedLogCount,
-                            logs.Length,
-                            $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}"
-                        );
-                        Assert.IsTrue(
-                            logs.Contains(command),
-                            $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}"
-                        );
+                        Assert.AreEqual(expectedLogCount, logs.Length, $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}");
+                        Assert.IsTrue(logs.Contains(command), $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}");
 
                         expected = $"{quote}{quote}";
                         assertion = message =>
@@ -388,9 +273,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                                     position, so a parse that dropped the CR still
                                     fails here.
                                 */
-                                LogTextSanitizer.Sanitize(
-                                    expected.Replace(quote.ToString(), string.Empty)
-                                ),
+                                LogTextSanitizer.Sanitize(expected.Replace(quote.ToString(), string.Empty)),
                                 message
                             );
                         command = "log " + expected;
@@ -398,15 +281,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                         Assert.AreEqual(++expectedLogCount, logCount);
                         Assert.That(exception == null, $"Error running {command}: {exception}");
                         logs = history.GetHistory(true, true).ToArray();
-                        Assert.AreEqual(
-                            expectedLogCount,
-                            logs.Length,
-                            $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}"
-                        );
-                        Assert.IsTrue(
-                            logs.Contains(command),
-                            $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}"
-                        );
+                        Assert.AreEqual(expectedLogCount, logs.Length, $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}");
+                        Assert.IsTrue(logs.Contains(command), $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}");
 
                         expected = $"{quote}";
                         assertion = message => Assert.AreEqual(string.Empty, message);
@@ -415,11 +291,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                         Assert.AreEqual(++expectedLogCount, logCount);
                         Assert.That(exception == null, $"Error running {command}: {exception}");
                         logs = history.GetHistory(true, true).ToArray();
-                        Assert.AreEqual(
-                            expectedLogCount,
-                            logs.Length,
-                            $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}"
-                        );
+                        Assert.AreEqual(expectedLogCount, logs.Length, $"Unexpected logs:{Environment.NewLine}{string.Join(Environment.NewLine, logs)}");
                         Assert.AreEqual(
                             ++simpleCommandCount,
                             logs.Count(message => string.Equals(message, "log")),
@@ -443,10 +315,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 }
 
                 Assert.IsFalse(anyError, errorBuilder.ToString());
-                Assert.IsFalse(
-                    initialHadError,
-                    "Shell reported errors, but was unable to consume error messages!"
-                );
+                Assert.IsFalse(initialHadError, "Shell reported errors, but was unable to consume error messages!");
             }
             finally
             {
@@ -485,45 +354,23 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             int invocations = 0;
             Assert.IsTrue(
                 contextAware
-                    ? shell.AddCommand(
-                        new CommandDefinition
-                        {
-                            Name = "throwingCommand",
-                            Handler = (context, arguments) => Throw(),
-                        }
-                    )
+                    ? shell.AddCommand(new CommandDefinition { Name = "throwingCommand", Handler = (context, arguments) => Throw() })
                     : shell.AddCommand("throwingCommand", arguments => Throw()),
                 "Sanity: the throwing command registers"
             );
-            Assert.IsTrue(
-                shell.AddCommand("recoverCommand", arguments => { }),
-                "Sanity: the command that runs afterwards registers"
-            );
+            Assert.IsTrue(shell.AddCommand("recoverCommand", arguments => { }), "Sanity: the command that runs afterwards registers");
 
             LogAssert.Expect(LogType.Exception, new Regex("handler exploded"));
 
-            Assert.IsTrue(
-                shell.RunCommand("throwingCommand"),
-                "The command ran, so the shell still answers that it ran"
-            );
+            Assert.IsTrue(shell.RunCommand("throwingCommand"), "The command ran, so the shell still answers that it ran");
             Assert.AreEqual(1, invocations, "The handler ran once");
-            Assert.IsTrue(
-                shell.TryConsumeErrorMessage(out string error),
-                "A thrown handler is reported where every other failure is"
-            );
+            Assert.IsTrue(shell.TryConsumeErrorMessage(out string error), "A thrown handler is reported where every other failure is");
             StringAssert.Contains("throwingCommand", error, "The report names the command");
-            StringAssert.Contains(
-                "InvalidOperationException",
-                error,
-                "The report names what was thrown"
-            );
+            StringAssert.Contains("InvalidOperationException", error, "The report names what was thrown");
             StringAssert.Contains("handler exploded", error, "The report carries the message");
             Assert.IsFalse(shell.TryConsumeErrorMessage(out _), "One failure reports one message");
 
-            Assert.IsTrue(
-                shell.RunCommand("recoverCommand"),
-                "A command after the failure still runs"
-            );
+            Assert.IsTrue(shell.RunCommand("recoverCommand"), "A command after the failure still runs");
 
             void Throw()
             {
@@ -543,43 +390,17 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             CommandShell shell = new CommandShell(new CommandHistory(16));
             shell.InitializeAutoRegisteredCommands();
-            Assert.IsNotEmpty(
-                shell.AutoRegisteredCommands,
-                "Sanity: expected discovered auto commands to register"
-            );
-            Assert.IsTrue(
-                shell.AddCommand(
-                    new CommandDefinition { Name = "customClearProbe", Handler = (_, _) => { } }
-                ),
-                "Sanity: custom registration must succeed"
-            );
+            Assert.IsNotEmpty(shell.AutoRegisteredCommands, "Sanity: expected discovered auto commands to register");
+            Assert.IsTrue(shell.AddCommand(new CommandDefinition { Name = "customClearProbe", Handler = (_, _) => { } }), "Sanity: custom registration must succeed");
 
             int expectedCount = shell.AutoRegisteredCommands.Count + 1;
             int cleared = shell.ClearCustomCommands();
 
-            Assert.AreEqual(
-                expectedCount,
-                cleared,
-                "The returned count must cover auto and custom commands alike"
-            );
-            Assert.AreEqual(
-                0,
-                shell.Commands.Count,
-                "ClearCustomCommands must leave no commands registered"
-            );
-            Assert.IsEmpty(
-                shell.AutoRegisteredCommands,
-                "AutoRegisteredCommands must not list removed commands (issue #64)"
-            );
-            Assert.IsFalse(
-                shell.AutoCommandsRegistered,
-                "Clearing a registered shell must reset the readiness flag the terminal restore path keys on"
-            );
-            Assert.AreEqual(
-                0,
-                shell.ClearAutoRegisteredCommands(),
-                "A later auto clear must find nothing left to remove"
-            );
+            Assert.AreEqual(expectedCount, cleared, "The returned count must cover auto and custom commands alike");
+            Assert.AreEqual(0, shell.Commands.Count, "ClearCustomCommands must leave no commands registered");
+            Assert.IsEmpty(shell.AutoRegisteredCommands, "AutoRegisteredCommands must not list removed commands (issue #64)");
+            Assert.IsFalse(shell.AutoCommandsRegistered, "Clearing a registered shell must reset the readiness flag the terminal restore path keys on");
+            Assert.AreEqual(0, shell.ClearAutoRegisteredCommands(), "A later auto clear must find nothing left to remove");
         }
 
         [Test]
@@ -587,23 +408,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             CommandShell shell = new CommandShell(new CommandHistory(16));
             shell.InitializeAutoRegisteredCommands(deferRegistration: true);
-            Assert.AreEqual(
-                0,
-                shell.ClearCustomCommands(),
-                "Nothing is registered before readiness"
-            );
+            Assert.AreEqual(0, shell.ClearCustomCommands(), "Nothing is registered before readiness");
 
             shell.EnsureAutoCommandsRegistered();
 
-            Assert.IsFalse(
-                shell.AutoCommandsRegistered,
-                "Clearing must cancel the pending deferred registration"
-            );
-            Assert.AreEqual(
-                0,
-                shell.Commands.Count,
-                "Cleared shells must not resurrect auto commands through readiness"
-            );
+            Assert.IsFalse(shell.AutoCommandsRegistered, "Clearing must cancel the pending deferred registration");
+            Assert.AreEqual(0, shell.Commands.Count, "Cleared shells must not resurrect auto commands through readiness");
         }
 
         [Test]
@@ -611,16 +421,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             CommandShell shell = new CommandShell(new CommandHistory(16));
             shell.InitializeAutoRegisteredCommands();
-            Assert.IsTrue(
-                shell.AddCommand(
-                    new CommandDefinition { Name = "customClearProbeA", Handler = (_, _) => { } }
-                )
-            );
-            Assert.IsTrue(
-                shell.AddCommand(
-                    new CommandDefinition { Name = "customClearProbeB", Handler = (_, _) => { } }
-                )
-            );
+            Assert.IsTrue(shell.AddCommand(new CommandDefinition { Name = "customClearProbeA", Handler = (_, _) => { } }));
+            Assert.IsTrue(shell.AddCommand(new CommandDefinition { Name = "customClearProbeB", Handler = (_, _) => { } }));
 
             int expectedCount = shell.AutoRegisteredCommands.Count + 2;
             Assert.AreEqual(expectedCount, shell.ClearAllCommands());

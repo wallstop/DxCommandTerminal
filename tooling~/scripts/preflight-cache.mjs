@@ -6,7 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const CACHE_VERSION = 4;
+const CACHE_VERSION = 5;
 const CACHE_DIRECTORY = path.join(path.dirname(fileURLToPath(import.meta.url)), ".preflight-cache");
 const CHECKOUT_ID = (() => {
   try {
@@ -15,7 +15,6 @@ const CHECKOUT_ID = (() => {
     return REPO_ROOT;
   }
 })();
-const CACHE_DISABLED_CHECKS = new Set(["compat-check", "test-editor"]);
 const CACHE_PATH_KEYS = new Set([
   "COMPARISON_DIRECTION_ROOTS",
   "NESTED_TYPE_PLACEMENT_ROOTS",
@@ -77,6 +76,96 @@ function hashText(value) {
     repositorySnapshot).
  */
 const UNTRACKED_CONTENT_HASH_LIMIT = 1024 * 1024;
+
+/*
+    Content identity for tracked files comes from git's index, not from
+    re-reading bytes: git status answers "worktree matches index" with
+    the same stat machinery every caller would otherwise duplicate, so a
+    clean tracked file keys at its index blob (one `ls-files -s`
+    listing, ~25 ms for ~1,200 files) and only status-flagged files fall
+    back to byte reads. The status call uses
+    `--untracked-files=no`, which skips the untracked walk entirely.
+    The state is computed lazily once per process (CI and --no-cache
+    runs never key anything and never pay the spawns).
+
+    The index-eol configuration (core.autocrlf, core.eol) is folded into
+    the blob marker: with a clean/smudge filter the worktree bytes and
+    the index blob genuinely differ while status says clean, so flipping
+    the configuration must move keys, not age a cached pass.
+
+    Stated limits, all inherited from the snapshot's existing contract:
+    a file flagged assume-unchanged or skip-worktree hides its edits from
+    status and is keyed at its index blob; the state is computed once per
+    process, so an edit landing after the first keyed check in the same
+    run is seen by the next run (the per-run memo contract); the folded
+    configuration covers core.autocrlf and core.eol, while `text`/`eol`/
+    `ident`/`working-tree-encoding` ATTRIBUTES and any LFS or custom
+    clean/smudge filter drive worktree-vs-index divergence the marker
+    does not see - this repository carries only `text eol=lf` over its
+    own tooling paths and no filter over keyed roots today, and either
+    landing over keyed roots needs to join this key before it can be
+    trusted; and the dotnet lane keys pinned package versions, not the
+    global NuGet cache contents, the same accepted limit a lockfile-keyed
+    CI cache takes. When git is unavailable the whole identity falls
+    back to byte reads.
+ */
+let gitFileIdentityState = null;
+
+function gitFileIdentity() {
+  if (gitFileIdentityState !== null) {
+    return gitFileIdentityState;
+  }
+  try {
+    const tracked = new Map();
+    const listing = execFileSync("git", ["ls-files", "-s", "-z"], {
+      cwd: REPO_ROOT,
+      maxBuffer: 256 * 1024 * 1024,
+      encoding: "utf8"
+    });
+    for (const record of listing.split("\0")) {
+      const tab = record.indexOf("\t");
+      if (tab < 0) {
+        continue;
+      }
+      const meta = record.slice(0, tab).split(" ");
+      if (meta.length < 3) {
+        continue;
+      }
+      tracked.set(record.slice(tab + 1), meta[1]);
+    }
+
+    const status = execFileSync("git", ["status", "--porcelain=v1", "-z", "--untracked-files=no"], {
+      cwd: REPO_ROOT,
+      maxBuffer: 256 * 1024 * 1024,
+      encoding: "utf8"
+    });
+    const dirty = parseStatusRecords(status).worktreeDirty;
+    /* One spawn per key, each caught alone: `git config --get` exits 1
+       for an UNSET key, so a shared try/catch would let a set autocrlf
+       next to an unset eol read as both-unset and hide a real flip. */
+    const configGet = (key) => {
+      try {
+        return execFileSync("git", ["config", "--get", key], { cwd: REPO_ROOT, encoding: "utf8" }).trim();
+      } catch {
+        return "<unset>";
+      }
+    };
+    const eol = [configGet("core.autocrlf"), configGet("core.eol")].join("\0");
+    gitFileIdentityState = { tracked, dirty, eol };
+  } catch {
+    gitFileIdentityState = { tracked: null, dirty: null, eol: "" };
+  }
+  return gitFileIdentityState;
+}
+
+/** Maps an absolute path inside the repo to its slash-separated repo-relative path; null outside. */
+function repoRelativePath(target) {
+  const relative = path.relative(REPO_ROOT, target);
+  if (relative === "" || relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+    return null;
+  }
+  return relative.split(path.sep).join("/");
+}
 
 function statSignature(stat) {
   return `${stat.mode}\0${stat.size}\0${stat.mtimeMs}\0${stat.ino}\0`;
@@ -152,6 +241,28 @@ function updatePathHash(hash, target, label, visited, excludes) {
   }
 
   if (stat.isFile()) {
+    const identity = gitFileIdentity();
+    const relative = repoRelativePath(target);
+    if (relative !== null && identity.tracked !== null) {
+      const blob = identity.tracked.get(relative);
+      if (blob !== undefined && !identity.dirty.has(relative)) {
+        hash.update(`git-blob\0${blob}\0${identity.eol}\0`);
+        return;
+      }
+    }
+    /*
+        Above the size cap the key hashes the stat signature instead of
+        the bytes - the same documented coin the snapshot already flips
+        for huge untracked files. The walk's wall was file reads, and the
+        only regular victims here are build outputs and tool binaries
+        (Generator~ obj/bin, /usr/bin/node, the npm install), which are
+        immutable between real changes; a same-size, same-mtime edit to
+        one huge file defeats its slice of the key.
+     */
+    if (stat.size > UNTRACKED_CONTENT_HASH_LIMIT) {
+      hash.update(statSignature(stat));
+      return;
+    }
     hash.update(fs.readFileSync(target));
     return;
   }
@@ -210,6 +321,57 @@ function hashPathEntry(entry, excludes) {
   return hash.digest("hex");
 }
 
+/*
+    Parses one `git status --porcelain=v1 -z --untracked-files=...` output
+    into the two views the cache needs.
+
+    Record shapes (empirically pinned in this repo's contract tests):
+    `XY path` for ordinary entries, `?? path` for untracked, and staged
+    renames/copies as TWO records: `XY NEW\0OLD\0` - the flagged path
+    (the destination, what exists on disk) comes first and carries the
+    Y code; the ORIGINAL path follows as a bare record that is not a
+    status line of its own.
+
+    `changed` lists every path whose state differs from HEAD - either
+    half dirty, or untracked. The snapshot folds those files' contents
+    because a later rewrite of the same file keeps the status output
+    byte-identical exactly as a worktree rewrite does.
+
+    `worktreeDirty` holds only paths whose WORKTREE half (Y) is not
+    space. The per-file identity uses this view on purpose: it answers
+    "what are this file's bytes", and a clean worktree half means those
+    bytes are the index blob, whatever the index-vs-HEAD half says.
+ */
+export function parseStatusRecords(output) {
+  const changed = [];
+  const worktreeDirty = new Set();
+  const records = output.split("\0");
+  for (let index = 0; index < records.length; index++) {
+    const record = records[index];
+    if (record === "") {
+      continue;
+    }
+    if (record.startsWith("?? ")) {
+      /* -z paths are literal (never quoted), so the slice is the path. */
+      changed.push(record.slice(3));
+      continue;
+    }
+    if (record.length < 4 || record[2] !== " ") {
+      continue;
+    }
+    if (record[0] !== " " || record[1] !== " ") {
+      changed.push(record.slice(3));
+    }
+    if (record[1] !== " ") {
+      worktreeDirty.add(record.slice(3));
+    }
+    if (record[0] === "R" || record[0] === "C") {
+      index++;
+    }
+  }
+  return { changed, worktreeDirty };
+}
+
 function repositorySnapshot() {
   /*
       One git call instead of a stat per tracked file: `git status
@@ -222,14 +384,17 @@ function repositorySnapshot() {
       edit to an untracked file's CONTENT leaves the output byte-identical
       while the check inputs move - and node-tests reads files outside its
       declared roots (.github/, .devcontainer/, .llm/), where a draft file
-      would age a cached pass. The untracked set is hashed by content to
-      close that gap. The hash is incremental over raw bytes - a UTF-8
-      string join would decode two different binary files to the same
-      replacement-character string - and a file above the size cap hashes
-      its stat signature instead of its bytes, so an un-ignored dump in
-      the worktree cannot reintroduce the keying wall. The cap trades the
-      same documented coin as every stat key here: a same-size, same-mtime
-      content edit to one huge untracked file defeats its part of the key.
+      would age a cached pass. The same holds for a DIRTY tracked file
+      outside those roots: a second rewrite keeps the ` M <path>` line
+      byte-identical while the content moves again. So every file status
+      flags as changed - untracked or tracked - is hashed by content: the
+      hash is incremental over raw bytes (a UTF-8 string join would decode
+      two different binary files to the same replacement-character
+      string), and a file above the size cap hashes its stat signature
+      instead of its bytes, so an un-ignored dump in the worktree cannot
+      reintroduce the keying wall. The cap trades the same documented coin
+      as every stat key here: a same-size, same-mtime content edit to one
+      huge file defeats its part of the key.
 
       Stated limit: a tracked file flagged assume-unchanged or
       skip-worktree hides its edits from status, and this snapshot does not
@@ -239,7 +404,7 @@ function repositorySnapshot() {
    */
   const output = execFileSync(
     "git",
-    ["status", "--porcelain", "-z", "--untracked-files=all"],
+    ["status", "--porcelain=v1", "-z", "--untracked-files=all"],
     {
       cwd: REPO_ROOT,
       maxBuffer: 256 * 1024 * 1024,
@@ -248,10 +413,8 @@ function repositorySnapshot() {
   );
   const hash = crypto.createHash("sha256");
   hash.update(output);
-  const untracked = output.split("\0").filter((entry) => entry.startsWith("?? "));
-  for (const entry of untracked) {
-    /* -z paths are literal (never quoted), so the slice is the path. */
-    const relative = entry.slice(3);
+  const { changed } = parseStatusRecords(output);
+  for (const relative of changed) {
     hash.update(relative);
     hash.update("\0");
     const absolute = path.join(REPO_ROOT, relative);
@@ -672,9 +835,6 @@ function readRegularFile(filePath) {
 }
 
 export function isCacheableCheck(check) {
-  if (CACHE_DISABLED_CHECKS.has(check.name)) {
-    return false;
-  }
   if (check.cacheRuntimeEnvironment === true && (process.env.NODE_OPTIONS || process.env.NODE_PATH)) {
     return false;
   }

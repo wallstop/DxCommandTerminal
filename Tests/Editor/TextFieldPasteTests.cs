@@ -30,11 +30,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             arranged selection therefore ignores itself on 2021.3 with that
             reason and runs unchanged everywhere the setter exists.
          */
-        private static TextField FieldWithArrangedSelection(
-            string value,
-            int selectIndex,
-            int cursorIndex
-        )
+        private static TextField FieldWithArrangedSelection(string value, int selectIndex, int cursorIndex)
         {
             TextField field = new TextField();
             field.value = value;
@@ -42,10 +38,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             field.selectIndex = selectIndex;
             field.cursorIndex = cursorIndex;
 #else
-            Assert.Ignore(
-                "2021.3 exposes the caret getters only; the engine owns placement, "
-                    + "so this fixture's arranged selection cannot be built here"
-            );
+            Assert.Ignore("2021.3 exposes the caret getters only; the engine owns placement, " + "so this fixture's arranged selection cannot be built here");
 #endif
             return field;
         }
@@ -79,98 +72,32 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [TestCase("give\nitem\n42", "give item 42", Description = "Newlines become spaces")]
         [TestCase("give\r\nitem", "give item", Description = "A CRLF is one separator")]
         [TestCase("give\ta\tb", "give a b", Description = "Tabs become spaces")]
-        [TestCase(
-            "give   item",
-            "give item",
-            Description = "An interior run collapses to one space"
-        )]
+        [TestCase("give   item", "give item", Description = "An interior run collapses to one space")]
         [TestCase("  give", " give", Description = "A leading run keeps its one space")]
         [TestCase("give  ", "give ", Description = "A trailing run keeps its one space")]
         [TestCase("a\n\n\nb", "a b", Description = "Blank pasted lines are one separator")]
         [TestCase("give\u00a0item", "give item", Description = "A non-breaking space separates")]
         [TestCase("   ", " ", Description = "An all-whitespace clipboard is one space")]
         [TestCase("", "", Description = "An empty clipboard flattens to nothing")]
-        [TestCase(
-            "set name \"two\nlines\"",
-            "set name \"two lines\"",
-            Description = "A quote still groups, but the run inside it is normalized"
-        )]
+        [TestCase("set name \"two\nlines\"", "set name \"two lines\"", Description = "A quote still groups, but the run inside it is normalized")]
         public void FlattenCollapsesWhitespaceRuns(string clipboard, string expected)
         {
             Assert.AreEqual(expected, TextFieldPaste.Flatten(clipboard), $"Flatten '{clipboard}'");
         }
 
-        [TestCase(
-            "",
-            0,
-            0,
-            "give item 42",
-            "give item 42",
-            12,
-            Description = "Into an empty field"
-        )]
-        [TestCase(
-            "give ",
-            5,
-            5,
-            "item 42",
-            "give item 42",
-            12,
-            Description = "At the end of the field"
-        )]
-        [TestCase(
-            "give 42",
-            4,
-            4,
-            " item",
-            "give item 42",
-            9,
-            Description = "In the middle of the field"
-        )]
-        [TestCase(
-            "give",
-            4,
-            4,
-            " spawn\n enemy",
-            "give spawn enemy",
-            16,
-            Description = "A pasted block flattens on the way in"
-        )]
-        [TestCase(
-            "give ",
-            5,
-            5,
-            "   ",
-            "give  ",
-            6,
-            Description = "An all-whitespace paste is one space"
-        )]
-        [TestCase(
-            "",
-            0,
-            0,
-            "  give item",
-            "give item",
-            9,
-            Description = "A leading run at the start is dropped"
-        )]
-        public void TryApplyReplacesTheSelection(
-            string value,
-            int selectIndex,
-            int cursorIndex,
-            string clipboard,
-            string expectedValue,
-            int expectedCaret
-        )
+        [TestCase("", 0, 0, "give item 42", "give item 42", 12, Description = "Into an empty field")]
+        [TestCase("give ", 5, 5, "item 42", "give item 42", 12, Description = "At the end of the field")]
+        [TestCase("give 42", 4, 4, " item", "give item 42", 9, Description = "In the middle of the field")]
+        [TestCase("give", 4, 4, " spawn\n enemy", "give spawn enemy", 16, Description = "A pasted block flattens on the way in")]
+        [TestCase("give ", 5, 5, "   ", "give  ", 6, Description = "An all-whitespace paste is one space")]
+        [TestCase("", 0, 0, "  give item", "give item", 9, Description = "A leading run at the start is dropped")]
+        public void TryApplyReplacesTheSelection(string value, int selectIndex, int cursorIndex, string clipboard, string expectedValue, int expectedCaret)
         {
             TextField field = FieldWithArrangedSelection(value, selectIndex, cursorIndex);
             GUIUtility.systemCopyBuffer = clipboard;
 
             using KeyDownEvent paste = PasteKeyDown(EventModifiers.Control);
-            Assert.IsTrue(
-                TextFieldPaste.TryApply(field, paste, out _),
-                $"Ctrl+V should paste '{clipboard}'"
-            );
+            Assert.IsTrue(TextFieldPaste.TryApply(field, paste, out _), $"Ctrl+V should paste '{clipboard}'");
             Assert.AreEqual(expectedValue, field.value, "Pasted value");
             Assert.AreEqual(expectedCaret, field.cursorIndex, "Caret after the paste");
             Assert.AreEqual(expectedCaret, field.selectIndex, "Selection after the paste");
@@ -195,10 +122,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             GUIUtility.systemCopyBuffer = "   ";
 
             using KeyDownEvent paste = PasteKeyDown(EventModifiers.Control);
-            Assert.IsFalse(
-                TextFieldPaste.TryApply(field, paste, out _),
-                "A leading whitespace run separates nothing, so there is no paste to apply"
-            );
+            Assert.IsFalse(TextFieldPaste.TryApply(field, paste, out _), "A leading whitespace run separates nothing, so there is no paste to apply");
             Assert.AreEqual("give", field.value, "The field is untouched");
         }
 
@@ -209,10 +133,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             GUIUtility.systemCopyBuffer = "torch";
 
             using KeyDownEvent paste = PasteKeyDown(EventModifiers.Command);
-            Assert.IsTrue(
-                TextFieldPaste.TryApply(field, paste, out int caret),
-                "A macOS Cmd+V pastes the same way"
-            );
+            Assert.IsTrue(TextFieldPaste.TryApply(field, paste, out int caret), "A macOS Cmd+V pastes the same way");
             Assert.AreEqual("give torch 42", field.value, "The selection was replaced");
             Assert.AreEqual(10, caret, "The reported caret is where the paste landed");
             Assert.AreEqual(caret, field.cursorIndex, "The field was left on the same caret");
@@ -232,27 +153,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [TestCase("give 42", 4, 4, " item", 9, Description = "In the middle of the field")]
         [TestCase("give item 42", 5, 9, "torch pick", 15, Description = "Over a selection")]
         [TestCase("", 0, 0, "give\titem", 9, Description = "A pasted block, flattened")]
-        public void TheReportedCaretIsWhereThePasteLanded(
-            string value,
-            int selectIndex,
-            int cursorIndex,
-            string clipboard,
-            int expectedCaret
-        )
+        public void TheReportedCaretIsWhereThePasteLanded(string value, int selectIndex, int cursorIndex, string clipboard, int expectedCaret)
         {
             TextField field = FieldWithArrangedSelection(value, selectIndex, cursorIndex);
             GUIUtility.systemCopyBuffer = clipboard;
 
             using KeyDownEvent paste = PasteKeyDown(EventModifiers.Control);
-            Assert.IsTrue(
-                TextFieldPaste.TryApply(field, paste, out int caret),
-                "Ctrl+V should paste"
-            );
-            Assert.AreEqual(
-                expectedCaret,
-                caret,
-                $"The reported caret for '{value}' + '{clipboard}'"
-            );
+            Assert.IsTrue(TextFieldPaste.TryApply(field, paste, out int caret), "Ctrl+V should paste");
+            Assert.AreEqual(expectedCaret, caret, $"The reported caret for '{value}' + '{clipboard}'");
             Assert.AreEqual(expectedCaret, field.cursorIndex, "The field holds that caret too");
         }
 
@@ -263,10 +171,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             GUIUtility.systemCopyBuffer = "item 42";
 
             using KeyDownEvent key = PasteKeyDown(KeyCode.V, EventModifiers.None);
-            Assert.IsFalse(
-                TextFieldPaste.TryApply(field, key, out int caret),
-                "A plain V is not a paste"
-            );
+            Assert.IsFalse(TextFieldPaste.TryApply(field, key, out int caret), "A plain V is not a paste");
             Assert.AreEqual(0, caret, "A failed paste reports no position");
         }
 
@@ -280,12 +185,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [TestCase("give", 0, "  item 42", "item 42give", Description = "At the start, dropped")]
         [TestCase("give", 4, "  item 42", "give item 42", Description = "At the end, kept")]
         [TestCase("give", 2, "  item 42", "gi item 42ve", Description = "Mid-line, kept")]
-        public void ALeadingRunIsDroppedOnlyAtTheStartOfTheValue(
-            string value,
-            int caret,
-            string clipboard,
-            string expectedValue
-        )
+        public void ALeadingRunIsDroppedOnlyAtTheStartOfTheValue(string value, int caret, string clipboard, string expectedValue)
         {
             TextField field = FieldWithArrangedSelection(value, caret, caret);
             GUIUtility.systemCopyBuffer = clipboard;
@@ -310,30 +210,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             position after the pasted text, and a value that kept the letter
             the caret moved in front of.
          */
-        [TestCase(
-            "give \ud83d\ude00 item",
-            6,
-            "torch",
-            "give torch\ud83d\ude00 item",
-            10,
-            Description = "A caret inside an emoji pastes in front of it"
-        )]
-        [TestCase(
-            "give \ud83d\ude00 item",
-            7,
-            "torch",
-            "give \ud83d\ude00torch item",
-            12,
-            Description = "A caret after an emoji pastes where it is"
-        )]
-        [TestCase(
-            "give cafe\u0301 item",
-            9,
-            "torch",
-            "give caftorche\u0301 item",
-            13,
-            Description = "A caret before an accent pastes in front of it"
-        )]
+        [TestCase("give \ud83d\ude00 item", 6, "torch", "give torch\ud83d\ude00 item", 10, Description = "A caret inside an emoji pastes in front of it")]
+        [TestCase("give \ud83d\ude00 item", 7, "torch", "give \ud83d\ude00torch item", 12, Description = "A caret after an emoji pastes where it is")]
+        [TestCase("give cafe\u0301 item", 9, "torch", "give caftorche\u0301 item", 13, Description = "A caret before an accent pastes in front of it")]
         /*
             A clipboard that ends mid-sequence - a truncated emoji, whose
             invisible joiner is followed by a character that joins with it -
@@ -361,22 +240,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             8,
             Description = "A clipboard ending in a joiner keeps the caret before what joins it"
         )]
-        public void APasteNeverSplitsACharacter(
-            string value,
-            int caret,
-            string clipboard,
-            string expectedValue,
-            int expectedCaret
-        )
+        public void APasteNeverSplitsACharacter(string value, int caret, string clipboard, string expectedValue, int expectedCaret)
         {
             TextField field = FieldWithArrangedSelection(value, caret, caret);
             GUIUtility.systemCopyBuffer = clipboard;
 
             using KeyDownEvent paste = PasteKeyDown(EventModifiers.Control);
-            Assert.IsTrue(
-                TextFieldPaste.TryApply(field, paste, out int landed),
-                "Ctrl+V should paste"
-            );
+            Assert.IsTrue(TextFieldPaste.TryApply(field, paste, out int landed), "Ctrl+V should paste");
             Assert.AreEqual(expectedValue, field.value, "The character is not split");
             Assert.AreEqual(expectedCaret, landed, "The reported caret is after the pasted text");
             Assert.AreEqual(expectedCaret, field.cursorIndex, "The field holds that caret too");
@@ -394,37 +264,22 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             string dropped = "item 42give";
             string kept = " item 42give";
 
-            Assert.AreEqual(
-                "item|42give",
-                Tokenize(dropped),
-                "Without the run the value is a command and one argument"
-            );
-            Assert.AreEqual(
-                Tokenize(dropped),
-                Tokenize(kept),
-                "A leading separator separates nothing, so both lines run the same command"
-            );
+            Assert.AreEqual("item|42give", Tokenize(dropped), "Without the run the value is a command and one argument");
+            Assert.AreEqual(Tokenize(dropped), Tokenize(kept), "A leading separator separates nothing, so both lines run the same command");
         }
 
         [TestCase(KeyCode.V, EventModifiers.None, Description = "A plain V types a V")]
         [TestCase(KeyCode.V, EventModifiers.Shift, Description = "Shift+V types a V")]
         [TestCase(KeyCode.V, EventModifiers.Alt, Description = "Alt+V is not a paste")]
         [TestCase(KeyCode.T, EventModifiers.Control, Description = "Ctrl+T is not a paste")]
-        [TestCase(
-            KeyCode.LeftArrow,
-            EventModifiers.Control,
-            Description = "Ctrl+Left still moves the caret"
-        )]
+        [TestCase(KeyCode.LeftArrow, EventModifiers.Control, Description = "Ctrl+Left still moves the caret")]
         public void NonPasteKeysAreLeftAlone(KeyCode keyCode, EventModifiers modifiers)
         {
             TextField field = FieldWithArrangedSelection("give", 4, 4);
             GUIUtility.systemCopyBuffer = "item";
 
             using KeyDownEvent key = PasteKeyDown(keyCode, modifiers);
-            Assert.IsFalse(
-                TextFieldPaste.TryApply(field, key, out _),
-                $"'{keyCode}' with {modifiers} is not a paste"
-            );
+            Assert.IsFalse(TextFieldPaste.TryApply(field, key, out _), $"'{keyCode}' with {modifiers} is not a paste");
             Assert.AreEqual("give", field.value, "The field is untouched");
         }
 
@@ -435,10 +290,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             GUIUtility.systemCopyBuffer = string.Empty;
 
             using KeyDownEvent paste = PasteKeyDown(EventModifiers.Control);
-            Assert.IsFalse(
-                TextFieldPaste.TryApply(field, paste, out _),
-                "tvOS has no clipboard and a platform that will not answer reads empty; that is not a paste"
-            );
+            Assert.IsFalse(TextFieldPaste.TryApply(field, paste, out _), "tvOS has no clipboard and a platform that will not answer reads empty; that is not a paste");
             Assert.AreEqual("give", field.value, "The field is untouched");
         }
 
@@ -449,14 +301,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             GUIUtility.systemCopyBuffer = "item";
             using KeyDownEvent paste = PasteKeyDown(EventModifiers.Control);
 
-            Assert.IsFalse(
-                TextFieldPaste.TryApply(null, paste, out _),
-                "No field means nothing to paste into"
-            );
-            Assert.IsFalse(
-                TextFieldPaste.TryApply(field, null, out _),
-                "No key means nothing was asked for"
-            );
+            Assert.IsFalse(TextFieldPaste.TryApply(null, paste, out _), "No field means nothing to paste into");
+            Assert.IsFalse(TextFieldPaste.TryApply(field, null, out _), "No key means nothing was asked for");
             Assert.AreEqual(string.Empty, field.value, "Neither call wrote the field");
         }
 

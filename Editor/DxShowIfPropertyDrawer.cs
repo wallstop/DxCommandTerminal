@@ -30,9 +30,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor
                 return true;
             }
 
-            SerializedProperty conditionProperty = property.serializedObject.FindProperty(
-                showIf.conditionField
-            );
+            SerializedProperty conditionProperty = property.serializedObject.FindProperty(showIf.conditionField);
             if (conditionProperty is not { propertyType: SerializedPropertyType.Boolean })
             {
                 if (conditionProperty != null)
@@ -41,12 +39,7 @@ namespace WallstopStudios.DxCommandTerminal.Editor
                 }
 
                 object enclosingObject = property.GetEnclosingObject(out _);
-                FieldInfo conditionField = enclosingObject
-                    ?.GetType()
-                    .GetField(
-                        showIf.conditionField,
-                        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic
-                    );
+                FieldInfo conditionField = enclosingObject?.GetType().GetField(showIf.conditionField, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
                 if (conditionField?.GetValue(enclosingObject) is bool maybeCondition)
                 {
                     return showIf.inverse ? !maybeCondition : maybeCondition;

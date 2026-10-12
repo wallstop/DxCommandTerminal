@@ -67,8 +67,7 @@ namespace WallstopStudios.DxCommandTerminal.Attributes
             int index = methodName.IndexOf(commandId, StringComparison.OrdinalIgnoreCase);
 
             // Method is prefixed, suffixed with, or contains "COMMAND".
-            string commandName =
-                0 <= index ? methodName.Remove(index, commandId.Length) : methodName;
+            string commandName = 0 <= index ? methodName.Remove(index, commandId.Length) : methodName;
 
             return commandName;
         }

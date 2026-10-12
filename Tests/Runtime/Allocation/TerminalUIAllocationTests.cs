@@ -74,15 +74,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
             _terminal._commandInput.value = SelectiveToken;
             yield return null;
 
-            AllocationAssertions.AssertZeroAllocations(
-                "per-keystroke hint sweep (Always mode)",
-                () => _terminal.ResetAutoComplete()
-            );
-            Assert.AreEqual(
-                CommandCount,
-                _terminal._lastCompletionBuffer.Count,
-                "Sanity: the sweep must keep every prefix match as a hint"
-            );
+            AllocationAssertions.AssertZeroAllocations("per-keystroke hint sweep (Always mode)", () => _terminal.ResetAutoComplete());
+            Assert.AreEqual(CommandCount, _terminal._lastCompletionBuffer.Count, "Sanity: the sweep must keep every prefix match as a hint");
         }
 
         [UnityTest]
@@ -94,15 +87,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
             _terminal._commandInput.value = SelectiveToken;
             yield return null;
 
-            AllocationAssertions.AssertZeroAllocations(
-                "legacy Tab completion cycle",
-                () => _terminal.CompleteCommand(true)
-            );
-            Assert.AreEqual(
-                CommandCount,
-                _terminal._lastCompletionBuffer.Count,
-                "Sanity: the cycle must keep the completion buffer populated"
-            );
+            AllocationAssertions.AssertZeroAllocations("legacy Tab completion cycle", () => _terminal.CompleteCommand(true));
+            Assert.AreEqual(CommandCount, _terminal._lastCompletionBuffer.Count, "Sanity: the cycle must keep the completion buffer populated");
         }
 
         [UnityTest]
@@ -121,17 +107,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
                 the input line (Remove + Insert) and quotes multi-word
                 tokens; the strings ARE the feature's output.
              */
-            AllocationAssertions.AssertDetectsAllocation(
-                "provider Tab completion cycle (inserted line strings)",
-                () => _terminal.CompleteCommand(true)
-            );
-            Assert.That(
-                _terminal._commandInput.value.StartsWith(
-                    ProviderCommandName,
-                    StringComparison.Ordinal
-                ),
-                "Sanity: the provider cycle must apply token completions"
-            );
+            AllocationAssertions.AssertDetectsAllocation("provider Tab completion cycle (inserted line strings)", () => _terminal.CompleteCommand(true));
+            Assert.That(_terminal._commandInput.value.StartsWith(ProviderCommandName, StringComparison.Ordinal), "Sanity: the provider cycle must apply token completions");
         }
 
         [UnityTest]
@@ -149,10 +126,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
             yield return null;
             yield return null;
 
-            AllocationAssertions.AssertZeroAllocations(
-                "steady-state refresh pass while open",
-                () => _terminal.RefreshUI()
-            );
+            AllocationAssertions.AssertZeroAllocations("steady-state refresh pass while open", () => _terminal.RefreshUI());
         }
 
         [UnityTest]
@@ -170,14 +144,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
                 yield return null;
             }
 
-            Assert.IsTrue(
-                _terminal.IsClosed,
-                "Sanity: the terminal must settle closed before the pin"
-            );
-            AllocationAssertions.AssertZeroAllocations(
-                "steady-state refresh pass while closed (the pass the idle gate skips)",
-                () => _terminal.RefreshUI()
-            );
+            Assert.IsTrue(_terminal.IsClosed, "Sanity: the terminal must settle closed before the pin");
+            AllocationAssertions.AssertZeroAllocations("steady-state refresh pass while closed (the pass the idle gate skips)", () => _terminal.RefreshUI());
         }
 
         private IEnumerator SpawnTerminal(HintDisplayMode hintMode)
@@ -209,21 +177,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
             yield return null;
 
             int frameBudget = 600;
-            while (
-                0 < frameBudget--
-                && (
-                    _terminal._commandInput == null
-                    || _terminal._commandInput.resolvedStyle.display != DisplayStyle.Flex
-                )
-            )
+            while (0 < frameBudget-- && (_terminal._commandInput == null || _terminal._commandInput.resolvedStyle.display != DisplayStyle.Flex))
             {
                 yield return null;
             }
 
-            Assert.That(
-                _terminal._commandInput != null,
-                "The terminal input field should exist after the terminal opens"
-            );
+            Assert.That(_terminal._commandInput != null, "The terminal input field should exist after the terminal opens");
         }
 
         private void RegisterTier()
@@ -244,15 +203,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Allocation
 
             CommandBuilder builder = CommandBuilder
                 .Create(ProviderCommandName)
-                .Arg<string>(
-                    "candidate",
-                    spec => spec.Required().Choices(context => candidates, value => value)
-                )
+                .Arg<string>("candidate", spec => spec.Required().Choices(context => candidates, value => value))
                 .Handler((context, arguments) => { });
-            Assert.IsTrue(
-                Terminal.Shell.AddCommand(builder, out _),
-                "The provider command should register"
-            );
+            Assert.IsTrue(Terminal.Shell.AddCommand(builder, out _), "The provider command should register");
         }
     }
 }

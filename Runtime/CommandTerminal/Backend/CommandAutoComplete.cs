@@ -35,11 +35,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         private long _commandNamesVersion;
         private bool _commandNamesDirty = true;
 
-        public CommandAutoComplete(
-            CommandHistory history,
-            CommandShell shell,
-            IEnumerable<string> commands = null
-        )
+        public CommandAutoComplete(CommandHistory history, CommandShell shell, IEnumerable<string> commands = null)
         {
             _history = history ?? throw new ArgumentNullException(nameof(history));
             _shell = shell ?? throw new ArgumentNullException(nameof(shell));
@@ -89,13 +85,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 while (runEnd < wordCount)
                 {
                     string candidate = words[runEnd];
-                    if (
-                        !string.Equals(
-                            candidate,
-                            representative,
-                            StringComparison.OrdinalIgnoreCase
-                        )
-                    )
+                    if (!string.Equals(candidate, representative, StringComparison.OrdinalIgnoreCase))
                     {
                         break;
                     }
@@ -130,12 +120,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             return buffer;
         }
 
-        private void WalkHistory(
-            string input,
-            bool onlySuccess,
-            bool onlyErrorFree,
-            List<string> buffer
-        )
+        private void WalkHistory(string input, bool onlySuccess, bool onlyErrorFree, List<string> buffer)
         {
             if (input.NeedsTrim())
             {
@@ -175,9 +160,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             foreach (KeyValuePair<string, CommandInfo> command in _shell.CommandsSorted)
             {
                 string name = command.Key;
-                _commandNames.Add(
-                    name.NeedsLowerInvariantConversion() ? name.ToLowerInvariant() : name
-                );
+                _commandNames.Add(name.NeedsLowerInvariantConversion() ? name.ToLowerInvariant() : name);
             }
         }
 

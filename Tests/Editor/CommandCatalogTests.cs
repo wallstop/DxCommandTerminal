@@ -11,8 +11,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
     public sealed class CommandCatalogTests
     {
-        private const string CatalogTypeName =
-            "WallstopStudios.DxCommandTerminal.Generated.CommandCatalog";
+        private const string CatalogTypeName = "WallstopStudios.DxCommandTerminal.Generated.CommandCatalog";
 
         /*
             The pre-#223 discovery oracle: a direct reflection sweep over the
@@ -22,8 +21,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         */
         private static Dictionary<string, MethodInfo> ReflectDeclaredCommands(params Type[] anchors)
         {
-            const BindingFlags discoveryFlags =
-                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+            const BindingFlags discoveryFlags = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
             Dictionary<string, MethodInfo> declared = new(StringComparer.OrdinalIgnoreCase);
             foreach (Type anchor in anchors)
             {
@@ -32,10 +30,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 {
                     foreach (MethodInfo method in type.GetMethods(discoveryFlags))
                     {
-                        if (
-                            Attribute.GetCustomAttribute(method, typeof(RegisterCommandAttribute))
-                            is not RegisterCommandAttribute attribute
-                        )
+                        if (Attribute.GetCustomAttribute(method, typeof(RegisterCommandAttribute)) is not RegisterCommandAttribute attribute)
                         {
                             continue;
                         }
@@ -53,11 +48,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void GeneratedCatalogIsPresentInTestAssembly()
         {
             Type catalogType = typeof(CommandCatalogTests).Assembly.GetType(CatalogTypeName, false);
-            Assert.That(
-                catalogType != null,
-                "The source generator did not emit a command catalog for the test "
-                    + "assembly; shell discovery fell back to reflection for it."
-            );
+            Assert.That(catalogType != null, "The source generator did not emit a command catalog for the test " + "assembly; shell discovery fell back to reflection for it.");
         }
 
         [Test]
@@ -66,8 +57,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Type catalogType = typeof(BuiltInCommands).Assembly.GetType(CatalogTypeName, false);
             Assert.That(
                 catalogType != null,
-                "The source generator did not emit a command catalog for the runtime "
-                    + "assembly; built-in commands fell back to reflection discovery."
+                "The source generator did not emit a command catalog for the runtime " + "assembly; built-in commands fell back to reflection discovery."
             );
         }
 
@@ -81,9 +71,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 same metadata. Reflection parity is pinned separately by
                 RegisteredCommandsListsTheSameCommandsReflectionFinds.
             */
-            (MethodInfo method, RegisterCommandAttribute attribute)[] legacy = CommandShell
-                .RegisteredCommands
-                .Value;
+            (MethodInfo method, RegisterCommandAttribute attribute)[] legacy = CommandShell.RegisteredCommands.Value;
 
             Assert.IsNotEmpty(legacy, "Sanity: expected the oracle to find declared commands");
 
@@ -91,10 +79,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             CommandShell shell = new CommandShell(history);
             shell.InitializeAutoRegisteredCommands();
 
-            List<string> legacyNames = legacy
-                .Select(tuple => tuple.attribute.Name)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
+            List<string> legacyNames = legacy.Select(tuple => tuple.attribute.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
             foreach ((MethodInfo method, RegisterCommandAttribute attribute) in legacy)
             {
@@ -102,51 +87,24 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 bool registered = shell.AutoRegisteredCommands.Contains(commandName);
                 Assert.IsTrue(
                     registered,
-                    $"Command '{commandName}' (method {method.Name}) was discovered by the "
-                        + "compatibility surface but not registered by the catalog path"
+                    $"Command '{commandName}' (method {method.Name}) was discovered by the " + "compatibility surface but not registered by the catalog path"
                 );
 
                 if (!shell.Commands.TryGetValue(commandName, out CommandInfo info))
                 {
-                    Assert.Fail(
-                        $"Command '{commandName}' is auto-registered but missing from the shell"
-                    );
+                    Assert.Fail($"Command '{commandName}' is auto-registered but missing from the shell");
                     continue;
                 }
 
-                Assert.AreEqual(
-                    attribute.MinArgCount,
-                    info.minArgCount,
-                    $"Command '{commandName}' has mismatched min bounds"
-                );
+                Assert.AreEqual(attribute.MinArgCount, info.minArgCount, $"Command '{commandName}' has mismatched min bounds");
                 int? expectedMaxArgCount = attribute.MaxArgCount < 0 ? null : attribute.MaxArgCount;
-                Assert.AreEqual(
-                    expectedMaxArgCount,
-                    info.maxArgCount,
-                    $"Command '{commandName}' has mismatched max bounds"
-                );
-                Assert.AreEqual(
-                    attribute.Help ?? string.Empty,
-                    info.help ?? string.Empty,
-                    $"Command '{commandName}' has mismatched help text"
-                );
-                Assert.AreEqual(
-                    attribute.Hint,
-                    info.hint,
-                    $"Command '{commandName}' has mismatched hint text"
-                );
-                Assert.AreEqual(
-                    attribute.AddToHistory,
-                    info.addToHistory,
-                    $"Command '{commandName}' has mismatched history policy"
-                );
+                Assert.AreEqual(expectedMaxArgCount, info.maxArgCount, $"Command '{commandName}' has mismatched max bounds");
+                Assert.AreEqual(attribute.Help ?? string.Empty, info.help ?? string.Empty, $"Command '{commandName}' has mismatched help text");
+                Assert.AreEqual(attribute.Hint, info.hint, $"Command '{commandName}' has mismatched hint text");
+                Assert.AreEqual(attribute.AddToHistory, info.addToHistory, $"Command '{commandName}' has mismatched history policy");
             }
 
-            Assert.AreEqual(
-                legacyNames.Count,
-                shell.AutoRegisteredCommands.Count,
-                "The catalog path must register exactly the declared command set"
-            );
+            Assert.AreEqual(legacyNames.Count, shell.AutoRegisteredCommands.Count, "The catalog path must register exactly the declared command set");
         }
 
         [Test]
@@ -155,23 +113,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Type catalogType = typeof(CommandCatalogTests).Assembly.GetType(CatalogTypeName, false);
             Assert.That(catalogType != null, "Sanity: the test assembly carries a catalog");
 
-            MethodInfo collect = catalogType.GetMethod(
-                "Collect",
-                BindingFlags.Public | BindingFlags.Static
-            );
+            MethodInfo collect = catalogType.GetMethod("Collect", BindingFlags.Public | BindingFlags.Static);
             List<CommandCatalogEntry> entries = new();
             collect.Invoke(null, new object[] { entries });
-            CommandCatalogEntry entry = entries.Find(candidate =>
-                candidate.IsValid && 0 < candidate.Name.Length
-            );
+            CommandCatalogEntry entry = entries.Find(candidate => candidate.IsValid && 0 < candidate.Name.Length);
             Assert.That(entry != null, "Sanity: the catalog carries a valid command");
 
             Action<CommandArg[]> first = entry.GetHandler();
             Action<CommandArg[]> second = entry.GetHandler();
-            Assert.That(
-                ReferenceEquals(first, second),
-                "A second bind re-allocated the handler delegate"
-            );
+            Assert.That(ReferenceEquals(first, second), "A second bind re-allocated the handler delegate");
 
             /*
                 The memoized delegate is the one registration installs: a full
@@ -181,31 +131,20 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             CommandHistory history = new CommandHistory(16);
             CommandShell shell = new CommandShell(history);
             shell.InitializeAutoRegisteredCommands();
-            Assert.IsTrue(
-                shell.Commands.TryGetValue(entry.Name, out CommandInfo registered),
-                $"Command '{entry.Name}' was not registered"
-            );
+            Assert.IsTrue(shell.Commands.TryGetValue(entry.Name, out CommandInfo registered), $"Command '{entry.Name}' was not registered");
             shell.ClearAutoRegisteredCommands();
             shell.InitializeAutoRegisteredCommands();
-            Assert.That(
-                ReferenceEquals(registered.handler, shell.Commands[entry.Name].handler),
-                "A second registration cycle re-allocated the handler delegate"
-            );
+            Assert.That(ReferenceEquals(registered.handler, shell.Commands[entry.Name].handler), "A second registration cycle re-allocated the handler delegate");
         }
 
         [Test]
         public void RegisteredCommandsListsTheSameCommandsReflectionFinds()
         {
-            Dictionary<string, MethodInfo> expected = ReflectDeclaredCommands(
-                typeof(CommandCatalogTests),
-                typeof(BuiltInCommands)
-            );
+            Dictionary<string, MethodInfo> expected = ReflectDeclaredCommands(typeof(CommandCatalogTests), typeof(BuiltInCommands));
             Assert.That(0 < expected.Count, "Sanity: the swept assemblies declare commands");
 
             Dictionary<string, MethodInfo> actualMethods = new(StringComparer.OrdinalIgnoreCase);
-            (MethodInfo method, RegisterCommandAttribute attribute)[] discovered = CommandShell
-                .RegisteredCommands
-                .Value;
+            (MethodInfo method, RegisterCommandAttribute attribute)[] discovered = CommandShell.RegisteredCommands.Value;
             foreach ((MethodInfo method, RegisterCommandAttribute attribute) in discovered)
             {
                 actualMethods[attribute.Name] = method;
@@ -215,14 +154,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             {
                 Assert.IsTrue(
                     actualMethods.TryGetValue(pair.Key, out MethodInfo actualMethod),
-                    $"Command '{pair.Key}' was found by reflection but is missing from "
-                        + "RegisteredCommands"
+                    $"Command '{pair.Key}' was found by reflection but is missing from " + "RegisteredCommands"
                 );
-                Assert.AreEqual(
-                    pair.Value,
-                    actualMethod,
-                    $"Command '{pair.Key}' resolved to a different handler method"
-                );
+                Assert.AreEqual(pair.Value, actualMethod, $"Command '{pair.Key}' resolved to a different handler method");
             }
         }
     }

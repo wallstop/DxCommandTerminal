@@ -26,16 +26,14 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     [InitializeOnLoad]
     internal sealed class TypeCacheCommandDiscovery : ICommandDiscoveryProvider
     {
-        internal static readonly TypeCacheCommandDiscovery Instance =
-            new TypeCacheCommandDiscovery();
+        internal static readonly TypeCacheCommandDiscovery Instance = new TypeCacheCommandDiscovery();
 
         /*
             Snapshots are keyed weakly by assembly and hold only that
             assembly's own methods, so the table never pins an unreferenced
             collectible editor assembly alive.
          */
-        private readonly ConditionalWeakTable<Assembly, TypeCacheSnapshot> _snapshots =
-            new ConditionalWeakTable<Assembly, TypeCacheSnapshot>();
+        private readonly ConditionalWeakTable<Assembly, TypeCacheSnapshot> _snapshots = new ConditionalWeakTable<Assembly, TypeCacheSnapshot>();
 
         private TypeCacheCommandDiscovery() { }
 
@@ -44,10 +42,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             CommandShell.RegisterDiscoveryProvider(Instance);
         }
 
-        private static bool AppendSnapshot(
-            TypeCacheSnapshot snapshot,
-            List<CommandShell.AutoCommand> commands
-        )
+        private static bool AppendSnapshot(TypeCacheSnapshot snapshot, List<CommandShell.AutoCommand> commands)
         {
             if (!snapshot.Known)
             {
@@ -74,8 +69,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             List<CommandShell.AutoCommand> collected = new();
             try
             {
-                TypeCache.MethodCollection attributedMethods =
-                    TypeCache.GetMethodsWithAttribute<RegisterCommandAttribute>();
+                TypeCache.MethodCollection attributedMethods = TypeCache.GetMethodsWithAttribute<RegisterCommandAttribute>();
                 foreach (MethodInfo method in attributedMethods)
                 {
                     if (method == null)
@@ -84,17 +78,12 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                     }
 
                     Type declaringType = method.DeclaringType;
-                    if (
-                        declaringType == null
-                        || !method.IsStatic
-                        || !ReferenceEquals(declaringType.Assembly, assembly)
-                    )
+                    if (declaringType == null || !method.IsStatic || !ReferenceEquals(declaringType.Assembly, assembly))
                     {
                         continue;
                     }
 
-                    RegisterCommandAttribute attribute =
-                        method.GetCustomAttribute<RegisterCommandAttribute>(false);
+                    RegisterCommandAttribute attribute = method.GetCustomAttribute<RegisterCommandAttribute>(false);
                     if (attribute == null)
                     {
                         continue;
@@ -108,9 +97,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             {
                 Debug.LogWarning(
                     LogTextSanitizer.Sanitize(
-                        $"[DxCommandTerminal] TypeCache command discovery failed for assembly "
-                            + $"{assembly.GetName().Name}: {e}; discovery continues "
-                            + $"by reflection"
+                        $"[DxCommandTerminal] TypeCache command discovery failed for assembly " + $"{assembly.GetName().Name}: {e}; discovery continues " + $"by reflection"
                     )
                 );
                 return TypeCacheSnapshot.Unknown;
@@ -153,10 +140,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         private sealed class TypeCacheSnapshot
         {
-            internal static readonly TypeCacheSnapshot Unknown = new(
-                new List<CommandShell.AutoCommand>(),
-                false
-            );
+            internal static readonly TypeCacheSnapshot Unknown = new(new List<CommandShell.AutoCommand>(), false);
 
             public readonly List<CommandShell.AutoCommand> Commands;
             public readonly bool Known;

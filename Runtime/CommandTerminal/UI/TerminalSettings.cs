@@ -16,11 +16,7 @@ namespace WallstopStudios.DxCommandTerminal.UI
         (window geometry, animation curves, ids, persisted theme/font
         preferences) stay on the components.
      */
-    [CreateAssetMenu(
-        menuName = "Wallstop Studios/DxCommandTerminal/Terminal Settings",
-        fileName = nameof(TerminalSettings),
-        order = 1_111_125
-    )]
+    [CreateAssetMenu(menuName = "Wallstop Studios/DxCommandTerminal/Terminal Settings", fileName = nameof(TerminalSettings), order = 1_111_125)]
     public sealed class TerminalSettings : ScriptableObject
     {
         [Header("Buffers")]
@@ -86,16 +82,11 @@ namespace WallstopStudios.DxCommandTerminal.UI
         [Tooltip("Forward Unity's own log messages into the terminal")]
         public bool logUnityMessages;
 
-        [Tooltip(
-            "Which entries capture a caller stack trace. ErrorsAndWarnings and Disabled skip the "
-                + "per-log extraction cost for routine messages."
-        )]
+        [Tooltip("Which entries capture a caller stack trace. ErrorsAndWarnings and Disabled skip the " + "per-log extraction cost for routine messages.")]
         public TerminalStackTraceMode stackTraceMode = TerminalStackTraceMode.All;
 
         [Header("Command Palette")]
-        [Tooltip(
-            "Hotkey that opens/closes the command palette (supports ctrl+ and shift+ modifiers)"
-        )]
+        [Tooltip("Hotkey that opens/closes the command palette (supports ctrl+ and shift+ modifiers)")]
         public string paletteToggleHotkey = "ctrl+space";
     }
 }

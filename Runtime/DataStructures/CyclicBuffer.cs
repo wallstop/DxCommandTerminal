@@ -233,9 +233,7 @@ namespace WallstopStudios.DxCommandTerminal.DataStructures
             }
             unchecked
             {
-                int adjustedIndex = (int)(
-                    (_position - 1L + longCapacity - (_buffer.Count - 1 - index)) % longCapacity
-                );
+                int adjustedIndex = (int)((_position - 1L + longCapacity - (_buffer.Count - 1 - index)) % longCapacity);
                 return adjustedIndex;
             }
         }

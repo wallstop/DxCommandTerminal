@@ -16,27 +16,18 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         private static TerminalControlTypes[] GetControlTypes()
         {
-            FieldInfo controlTypesField = typeof(TerminalKeyboardController).GetField(
-                "ControlTypes",
-                BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy
-            );
+            FieldInfo controlTypesField = typeof(TerminalKeyboardController).GetField("ControlTypes", BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy);
             return (TerminalControlTypes[])controlTypesField.GetValue(null);
         }
 
         private static FieldInfo GetControlOrderField()
         {
-            return typeof(TerminalKeyboardController).GetField(
-                "_controlOrder",
-                BindingFlags.Instance | BindingFlags.NonPublic
-            );
+            return typeof(TerminalKeyboardController).GetField("_controlOrder", BindingFlags.Instance | BindingFlags.NonPublic);
         }
 
         private static MethodInfo GetVerifyMethod()
         {
-            return typeof(TerminalKeyboardController).GetMethod(
-                "VerifyControlOrderIntegrity",
-                BindingFlags.Instance | BindingFlags.NonPublic
-            );
+            return typeof(TerminalKeyboardController).GetMethod("VerifyControlOrderIntegrity", BindingFlags.Instance | BindingFlags.NonPublic);
         }
 
         [TearDown]
@@ -55,25 +46,15 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void ControlTypesContainsAllNonNoneEnumValues()
         {
-            TerminalControlTypes[] expected = Enum.GetValues(typeof(TerminalControlTypes))
-                .OfType<TerminalControlTypes>()
-                .Except(new[] { default(TerminalControlTypes) })
-                .ToArray();
+            TerminalControlTypes[] expected = Enum.GetValues(typeof(TerminalControlTypes)).OfType<TerminalControlTypes>().Except(new[] { default(TerminalControlTypes) }).ToArray();
 
             TerminalControlTypes[] actual = GetControlTypes();
             Assert.That(actual != null, "ControlTypes should not be null");
-            Assert.AreEqual(
-                expected.Length,
-                actual.Length,
-                $"ControlTypes length mismatch. Expected: [{string.Join(", ", expected)}], Actual: [{string.Join(", ", actual)}]"
-            );
+            Assert.AreEqual(expected.Length, actual.Length, $"ControlTypes length mismatch. Expected: [{string.Join(", ", expected)}], Actual: [{string.Join(", ", actual)}]");
 
             foreach (TerminalControlTypes controlType in expected)
             {
-                Assert.IsTrue(
-                    actual.Contains(controlType),
-                    $"ControlTypes is missing {controlType}. Contents: [{string.Join(", ", actual)}]"
-                );
+                Assert.IsTrue(actual.Contains(controlType), $"ControlTypes is missing {controlType}. Contents: [{string.Join(", ", actual)}]");
             }
         }
 
@@ -109,10 +90,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             // Now modify _controlOrder to have duplicates but still include all types, then invoke VerifyControlOrderIntegrity.
             FieldInfo controlOrderField = GetControlOrderField();
-            Assert.That(
-                controlOrderField != null,
-                "_controlOrder field should exist on TerminalKeyboardController"
-            );
+            Assert.That(controlOrderField != null, "_controlOrder field should exist on TerminalKeyboardController");
 
             List<TerminalControlTypes> orderWithDuplicates = GetControlTypes().ToList();
             // Add duplicates
@@ -121,10 +99,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             controlOrderField.SetValue(controller, orderWithDuplicates);
 
             MethodInfo verifyMethod = GetVerifyMethod();
-            Assert.That(
-                verifyMethod != null,
-                "VerifyControlOrderIntegrity method should exist on TerminalKeyboardController"
-            );
+            Assert.That(verifyMethod != null, "VerifyControlOrderIntegrity method should exist on TerminalKeyboardController");
 
             verifyMethod.Invoke(controller, null);
 
@@ -143,30 +118,18 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return null;
 
             FieldInfo controlOrderField = GetControlOrderField();
-            Assert.That(
-                controlOrderField != null,
-                "_controlOrder field should exist on TerminalKeyboardController"
-            );
+            Assert.That(controlOrderField != null, "_controlOrder field should exist on TerminalKeyboardController");
 
             // Remove the last type from the list
             TerminalControlTypes[] allTypes = GetControlTypes();
             TerminalControlTypes removedType = allTypes[^1];
-            List<TerminalControlTypes> incompleteOrder = allTypes
-                .Take(allTypes.Length - 1)
-                .ToList();
+            List<TerminalControlTypes> incompleteOrder = allTypes.Take(allTypes.Length - 1).ToList();
             controlOrderField.SetValue(controller, incompleteOrder);
 
             MethodInfo verifyMethod = GetVerifyMethod();
-            Assert.That(
-                verifyMethod != null,
-                "VerifyControlOrderIntegrity method should exist on TerminalKeyboardController"
-            );
+            Assert.That(verifyMethod != null, "VerifyControlOrderIntegrity method should exist on TerminalKeyboardController");
 
-            LogAssert.Expect(
-                LogType.Warning,
-                $"Control Order is missing the following controls: [{removedType}]. "
-                    + "Input for these will not be handled. Is this intentional?"
-            );
+            LogAssert.Expect(LogType.Warning, $"Control Order is missing the following controls: [{removedType}]. " + "Input for these will not be handled. Is this intentional?");
             verifyMethod.Invoke(controller, null);
 
             LogAssert.NoUnexpectedReceived();
@@ -187,25 +150,18 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             yield return null;
 
             FieldInfo controlOrderField = GetControlOrderField();
-            Assert.That(
-                controlOrderField != null,
-                "_controlOrder field should exist on TerminalKeyboardController"
-            );
+            Assert.That(controlOrderField != null, "_controlOrder field should exist on TerminalKeyboardController");
             controlOrderField.SetValue(controller, new List<TerminalControlTypes>());
 
             MethodInfo verifyMethod = GetVerifyMethod();
-            Assert.That(
-                verifyMethod != null,
-                "VerifyControlOrderIntegrity method should exist on TerminalKeyboardController"
-            );
+            Assert.That(verifyMethod != null, "VerifyControlOrderIntegrity method should exist on TerminalKeyboardController");
 
             TerminalControlTypes[] allTypes = GetControlTypes();
             string expectedMissing = string.Join(", ", allTypes);
 
             LogAssert.Expect(
                 LogType.Warning,
-                $"Control Order is missing the following controls: [{expectedMissing}]. "
-                    + "Input for these will not be handled. Is this intentional?"
+                $"Control Order is missing the following controls: [{expectedMissing}]. " + "Input for these will not be handled. Is this intentional?"
             );
             verifyMethod.Invoke(controller, null);
 

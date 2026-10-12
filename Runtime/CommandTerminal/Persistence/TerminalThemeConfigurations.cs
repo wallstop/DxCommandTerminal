@@ -9,10 +9,7 @@ namespace WallstopStudios.DxCommandTerminal.Persistence
     {
         public List<TerminalThemeConfiguration> configurations = new();
 
-        public bool TryGetConfiguration(
-            TerminalUI terminal,
-            out TerminalThemeConfiguration configuration
-        )
+        public bool TryGetConfiguration(TerminalUI terminal, out TerminalThemeConfiguration configuration)
         {
             int existingIndex = -1;
             if (terminal != null)
@@ -20,13 +17,7 @@ namespace WallstopStudios.DxCommandTerminal.Persistence
                 int configurationCount = configurations.Count;
                 for (int i = 0; i < configurationCount; ++i)
                 {
-                    if (
-                        string.Equals(
-                            terminal.id,
-                            configurations[i].terminalId,
-                            StringComparison.OrdinalIgnoreCase
-                        )
-                    )
+                    if (string.Equals(terminal.id, configurations[i].terminalId, StringComparison.OrdinalIgnoreCase))
                     {
                         existingIndex = i;
                         break;
@@ -51,13 +42,7 @@ namespace WallstopStudios.DxCommandTerminal.Persistence
             int configurationCount = configurations.Count;
             for (int i = 0; i < configurationCount; ++i)
             {
-                if (
-                    string.Equals(
-                        configuration.terminalId,
-                        configurations[i].terminalId,
-                        StringComparison.OrdinalIgnoreCase
-                    )
-                )
+                if (string.Equals(configuration.terminalId, configurations[i].terminalId, StringComparison.OrdinalIgnoreCase))
                 {
                     existingIndex = i;
                     break;

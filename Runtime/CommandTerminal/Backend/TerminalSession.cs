@@ -54,10 +54,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             int logBufferSize = Mathf.Max(0, config.LogBufferSize);
             if (force || Buffer == null)
             {
-                Buffer = new CommandLog(logBufferSize, config.IgnoredLogTypes)
-                {
-                    StackTraceMode = config.StackTraceMode,
-                };
+                Buffer = new CommandLog(logBufferSize, config.IgnoredLogTypes) { StackTraceMode = config.StackTraceMode };
             }
             else
             {
@@ -96,11 +93,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             if (reconfigureShell)
             {
                 Shell.ClearAutoRegisteredCommands();
-                Shell.InitializeAutoRegisteredCommands(
-                    ignoredCommands: config.DisabledCommands,
-                    ignoreDefaultCommands: config.IgnoreDefaultCommands,
-                    deferRegistration: true
-                );
+                Shell.InitializeAutoRegisteredCommands(ignoredCommands: config.DisabledCommands, ignoreDefaultCommands: config.IgnoreDefaultCommands, deferRegistration: true);
             }
 
             return reconfigureShell;
@@ -158,8 +151,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             ///     serialized configuration of its own (a palette with no
             ///     settings asset assigned) bootstraps the session.
             /// </summary>
-            public static Config Default { get; } =
-                new(DefaultLogBufferSize, DefaultHistoryBufferSize, null, null, false);
+            public static Config Default { get; } = new(DefaultLogBufferSize, DefaultHistoryBufferSize, null, null, false);
 
             public int LogBufferSize { get; }
 

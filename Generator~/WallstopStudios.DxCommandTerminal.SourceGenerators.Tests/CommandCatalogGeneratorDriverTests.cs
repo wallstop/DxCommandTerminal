@@ -603,15 +603,7 @@ namespace Fixtures
                 : new[] { "UNITY_EDITOR", "DEVELOPMENT_BUILD" };
 
             Assembly assembly = TestCompilationFactory.CompileAndLoad(
-                TestCompilationFactory
-                    .RunGenerator(
-                        TestCompilationFactory.CreateCompilation(
-                            "ConditionalDefines" + defineCount,
-                            ConditionalFixture,
-                            defines
-                        )
-                    )
-                    .output
+                TestCompilationFactory.RunGenerator(TestCompilationFactory.CreateCompilation("ConditionalDefines" + defineCount, ConditionalFixture, defines)).output
             );
 
             CatalogView catalog = CatalogView.Load(assembly);
@@ -622,9 +614,7 @@ namespace Fixtures
         [Fact]
         public void RegistersExplicitAttributes()
         {
-            (SyntaxTree generated, CSharpCompilation output) = TestCompilationFactory.RunGenerator(
-                TestCompilationFactory.CreateCompilation("ExplicitAttributes", StandardFixture)
-            );
+            (SyntaxTree generated, CSharpCompilation output) = TestCompilationFactory.RunGenerator(TestCompilationFactory.CreateCompilation("ExplicitAttributes", StandardFixture));
             Assembly assembly = TestCompilationFactory.CompileAndLoad(output);
 
             CatalogView catalog = CatalogView.Load(assembly);
@@ -657,11 +647,7 @@ namespace Fixtures
         public void ExecutesPublicAndPrivateBinders()
         {
             Assembly assembly = TestCompilationFactory.CompileAndLoad(
-                TestCompilationFactory
-                    .RunGenerator(
-                        TestCompilationFactory.CreateCompilation("BinderExecution", StandardFixture)
-                    )
-                    .output
+                TestCompilationFactory.RunGenerator(TestCompilationFactory.CreateCompilation("BinderExecution", StandardFixture)).output
             );
 
             CatalogView catalog = CatalogView.Load(assembly);
@@ -698,9 +684,7 @@ namespace Fixtures
         public void RegistersAliasesAndQualifiedAttributes()
         {
             Assembly assembly = TestCompilationFactory.CompileAndLoad(
-                TestCompilationFactory
-                    .RunGenerator(TestCompilationFactory.CreateCompilation("Aliases", AliasFixture))
-                    .output
+                TestCompilationFactory.RunGenerator(TestCompilationFactory.CreateCompilation("Aliases", AliasFixture)).output
             );
 
             CatalogView catalog = CatalogView.Load(assembly);
@@ -712,16 +696,8 @@ namespace Fixtures
         [Fact]
         public void GeneratedTextIsDeterministic()
         {
-            string first = TestCompilationFactory
-                .RunGenerator(
-                    TestCompilationFactory.CreateCompilation("DeterminismA", DeterminismFixture)
-                )
-                .generated?.ToString();
-            string second = TestCompilationFactory
-                .RunGenerator(
-                    TestCompilationFactory.CreateCompilation("DeterminismB", DeterminismFixture)
-                )
-                .generated?.ToString();
+            string first = TestCompilationFactory.RunGenerator(TestCompilationFactory.CreateCompilation("DeterminismA", DeterminismFixture)).generated?.ToString();
+            string second = TestCompilationFactory.RunGenerator(TestCompilationFactory.CreateCompilation("DeterminismB", DeterminismFixture)).generated?.ToString();
 
             Assert.Equal(first, second);
         }
@@ -729,39 +705,19 @@ namespace Fixtures
         [Fact]
         public void GeneratedCatalogCarriesStrippingPreservation()
         {
-            string generated = TestCompilationFactory
-                .RunGenerator(
-                    TestCompilationFactory.CreateCompilation("Preserved", DeterminismFixture)
-                )
-                .generated?.ToString();
+            string generated = TestCompilationFactory.RunGenerator(TestCompilationFactory.CreateCompilation("Preserved", DeterminismFixture)).generated?.ToString();
 
             Assert.NotNull(generated);
             string preserveAttribute = "[global::UnityEngine.Scripting.Preserve]";
             Assert.Contains(preserveAttribute, generated, StringComparison.Ordinal);
-            Assert.Contains(
-                preserveAttribute
-                    + Environment.NewLine
-                    + "        internal static class CommandCatalog",
-                generated,
-                StringComparison.Ordinal
-            );
-            Assert.Contains(
-                preserveAttribute + Environment.NewLine + "            public static void Collect(",
-                generated,
-                StringComparison.Ordinal
-            );
+            Assert.Contains(preserveAttribute + Environment.NewLine + "        internal static class CommandCatalog", generated, StringComparison.Ordinal);
+            Assert.Contains(preserveAttribute + Environment.NewLine + "            public static void Collect(", generated, StringComparison.Ordinal);
         }
 
         [Fact]
         public void CatalogOmitsPreservationWithoutUnityEngine()
         {
-            (SyntaxTree generated, _) = TestCompilationFactory.RunGenerator(
-                TestCompilationFactory.CreateCompilation(
-                    "NoUnity",
-                    DeterminismFixture,
-                    includeUnityShim: false
-                )
-            );
+            (SyntaxTree generated, _) = TestCompilationFactory.RunGenerator(TestCompilationFactory.CreateCompilation("NoUnity", DeterminismFixture, includeUnityShim: false));
 
             Assert.NotNull(generated);
             Assert.DoesNotContain("Preserve", generated.ToString(), StringComparison.Ordinal);
@@ -771,11 +727,7 @@ namespace Fixtures
         public void EntryOrderMatchesDeclarationOrder()
         {
             Assembly assembly = TestCompilationFactory.CompileAndLoad(
-                TestCompilationFactory
-                    .RunGenerator(
-                        TestCompilationFactory.CreateCompilation("EntryOrder", DeterminismFixture)
-                    )
-                    .output
+                TestCompilationFactory.RunGenerator(TestCompilationFactory.CreateCompilation("EntryOrder", DeterminismFixture)).output
             );
 
             CatalogView catalog = CatalogView.Load(assembly);
@@ -795,14 +747,7 @@ namespace Fixtures
         public void NestedHolderNamesResolveThroughAssemblyGetType()
         {
             Assembly assembly = TestCompilationFactory.CompileAndLoad(
-                TestCompilationFactory
-                    .RunGenerator(
-                        TestCompilationFactory.CreateCompilation(
-                            "NestedHolderName",
-                            NestedHolderFixture
-                        )
-                    )
-                    .output
+                TestCompilationFactory.RunGenerator(TestCompilationFactory.CreateCompilation("NestedHolderName", NestedHolderFixture)).output
             );
 
             CatalogView catalog = CatalogView.Load(assembly);
@@ -813,9 +758,7 @@ namespace Fixtures
 
             Type holder = assembly.GetType(holderName);
             Assert.NotNull(holder);
-            Type argumentArrayType = assembly.GetType(
-                "WallstopStudios.DxCommandTerminal.Backend.CommandArg"
-            );
+            Type argumentArrayType = assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg");
             MethodInfo method = holder.GetMethod(
                 catalog.MethodNameOf(entry),
                 BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic,
@@ -836,16 +779,11 @@ namespace Fixtures
         public void ValidEntriesResolveTheirHandlerThroughTheDeclaringTypeName()
         {
             Assembly assembly = TestCompilationFactory.CompileAndLoad(
-                TestCompilationFactory
-                    .RunGenerator(
-                        TestCompilationFactory.CreateCompilation("HolderName", StandardFixture)
-                    )
-                    .output
+                TestCompilationFactory.RunGenerator(TestCompilationFactory.CreateCompilation("HolderName", StandardFixture)).output
             );
 
             CatalogView catalog = CatalogView.Load(assembly);
-            BindingFlags discoveryFlags =
-                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+            BindingFlags discoveryFlags = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
             foreach (object entry in catalog.Entries)
             {
                 if (!catalog.HasValidSignature(entry))
@@ -857,16 +795,8 @@ namespace Fixtures
                 string holderName = catalog.DeclaringTypeNameOf(entry);
                 Type holder = assembly.GetType(holderName);
                 Assert.NotNull(holder);
-                Type argumentArrayType = assembly.GetType(
-                    "WallstopStudios.DxCommandTerminal.Backend.CommandArg"
-                );
-                MethodInfo method = holder.GetMethod(
-                    catalog.MethodNameOf(entry),
-                    discoveryFlags,
-                    null,
-                    new[] { argumentArrayType.MakeArrayType() },
-                    null
-                );
+                Type argumentArrayType = assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg");
+                MethodInfo method = holder.GetMethod(catalog.MethodNameOf(entry), discoveryFlags, null, new[] { argumentArrayType.MakeArrayType() }, null);
                 Assert.NotNull(method);
 
                 /*
@@ -889,11 +819,7 @@ namespace Fixtures
         public void GetHandlerReturnsTheSameDelegateInstanceOnASecondCall()
         {
             Assembly assembly = TestCompilationFactory.CompileAndLoad(
-                TestCompilationFactory
-                    .RunGenerator(
-                        TestCompilationFactory.CreateCompilation("HandlerMemo", StandardFixture)
-                    )
-                    .output
+                TestCompilationFactory.RunGenerator(TestCompilationFactory.CreateCompilation("HandlerMemo", StandardFixture)).output
             );
 
             CatalogView catalog = CatalogView.Load(assembly);
@@ -907,10 +833,7 @@ namespace Fixtures
                 }
 
                 Assert.NotNull(first);
-                Assert.True(
-                    ReferenceEquals(first, second),
-                    $"Command '{catalog.NameOf(entry)}' re-bound its handler on a second call"
-                );
+                Assert.True(ReferenceEquals(first, second), $"Command '{catalog.NameOf(entry)}' re-bound its handler on a second call");
             }
         }
 
@@ -918,11 +841,7 @@ namespace Fixtures
         public void RegistersDefaultishInternalConstructor()
         {
             Assembly assembly = TestCompilationFactory.CompileAndLoad(
-                TestCompilationFactory
-                    .RunGenerator(
-                        TestCompilationFactory.CreateCompilation("Defaultish", DefaultishFixture)
-                    )
-                    .output
+                TestCompilationFactory.RunGenerator(TestCompilationFactory.CreateCompilation("Defaultish", DefaultishFixture)).output
             );
 
             CatalogView catalog = CatalogView.Load(assembly);
@@ -943,11 +862,7 @@ namespace Fixtures
         public void CarriesExecutionContextsIntoCatalogEntries()
         {
             Assembly assembly = TestCompilationFactory.CompileAndLoad(
-                TestCompilationFactory
-                    .RunGenerator(
-                        TestCompilationFactory.CreateCompilation("Contexts", ContextsFixture)
-                    )
-                    .output
+                TestCompilationFactory.RunGenerator(TestCompilationFactory.CreateCompilation("Contexts", ContextsFixture)).output
             );
 
             /*
@@ -968,11 +883,7 @@ namespace Fixtures
         public void RegistersCommandsWithExactSignatureAccessors()
         {
             Assembly assembly = TestCompilationFactory.CompileAndLoad(
-                TestCompilationFactory
-                    .RunGenerator(
-                        TestCompilationFactory.CreateCompilation("ExactAccessors", RejectionFixture)
-                    )
-                    .output
+                TestCompilationFactory.RunGenerator(TestCompilationFactory.CreateCompilation("ExactAccessors", RejectionFixture)).output
             );
 
             CatalogView catalog = CatalogView.Load(assembly);
@@ -1006,11 +917,7 @@ namespace Fixtures
         public void SkipsInstanceCommandsAndOpenGenericContainers()
         {
             Assembly assembly = TestCompilationFactory.CompileAndLoad(
-                TestCompilationFactory
-                    .RunGenerator(
-                        TestCompilationFactory.CreateCompilation("Skips", RejectionFixture)
-                    )
-                    .output
+                TestCompilationFactory.RunGenerator(TestCompilationFactory.CreateCompilation("Skips", RejectionFixture)).output
             );
 
             CatalogView catalog = CatalogView.Load(assembly);
@@ -1028,63 +935,36 @@ namespace Fixtures
         public void SkipsCommandsWhenCommandCatalogEntryIsAbsent()
         {
             (SyntaxTree generated, CSharpCompilation output) = TestCompilationFactory.RunGenerator(
-                TestCompilationFactory.CreateCompilation(
-                    "NoContract",
-                    StandardFixture,
-                    includeCommandCatalogEntry: false
-                )
+                TestCompilationFactory.CreateCompilation("NoContract", StandardFixture, includeCommandCatalogEntry: false)
             );
 
             Assert.Null(generated);
-            Assert.Null(
-                output.SyntaxTrees.FirstOrDefault(tree =>
-                    tree.FilePath == TestCompilationFactory.GeneratedHintName
-                )
-            );
+            Assert.Null(output.SyntaxTrees.FirstOrDefault(tree => tree.FilePath == TestCompilationFactory.GeneratedHintName));
         }
 
         [Fact]
         public void SkipsCommandsWhenNoCommandsArePresent()
         {
-            (SyntaxTree generated, CSharpCompilation output) = TestCompilationFactory.RunGenerator(
-                TestCompilationFactory.CreateCompilation("NoCommands", NoCommandsFixture)
-            );
+            (SyntaxTree generated, CSharpCompilation output) = TestCompilationFactory.RunGenerator(TestCompilationFactory.CreateCompilation("NoCommands", NoCommandsFixture));
 
             Assert.Null(generated);
-            Assert.Null(
-                output.SyntaxTrees.FirstOrDefault(tree =>
-                    tree.FilePath == TestCompilationFactory.GeneratedHintName
-                )
-            );
+            Assert.Null(output.SyntaxTrees.FirstOrDefault(tree => tree.FilePath == TestCompilationFactory.GeneratedHintName));
         }
 
         [Fact]
         public void SkipsCommandsWhenFixtureIsEmpty()
         {
-            (SyntaxTree generated, CSharpCompilation output) = TestCompilationFactory.RunGenerator(
-                TestCompilationFactory.CreateCompilation("EmptyFixture", string.Empty)
-            );
+            (SyntaxTree generated, CSharpCompilation output) = TestCompilationFactory.RunGenerator(TestCompilationFactory.CreateCompilation("EmptyFixture", string.Empty));
 
             Assert.Null(generated);
-            Assert.Null(
-                output.SyntaxTrees.FirstOrDefault(tree =>
-                    tree.FilePath == TestCompilationFactory.GeneratedHintName
-                )
-            );
+            Assert.Null(output.SyntaxTrees.FirstOrDefault(tree => tree.FilePath == TestCompilationFactory.GeneratedHintName));
         }
 
         [Fact]
         public void RegistersPositionalConstructorNames()
         {
             Assembly assembly = TestCompilationFactory.CompileAndLoad(
-                TestCompilationFactory
-                    .RunGenerator(
-                        TestCompilationFactory.CreateCompilation(
-                            "PositionalName",
-                            PositionalNameFixture
-                        )
-                    )
-                    .output
+                TestCompilationFactory.RunGenerator(TestCompilationFactory.CreateCompilation("PositionalName", PositionalNameFixture)).output
             );
 
             CatalogView catalog = CatalogView.Load(assembly);
@@ -1098,14 +978,7 @@ namespace Fixtures
         public void EmitsCompilableCodeForKeywordMethodNames()
         {
             Assembly assembly = TestCompilationFactory.CompileAndLoad(
-                TestCompilationFactory
-                    .RunGenerator(
-                        TestCompilationFactory.CreateCompilation(
-                            "KeywordMethods",
-                            KeywordMethodFixture
-                        )
-                    )
-                    .output
+                TestCompilationFactory.RunGenerator(TestCompilationFactory.CreateCompilation("KeywordMethods", KeywordMethodFixture)).output
             );
 
             CatalogView catalog = CatalogView.Load(assembly);
@@ -1114,29 +987,11 @@ namespace Fixtures
             Assert.Equal("params", catalog.MethodNameOf(catalog.Entries[0]));
             Assert.Equal("void", catalog.NameOf(catalog.Entries[1]));
 
-            FieldInfo invocations = assembly
-                .GetType("Fixtures.KeywordCommands")
-                .GetField("KeywordInvocations");
+            FieldInfo invocations = assembly.GetType("Fixtures.KeywordCommands").GetField("KeywordInvocations");
             Assert.Equal(0, invocations.GetValue(null));
-            catalog.BinderOf(catalog.Entries[0])(
-                new object[]
-                {
-                    Array.CreateInstance(
-                        assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"),
-                        0
-                    ),
-                }
-            );
+            catalog.BinderOf(catalog.Entries[0])(new object[] { Array.CreateInstance(assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"), 0) });
             Assert.Equal(1, invocations.GetValue(null));
-            catalog.BinderOf(catalog.Entries[1])(
-                new object[]
-                {
-                    Array.CreateInstance(
-                        assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"),
-                        0
-                    ),
-                }
-            );
+            catalog.BinderOf(catalog.Entries[1])(new object[] { Array.CreateInstance(assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"), 0) });
             Assert.Equal(11, invocations.GetValue(null));
         }
 
@@ -1144,11 +999,7 @@ namespace Fixtures
         public void BlankInferredNamesAreEmittedAndRejectedLikeLegacy()
         {
             Assembly assembly = TestCompilationFactory.CompileAndLoad(
-                TestCompilationFactory
-                    .RunGenerator(
-                        TestCompilationFactory.CreateCompilation("BlankName", BlankNameFixture)
-                    )
-                    .output
+                TestCompilationFactory.RunGenerator(TestCompilationFactory.CreateCompilation("BlankName", BlankNameFixture)).output
             );
 
             /*
@@ -1165,14 +1016,7 @@ namespace Fixtures
         public void PartialMethodDeclarationsProduceOneEntry()
         {
             Assembly assembly = TestCompilationFactory.CompileAndLoad(
-                TestCompilationFactory
-                    .RunGenerator(
-                        TestCompilationFactory.CreateCompilation(
-                            "PartialMethods",
-                            PartialMethodFixture
-                        )
-                    )
-                    .output
+                TestCompilationFactory.RunGenerator(TestCompilationFactory.CreateCompilation("PartialMethods", PartialMethodFixture)).output
             );
 
             CatalogView catalog = CatalogView.Load(assembly);
@@ -1184,14 +1028,7 @@ namespace Fixtures
         public void DuplicateInferredNamesEachProduceAnEntry()
         {
             Assembly assembly = TestCompilationFactory.CompileAndLoad(
-                TestCompilationFactory
-                    .RunGenerator(
-                        TestCompilationFactory.CreateCompilation(
-                            "DuplicateNames",
-                            DuplicateNameFixture
-                        )
-                    )
-                    .output
+                TestCompilationFactory.RunGenerator(TestCompilationFactory.CreateCompilation("DuplicateNames", DuplicateNameFixture)).output
             );
 
             CatalogView catalog = CatalogView.Load(assembly);
@@ -1203,26 +1040,13 @@ namespace Fixtures
         public void NonVoidHandlerEmitCachedBinderThatThrowsLikeReflection()
         {
             Assembly assembly = TestCompilationFactory.CompileAndLoad(
-                TestCompilationFactory
-                    .RunGenerator(
-                        TestCompilationFactory.CreateCompilation(
-                            "NonVoidHandlers",
-                            NonVoidHandlerFixture
-                        )
-                    )
-                    .output
+                TestCompilationFactory.RunGenerator(TestCompilationFactory.CreateCompilation("NonVoidHandlers", NonVoidHandlerFixture)).output
             );
 
             CatalogView catalog = CatalogView.Load(assembly);
             object value = catalog.Entries.Single(entry => catalog.NameOf(entry) == "NonVoidValue");
             Assert.True(catalog.HasValidSignature(value));
-            object[] args =
-            {
-                Array.CreateInstance(
-                    assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"),
-                    0
-                ),
-            };
+            object[] args = { Array.CreateInstance(assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"), 0) };
             Assert.ThrowsAny<Exception>(() => catalog.BinderOf(value)(args));
         }
 
@@ -1230,25 +1054,12 @@ namespace Fixtures
         public void NonVoidTaskHandlerEmitCachedBinderThatThrowsLikeReflection()
         {
             Assembly assembly = TestCompilationFactory.CompileAndLoad(
-                TestCompilationFactory
-                    .RunGenerator(
-                        TestCompilationFactory.CreateCompilation(
-                            "NonVoidHandlersTask",
-                            NonVoidHandlerFixture
-                        )
-                    )
-                    .output
+                TestCompilationFactory.RunGenerator(TestCompilationFactory.CreateCompilation("NonVoidHandlersTask", NonVoidHandlerFixture)).output
             );
 
             CatalogView catalog = CatalogView.Load(assembly);
             object task = catalog.Entries.Single(entry => catalog.NameOf(entry) == "NonVoidTask");
-            object[] args =
-            {
-                Array.CreateInstance(
-                    assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"),
-                    0
-                ),
-            };
+            object[] args = { Array.CreateInstance(assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"), 0) };
             Assert.ThrowsAny<Exception>(() => catalog.BinderOf(task)(args));
         }
 
@@ -1256,38 +1067,20 @@ namespace Fixtures
         public void NonVoidFixtureKeepsVoidHandlerDirectlyBindable()
         {
             Assembly assembly = TestCompilationFactory.CompileAndLoad(
-                TestCompilationFactory
-                    .RunGenerator(
-                        TestCompilationFactory.CreateCompilation(
-                            "NonVoidHandlersVoid",
-                            NonVoidHandlerFixture
-                        )
-                    )
-                    .output
+                TestCompilationFactory.RunGenerator(TestCompilationFactory.CreateCompilation("NonVoidHandlersVoid", NonVoidHandlerFixture)).output
             );
 
             CatalogView catalog = CatalogView.Load(assembly);
             object voidCommand = catalog.Entries.Single(entry => catalog.NameOf(entry) == "Void");
             Assert.True(catalog.HasValidSignature(voidCommand));
-            object[] args =
-            {
-                Array.CreateInstance(
-                    assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"),
-                    0
-                ),
-            };
+            object[] args = { Array.CreateInstance(assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"), 0) };
             catalog.BinderOf(voidCommand)(args);
         }
 
         [Fact]
         public void InaccessibleHoldersSkipTheCatalogForTheWholeAssembly()
         {
-            (SyntaxTree generated, _) = TestCompilationFactory.RunGenerator(
-                TestCompilationFactory.CreateCompilation(
-                    "InaccessibleHolder",
-                    InaccessibleHolderFixture
-                )
-            );
+            (SyntaxTree generated, _) = TestCompilationFactory.RunGenerator(TestCompilationFactory.CreateCompilation("InaccessibleHolder", InaccessibleHolderFixture));
 
             Assert.Null(generated);
         }
@@ -1295,12 +1088,7 @@ namespace Fixtures
         [Fact]
         public void InaccessibleHoldersForceReflectionEvenWhenOtherCommandsExist()
         {
-            (SyntaxTree generated, _) = TestCompilationFactory.RunGenerator(
-                TestCompilationFactory.CreateCompilation(
-                    "InaccessibleMixed",
-                    InaccessibleMixedFixture
-                )
-            );
+            (SyntaxTree generated, _) = TestCompilationFactory.RunGenerator(TestCompilationFactory.CreateCompilation("InaccessibleMixed", InaccessibleMixedFixture));
 
             Assert.Null(generated);
         }
@@ -1310,11 +1098,7 @@ namespace Fixtures
         [InlineData("private", ",", 2)]
         [InlineData("public", ",,", 3)]
         [InlineData("private", ",,", 3)]
-        public void MultidimensionalCommandArraysRemainRejectedInPartialHolders(
-            string accessibility,
-            string dimensions,
-            int rank
-        )
+        public void MultidimensionalCommandArraysRemainRejectedInPartialHolders(string accessibility, string dimensions, int rank)
         {
             string fixture =
                 @"
@@ -1341,18 +1125,10 @@ namespace Fixtures
         }
     }
 }";
-            CSharpCompilation compilation = TestCompilationFactory.CreateCompilation(
-                "MultidimensionalArrays" + accessibility + rank,
-                fixture
-            );
-            Assert.DoesNotContain(
-                compilation.GetDiagnostics(),
-                diagnostic => diagnostic.Severity == DiagnosticSeverity.Error
-            );
+            CSharpCompilation compilation = TestCompilationFactory.CreateCompilation("MultidimensionalArrays" + accessibility + rank, fixture);
+            Assert.DoesNotContain(compilation.GetDiagnostics(), diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
 
-            (SyntaxTree generated, CSharpCompilation output) = TestCompilationFactory.RunGenerator(
-                compilation
-            );
+            (SyntaxTree generated, CSharpCompilation output) = TestCompilationFactory.RunGenerator(compilation);
             Assert.NotNull(generated);
             Assembly assembly = TestCompilationFactory.CompileAndLoad(output);
             CatalogView catalog = CatalogView.Load(assembly);
@@ -1364,37 +1140,20 @@ namespace Fixtures
             MethodInfo accessor = catalog.MethodAccessorOf(matrix);
             Assert.NotNull(accessor);
             Assert.Equal("Matrix", accessor.Name);
-            Assert.Equal(
-                rank,
-                Assert.Single(accessor.GetParameters()).ParameterType.GetArrayRank()
-            );
+            Assert.Equal(rank, Assert.Single(accessor.GetParameters()).ParameterType.GetArrayRank());
 
             object vector = catalog.Entries[1];
             Assert.True(catalog.HasValidSignature(vector));
             Assert.Null(catalog.MethodAccessorOf(vector));
-            catalog.BinderOf(vector)(
-                new object[]
-                {
-                    Array.CreateInstance(
-                        assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"),
-                        0
-                    ),
-                }
-            );
-            Assert.Equal(
-                1,
-                assembly.GetType("Fixtures.ArrayCommands").GetField("Invocations").GetValue(null)
-            );
+            catalog.BinderOf(vector)(new object[] { Array.CreateInstance(assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"), 0) });
+            Assert.Equal(1, assembly.GetType("Fixtures.ArrayCommands").GetField("Invocations").GetValue(null));
         }
 
         [Fact]
         public void PartialHolderPrivateCommandsBindWithoutReflection()
         {
             (SyntaxTree generated, CSharpCompilation output) = TestCompilationFactory.RunGenerator(
-                TestCompilationFactory.CreateCompilation(
-                    "PartialPrivate",
-                    PartialPrivateCommandFixture
-                )
+                TestCompilationFactory.CreateCompilation("PartialPrivate", PartialPrivateCommandFixture)
             );
 
             Assert.NotNull(generated);
@@ -1409,17 +1168,9 @@ namespace Fixtures
             Assert.True(catalog.HasValidSignature(entry));
             Assert.Null(catalog.MethodAccessorOf(entry));
 
-            FieldInfo invocations = assembly
-                .GetType("Fixtures.PartialPrivateCommands")
-                .GetField("SecretInvocations");
+            FieldInfo invocations = assembly.GetType("Fixtures.PartialPrivateCommands").GetField("SecretInvocations");
             Assert.Equal(0, invocations.GetValue(null));
-            object[] args =
-            {
-                Array.CreateInstance(
-                    assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"),
-                    0
-                ),
-            };
+            object[] args = { Array.CreateInstance(assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"), 0) };
             catalog.BinderOf(entry)(args);
             Assert.Equal(1, invocations.GetValue(null));
         }
@@ -1428,25 +1179,12 @@ namespace Fixtures
         public void PartialHolderPrivateCommandsReuseTheCachedBinder()
         {
             Assembly assembly = TestCompilationFactory.CompileAndLoad(
-                TestCompilationFactory
-                    .RunGenerator(
-                        TestCompilationFactory.CreateCompilation(
-                            "PartialPrivateCached",
-                            PartialPrivateCommandFixture
-                        )
-                    )
-                    .output
+                TestCompilationFactory.RunGenerator(TestCompilationFactory.CreateCompilation("PartialPrivateCached", PartialPrivateCommandFixture)).output
             );
 
             CatalogView catalog = CatalogView.Load(assembly);
             object entry = Assert.Single(catalog.Entries);
-            object[] args =
-            {
-                Array.CreateInstance(
-                    assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"),
-                    0
-                ),
-            };
+            object[] args = { Array.CreateInstance(assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"), 0) };
             catalog.BinderOf(entry)(args);
             Assert.Same(catalog.BinderOf(entry)(args), catalog.BinderOf(entry)(args));
         }
@@ -1455,10 +1193,7 @@ namespace Fixtures
         public void PartialNestedHolderPrivateCommandsBindWithoutReflection()
         {
             (SyntaxTree generated, CSharpCompilation output) = TestCompilationFactory.RunGenerator(
-                TestCompilationFactory.CreateCompilation(
-                    "PartialNested",
-                    PartialPrivateNestedCommandFixture
-                )
+                TestCompilationFactory.CreateCompilation("PartialNested", PartialPrivateNestedCommandFixture)
             );
 
             Assert.NotNull(generated);
@@ -1472,16 +1207,8 @@ namespace Fixtures
             Assert.Equal("Secret", catalog.NameOf(entry));
             Assert.True(catalog.HasValidSignature(entry));
 
-            FieldInfo invocations = assembly
-                .GetType("Fixtures.PartialOuter+PartialInner")
-                .GetField("SecretInvocations");
-            object[] args =
-            {
-                Array.CreateInstance(
-                    assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"),
-                    0
-                ),
-            };
+            FieldInfo invocations = assembly.GetType("Fixtures.PartialOuter+PartialInner").GetField("SecretInvocations");
+            object[] args = { Array.CreateInstance(assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"), 0) };
             catalog.BinderOf(entry)(args);
             Assert.Equal(1, invocations.GetValue(null));
         }
@@ -1490,10 +1217,7 @@ namespace Fixtures
         public void PartialStructPrivateCommandsBindWithoutReflection()
         {
             (SyntaxTree generated, CSharpCompilation output) = TestCompilationFactory.RunGenerator(
-                TestCompilationFactory.CreateCompilation(
-                    "PartialStruct",
-                    PartialStructPrivateCommandFixture
-                )
+                TestCompilationFactory.CreateCompilation("PartialStruct", PartialStructPrivateCommandFixture)
             );
 
             Assert.NotNull(generated);
@@ -1504,16 +1228,8 @@ namespace Fixtures
             object entry = Assert.Single(catalog.Entries);
             Assert.True(catalog.HasValidSignature(entry));
 
-            FieldInfo invocations = assembly
-                .GetType("Fixtures.PartialStructCommands")
-                .GetField("SecretInvocations");
-            object[] args =
-            {
-                Array.CreateInstance(
-                    assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"),
-                    0
-                ),
-            };
+            FieldInfo invocations = assembly.GetType("Fixtures.PartialStructCommands").GetField("SecretInvocations");
+            object[] args = { Array.CreateInstance(assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"), 0) };
             catalog.BinderOf(entry)(args);
             Assert.Equal(1, invocations.GetValue(null));
         }
@@ -1522,29 +1238,14 @@ namespace Fixtures
         public void PartialHoldersGroupCompanionsAndKeepAccessibleCommandsDirect()
         {
             Assembly assembly = TestCompilationFactory.CompileAndLoad(
-                TestCompilationFactory
-                    .RunGenerator(
-                        TestCompilationFactory.CreateCompilation(
-                            "PartialMixed",
-                            PartialMixedCommandsFixture
-                        )
-                    )
-                    .output
+                TestCompilationFactory.RunGenerator(TestCompilationFactory.CreateCompilation("PartialMixed", PartialMixedCommandsFixture)).output
             );
 
             CatalogView catalog = CatalogView.Load(assembly);
             Assert.Equal(4, catalog.Entries.Count);
-            FieldInfo invocations = assembly
-                .GetType("Fixtures.PartialMixedCommands")
-                .GetField("Invocations");
+            FieldInfo invocations = assembly.GetType("Fixtures.PartialMixedCommands").GetField("Invocations");
 
-            object[] args =
-            {
-                Array.CreateInstance(
-                    assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"),
-                    0
-                ),
-            };
+            object[] args = { Array.CreateInstance(assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"), 0) };
             foreach (object entry in catalog.Entries)
             {
                 catalog.BinderOf(entry)(args);
@@ -1557,36 +1258,21 @@ namespace Fixtures
         public void KeywordNamedPartialHoldersEmitCompilableCompanions()
         {
             Assembly assembly = TestCompilationFactory.CompileAndLoad(
-                TestCompilationFactory
-                    .RunGenerator(
-                        TestCompilationFactory.CreateCompilation(
-                            "KeywordPartial",
-                            KeywordNamedPartialHolderFixture
-                        )
-                    )
-                    .output
+                TestCompilationFactory.RunGenerator(TestCompilationFactory.CreateCompilation("KeywordPartial", KeywordNamedPartialHolderFixture)).output
             );
 
             CatalogView catalog = CatalogView.Load(assembly);
             object entry = Assert.Single(catalog.Entries);
             Assert.True(catalog.HasValidSignature(entry));
 
-            object[] args =
-            {
-                Array.CreateInstance(
-                    assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"),
-                    0
-                ),
-            };
+            object[] args = { Array.CreateInstance(assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"), 0) };
             catalog.BinderOf(entry)(args);
         }
 
         [Fact]
         public void NonPartialHolderPrivateCommandsKeepTheReflectionBinder()
         {
-            (SyntaxTree generated, CSharpCompilation output) = TestCompilationFactory.RunGenerator(
-                TestCompilationFactory.CreateCompilation("NonPartialPrivate", StandardFixture)
-            );
+            (SyntaxTree generated, CSharpCompilation output) = TestCompilationFactory.RunGenerator(TestCompilationFactory.CreateCompilation("NonPartialPrivate", StandardFixture));
 
             Assert.NotNull(generated);
             string source = generated.ToString();
@@ -1597,13 +1283,7 @@ namespace Fixtures
             CatalogView catalog = CatalogView.Load(assembly);
             object secret = catalog.Entries.Single(entry => catalog.NameOf(entry) == "Secret");
             Assert.True(catalog.HasValidSignature(secret));
-            object[] args =
-            {
-                Array.CreateInstance(
-                    assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"),
-                    0
-                ),
-            };
+            object[] args = { Array.CreateInstance(assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"), 0) };
             catalog.BinderOf(secret)(args);
         }
 
@@ -1611,18 +1291,11 @@ namespace Fixtures
         public void GenericPartialHoldersEmitNoCompanion()
         {
             (SyntaxTree generated, CSharpCompilation output) = TestCompilationFactory.RunGenerator(
-                TestCompilationFactory.CreateCompilation(
-                    "GenericPartial",
-                    GenericPartialHolderFixture
-                )
+                TestCompilationFactory.CreateCompilation("GenericPartial", GenericPartialHolderFixture)
             );
 
             Assert.NotNull(generated);
-            Assert.DoesNotContain(
-                "DxCommandTerminalBinder",
-                generated.ToString(),
-                StringComparison.Ordinal
-            );
+            Assert.DoesNotContain("DxCommandTerminalBinder", generated.ToString(), StringComparison.Ordinal);
 
             Assembly assembly = TestCompilationFactory.CompileAndLoad(output);
             CatalogView catalog = CatalogView.Load(assembly);
@@ -1634,14 +1307,8 @@ namespace Fixtures
         [Fact]
         public void FileLocalHoldersSkipTheCatalogForTheWholeAssembly()
         {
-            CSharpCompilation compilation = TestCompilationFactory.CreateCompilation(
-                "FileLocalPartial",
-                FileLocalPartialHolderFixture
-            );
-            Assert.DoesNotContain(
-                compilation.GetParseDiagnostics(),
-                diagnostic => diagnostic.Severity == DiagnosticSeverity.Error
-            );
+            CSharpCompilation compilation = TestCompilationFactory.CreateCompilation("FileLocalPartial", FileLocalPartialHolderFixture);
+            Assert.DoesNotContain(compilation.GetParseDiagnostics(), diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
 
             (SyntaxTree generated, _) = TestCompilationFactory.RunGenerator(compilation);
             Assert.Null(generated);
@@ -1651,14 +1318,7 @@ namespace Fixtures
         public void KeywordNamedHoldersEmitCompilableCatalogs()
         {
             Assembly assembly = TestCompilationFactory.CompileAndLoad(
-                TestCompilationFactory
-                    .RunGenerator(
-                        TestCompilationFactory.CreateCompilation(
-                            "KeywordHolder",
-                            KeywordNamedHolderFixture
-                        )
-                    )
-                    .output
+                TestCompilationFactory.RunGenerator(TestCompilationFactory.CreateCompilation("KeywordHolder", KeywordNamedHolderFixture)).output
             );
 
             CatalogView catalog = CatalogView.Load(assembly);

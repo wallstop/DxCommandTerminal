@@ -42,36 +42,16 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             yield return new TestCaseData(0, string.Empty, 300).SetName("EmptyToken.EmptyScene");
             yield return new TestCaseData(0, TypedToken, 300).SetName("TypedToken.EmptyScene");
-            yield return new TestCaseData(0, SelectiveToken, 300).SetName(
-                "SelectiveToken.EmptyScene"
-            );
-            yield return new TestCaseData(100, string.Empty, 300).SetName(
-                "EmptyToken.HundredObjects"
-            );
-            yield return new TestCaseData(100, TypedToken, 300).SetName(
-                "TypedToken.HundredObjects"
-            );
-            yield return new TestCaseData(100, SelectiveToken, 300).SetName(
-                "SelectiveToken.HundredObjects"
-            );
-            yield return new TestCaseData(1000, string.Empty, 300).SetName(
-                "EmptyToken.ThousandObjects"
-            );
-            yield return new TestCaseData(1000, TypedToken, 300).SetName(
-                "TypedToken.ThousandObjects"
-            );
-            yield return new TestCaseData(1000, SelectiveToken, 300).SetName(
-                "SelectiveToken.ThousandObjects"
-            );
-            yield return new TestCaseData(10000, string.Empty, 50).SetName(
-                "EmptyToken.TenThousandObjects"
-            );
-            yield return new TestCaseData(10000, TypedToken, 50).SetName(
-                "TypedToken.TenThousandObjects"
-            );
-            yield return new TestCaseData(10000, SelectiveToken, 50).SetName(
-                "SelectiveToken.TenThousandObjects"
-            );
+            yield return new TestCaseData(0, SelectiveToken, 300).SetName("SelectiveToken.EmptyScene");
+            yield return new TestCaseData(100, string.Empty, 300).SetName("EmptyToken.HundredObjects");
+            yield return new TestCaseData(100, TypedToken, 300).SetName("TypedToken.HundredObjects");
+            yield return new TestCaseData(100, SelectiveToken, 300).SetName("SelectiveToken.HundredObjects");
+            yield return new TestCaseData(1000, string.Empty, 300).SetName("EmptyToken.ThousandObjects");
+            yield return new TestCaseData(1000, TypedToken, 300).SetName("TypedToken.ThousandObjects");
+            yield return new TestCaseData(1000, SelectiveToken, 300).SetName("SelectiveToken.ThousandObjects");
+            yield return new TestCaseData(10000, string.Empty, 50).SetName("EmptyToken.TenThousandObjects");
+            yield return new TestCaseData(10000, TypedToken, 50).SetName("TypedToken.TenThousandObjects");
+            yield return new TestCaseData(10000, SelectiveToken, 50).SetName("SelectiveToken.TenThousandObjects");
         }
 
         private static IEnumerable<TestCaseData> BudgetCases()
@@ -101,11 +81,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         [TestCaseSource(nameof(ScalingCases))]
-        public void MeasuresEndToEndCompletionScaling(
-            int objectCount,
-            string token,
-            int sampleCount
-        )
+        public void MeasuresEndToEndCompletionScaling(int objectCount, string token, int sampleCount)
         {
             CommandShell shell = CreateScaledShell(objectCount);
             List<CommandCompletion> results = new();
@@ -121,26 +97,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             for (int i = 0; i < WarmupIterations; ++i)
             {
-                shell.TryComplete(
-                    CommandExecutionContext.Current,
-                    input,
-                    input.Length,
-                    results,
-                    out _
-                );
+                shell.TryComplete(CommandExecutionContext.Current, input, input.Length, results, out _);
             }
 
             long[] samples = new long[sampleCount];
             for (int i = 0; i < sampleCount; ++i)
             {
                 Stopwatch stopwatch = Stopwatch.StartNew();
-                shell.TryComplete(
-                    CommandExecutionContext.Current,
-                    input,
-                    input.Length,
-                    results,
-                    out _
-                );
+                shell.TryComplete(CommandExecutionContext.Current, input, input.Length, results, out _);
                 samples[i] = stopwatch.ElapsedTicks;
             }
 
@@ -148,8 +112,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             System.Array.Sort(sorted);
             double ticksToMilliseconds = 1000.0 / Stopwatch.Frequency;
             double median = sorted[sampleCount / 2] * ticksToMilliseconds;
-            double p95 =
-                sorted[(int)System.Math.Ceiling(sampleCount * 0.95) - 1] * ticksToMilliseconds;
+            double p95 = sorted[(int)System.Math.Ceiling(sampleCount * 0.95) - 1] * ticksToMilliseconds;
             double max = sorted[sampleCount - 1] * ticksToMilliseconds;
             int gen0Delta = System.GC.CollectionCount(0) - gen0Collections;
 
@@ -169,13 +132,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             for (int i = 0; i < WarmupIterations; ++i)
             {
-                shell.TryComplete(
-                    CommandExecutionContext.Current,
-                    input,
-                    input.Length,
-                    results,
-                    out _
-                );
+                shell.TryComplete(CommandExecutionContext.Current, input, input.Length, results, out _);
             }
 
             long[] samples = new long[BudgetSampleCount];
@@ -183,28 +140,17 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             for (int i = 0; i < samples.Length; ++i)
             {
                 stopwatch.Restart();
-                shell.TryComplete(
-                    CommandExecutionContext.Current,
-                    input,
-                    input.Length,
-                    results,
-                    out _
-                );
+                shell.TryComplete(CommandExecutionContext.Current, input, input.Length, results, out _);
                 samples[i] = stopwatch.ElapsedTicks;
             }
 
             System.Array.Sort(samples);
             double ticksToMilliseconds = 1000.0 / Stopwatch.Frequency;
             double median = samples[samples.Length / 2] * ticksToMilliseconds;
-            double p95 =
-                samples[(int)System.Math.Ceiling(samples.Length * 0.95) - 1] * ticksToMilliseconds;
+            double p95 = samples[(int)System.Math.Ceiling(samples.Length * 0.95) - 1] * ticksToMilliseconds;
             double max = samples[samples.Length - 1] * ticksToMilliseconds;
 
-            Assert.AreEqual(
-                objectCount,
-                results.Count,
-                "Every fixture object should complete for the typed prefix"
-            );
+            Assert.AreEqual(objectCount, results.Count, "Every fixture object should complete for the typed prefix");
             Assert.Less(
                 p95,
                 budgetMilliseconds,
@@ -242,8 +188,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             System.Array.Sort(sorted);
             double ticksToMilliseconds = 1000.0 / Stopwatch.Frequency;
             double median = sorted[sampleCount / 2] * ticksToMilliseconds;
-            double p95 =
-                sorted[(int)System.Math.Ceiling(sampleCount * 0.95) - 1] * ticksToMilliseconds;
+            double p95 = sorted[(int)System.Math.Ceiling(sampleCount * 0.95) - 1] * ticksToMilliseconds;
             double max = sorted[sampleCount - 1] * ticksToMilliseconds;
             int gen0Delta = System.GC.CollectionCount(0) - gen0Collections;
 
@@ -274,13 +219,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     CommandBuilder
                         .Create(CommandName)
                         .Contexts(CommandExecutionContextSets.All)
-                        .Arg<GameObject>(
-                            "target",
-                            spec =>
-                                spec.Required()
-                                    .RawParser(adapter.TryParse)
-                                    .Choices(adapter.GetChoices, adapter.FormatChoice)
-                        )
+                        .Arg<GameObject>("target", spec => spec.Required().RawParser(adapter.TryParse).Choices(adapter.GetChoices, adapter.FormatChoice))
                         .Handler((context, arguments) => { }),
                     out _
                 )

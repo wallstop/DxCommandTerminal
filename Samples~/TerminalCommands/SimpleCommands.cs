@@ -16,10 +16,7 @@ namespace WallstopStudios.DxCommandTerminal.Samples
                 CommandBuilder
                     .Create("heal", "Heals a target")
                     .Arg<int>("amount", spec => spec.Required().Range(1, 100))
-                    .Arg<string>(
-                        "target",
-                        spec => spec.Default("self").Choices("self", "ally", "enemy")
-                    )
+                    .Arg<string>("target", spec => spec.Default("self").Choices("self", "ally", "enemy"))
                     .Handler(
                         (context, arguments) =>
                         {

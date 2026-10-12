@@ -34,10 +34,7 @@
 
         private static string Take(TextFieldUndo undo, bool forward, string fieldText)
         {
-            Assert.IsTrue(
-                undo.Step(fieldText, fieldText.Length, forward, out string text, out _),
-                $"There is a state to {(forward ? "redo" : "undo")} from '{fieldText}'"
-            );
+            Assert.IsTrue(undo.Step(fieldText, fieldText.Length, forward, out string text, out _), $"There is a state to {(forward ? "redo" : "undo")} from '{fieldText}'");
             return text;
         }
 
@@ -54,24 +51,10 @@
         [TestCase(KeyCode.Y, true, false, false, false)]
         [TestCase(KeyCode.V, true, false, false, false)]
         [TestCase(KeyCode.LeftArrow, false, false, false, false)]
-        public void OnlyTheModifiedZIsHistory(
-            KeyCode keyCode,
-            bool commandOrCtrl,
-            bool shiftKey,
-            bool isUndo,
-            bool isRedo
-        )
+        public void OnlyTheModifiedZIsHistory(KeyCode keyCode, bool commandOrCtrl, bool shiftKey, bool isUndo, bool isRedo)
         {
-            Assert.AreEqual(
-                isUndo,
-                TextFieldUndo.IsUndo(keyCode, commandOrCtrl, shiftKey),
-                "IsUndo for the given keys"
-            );
-            Assert.AreEqual(
-                isRedo,
-                TextFieldUndo.IsRedo(keyCode, commandOrCtrl, shiftKey),
-                "IsRedo for the given keys"
-            );
+            Assert.AreEqual(isUndo, TextFieldUndo.IsUndo(keyCode, commandOrCtrl, shiftKey), "IsUndo for the given keys");
+            Assert.AreEqual(isRedo, TextFieldUndo.IsRedo(keyCode, commandOrCtrl, shiftKey), "IsRedo for the given keys");
         }
 
         /*
@@ -90,11 +73,7 @@
 
             Assert.AreEqual("gi", Take(undo, false, "giv"), "The first undo drops one keystroke");
             Assert.AreEqual("g", Take(undo, false, "gi"), "The second drops the one before it");
-            Assert.AreEqual(
-                string.Empty,
-                Take(undo, false, "g"),
-                "The last undo lands on the empty line the field started on"
-            );
+            Assert.AreEqual(string.Empty, Take(undo, false, "g"), "The last undo lands on the empty line the field started on");
         }
 
         /*
@@ -140,11 +119,7 @@
             Type(undo, "gi");
             Assert.AreEqual("g", Take(undo, false, "gi"), "Sanity: the undo moved");
 
-            Assert.AreEqual(
-                string.Empty,
-                Take(undo, false, "g"),
-                "The second undo goes on past the state the first one left"
-            );
+            Assert.AreEqual(string.Empty, Take(undo, false, "g"), "The second undo goes on past the state the first one left");
         }
 
         /*
@@ -165,11 +140,7 @@
             undo.Observe("giv", 3);
             undo.Observe("givx", 4);
 
-            Assert.AreEqual(
-                "giv",
-                Take(undo, false, "givx"),
-                "One undo drops the keystroke that was observed last"
-            );
+            Assert.AreEqual("giv", Take(undo, false, "givx"), "One undo drops the keystroke that was observed last");
         }
 
         /*
@@ -193,11 +164,7 @@
             undo.Step("givx", 4, true, out string redone, out int clamped);
             Assert.AreEqual("gi", redone, "Sanity: the redo came back to the state it left");
 
-            Assert.AreEqual(
-                2,
-                clamped,
-                "The caret that state carries is its own end, not the 99 it was observed with"
-            );
+            Assert.AreEqual(2, clamped, "The caret that state carries is its own end, not the 99 it was observed with");
         }
 
         /*
@@ -234,11 +201,7 @@
                 ++steps;
             }
 
-            Assert.AreEqual(
-                1,
-                steps,
-                "Every recording of that text was the state the stack already held"
-            );
+            Assert.AreEqual(1, steps, "Every recording of that text was the state the stack already held");
         }
 
         [Test]
@@ -248,10 +211,7 @@
             Type(undo, "give sword 5");
             undo.Clear();
 
-            Assert.IsFalse(
-                undo.Step(string.Empty, 0, false, out _, out _),
-                "A cleared stack has nothing to undo, so the key does nothing"
-            );
+            Assert.IsFalse(undo.Step(string.Empty, 0, false, out _, out _), "A cleared stack has nothing to undo, so the key does nothing");
         }
 
         /*
@@ -268,11 +228,7 @@
             Type(undo, "give sw");
             Type(undo, "give sword");
 
-            Assert.AreEqual(
-                "give sw",
-                Take(undo, false, "give sword"),
-                "The state the terminal wrote is one step back"
-            );
+            Assert.AreEqual("give sw", Take(undo, false, "give sword"), "The state the terminal wrote is one step back");
         }
 
         [Test]
@@ -302,10 +258,7 @@
 
             Type(undo, "give");
 
-            Assert.IsFalse(
-                undo.Step("give", 4, true, out _, out _),
-                "The state after the undone one was dropped, so there is nothing to redo"
-            );
+            Assert.IsFalse(undo.Step("give", 4, true, out _, out _), "The state after the undone one was dropped, so there is nothing to redo");
         }
 
         /*
@@ -348,16 +301,8 @@
                 ++steps;
             }
 
-            Assert.AreEqual(
-                TextFieldUndo.MaxEntries - 1,
-                steps,
-                "The ceiling dropped one state, so one fewer than was typed is reachable"
-            );
-            Assert.AreEqual(
-                new string('a', 2),
-                held,
-                "The oldest state still reachable is the second, not the empty line it started on"
-            );
+            Assert.AreEqual(TextFieldUndo.MaxEntries - 1, steps, "The ceiling dropped one state, so one fewer than was typed is reachable");
+            Assert.AreEqual(new string('a', 2), held, "The oldest state still reachable is the second, not the empty line it started on");
         }
     }
 }

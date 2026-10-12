@@ -35,14 +35,7 @@ namespace WallstopStudios.DxCommandTerminal.Samples
                     .Create("weather", "Sets the weather")
                     .Arg<WeatherCondition>(
                         "condition",
-                        spec =>
-                            spec.Default(WeatherCondition.Clear)
-                                .Choices(
-                                    WeatherCondition.Clear,
-                                    WeatherCondition.Rain,
-                                    WeatherCondition.Storm,
-                                    WeatherCondition.Fog
-                                )
+                        spec => spec.Default(WeatherCondition.Clear).Choices(WeatherCondition.Clear, WeatherCondition.Rain, WeatherCondition.Storm, WeatherCondition.Fog)
                     )
                     .Handler(
                         (context, arguments) =>

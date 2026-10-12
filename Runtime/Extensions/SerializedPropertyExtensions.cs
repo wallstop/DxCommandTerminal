@@ -16,20 +16,11 @@ namespace WallstopStudios.DxCommandTerminal.Extensions
 #if UNITY_WEBGL
             return field.GetValue;
 #else
-            DynamicMethod dynamicMethod = new(
-                $"Get{field.Name}",
-                typeof(object),
-                new[] { typeof(object) },
-                field.DeclaringType,
-                true
-            );
+            DynamicMethod dynamicMethod = new($"Get{field.Name}", typeof(object), new[] { typeof(object) }, field.DeclaringType, true);
 
             ILGenerator il = dynamicMethod.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(
-                field.DeclaringType.IsValueType ? OpCodes.Unbox : OpCodes.Castclass,
-                field.DeclaringType
-            );
+            il.Emit(field.DeclaringType.IsValueType ? OpCodes.Unbox : OpCodes.Castclass, field.DeclaringType);
             il.Emit(OpCodes.Ldfld, field);
             if (field.FieldType.IsValueType)
             {
@@ -44,15 +35,11 @@ namespace WallstopStudios.DxCommandTerminal.Extensions
 
     internal static class SerializedPropertyExtensions
     {
-        private static readonly Dictionary<
-            Type,
-            Dictionary<string, Func<object, object>>
-        > FieldProducersByType = new();
-        private static readonly PropertyInfo GradientProperty =
-            typeof(SerializedProperty).GetProperty(
-                "gradientValue",
-                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic
-            );
+        private static readonly Dictionary<Type, Dictionary<string, Func<object, object>>> FieldProducersByType = new();
+        private static readonly PropertyInfo GradientProperty = typeof(SerializedProperty).GetProperty(
+            "gradientValue",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic
+        );
 
         public static object GetValue(this SerializedProperty property)
         {
@@ -115,34 +102,16 @@ namespace WallstopStudios.DxCommandTerminal.Extensions
                         }
 
                         Type type = obj.GetType();
-                        if (
-                            !FieldProducersByType.TryGetValue(
-                                type,
-                                out Dictionary<string, Func<object, object>> fieldProducersByName
-                            )
-                        )
+                        if (!FieldProducersByType.TryGetValue(type, out Dictionary<string, Func<object, object>> fieldProducersByName))
                         {
-                            fieldProducersByName = new Dictionary<string, Func<object, object>>(
-                                StringComparer.Ordinal
-                            );
+                            fieldProducersByName = new Dictionary<string, Func<object, object>>(StringComparer.Ordinal);
                             FieldProducersByType[type] = fieldProducersByName;
                         }
 
-                        if (
-                            !fieldProducersByName.TryGetValue(
-                                name,
-                                out Func<object, object> fieldProducer
-                            )
-                        )
+                        if (!fieldProducersByName.TryGetValue(name, out Func<object, object> fieldProducer))
                         {
-                            FieldInfo field = type.GetField(
-                                name,
-                                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic
-                            );
-                            fieldProducer =
-                                field == null
-                                    ? _ => null
-                                    : FieldAccessorFactory.CreateFieldGetter(field);
+                            FieldInfo field = type.GetField(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                            fieldProducer = field == null ? _ => null : FieldAccessorFactory.CreateFieldGetter(field);
                             fieldProducersByName[name] = fieldProducer;
                         }
 
@@ -162,10 +131,7 @@ namespace WallstopStudios.DxCommandTerminal.Extensions
         /// <param name="property">The SerializedProperty.</param>
         /// <param name="fieldInfo">Outputs the FieldInfo of the referenced field.</param>
         /// <returns>The instance object that owns the field.</returns>
-        internal static object GetEnclosingObject(
-            this SerializedProperty property,
-            out FieldInfo fieldInfo
-        )
+        internal static object GetEnclosingObject(this SerializedProperty property, out FieldInfo fieldInfo)
         {
             object obj = property.serializedObject.targetObject;
             if (obj == null)
@@ -198,10 +164,7 @@ namespace WallstopStudios.DxCommandTerminal.Extensions
                     continue;
                 }
 
-                enclosingField = type?.GetField(
-                    fieldName,
-                    BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance
-                );
+                enclosingField = type?.GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance);
                 if (enclosingField == null)
                 {
                     fieldInfo = null;

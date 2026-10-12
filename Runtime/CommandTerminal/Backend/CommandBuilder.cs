@@ -52,10 +52,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         {
             if (string.IsNullOrWhiteSpace(name))
             {
-                throw new CommandConfigurationException(
-                    CommandConfigurationFailure.EmptyName,
-                    "A command name is required; pass a non-empty name to CommandBuilder.Create."
-                );
+                throw new CommandConfigurationException(CommandConfigurationFailure.EmptyName, "A command name is required; pass a non-empty name to CommandBuilder.Create.");
             }
 
             return new CommandBuilder(name);
@@ -111,22 +108,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                         knowledge and stores its typed array in its own slot
                         of the parsed buffer.
                      */
-                    if (
-                        !spec.TryParseAll(
-                            arguments,
-                            offset + i,
-                            parsed,
-                            i,
-                            out CommandArg failedToken,
-                            out string validationError
-                        )
-                    )
+                    if (!spec.TryParseAll(arguments, offset + i, parsed, i, out CommandArg failedToken, out string validationError))
                     {
-                        owner.IssueErrorMessage(
-                            validationError == null
-                                ? $"'{name}': {spec.FormatParseError(failedToken)}"
-                                : $"'{name}': {validationError}"
-                        );
+                        owner.IssueErrorMessage(validationError == null ? $"'{name}': {spec.FormatParseError(failedToken)}" : $"'{name}': {validationError}");
                         return;
                     }
 
@@ -228,9 +212,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             arguments without choices stay null. The array is always sized to
             specs.Length so route completion can index it directly.
         */
-        private static CommandCompletionProvider[] BuildSpecCompletionStages(
-            CommandArgument[] specs
-        )
+        private static CommandCompletionProvider[] BuildSpecCompletionStages(CommandArgument[] specs)
         {
             CommandCompletionProvider[] stages = new CommandCompletionProvider[specs.Length];
             for (int i = 0; i < specs.Length; ++i)
@@ -241,10 +223,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                     continue;
                 }
 
-                stages[i] = (
-                    in CommandCompletionContext context,
-                    List<CommandCompletion> results
-                ) => spec.AppendCompletions(context, results);
+                stages[i] = (in CommandCompletionContext context, List<CommandCompletion> results) => spec.AppendCompletions(context, results);
             }
 
             return stages;
@@ -274,9 +253,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                     return;
                 }
 
-                owner.IssueErrorMessage(
-                    $"'{path}': expected a subcommand. Expected one of: {FormatRouteList(lookup)}"
-                );
+                owner.IssueErrorMessage($"'{path}': expected a subcommand. Expected one of: {FormatRouteList(lookup)}");
                 return;
             }
 
@@ -284,24 +261,13 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             string tokenText = token.contents ?? string.Empty;
             if (!lookup.TryGetValue(tokenText, out SubcommandRoute route))
             {
-                owner.IssueErrorMessage(
-                    $"'{path}': unknown subcommand '{tokenText}'. "
-                        + $"Expected one of: {FormatRouteList(lookup)}"
-                );
+                owner.IssueErrorMessage($"'{path}': unknown subcommand '{tokenText}'. " + $"Expected one of: {FormatRouteList(lookup)}");
                 return;
             }
 
             if (route.IsRouter)
             {
-                RouteInvocation(
-                    owner,
-                    route.Lookup,
-                    route.FullPath,
-                    route.Fallback,
-                    context,
-                    arguments,
-                    offset + 1
-                );
+                RouteInvocation(owner, route.Lookup, route.FullPath, route.Fallback, context, arguments, offset + 1);
                 return;
             }
 
@@ -309,9 +275,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             if (available < route.RequiredCount)
             {
                 owner.IssueErrorMessage(
-                    $"'{route.FullPath}': requires at least {route.RequiredCount} argument"
-                        + (route.RequiredCount == 1 ? string.Empty : "s")
-                        + $"\n    -> Usage: {route.PathUsage}"
+                    $"'{route.FullPath}': requires at least {route.RequiredCount} argument" + (route.RequiredCount == 1 ? string.Empty : "s") + $"\n    -> Usage: {route.PathUsage}"
                 );
                 return;
             }
@@ -322,31 +286,16 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 if (routeSpecCount < available)
                 {
                     owner.IssueErrorMessage(
-                        $"'{route.FullPath}': expects at most {routeSpecCount} argument"
-                            + (routeSpecCount == 1 ? string.Empty : "s")
-                            + $"\n    -> Usage: {route.PathUsage}"
+                        $"'{route.FullPath}': expects at most {routeSpecCount} argument" + (routeSpecCount == 1 ? string.Empty : "s") + $"\n    -> Usage: {route.PathUsage}"
                     );
                     return;
                 }
             }
 
-            RunTyped(
-                owner,
-                route.Specs,
-                route.FullPath,
-                route.Handler,
-                context,
-                arguments,
-                offset + 1
-            );
+            RunTyped(owner, route.Specs, route.FullPath, route.Handler, context, arguments, offset + 1);
         }
 
-        private static void RouteCompletion(
-            Dictionary<string, SubcommandRoute> lookup,
-            in CommandCompletionContext context,
-            int baseStage,
-            List<CommandCompletion> results
-        )
+        private static void RouteCompletion(Dictionary<string, SubcommandRoute> lookup, in CommandCompletionContext context, int baseStage, List<CommandCompletion> results)
         {
             int stage = context.ActiveArgumentIndex - baseStage;
             if (stage == 0)
@@ -356,9 +305,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 {
                     if (candidate.Name.StartsWith(token, StringComparison.OrdinalIgnoreCase))
                     {
-                        results.Add(
-                            new CommandCompletion(candidate.Name, description: candidate.Help)
-                        );
+                        results.Add(new CommandCompletion(candidate.Name, description: candidate.Help));
                     }
                 }
 
@@ -402,9 +349,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 a subcommand-relative context so dynamic choice providers read
                 the same shape as on a top-level command.
             */
-            route
-                .CompletionStages[childStage]
-                ?.Invoke(context.ForSubcommand(baseStage + 1), results);
+            route.CompletionStages[childStage]?.Invoke(context.ForSubcommand(baseStage + 1), results);
         }
 
         private static string FormatRouteList(Dictionary<string, SubcommandRoute> lookup)
@@ -486,10 +431,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         ///     argument after the command's
         ///     <see cref="Remaining{T}"/> argument throws.
         /// </summary>
-        public CommandBuilder Arg<T>(
-            string name,
-            Func<CommandArgumentSpec<T>, CommandArgumentSpec<T>> configure = null
-        )
+        public CommandBuilder Arg<T>(string name, Func<CommandArgumentSpec<T>, CommandArgumentSpec<T>> configure = null)
         {
             EnsureArgumentNameAvailable(name);
             int argumentCount = _arguments.Count;
@@ -526,10 +468,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         ///     <see cref="CommandArgumentSpec{T}.Default"/> on the remaining
         ///     argument all throw at definition time.
         /// </remarks>
-        public CommandBuilder Remaining<T>(
-            string name,
-            Func<CommandArgumentSpec<T>, CommandArgumentSpec<T>> configure = null
-        )
+        public CommandBuilder Remaining<T>(string name, Func<CommandArgumentSpec<T>, CommandArgumentSpec<T>> configure = null)
         {
             EnsureArgumentNameAvailable(name);
             foreach (CommandArgument argument in _arguments)
@@ -538,8 +477,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 {
                     throw new CommandConfigurationException(
                         CommandConfigurationFailure.InvalidRemainingArgument,
-                        $"Command '{Name}': only one remaining argument is allowed; "
-                            + $"'{argument.Name}' already consumes every trailing token.",
+                        $"Command '{Name}': only one remaining argument is allowed; " + $"'{argument.Name}' already consumes every trailing token.",
                         Name,
                         argumentName: name
                     );
@@ -551,8 +489,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             {
                 throw new CommandConfigurationException(
                     CommandConfigurationFailure.InvalidRemainingArgument,
-                    $"Command '{Name}': the remaining argument '{name}' cannot declare a "
-                        + "default; an invocation without trailing tokens reads as an empty array.",
+                    $"Command '{Name}': the remaining argument '{name}' cannot declare a " + "default; an invocation without trailing tokens reads as an empty array.",
                     Name,
                     argumentName: name
                 );
@@ -607,8 +544,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             {
                 throw new CommandConfigurationException(
                     CommandConfigurationFailure.InvalidSubcommandConfiguration,
-                    $"Command '{Name} {normalized}': subcommands run inside the parent's "
-                        + "execution contexts; do not set Contexts on a subcommand.",
+                    $"Command '{Name} {normalized}': subcommands run inside the parent's " + "execution contexts; do not set Contexts on a subcommand.",
                     Name,
                     subcommandName: normalized
                 );
@@ -618,8 +554,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             {
                 throw new CommandConfigurationException(
                     CommandConfigurationFailure.InvalidSubcommandConfiguration,
-                    $"Command '{Name} {normalized}': subcommands are recorded under the "
-                        + "parent's history policy; do not set AddToHistory on a subcommand.",
+                    $"Command '{Name} {normalized}': subcommands are recorded under the " + "parent's history policy; do not set AddToHistory on a subcommand.",
                     Name,
                     subcommandName: normalized
                 );
@@ -652,10 +587,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         {
             if (string.IsNullOrWhiteSpace(Name))
             {
-                throw new CommandConfigurationException(
-                    CommandConfigurationFailure.EmptyName,
-                    "A command name is required; pass a non-empty name to CommandBuilder.Create."
-                );
+                throw new CommandConfigurationException(CommandConfigurationFailure.EmptyName, "A command name is required; pass a non-empty name to CommandBuilder.Create.");
             }
 
             string name = NormalizeName(Name, Name, isSubcommandName: false);
@@ -674,8 +606,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             CommandCompletionProvider provider = BuildCompletionProvider(specs);
             TypedCommandHandler handler = _handler;
 
-            CommandHandler dispatch = (context, arguments) =>
-                RunTyped(owner, specs, name, handler, context, arguments, 0);
+            CommandHandler dispatch = (context, arguments) => RunTyped(owner, specs, name, handler, context, arguments, 0);
 
             return new CommandDefinition
             {
@@ -702,8 +633,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             {
                 throw new CommandConfigurationException(
                     CommandConfigurationFailure.InvalidSubcommandConfiguration,
-                    $"Command '{name}': a command with subcommands cannot declare its own "
-                        + "arguments; declare them on the subcommands.",
+                    $"Command '{name}': a command with subcommands cannot declare its own " + "arguments; declare them on the subcommands.",
                     name
                 );
             }
@@ -725,12 +655,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 MaxArgCount = null,
                 AddToHistory = _addToHistory,
                 Contexts = _contexts,
-                Handler = (context, arguments) =>
-                    RouteInvocation(owner, self.Lookup, name, fallback, context, arguments, 0),
-                CompletionProvider = (
-                    in CommandCompletionContext context,
-                    List<CommandCompletion> results
-                ) => RouteCompletion(self.Lookup, context, 0, results),
+                Handler = (context, arguments) => RouteInvocation(owner, self.Lookup, name, fallback, context, arguments, 0),
+                CompletionProvider = (in CommandCompletionContext context, List<CommandCompletion> results) => RouteCompletion(self.Lookup, context, 0, results),
             };
         }
 
@@ -774,18 +700,14 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             {
                 throw new CommandConfigurationException(
                     CommandConfigurationFailure.InvalidSubcommandConfiguration,
-                    $"Command '{path}': a command with subcommands cannot declare its own "
-                        + "arguments; declare them on the subcommands.",
+                    $"Command '{path}': a command with subcommands cannot declare its own " + "arguments; declare them on the subcommands.",
                     path
                 );
             }
 
             int childCount = _subcommands.Count;
             SubcommandRoute[] children = new SubcommandRoute[childCount];
-            Dictionary<string, SubcommandRoute> lookup = new(
-                childCount,
-                StringComparer.OrdinalIgnoreCase
-            );
+            Dictionary<string, SubcommandRoute> lookup = new(childCount, StringComparer.OrdinalIgnoreCase);
             for (int i = 0; i < childCount; ++i)
             {
                 CommandBuilder child = _subcommands[i];
@@ -825,12 +747,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         {
             if (string.IsNullOrWhiteSpace(name))
             {
-                throw new CommandConfigurationException(
-                    CommandConfigurationFailure.EmptyName,
-                    $"Command '{Name}': argument names must not be empty.",
-                    Name,
-                    argumentName: name
-                );
+                throw new CommandConfigurationException(CommandConfigurationFailure.EmptyName, $"Command '{Name}': argument names must not be empty.", Name, argumentName: name);
             }
 
             foreach (CommandArgument argument in _arguments)
@@ -847,11 +764,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             }
         }
 
-        private CommandArgumentSpec<T> ConfigureArgument<T>(
-            string name,
-            Func<CommandArgumentSpec<T>, CommandArgumentSpec<T>> configure,
-            bool isRemaining
-        )
+        private CommandArgumentSpec<T> ConfigureArgument<T>(string name, Func<CommandArgumentSpec<T>, CommandArgumentSpec<T>> configure, bool isRemaining)
         {
             CommandArgumentSpec<T> spec = new(name, isRemaining);
             if (configure != null)
@@ -895,10 +808,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             structured identity. The original exception rides as the inner
             exception, keeping its throw-site stack.
          */
-        private CommandConfigurationException WithCommandScope(
-            CommandConfigurationException e,
-            string argumentName
-        )
+        private CommandConfigurationException WithCommandScope(CommandConfigurationException e, string argumentName)
         {
             return new CommandConfigurationException(
                 e.Failure,
@@ -917,18 +827,13 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             path here so the identity matches Build-time diagnostics, which
             name the composed path ('inventory add').
          */
-        private CommandConfigurationException WithComposedScope(
-            CommandConfigurationException e,
-            string subcommandName
-        )
+        private CommandConfigurationException WithComposedScope(CommandConfigurationException e, string subcommandName)
         {
             string innerCommand = e.CommandName;
             return new CommandConfigurationException(
                 e.Failure,
                 e.Message,
-                string.IsNullOrEmpty(innerCommand)
-                    ? $"{Name} {subcommandName}"
-                    : $"{Name} {innerCommand}",
+                string.IsNullOrEmpty(innerCommand) ? $"{Name} {subcommandName}" : $"{Name} {innerCommand}",
                 argumentName: e.ArgumentName,
                 subcommandName: e.SubcommandName ?? subcommandName,
                 argumentType: e.ArgumentType,
@@ -963,8 +868,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                     {
                         throw new CommandConfigurationException(
                             CommandConfigurationFailure.ArgumentOrdering,
-                            $"Command '{path}': required argument '{spec.Name}' must be "
-                                + "declared before every optional argument.",
+                            $"Command '{path}': required argument '{spec.Name}' must be " + "declared before every optional argument.",
                             path,
                             argumentName: spec.Name
                         );
@@ -994,8 +898,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 {
                     throw new CommandConfigurationException(
                         CommandConfigurationFailure.InvalidDefault,
-                        $"Command '{path}': the default for argument '{spec.Name}' fails "
-                            + $"its own validation: {defaultError}",
+                        $"Command '{path}': the default for argument '{spec.Name}' fails " + $"its own validation: {defaultError}",
                         path,
                         argumentName: spec.Name
                     );
@@ -1035,8 +938,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
             public TypedCommandHandler Fallback { get; internal set; }
 
-            public CommandCompletionProvider[] CompletionStages { get; internal set; } =
-                Array.Empty<CommandCompletionProvider>();
+            public CommandCompletionProvider[] CompletionStages { get; internal set; } = Array.Empty<CommandCompletionProvider>();
 
             public SubcommandRoute[] Children { get; internal set; }
 

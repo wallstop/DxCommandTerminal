@@ -15,11 +15,7 @@ namespace WallstopStudios.DxCommandTerminal.Themes
         TerminalThemePack like any hand-written one and is never read back by
         this asset, so runtime behavior and shipped packs are unchanged.
      */
-    [CreateAssetMenu(
-        menuName = "Wallstop Studios/DxCommandTerminal/Theme Asset",
-        fileName = "NewTerminalTheme",
-        order = 1_111_124
-    )]
+    [CreateAssetMenu(menuName = "Wallstop Studios/DxCommandTerminal/Theme Asset", fileName = "NewTerminalTheme", order = 1_111_124)]
     public sealed class TerminalThemeAsset : ScriptableObject
     {
         /*
@@ -262,11 +258,7 @@ namespace WallstopStudios.DxCommandTerminal.Themes
                 across git checkout configs), so the Editor writer's
                 content-compare never sees phantom EOL churn.
              */
-            builder
-                .Append(GeneratedMarkerPrefix)
-                .Append(" from '")
-                .Append(SafeDisplayName())
-                .Append(".asset' - hand edits are overwritten on the next change. */\n");
+            builder.Append(GeneratedMarkerPrefix).Append(" from '").Append(SafeDisplayName()).Append(".asset' - hand edits are overwritten on the next change. */\n");
             builder.Append('.').Append(cssClass).Append(" {\n");
             builder.Append("    /* Backgrounds */\n");
             AppendToken(builder, "--terminal-bg", _terminalBg);

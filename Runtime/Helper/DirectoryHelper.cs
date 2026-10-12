@@ -9,23 +9,15 @@ namespace WallstopStudios.DxCommandTerminal.Helper
     {
         internal static string GetCallerScriptDirectory([CallerFilePath] string sourceFilePath = "")
         {
-            return string.IsNullOrWhiteSpace(sourceFilePath)
-                ? string.Empty
-                : Path.GetDirectoryName(sourceFilePath);
+            return string.IsNullOrWhiteSpace(sourceFilePath) ? string.Empty : Path.GetDirectoryName(sourceFilePath);
         }
 
         internal static string FindPackageRootPath(string startDirectory)
         {
-            return FindRootPath(
-                startDirectory,
-                path => File.Exists(Path.Combine(path, "package.json"))
-            );
+            return FindRootPath(startDirectory, path => File.Exists(Path.Combine(path, "package.json")));
         }
 
-        internal static string FindRootPath(
-            string startDirectory,
-            Func<string, bool> terminalCondition
-        )
+        internal static string FindRootPath(string startDirectory, Func<string, bool> terminalCondition)
         {
             string currentPath = startDirectory;
             while (!string.IsNullOrWhiteSpace(currentPath))
@@ -81,10 +73,7 @@ namespace WallstopStudios.DxCommandTerminal.Helper
                 return string.Empty;
             }
 
-            string targetPathAbsolute = Path.Combine(
-                packageRootAbsolute,
-                directory.Replace('/', Path.DirectorySeparatorChar)
-            );
+            string targetPathAbsolute = Path.Combine(packageRootAbsolute, directory.Replace('/', Path.DirectorySeparatorChar));
 
             return AbsoluteToUnityRelativePath(targetPathAbsolute);
         }
@@ -109,9 +98,7 @@ namespace WallstopStudios.DxCommandTerminal.Helper
             {
                 // +1 to remove the leading slash only if projectRoot doesn't end with one
                 int projectRootLength = projectRoot.Length;
-                int startIndex = projectRoot.EndsWith("/", StringComparison.OrdinalIgnoreCase)
-                    ? projectRootLength
-                    : projectRootLength + 1;
+                int startIndex = projectRoot.EndsWith("/", StringComparison.OrdinalIgnoreCase) ? projectRootLength : projectRootLength + 1;
                 return startIndex < absolutePath.Length ? absolutePath[startIndex..] : string.Empty;
             }
 

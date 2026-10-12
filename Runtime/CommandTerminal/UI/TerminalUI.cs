@@ -53,11 +53,9 @@
         private static TerminalUI _configOwner;
 
         // ReSharper disable once MemberCanBePrivate.Global
-        public bool IsClosed =>
-            !IsOpenState(_state) && Mathf.Approximately(_currentWindowHeight, _targetWindowHeight);
+        public bool IsClosed => !IsOpenState(_state) && Mathf.Approximately(_currentWindowHeight, _targetWindowHeight);
 
-        public string CurrentTheme =>
-            !string.IsNullOrWhiteSpace(_runtimeTheme) ? _runtimeTheme : _persistedTheme;
+        public string CurrentTheme => !string.IsNullOrWhiteSpace(_runtimeTheme) ? _runtimeTheme : _persistedTheme;
 
         public string CurrentFriendlyTheme => ThemeNameHelper.GetFriendlyThemeName(CurrentTheme);
 
@@ -99,19 +97,13 @@
         public float smallTerminalRatio = 0.4714285f;
 
         [Tooltip("Curve the console follows to go from closed -> open")]
-        public AnimationCurve easeOutCurve = new()
-        {
-            keys = new[] { new Keyframe(0, 0), new Keyframe(1, 1) },
-        };
+        public AnimationCurve easeOutCurve = new() { keys = new[] { new Keyframe(0, 0), new Keyframe(1, 1) } };
 
         [Tooltip("Duration for the ease-out animation in seconds")]
         public float easeOutTime = 0.5f;
 
         [Tooltip("Curve the console follows to go from open -> closed")]
-        public AnimationCurve easeInCurve = new()
-        {
-            keys = new[] { new Keyframe(0, 0), new Keyframe(1, 1) },
-        };
+        public AnimationCurve easeInCurve = new() { keys = new[] { new Keyframe(0, 0), new Keyframe(1, 1) } };
 
         [Tooltip("Duration for the ease-in animation in seconds")]
         public float easeInTime = 0.5f;
@@ -202,15 +194,11 @@
         internal bool _logUnityMessages;
 
         [SerializeField]
-        [Tooltip(
-            "Which entries capture a caller stack trace. ErrorsAndWarnings and Disabled skip the per-log extraction cost for routine messages."
-        )]
+        [Tooltip("Which entries capture a caller stack trace. ErrorsAndWarnings and Disabled skip the per-log extraction cost for routine messages.")]
         internal TerminalStackTraceMode _stackTraceMode = TerminalStackTraceMode.All;
 
         [SerializeField]
-        [Tooltip(
-            "Shared settings asset applied when this component wakes; its values win over the serialized component values. Empty = component values."
-        )]
+        [Tooltip("Shared settings asset applied when this component wakes; its values win over the serialized component values. Empty = component values.")]
         internal TerminalSettings _settings;
 
         private IInputHandler[] _inputHandlers;
@@ -317,9 +305,7 @@
         private bool _lastKnownHintsClickable;
         private IVisualElementScheduledItem _cursorBlinkSchedule;
         private readonly List<string> _lastCompletionBufferTempCache = new();
-        private readonly HashSet<string> _lastCompletionBufferTempSet = new(
-            StringComparer.OrdinalIgnoreCase
-        );
+        private readonly HashSet<string> _lastCompletionBufferTempSet = new(StringComparer.OrdinalIgnoreCase);
         private readonly List<VisualElement> _autoCompleteChildren = new();
 
         /*
@@ -414,40 +400,20 @@
             switch (_logBufferSize)
             {
                 case <= 0:
-                    Debug.LogError(
-                        LogTextSanitizer.Sanitize(
-                            $"Invalid buffer size '{_logBufferSize}', must be greater than zero. Defaulting to 0 (empty buffer)."
-                        ),
-                        this
-                    );
+                    Debug.LogError(LogTextSanitizer.Sanitize($"Invalid buffer size '{_logBufferSize}', must be greater than zero. Defaulting to 0 (empty buffer)."), this);
                     break;
                 case < 10:
-                    Debug.LogWarning(
-                        LogTextSanitizer.Sanitize(
-                            $"Unsupported buffer size '{_logBufferSize}', recommended size is > 10."
-                        ),
-                        this
-                    );
+                    Debug.LogWarning(LogTextSanitizer.Sanitize($"Unsupported buffer size '{_logBufferSize}', recommended size is > 10."), this);
                     break;
             }
 
             switch (_historyBufferSize)
             {
                 case <= 0:
-                    Debug.LogError(
-                        LogTextSanitizer.Sanitize(
-                            $"Invalid buffer size '{_historyBufferSize}', must be greater than zero. Defaulting to 0 (empty buffer)."
-                        ),
-                        this
-                    );
+                    Debug.LogError(LogTextSanitizer.Sanitize($"Invalid buffer size '{_historyBufferSize}', must be greater than zero. Defaulting to 0 (empty buffer)."), this);
                     break;
                 case < 10:
-                    Debug.LogWarning(
-                        LogTextSanitizer.Sanitize(
-                            $"Unsupported buffer size '{_historyBufferSize}', recommended size is > 10."
-                        ),
-                        this
-                    );
+                    Debug.LogWarning(LogTextSanitizer.Sanitize($"Unsupported buffer size '{_historyBufferSize}', recommended size is > 10."), this);
                     break;
             }
 
@@ -496,12 +462,7 @@
             string[] logUnityMessagePropertiesTracked = { nameof(_logUnityMessages) };
             TrackProperties(logUnityMessagePropertiesTracked, _logUnityMessageProperties);
 
-            string[] autoCompletePropertiesTracked =
-            {
-                nameof(hintDisplayMode),
-                nameof(_disabledCommands),
-                nameof(ignoreDefaultCommands),
-            };
+            string[] autoCompletePropertiesTracked = { nameof(hintDisplayMode), nameof(_disabledCommands), nameof(ignoreDefaultCommands) };
             TrackProperties(autoCompletePropertiesTracked, _autoCompleteProperties);
 
             void TrackProperties(string[] properties, List<SerializedProperty> storage)
@@ -529,12 +490,7 @@
                     }
                     else
                     {
-                        Debug.LogWarning(
-                            LogTextSanitizer.Sanitize(
-                                $"Failed to track/find window property {propertyName}, updates to this property will be ignored."
-                            ),
-                            this
-                        );
+                        Debug.LogWarning(LogTextSanitizer.Sanitize($"Failed to track/find window property {propertyName}, updates to this property will be ignored."), this);
                     }
                 }
             }
@@ -668,14 +624,7 @@
                 gate evaluated after the snap would skip that final write and
                 freeze the surface at the last animated height.
              */
-            bool idleClosed =
-                IsClosed
-                && !_needsFocus
-                && !_needsScrollToEnd
-                && !_pendingCaretIndex.HasValue
-                && !IsPaletteSurfaceOpen()
-                && !showGUIButtons
-                && !_needsInitialRefresh;
+            bool idleClosed = IsClosed && !_needsFocus && !_needsScrollToEnd && !_pendingCaretIndex.HasValue && !IsPaletteSurfaceOpen() && !showGUIButtons && !_needsInitialRefresh;
 
             ResetWindowIdempotent();
             HandleHeightAnimation();
@@ -799,9 +748,7 @@
             {
                 if (_uiDocument != null && _terminalContainer != null)
                 {
-                    InitializeTheme(
-                        _uiDocument.rootVisualElement?.Q<VisualElement>(TerminalRootName)
-                    );
+                    InitializeTheme(_uiDocument.rootVisualElement?.Q<VisualElement>(TerminalRootName));
                 }
             }
 
@@ -870,10 +817,7 @@
                 {
                     object propertyValue = property.GetValue();
                     object previousValue = _propertyValues[property.name];
-                    if (
-                        propertyValue is List<string> currentStringList
-                        && previousValue is List<string> previousStringList
-                    )
+                    if (propertyValue is List<string> currentStringList && previousValue is List<string> previousStringList)
                     {
                         if (!ListsEqual(currentStringList, previousStringList))
                         {
@@ -883,17 +827,12 @@
 
                         continue;
                     }
-                    if (
-                        propertyValue is List<TerminalLogType> currentLogTypeList
-                        && previousValue is List<TerminalLogType> previousLogTypeList
-                    )
+                    if (propertyValue is List<TerminalLogType> currentLogTypeList && previousValue is List<TerminalLogType> previousLogTypeList)
                     {
                         if (!ListsEqual(currentLogTypeList, previousLogTypeList))
                         {
                             needRefresh = true;
-                            _propertyValues[property.name] = new List<TerminalLogType>(
-                                currentLogTypeList
-                            );
+                            _propertyValues[property.name] = new List<TerminalLogType>(currentLogTypeList);
                         }
 
                         continue;
@@ -934,10 +873,8 @@
                     return false;
                 }
 
-                VisualElement focused =
-                    _commandInput.panel?.focusController?.focusedElement as VisualElement;
-                return focused != null
-                    && (focused == _commandInput || _commandInput.Contains(focused));
+                VisualElement focused = _commandInput.panel?.focusController?.focusedElement as VisualElement;
+                return focused != null && (focused == _commandInput || _commandInput.Contains(focused));
             }
         }
 
@@ -1020,10 +957,7 @@
             }
         }
 
-        private static bool TokenCompletionsEquivalent(
-            List<CommandCompletion> candidates,
-            List<CommandCompletion> current
-        )
+        private static bool TokenCompletionsEquivalent(List<CommandCompletion> candidates, List<CommandCompletion> current)
         {
             if (candidates.Count != current.Count)
             {
@@ -1035,14 +969,7 @@
             {
                 CommandCompletion candidate = candidates[i];
                 CommandCompletion active = current[i];
-                if (
-                    !string.Equals(
-                        candidate.InsertionText,
-                        active.InsertionText,
-                        StringComparison.Ordinal
-                    )
-                    || candidate.HasReplacementOverride != active.HasReplacementOverride
-                )
+                if (!string.Equals(candidate.InsertionText, active.InsertionText, StringComparison.Ordinal) || candidate.HasReplacementOverride != active.HasReplacementOverride)
                 {
                     return false;
                 }
@@ -1050,10 +977,7 @@
                 if (
                     candidate.Replacement is CommandCompletionReplacement candidateReplacement
                     && active.Replacement is CommandCompletionReplacement activeReplacement
-                    && (
-                        candidateReplacement.Start != activeReplacement.Start
-                        || candidateReplacement.Length != activeReplacement.Length
-                    )
+                    && (candidateReplacement.Start != activeReplacement.Start || candidateReplacement.Length != activeReplacement.Length)
                 )
                 {
                     return false;
@@ -1065,9 +989,7 @@
 
         private static void InitializeScrollView(ScrollView scrollView)
         {
-            VisualElement parent = scrollView.Q<VisualElement>(
-                className: "unity-scroller--vertical"
-            );
+            VisualElement parent = scrollView.Q<VisualElement>(className: "unity-scroller--vertical");
             if (parent == null)
             {
                 scrollView.RegisterCallback<GeometryChangedEvent>(ReInitialize);
@@ -1079,12 +1001,8 @@
                     scrollView.UnregisterCallback<GeometryChangedEvent>(ReInitialize);
                 }
             }
-            VisualElement trackerElement = parent.Q<VisualElement>(
-                className: "unity-base-slider__tracker"
-            );
-            VisualElement draggerElement = parent.Q<VisualElement>(
-                className: "unity-base-slider__dragger"
-            );
+            VisualElement trackerElement = parent.Q<VisualElement>(className: "unity-base-slider__tracker");
+            VisualElement draggerElement = parent.Q<VisualElement>(className: "unity-base-slider__dragger");
 
             ScrollBarCaptureState scrollBarCaptureState = ScrollBarCaptureState.Inactive;
 
@@ -1238,10 +1156,7 @@
                 string fontName = font.name;
                 if (!requireMono || fontName.Contains("Mono", StringComparison.OrdinalIgnoreCase))
                 {
-                    if (
-                        !requireRegular
-                        || fontName.Contains("Regular", StringComparison.OrdinalIgnoreCase)
-                    )
+                    if (!requireRegular || fontName.Contains("Regular", StringComparison.OrdinalIgnoreCase))
                     {
                         return font;
                     }
@@ -1392,14 +1307,7 @@
             _runtimeFont = font;
             if (currentFont != font)
             {
-                Debug.Log(
-                    LogTextSanitizer.Sanitize(
-                        currentFont == null
-                            ? $"Setting font to {font.name}."
-                            : $"Changing font from {currentFont.name} to {font.name}."
-                    ),
-                    this
-                );
+                Debug.Log(LogTextSanitizer.Sanitize(currentFont == null ? $"Setting font to {font.name}." : $"Changing font from {currentFont.name} to {font.name}."), this);
             }
 
             if (persist)
@@ -1438,14 +1346,7 @@
         {
             string friendlyThemeName = ThemeNameHelper.GetFriendlyThemeName(theme);
             SetRuntimeTheme();
-            if (
-                !persist
-                && string.Equals(
-                    friendlyThemeName,
-                    CurrentFriendlyTheme,
-                    StringComparison.OrdinalIgnoreCase
-                )
-            )
+            if (!persist && string.Equals(friendlyThemeName, CurrentFriendlyTheme, StringComparison.OrdinalIgnoreCase))
             {
                 return;
             }
@@ -1459,12 +1360,7 @@
             _runtimeTheme = validatedTheme;
             if (!string.Equals(currentTheme, friendlyThemeName, StringComparison.OrdinalIgnoreCase))
             {
-                Debug.Log(
-                    LogTextSanitizer.Sanitize(
-                        $"Changing theme from {currentTheme} to {friendlyThemeName}."
-                    ),
-                    this
-                );
+                Debug.Log(LogTextSanitizer.Sanitize($"Changing theme from {currentTheme} to {friendlyThemeName}."), this);
             }
 
             if (persist)
@@ -1519,9 +1415,7 @@
                     return;
                 }
 
-                VisualElement terminalRoot = _uiDocument.rootVisualElement?.Q<VisualElement>(
-                    TerminalRootName
-                );
+                VisualElement terminalRoot = _uiDocument.rootVisualElement?.Q<VisualElement>(TerminalRootName);
                 if (terminalRoot == null)
                 {
                     return;
@@ -1678,16 +1572,12 @@
 
                 _lastKnownCommandText ??= _input.CommandText ?? string.Empty;
                 _lastCompletionBufferTempCache.Clear();
-                Terminal.AutoComplete?.Complete(
-                    _lastKnownCommandText,
-                    _lastCompletionBufferTempCache
-                );
+                Terminal.AutoComplete?.Complete(_lastKnownCommandText, _lastCompletionBufferTempCache);
                 bool equivalentBuffers = true;
                 try
                 {
                     int completionLength = _lastCompletionBufferTempCache.Count;
-                    equivalentBuffers =
-                        _lastCompletionBuffer.Count == _lastCompletionBufferTempCache.Count;
+                    equivalentBuffers = _lastCompletionBuffer.Count == _lastCompletionBufferTempCache.Count;
                     if (equivalentBuffers)
                     {
                         _lastCompletionBufferTempSet.Clear();
@@ -1715,14 +1605,11 @@
                             }
                             else if (searchForward)
                             {
-                                _lastCompletionIndex =
-                                    (_lastCompletionIndex + 1) % completionLength;
+                                _lastCompletionIndex = (_lastCompletionIndex + 1) % completionLength;
                             }
                             else
                             {
-                                _lastCompletionIndex =
-                                    (_lastCompletionIndex - 1 + completionLength)
-                                    % completionLength;
+                                _lastCompletionIndex = (_lastCompletionIndex - 1 + completionLength) % completionLength;
                             }
 
                             _input.CommandText = _lastCompletionBuffer[_lastCompletionIndex.Value];
@@ -1782,10 +1669,7 @@
                 return;
             }
 
-            bool focused =
-                _textInput != null
-                && _textInput.focusController != null
-                && _textInput.focusController.focusedElement == _textInput;
+            bool focused = _textInput != null && _textInput.focusController != null && _textInput.focusController.focusedElement == _textInput;
 
             /*
                 The field applies programmatic value writes on its own
@@ -1830,12 +1714,8 @@
             if (hintDisplayMode == HintDisplayMode.Always)
             {
                 _lastCompletionBufferTempCache.Clear();
-                Terminal.AutoComplete?.Complete(
-                    _lastKnownCommandText,
-                    _lastCompletionBufferTempCache
-                );
-                bool equivalent =
-                    _lastCompletionBufferTempCache.Count == _lastCompletionBuffer.Count;
+                Terminal.AutoComplete?.Complete(_lastKnownCommandText, _lastCompletionBufferTempCache);
+                bool equivalent = _lastCompletionBufferTempCache.Count == _lastCompletionBuffer.Count;
                 if (equivalent)
                 {
                     _lastCompletionBufferTempSet.Clear();
@@ -1955,12 +1835,9 @@
             _uiDocument.rootVisualElement.style.height = _currentWindowHeight;
             _terminalContainer.style.height = _currentWindowHeight;
             _terminalContainer.style.width = Screen.width;
-            DisplayStyle commandInputStyle =
-                _currentWindowHeight <= 30 ? DisplayStyle.None : DisplayStyle.Flex;
+            DisplayStyle commandInputStyle = _currentWindowHeight <= 30 ? DisplayStyle.None : DisplayStyle.Flex;
 
-            _needsFocus |=
-                _inputContainer.resolvedStyle.display != commandInputStyle
-                && commandInputStyle == DisplayStyle.Flex;
+            _needsFocus |= _inputContainer.resolvedStyle.display != commandInputStyle && commandInputStyle == DisplayStyle.Flex;
             _inputContainer.style.display = commandInputStyle;
 
             if (_commandIssuedThisFrame)
@@ -2002,11 +1879,7 @@
 
                 _needsFocus = false;
             }
-            else if (
-                _needsScrollToEnd
-                && _logScrollView != null
-                && _logScrollView.style.display != DisplayStyle.None
-            )
+            else if (_needsScrollToEnd && _logScrollView != null && _logScrollView.style.display != DisplayStyle.None)
             {
                 ScrollToEnd();
                 _needsScrollToEnd = false;
@@ -2104,9 +1977,7 @@
                     nothing.
                  */
                 DropFindScroll();
-                LogFindWarning(
-                    "No log line matches the search. clear-filter shows every line again."
-                );
+                LogFindWarning("No log line matches the search. clear-filter shows every line again.");
                 return;
             }
 
@@ -2203,15 +2074,7 @@
                 return false;
             }
 
-            if (
-                !_commandUndo.Step(
-                    _input.CommandText,
-                    _commandInput.cursorIndex,
-                    forward,
-                    out string text,
-                    out int caret
-                )
-            )
+            if (!_commandUndo.Step(_input.CommandText, _commandInput.cursorIndex, forward, out string text, out int caret))
             {
                 return false;
             }
@@ -2368,15 +2231,8 @@
             bool keepRequest =
                 _tokenCompletionInput != null
                 && (
-                    string.Equals(
-                        currentInput,
-                        _tokenCompletionAppliedText,
-                        StringComparison.Ordinal
-                    )
-                    || (
-                        string.Equals(currentInput, _tokenCompletionInput, StringComparison.Ordinal)
-                        && NormalizeCaret(liveCaret) == _tokenCompletionCaret
-                    )
+                    string.Equals(currentInput, _tokenCompletionAppliedText, StringComparison.Ordinal)
+                    || (string.Equals(currentInput, _tokenCompletionInput, StringComparison.Ordinal) && NormalizeCaret(liveCaret) == _tokenCompletionCaret)
                 );
             if (!keepRequest)
             {
@@ -2419,9 +2275,7 @@
                 return true;
             }
 
-            bool equivalent =
-                _tokenCompletionIndex != null
-                && TokenCompletionsEquivalent(_tokenCompletionsTemp, _tokenCompletions);
+            bool equivalent = _tokenCompletionIndex != null && TokenCompletionsEquivalent(_tokenCompletionsTemp, _tokenCompletions);
             if (!equivalent)
             {
                 _tokenCompletions.Clear();
@@ -2440,8 +2294,7 @@
             }
             else
             {
-                _tokenCompletionIndex =
-                    (_tokenCompletionIndex.Value - 1 + completionCount) % completionCount;
+                _tokenCompletionIndex = (_tokenCompletionIndex.Value - 1 + completionCount) % completionCount;
             }
 
             ApplyTokenCompletion(_tokenCompletions[_tokenCompletionIndex.Value]);
@@ -2463,12 +2316,7 @@
                 replacementStart = _tokenCompletionReplacementStart;
                 replacementLength = _tokenCompletionReplacementLength;
             }
-            if (
-                replacementStart < 0
-                || replacementLength < 0
-                || input.Length < replacementStart
-                || input.Length - replacementStart < replacementLength
-            )
+            if (replacementStart < 0 || replacementLength < 0 || input.Length < replacementStart || input.Length - replacementStart < replacementLength)
             {
                 return;
             }
@@ -2483,16 +2331,13 @@
                     out string insertion,
                     out replacementStart,
                     out replacementLength,
-                    wholeToken: replacementStart == _tokenCompletionReplacementStart
-                        && replacementLength == _tokenCompletionReplacementLength
+                    wholeToken: replacementStart == _tokenCompletionReplacementStart && replacementLength == _tokenCompletionReplacementLength
                 )
             )
             {
                 return;
             }
-            string newInput = input
-                .Remove(replacementStart, replacementLength)
-                .Insert(replacementStart, insertion);
+            string newInput = input.Remove(replacementStart, replacementLength).Insert(replacementStart, insertion);
             _tokenCompletionAppliedText = newInput;
             /*
                 Snapped here, where the position is an offset into the text
@@ -2621,10 +2466,7 @@
             /* A fresh view starts at zero, so no earlier pin describes it. */
             _logTail.Attach();
 
-            _autoCompleteContainer = new ScrollView(ScrollViewMode.Horizontal)
-            {
-                name = "AutoCompletePopup",
-            };
+            _autoCompleteContainer = new ScrollView(ScrollViewMode.Horizontal) { name = "AutoCompletePopup" };
             _autoCompleteContainer.AddToClassList("autocomplete-popup");
             _terminalContainer.Add(_autoCompleteContainer);
 
@@ -2632,11 +2474,7 @@
             _inputContainer.AddToClassList("input-container");
             _terminalContainer.Add(_inputContainer);
 
-            _runButton = new Button(EnterCommand)
-            {
-                text = runButtonText,
-                name = "RunCommandButton",
-            };
+            _runButton = new Button(EnterCommand) { text = runButtonText, name = "RunCommandButton" };
             _runButton.AddToClassList("terminal-button");
             _runButton.AddToClassList("terminal-button-run");
             _runButton.style.display = DisplayStyle.None;
@@ -2683,13 +2521,7 @@
                         return;
                     }
 
-                    if (
-                        context._commandIssuedThisFrame
-                        || Array.Exists(
-                            context._inputHandlers,
-                            handler => handler.ShouldHandleInputThisFrame
-                        )
-                    )
+                    if (context._commandIssuedThisFrame || Array.Exists(context._inputHandlers, handler => handler.ShouldHandleInputThisFrame))
                     {
                         if (!string.Equals(context._commandInput.value, context._input.CommandText))
                         {
@@ -2704,10 +2536,7 @@
                             dispatches re-enters this same branch, which stops
                             before the recording below can see it.
                          */
-                        context._commandUndo.Observe(
-                            context._input.CommandText,
-                            context._commandInput.cursorIndex
-                        );
+                        context._commandUndo.Observe(context._input.CommandText, context._commandInput.cursorIndex);
                         evt.StopPropagation();
                         return;
                     }
@@ -2726,14 +2555,7 @@
                     context._commandUndo.Observe(evt.newValue, context._commandInput.cursorIndex);
 
                     bool echoFromCode = context._isCommandFromCode;
-                    if (
-                        !echoFromCode
-                        && string.Equals(
-                            evt.newValue,
-                            context._lastCodeSyncedValue,
-                            StringComparison.Ordinal
-                        )
-                    )
+                    if (!echoFromCode && string.Equals(evt.newValue, context._lastCodeSyncedValue, StringComparison.Ordinal))
                     {
                         /*
                            One echo follows each programmatic write; a later
@@ -2744,9 +2566,7 @@
                     }
 
                     context._runButton.style.display =
-                        context.showGUIButtons
-                        && !string.IsNullOrWhiteSpace(context._input.CommandText)
-                        && !string.IsNullOrWhiteSpace(context.runButtonText)
+                        context.showGUIButtons && !string.IsNullOrWhiteSpace(context._input.CommandText) && !string.IsNullOrWhiteSpace(context.runButtonText)
                             ? DisplayStyle.Flex
                             : DisplayStyle.None;
                     if (!echoFromCode)
@@ -2871,10 +2691,7 @@
                 for (int i = root.styleSheets.count - 1; 0 <= i; --i)
                 {
                     StyleSheet styleSheet = root.styleSheets[i];
-                    if (
-                        styleSheet == null
-                        || styleSheet.name.Contains("Theme", StringComparison.OrdinalIgnoreCase)
-                    )
+                    if (styleSheet == null || styleSheet.name.Contains("Theme", StringComparison.OrdinalIgnoreCase))
                     {
                         root.styleSheets.Remove(styleSheet);
                     }
@@ -2892,10 +2709,7 @@
             }
             else
             {
-                Debug.LogWarning(
-                    "No root element assigned, theme initialization may be broken.",
-                    this
-                );
+                Debug.LogWarning("No root element assigned, theme initialization may be broken.", this);
             }
 
             _runtimeTheme = _persistedTheme;
@@ -2923,12 +2737,7 @@
                 */
                 if (_persistedTheme != null)
                 {
-                    Debug.LogWarning(
-                        LogTextSanitizer.Sanitize(
-                            $"Persisted theme '{_persistedTheme}' not found in the pack, defaulting to '{_runtimeTheme}'."
-                        ),
-                        this
-                    );
+                    Debug.LogWarning(LogTextSanitizer.Sanitize($"Persisted theme '{_persistedTheme}' not found in the pack, defaulting to '{_runtimeTheme}'."), this);
                 }
             }
             else
@@ -2982,10 +2791,7 @@
                 return;
             }
 
-            Debug.LogWarning(
-                "Font pack contains no fonts; defaulting to OS font 'Courier New' 16pt.",
-                this
-            );
+            Debug.LogWarning("Font pack contains no fonts; defaulting to OS font 'Courier New' 16pt.", this);
             _runtimeFont = Font.CreateDynamicFontFromOSFont("Courier New", 16);
         }
 
@@ -3160,29 +2966,11 @@
 
             static void SetupLogText(VisualElement logText, LogItem log)
             {
-                logText.EnableInClassList(
-                    "terminal-output-label--shell",
-                    log.type == TerminalLogType.ShellMessage
-                );
-                logText.EnableInClassList(
-                    "terminal-output-label--error",
-                    log.type
-                        is TerminalLogType.Exception
-                            or TerminalLogType.Error
-                            or TerminalLogType.Assert
-                );
-                logText.EnableInClassList(
-                    "terminal-output-label--warning",
-                    log.type == TerminalLogType.Warning
-                );
-                logText.EnableInClassList(
-                    "terminal-output-label--message",
-                    log.type == TerminalLogType.Message
-                );
-                logText.EnableInClassList(
-                    "terminal-output-label--input",
-                    log.type == TerminalLogType.Input
-                );
+                logText.EnableInClassList("terminal-output-label--shell", log.type == TerminalLogType.ShellMessage);
+                logText.EnableInClassList("terminal-output-label--error", log.type is TerminalLogType.Exception or TerminalLogType.Error or TerminalLogType.Assert);
+                logText.EnableInClassList("terminal-output-label--warning", log.type == TerminalLogType.Warning);
+                logText.EnableInClassList("terminal-output-label--message", log.type == TerminalLogType.Message);
+                logText.EnableInClassList("terminal-output-label--input", log.type == TerminalLogType.Input);
             }
         }
 
@@ -3357,13 +3145,7 @@
                 with the key their platform calls the command key has to get
                 there whichever flag it arrived in.
              */
-            if (
-                !LogScrollKeys.TryResolve(
-                    evt.keyCode,
-                    evt.commandKey || evt.ctrlKey,
-                    out LogScrollIntent intent
-                )
-            )
+            if (!LogScrollKeys.TryResolve(evt.keyCode, evt.commandKey || evt.ctrlKey, out LogScrollIntent intent))
             {
                 return false;
             }
@@ -3383,12 +3165,7 @@
                 that has not been laid out, where there is nothing to page
                 through and the clamp leaves the view where it is.
              */
-            float target = LogScrollKeys.Target(
-                intent,
-                scroller.value,
-                scroller.highValue,
-                _logScrollView.contentViewport.layout.height
-            );
+            float target = LogScrollKeys.Target(intent, scroller.value, scroller.highValue, _logScrollView.contentViewport.layout.height);
 
             scroller.value = target;
 
@@ -3457,10 +3234,7 @@
 
         private void RefreshAutoCompleteHints()
         {
-            bool shouldDisplay =
-                0 < _lastCompletionBuffer.Count
-                && hintDisplayMode is HintDisplayMode.Always or HintDisplayMode.AutoCompleteOnly
-                && _autoCompleteContainer != null;
+            bool shouldDisplay = 0 < _lastCompletionBuffer.Count && hintDisplayMode is HintDisplayMode.Always or HintDisplayMode.AutoCompleteOnly && _autoCompleteContainer != null;
 
             if (!shouldDisplay)
             {
@@ -3491,8 +3265,7 @@
                 keystroke swaps the candidates without changing their count,
                 and the bar then showed the previous keystroke's text.
              */
-            bool contentsChanged =
-                currentChildCount != bufferLength || !RenderedCandidatesMatch(bufferLength);
+            bool contentsChanged = currentChildCount != bufferLength || !RenderedCandidatesMatch(bufferLength);
             bool dirty = contentsChanged || _lastCompletionIndex != _previousLastCompletionIndex;
             if (contentsChanged)
             {
@@ -3506,8 +3279,7 @@
                         if (makeHintsClickable)
                         {
                             Button hintButton = new();
-                            hintButton.clicked += () =>
-                                ApplyHint(_autoCompleteContainer.IndexOf(hintButton));
+                            hintButton.clicked += () => ApplyHint(_autoCompleteContainer.IndexOf(hintButton));
                             hintButton.text = LogTextSanitizer.Sanitize(hint);
                             hintElement = hintButton;
                         }
@@ -3606,13 +3378,7 @@
 
             for (int i = 0; i < bufferLength; ++i)
             {
-                if (
-                    !string.Equals(
-                        _renderedHintCandidates[i],
-                        _lastCompletionBuffer[i],
-                        StringComparison.Ordinal
-                    )
-                )
+                if (!string.Equals(_renderedHintCandidates[i], _lastCompletionBuffer[i], StringComparison.Ordinal))
                 {
                     return false;
                 }
@@ -3641,8 +3407,7 @@
 
             if (childCount <= _lastCompletionIndex)
             {
-                _lastCompletionIndex =
-                    (_lastCompletionIndex % childCount + childCount) % childCount;
+                _lastCompletionIndex = (_lastCompletionIndex % childCount + childCount) % childCount;
             }
 
             if (_previousLastCompletionIndex == _lastCompletionIndex)
@@ -3660,8 +3425,7 @@
 
             const float epsilon = 0.01f;
 
-            bool isFullyVisible =
-                epsilon <= targetElementLeft && targetElementRight <= viewportWidth + epsilon;
+            bool isFullyVisible = epsilon <= targetElementLeft && targetElementRight <= viewportWidth + epsilon;
 
             if (isFullyVisible)
             {
@@ -3822,11 +3586,7 @@
                     }
                     break;
                 default:
-                    throw new InvalidEnumArgumentException(
-                        nameof(_state),
-                        (int)_state,
-                        typeof(TerminalState)
-                    );
+                    throw new InvalidEnumArgumentException(nameof(_state), (int)_state, typeof(TerminalState));
             }
             return;
 
@@ -3848,11 +3608,7 @@
                         }
                         break;
                     default:
-                        throw new InvalidEnumArgumentException(
-                            nameof(_state),
-                            (int)_state,
-                            typeof(TerminalState)
-                        );
+                        throw new InvalidEnumArgumentException(nameof(_state), (int)_state, typeof(TerminalState));
                 }
             }
 
@@ -3874,11 +3630,7 @@
                         }
                         break;
                     default:
-                        throw new InvalidEnumArgumentException(
-                            nameof(_state),
-                            (int)_state,
-                            typeof(TerminalState)
-                        );
+                        throw new InvalidEnumArgumentException(nameof(_state), (int)_state, typeof(TerminalState));
                 }
             }
         }
@@ -3931,33 +3683,18 @@
 
             float curveValue = selectedCurve.Evaluate(normalizedTime);
 
-            _currentWindowHeight = Mathf.LerpUnclamped(
-                _initialWindowHeight,
-                _targetWindowHeight,
-                curveValue
-            );
+            _currentWindowHeight = Mathf.LerpUnclamped(_initialWindowHeight, _targetWindowHeight, curveValue);
 
             if (isExpanding)
             {
-                _currentWindowHeight = Mathf.Clamp(
-                    _currentWindowHeight,
-                    _initialWindowHeight,
-                    _targetWindowHeight
-                );
+                _currentWindowHeight = Mathf.Clamp(_currentWindowHeight, _initialWindowHeight, _targetWindowHeight);
             }
             else
             {
-                _currentWindowHeight = Mathf.Clamp(
-                    _currentWindowHeight,
-                    _targetWindowHeight,
-                    _initialWindowHeight
-                );
+                _currentWindowHeight = Mathf.Clamp(_currentWindowHeight, _targetWindowHeight, _initialWindowHeight);
             }
 
-            if (
-                Mathf.Approximately(_currentWindowHeight, _targetWindowHeight)
-                || animationDuration <= _animationTimer
-            )
+            if (Mathf.Approximately(_currentWindowHeight, _targetWindowHeight) || animationDuration <= _animationTimer)
             {
                 _currentWindowHeight = _targetWindowHeight;
                 _isAnimating = false;

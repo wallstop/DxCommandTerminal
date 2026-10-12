@@ -77,8 +77,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 parsed = text.Length;
                 return true;
             };
-            bool requiresBase =
-                !remaining && !string.Equals(copy, "required", StringComparison.Ordinal);
+            bool requiresBase = !remaining && !string.Equals(copy, "required", StringComparison.Ordinal);
             CommandArgumentSpec<int> original = new("value", remaining);
             if (requiresBase)
             {
@@ -101,8 +100,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreNotSame(original, configured);
             Assert.AreEqual(remaining, configured.IsRemaining);
             Assert.AreEqual(
-                string.Equals(copy, "required", StringComparison.Ordinal)
-                    || (requiresBase && !string.Equals(copy, "default", StringComparison.Ordinal)),
+                string.Equals(copy, "required", StringComparison.Ordinal) || (requiresBase && !string.Equals(copy, "default", StringComparison.Ordinal)),
                 configured.IsRequired
             );
             Assert.AreEqual(requiresBase, original.IsRequired);
@@ -113,37 +111,21 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreEqual(4, originalValue);
             observed.Clear();
             CommandShell shell = new(History());
-            CommandBuilder builder = CommandBuilder
-                .Create("raw-copy")
-                .Contexts(CommandExecutionContextSets.All);
-            builder = remaining
-                ? builder.Remaining<int>("value", spec => configured)
-                : builder.Arg<int>("value", spec => configured);
+            CommandBuilder builder = CommandBuilder.Create("raw-copy").Contexts(CommandExecutionContextSets.All);
+            builder = remaining ? builder.Remaining<int>("value", spec => configured) : builder.Arg<int>("value", spec => configured);
             int[] values = null;
             Assert.IsTrue(
                 shell.AddCommand(
-                    builder.Handler(
-                        (context, arguments) =>
-                            values = remaining
-                                ? arguments.Get<int[]>("value")
-                                : new[] { arguments.Get<int>("value") }
-                    ),
+                    builder.Handler((context, arguments) => values = remaining ? arguments.Get<int[]>("value") : new[] { arguments.Get<int>("value") }),
                     out CommandRegistrationHandle handle
                 )
             );
             using (handle)
             {
-                Assert.IsTrue(
-                    shell.RunCommand(
-                        remaining ? $"raw-copy \"{input}\" \"{input}\"" : $"raw-copy \"{input}\""
-                    )
-                );
+                Assert.IsTrue(shell.RunCommand(remaining ? $"raw-copy \"{input}\" \"{input}\"" : $"raw-copy \"{input}\""));
                 Assert.That(ConsumeError(shell) == null);
                 CollectionAssert.AreEqual(remaining ? new[] { 4, 4 } : new[] { 4 }, values);
-                CollectionAssert.AreEqual(
-                    remaining ? new[] { input, input } : new[] { input },
-                    observed
-                );
+                CollectionAssert.AreEqual(remaining ? new[] { input, input } : new[] { input }, observed);
             }
         }
 
@@ -203,9 +185,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreEqual(12, originalValue);
             Assert.AreEqual(remaining, cleaned.IsRemaining);
             Assert.AreEqual(remaining, rawAgain.IsRemaining);
-            ArgumentNullException exception = Assert.Throws<ArgumentNullException>(() =>
-                raw.RawParser(null)
-            );
+            ArgumentNullException exception = Assert.Throws<ArgumentNullException>(() => raw.RawParser(null));
             Assert.AreEqual("parser", exception.ParamName);
             Assert.Throws<ArgumentNullException>(() => raw.Parser(null));
         }
@@ -245,32 +225,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             CommandShell shell = new(History());
             int invocations = 0;
-            Assert.IsTrue(
-                shell.AddCommand(
-                    CommandBuilder
-                        .Create("heal")
-                        .Arg<int>("amount", spec => spec.Required())
-                        .Handler((context, arguments) => ++invocations),
-                    out _
-                )
-            );
+            Assert.IsTrue(shell.AddCommand(CommandBuilder.Create("heal").Arg<int>("amount", spec => spec.Required()).Handler((context, arguments) => ++invocations), out _));
 
-            Assert.IsFalse(
-                shell.RunCommand("heal"),
-                "A missing required argument must not dispatch"
-            );
+            Assert.IsFalse(shell.RunCommand("heal"), "A missing required argument must not dispatch");
             string error = ConsumeError(shell);
             Assert.That(error != null, "A bounds violation queues an error");
-            Assert.That(
-                error,
-                Does.Contain("exactly 1 argument"),
-                "The derived bounds should drive the shell's bounds message"
-            );
-            Assert.That(
-                error,
-                Does.Contain("<amount:int>"),
-                "The derived usage hint should appear in the bounds message"
-            );
+            Assert.That(error, Does.Contain("exactly 1 argument"), "The derived bounds should drive the shell's bounds message");
+            Assert.That(error, Does.Contain("<amount:int>"), "The derived usage hint should appear in the bounds message");
             Assert.AreEqual(0, invocations, "The handler must not run with missing arguments");
         }
 
@@ -279,15 +240,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             CommandShell shell = new(History());
             int invocations = 0;
-            Assert.IsTrue(
-                shell.AddCommand(
-                    CommandBuilder
-                        .Create("heal")
-                        .Arg<int>("amount", spec => spec.Required())
-                        .Handler((context, arguments) => ++invocations),
-                    out _
-                )
-            );
+            Assert.IsTrue(shell.AddCommand(CommandBuilder.Create("heal").Arg<int>("amount", spec => spec.Required()).Handler((context, arguments) => ++invocations), out _));
 
             Assert.IsFalse(shell.RunCommand("heal 5 extra"));
             string error = ConsumeError(shell);
@@ -306,20 +259,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     CommandBuilder
                         .Create("wave")
                         .Arg<string>("target", spec => spec.Default("everyone"))
-                        .Handler(
-                            (context, arguments) => observedTargets.Add(arguments.Get<string>(0))
-                        ),
+                        .Handler((context, arguments) => observedTargets.Add(arguments.Get<string>(0))),
                     out _
                 )
             );
 
             Assert.IsTrue(shell.RunCommand("wave"));
             Assert.IsTrue(shell.RunCommand("wave bob"));
-            CollectionAssert.AreEqual(
-                new[] { "everyone", "bob" },
-                observedTargets,
-                "An omitted optional argument uses its default; a provided one parses"
-            );
+            CollectionAssert.AreEqual(new[] { "everyone", "bob" }, observedTargets, "An omitted optional argument uses its default; a provided one parses");
             Assert.That(ConsumeError(shell) == null);
             Assert.That(ConsumeError(shell) == null);
         }
@@ -350,19 +297,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
 
             Assert.IsTrue(shell.RunCommand("annotate"));
-            Assert.That(
-                note == null,
-                "An optional string without an explicit default reads as null"
-            );
-            Assert.IsTrue(
-                notePresent,
-                "A correctly-typed null default is a successful read, not a mismatch"
-            );
-            Assert.AreEqual(
-                0,
-                count,
-                "An optional value type without a default reads as default(T)"
-            );
+            Assert.That(note == null, "An optional string without an explicit default reads as null");
+            Assert.IsTrue(notePresent, "A correctly-typed null default is a successful read, not a mismatch");
+            Assert.AreEqual(0, count, "An optional value type without a default reads as default(T)");
         }
 
         [Test]
@@ -409,10 +346,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             Assert.IsTrue(shell.RunCommand("probe 1"));
             Assert.That(negativeGet != null, "A negative index throws ArgumentOutOfRangeException");
-            Assert.That(
-                overflowGet != null,
-                "An out-of-range index throws ArgumentOutOfRangeException"
-            );
+            Assert.That(overflowGet != null, "An out-of-range index throws ArgumentOutOfRangeException");
             Assert.IsFalse(negativeTryGet, "TryGet reports false for a negative index");
             Assert.IsFalse(overflowTryGet, "TryGet reports false for an out-of-range index");
         }
@@ -424,15 +358,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             CommandShell shell = new(History());
             int invocations = 0;
-            Assert.IsTrue(
-                shell.AddCommand(
-                    CommandBuilder
-                        .Create("heal")
-                        .Arg<int>("amount", spec => spec.Required())
-                        .Handler((context, arguments) => ++invocations),
-                    out _
-                )
-            );
+            Assert.IsTrue(shell.AddCommand(CommandBuilder.Create("heal").Arg<int>("amount", spec => spec.Required()).Handler((context, arguments) => ++invocations), out _));
 
             /*
                 Like the built-in commands' own argument handling, a parse
@@ -474,23 +400,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.That(error, Does.Contain("pickaxe, torch"));
             Assert.AreEqual(0, picked.Count);
 
-            Assert.IsTrue(
-                shell.RunCommand("pickup PICKAXE"),
-                "String choices match case-insensitively like command names"
-            );
+            Assert.IsTrue(shell.RunCommand("pickup PICKAXE"), "String choices match case-insensitively like command names");
             Assert.AreEqual("PICKAXE", picked[0]);
             Assert.That(ConsumeError(shell) == null);
 
             List<CommandCompletion> results = new();
-            Assert.IsTrue(
-                shell.TryComplete(CommandExecutionContext.Current, "pickup to", 10, results, out _),
-                "A builder command with choices should answer completion requests"
-            );
-            CollectionAssert.AreEqual(
-                new[] { "torch" },
-                results.ConvertAll(completion => completion.InsertionText),
-                "Choices filter by the active token prefix"
-            );
+            Assert.IsTrue(shell.TryComplete(CommandExecutionContext.Current, "pickup to", 10, results, out _), "A builder command with choices should answer completion requests");
+            CollectionAssert.AreEqual(new[] { "torch" }, results.ConvertAll(completion => completion.InsertionText), "Choices filter by the active token prefix");
         }
 
         [Test]
@@ -512,11 +428,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.IsTrue(shell.RunCommand("scale 3"));
             Assert.IsTrue(shell.RunCommand("scale 0.4"));
             Assert.IsTrue(shell.RunCommand("scale 3.1"));
-            CollectionAssert.AreEqual(
-                new[] { 0.5f, 3f },
-                observed,
-                "Boundary values are inclusive"
-            );
+            CollectionAssert.AreEqual(new[] { 0.5f, 3f }, observed, "Boundary values are inclusive");
             string below = ConsumeError(shell);
             Assert.That(below != null, "An out-of-range value queues a controlled error");
             Assert.That(below, Does.Contain("out of range"));
@@ -533,16 +445,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 shell.AddCommand(
                     CommandBuilder
                         .Create("port")
-                        .Arg<int>(
-                            "port",
-                            spec =>
-                                spec.Required()
-                                    .Validate(value =>
-                                        (1 <= value) && (value <= 65535)
-                                            ? null
-                                            : "must be a valid port number"
-                                    )
-                        )
+                        .Arg<int>("port", spec => spec.Required().Validate(value => (1 <= value) && (value <= 65535) ? null : "must be a valid port number"))
                         .Handler((context, arguments) => observed.Add(arguments.Get<int>(0))),
                     out _
                 )
@@ -567,9 +470,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                     CommandBuilder
                         .Create("equip")
                         .Arg<WeaponType>("weapon", spec => spec.Required().EnumChoices())
-                        .Handler(
-                            (context, arguments) => observed.Add(arguments.Get<WeaponType>(0))
-                        ),
+                        .Handler((context, arguments) => observed.Add(arguments.Get<WeaponType>(0))),
                     out _
                 )
             );
@@ -583,9 +484,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreEqual(1, observed.Count);
 
             List<CommandCompletion> results = new();
-            Assert.IsTrue(
-                shell.TryComplete(CommandExecutionContext.Current, "equip ", 6, results, out _)
-            );
+            Assert.IsTrue(shell.TryComplete(CommandExecutionContext.Current, "equip ", 6, results, out _));
             CollectionAssert.AreEqual(
                 new[] { "Unknown", "Bow", "Staff", "Sword" },
                 results.ConvertAll(completion => completion.InsertionText),
@@ -605,12 +504,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 shell.AddCommand(
                     CommandBuilder
                         .Create("equip")
-                        .Arg<WeaponType>(
-                            "weapon",
-                            spec =>
-                                spec.Required()
-                                    .Choices(WeaponType.Sword, WeaponType.Bow, WeaponType.Staff)
-                        )
+                        .Arg<WeaponType>("weapon", spec => spec.Required().Choices(WeaponType.Sword, WeaponType.Bow, WeaponType.Staff))
                         .Handler((context, arguments) => ++invocations),
                     out CommandRegistrationHandle handle
                 )
@@ -630,20 +524,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void ExplicitEnumChoicesRejectInvalidOptionalDefault()
         {
             CommandShell shell = new(History());
-            CommandConfigurationException exception = Assert.Throws<CommandConfigurationException>(
-                () =>
-                    shell.AddCommand(
-                        CommandBuilder
-                            .Create("equip")
-                            .Arg<WeaponType>(
-                                "weapon",
-                                spec =>
-                                    spec.Choices(WeaponType.Sword, WeaponType.Bow, WeaponType.Staff)
-                                        .Default(default)
-                            )
-                            .Handler((context, arguments) => { }),
-                        out _
-                    )
+            CommandConfigurationException exception = Assert.Throws<CommandConfigurationException>(() =>
+                shell.AddCommand(
+                    CommandBuilder
+                        .Create("equip")
+                        .Arg<WeaponType>("weapon", spec => spec.Choices(WeaponType.Sword, WeaponType.Bow, WeaponType.Staff).Default(default))
+                        .Handler((context, arguments) => { }),
+                    out _
+                )
             );
             Assert.AreEqual(CommandConfigurationFailure.InvalidDefault, exception.Failure);
         }
@@ -651,9 +539,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void EnumChoicesPreserveValidLegacyZero()
         {
-            CommandArgumentSpec<TerminalLogType> spec = new CommandArgumentSpec<TerminalLogType>(
-                "type"
-            ).EnumChoices();
+            CommandArgumentSpec<TerminalLogType> spec = new CommandArgumentSpec<TerminalLogType>("type").EnumChoices();
             Assert.IsTrue(spec.TryParse(new CommandArg("0"), out object parsed));
             Assert.AreEqual(TerminalLogType.Error, parsed);
             Assert.That(spec.ValidateParsed(parsed) == null);
@@ -679,13 +565,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             CollectionAssert.AreEqual(new[] { true, false }, observed);
 
             List<CommandCompletion> results = new();
-            Assert.IsTrue(
-                shell.TryComplete(CommandExecutionContext.Current, "godmode tr", 10, results, out _)
-            );
-            CollectionAssert.AreEqual(
-                new[] { "true" },
-                results.ConvertAll(completion => completion.InsertionText)
-            );
+            Assert.IsTrue(shell.TryComplete(CommandExecutionContext.Current, "godmode tr", 10, results, out _));
+            CollectionAssert.AreEqual(new[] { "true" }, results.ConvertAll(completion => completion.InsertionText));
         }
 
         [Test]
@@ -714,49 +595,20 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
 
             List<CommandCompletion> results = new();
-            Assert.IsTrue(
-                shell.TryComplete(CommandExecutionContext.Current, "summon ", 7, results, out _)
-            );
-            CollectionAssert.AreEqual(
-                new[] { "pickaxe", "torch" },
-                results.ConvertAll(completion => completion.InsertionText)
-            );
+            Assert.IsTrue(shell.TryComplete(CommandExecutionContext.Current, "summon ", 7, results, out _));
+            CollectionAssert.AreEqual(new[] { "pickaxe", "torch" }, results.ConvertAll(completion => completion.InsertionText));
 
             /*
                 Stage 1 sees the completed first argument as live context: the
                 provider re-queries on every request.
              */
-            Assert.IsTrue(
-                shell.TryComplete(
-                    CommandExecutionContext.Current,
-                    "summon pickaxe ",
-                    15,
-                    results,
-                    out _
-                )
-            );
+            Assert.IsTrue(shell.TryComplete(CommandExecutionContext.Current, "summon pickaxe ", 15, results, out _));
             Assert.AreEqual(1, requests.Count, "The provider runs once per stage-1 request");
-            CollectionAssert.AreEqual(
-                new[] { "ally-1" },
-                results.ConvertAll(completion => completion.InsertionText),
-                "Dynamic providers re-query on every request"
-            );
+            CollectionAssert.AreEqual(new[] { "ally-1" }, results.ConvertAll(completion => completion.InsertionText), "Dynamic providers re-query on every request");
 
-            Assert.IsTrue(
-                shell.TryComplete(
-                    CommandExecutionContext.Current,
-                    "summon torch ",
-                    13,
-                    results,
-                    out _
-                )
-            );
+            Assert.IsTrue(shell.TryComplete(CommandExecutionContext.Current, "summon torch ", 13, results, out _));
             Assert.AreEqual(2, requests.Count, "A second request queries the provider again");
-            CollectionAssert.AreEqual(
-                new[] { "ally-1" },
-                results.ConvertAll(completion => completion.InsertionText),
-                "Dynamic choices recompute instead of caching"
-            );
+            CollectionAssert.AreEqual(new[] { "ally-1" }, results.ConvertAll(completion => completion.InsertionText), "Dynamic choices recompute instead of caching");
         }
 
         [Test]
@@ -776,11 +628,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
 
             CommandInfo info = shell.Commands["teleport"];
-            StringAssert.AreEqualIgnoringCase(
-                "teleport <position:Vector3> [delay:float]",
-                info.hint,
-                "Required arguments render as <name:type>, optional ones as [name:type]"
-            );
+            StringAssert.AreEqualIgnoringCase("teleport <position:Vector3> [delay:float]", info.hint, "Required arguments render as <name:type>, optional ones as [name:type]");
         }
 
         [Test]
@@ -789,48 +637,23 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             CommandShell shell = new(History());
             Assert.IsTrue(
                 shell.AddCommand(
-                    CommandBuilder
-                        .Create("shout")
-                        .Hint("shout <message...>")
-                        .Arg<string>("message", spec => spec.Required())
-                        .Handler((context, arguments) => { }),
+                    CommandBuilder.Create("shout").Hint("shout <message...>").Arg<string>("message", spec => spec.Required()).Handler((context, arguments) => { }),
                     out _
                 )
             );
 
-            Assert.AreEqual(
-                "shout <message...>",
-                shell.Commands["shout"].hint,
-                "An explicit hint wins over the derived usage"
-            );
+            Assert.AreEqual("shout <message...>", shell.Commands["shout"].hint, "An explicit hint wins over the derived usage");
         }
 
         [Test]
         public void NoChoicesLeavesHistoryCompletionUntouched()
         {
             CommandShell shell = new(History());
-            Assert.IsTrue(
-                shell.AddCommand(
-                    CommandBuilder
-                        .Create("noop-args")
-                        .Arg<string>("value", spec => spec.Required())
-                        .Handler((context, arguments) => { }),
-                    out _
-                )
-            );
+            Assert.IsTrue(shell.AddCommand(CommandBuilder.Create("noop-args").Arg<string>("value", spec => spec.Required()).Handler((context, arguments) => { }), out _));
 
-            Assert.That(
-                shell.Commands["noop-args"].completionProvider == null,
-                "Commands without choices keep the history-based completion path"
-            );
+            Assert.That(shell.Commands["noop-args"].completionProvider == null, "Commands without choices keep the history-based completion path");
             Assert.IsFalse(
-                shell.TryComplete(
-                    CommandExecutionContext.Current,
-                    "noop-args ",
-                    10,
-                    new List<CommandCompletion>(),
-                    out _
-                ),
+                shell.TryComplete(CommandExecutionContext.Current, "noop-args ", 10, new List<CommandCompletion>(), out _),
                 "No provider means the shell reports no provider-backed completion"
             );
         }
@@ -853,11 +676,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             List<CommandCompletion> results = new();
             CommandExecutionContext context = CommandExecutionContext.Current;
             Assert.IsTrue(shell.TryComplete(context, "give ", 5, results, out _));
-            CollectionAssert.AreEqual(
-                new[] { "pickaxe", "torch" },
-                results.ConvertAll(completion => completion.InsertionText),
-                "Stage 0 completes the first argument"
-            );
+            CollectionAssert.AreEqual(new[] { "pickaxe", "torch" }, results.ConvertAll(completion => completion.InsertionText), "Stage 0 completes the first argument");
 
             Assert.IsTrue(shell.TryComplete(context, "give pickaxe ", 13, results, out _));
             CollectionAssert.AreEqual(
@@ -867,10 +686,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             );
 
             Assert.IsTrue(shell.TryComplete(context, "give pickaxe 1 ", 15, results, out _));
-            Assert.IsEmpty(
-                results,
-                "Stages beyond the definition produce no candidates but stay provider-answered"
-            );
+            Assert.IsEmpty(results, "Stages beyond the definition produce no candidates but stay provider-answered");
         }
 
         [Test]
@@ -908,62 +724,28 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.IsTrue(shell.RunCommand("report 42 hero"));
             Assert.AreEqual("hero", byName);
             Assert.AreEqual(42, byIndex);
-            Assert.That(
-                mismatch != null,
-                "Reading an argument with the wrong type fails with a descriptive error"
-            );
-            Assert.IsTrue(
-                mismatch is CommandArgumentTypeMismatchException,
-                "The mismatch throws the typed binder exception"
-            );
-            CommandArgumentTypeMismatchException typed =
-                (CommandArgumentTypeMismatchException)mismatch;
-            Assert.AreEqual(
-                "score",
-                typed.ArgumentName,
-                "The mismatch names the argument that was read"
-            );
-            Assert.AreEqual(
-                typeof(int),
-                typed.StoredType,
-                "The mismatch carries the argument's stored value type"
-            );
-            Assert.AreEqual(
-                typeof(float),
-                typed.RequestedType,
-                "The mismatch carries the requested type"
-            );
+            Assert.That(mismatch != null, "Reading an argument with the wrong type fails with a descriptive error");
+            Assert.IsTrue(mismatch is CommandArgumentTypeMismatchException, "The mismatch throws the typed binder exception");
+            CommandArgumentTypeMismatchException typed = (CommandArgumentTypeMismatchException)mismatch;
+            Assert.AreEqual("score", typed.ArgumentName, "The mismatch names the argument that was read");
+            Assert.AreEqual(typeof(int), typed.StoredType, "The mismatch carries the argument's stored value type");
+            Assert.AreEqual(typeof(float), typed.RequestedType, "The mismatch carries the requested type");
         }
 
         [Test]
         public void MissingHandlerFailsAtDefinitionTime()
         {
             CommandShell shell = new(History());
-            CommandConfigurationException exception = Assert.Throws<CommandConfigurationException>(
-                () =>
-                    shell.AddCommand(CommandBuilder.Create("handlerless"), out _)
-            );
-            Assert.That(
-                exception.Message,
-                Does.Contain("Handler"),
-                "The diagnostic should point at the missing handler"
-            );
+            CommandConfigurationException exception = Assert.Throws<CommandConfigurationException>(() => shell.AddCommand(CommandBuilder.Create("handlerless"), out _));
+            Assert.That(exception.Message, Does.Contain("Handler"), "The diagnostic should point at the missing handler");
         }
 
         [Test]
         public void DuplicateArgumentNamesFailAtDefinitionTime()
         {
             CommandShell shell = new(History());
-            CommandConfigurationException exception = Assert.Throws<CommandConfigurationException>(
-                () =>
-                    shell.AddCommand(
-                        CommandBuilder
-                            .Create("dupe")
-                            .Arg<int>("count")
-                            .Arg<int>("count")
-                            .Handler((context, arguments) => { }),
-                        out _
-                    )
+            CommandConfigurationException exception = Assert.Throws<CommandConfigurationException>(() =>
+                shell.AddCommand(CommandBuilder.Create("dupe").Arg<int>("count").Arg<int>("count").Handler((context, arguments) => { }), out _)
             );
             Assert.That(exception.Message, Does.Contain("count"));
         }
@@ -972,15 +754,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void UnparseableArgumentTypeFailsAtDefinitionTime()
         {
             CommandShell shell = new(History());
-            CommandConfigurationException exception = Assert.Throws<CommandConfigurationException>(
-                () =>
-                    shell.AddCommand(
-                        CommandBuilder
-                            .Create("custom")
-                            .Arg<UnregisteredType>("value", spec => spec.Required())
-                            .Handler((context, arguments) => { }),
-                        out _
-                    )
+            CommandConfigurationException exception = Assert.Throws<CommandConfigurationException>(() =>
+                shell.AddCommand(CommandBuilder.Create("custom").Arg<UnregisteredType>("value", spec => spec.Required()).Handler((context, arguments) => { }), out _)
             );
             Assert.That(exception.Message, Does.Contain("UnregisteredType"));
 
@@ -1003,13 +778,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             try
             {
                 Assert.IsTrue(
-                    shell.AddCommand(
-                        CommandBuilder
-                            .Create("custom")
-                            .Arg<UnregisteredType>("value", spec => spec.Required())
-                            .Handler((context, arguments) => { }),
-                        out _
-                    ),
+                    shell.AddCommand(CommandBuilder.Create("custom").Arg<UnregisteredType>("value", spec => spec.Required()).Handler((context, arguments) => { }), out _),
                     "A registered parser unblocks the definition"
                 );
             }
@@ -1025,13 +794,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             CommandShell shell = new(History());
             int runs = 0;
             Assert.IsTrue(
-                shell.AddCommand(
-                    CommandBuilder
-                        .Create("order-omitted")
-                        .Arg<int>("value", spec => spec.Required().Default(9))
-                        .Handler((context, arguments) => ++runs),
-                    out _
-                ),
+                shell.AddCommand(CommandBuilder.Create("order-omitted").Arg<int>("value", spec => spec.Required().Default(9)).Handler((context, arguments) => ++runs), out _),
                 "Required().Default() ends optional: the last fluent call wins"
             );
 
@@ -1044,30 +807,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void DefaultsMustSatisfyTheirOwnValidation()
         {
             CommandShell shell = new(History());
-            CommandConfigurationException exception = Assert.Throws<CommandConfigurationException>(
-                () =>
-                    shell.AddCommand(
-                        CommandBuilder
-                            .Create("bounded-default")
-                            .Arg<int>("count", spec => spec.Default(0).Range(1, 100))
-                            .Handler((context, arguments) => { }),
-                        out _
-                    )
+            CommandConfigurationException exception = Assert.Throws<CommandConfigurationException>(() =>
+                shell.AddCommand(CommandBuilder.Create("bounded-default").Arg<int>("count", spec => spec.Default(0).Range(1, 100)).Handler((context, arguments) => { }), out _)
             );
-            Assert.That(
-                exception.Message,
-                Does.Contain("count"),
-                "The diagnostic names the argument whose default violates validation"
-            );
+            Assert.That(exception.Message, Does.Contain("count"), "The diagnostic names the argument whose default violates validation");
 
             Assert.IsTrue(
-                shell.AddCommand(
-                    CommandBuilder
-                        .Create("bounded-default")
-                        .Arg<int>("count", spec => spec.Default(1).Range(1, 100))
-                        .Handler((context, arguments) => { }),
-                    out _
-                ),
+                shell.AddCommand(CommandBuilder.Create("bounded-default").Arg<int>("count", spec => spec.Default(1).Range(1, 100)).Handler((context, arguments) => { }), out _),
                 "A default inside the range registers"
             );
         }
@@ -1076,24 +822,13 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void DisposedHandleDoesNotRemoveALegacyReplacement()
         {
             CommandShell shell = new(History());
-            Assert.IsTrue(
-                shell.AddCommand(
-                    CommandBuilder.Create("replaced").Handler((context, arguments) => { }),
-                    out CommandRegistrationHandle handle
-                )
-            );
+            Assert.IsTrue(shell.AddCommand(CommandBuilder.Create("replaced").Handler((context, arguments) => { }), out CommandRegistrationHandle handle));
 
             shell.ClearCustomCommands();
-            Assert.IsTrue(
-                shell.AddCommand("replaced", arguments => { }),
-                "Sanity: a legacy command registers under the same name"
-            );
+            Assert.IsTrue(shell.AddCommand("replaced", arguments => { }), "Sanity: a legacy command registers under the same name");
 
             handle.Dispose();
-            Assert.IsTrue(
-                shell.Commands.ContainsKey("replaced"),
-                "A stale handle must not remove the legacy replacement"
-            );
+            Assert.IsTrue(shell.Commands.ContainsKey("replaced"), "A stale handle must not remove the legacy replacement");
         }
 
         [Test]
@@ -1102,21 +837,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             CommandHistory history = History();
             CommandShell shell = new(history);
             Assert.IsTrue(
-                shell.AddCommand(
-                    CommandBuilder
-                        .Create("quiet")
-                        .AddToHistory(false)
-                        .Arg<int>("value", spec => spec.Required())
-                        .Handler((context, arguments) => { }),
-                    out _
-                )
+                shell.AddCommand(CommandBuilder.Create("quiet").AddToHistory(false).Arg<int>("value", spec => spec.Required()).Handler((context, arguments) => { }), out _)
             );
 
             Assert.IsTrue(shell.RunCommand("quiet 5"));
-            Assert.IsEmpty(
-                history.GetHistory(true, true),
-                "AddToHistory(false) must keep builder invocations out of the history"
-            );
+            Assert.IsEmpty(history.GetHistory(true, true), "AddToHistory(false) must keep builder invocations out of the history");
         }
 
         [Test]
@@ -1127,10 +852,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             string outerValue = null;
             Assert.IsTrue(
                 shell.AddCommand(
-                    CommandBuilder
-                        .Create("inner")
-                        .Arg<string>("value", spec => spec.Required())
-                        .Handler((context, arguments) => innerValue = arguments.Get<string>(0)),
+                    CommandBuilder.Create("inner").Arg<string>("value", spec => spec.Required()).Handler((context, arguments) => innerValue = arguments.Get<string>(0)),
                     out _
                 )
             );
@@ -1143,10 +865,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                             (context, arguments) =>
                             {
                                 outerValue = arguments.Get<string>(0);
-                                Assert.IsTrue(
-                                    shell.RunCommand("inner nested"),
-                                    "Nested dispatch succeeds from inside a builder handler"
-                                );
+                                Assert.IsTrue(shell.RunCommand("inner nested"), "Nested dispatch succeeds from inside a builder handler");
                                 outerValue = arguments.Get<string>(0);
                             }
                         ),
@@ -1164,45 +883,25 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             CommandShell shell = new(History());
             Assert.IsTrue(
-                shell.AddCommand(
-                    CommandBuilder.Create("borrowed").Handler((context, arguments) => { }),
-                    out CommandRegistrationHandle handle
-                ),
+                shell.AddCommand(CommandBuilder.Create("borrowed").Handler((context, arguments) => { }), out CommandRegistrationHandle handle),
                 "Registration should return a handle"
             );
             Assert.That(handle != null);
             Assert.IsTrue(shell.Commands.ContainsKey("borrowed"));
 
             handle.Dispose();
-            Assert.IsFalse(
-                shell.Commands.ContainsKey("borrowed"),
-                "Disposal removes the registration from discovery"
-            );
-            Assert.IsFalse(
-                shell.RunCommand("borrowed"),
-                "A disposed registration no longer executes"
-            );
+            Assert.IsFalse(shell.Commands.ContainsKey("borrowed"), "Disposal removes the registration from discovery");
+            Assert.IsFalse(shell.RunCommand("borrowed"), "A disposed registration no longer executes");
 
             // A later replacement with the same name must survive the stale handle.
-            Assert.IsTrue(
-                shell.AddCommand(
-                    CommandBuilder.Create("borrowed").Handler((context, arguments) => { }),
-                    out CommandRegistrationHandle replacement
-                )
-            );
+            Assert.IsTrue(shell.AddCommand(CommandBuilder.Create("borrowed").Handler((context, arguments) => { }), out CommandRegistrationHandle replacement));
             handle.Dispose();
-            Assert.IsTrue(
-                shell.Commands.ContainsKey("borrowed"),
-                "Disposing a stale handle must not remove a later replacement"
-            );
+            Assert.IsTrue(shell.Commands.ContainsKey("borrowed"), "Disposing a stale handle must not remove a later replacement");
             replacement.Dispose();
             Assert.IsFalse(shell.Commands.ContainsKey("borrowed"));
 
             Assert.IsTrue(
-                shell.AddCommand(
-                    CommandBuilder.Create("borrowed").Handler((context, arguments) => { }),
-                    out CommandRegistrationHandle reRegistered
-                ),
+                shell.AddCommand(CommandBuilder.Create("borrowed").Handler((context, arguments) => { }), out CommandRegistrationHandle reRegistered),
                 "Sanity: the name is free again after disposal"
             );
             reRegistered.Dispose();
@@ -1213,19 +912,11 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         public void HandleDisposeIsIdempotent()
         {
             CommandShell shell = new(History());
-            Assert.IsTrue(
-                shell.AddCommand(
-                    CommandBuilder.Create("idempotent").Handler((context, arguments) => { }),
-                    out CommandRegistrationHandle handle
-                )
-            );
+            Assert.IsTrue(shell.AddCommand(CommandBuilder.Create("idempotent").Handler((context, arguments) => { }), out CommandRegistrationHandle handle));
 
             handle.Dispose();
             handle.Dispose();
-            Assert.IsFalse(
-                shell.Commands.ContainsKey("idempotent"),
-                "A second dispose is a no-op, not a re-removal or a throw"
-            );
+            Assert.IsFalse(shell.Commands.ContainsKey("idempotent"), "A second dispose is a no-op, not a re-removal or a throw");
         }
 
         [Test]
@@ -1233,28 +924,18 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             CommandShell shell = new(History());
             int invocations = 0;
-            Assert.IsTrue(
-                shell.AddCommand(
-                    CommandBuilder
-                        .Create("player-only")
-                        .Contexts(CommandExecutionContexts.Player)
-                        .Handler((context, arguments) => ++invocations),
-                    out _
-                )
-            );
+            Assert.IsTrue(shell.AddCommand(CommandBuilder.Create("player-only").Contexts(CommandExecutionContexts.Player).Handler((context, arguments) => ++invocations), out _));
 
             /*
                 The ambient provider substitutes for the Unity environment, so
                 eligibility is exercised for both sides of the gate.
              */
-            CommandExecutionContext.AmbientContextProvider = () =>
-                new CommandExecutionContext(CommandExecutionContexts.Player);
+            CommandExecutionContext.AmbientContextProvider = () => new CommandExecutionContext(CommandExecutionContexts.Player);
             Assert.IsTrue(shell.RunCommand("player-only"));
             Assert.AreEqual(1, invocations);
             Assert.That(ConsumeError(shell) == null);
 
-            CommandExecutionContext.AmbientContextProvider = () =>
-                new CommandExecutionContext(CommandExecutionContexts.EditorEditMode);
+            CommandExecutionContext.AmbientContextProvider = () => new CommandExecutionContext(CommandExecutionContexts.EditorEditMode);
             Assert.IsFalse(shell.RunCommand("player-only"));
             Assert.AreEqual(1, invocations, "The handler must not run when ineligible");
             Assert.That(ConsumeError(shell) != null);
@@ -1269,26 +950,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             BuilderLifecycleComponent component = host.AddComponent<BuilderLifecycleComponent>();
             try
             {
-                Assert.IsTrue(
-                    Terminal.Shell.Commands.ContainsKey("lifecycle-hit"),
-                    "OnEnable should register the builder command"
-                );
+                Assert.IsTrue(Terminal.Shell.Commands.ContainsKey("lifecycle-hit"), "OnEnable should register the builder command");
 
                 component.enabled = false;
-                Assert.IsFalse(
-                    Terminal.Shell.Commands.ContainsKey("lifecycle-hit"),
-                    "OnDisable should dispose the registration"
-                );
+                Assert.IsFalse(Terminal.Shell.Commands.ContainsKey("lifecycle-hit"), "OnDisable should dispose the registration");
 
                 component.enabled = true;
-                Assert.IsTrue(
-                    Terminal.Shell.Commands.ContainsKey("lifecycle-hit"),
-                    "Re-enabling registers the command again"
-                );
-                Assert.IsTrue(
-                    Terminal.Shell.RunCommand("lifecycle-hit 7"),
-                    "The re-registered command executes"
-                );
+                Assert.IsTrue(Terminal.Shell.Commands.ContainsKey("lifecycle-hit"), "Re-enabling registers the command again");
+                Assert.IsTrue(Terminal.Shell.RunCommand("lifecycle-hit 7"), "The re-registered command executes");
                 Assert.AreEqual(1, component.Invocations);
             }
             finally

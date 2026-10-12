@@ -22,13 +22,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
         private const int TraceIterations = 20_000;
 
-        private static readonly string[] Messages =
-        {
-            "alpha",
-            "beta",
-            "gamma with a longer body to walk",
-            "delta",
-        };
+        private static readonly string[] Messages = { "alpha", "beta", "gamma with a longer body to walk", "delta" };
 
         /*
             Reused read window for the flood readers, hoisted because the
@@ -52,11 +46,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 {
                     for (int i = 0; i < iterations; ++i)
                     {
-                        log.HandleLog(
-                            messages[i % messages.Count],
-                            string.Empty,
-                            TerminalLogType.Message
-                        );
+                        log.HandleLog(messages[i % messages.Count], string.Empty, TerminalLogType.Message);
                     }
                 }
                 catch (Exception exception)
@@ -78,13 +68,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             the enumeration test pins: writes land from a background thread
             the way Unity's threaded log callback delivers them.
          */
-        private static Thread StartBufferFlood(
-            CyclicBuffer<LogItem> buffer,
-            ManualResetEventSlim start,
-            int iterations,
-            Action<Exception> onFailure,
-            ManualResetEventSlim done
-        )
+        private static Thread StartBufferFlood(CyclicBuffer<LogItem> buffer, ManualResetEventSlim start, int iterations, Action<Exception> onFailure, ManualResetEventSlim done)
         {
             Thread thread = new(() =>
             {
@@ -93,13 +77,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 {
                     for (int i = 0; i < iterations; ++i)
                     {
-                        buffer.Add(
-                            new LogItem(
-                                TerminalLogType.Message,
-                                Messages[i % Messages.Length],
-                                string.Empty
-                            )
-                        );
+                        buffer.Add(new LogItem(TerminalLogType.Message, Messages[i % Messages.Length], string.Empty));
                     }
                 }
                 catch (Exception exception)
@@ -162,10 +140,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         {
             for (int i = 0; i < count; ++i)
             {
-                Assert.IsTrue(
-                    log.HandleLog($"{prefix}{i}", string.Empty, TerminalLogType.Message),
-                    "Sanity: every write must land"
-                );
+                Assert.IsTrue(log.HandleLog($"{prefix}{i}", string.Empty, TerminalLogType.Message), "Sanity: every write must land");
             }
         }
 
@@ -230,10 +205,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 writer.Join();
             }
 
-            Assert.That(
-                writerFailure == null,
-                $"Background log writes must not throw: {writerFailure}"
-            );
+            Assert.That(writerFailure == null, $"Background log writes must not throw: {writerFailure}");
             Assert.That(0 < passes, "Sanity: the reader must have raced the writer");
         }
 
@@ -256,13 +228,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             using ManualResetEventSlim done = new(false);
             Exception writerFailure = null;
 
-            Thread writer = StartBufferFlood(
-                buffer,
-                start,
-                WriterIterations,
-                exception => Interlocked.CompareExchange(ref writerFailure, exception, null),
-                done
-            );
+            Thread writer = StartBufferFlood(buffer, start, WriterIterations, exception => Interlocked.CompareExchange(ref writerFailure, exception, null), done);
 
             try
             {
@@ -270,20 +236,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 {
                     foreach (LogItem entry in buffer)
                     {
-                        Assert.AreEqual(
-                            TerminalLogType.Message,
-                            entry.type,
-                            "A read entry must not be a partially written struct"
-                        );
-                        Assert.IsTrue(
-                            WasWritten(entry.message),
-                            $"A read entry carried a message the writer never wrote: '{entry.message}'"
-                        );
-                        Assert.AreEqual(
-                            string.Empty,
-                            entry.stackTrace,
-                            "A read entry must not pair one write's message with another's trace"
-                        );
+                        Assert.AreEqual(TerminalLogType.Message, entry.type, "A read entry must not be a partially written struct");
+                        Assert.IsTrue(WasWritten(entry.message), $"A read entry carried a message the writer never wrote: '{entry.message}'");
+                        Assert.AreEqual(string.Empty, entry.stackTrace, "A read entry must not pair one write's message with another's trace");
                     }
                 }
             }
@@ -292,10 +247,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 writer.Join();
             }
 
-            Assert.That(
-                writerFailure == null,
-                $"Background log writes must not throw: {writerFailure}"
-            );
+            Assert.That(writerFailure == null, $"Background log writes must not throw: {writerFailure}");
         }
 
         /*
@@ -342,11 +294,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             }
 
             Assert.That(failure == null, $"Concurrent writes must not throw: {failure}");
-            Assert.AreEqual(
-                (long)writes * writerCount,
-                log.Version - before,
-                "Every write must bump the version exactly once"
-            );
+            Assert.AreEqual((long)writes * writerCount, log.Version - before, "Every write must bump the version exactly once");
         }
 
         /*
@@ -381,13 +329,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 {
                     if (!ContainsOnly(value, "ALPHA"))
                     {
-                        Interlocked.CompareExchange(
-                            ref failure,
-                            new InvalidOperationException(
-                                $"A reduction carried another thread's frames: {value}"
-                            ),
-                            null
-                        );
+                        Interlocked.CompareExchange(ref failure, new InvalidOperationException($"A reduction carried another thread's frames: {value}"), null);
                     }
                 },
                 exception => Interlocked.CompareExchange(ref failure, exception, null)
@@ -401,13 +343,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 {
                     if (!ContainsOnly(value, "BETA"))
                     {
-                        Interlocked.CompareExchange(
-                            ref failure,
-                            new InvalidOperationException(
-                                $"A reduction carried another thread's frames: {value}"
-                            ),
-                            null
-                        );
+                        Interlocked.CompareExchange(ref failure, new InvalidOperationException($"A reduction carried another thread's frames: {value}"), null);
                     }
                 },
                 exception => Interlocked.CompareExchange(ref failure, exception, null)
@@ -435,14 +371,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             using ManualResetEventSlim done = new(false);
 
             Exception writerFailure = null;
-            Thread writer = StartFlood(
-                log,
-                start,
-                WriterIterations,
-                Messages,
-                exception => Interlocked.CompareExchange(ref writerFailure, exception, null),
-                done
-            );
+            Thread writer = StartFlood(log, start, WriterIterations, Messages, exception => Interlocked.CompareExchange(ref writerFailure, exception, null), done);
 
             // Hoisted: the buffer is only ever sized down and back up, so the array never has to grow.
             LogItem[] window = new LogItem[Capacity];
@@ -467,10 +396,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                      */
                     for (int i = 0; i < count; ++i)
                     {
-                        Assert.IsTrue(
-                            WasWritten(window[i].message),
-                            $"A reconfigured window held an entry no writer produced: '{window[i].message}'"
-                        );
+                        Assert.IsTrue(WasWritten(window[i].message), $"A reconfigured window held an entry no writer produced: '{window[i].message}'");
                     }
 
                     /*
@@ -480,10 +406,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                         the writer never filled under exactly this churn.
                      */
                     log.TryGetLast(out LogItem last);
-                    Assert.IsTrue(
-                        last.message == null || WasWritten(last.message),
-                        $"A newest-entry read held an entry no writer produced: '{last.message}'"
-                    );
+                    Assert.IsTrue(last.message == null || WasWritten(last.message), $"A newest-entry read held an entry no writer produced: '{last.message}'");
                 }
             }
             finally
@@ -492,10 +415,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             }
 
             Assert.That(0 < reconfigured, "Sanity: the reconfiguration loop must have run");
-            Assert.That(
-                writerFailure == null,
-                $"Background log writes must not throw: {writerFailure}"
-            );
+            Assert.That(writerFailure == null, $"Background log writes must not throw: {writerFailure}");
         }
 
         /*
@@ -562,11 +482,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreEqual(0, accepted, "No write of an applied filter's type may be accepted");
 
             LogItem[] window = new LogItem[Capacity];
-            Assert.AreEqual(
-                0,
-                log.CopyTo(window),
-                "A flood of an applied filter's type must land nothing in the window"
-            );
+            Assert.AreEqual(0, log.CopyTo(window), "A flood of an applied filter's type must land nothing in the window");
         }
 
         /*
@@ -593,10 +509,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             for (int i = 0; i < 8; ++i)
             {
-                Assert.IsTrue(
-                    log.HandleLog($"after-resize-{i}", string.Empty, TerminalLogType.Message),
-                    "Sanity: every write must land"
-                );
+                Assert.IsTrue(log.HandleLog($"after-resize-{i}", string.Empty, TerminalLogType.Message), "Sanity: every write must land");
             }
 
             AssertWindowIs(log, Last("after-resize-", 8, 4), "same-capacity resize then writes");
@@ -630,11 +543,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             AssertWindowIs(log, Join(Last("b", 6, 4), Last("c", 4, 4)), "grown holds more");
 
             log.Resize(2);
-            AssertWindowIs(
-                log,
-                new[] { "b2", "b3" },
-                "shrunk keeps the oldest entries still showing"
-            );
+            AssertWindowIs(log, new[] { "b2", "b3" }, "shrunk keeps the oldest entries still showing");
 
             log.Resize(0);
             AssertWindowIs(log, Array.Empty<string>(), "zero capacity holds nothing");
@@ -655,14 +564,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             package's own frames the real reduction drops. The marker is what
             must survive; a foreign one proves two threads shared a buffer.
          */
-        private Thread StartReducer(
-            CommandLog log,
-            ManualResetEventSlim start,
-            string marker,
-            int iterations,
-            Action<string> onResult,
-            Action<Exception> onFailure
-        )
+        private Thread StartReducer(CommandLog log, ManualResetEventSlim start, string marker, int iterations, Action<string> onResult, Action<Exception> onFailure)
         {
             Thread thread = new(() =>
             {
