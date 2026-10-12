@@ -30,6 +30,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             field that is not in a panel there. A fixture that needs an
             arranged selection therefore ignores itself on 2021.3 with that
             reason and runs unchanged everywhere the setter exists.
+
+            The read-back is part of the arrange, the same two-way rule the
+            clipboard write follows: a caret write the field does not report
+            back means the fixture's selection cannot be built here, which
+            is the environment (#250's degraded host clamps detached-field
+            caret writes to 0), not a product verdict. Ignoring names it.
          */
         private static TextField FieldWithArrangedSelection(string value, int selectIndex, int cursorIndex)
         {
@@ -38,6 +44,14 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 #if UNITY_2022_1_OR_NEWER
             field.selectIndex = selectIndex;
             field.cursorIndex = cursorIndex;
+            if (field.selectIndex != selectIndex || field.cursorIndex != cursorIndex)
+            {
+                Assert.Ignore(
+                    $"The field did not hold the arranged selection (wanted [{selectIndex}, {cursorIndex}], "
+                        + $"holds [{field.selectIndex}, {field.cursorIndex}]); the caret fixtures need a host "
+                        + "whose detached fields hold caret writes (#250)"
+                );
+            }
 #else
             Assert.Ignore("2021.3 exposes the caret getters only; the engine owns placement, " + "so this fixture's arranged selection cannot be built here");
 #endif
@@ -53,13 +67,12 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [TearDown]
         public void TearDown()
         {
-            GUIUtility.systemCopyBuffer = _originalClipboard;
+            _ = TerminalClipboard.TryWrite(_originalClipboard);
         }
 
         [Test]
         public void CopyCarriesTheSelectedSpanVerbatim()
         {
-            ClipboardWitness.IgnoreWhenClipboardCannotServe();
             TextField field = FieldWithArrangedSelection("spawn item torch 1", 6, 16);
             bool answered = TextFieldCopyCut.TryApply(field, KeyDown(KeyCode.C, EventModifiers.Control), out int? caret);
             Assert.That(answered, "A Ctrl+C over a selection is answered");
@@ -71,7 +84,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void CutTakesTheSelectedSpanOutOfTheField()
         {
-            ClipboardWitness.IgnoreWhenClipboardCannotServe();
             TextField field = FieldWithArrangedSelection("spawn item torch 1", 6, 16);
             bool answered = TextFieldCopyCut.TryApply(field, KeyDown(KeyCode.X, EventModifiers.Control), out int? caret);
             Assert.That(answered, "A Ctrl+X over a selection is answered");
@@ -83,8 +95,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void AnEmptySelectionLeavesTheKeyAlone()
         {
-            ClipboardWitness.IgnoreWhenClipboardCannotServe();
-            GUIUtility.systemCopyBuffer = "untouched";
+            _ = TerminalClipboard.TryWrite("untouched");
             TextField field = FieldWithArrangedSelection("spawn item", 6, 6);
             bool answered = TextFieldCopyCut.TryApply(field, KeyDown(KeyCode.C, EventModifiers.Control), out int? caret);
             Assert.That(!answered, "A copy with nothing selected is not answered");
@@ -107,9 +118,8 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [TestCase(KeyCode.C, EventModifiers.Shift, Description = "Shift adds no clipboard meaning")]
         public void KeysThatAreNotThisHelperSAreLeftAlone(KeyCode keyCode, EventModifiers modifiers)
         {
-            ClipboardWitness.IgnoreWhenClipboardCannotServe();
             TextField field = FieldWithArrangedSelection("spawn item", 0, 5);
-            GUIUtility.systemCopyBuffer = "untouched";
+            _ = TerminalClipboard.TryWrite("untouched");
             Assert.That(!TextFieldCopyCut.TryApply(field, KeyDown(keyCode, modifiers), out _), $"{keyCode} with {modifiers} is not a copy or a cut");
             Assert.AreEqual("spawn item", field.value);
             Assert.AreEqual("untouched", TerminalClipboard.Read());
@@ -125,7 +135,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [Test]
         public void ASnappedSelectionCannotPutHalfACharacterOnTheClipboard()
         {
-            ClipboardWitness.IgnoreWhenClipboardCannotServe();
             /*
                 The field can report a caret inside a surrogate pair - "a😀b"
                 is a, a high surrogate, a low surrogate, b - and the copied
