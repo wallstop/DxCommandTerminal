@@ -153,8 +153,8 @@ jobs:
         run: node tooling~/scripts/release/validate-package-contents.mjs
 
   csharp-lints:
-    # The eight C# linters (the pre-commit fleet's static scans) run once
-    # here, not inside both OS legs of node-tests. They read tracked bytes,
+    # The eight C# linters that ran inside both OS legs of node-tests run
+    # once here instead. They read tracked bytes,
     # which are OS-identical by checkout (no CRLF rewrite without a matching
     # .gitattributes pin), so the second leg was a duplicate bill - Windows
     # minutes cost twice - and a serial tail on the node-tests job's wall.
@@ -229,7 +229,7 @@ jobs:
         run: |
           # Everything the job reads: the grammar project and the two dev
           # tool C# files it compiles, the reader import plus its module-scope
-          # t11 imports, the manifest defining the command, this workflow.
+          # t11 imports, the npm inputs the install reads, this workflow.
           #
           # The base must span the event's WHOLE change range, not the
           # last commit: a PR diffs from its base SHA (the merge-ref
@@ -256,6 +256,7 @@ jobs:
             tooling~/scripts/t11/comparator.mjs \
             tooling~/scripts/t11/scenarios.mjs \
             tooling~/package.json \
+            tooling~/.npmrc \
             .github/workflows/tooling-tests.yml | grep -q .; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
