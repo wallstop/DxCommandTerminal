@@ -149,6 +149,20 @@ repos:
           Null assertions evaluate Unity's fake-null operator: Assert.IsNull /
           Assert.IsNotNull bypass it, so tests assert Assert.That(x == null /
           x != null). Use --fix for the mechanical conversion.
+      - id: md-format-lint
+        name: Lint markdown format (prettier at the 180-char measure, issue #215)
+        entry: node tooling~/scripts/lint-md-format.mjs
+        language: system
+        files: \.md$
+        pass_filenames: false
+        stages:
+          - pre-commit
+          - pre-push
+        description: >
+          Markdown prose wraps at the repo's 180-character measure: every tracked
+          markdown file is prettier-formatted (.prettierrc.json), with code fences
+          left byte-identical and the generated skills index excluded. Use --fix
+          (npm --prefix tooling~ run lint:md:fix) for the rewrite.
       - id: llm-instructions-lint
         name: Lint .llm instructions (SKILL.md spec, index freshness, pointer delegation)
         entry: pwsh -NoProfile -File tooling~/scripts/lint-llm-instructions.ps1

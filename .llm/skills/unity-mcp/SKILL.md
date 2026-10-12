@@ -7,252 +7,155 @@ metadata:
 
 # Unity MCP Bridge and Agent Backends
 
-Unity runs on the host; agents (in the devcontainer or on the host) reach it through
-`tooling~/scripts/mcp/unity-mcp.mjs`. Full reference: `tooling~/scripts/mcp/README.md`.
+Unity runs on the host; agents (in the devcontainer or on the host) reach it through `tooling~/scripts/mcp/unity-mcp.mjs`. Full reference: `tooling~/scripts/mcp/README.md`.
 
 ## Commands
 
-| npm script | Does |
-| --- | --- |
-| `npm run unity:mcp` | Host only: start the bridge (`unity-mcp.mjs bridge`). Requires `UNITY_PROJECT_PATH` in `.env.local` or `--project`. |
-| `npm run unity:mcp:probe` | Discover endpoints, verify a live editor answers. |
-| `npm run unity:mcp:configure` | Write all agent MCP configs (probe first). `-- --offline` writes without network. |
-| `npm run unity:capture` | Capture editor/game state; see [capture-unity-state](../capture-unity-state/SKILL.md). |
-| `npm run unity:mcp:install-capture` | Install the editor dev tools (state capture, test run reporter) host-side. |
-| `npm run ai:backends -- install` | (Re)install the Z.AI and OpenRouter launchers. |
+| npm script                          | Does                                                                                                                |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `npm run unity:mcp`                 | Host only: start the bridge (`unity-mcp.mjs bridge`). Requires `UNITY_PROJECT_PATH` in `.env.local` or `--project`. |
+| `npm run unity:mcp:probe`           | Discover endpoints, verify a live editor answers.                                                                   |
+| `npm run unity:mcp:configure`       | Write all agent MCP configs (probe first). `-- --offline` writes without network.                                   |
+| `npm run unity:capture`             | Capture editor/game state; see [capture-unity-state](../capture-unity-state/SKILL.md).                              |
+| `npm run unity:mcp:install-capture` | Install the editor dev tools (state capture, test run reporter) host-side.                                          |
+| `npm run ai:backends -- install`    | (Re)install the Z.AI and OpenRouter launchers.                                                                      |
 
 ## Ports are project-local
 
-The bridge defaults to a deterministic port in `27100..27999` derived from the
-resolved `UNITY_PROJECT_PATH` (FNV-1a hash). Multiple open editors therefore never
-collide as long as each project has its own path. Discovery probes the project port
-first, then `9020`, then `9003`. The bridge is authenticated
-(`UNITY_MCP_BEARER_TOKEN`, minted into `.env.local` automatically); `GET /healthz`
-is the only unauthenticated endpoint.
+The bridge defaults to a deterministic port in `27100..27999` derived from the resolved `UNITY_PROJECT_PATH` (FNV-1a hash). Multiple open editors therefore never collide as long as
+each project has its own path. Discovery probes the project port first, then `9020`, then `9003`. The bridge is authenticated (`UNITY_MCP_BEARER_TOKEN`, minted into `.env.local`
+automatically); `GET /healthz` is the only unauthenticated endpoint.
 
-Conflict policy: a live bridge already on the port is reported and the start
-becomes a no-op (exit 0) instead of spawning a duplicate. A busy port from
-`.env.local` or the project hash heals: the bridge takes the next free port in
-the range and persists it as `UNITY_MCP_BRIDGE_PORT` in `.env.local`, so later
-`configure` runs and clients read the bound port. A `--port` flag or
-process-environment `UNITY_MCP_BRIDGE_PORT` is binding intent and fails fast
-instead of moving. A port held on `127.0.0.1` counts as busy even for a
-`0.0.0.0` bind (Windows accepts that bind, then the loopback listener shadows
-the bridge).
+Conflict policy: a live bridge already on the port is reported and the start becomes a no-op (exit 0) instead of spawning a duplicate. A busy port from `.env.local` or the project
+hash heals: the bridge takes the next free port in the range and persists it as `UNITY_MCP_BRIDGE_PORT` in `.env.local`, so later `configure` runs and clients read the bound port.
+A `--port` flag or process-environment `UNITY_MCP_BRIDGE_PORT` is binding intent and fails fast instead of moving. A port held on `127.0.0.1` counts as busy even for a `0.0.0.0`
+bind (Windows accepts that bind, then the loopback listener shadows the bridge).
 
-Path canonicalization contract: `resolveProjectPath` never hands a foreign
-absolute path to the platform `resolve()` - POSIX reads `C:/Game` as relative,
-prepends the cwd, and the container then derives a different port than the host
-bridge binds. The contract covers every place a project path is resolved or
-joined, not just port derivation: `captureArtifactRoot` and
-`captureInstallTarget` once used bare `path.resolve`, the host path arrived
-mangled at the editor, and `CaptureAll` threw forever behind a
-`Runtime Error` envelope that read as a broken eval schema (#211). Prefixes
-that carry meaning survive the collapse: a Windows drive
-stays `C:/...`, and a UNC share keeps its double slash (`//server/share`), which
-one-slash collapse would turn into a drive-rooted path that `existsSync`, cwd,
-and `--project-path` all miss.
+Path canonicalization contract: `resolveProjectPath` never hands a foreign absolute path to the platform `resolve()` - POSIX reads `C:/Game` as relative, prepends the cwd, and the
+container then derives a different port than the host bridge binds. The contract covers every place a project path is resolved or joined, not just port derivation:
+`captureArtifactRoot` and `captureInstallTarget` once used bare `path.resolve`, the host path arrived mangled at the editor, and `CaptureAll` threw forever behind a `Runtime Error`
+envelope that read as a broken eval schema (#211). Prefixes that carry meaning survive the collapse: a Windows drive stays `C:/...`, and a UNC share keeps its double slash
+(`//server/share`), which one-slash collapse would turn into a drive-rooted path that `existsSync`, cwd, and `--project-path` all miss.
 
 ## Multi-editor and multi-checkout rules
 
-- One bridge per project path. Each checkout sets its own `UNITY_PROJECT_PATH` in
-  `.env.local`; the same `unity-mcp` server name in each checkout then reaches that
-  checkout's editor.
-- Keep the bridge alive under the host's service manager (launchd on macOS) if it
-  must survive terminal closure: host `node <repo>/tooling~/scripts/mcp/unity-mcp.mjs bridge`.
-- Backend selection: `--backend cli` (default; Unity 6 CLI `unity mcp --project-path`)
-  or `--backend relay` (legacy AI Assistant under `~/.unity/relay/`). If `unity list
-  --project-path <project> --format json` shows no Pipeline tools, use relay.
+- One bridge per project path. Each checkout sets its own `UNITY_PROJECT_PATH` in `.env.local`; the same `unity-mcp` server name in each checkout then reaches that checkout's
+  editor.
+- Keep the bridge alive under the host's service manager (launchd on macOS) if it must survive terminal closure: host `node <repo>/tooling~/scripts/mcp/unity-mcp.mjs bridge`.
+- Backend selection: `--backend cli` (default; Unity 6 CLI `unity mcp --project-path`) or `--backend relay` (legacy AI Assistant under `~/.unity/relay/`). If
+  `unity list --project-path <project> --format json` shows no Pipeline tools, use relay.
 
 ## configure behavior
 
-One transaction writes seven configs with rollback and mode 0600: `.mcp.json`
-(Claude), `.codex/config.toml`, `opencode.jsonc`, `.nanocoder/mcp.json`,
-`.vscode/mcp.json`, `.cursor/mcp.json`, `.copilot/mcp-config.json`. All are
-gitignored. Servers: `unity-mcp`, `github` (remote, PAT from
-`GITHUB_TOKEN`/`GH_TOKEN`/`GITHUB_PERSONAL_ACCESS_TOKEN`/`GITHUB_PAT`/
-`GITHUB_MCP_PAT`; OpenCode references the alias that supplied the value, and
-`ai-backends.sh env` exports that alias so the `{env:NAME}` lookup resolves
-outside the devcontainer too), `git`,
-`fetch`, `context7` (library docs), and when a Z.AI key exists (`Z_AI_API_KEY` or `ZAI_API_KEY`):
-`web-search-prime`, `web-reader`, `zread`, `zai-mcp-server` (vision). No key -> the
-four Z.AI entries are removed. A running bridge that rejected the token aborts
-configure before writing anything: copy `UNITY_MCP_BEARER_TOKEN` from the host
-`.env.local` instead of minting a second one. In the devcontainer,
-`UNITY_PROJECT_PATH` remains the host identity used for port discovery, while
-`UNITY_PROJECT_CONTAINER_PATH=/unity-project` is used for local capture files.
-After editing `.env.local`, run `npm run unity:mcp:configure -- --offline`, then
-reconnect MCP or restart agents. Credential loading, scrubbing, and the OpenCode
-v2 readiness gate are covered in
+One transaction writes seven configs with rollback and mode 0600: `.mcp.json` (Claude), `.codex/config.toml`, `opencode.jsonc`, `.nanocoder/mcp.json`, `.vscode/mcp.json`,
+`.cursor/mcp.json`, `.copilot/mcp-config.json`. All are gitignored. Servers: `unity-mcp`, `github` (remote, PAT from
+`GITHUB_TOKEN`/`GH_TOKEN`/`GITHUB_PERSONAL_ACCESS_TOKEN`/`GITHUB_PAT`/ `GITHUB_MCP_PAT`; OpenCode references the alias that supplied the value, and `ai-backends.sh env` exports
+that alias so the `{env:NAME}` lookup resolves outside the devcontainer too), `git`, `fetch`, `context7` (library docs), and when a Z.AI key exists (`Z_AI_API_KEY` or
+`ZAI_API_KEY`): `web-search-prime`, `web-reader`, `zread`, `zai-mcp-server` (vision). No key -> the four Z.AI entries are removed. A running bridge that rejected the token aborts
+configure before writing anything: copy `UNITY_MCP_BEARER_TOKEN` from the host `.env.local` instead of minting a second one. In the devcontainer, `UNITY_PROJECT_PATH` remains the
+host identity used for port discovery, while `UNITY_PROJECT_CONTAINER_PATH=/unity-project` is used for local capture files. After editing `.env.local`, run
+`npm run unity:mcp:configure -- --offline`, then reconnect MCP or restart agents. Credential loading, scrubbing, and the OpenCode v2 readiness gate are covered in
 [devcontainer-lifecycle](../devcontainer-lifecycle/SKILL.md).
 
 ## OpenRouter backends (API key, any model)
 
-`ai-backends.sh install` also creates `codex-openrouter` and `claude-openrouter`.
-Key: `OPENROUTER_API_KEY` in the environment or `.env.local` (resolved as data).
-- `claude-openrouter`: base URL `https://openrouter.ai/api` (Anthropic Messages
-  compat), `ANTHROPIC_API_KEY` explicitly empty, model slots default to
-  `anthropic/claude-sonnet-5` / `claude-opus-5` / `claude-haiku-4.5` /
-  `claude-fable-5.1` via `CLAUDE_OPENROUTER_{SONNET,OPUS,HAIKU,FABLE}_MODEL`,
-  subagents via `CLAUDE_OPENROUTER_SUBAGENT_MODEL`, gateway model picker on by
-  default (`CLAUDE_OPENROUTER_GATEWAY_DISCOVERY=0` to disable).
-- `codex-openrouter`: profile `devcontainer-openrouter`, Responses API
-  (`https://openrouter.ai/api/v1`, `wire_api = "responses"` - modern Codex has no
-  chat wire), default `openai/gpt-5.6-sol` via `CODEX_OPENROUTER_MODEL`.
+`ai-backends.sh install` also creates `codex-openrouter` and `claude-openrouter`. Key: `OPENROUTER_API_KEY` in the environment or `.env.local` (resolved as data).
+
+- `claude-openrouter`: base URL `https://openrouter.ai/api` (Anthropic Messages compat), `ANTHROPIC_API_KEY` explicitly empty, model slots default to `anthropic/claude-sonnet-5` /
+  `claude-opus-5` / `claude-haiku-4.5` / `claude-fable-5.1` via `CLAUDE_OPENROUTER_{SONNET,OPUS,HAIKU,FABLE}_MODEL`, subagents via `CLAUDE_OPENROUTER_SUBAGENT_MODEL`, gateway model
+  picker on by default (`CLAUDE_OPENROUTER_GATEWAY_DISCOVERY=0` to disable).
+- `codex-openrouter`: profile `devcontainer-openrouter`, Responses API (`https://openrouter.ai/api/v1`, `wire_api = "responses"` - modern Codex has no chat wire), default
+  `openai/gpt-5.6-sol` via `CODEX_OPENROUTER_MODEL`.
 
 ## Z.AI backends (subscription)
 
-`.devcontainer/ai-backends.sh install` creates `codex-zai` and `claude-zai`
-launchers without touching native `claude`/`codex` logins or configs:
+`.devcontainer/ai-backends.sh install` creates `codex-zai` and `claude-zai` launchers without touching native `claude`/`codex` logins or configs:
 
-- `claude-zai`: isolated `CLAUDE_CONFIG_DIR` (`~/.claude-zai` default), base URL
-  `https://api.z.ai/api/anthropic`, models `glm-5.3[1m]`/`glm-5.3-flash[1m]`,
-  container-aware sandbox handling. Overrides: `CLAUDE_ZAI_{SONNET,OPUS,HAIKU}_MODEL`,
-  `CLAUDE_ZAI_CONFIG_DIR`, `ZAI_API_TIMEOUT_MS`, `AI_BACKENDS_CONTAINER_MODE`,
-  `CLAUDE_ZAI_SUBPROCESS_ENV_SCRUB`.
-- `codex-zai`: profile `devcontainer-zai` + model catalog in `CODEX_HOME`, Responses
-  endpoint `https://api.z.ai/api/v1`, model `glm-5.3` (override `CODEX_ZAI_MODEL`,
-  `CODEX_ZAI_REASONING_EFFORT=low|high|max`). The key is exported to codex but
-  filtered from MCP subprocesses via `shell_environment_policy`.
+- `claude-zai`: isolated `CLAUDE_CONFIG_DIR` (`~/.claude-zai` default), base URL `https://api.z.ai/api/anthropic`, models `glm-5.3[1m]`/`glm-5.3-flash[1m]`, container-aware sandbox
+  handling. Overrides: `CLAUDE_ZAI_{SONNET,OPUS,HAIKU}_MODEL`, `CLAUDE_ZAI_CONFIG_DIR`, `ZAI_API_TIMEOUT_MS`, `AI_BACKENDS_CONTAINER_MODE`, `CLAUDE_ZAI_SUBPROCESS_ENV_SCRUB`.
+- `codex-zai`: profile `devcontainer-zai` + model catalog in `CODEX_HOME`, Responses endpoint `https://api.z.ai/api/v1`, model `glm-5.3` (override `CODEX_ZAI_MODEL`,
+  `CODEX_ZAI_REASONING_EFFORT=low|high|max`). The key is exported to codex but filtered from MCP subprocesses via `shell_environment_policy`.
 
-Set the key only in `.env.local` or your shell/secret store; never in generated
-files or CLI arguments.
+Set the key only in `.env.local` or your shell/secret store; never in generated files or CLI arguments.
 
 ## Session lifecycle and a busy editor
 
-A bridge session is a host process, and only an explicit HTTP `DELETE` carrying
-`Mcp-Session-Id` frees its slot. Closing the MCP client is not enough. The
-bridge caps concurrent sessions (`--max-sessions`, default 8; each owns a relay
-child process) and reaps an idle session after `--session-timeout` (60s), so a
-leak shows up as HTTP 503 with JSON-RPC `-32000 Too many concurrent MCP
-sessions` - the probe retries that and reports it as transient, never as a dead
-bridge. Any tool that opens a session must release it with a DELETE, including
-on its failure paths; `withMcpSession` does this through `deleteBridgeSession`.
-To prove a change here: run 8 open/close cycles, then a 9th - the 9th is the one
-that exposes a leak.
+A bridge session is a host process, and only an explicit HTTP `DELETE` carrying `Mcp-Session-Id` frees its slot. Closing the MCP client is not enough. The bridge caps concurrent
+sessions (`--max-sessions`, default 8; each owns a relay child process) and reaps an idle session after `--session-timeout` (60s), so a leak shows up as HTTP 503 with JSON-RPC
+`-32000 Too many concurrent MCP sessions` - the probe retries that and reports it as transient, never as a dead bridge. Any tool that opens a session must release it with a DELETE,
+including on its failure paths; `withMcpSession` does this through `deleteBridgeSession`. To prove a change here: run 8 open/close cycles, then a 9th - the 9th is the one that
+exposes a leak.
 
-The editor serves tool calls on its main thread. A request that lands while the
-editor is busy (a Play Mode run winding down, a domain reload) comes back as
-`The operation was aborted due to timeout`, and the SDK then rejects every later
-call on that session instantly with that first reason - one unlucky request
-kills the rest of the command. So a session rebuilds its transport once when a
-call throws, and the caller retries.
+The editor serves tool calls on its main thread. A request that lands while the editor is busy (a Play Mode run winding down, a domain reload) comes back as
+`The operation was aborted due to timeout`, and the SDK then rejects every later call on that session instantly with that first reason - one unlucky request kills the rest of the
+command. So a session rebuilds its transport once when a call throws, and the caller retries.
 
-Do not gate on `isCompiling`: reference runs recorded it as `false` while every
-call was timing out
-(`ambiguous-interactive/unity-helpers/.llm/references/unity-mcp-fixture-runner-part-1.md`).
-Play mode is the discriminating flag, because play mode over MCP times out every
-tool until it ends. Wait on it only in a bounded loop; the retry is the safety
-net.
+Do not gate on `isCompiling`: reference runs recorded it as `false` while every call was timing out
+(`ambiguous-interactive/unity-helpers/.llm/references/unity-mcp-fixture-runner-part-1.md`). Play mode is the discriminating flag, because play mode over MCP times out every tool
+until it ends. Wait on it only in a bounded loop; the retry is the safety net.
 
-The robust fix is in place: `DxTerminalTestRunReporter` (installed by
-`npm run unity:mcp:install-capture` next to the state-capture script) makes the
-editor report each run into `.artifacts/unity-state/test-run.txt`, and
-`unity:tests` / `t4:capture` read that file instead of polling a main thread a
-Play Mode run occupies. The first token is `running`, `pass=`, or `did-not-run`,
-and every line carries the owner token from `test-run-request.txt`, so a late
-callback from an earlier run is never read as this run's result. Without the
-reporter compiled in, or without a writable claim directory, the command falls
-back to `test_status` polling. The claim path replaces the status poll, never the
-`run_tests` request. Two facts worth keeping: an editor that answers
-`did-not-run token=none` saw no request file, which is normal when something other
-than the MCP tooling started the run and means the two sides resolved different claim
-directories on the first leg; and a run that matches no test never starts, so the
-editor reports nothing and the bridge's zero-total answer is used instead.
+The robust fix is in place: `DxTerminalTestRunReporter` (installed by `npm run unity:mcp:install-capture` next to the state-capture script) makes the editor report each run into
+`.artifacts/unity-state/test-run.txt`, and `unity:tests` / `t4:capture` read that file instead of polling a main thread a Play Mode run occupies. The first token is `running`,
+`pass=`, or `did-not-run`, and every line carries the owner token from `test-run-request.txt`, so a late callback from an earlier run is never read as this run's result. Without
+the reporter compiled in, or without a writable claim directory, the command falls back to `test_status` polling. The claim path replaces the status poll, never the `run_tests`
+request. Two facts worth keeping: an editor that answers `did-not-run token=none` saw no request file, which is normal when something other than the MCP tooling started the run and
+means the two sides resolved different claim directories on the first leg; and a run that matches no test never starts, so the editor reports nothing and the bridge's zero-total
+answer is used instead.
 
 ### Busy-window retry windows are the caller's deadline
 
-`callFirstWorking` waits busy answers out, and the window it waits for must be
-the calling flow's own deadline - the current leg's, a probe's 5 s - never a
-fresh slice of a bigger budget. A window refilled per call outlives the leg it
-serves, and a wait that holds until the editor frees can starve the polls
-around it: the no-reporter result loop depends on `test_status` polls landing
-while a run is still in flight (`seenRunning` is what makes a second identical
-summary attributable), so the mid-run idle probe rides a short window and
-returns on its first refusal (Bugbot, PR #216). When adding a caller, thread
-the deadline; when adding a matcher for busy errors, anchor word-only
-patterns (`^terminated$`, not `terminated`) so a permanent error that merely
-contains the word retires its variant instead of being waited out, and let
-envelope failures count as transient only with empty diagnostics - compile
-diagnostics are the editor's own final answer.
+`callFirstWorking` waits busy answers out, and the window it waits for must be the calling flow's own deadline - the current leg's, a probe's 5 s - never a fresh slice of a bigger
+budget. A window refilled per call outlives the leg it serves, and a wait that holds until the editor frees can starve the polls around it: the no-reporter result loop depends on
+`test_status` polls landing while a run is still in flight (`seenRunning` is what makes a second identical summary attributable), so the mid-run idle probe rides a short window and
+returns on its first refusal (Bugbot, PR #216). When adding a caller, thread the deadline; when adding a matcher for busy errors, anchor word-only patterns (`^terminated$`, not
+`terminated`) so a permanent error that merely contains the word retires its variant instead of being waited out, and let envelope failures count as transient only with empty
+diagnostics - compile diagnostics are the editor's own final answer.
 
 ## Host editor hygiene (eval drills)
 
-A modal dialog blocks the editor's main thread; while it is up, every bridge
-request times out and the outage reads as a hang (session-048: a scratch scene
-was deleted while it was the open scene, and the next play-mode entry raised
-the "save modified scene?" prompt). The techniques here are adapted from
-IshoBoy's shared-editor etiquette (`Ambiguous-Interactive/IshoBoy`) and the
-capture runner's refusal gate.
+A modal dialog blocks the editor's main thread; while it is up, every bridge request times out and the outage reads as a hang (session-048: a scratch scene was deleted while it was
+the open scene, and the next play-mode entry raised the "save modified scene?" prompt). The techniques here are adapted from IshoBoy's shared-editor etiquette
+(`Ambiguous-Interactive/IshoBoy`) and the capture runner's refusal gate.
 
-- **Open with a refusal preflight, not a state guess.** Before anything that
-  swaps, saves, reimports, compiles, or enters play mode, run one read-only
-  eval: `EditorApplication.isPlaying(OrWillChangePlaymode)`, `isCompiling`,
-  and every open scene's `path` + `isDirty`. Dirty or playing -> **refuse and
-  say so** (name the scenes) instead of stepping into a prompt only the human
-  can dismiss. Editor status endpoints cannot see scene dirtiness.
-- **Never write or `DeleteAsset` anything under `Assets/` the editor has
-  open** - reimporting a loaded file raises "Reload/Ignore" and deleting the
-  file under the open scene dirties it. Re-read the open-scene list
-  immediately before the write rather than trusting an earlier probe.
-- **Single-mode scene swaps are the modal source** (`NewScene`/`OpenScene`
-  with `NewSceneMode.Single` prompt over a dirty scene). Prefer no swap; for
-  isolated edit-mode work use `EditorSceneManager.NewPreviewScene()` /
-  `ClosePreviewScene(scene)`, which touch no open scene.
-- **`new GameObject` lands in the active scene and dirties it**; destroying
-  it does not clear the flag. In eval probes use
+- **Open with a refusal preflight, not a state guess.** Before anything that swaps, saves, reimports, compiles, or enters play mode, run one read-only eval:
+  `EditorApplication.isPlaying(OrWillChangePlaymode)`, `isCompiling`, and every open scene's `path` + `isDirty`. Dirty or playing -> **refuse and say so** (name the scenes) instead
+  of stepping into a prompt only the human can dismiss. Editor status endpoints cannot see scene dirtiness.
+- **Never write or `DeleteAsset` anything under `Assets/` the editor has open** - reimporting a loaded file raises "Reload/Ignore" and deleting the file under the open scene
+  dirties it. Re-read the open-scene list immediately before the write rather than trusting an earlier probe.
+- **Single-mode scene swaps are the modal source** (`NewScene`/`OpenScene` with `NewSceneMode.Single` prompt over a dirty scene). Prefer no swap; for isolated edit-mode work use
+  `EditorSceneManager.NewPreviewScene()` / `ClosePreviewScene(scene)`, which touch no open scene.
+- **`new GameObject` lands in the active scene and dirties it**; destroying it does not clear the flag. In eval probes use
   `EditorUtility.CreateGameObjectWithHideFlags(name, HideFlags.HideAndDontSave, ...)`
-  - it belongs to no scene. (Its `scene.IsValid()` is false, so bodies added
-  with it never register with a physics world.)
-- **Restore order**: record the open scenes first; open the originals back
-  with `OpenScene(path)` BEFORE deleting drill assets; end with zero dirty
-  scenes, no drill asset open, not playing. Unity 6 has no
-  `ClearSceneDirtiness`; once a prompt is dismissed, opening a clean scene is
-  the reset. Verify via eval after every drill.
-- **Play mode is a one-way door over MCP** (entering it stops the bridge
-  answering; only a human at the machine can leave). Only start
-  play-mode runs with the human present, and never as the session's last
-  operation.
+    - it belongs to no scene. (Its `scene.IsValid()` is false, so bodies added with it never register with a physics world.)
+- **Restore order**: record the open scenes first; open the originals back with `OpenScene(path)` BEFORE deleting drill assets; end with zero dirty scenes, no drill asset open, not
+  playing. Unity 6 has no `ClearSceneDirtiness`; once a prompt is dismissed, opening a clean scene is the reset. Verify via eval after every drill.
+- **Play mode is a one-way door over MCP** (entering it stops the bridge answering; only a human at the machine can leave). Only start play-mode runs with the human present, and
+  never as the session's last operation.
 
 ## An eval is code no lane compiles, and a catch makes it fail open
 
-An expression eval'd into a host editor is not compiled by CI, not compiled by
-`compat:check`, and not covered by a node test that mocks the bridge. If it names
-an API that is not public, the eval **fails to compile**, and a surrounding
-`catch {}` turns that into silence - so the feature looks present, is covered by
-a green test against a mock, and does nothing on the host. Bugbot caught one in
-`unity:tests`: `UnityEditor.LogEntries.GetLogEntriesByType` is internal (CS0122),
-so the compile guard's promised "First error: ..." could never appear.
+An expression eval'd into a host editor is not compiled by CI, not compiled by `compat:check`, and not covered by a node test that mocks the bridge. If it names an API that is not
+public, the eval **fails to compile**, and a surrounding `catch {}` turns that into silence - so the feature looks present, is covered by a green test against a mock, and does
+nothing on the host. Bugbot caught one in `unity:tests`: `UnityEditor.LogEntries.GetLogEntriesByType` is internal (CS0122), so the compile guard's promised "First error: ..." could
+never appear.
 
-- Verify each API against the live editor before relying on it: eval it and read
-  `diagnostics`. `typeof(X.Method)` is a bad probe (CS0426 - `typeof` takes a
-  type); call the thing, or reflect on the declaring type.
-- Watch for a chain of unfamiliar type names. `UnityEditor.LogEntries` plus
-  `UnityEditor.LogEntryType` was written from memory; `AssetDatabase.Refresh`
-  next to it is obviously public, and the contrast is the tell.
-- A `catch` around an eval must be justified as "the editor is busy", never as
-  "the API might not exist". If the value is optional, say so; if it is not
-  optional, do not read it. Unity exposes no public synchronous compile-error
-  API, so point at `compat:check` rather than an eval that cannot answer.
-- The pre-existing evals here are exercised every run and are sound:
-  `EditorUtility.scriptCompilationFailed`, the three `EditorApplication` flags,
-  and the `AssetDatabase.Refresh` + `CompilationPipeline.RequestScriptCompilation`
-  pair in `refreshScripts`. That is the bar for a new probe.
+- Verify each API against the live editor before relying on it: eval it and read `diagnostics`. `typeof(X.Method)` is a bad probe (CS0426 - `typeof` takes a type); call the thing,
+  or reflect on the declaring type.
+- Watch for a chain of unfamiliar type names. `UnityEditor.LogEntries` plus `UnityEditor.LogEntryType` was written from memory; `AssetDatabase.Refresh` next to it is obviously
+  public, and the contrast is the tell.
+- A `catch` around an eval must be justified as "the editor is busy", never as "the API might not exist". If the value is optional, say so; if it is not optional, do not read it.
+  Unity exposes no public synchronous compile-error API, so point at `compat:check` rather than an eval that cannot answer.
+- The pre-existing evals here are exercised every run and are sound: `EditorUtility.scriptCompilationFailed`, the three `EditorApplication` flags, and the `AssetDatabase.Refresh` +
+  `CompilationPipeline.RequestScriptCompilation` pair in `refreshScripts`. That is the bar for a new probe.
 
 ## Troubleshooting
 
-- `probe` unreachable: is the bridge running on the host (`npm run unity:mcp`)? Is
-  `UNITY_PROJECT_PATH` set? In the container, `host.docker.internal` must resolve
+- `probe` unreachable: is the bridge running on the host (`npm run unity:mcp`)? Is `UNITY_PROJECT_PATH` set? In the container, `host.docker.internal` must resolve
   (devcontainer.json adds it via `--add-host`).
 - `unauthorized` on probe: token mismatch between host and container `.env.local`.
-- Empty tools list from the cli backend: Pipeline is not loaded in that editor;
-  check compilation conflicts, or fall back to `--backend relay`.
-- Agent cannot see Z.AI servers: no key in `.env.local`; configs not rewritten
-  since the key was added (re-run offline configure).
-- Bridge answers 503 `Too many concurrent MCP sessions`: something is leaking
-  sessions. Raise `--max-sessions` for a busy host, and check every path that
-  opens a session releases it.
-- `eval` compiles C# STATEMENTS from a `code` parameter: terminate expressions
-  (`return (...);`), never rely on an `expression` parameter or direct references
-  into host assemblies (resolve those via `Type.GetType`), and expect the client
-  call variants in `unity-mcp.mjs` to try `code` first.
+- Empty tools list from the cli backend: Pipeline is not loaded in that editor; check compilation conflicts, or fall back to `--backend relay`.
+- Agent cannot see Z.AI servers: no key in `.env.local`; configs not rewritten since the key was added (re-run offline configure).
+- Bridge answers 503 `Too many concurrent MCP sessions`: something is leaking sessions. Raise `--max-sessions` for a busy host, and check every path that opens a session releases
+  it.
+- `eval` compiles C# STATEMENTS from a `code` parameter: terminate expressions (`return (...);`), never rely on an `expression` parameter or direct references into host assemblies
+  (resolve those via `Type.GetType`), and expect the client call variants in `unity-mcp.mjs` to try `code` first.

@@ -310,6 +310,19 @@ export function buildChecks() {
       cachePaths: ["Styles/Themes", "Styles/BaseStyles.uss", "tooling~/scripts/lint-theme-palette-tokens.mjs"]
     },
     {
+      /*
+          Keys the tracked-file snapshot: the file list comes from
+          `git ls-files`, so any tracked edit (markdown or the config the
+          formatter reads) moves the key, and untracked scratch never
+          does.
+       */
+      name: "lint-md-format",
+      command: "node tooling~/scripts/lint-md-format.mjs",
+      cacheTrackedFiles: true,
+      cacheRuntimeEnvironment: true,
+      cachePaths: ["tooling~/scripts/lint-md-format.mjs"]
+    },
+    {
       name: "lint-docs-catalog",
       command: "node tooling~/scripts/lint-docs-catalog.mjs",
       cacheRuntimeEnvironment: true,

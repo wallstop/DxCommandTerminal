@@ -1,15 +1,11 @@
 # Typed arguments
 
-Arguments parse through `CommandArg.TryGet<T>`: it returns `false` on
-failure instead of silently defaulting, so bad input is rejected, not
-misread.
+Arguments parse through `CommandArg.TryGet<T>`: it returns `false` on failure instead of silently defaulting, so bad input is rejected, not misread.
 
 ## Built-in kinds
 
-Primitives, `DateTime`, `Guid`, enums, Unity math types (`Vector2`,
-`Color`, `Quaternion`, `Bounds`, `Rect`, `Plane`, `Ray`, ...), plus
-named constants: `red` parses as `Color.red`, `MaxValue` as
-`int.MaxValue`.
+Primitives, `DateTime`, `Guid`, enums, Unity math types (`Vector2`, `Color`, `Quaternion`, `Bounds`, `Rect`, `Plane`, `Ray`, ...), plus named constants: `red` parses as
+`Color.red`, `MaxValue` as `int.MaxValue`.
 
 ```csharp
 if (args[0].TryGet<int>(out int count))
@@ -22,20 +18,16 @@ Inside a builder handler, parsed values come typed and validated:
 
 [!code-csharp[ArgumentKinds](samples/ArgumentKinds.cs)]
 
-`god` uses bool choices, `weather` completes and validates enum names,
-`timescale` clamps rejection to a 0-10 range. Out-of-range or
-unparsable input stops the command with a descriptive shell error.
+`god` uses bool choices, `weather` completes and validates enum names, `timescale` clamps rejection to a 0-10 range. Out-of-range or unparsable input stops the command with a
+descriptive shell error.
 
 ## Separators
 
-Any whitespace character separates arguments, not only a space. A tab, a
-newline, or a non-breaking space ends an unquoted argument, so text that
-was not typed on one line - a pasted block, a copied log line - arrives as
-the arguments it reads as rather than as one token.
+Any whitespace character separates arguments, not only a space. A tab, a newline, or a non-breaking space ends an unquoted argument, so text that was not typed on one line - a
+pasted block, a copied log line - arrives as the arguments it reads as rather than as one token.
 
-A `$variable` is the exception, and by design: it is substituted after the
-split, so a value stored with `set-variable` keeps whatever whitespace it
-holds and arrives as one argument.
+A `$variable` is the exception, and by design: it is substituted after the split, so a value stored with `set-variable` keeps whatever whitespace it holds and arrives as one
+argument.
 
 Quote a value that must hold whitespace:
 
@@ -43,13 +35,11 @@ Quote a value that must hold whitespace:
 set name "two words"
 ```
 
-Both quote characters open a quoted argument, a quoted value keeps its
-whitespace, and an unmatched quote takes the rest of the line.
+Both quote characters open a quoted argument, a quoted value keeps its whitespace, and an unmatched quote takes the rest of the line.
 
 ## Custom parsers
 
-Register a parser once for your own types; builder arguments and
-`[RegisterCommand]` methods use it through the same path:
+Register a parser once for your own types; builder arguments and `[RegisterCommand]` methods use it through the same path:
 
 ```csharp
 CommandArgParser.RegisterParser<AccountId>(
@@ -61,14 +51,11 @@ CommandArgParser.RegisterParser<AccountId>(
     });
 ```
 
-`force: true` replaces an existing parser. For one-off parsing,
-`TryGet<T>(out T value, parser)` takes a parser per call. The
-culture-invariant built-in parsers are also public
+`force: true` replaces an existing parser. For one-off parsing, `TryGet<T>(out T value, parser)` takes a parser per call. The culture-invariant built-in parsers are also public
 (`CommandArgParsers.Float`, `.Int`, `.DateTime`, ...).
 
 ## Where next
 
 - [Registering commands](commands.md) - the three registration forms.
 - [Completion](completion.md) - Tab completion for argument values.
-- [API Reference](xref:WallstopStudios.DxCommandTerminal.Backend.CommandArg) -
-  `CommandArg`, `CommandArgParsers`, `CommandArgParser`.
+- [API Reference](xref:WallstopStudios.DxCommandTerminal.Backend.CommandArg) - `CommandArg`, `CommandArgParsers`, `CommandArgParser`.

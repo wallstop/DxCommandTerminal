@@ -6,7 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const CACHE_VERSION = 5;
+const CACHE_VERSION = 6;
 const CACHE_DIRECTORY = path.join(path.dirname(fileURLToPath(import.meta.url)), ".preflight-cache");
 const CHECKOUT_ID = (() => {
   try {
@@ -78,42 +78,52 @@ function hashText(value) {
 const UNTRACKED_CONTENT_HASH_LIMIT = 1024 * 1024;
 
 /*
-    Content identity for tracked files comes from git's index, not from
-    re-reading bytes: git status answers "worktree matches index" with
-    the same stat machinery every caller would otherwise duplicate, so a
-    clean tracked file keys at its index blob (one `ls-files -s`
-    listing, ~25 ms for ~1,200 files) and only status-flagged files fall
-    back to byte reads. The status call uses
-    `--untracked-files=no`, which skips the untracked walk entirely.
-    The state is computed lazily once per process (CI and --no-cache
-    runs never key anything and never pay the spawns).
+    Content identity comes from git's LISTINGS, not from the filesystem:
+    one `ls-files -s` (every tracked path with its index blob, ~25 ms)
+    and one `status --porcelain -z --untracked-files=all` (which tracked
+    files are dirty, which untracked files exist) answer everything a
+    keyed root needs without a single per-file stat. On the 9p workspace
+    mount one metadata call costs milliseconds, so the old per-entry
+    walk - lstat over every directory a root spans - was the largest
+    single cost of a fully cached preflight run; the listings replace it
+    with two fixed spawns. Both listings are computed lazily once per
+    process (CI and --no-cache runs never key anything and never pay
+    the spawns).
 
-    The index-eol configuration (core.autocrlf, core.eol) is folded into
-    the blob marker: with a clean/smudge filter the worktree bytes and
-    the index blob genuinely differ while status says clean, so flipping
-    the configuration must move keys, not age a cached pass.
+    A path inside the repository keys from the listings whenever git
+    sees ANY entry under it: tracked files key at their index blob,
+    status-flagged files (dirty tracked, untracked) fold their bytes
+    under the same size cap the walk used, and the status output is
+    what the repo snapshot hashes. A path git sees NOTHING under -
+    ignored build outputs, scratch trees - still gets the full
+    filesystem walk, so ignored roots keep their exact per-byte
+    identity. Paths outside the repository keep the walk too.
 
     Stated limits, all inherited from the snapshot's existing contract:
-    a file flagged assume-unchanged or skip-worktree hides its edits from
-    status and is keyed at its index blob; the state is computed once per
-    process, so an edit landing after the first keyed check in the same
-    run is seen by the next run (the per-run memo contract); the folded
-    configuration covers core.autocrlf and core.eol, while `text`/`eol`/
-    `ident`/`working-tree-encoding` ATTRIBUTES and any LFS or custom
-    clean/smudge filter drive worktree-vs-index divergence the marker
-    does not see - this repository carries only `text eol=lf` over its
-    own tooling paths and no filter over keyed roots today, and either
-    landing over keyed roots needs to join this key before it can be
-    trusted; and the dotnet lane keys pinned package versions, not the
+    a file flagged assume-unchanged or skip-worktree hides its edits
+    from status and keys at its index blob; the state is computed once
+    per process, so an edit landing after the first keyed check in the
+    same run is seen by the next run (the per-run memo contract); the
+    folded eol configuration covers core.autocrlf and core.eol, while
+    `text`/`eol`/`ident`/`working-tree-encoding` ATTRIBUTES and any LFS
+    or custom clean/smudge filter drive worktree-vs-index divergence the
+    marker does not see - this repository carries only `text eol=lf`
+    over its own tooling paths and no filter over keyed roots today, and
+    either landing over keyed roots needs to join this key before it can
+    be trusted; an IGNORED file under a git-visible root does not move
+    its key (git's listings never name it, and walking ignored content
+    was the cost this identity exists to remove - an ignored root keeps
+    the walk); and the dotnet lane keys pinned package versions, not the
     global NuGet cache contents, the same accepted limit a lockfile-keyed
     CI cache takes. When git is unavailable the whole identity falls
     back to byte reads.
  */
-let gitFileIdentityState = null;
+let gitListingState = null;
+const GIT_LISTINGS_UNAVAILABLE = { tracked: new Map(), status: "", changed: [], untracked: [], worktreeDirty: new Set(), eol: "" };
 
-function gitFileIdentity() {
-  if (gitFileIdentityState !== null) {
-    return gitFileIdentityState;
+function gitListings() {
+  if (gitListingState !== null) {
+    return gitListingState;
   }
   try {
     const tracked = new Map();
@@ -134,12 +144,14 @@ function gitFileIdentity() {
       tracked.set(record.slice(tab + 1), meta[1]);
     }
 
-    const status = execFileSync("git", ["status", "--porcelain=v1", "-z", "--untracked-files=no"], {
+    const status = execFileSync("git", ["status", "--porcelain=v1", "-z", "--untracked-files=all"], {
       cwd: REPO_ROOT,
       maxBuffer: 256 * 1024 * 1024,
       encoding: "utf8"
     });
-    const dirty = parseStatusRecords(status).worktreeDirty;
+    const { changed, worktreeDirty } = parseStatusRecords(status);
+    const untracked = changed.filter((relative) => !tracked.has(relative));
+
     /* One spawn per key, each caught alone: `git config --get` exits 1
        for an UNSET key, so a shared try/catch would let a set autocrlf
        next to an unset eol read as both-unset and hide a real flip. */
@@ -151,11 +163,13 @@ function gitFileIdentity() {
       }
     };
     const eol = [configGet("core.autocrlf"), configGet("core.eol")].join("\0");
-    gitFileIdentityState = { tracked, dirty, eol };
+    gitListingState = { tracked, status, changed, untracked, worktreeDirty, eol };
   } catch {
-    gitFileIdentityState = { tracked: null, dirty: null, eol: "" };
+    /* Memoize the failure too: a git-less machine retries nothing, the
+       same one-time fallback the old per-file identity cached. */
+    gitListingState = GIT_LISTINGS_UNAVAILABLE;
   }
-  return gitFileIdentityState;
+  return gitListingState;
 }
 
 /** Maps an absolute path inside the repo to its slash-separated repo-relative path; null outside. */
@@ -172,7 +186,10 @@ function statSignature(stat) {
 }
 
 /*
-    File identities are content hashes behind a cheap identity walk: the
+    The filesystem walk is the FALLBACK identity, used only where the
+    listings cannot answer: paths outside the repository, paths git sees
+    nothing under (ignored roots, scratch trees), and runs without git.
+    File identities are content hashes behind a cheap walk: the
     per-entry cost that made the old keying take 112 s serial was
     realpathSync plus readlinkSync on every entry - three metadata syscalls
     on a filesystem where one costs milliseconds - not the content reads.
@@ -241,13 +258,15 @@ function updatePathHash(hash, target, label, visited, excludes) {
   }
 
   if (stat.isFile()) {
-    const identity = gitFileIdentity();
     const relative = repoRelativePath(target);
-    if (relative !== null && identity.tracked !== null) {
-      const blob = identity.tracked.get(relative);
-      if (blob !== undefined && !identity.dirty.has(relative)) {
-        hash.update(`git-blob\0${blob}\0${identity.eol}\0`);
-        return;
+    if (relative !== null) {
+      const listings = gitListings();
+      if (listings !== GIT_LISTINGS_UNAVAILABLE) {
+        const blob = listings.tracked.get(relative);
+        if (blob !== undefined && !listings.worktreeDirty.has(relative)) {
+          hash.update(`git-blob\0${blob}\0${listings.eol}\0`);
+          return;
+        }
       }
     }
     /*
@@ -293,6 +312,88 @@ function updatePathHash(hash, target, label, visited, excludes) {
   }
 }
 
+/*
+    Content state for one status-flagged path: bytes under the size cap,
+    a stat signature above it (the same documented coin the walk flips
+    for huge files), a link-text hash for a symlink (retargeting between
+    two same-content targets must move the key, like the walk's link
+    fold), and a missing marker for a deletion status has named but the
+    worktree no longer has.
+ */
+function flaggedContentState(relative) {
+  const absolute = path.join(REPO_ROOT, relative);
+  try {
+    const stat = fs.lstatSync(absolute);
+    if (stat.isSymbolicLink()) {
+      let link;
+      try {
+        link = fs.readlinkSync(absolute);
+      } catch {
+        return hashText("unreadable-link");
+      }
+      return hashText(`link\0${link}`);
+    }
+    if (stat.isFile() && stat.size <= UNTRACKED_CONTENT_HASH_LIMIT) {
+      return hashText(fs.readFileSync(absolute));
+    }
+    return hashText(statSignature(stat));
+  } catch {
+    return hashText("missing");
+  }
+}
+
+function isExcluded(relative, excludes) {
+  return excludes.some((root) => relative === root || relative.startsWith(`${root}/`));
+}
+
+/*
+    Listing-based state for one repository path: a deterministic fold
+    over every entry git sees under it - clean tracked files at their
+    index blobs, dirty tracked and untracked files at their content
+    hashes - with zero filesystem calls. Returns null when the listings
+    cannot answer so the caller falls back to the walk: git missing,
+    the path outside the repository, or no git-visible entry under it
+    (ignored and empty roots keep the walk's exact identity).
+ */
+function listingPathState(resolved, excludes) {
+  const listings = gitListings();
+  if (listings === GIT_LISTINGS_UNAVAILABLE) {
+    return null;
+  }
+  const relative = repoRelativePath(resolved);
+  if (relative === null) {
+    return null;
+  }
+  const prefix = `${relative}/`;
+  const under = (candidate) => candidate === relative || candidate.startsWith(prefix);
+  const trackedEntries = [];
+  for (const [candidate, blob] of listings.tracked) {
+    if (under(candidate) && !isExcluded(candidate, excludes)) {
+      trackedEntries.push([candidate, blob]);
+    }
+  }
+  const untrackedEntries = listings.untracked.filter((candidate) => under(candidate) && !isExcluded(candidate, excludes));
+  if (trackedEntries.length === 0 && untrackedEntries.length === 0) {
+    return null;
+  }
+  trackedEntries.sort((left, right) => (left[0] < right[0] ? -1 : left[0] > right[0] ? 1 : 0));
+  const hash = crypto.createHash("sha256");
+  for (const [candidate, blob] of trackedEntries) {
+    hash.update(`${candidate}\0`);
+    if (listings.worktreeDirty.has(candidate)) {
+      hash.update(flaggedContentState(candidate));
+    } else {
+      hash.update(`git-blob\0${blob}\0${listings.eol}\0`);
+    }
+  }
+  untrackedEntries.sort();
+  for (const candidate of untrackedEntries) {
+    hash.update(`${candidate}\0`);
+    hash.update(flaggedContentState(candidate));
+  }
+  return hash.digest("hex");
+}
+
 export function pathState(value, excludes = []) {
   return combinedPathState(value, excludes, hashPathEntry);
 }
@@ -317,6 +418,11 @@ function hashPathEntry(entry, excludes) {
   const hash = crypto.createHash("sha256");
   const resolved = path.resolve(REPO_ROOT, entry);
   hash.update(`${entry}\0`);
+  const listed = listingPathState(resolved, excludes);
+  if (listed !== null) {
+    hash.update(listed);
+    return hash.digest("hex");
+  }
   updatePathHash(hash, resolved, entry, new Set(), excludes);
   return hash.digest("hex");
 }
@@ -374,11 +480,9 @@ export function parseStatusRecords(output) {
 
 function repositorySnapshot() {
   /*
-      One git call instead of a stat per tracked file: `git status
-      --porcelain` is index-backed and answers which tracked files changed
-      and which untracked files exist, in one process on every filesystem,
-      where the per-file walk cost tens of seconds of metadata syscalls on
-      the dev container before a single check spawned.
+      The repo snapshot hashes the same `status --untracked-files=all`
+      listing the path identity already pays for - one spawn serves both
+      - plus each flagged file's bytes, in status order.
 
       Status encodes an untracked file as a bare `?? <path>` line, so an
       edit to an untracked file's CONTENT leaves the output byte-identical
@@ -402,19 +506,16 @@ function repositorySnapshot() {
       per-developer opt-in, and re-walking every tracked file is the cost
       this snapshot exists to remove.
    */
-  const output = execFileSync(
-    "git",
-    ["status", "--porcelain=v1", "-z", "--untracked-files=all"],
-    {
-      cwd: REPO_ROOT,
-      maxBuffer: 256 * 1024 * 1024,
-      encoding: "utf8"
-    }
-  );
+  const listings = gitListings();
+  if (listings === GIT_LISTINGS_UNAVAILABLE) {
+    throw new Error("git is unavailable; the repo snapshot cannot be computed");
+  }
   const hash = crypto.createHash("sha256");
-  hash.update(output);
-  const { changed } = parseStatusRecords(output);
-  for (const relative of changed) {
+  hash.update(listings.status);
+  for (const [relative, blob] of listings.tracked) {
+    hash.update(`${relative}\0${blob}\0${listings.eol}\0`);
+  }
+  for (const relative of listings.changed) {
     hash.update(relative);
     hash.update("\0");
     const absolute = path.join(REPO_ROOT, relative);
@@ -710,9 +811,11 @@ function combinedPathStateDefault(value, excludes) {
     One key computer per preflight run: it memoizes per-root states and the
     repo snapshot for the keying phase only, where the nine linters declare
     overlapping roots and every check would otherwise re-walk the same
-    trees serially. The memo lives in the computer, never in the exported
-    functions, so direct callers (the contract tests) keep observing the
-    live filesystem.
+    trees serially. The memo contract is per process: the git listings
+    behind both the computer and the exported functions form once per run,
+    so an edit landing after the first keyed call is seen by the next run,
+    never by the same one - contract tests observe keys from child
+    processes for exactly that reason.
  */
 export function createCacheKeyComputer() {
   const entryCache = new Map();

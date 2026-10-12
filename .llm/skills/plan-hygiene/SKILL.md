@@ -7,18 +7,17 @@ metadata:
 
 # Plan Hygiene
 
-`PLAN.md` is a living plan, not a log. It answers one question: what is left to do and
-what still binds that work. Everything else has a home (see the document map).
+`PLAN.md` is a living plan, not a log. It answers one question: what is left to do and what still binds that work. Everything else has a home (see the document map).
 
 ## Document map (what lives where)
 
-| Content | Home |
-| --- | --- |
-| In-progress + future work, open performance gates, binding constraints | `PLAN.md` |
-| Work style, session scoping, fix philosophy, PR targets | `GOAL.md` |
-| Standing code/repo rules and skills | `.llm/context.md`, `.llm/skills/` |
-| Session history, RCA, measurements, evidence tallies | `progress/session-NNN-slug.md` (git-ignored) |
-| Raw benchmark/capture artifacts | `.artifacts/` |
+| Content                                                                | Home                                         |
+| ---------------------------------------------------------------------- | -------------------------------------------- |
+| In-progress + future work, open performance gates, binding constraints | `PLAN.md`                                    |
+| Work style, session scoping, fix philosophy, PR targets                | `GOAL.md`                                    |
+| Standing code/repo rules and skills                                    | `.llm/context.md`, `.llm/skills/`            |
+| Session history, RCA, measurements, evidence tallies                   | `progress/session-NNN-slug.md` (git-ignored) |
+| Raw benchmark/capture artifacts                                        | `.artifacts/`                                |
 
 ## PLAN.md contract
 
@@ -33,21 +32,16 @@ The file contains ONLY:
 
 Never place in `PLAN.md`:
 
-- Session narration or summaries ("Session-NNN landed ...") - that belongs in the
-  session's `progress/` log, written once, never mirrored.
+- Session narration or summaries ("Session-NNN landed ...") - that belongs in the session's `progress/` log, written once, never mirrored.
 - Measurement numbers, test tallies, evidence trails (live in `progress/` records).
-- Completed items. Delete them; do not merely tick the box. Landed tasks collapse into
-  one status line.
-- Stale grounding ("starting evidence", dependency schedules for finished work, links
-  consumed by landed work).
+- Completed items. Delete them; do not merely tick the box. Landed tasks collapse into one status line.
+- Stale grounding ("starting evidence", dependency schedules for finished work, links consumed by landed work).
 
 ## Session-end checklist
 
 1. Write the session log: `progress/session-NNN-brief-description.md`.
-2. Update `PLAN.md`: refresh the status date/snapshot, delete items this session
-   completed entirely, and add new open items with their acceptance criteria.
-3. Re-read the file top to bottom: if a line no longer changes what a future session
-   would do, delete it.
+2. Update `PLAN.md`: refresh the status date/snapshot, delete items this session completed entirely, and add new open items with their acceptance criteria.
+3. Re-read the file top to bottom: if a line no longer changes what a future session would do, delete it.
 
 ## Size budget
 

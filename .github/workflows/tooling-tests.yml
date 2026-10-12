@@ -27,8 +27,7 @@ on:
       - ".gitattributes"
       - ".npmrc"
       - "tooling~/.npmrc"
-      - ".github/workflows/tooling-tests.yml"
-      - ".github/workflows/release*.yml"
+      - ".github/workflows/**"
   pull_request:
     paths:
       - "package.json"
@@ -52,8 +51,7 @@ on:
       - ".gitattributes"
       - ".npmrc"
       - "tooling~/.npmrc"
-      - ".github/workflows/tooling-tests.yml"
-      - ".github/workflows/release*.yml"
+      - ".github/workflows/**"
 
 permissions:
   contents: read
@@ -156,6 +154,12 @@ jobs:
       - name: Lint Unity-object null assertions
         run: node tooling~/scripts/lint-unity-null-patterns.mjs
 
+      - name: Lint markdown format
+        # Issue #215: prettier at the 180-character measure. OS-neutral, so
+        # one leg checks it; the local preflight gate mirrors this lane.
+        if: matrix.os == 'ubuntu-latest'
+        run: node tooling~/scripts/lint-md-format.mjs
+
       - name: Validate package contents
         if: matrix.os == 'ubuntu-latest'
         run: node tooling~/scripts/release/validate-package-contents.mjs
@@ -168,16 +172,63 @@ jobs:
     # C# error in a dev tool from reaching a developer machine first (#164).
     # Unity is never provisioned here either: the stand-in is a declared surface,
     # and the host matrix is what answers the real editor.
+    #
+    # The job self-gates on its own inputs (the grammar project, the reader
+    # import in unity-mcp.mjs, the manifest, this workflow): any other change
+    # that trips the workflow-level paths cannot affect it, so it skips
+    # instead of spending a runner minute. Two-dot diff: over-triggering on
+    # an unusual merge shape is safe; under-triggering would skip the gate.
     name: devtool-grammar (ubuntu-latest)
     runs-on: ubuntu-latest
     env:
       DOTNET_NOLOGO: true
       DOTNET_CLI_TELEMETRY_OPTOUT: true
+      PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      PUSH_BEFORE: ${{ github.event.before }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+
+      - name: Resolve whether the grammar inputs changed
+        id: grammar-inputs
+        shell: bash
+        run: |
+          # Everything the job reads: the grammar project and the reporter
+          # C# it compiles, the reader import plus its module-scope t11
+          # imports, the manifest defining the command, this workflow.
+          #
+          # The base must span the event's WHOLE change range, not the
+          # last commit: a PR diffs from its base SHA (the merge-ref
+          # first parent stands in when the payload SHA is absent from
+          # the shallow clone), a push diffs from the pushed-over tip
+          # (fetched on demand), so a multi-commit push cannot skip the
+          # gate on an earlier commit's input change. Last resort is
+          # HEAD~1, the same safe direction as the fetch guard.
+          base="$PR_BASE_SHA"
+          if [ -z "$base" ] || ! git cat-file -e "$base" 2>/dev/null; then
+            base=""
+          fi
+          if [ -z "$base" ] && [ -n "$PUSH_BEFORE" ] && [ "$PUSH_BEFORE" != "0000000000000000000000000000000000000000" ]; then
+            git fetch -q --no-tags --depth=1 origin "$PUSH_BEFORE" 2>/dev/null && base="$PUSH_BEFORE"
+          fi
+          if [ -z "$base" ]; then
+            base="$(git rev-parse HEAD~1)"
+          fi
+          if git diff --name-only "$base" HEAD -- \
+            tooling~/scripts/mcp/grammar \
+            tooling~/scripts/mcp/DxTerminalTestRunReporter.cs.txt \
+            tooling~/scripts/mcp/unity-mcp.mjs \
+            tooling~/scripts/t11/comparator.mjs \
+            tooling~/scripts/t11/scenarios.mjs \
+            tooling~/package.json \
+            .github/workflows/tooling-tests.yml | grep -q .; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Setup Node
+        if: steps.grammar-inputs.outputs.changed == 'true'
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
@@ -185,6 +236,7 @@ jobs:
       # Matches the generator-tests job: the same pinned SDK, so a language or
       # analyzer difference cannot make one gate red and the other green.
       - name: Setup DotNet
+        if: steps.grammar-inputs.outputs.changed == 'true'
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: 9.0.306
@@ -192,6 +244,7 @@ jobs:
       # net8.0 under a newer SDK pulls its targeting and apphost packs from
       # nuget.org, so the shared cold cost is cached here too.
       - name: Cache NuGet packages
+        if: steps.grammar-inputs.outputs.changed == 'true'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.nuget/packages
@@ -199,11 +252,13 @@ jobs:
           restore-keys: ${{ runner.os }}-nuget-
 
       - name: Resolve npm cache directory
+        if: steps.grammar-inputs.outputs.changed == 'true'
         id: npm-cache
         shell: bash
         run: echo "dir=$(npm config get cache)" >> "$GITHUB_OUTPUT"
 
       - name: Cache npm packages
+        if: steps.grammar-inputs.outputs.changed == 'true'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ steps.npm-cache.outputs.dir }}
@@ -213,7 +268,9 @@ jobs:
       # The claim reader is imported from unity-mcp.mjs, so this job needs the
       # npm project even though it runs no node suite.
       - name: Install dependencies
+        if: steps.grammar-inputs.outputs.changed == 'true'
         run: npm --prefix tooling~ install --no-audit --no-fund --prefer-offline
 
       - name: Check the reporter compiles and its claim grammar round-trips
+        if: steps.grammar-inputs.outputs.changed == 'true'
         run: npm --prefix tooling~ run mcp:grammar

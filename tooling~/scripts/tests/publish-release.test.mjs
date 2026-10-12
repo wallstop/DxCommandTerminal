@@ -159,7 +159,7 @@ test("workflow structure: remote checks precede npm and all Release mutations", 
   assert.match(job(publishWorkflow, "publish-npm"), /--artifact "com.wallstop-studios.dxcommandterminal-\$\{version\}.tgz"/);
   assert.match(job(publishWorkflow, "github-release"), /args=\(--verify-tag --draft/);
   const ci = readWorkflow("tooling-tests.yml");
-  assert.strictEqual(ci.match(/"\.github\/workflows\/release\*\.yml"/g)?.length, 2);
+  assert.strictEqual(ci.match(/["']\.github\/workflows\/\*\*["']/g)?.length, 2, "the suite reads .github/workflows, so every workflow change must trigger it");
 });
 
 test("workflow path filters include repository execution inputs", () => {

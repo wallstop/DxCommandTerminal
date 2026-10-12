@@ -1,9 +1,9 @@
-*Documentation for internal features of the Terminal. For documentation on how to register commands, please refer to the [README](./README.md).*
+_Documentation for internal features of the Terminal. For documentation on how to register commands, please refer to the [README](./README.md)._
 
 ### Terminal structure:
 
 |              | Description                                                        |
-|:-------------|:-------------------------------------------------------------------|
+| :----------- | :----------------------------------------------------------------- |
 | Buffer       | Handles incoming logs                                              |
 | Autocomplete | Keeps a list of known words and uses it to autocomplete text       |
 | Shell        | Responsible for parsing and executing commands                     |

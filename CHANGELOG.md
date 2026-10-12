@@ -1,184 +1,379 @@
 # Changelog
 
-All notable, user-facing changes to this project will be documented in this file. Internal
-work (refactors, tooling, style enforcement, measurement infrastructure) stays out; if a
+All notable, user-facing changes to this project will be documented in this file. Internal work (refactors, tooling, style enforcement, measurement infrastructure) stays out; if a
 user cannot observe the difference, it does not belong here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-Entry style follows [unity-helpers](https://github.com/Ambiguous-Interactive/unity-helpers)
-(MIT): one user-observable change per bullet, a present-tense verb first - `Add`, `Fix`,
-`Change` - one sentence, two only when the second names what is preserved or refused, and
-the issue reference at the end. Details live in the docs and the linked issue.
+Entry style follows [unity-helpers](https://github.com/Ambiguous-Interactive/unity-helpers) (MIT): one user-observable change per bullet, a present-tense verb first - `Add`, `Fix`,
+`Change` - one sentence, two only when the second names what is preserved or refused, and the issue reference at the end. Details live in the docs and the linked issue.
 
 ## Unreleased
 
 ### Added
 
-- Add `CommandCatalogEntry.GetHandler`, which binds a catalog entry's handler at most once
-  per entry so a registration cycle re-reads one delegate instead of re-allocating it
+- Add `CommandCatalogEntry.GetHandler`, which binds a catalog entry's handler at most once per entry so a registration cycle re-reads one delegate instead of re-allocating it
   ([#223](https://github.com/wallstop/DxCommandTerminal/issues/223)).
-- Add `CommandArg` parsing-configuration setters - `SetDelimiters`, `SetQuotes`,
-  `SetIgnoredValuesForCleanedTypes`, `SetDoNotCleanTypes`, `SetIgnoredValuesForComplexTypes` -
-  and `ResetParsingConfiguration`, replacing each set's contents in place; the raw sets stay
-  public and mutable ([#229](https://github.com/wallstop/DxCommandTerminal/issues/229)).
-- Add Ctrl+C and Ctrl+X copy and cut of the selected text on both console surfaces' input
-  fields; a cut updates the command text and re-ranks the palette, and a clipboard that will
-  not take the text leaves the selection in the field instead of deleting it
-  ([#194](https://github.com/wallstop/DxCommandTerminal/issues/194)).
+- Add `CommandArg` parsing-configuration setters - `SetDelimiters`, `SetQuotes`, `SetIgnoredValuesForCleanedTypes`, `SetDoNotCleanTypes`, `SetIgnoredValuesForComplexTypes` - and
+  `ResetParsingConfiguration`, replacing each set's contents in place; the raw sets stay public and mutable ([#229](https://github.com/wallstop/DxCommandTerminal/issues/229)).
+- Add Ctrl+C and Ctrl+X copy and cut of the selected text on both console surfaces' input fields; a cut updates the command text and re-ranks the palette, and a clipboard that will
+  not take the text leaves the selection in the field instead of deleting it ([#194](https://github.com/wallstop/DxCommandTerminal/issues/194)).
 
 ### Changed
 
-- Answer `CommandShell.RegisteredCommands` from generated catalogs, one exact-signature
-  lookup per command, where a catalog exists; assemblies without a catalog keep the
-  reflection sweep with identical results
-  ([#223](https://github.com/wallstop/DxCommandTerminal/issues/223)).
-- Stop the open terminal from re-reading the log every frame: the window copy and the search
-  pass now run only when the buffer, its capacity, or the search query changed, so an idle
-  console costs no per-frame read even with a `find` query standing
-  ([#222](https://github.com/wallstop/DxCommandTerminal/issues/222)).
-- Reserve the console key: backtick and shift+backtick open and close the console on every
-  press, even while a field has focus, instead of typing their character into it. A close
-  clears the line, and the character cannot be typed onto a bound toggle key
-  ([#218](https://github.com/wallstop/DxCommandTerminal/issues/218)).
+- Answer `CommandShell.RegisteredCommands` from generated catalogs, one exact-signature lookup per command, where a catalog exists; assemblies without a catalog keep the reflection
+  sweep with identical results ([#223](https://github.com/wallstop/DxCommandTerminal/issues/223)).
+- Stop the open terminal from re-reading the log every frame: the window copy and the search pass now run only when the buffer, its capacity, or the search query changed, so an
+  idle console costs no per-frame read even with a `find` query standing ([#222](https://github.com/wallstop/DxCommandTerminal/issues/222)).
+- Reserve the console key: backtick and shift+backtick open and close the console on every press, even while a field has focus, instead of typing their character into it. A close
+  clears the line, and the character cannot be typed onto a bound toggle key ([#218](https://github.com/wallstop/DxCommandTerminal/issues/218)).
 - Deprecate `CommandLog.Logs` in favor of the safe `CopyTo`, `Count`, and `TryGetLast` reads.
 - Make `CommandHistory.GetHistory` return an allocation-free live view of the history.
-- Log the full exception in the package's Console warnings and errors: the type, message, and
-  throw-site stack now accompany the sentence, where the message alone printed before.
+- Log the full exception in the package's Console warnings and errors: the type, message, and throw-site stack now accompany the sentence, where the message alone printed before.
 
 ### Fixed
 
-- Fix the polled hotkeys throwing a `NullReferenceException` every frame on a host with no
-  keyboard; a gamepad-only setup, a console, or the frame an unplug lands now reads no press
-  ([#221](https://github.com/wallstop/DxCommandTerminal/issues/221)).
-- Fix parser registrations and control-set edits leaking across play sessions when domain
-  reload is off; the session reset now clears the palette statics and restores `CommandArg`'s
-  defaults ([#224](https://github.com/wallstop/DxCommandTerminal/issues/224)).
-- Fix the float and double argument parsers answering differently per runtime for literals too
-  large for the type; the overflowed literal is now refused everywhere, and named spellings
-  like `Infinity` and `NaN` still parse.
-- Fix text the package writes to Unity's Console window and the player log carrying invisible
-  control or bidirectional characters in a font, theme, command, or file name; such text now
-  prints as its `\u202E` escape. The in-game console already showed it and still does.
+- Fix the polled hotkeys throwing a `NullReferenceException` every frame on a host with no keyboard; a gamepad-only setup, a console, or the frame an unplug lands now reads no
+  press ([#221](https://github.com/wallstop/DxCommandTerminal/issues/221)).
+- Fix parser registrations and control-set edits leaking across play sessions when domain reload is off; the session reset now clears the palette statics and restores
+  `CommandArg`'s defaults ([#224](https://github.com/wallstop/DxCommandTerminal/issues/224)).
+- Fix the float and double argument parsers answering differently per runtime for literals too large for the type; the overflowed literal is now refused everywhere, and named
+  spellings like `Infinity` and `NaN` still parse.
+- Fix text the package writes to Unity's Console window and the player log carrying invisible control or bidirectional characters in a font, theme, command, or file name; such text
+  now prints as its `\u202E` escape. The in-game console already showed it and still does.
 - Fix ignored log entries landing when the ignore filter changed mid-write.
-- Make `CommandLog` own the ignore filter and stack-trace mode, configured through `TerminalUI`
-  or `TerminalSettings`.
+- Make `CommandLog` own the ignore filter and stack-trace mode, configured through `TerminalUI` or `TerminalSettings`.
 
 ## [1.0.1] - 2026-10-02
 
 ### Added
 
-- Ctrl+Z and Ctrl+Shift+Z undo and redo the command line, on both console surfaces. Until now
-  nothing the console showed could be taken back: a UI Toolkit text field has no history of its
-  own, and the package supplied none, so a typo in a long command was corrected one Backspace at
-  a time - the worst case for the longest commands - on every supported editor. Undo is one state
-  per change rather than one per run of typing, and a state is any change to the field, including
-  the ones the terminal made: a Tab completion, a line recalled from history, a paste, and the
-  clear a command run performs. So a completion you did not want is one Ctrl+Z away, and one more
-  after a run brings the executed command back onto the line without running it again. The key is
-  consumed only when there is a state to move to, so one with nothing left to undo does nothing
-  rather than clearing the line. The history is per surface and holds 64 states, and closing the
-  console clears the command line's, because the field it described is gone. See
+- Ctrl+Z and Ctrl+Shift+Z undo and redo the command line, on both console surfaces. Until now nothing the console showed could be taken back: a UI Toolkit text field has no history
+  of its own, and the package supplied none, so a typo in a long command was corrected one Backspace at a time - the worst case for the longest commands - on every supported
+  editor. Undo is one state per change rather than one per run of typing, and a state is any change to the field, including the ones the terminal made: a Tab completion, a line
+  recalled from history, a paste, and the clear a command run performs. So a completion you did not want is one Ctrl+Z away, and one more after a run brings the executed command
+  back onto the line without running it again. The key is consumed only when there is a state to move to, so one with nothing left to undo does nothing rather than clearing the
+  line. The history is per surface and holds 64 states, and closing the console clears the command line's, because the field it described is gone. See
   [Undo](Documentation~/undo.md).
-- `find <text>` searches the log view: it keeps only the lines holding the text, jumps to the first match, and reports how many lines matched out of how many the search ranged over. `find` with no argument steps to the next match and wraps at the end, F3 and Shift+F3 do the same from the keyboard, and `clear-filter` shows every line again. Until now a log too long to read had no way in but dragging a 10px scrollbar: with the default 256-entry buffer, finding one error meant paging through every line that was not it, and the log view is the only place a message ever appears. The count is the answer to "did my search hit", which a view showing some lines cannot give. A search that matched nothing reports that and stays set, so a typo does not silently put the whole log back on screen, and the line the search writes to say so is never one of its own results - a query that happened to be a word in that line (`search`, `log`, `clear-filter`) otherwise matched it, and the count grew with every repeat. A query is the arguments joined back into one string, so `find "two words"` searches for two words, and an empty or whitespace-only query is refused so it cannot drop the search already in place. The search runs over the text as the log shows it, so what is on screen is what can be found, and it ignores case. It does not find commands you ran: both console surfaces echo the typed line into the log as an `Input` entry before the handler runs, and a search that matched its own echo reported a hit for every query, including one that appears nowhere. `clear-console` does not drop the search - the view goes empty until the next `clear-filter` - and the query is recorded only as the `find` line in the log, so it is not recoverable once that line rotates out of the buffer.
-- `copy-last` and `copy-log [n]` put the console log on the system clipboard: the newest line, or the last N, joined with newlines. Until now nothing could be read out of the console at all - the log view is the only place a message, a command echo, or a failing value ever appears, and none of it could be selected, so a developer who saw `Command 'give' threw ArgumentException` in a device build had to retype it or screenshot the game window. Both surfaces echo the line you typed into the log before the command runs, so a copy skips the echoes at the newest end: `copy-last` returns the line you were reading, not the word `copy-last`. An echo further back stays, because a transcript of a session wants the commands in it as much as the output. A copied line is the line the log shows, so the stack trace is not included (`trace` is how you read one) and copying 256 lines does not carry 256 traces. A clipboard write is a request a platform can decline - tvOS has none, and a browser may refuse without a user gesture - so the write is read back and compared, and a copy that did not happen says so instead of silently doing nothing. An empty log, a log holding only commands, a count that is not a number, and a count below one are each reported rather than ignored.
-- The log scrolls with the keyboard while the command line holds focus. Page Up and Page Down page it by one viewport, and Ctrl+Home (Cmd+Home on macOS) and Ctrl+End reach its oldest and newest lines, so a developer looking for one error in a full 256-entry buffer no longer has to drag a 10px scrollbar. Home and End without the modifier stay with the command line, where they move the caret as a text field should, and every other key is untouched. Paging back detaches the tail exactly as scrolling back does, so new output no longer pulls the view to the end while it is being read; Ctrl+End is the way back to following. A page that reaches the end leaves the log following rather than parked a line short of an end that is still growing.
-- `CommandLog.CopyTo(LogItem[] destination)` copies the log's visible window, oldest first, into a caller-owned array and returns how many entries it wrote. Reading `CommandLog.Logs` counts and then indexes as two separate reads, so a log written from another thread between them can be missed or, if the buffer was cleared or shrunk, throw. One `CopyTo` call is one consistent view. A destination shorter than the window truncates to its oldest entries, so size it for the largest buffer the session configures.
-- Paste on both console surfaces: Ctrl+V (Cmd+V on macOS) pastes the system clipboard into the terminal's command line and the quick-launch bar's search input, replacing the current selection. A UI Toolkit text field has no clipboard of its own, so the terminal answers the key. A pasted block arrives as the arguments it reads as - every run of whitespace (newlines from a copied stack trace, tabs from a copied log line, the trailing newline of a copied command) collapses to the single space that separates arguments - and a run at the start of the field is dropped because it separates nothing. A quote still groups, so `set name "two words"` pastes as one argument, but the paste normalizes before the tokenizer sees the text, so quoted whitespace survives typing and not pasting. The clipboard is unavailable on tvOS, and a platform that will not answer without a user gesture may read empty; neither is an error, the key is left alone, and anything the platform does with it still happens. One limit: a control character that is not whitespace stays in the field, where a single line cannot show it, and reaches the argument as the character that was copied.
-- `TerminalUI.SetCursorBlinkPaused(bool)` freezes the caret blink schedule with the caret pinned visible (or restores normal blinking), so screenshots, video capture, and tests produce deterministic caret pixels regardless of when the frame lands.
-- Opt-in stack-trace capture modes: the new `TerminalStackTraceMode` setting on `TerminalSettings` (and the matching `TerminalUI` field) chooses which log entries record a caller stack trace — `All` (default; unchanged behavior), `ErrorsAndWarnings` (error, assert, exception, and warning entries only), or `Disabled` (never). Trace extraction dominates the cost of a logged line, so games that log frequently during gameplay can skip it for routine messages; skipped entries store no trace text and their writes become allocation-free. Entries forwarded from Unity's own log callback follow the same rule.
-- Theme authoring without hand-written USS: new `TerminalThemeAsset` (menu `Assets > Create > Wallstop Studios > DxCommandTerminal > Theme Asset`) exposes color pickers for the 19 custom properties every terminal theme sheet defines, and the Editor automatically writes (and keeps updating) a sibling `.uss` named after the asset — rename or recolor the asset and the sheet follows. The generated sheet drops into a `TerminalThemePack`'s Themes list like any hand-written sheet, so `set-theme`, the shipped packs, and runtime behavior are unchanged.
-- Shared `TerminalSettings` asset (menu `Assets > Create > Wallstop Studios > DxCommandTerminal > Terminal Settings`): assign one on `TerminalUI` or `CommandPaletteUI` and its values win over the component's serialized values when the component wakes — buffer sizes, input caret, caret blink rate, on-screen button text, hint mode, history dedup, built-in command toggles, ignored log types, disabled commands, Unity log forwarding, and the palette hotkey. An empty slot keeps existing scenes behaving exactly as before; window geometry, animation curves, ids, and persisted theme/font preferences stay per-component.
-- Opt-in assembly discovery: `CommandShell.IncludeDiscoveryAssembly(Assembly)` scans an assembly the default discovery filter would skip (a runtime-emitted assembly, or a precompiled DLL without a package reference) through the normal catalog, provider, and reflection stages. The returned handle removes the assembly again; registering before the first command request applies immediately, later registrations apply on the next registration cycle. The readiness log counts explicitly included assemblies.
-- `CommandArg.TryGetRaw` and builder `.RawParser(...)` pass uncleaned token contents to explicit parsers. Scene-object samples use this path so CR/LF names do not resolve to a different object; existing parsers keep their cleanup behavior.
-- Opt-in `SceneObjectArgumentAdapter<T>` resolves GameObject and Component arguments by name, with fresh completion choices and configurable duplicate-name handling. New sample commands show object lookup and component access.
+- `find <text>` searches the log view: it keeps only the lines holding the text, jumps to the first match, and reports how many lines matched out of how many the search ranged
+  over. `find` with no argument steps to the next match and wraps at the end, F3 and Shift+F3 do the same from the keyboard, and `clear-filter` shows every line again. Until now a
+  log too long to read had no way in but dragging a 10px scrollbar: with the default 256-entry buffer, finding one error meant paging through every line that was not it, and the
+  log view is the only place a message ever appears. The count is the answer to "did my search hit", which a view showing some lines cannot give. A search that matched nothing
+  reports that and stays set, so a typo does not silently put the whole log back on screen, and the line the search writes to say so is never one of its own results - a query that
+  happened to be a word in that line (`search`, `log`, `clear-filter`) otherwise matched it, and the count grew with every repeat. A query is the arguments joined back into one
+  string, so `find "two words"` searches for two words, and an empty or whitespace-only query is refused so it cannot drop the search already in place. The search runs over the
+  text as the log shows it, so what is on screen is what can be found, and it ignores case. It does not find commands you ran: both console surfaces echo the typed line into the
+  log as an `Input` entry before the handler runs, and a search that matched its own echo reported a hit for every query, including one that appears nowhere. `clear-console` does
+  not drop the search - the view goes empty until the next `clear-filter` - and the query is recorded only as the `find` line in the log, so it is not recoverable once that line
+  rotates out of the buffer.
+- `copy-last` and `copy-log [n]` put the console log on the system clipboard: the newest line, or the last N, joined with newlines. Until now nothing could be read out of the
+  console at all - the log view is the only place a message, a command echo, or a failing value ever appears, and none of it could be selected, so a developer who saw
+  `Command 'give' threw ArgumentException` in a device build had to retype it or screenshot the game window. Both surfaces echo the line you typed into the log before the command
+  runs, so a copy skips the echoes at the newest end: `copy-last` returns the line you were reading, not the word `copy-last`. An echo further back stays, because a transcript of a
+  session wants the commands in it as much as the output. A copied line is the line the log shows, so the stack trace is not included (`trace` is how you read one) and copying 256
+  lines does not carry 256 traces. A clipboard write is a request a platform can decline - tvOS has none, and a browser may refuse without a user gesture - so the write is read
+  back and compared, and a copy that did not happen says so instead of silently doing nothing. An empty log, a log holding only commands, a count that is not a number, and a count
+  below one are each reported rather than ignored.
+- The log scrolls with the keyboard while the command line holds focus. Page Up and Page Down page it by one viewport, and Ctrl+Home (Cmd+Home on macOS) and Ctrl+End reach its
+  oldest and newest lines, so a developer looking for one error in a full 256-entry buffer no longer has to drag a 10px scrollbar. Home and End without the modifier stay with the
+  command line, where they move the caret as a text field should, and every other key is untouched. Paging back detaches the tail exactly as scrolling back does, so new output no
+  longer pulls the view to the end while it is being read; Ctrl+End is the way back to following. A page that reaches the end leaves the log following rather than parked a line
+  short of an end that is still growing.
+- `CommandLog.CopyTo(LogItem[] destination)` copies the log's visible window, oldest first, into a caller-owned array and returns how many entries it wrote. Reading
+  `CommandLog.Logs` counts and then indexes as two separate reads, so a log written from another thread between them can be missed or, if the buffer was cleared or shrunk, throw.
+  One `CopyTo` call is one consistent view. A destination shorter than the window truncates to its oldest entries, so size it for the largest buffer the session configures.
+- Paste on both console surfaces: Ctrl+V (Cmd+V on macOS) pastes the system clipboard into the terminal's command line and the quick-launch bar's search input, replacing the
+  current selection. A UI Toolkit text field has no clipboard of its own, so the terminal answers the key. A pasted block arrives as the arguments it reads as - every run of
+  whitespace (newlines from a copied stack trace, tabs from a copied log line, the trailing newline of a copied command) collapses to the single space that separates arguments -
+  and a run at the start of the field is dropped because it separates nothing. A quote still groups, so `set name "two words"` pastes as one argument, but the paste normalizes
+  before the tokenizer sees the text, so quoted whitespace survives typing and not pasting. The clipboard is unavailable on tvOS, and a platform that will not answer without a user
+  gesture may read empty; neither is an error, the key is left alone, and anything the platform does with it still happens. One limit: a control character that is not whitespace
+  stays in the field, where a single line cannot show it, and reaches the argument as the character that was copied.
+- `TerminalUI.SetCursorBlinkPaused(bool)` freezes the caret blink schedule with the caret pinned visible (or restores normal blinking), so screenshots, video capture, and tests
+  produce deterministic caret pixels regardless of when the frame lands.
+- Opt-in stack-trace capture modes: the new `TerminalStackTraceMode` setting on `TerminalSettings` (and the matching `TerminalUI` field) chooses which log entries record a caller
+  stack trace — `All` (default; unchanged behavior), `ErrorsAndWarnings` (error, assert, exception, and warning entries only), or `Disabled` (never). Trace extraction dominates the
+  cost of a logged line, so games that log frequently during gameplay can skip it for routine messages; skipped entries store no trace text and their writes become allocation-free.
+  Entries forwarded from Unity's own log callback follow the same rule.
+- Theme authoring without hand-written USS: new `TerminalThemeAsset` (menu `Assets > Create > Wallstop Studios > DxCommandTerminal > Theme Asset`) exposes color pickers for the 19
+  custom properties every terminal theme sheet defines, and the Editor automatically writes (and keeps updating) a sibling `.uss` named after the asset — rename or recolor the
+  asset and the sheet follows. The generated sheet drops into a `TerminalThemePack`'s Themes list like any hand-written sheet, so `set-theme`, the shipped packs, and runtime
+  behavior are unchanged.
+- Shared `TerminalSettings` asset (menu `Assets > Create > Wallstop Studios > DxCommandTerminal > Terminal Settings`): assign one on `TerminalUI` or `CommandPaletteUI` and its
+  values win over the component's serialized values when the component wakes — buffer sizes, input caret, caret blink rate, on-screen button text, hint mode, history dedup,
+  built-in command toggles, ignored log types, disabled commands, Unity log forwarding, and the palette hotkey. An empty slot keeps existing scenes behaving exactly as before;
+  window geometry, animation curves, ids, and persisted theme/font preferences stay per-component.
+- Opt-in assembly discovery: `CommandShell.IncludeDiscoveryAssembly(Assembly)` scans an assembly the default discovery filter would skip (a runtime-emitted assembly, or a
+  precompiled DLL without a package reference) through the normal catalog, provider, and reflection stages. The returned handle removes the assembly again; registering before the
+  first command request applies immediately, later registrations apply on the next registration cycle. The readiness log counts explicitly included assemblies.
+- `CommandArg.TryGetRaw` and builder `.RawParser(...)` pass uncleaned token contents to explicit parsers. Scene-object samples use this path so CR/LF names do not resolve to a
+  different object; existing parsers keep their cleanup behavior.
+- Opt-in `SceneObjectArgumentAdapter<T>` resolves GameObject and Component arguments by name, with fresh completion choices and configurable duplicate-name handling. New sample
+  commands show object lookup and component access.
 - Dynamic builder choices accept an explicit text formatter, so custom parsers can complete identifiers without changing existing choice formatting.
-- Package samples: `Samples~/TerminalCommands` ships runnable typed-builder examples (importable through Package Manager) covering required/optional arguments with range and choice validation, bool/enum arguments, nested subcommands with a bare-invocation fallback, live dynamic completion against game state, the unbounded trailing argument, execution contexts with Edit Mode opt-in, enable/disable registration lifetime, object lookup with component access, component listing plus a scene-wide missing-script scan, and layer/tag filtering whose choices complete the project's defined layers and the tags in use in the live scene.
-- Runtime quick-launch bar: new `CommandPaletteUI` component opens a compact command search bar on a configurable hotkey (default Ctrl+Space, legacy and new Input System). A blank query shows only the bar; results appear as you type, ranked exact-first, then prefix, then fuzzy subsequence (ordinal ties). Up/Down selects a result and auto-loads its name into the input without re-filtering the list, Tab commits the selected name, Enter executes (closing the palette; failures keep it open with visible feedback), Escape closes and restores the previous focus. Once the input names a command and reaches an argument, the bar lists that command's completion candidates (static choices and dynamic providers, staged across arguments): Tab applies the selected candidate to the active token, quoting values that contain whitespace when the token is not already quoted, and clicking a row applies it without running. Opening one command surface closes the other, and `Opened`/`Closed` events let gameplay code pause its input maps. Styling is theme-token driven through the shared stylesheet chain (`BaseStyles.uss`, as the terminal uses): panel, input, rows, hover/selected states, feedback, and a slim rounded scrollbar follow every shipped `TerminalThemePack` theme automatically, and `var()` fallbacks keep the bar readable when no theme is assigned.
-- Typed command builder: `CommandBuilder.Create(name).Help(...).Arg<int>(...)...` registers commands into `CommandShell.AddCommand` with typed required/optional arguments, defaults, per-argument validation (numeric `Range`, custom `Validate`), and static/dynamic/bool/enum choices. Argument bounds, the usage hint (`heal <amount:int> [target:string]`), and staged completion derive from the same definition. Parsing reuses the existing `CommandArg` parsers (no new runtime reflection); user-input mistakes surface as controlled shell errors and never run the handler.
-- Builder subcommands: `CommandBuilder.Subcommand(name, configure)` routes one registered command through its first argument, each subcommand with its own typed arguments, validation, and completion (`inventory add pickaxe 3`, `inventory remove pickaxe` under one `inventory` command). Tab completion offers subcommand names first and the routed subcommand's choices beyond it; a bare invocation runs the parent handler when set, otherwise an error lists the available subcommands. Subcommands nest to any depth, and errors name the full routed path (`'inventory add': ...`).
-- Unbounded trailing arguments on builder commands: `CommandBuilder.Remaining<T>(name, configure)` collects every trailing token into one typed array (`arguments.Get<T[]>(name)`), parsing and validating each element with the argument's own rules. The usage hint marks the variadic argument (`say <message:string...>`), its choices complete every trailing stage, and `.Required()` on it demands at least one token.
-- `CommandConfigurationException`, thrown for command-authoring mistakes at definition time (missing handlers, duplicate names, required-after-optional ordering, unparseable argument types, defaults failing their own validation, subcommand conflicts). It derives from `InvalidOperationException`, so existing handlers keep working, and exposes the offending `CommandName` for programmatic handling.
-- Structured data on definition-time errors: `CommandConfigurationException` now also carries a `Failure` classification (`CommandConfigurationFailure`), so callers branch on the failure kind instead of parsing messages, plus the `ArgumentName`, `SubcommandName`, and `ArgumentType` the failure concerns. All builder and argument-spec misconfigurations report the same structured identity, including spec-level errors made inside an argument's configure callback or a subcommand's configure callback (the routed path is composed onto the command name, matching build-time diagnostics); idiomatic null-argument contracts keep the standard `ArgumentNullException`.
-- `CommandArgumentTypeMismatchException`, thrown by `CommandArguments.Get<T>` when the stored parsed value is not readable as the requested type. It derives from `InvalidOperationException`, so existing catchers keep working, and exposes `ArgumentName`, `StoredType`, and `RequestedType` for programmatic handling; remaining arguments store an array of their element type, so reading the element type itself reports `StoredType` as that array type.
-- Disposable command registrations: `CommandShell.AddCommand(CommandBuilder, out CommandRegistrationHandle)` returns a handle that removes exactly its own registration on `Dispose` — never a later replacement with the same name — for instance-owned commands that register on enable and dispose on disable.
-- The source generator emits `[UnityEngine.Scripting.Preserve]` on every generated command catalog - on the catalog type and its `Collect` entry method - so the linker keeps the catalog and everything reachable from it, and commands registered with `[RegisterCommand]` stay available through managed code stripping (IL2CPP/WebGL) at every Managed Stripping Level. Private handlers in partial types are bound through an emitted partial companion of the declaring type instead of reflection, so they are inside that reachable graph as well. Commands bound only through reflection — handlers in private, non-partial types and precompiled DLLs without a catalog — needed `[Preserve]`, a `link.xml`, or manual registration at `Medium` or higher; the player compatibility bake (under Fixed) now covers them automatically.
-- Deferred first-use command registration: `CommandShell.InitializeAutoRegisteredCommands` accepts a `deferRegistration` flag. The terminal applies its ignored/default command configuration when enabled and defers the discovery scan and delegate materialization to the first command request, the first read of `CommandShell.Commands`, or an explicit `CommandShell.EnsureAutoCommandsRegistered` call. `CommandShell.AutoCommandsRegistered` reports whether registration has been applied. Clearing auto commands cancels a pending registration. Note that `CommandShell.AutoRegisteredCommands` reflects only applied registration, so it stays empty until first use for deferred shells.
-- Source-generated command registration: the package now ships a Roslyn source generator that emits an internal `CommandCatalog` into every assembly declaring `[RegisterCommand]` methods. `CommandShell` binds those catalogs without walking assembly types; assemblies without a catalog (precompiled DLLs, analyzers unavailable) fall back to the previous reflection discovery with identical results. The public `CommandShell.RegisteredCommands` surface is unchanged.
-- Context-aware execution: new `CommandExecutionContexts`, `CommandExecutionContext`, `CommandDefinition`, `CommandHandler`, `BorrowedCommandArguments` types, registered through `CommandShell.AddCommand(CommandDefinition)`. Definitions default to `CommandExecutionContextSets.Gameplay`; Edit Mode execution is opt-in. `[RegisterCommand]` gains a `Contexts` property (default `CommandExecutionContextSets.All`, so existing attributed commands keep their availability). `CommandDefinition.MaxArgCount` is `int?` (`null` = unbounded).
-- Argument completion providers: `CommandShell.TryComplete` builds a `CommandCompletionContext` for the command under the caret and fills a caller-owned buffer. Custom replacement ranges use the validated `CommandCompletionReplacement` struct; provider exceptions are contained; results dedupe ordinally. Commands without a provider keep the previous history-based completion.
-- `TerminalUI` Tab now cycles provider token completions: only the active token is replaced, trailing text is preserved, space- or quote-containing insertions are quoted, and the caret lands after the insertion.
+- Package samples: `Samples~/TerminalCommands` ships runnable typed-builder examples (importable through Package Manager) covering required/optional arguments with range and choice
+  validation, bool/enum arguments, nested subcommands with a bare-invocation fallback, live dynamic completion against game state, the unbounded trailing argument, execution
+  contexts with Edit Mode opt-in, enable/disable registration lifetime, object lookup with component access, component listing plus a scene-wide missing-script scan, and layer/tag
+  filtering whose choices complete the project's defined layers and the tags in use in the live scene.
+- Runtime quick-launch bar: new `CommandPaletteUI` component opens a compact command search bar on a configurable hotkey (default Ctrl+Space, legacy and new Input System). A blank
+  query shows only the bar; results appear as you type, ranked exact-first, then prefix, then fuzzy subsequence (ordinal ties). Up/Down selects a result and auto-loads its name
+  into the input without re-filtering the list, Tab commits the selected name, Enter executes (closing the palette; failures keep it open with visible feedback), Escape closes and
+  restores the previous focus. Once the input names a command and reaches an argument, the bar lists that command's completion candidates (static choices and dynamic providers,
+  staged across arguments): Tab applies the selected candidate to the active token, quoting values that contain whitespace when the token is not already quoted, and clicking a row
+  applies it without running. Opening one command surface closes the other, and `Opened`/`Closed` events let gameplay code pause its input maps. Styling is theme-token driven
+  through the shared stylesheet chain (`BaseStyles.uss`, as the terminal uses): panel, input, rows, hover/selected states, feedback, and a slim rounded scrollbar follow every
+  shipped `TerminalThemePack` theme automatically, and `var()` fallbacks keep the bar readable when no theme is assigned.
+- Typed command builder: `CommandBuilder.Create(name).Help(...).Arg<int>(...)...` registers commands into `CommandShell.AddCommand` with typed required/optional arguments,
+  defaults, per-argument validation (numeric `Range`, custom `Validate`), and static/dynamic/bool/enum choices. Argument bounds, the usage hint
+  (`heal <amount:int> [target:string]`), and staged completion derive from the same definition. Parsing reuses the existing `CommandArg` parsers (no new runtime reflection);
+  user-input mistakes surface as controlled shell errors and never run the handler.
+- Builder subcommands: `CommandBuilder.Subcommand(name, configure)` routes one registered command through its first argument, each subcommand with its own typed arguments,
+  validation, and completion (`inventory add pickaxe 3`, `inventory remove pickaxe` under one `inventory` command). Tab completion offers subcommand names first and the routed
+  subcommand's choices beyond it; a bare invocation runs the parent handler when set, otherwise an error lists the available subcommands. Subcommands nest to any depth, and errors
+  name the full routed path (`'inventory add': ...`).
+- Unbounded trailing arguments on builder commands: `CommandBuilder.Remaining<T>(name, configure)` collects every trailing token into one typed array (`arguments.Get<T[]>(name)`),
+  parsing and validating each element with the argument's own rules. The usage hint marks the variadic argument (`say <message:string...>`), its choices complete every trailing
+  stage, and `.Required()` on it demands at least one token.
+- `CommandConfigurationException`, thrown for command-authoring mistakes at definition time (missing handlers, duplicate names, required-after-optional ordering, unparseable
+  argument types, defaults failing their own validation, subcommand conflicts). It derives from `InvalidOperationException`, so existing handlers keep working, and exposes the
+  offending `CommandName` for programmatic handling.
+- Structured data on definition-time errors: `CommandConfigurationException` now also carries a `Failure` classification (`CommandConfigurationFailure`), so callers branch on the
+  failure kind instead of parsing messages, plus the `ArgumentName`, `SubcommandName`, and `ArgumentType` the failure concerns. All builder and argument-spec misconfigurations
+  report the same structured identity, including spec-level errors made inside an argument's configure callback or a subcommand's configure callback (the routed path is composed
+  onto the command name, matching build-time diagnostics); idiomatic null-argument contracts keep the standard `ArgumentNullException`.
+- `CommandArgumentTypeMismatchException`, thrown by `CommandArguments.Get<T>` when the stored parsed value is not readable as the requested type. It derives from
+  `InvalidOperationException`, so existing catchers keep working, and exposes `ArgumentName`, `StoredType`, and `RequestedType` for programmatic handling; remaining arguments store
+  an array of their element type, so reading the element type itself reports `StoredType` as that array type.
+- Disposable command registrations: `CommandShell.AddCommand(CommandBuilder, out CommandRegistrationHandle)` returns a handle that removes exactly its own registration on `Dispose`
+  — never a later replacement with the same name — for instance-owned commands that register on enable and dispose on disable.
+- The source generator emits `[UnityEngine.Scripting.Preserve]` on every generated command catalog - on the catalog type and its `Collect` entry method - so the linker keeps the
+  catalog and everything reachable from it, and commands registered with `[RegisterCommand]` stay available through managed code stripping (IL2CPP/WebGL) at every Managed Stripping
+  Level. Private handlers in partial types are bound through an emitted partial companion of the declaring type instead of reflection, so they are inside that reachable graph as
+  well. Commands bound only through reflection — handlers in private, non-partial types and precompiled DLLs without a catalog — needed `[Preserve]`, a `link.xml`, or manual
+  registration at `Medium` or higher; the player compatibility bake (under Fixed) now covers them automatically.
+- Deferred first-use command registration: `CommandShell.InitializeAutoRegisteredCommands` accepts a `deferRegistration` flag. The terminal applies its ignored/default command
+  configuration when enabled and defers the discovery scan and delegate materialization to the first command request, the first read of `CommandShell.Commands`, or an explicit
+  `CommandShell.EnsureAutoCommandsRegistered` call. `CommandShell.AutoCommandsRegistered` reports whether registration has been applied. Clearing auto commands cancels a pending
+  registration. Note that `CommandShell.AutoRegisteredCommands` reflects only applied registration, so it stays empty until first use for deferred shells.
+- Source-generated command registration: the package now ships a Roslyn source generator that emits an internal `CommandCatalog` into every assembly declaring `[RegisterCommand]`
+  methods. `CommandShell` binds those catalogs without walking assembly types; assemblies without a catalog (precompiled DLLs, analyzers unavailable) fall back to the previous
+  reflection discovery with identical results. The public `CommandShell.RegisteredCommands` surface is unchanged.
+- Context-aware execution: new `CommandExecutionContexts`, `CommandExecutionContext`, `CommandDefinition`, `CommandHandler`, `BorrowedCommandArguments` types, registered through
+  `CommandShell.AddCommand(CommandDefinition)`. Definitions default to `CommandExecutionContextSets.Gameplay`; Edit Mode execution is opt-in. `[RegisterCommand]` gains a `Contexts`
+  property (default `CommandExecutionContextSets.All`, so existing attributed commands keep their availability). `CommandDefinition.MaxArgCount` is `int?` (`null` = unbounded).
+- Argument completion providers: `CommandShell.TryComplete` builds a `CommandCompletionContext` for the command under the caret and fills a caller-owned buffer. Custom replacement
+  ranges use the validated `CommandCompletionReplacement` struct; provider exceptions are contained; results dedupe ordinally. Commands without a provider keep the previous
+  history-based completion.
+- `TerminalUI` Tab now cycles provider token completions: only the active token is replaced, trailing text is preserved, space- or quote-containing insertions are quoted, and the
+  caret lands after the insertion.
 - New shared `CommandTokenizer` for execution and completion, parity-pinned against `TryEatArgument` by a data-driven corpus.
 - `CommandDefinition` commands with `AddToHistory = false` dispatch without rebuilding the history line.
-- `CommandArgParsers`, a public static class exposing the culture-invariant parsers behind `CommandArg.TryGet`, one method per built-in type (`CommandArgParsers.Float`, `.Int`, `.DateTime`, ...), callable directly from command handlers and test code.
-- Built-in argument parsing for `Bounds`, `BoundsInt`, `RectOffset`, `Plane`, and `Ray` (Unity) plus `System.Numerics.Complex`. Each type parses positional components separated by a single console delimiter — bounds `center x,y,z size x,y,z` (so `0,0,0,1,1,1` is a unit bounds at the origin), boundsInt `position x,y,z size x,y,z`, rectOffset in `RectOffset(left, right, top, bottom)` order, plane `normal x,y,z distance`, ray `origin x,y,z direction x,y,z`, and complex `real, imaginary` — and the Unity `ToString()` forms of bounds, boundsInt, plane, and ray (their `Center:`/`Extents:`/`Position:`/`Size:`/`normal:`/`distance:`/`Origin:`/`Dir:` labels are stripped; bounds extents are doubled to size). The composite parsers (`Vector2` through `RectInt`, `Color`, `Quaternion`) are now public methods on `CommandArgParsers`, so handlers and tests can call them directly.
+- `CommandArgParsers`, a public static class exposing the culture-invariant parsers behind `CommandArg.TryGet`, one method per built-in type (`CommandArgParsers.Float`, `.Int`,
+  `.DateTime`, ...), callable directly from command handlers and test code.
+- Built-in argument parsing for `Bounds`, `BoundsInt`, `RectOffset`, `Plane`, and `Ray` (Unity) plus `System.Numerics.Complex`. Each type parses positional components separated by
+  a single console delimiter — bounds `center x,y,z size x,y,z` (so `0,0,0,1,1,1` is a unit bounds at the origin), boundsInt `position x,y,z size x,y,z`, rectOffset in
+  `RectOffset(left, right, top, bottom)` order, plane `normal x,y,z distance`, ray `origin x,y,z direction x,y,z`, and complex `real, imaginary` — and the Unity `ToString()` forms
+  of bounds, boundsInt, plane, and ray (their `Center:`/`Extents:`/`Position:`/`Size:`/`normal:`/`distance:`/`Origin:`/`Dir:` labels are stripped; bounds extents are doubled to
+  size). The composite parsers (`Vector2` through `RectInt`, `Color`, `Quaternion`) are now public methods on `CommandArgParsers`, so handlers and tests can call them directly.
 
 ### Changed
 
-- `trace` no longer prints a command line. It read a fixed entry back, which is the console's echo of `trace` itself - so it showed the message before it correctly only when the command above `trace` had said something, and printed that command's echo when it had not. It now reads the newest entry that is not a command echo, which also fixes `trace` dispatched programmatically (`shell.RunCommand("trace")`), where the old fixed offset skipped the newest message.
-- `time` no longer drops argument quoting. It rejoined its arguments with single spaces and re-tokenized, so a quoted argument arrived as several: `time set-variable greet "two words"` was rejected with `set-variable requires exactly 2 arguments` before the timed command ran at all. It now dispatches the parsed arguments it already has, so `time` can time anything the console can run. `log` and `log-terminal` are unchanged - they want the flattened form, so `log "a  b"` still prints `a  b`. A `$variable` is now substituted once rather than twice, so a stored value that is itself a variable reference is no longer expanded again.
-- The shipped documentation now matches the package. The README pointed at a directory that no longer exists, named a component and two inspector options that are not the ones it meant, and listed four argument types as "planned" that have shipped. `doc.md` documented four APIs whose real signatures take required arguments or do not exist at all. The completion guide promised layer and tag completion from an adapter whose constructor throws for those types. The themes and fonts guide was reachable only through the documentation sidebar.
-- Every character is typeable in a command line and in a palette search bar. A keyboard hotkey bound to a character key is now left to the field being typed into: with the defaults `` ` `` and `` #` ``, pressing the console key while the terminal is open types a backtick or a tilde instead of closing the terminal (and the character used to be dropped from the line as well), and typing the console key in a palette search no longer closes the palette and opens the terminal behind it. Bindings that press no character are unchanged and keep working while you type: navigation and editing keys, function keys, modifiers, lock and media keys, mouse or joystick buttons, and any `ctrl+` chord. Escape still closes an open terminal; a `closeHotkey` bound to a character cannot. PlayerInput bindings are unaffected and still fire while a field has focus, because the keyboard controller reads the binding string rather than the key an action pressed.
-- First command readiness is faster in projects with many loaded assemblies: the discovery scan no longer re-reads every loaded assembly's metadata on each registration cycle — that per-assembly check is immutable, so it is now cached for the assembly's lifetime. Discovered commands, their order, and the discovery filters' decisions are unchanged.
-- Terminal logging spends less time per logged line: the stack-trace cleanup that attributes a direct `Terminal.Log` call to its caller now runs as a single pass over the trace instead of splitting it into lines and rejoining them. The recorded stack trace text is unchanged.
-- Terminal completion sweeps allocate nothing per pass in the common case: the shell's command names are snapshotted in sorted order and rebuilt only when commands register, get removed, or get cleared, instead of re-enumerating the shell's sorted command table and re-lowercasing cased command names on every sweep. Suggested completions, their order, and casing rules are unchanged (the shell's table already stored suggestions for cased commands in lowercase), and sweeps measure measurably faster at large command counts.
-- First command readiness scales better with large `[RegisterCommand]` counts: reflection-discovered commands (precompiled DLLs, assemblies without a generated catalog, and Editor assemblies served through TypeCache) now bind their handler delegate on that command's first invocation instead of binding every declared command upfront, so the first command request no longer pays one delegate bind per declared command. Generic method definitions now register as rejected commands with the standard invalid-signature diagnostics instead of logging a console error at readiness; other degenerate-but-bindable signatures keep registering and running exactly as before. A reflection-discovered command whose delegate cannot bind on the running platform (previously a console error at readiness) now registers but reports the contained bind error at its first invocation.
-- Scene-object commands resolve and complete faster on large scenes: name resolution finds the lowest entity id among matching names directly instead of sorting the full query, and choice ordering sorts pre-extracted entity ids instead of comparing through a delegate on every comparison. Results and their deterministic order are unchanged.
-- `CommandExecutionContexts.None` and `CommandConfigurationFailure.None` are obsolete source names; typed `default` still represents an empty mask or an unclassified failure. Existing numeric values are unchanged.
-- Multiple `TerminalUI` components now follow defined ownership rules. The newest enabled component owns the shared session configuration, and `TerminalUI.Instance` tracks the newest enabled component. Disabling or destroying the owner hands both to a remaining enabled terminal: the shared log buffer, history, and command configuration revert to the remaining terminal's settings, and built-in UI commands (`list-themes`, `set-theme`, and similar) keep working after the owner is destroyed instead of reporting "No Terminal UI found" while a live terminal remains.
-- Each Play Mode session now starts with a fresh terminal session when domain reload is disabled: commands registered by gameplay code during a previous play session no longer survive into the next one, matching the default domain-reload behavior. Stale log-callback subscriptions from an abnormal exit are also detached once per session.
-- The terminal no longer builds its visual tree on enable: a `TerminalUI` that starts closed (the default) constructs its theme, font, log list, and input on the first open instead. Components that never open pay no UI-construction cost, and re-enabling a terminal rebuilds on the next open rather than on every enable. Opening still closes any command palette on the same document exactly as before.
-- A fully closed terminal stops its per-frame UI work: log sync, completion hints, state buttons, style writes, and focus/caret passes no longer run every frame while the terminal is closed with no pending work. Output logged while the terminal is closed syncs on the next open; the shared-document root-height handback after a command palette closes is preserved.
-- Shipped font payload is curated down to the fonts the asset packs actually use: the Regular weight of every shipped font family remains, plus the Medium weight for the families that ship one, while italics and every other weight (bold, black, thin, light, variable fonts, and similar) are removed (354 unused font assets). Package install size drops from about 70 MB of fonts to about 12 MB (npm tarball: 39.6 MB to 6.7 MB packed, 75.8 MB to 14.4 MB unpacked). All shipped `TerminalFontPack` and `TerminalThemePack` assets keep their full command sets; terminal default font selection, `SetFont`, `SetRandomFont`, and `list-fonts` behavior are unchanged. Packs that referenced a removed weight (for example a custom `TerminalFontPack` entry pointing at `FiraCode-Bold`) show a missing entry in the inspector and need that slot reassigned.
-- Argument bounds use `int?` instead of the `-1 = unbounded` sentinel: `CommandInfo.maxArgCount` is now `int?` and `CommandShell.AddCommand` takes `int? maxArgs` (default `null`). Legacy callers passing `-1` keep compiling and mean unbounded. `[RegisterCommandAttribute].MaxArgCount` stays `int` (attribute properties cannot be nullable) and `CommandInfo` normalizes negatives to `null`.
-- `TerminalUI` no longer runs command discovery on its enable frame. Commands register at the first command request (typically the first command run or completion query). The terminal re-applies its command configuration on every refresh, so auto commands cleared through `CommandShell.ClearAutoRegisteredCommands` return on the next first use after a terminal enable, instead of the previous enable-time registration.
-- User commands now keep a name registered manually before first use: the colliding auto command is skipped with a console warning instead of queueing a duplicate `already defined` error for the first command request. This also applies at enable time when a user command shadows a built-in command.
-- Registering a static command whose signature is valid but not bindable (for example a generic method definition, a non-void handler, or a method inside an open generic type) now logs a contained error instead of aborting shell initialization, matching the catalog path's handling of rejected signatures.
+- `trace` no longer prints a command line. It read a fixed entry back, which is the console's echo of `trace` itself - so it showed the message before it correctly only when the
+  command above `trace` had said something, and printed that command's echo when it had not. It now reads the newest entry that is not a command echo, which also fixes `trace`
+  dispatched programmatically (`shell.RunCommand("trace")`), where the old fixed offset skipped the newest message.
+- `time` no longer drops argument quoting. It rejoined its arguments with single spaces and re-tokenized, so a quoted argument arrived as several:
+  `time set-variable greet "two words"` was rejected with `set-variable requires exactly 2 arguments` before the timed command ran at all. It now dispatches the parsed arguments it
+  already has, so `time` can time anything the console can run. `log` and `log-terminal` are unchanged - they want the flattened form, so `log "a  b"` still prints `a  b`. A
+  `$variable` is now substituted once rather than twice, so a stored value that is itself a variable reference is no longer expanded again.
+- The shipped documentation now matches the package. The README pointed at a directory that no longer exists, named a component and two inspector options that are not the ones it
+  meant, and listed four argument types as "planned" that have shipped. `doc.md` documented four APIs whose real signatures take required arguments or do not exist at all. The
+  completion guide promised layer and tag completion from an adapter whose constructor throws for those types. The themes and fonts guide was reachable only through the
+  documentation sidebar.
+- Every character is typeable in a command line and in a palette search bar. A keyboard hotkey bound to a character key is now left to the field being typed into: with the defaults
+  `` ` `` and `` #` ``, pressing the console key while the terminal is open types a backtick or a tilde instead of closing the terminal (and the character used to be dropped from
+  the line as well), and typing the console key in a palette search no longer closes the palette and opens the terminal behind it. Bindings that press no character are unchanged
+  and keep working while you type: navigation and editing keys, function keys, modifiers, lock and media keys, mouse or joystick buttons, and any `ctrl+` chord. Escape still closes
+  an open terminal; a `closeHotkey` bound to a character cannot. PlayerInput bindings are unaffected and still fire while a field has focus, because the keyboard controller reads
+  the binding string rather than the key an action pressed.
+- First command readiness is faster in projects with many loaded assemblies: the discovery scan no longer re-reads every loaded assembly's metadata on each registration cycle —
+  that per-assembly check is immutable, so it is now cached for the assembly's lifetime. Discovered commands, their order, and the discovery filters' decisions are unchanged.
+- Terminal logging spends less time per logged line: the stack-trace cleanup that attributes a direct `Terminal.Log` call to its caller now runs as a single pass over the trace
+  instead of splitting it into lines and rejoining them. The recorded stack trace text is unchanged.
+- Terminal completion sweeps allocate nothing per pass in the common case: the shell's command names are snapshotted in sorted order and rebuilt only when commands register, get
+  removed, or get cleared, instead of re-enumerating the shell's sorted command table and re-lowercasing cased command names on every sweep. Suggested completions, their order, and
+  casing rules are unchanged (the shell's table already stored suggestions for cased commands in lowercase), and sweeps measure measurably faster at large command counts.
+- First command readiness scales better with large `[RegisterCommand]` counts: reflection-discovered commands (precompiled DLLs, assemblies without a generated catalog, and Editor
+  assemblies served through TypeCache) now bind their handler delegate on that command's first invocation instead of binding every declared command upfront, so the first command
+  request no longer pays one delegate bind per declared command. Generic method definitions now register as rejected commands with the standard invalid-signature diagnostics
+  instead of logging a console error at readiness; other degenerate-but-bindable signatures keep registering and running exactly as before. A reflection-discovered command whose
+  delegate cannot bind on the running platform (previously a console error at readiness) now registers but reports the contained bind error at its first invocation.
+- Scene-object commands resolve and complete faster on large scenes: name resolution finds the lowest entity id among matching names directly instead of sorting the full query, and
+  choice ordering sorts pre-extracted entity ids instead of comparing through a delegate on every comparison. Results and their deterministic order are unchanged.
+- `CommandExecutionContexts.None` and `CommandConfigurationFailure.None` are obsolete source names; typed `default` still represents an empty mask or an unclassified failure.
+  Existing numeric values are unchanged.
+- Multiple `TerminalUI` components now follow defined ownership rules. The newest enabled component owns the shared session configuration, and `TerminalUI.Instance` tracks the
+  newest enabled component. Disabling or destroying the owner hands both to a remaining enabled terminal: the shared log buffer, history, and command configuration revert to the
+  remaining terminal's settings, and built-in UI commands (`list-themes`, `set-theme`, and similar) keep working after the owner is destroyed instead of reporting "No Terminal UI
+  found" while a live terminal remains.
+- Each Play Mode session now starts with a fresh terminal session when domain reload is disabled: commands registered by gameplay code during a previous play session no longer
+  survive into the next one, matching the default domain-reload behavior. Stale log-callback subscriptions from an abnormal exit are also detached once per session.
+- The terminal no longer builds its visual tree on enable: a `TerminalUI` that starts closed (the default) constructs its theme, font, log list, and input on the first open
+  instead. Components that never open pay no UI-construction cost, and re-enabling a terminal rebuilds on the next open rather than on every enable. Opening still closes any
+  command palette on the same document exactly as before.
+- A fully closed terminal stops its per-frame UI work: log sync, completion hints, state buttons, style writes, and focus/caret passes no longer run every frame while the terminal
+  is closed with no pending work. Output logged while the terminal is closed syncs on the next open; the shared-document root-height handback after a command palette closes is
+  preserved.
+- Shipped font payload is curated down to the fonts the asset packs actually use: the Regular weight of every shipped font family remains, plus the Medium weight for the families
+  that ship one, while italics and every other weight (bold, black, thin, light, variable fonts, and similar) are removed (354 unused font assets). Package install size drops from
+  about 70 MB of fonts to about 12 MB (npm tarball: 39.6 MB to 6.7 MB packed, 75.8 MB to 14.4 MB unpacked). All shipped `TerminalFontPack` and `TerminalThemePack` assets keep their
+  full command sets; terminal default font selection, `SetFont`, `SetRandomFont`, and `list-fonts` behavior are unchanged. Packs that referenced a removed weight (for example a
+  custom `TerminalFontPack` entry pointing at `FiraCode-Bold`) show a missing entry in the inspector and need that slot reassigned.
+- Argument bounds use `int?` instead of the `-1 = unbounded` sentinel: `CommandInfo.maxArgCount` is now `int?` and `CommandShell.AddCommand` takes `int? maxArgs` (default `null`).
+  Legacy callers passing `-1` keep compiling and mean unbounded. `[RegisterCommandAttribute].MaxArgCount` stays `int` (attribute properties cannot be nullable) and `CommandInfo`
+  normalizes negatives to `null`.
+- `TerminalUI` no longer runs command discovery on its enable frame. Commands register at the first command request (typically the first command run or completion query). The
+  terminal re-applies its command configuration on every refresh, so auto commands cleared through `CommandShell.ClearAutoRegisteredCommands` return on the next first use after a
+  terminal enable, instead of the previous enable-time registration.
+- User commands now keep a name registered manually before first use: the colliding auto command is skipped with a console warning instead of queueing a duplicate `already defined`
+  error for the first command request. This also applies at enable time when a user command shadows a built-in command.
+- Registering a static command whose signature is valid but not bindable (for example a generic method definition, a non-void handler, or a method inside an open generic type) now
+  logs a contained error instead of aborting shell initialization, matching the catalog path's handling of rejected signatures.
 - An assembly holding commands inside private nested or file-local classes gets no generated catalog; the shell falls back to reflection for that assembly so no command is lost.
 - Nested command dispatches use per-depth parse scopes; legacy handlers still receive a fresh owned array per invocation, never pooled.
-- The package compiles with warnings treated as errors: each package assembly ships a per-assembly compiler response file (`-warnaserror`), so a compiler warning inside these assemblies fails compilation for consumers too. A per-assembly response file replaces any project-level `csc.rsp` for these assemblies only.
-- The terminal no longer logs on its normal default-font and default-theme selection (previously every enable logged a `No font assigned` or `Persisted theme not found` warning). Warnings remain for a font pack containing no fonts, a stale persisted theme or font name, and misconfiguration; the missing-font fallback to an OS font is now a warning instead of an error. Theme persistence progress messages only appear in the Editor and in development builds.
-- The npm tarball no longer ships `Media/` (README screenshots and the demo GIF). The README references them through absolute repository URLs so rendering on GitHub and npm is unchanged. This cuts 7.5 MB from the tarball consumers download.
-- Command argument parsing is culture-invariant: numeric, `DateTime`, `DateTimeOffset`, `TimeSpan`, and `BigInteger` arguments parse with `CultureInfo.InvariantCulture` regardless of the device locale, so `1.5` means one and a half on every machine. Locale-formatted input (for example `1,5` on a comma-decimal locale, or locale-formatted dates) is no longer accepted for these types.
+- The package compiles with warnings treated as errors: each package assembly ships a per-assembly compiler response file (`-warnaserror`), so a compiler warning inside these
+  assemblies fails compilation for consumers too. A per-assembly response file replaces any project-level `csc.rsp` for these assemblies only.
+- The terminal no longer logs on its normal default-font and default-theme selection (previously every enable logged a `No font assigned` or `Persisted theme not found` warning).
+  Warnings remain for a font pack containing no fonts, a stale persisted theme or font name, and misconfiguration; the missing-font fallback to an OS font is now a warning instead
+  of an error. Theme persistence progress messages only appear in the Editor and in development builds.
+- The npm tarball no longer ships `Media/` (README screenshots and the demo GIF). The README references them through absolute repository URLs so rendering on GitHub and npm is
+  unchanged. This cuts 7.5 MB from the tarball consumers download.
+- Command argument parsing is culture-invariant: numeric, `DateTime`, `DateTimeOffset`, `TimeSpan`, and `BigInteger` arguments parse with `CultureInfo.InvariantCulture` regardless
+  of the device locale, so `1.5` means one and a half on every machine. Locale-formatted input (for example `1,5` on a comma-decimal locale, or locale-formatted dates) is no longer
+  accepted for these types.
 - `RegisterCommandAttribute.NormalizeName` validates its method argument and throws `ArgumentNullException` for null instead of failing later at registration.
-- In the Editor, commands declared in assemblies without a generated catalog (precompiled DLLs, and source assemblies whose commands the generator cannot emit, such as private nested or file-local classes) are now discovered through Unity's TypeCache index instead of walking the assembly's types and methods, with the same registered commands as before. Generated catalogs stay the primary registration path; the shell's auto-registration log now also counts provider-served assemblies.
+- In the Editor, commands declared in assemblies without a generated catalog (precompiled DLLs, and source assemblies whose commands the generator cannot emit, such as private
+  nested or file-local classes) are now discovered through Unity's TypeCache index instead of walking the assembly's types and methods, with the same registered commands as before.
+  Generated catalogs stay the primary registration path; the shell's auto-registration log now also counts provider-served assemblies.
 
 ### Fixed
 
-- A background thread can no longer break the console's log. Unity's threaded log callback, and any `Terminal.Log` from a worker thread, wrote the shared log buffer while the terminal read it every frame, and nothing guarded either side. The buffer's write position, its entry count, and its backing list are separate read-modify-writes, so a background `Debug.Log` could leave the reader computing an index from a position and a length that no longer agreed, and the console threw an out-of-range exception on that frame - with nothing in the message pointing at threads. Two threads reducing a stack trace at once could also splice one thread's frames onto the other's line, or erase them outright. The buffer now guards its own state, the write counter is atomic, and the trace reduction has its own lock. The terminal reads one consistent window per frame instead of a count and separate per-line reads, and the text is still escaped before the buffer is touched, so a log write costs what it did: 0.40 ms median with stack-trace capture and 0.00 ms without it, no allocation in either (300 samples in the Unity Editor on Mono; a player build is not measured). One limit: reading `CommandLog.Logs` still counts and then indexes as two separate reads, so clearing or shrinking the buffer between them can still throw. The new public `CommandLog.CopyTo(LogItem[])` is the one-call consistent read, and is what the terminal uses.
-- Resizing a log or history buffer to the size it already had no longer breaks it. The write position was set one slot past the end of a full buffer, so the next entry grew the buffer past its capacity and every later read ran off the end of it - the same out-of-range exception, reachable with no thread at all through the public `Resize` (`Terminal.Buffer.Resize(Terminal.Buffer.Capacity)`). The position is now always a slot inside the buffer. Lowering a buffer's size still keeps the oldest entries it was showing rather than the newest, as it always has.
-- The log view follows its own output again. The console asked for a scroll only when the log view gained or lost a child, which misses two cases a Play Mode session hits in seconds. A burst of output that arrives in one frame asks for the scroll before the panel has laid the new content out, so the request lands on a stale (or, in a freshly opened console, empty) extent, scrolls to that instead, and is never made again. And a full log buffer keeps its count, so every line after the buffer filled rotated the ring without adding or removing a child: a line taller than the one it replaced - a wrapped message, a different font size, a resized window - grew the content with nothing for the trigger to see, and the view rested short of the newest line. New output now scrolls into view whenever the view is at its own end, a scroll away from the end detaches so the view holds the line the developer is reading, scrolling back to the end follows again, and running a command from the terminal shows its output whether the view was parked or not. "At the end" is the scroller's own value against its extent, so the mouse wheel, the scrollbar, and a scripted scroll all read the same. One limit: a command run from the quick-launch bar writes to the same log, so a parked view stays parked - the bar is its own surface.
-- The package's own inspectors now escape the names they print. The custom inspectors for `TerminalUI`, `TerminalThemePack`, and `TerminalFontPack` built their tooltips and dropdown labels from theme names, font names, command names, and asset paths with no escaping, so a name carrying a bidirectional override, a zero-width joiner, an invisible tag character, or a control character read one way there and another way in the value it selected. Those tooltips and popup labels render the same visible escapes the console shows. The value an index selects is still the raw name, so `SetTheme`, `SetFont`, the theme and font dropdowns, and the disabled-command list are unchanged. One limit, the same one the log has: a name holding the literal text `Admin\u202Eexe` prints the same as a name holding a real override.
-- A command that throws now says so in the console. A handler exception used to escape the terminal's input path, so in a device or standalone build it produced no in-game output at all and only Unity's own logger saw it. It is now contained and reported like every other command failure - one line in the log and in the quick-launch bar's error bar, naming the command, the exception type, and its message - while `Debug.LogException` keeps the stack trace in the Editor console and the player log. Later commands still run, and `RunCommand` still answers `true`, because the command ran and the failure is on the error queue.
-- The quick-launch bar no longer closes over its own error. A command that ran and then reported a controlled error through the shell's error queue - a builder validation failure, a rejected value, a thrown handler - returned success to the bar, which closed and took the error text with it, so the developer saw nothing at all. The bar now keeps the error visible, keeps the rejected line editable, and reports the submission as failed. A command that printed output still keeps the bar open, unchanged.
-- History recall now parks the caret at the end of the recalled line. Pressing Up or Down in a line the developer had already typed left the caret where it was, so the next character landed in the middle of the command they had just recalled. A recalled line is a new value, so the caret moves with it; applying a suggestion from the bar does the same. As with every other caret write, this needs Unity 2022.1 or newer: on 2021.3 the engine places the caret after the value lands.
-- The suggestion bar no longer shows the previous keystroke's candidates. In `HintDisplayMode.Always` the bar re-rendered on the number of rows and the selected index only, so typing a character that changed the candidates without changing how many there are - `zapo` narrowed to `zapt` - left the earlier candidates on screen, and clicking a row applied the candidate the row was built with instead of the one it showed. The bar now compares what its rows carry against the candidates the current input resolves to on every refresh, so it always shows and applies the current set.
-- The suggestion bar and the quick-launch result rows now escape what they render. Log text is escaped where it enters the terminal, and both row lists printed a completion candidate - a history line, a `GameObject` name, a command description - verbatim, so the same text read one way in the log and another in the bar. Both now render a bidirectional override, a zero-width joiner, an invisible tag character, or a control character as the same visible `\uXXXX` escape the log shows, and the row still applies and runs the raw text: the escape is for the reader, and the command is what you chose.
-- A caret inside a character no longer splits it. A text field moves its caret one UTF-16 code unit at a time, so a caret could sit between the two halves of an emoji, an accented letter, a joined emoji sequence, or a flag. The terminal then cut the argument at that offset: a completion provider was handed half a character, which no candidate can start with, so it filtered everything out and Tab did nothing at all without a word; and a paste landing on such a caret left half a surrogate in the field, which is not text a command can run. Every caret the console reads is now snapped out to the start of the character it is in, and every caret it computes is snapped where it is computed, so a provider is handed whole text, the replacement range still covers the whole character, a paste lands beside it, and an argument that holds an emoji no longer ends in half of one. Two limits, unchanged in kind: the snap moves the caret to the front of the character rather than past it, the jamo sequence Unicode composes into a Hangul syllable is the one character it does not join, and a paste leaves its caret at the end of the pasted text - a clipboard cut mid-emoji would otherwise snap the caret in front of the character just pasted.
-- A whitespace character, not only a space, now ends an unquoted argument. A pasted block, a log line, or a message from another system that reached the console as `give\nitem\t42` ran as one argument holding two newlines and a tab; it now runs as the three arguments it reads as. This closes the class for every caller, not just paste: execution, `CommandShell.TryEatArgument`, completion, and the paste handler all read one shared definition of a token boundary, and a non-breaking space separates as well. Quoting is unchanged, so whitespace inside quotes is still one argument, and a completion candidate containing any whitespace is now quoted rather than only one containing a space. One limit, unchanged and intended: a `$variable` is substituted after the split, so a value you set with `set-variable` or `CommandShell.SetVariable` is substituted whole and keeps the whitespace it holds.
-- Logged text is now escaped where it enters the terminal. `Terminal.Log`, the Unity log callback, and any direct `CommandLog` write now render bidirectional overrides, zero-width joiners, invisible tag characters, line and paragraph separators, and control characters as visible `\uXXXX` escapes instead of passing them through, so a `GameObject` named `"Admin\u202Eexe"` no longer reads one way and copies out as another. Newlines, tabs, and carriage returns are kept (a CRLF pair folds to one line break, so multi-frame stack traces stay clean on Windows), and readable text - paths, regexes, JSON, emoji - is left exactly as written. A quick-launch error bar that quotes the token you typed gets the same treatment, and both quick-launch panels now bound long text with a visible `(+N more chars)`, because neither has a scroller of its own. Sanitizing adds no allocation to a log write that allocated none before. Nothing is truncated: the log list keeps what you logged. One limit: a name holding the literal text `Admin\u202Eexe` prints the same as a name holding a real override, so the escape is readable but not machine-decodable.
-- A `PlayerInput` action bound to a character key no longer runs its message while a console field has focus. Every routed message (`ToggleSmall`, `ToggleFull`, `Close`, `EnterCommand`, `HandlePrevious`, `HandleNext`, `CompleteCommand`, `ReverseCompleteCommand`) now leaves its character to the field, matching the polled-hotkey path, so a `ToggleSmall` action on `` ` `` cannot close the console mid-sentence. The console reads the control that performed the action, so a gamepad button, a mouse button, a `ctrl+` chord, a composite driven by any of those, and the same character key with no field focused all work as before. Bind a message to a `Button` action: a `Value` action also sends a message on release, so a toggle on a key that types no character opens the console and closes it again.
-- Published npm and Unity package artifacts no longer include the repository's test assemblies. Installing the Test Framework no longer breaks headless `-nographics` compilation. The test suites remain available in the source checkout.
-- Unity 2021.3 compiles again: `TerminalUI` and `CommandPaletteUI` wrote the input field's `cursorIndex`/`selectIndex` caret properties, which only gained setters in Unity 2022.1, so the package failed to compile on the supported minimum editor. Caret placement (after a Tab completion, and the palette's panel re-clamp re-assert) is unchanged on Unity 2022.1+; on 2021.3 the engine places the caret after the input lands.
-- Unity 2021.3 and 2022.3 compile again: `SceneObjectArgumentAdapter<T>`'s sort-key field and the theme asset postprocessor's asset-identity check used Unity 6000.4+ entity-id APIs outside version checks, so the package failed to compile on the supported minimum editors. The guarded code paths are unchanged on Unity 6000.4+.
-- A `CommandPaletteUI` without any `TerminalUI` in the scene now bootstraps the shared session on enable, so the palette lists and runs commands and `Terminal.Log` works with no terminal present. Previously a palette-only setup showed no commands and logged nothing ("No command shell is available."). The bootstrap uses the assigned `TerminalSettings` asset, or the default capacities without one, and only when no other component has already created the session — an existing session's buffers, filters, and registrations are never reconfigured by a palette. Command discovery stays deferred to first use.
-- Attributed commands no longer vanish in player builds with managed stripping (`Medium` or higher, IL2CPP/WebGL). A new editor build hook feeds the stripping stage an additional `link.xml` (written under `Temp`, never under `Assets/`) that preserves exactly the handlers reached only through reflection: private or protected handlers in non-partial types, handlers whose shape the generated catalog cannot bind directly (non-void returns, generic methods, invalid signatures), and handlers in precompiled assemblies without a generated catalog. Handlers the generated code binds as direct delegates or names through a partial companion are already rooted and are not preserved; `EditorOnly` handlers never register in players and are skipped. If the manifest cannot be written, the build proceeds with a warning and today's behavior.
-- Swapping the `TerminalFontPack` on a live `TerminalUI` now re-resolves and reapplies the font immediately. Previously the pack change only took effect after a rebuild (`set-font`, a persisted font assignment, or a disable/re-enable), so the old pack's font kept rendering. Clearing the pack on a live terminal logs an error and keeps the last applied font, matching a rebuild.
-- The first time a terminal opens, it now renders the resolved `TerminalFontPack` font. Previously the first UI build never wrote the font definition to the fresh document root (the resolved font applied only after a rebuild, `set-font`, a persisted font assignment, or a palette open), so a fresh terminal drew Unity's default OS font even with a font pack assigned. The quick-launch bar now also re-resolves the font each time it opens, so a bar opened before the terminal's first build picks the pack font up too.
-- Reopening a terminal whose component was disabled and re-enabled no longer logs a spurious `Cannot set null font.` error. The rebuild now reapplies the resolved font to the fresh visual tree instead of dropping the font definition silently.
-- Terminal and quick-launch completions preserve literal `$` names, close open quotes, and switch conflicting quote delimiters. Values that cannot form one literal token are not applied. Manually typed variables keep their existing behavior.
-- Attributed commands with multidimensional `CommandArg` arrays no longer cause generated-code compilation errors. They remain rejected commands, matching reflection-based registration.
-- Quick-launch bar caret parking under panel resets: the caret for an applied completion or auto-loaded command name could land away from its target when the text field's own deferred caret reset ran after the first parking pass, leaving the caret mid-token (visible with quoted insertions). The queued caret is now retried until it holds across two panel passes, a user edit cancels any still-queued write, and the caret is not written to positions the field does not hold yet.
-- Dangling font-pack entries no longer throw: a `TerminalFontPack` list containing a destroyed font reference (for example after upgrading and a referenced weight no longer ships) crashed `list-fonts`, `set-font`, `SetRandomFont`, default font selection, and theme persistence with a `NullReferenceException`. Those paths now skip the invalid entry, keeping font selection, `list-fonts`, and persistence working until the slot is reassigned in the inspector.
-- Quick-launch bar output visibility: commands that print output (`list-fonts`, `list-themes`, `help`, ...) now clear the executed command from the bar, display the output inside the palette, and keep it open instead of closing silently on success; silent successes still close per `closeOnSuccessfulExecution`, Enter with the cleared bar does not re-run, and typing a new query clears the shown output.
-- Quick-launch bar shared-surface layout: with a `TerminalUI` and `CommandPaletteUI` on the same UIDocument, the terminal's per-frame window-height clamp no longer tweens the palette to the top of the screen while it is open; the terminal yields the shared document root while the palette owns it and reclaims it when the palette closes.
-- Quick-launch bar input focus: auto-loading a command name into the input now reliably parks the caret at the end (the text field's own deferred caret reset raced the write and could leave the caret mid-name or visibly select the loaded text), and clicking the results scrollbar no longer steals panel focus from the search input.
+- A background thread can no longer break the console's log. Unity's threaded log callback, and any `Terminal.Log` from a worker thread, wrote the shared log buffer while the
+  terminal read it every frame, and nothing guarded either side. The buffer's write position, its entry count, and its backing list are separate read-modify-writes, so a background
+  `Debug.Log` could leave the reader computing an index from a position and a length that no longer agreed, and the console threw an out-of-range exception on that frame - with
+  nothing in the message pointing at threads. Two threads reducing a stack trace at once could also splice one thread's frames onto the other's line, or erase them outright. The
+  buffer now guards its own state, the write counter is atomic, and the trace reduction has its own lock. The terminal reads one consistent window per frame instead of a count and
+  separate per-line reads, and the text is still escaped before the buffer is touched, so a log write costs what it did: 0.40 ms median with stack-trace capture and 0.00 ms without
+  it, no allocation in either (300 samples in the Unity Editor on Mono; a player build is not measured). One limit: reading `CommandLog.Logs` still counts and then indexes as two
+  separate reads, so clearing or shrinking the buffer between them can still throw. The new public `CommandLog.CopyTo(LogItem[])` is the one-call consistent read, and is what the
+  terminal uses.
+- Resizing a log or history buffer to the size it already had no longer breaks it. The write position was set one slot past the end of a full buffer, so the next entry grew the
+  buffer past its capacity and every later read ran off the end of it - the same out-of-range exception, reachable with no thread at all through the public `Resize`
+  (`Terminal.Buffer.Resize(Terminal.Buffer.Capacity)`). The position is now always a slot inside the buffer. Lowering a buffer's size still keeps the oldest entries it was showing
+  rather than the newest, as it always has.
+- The log view follows its own output again. The console asked for a scroll only when the log view gained or lost a child, which misses two cases a Play Mode session hits in
+  seconds. A burst of output that arrives in one frame asks for the scroll before the panel has laid the new content out, so the request lands on a stale (or, in a freshly opened
+  console, empty) extent, scrolls to that instead, and is never made again. And a full log buffer keeps its count, so every line after the buffer filled rotated the ring without
+  adding or removing a child: a line taller than the one it replaced - a wrapped message, a different font size, a resized window - grew the content with nothing for the trigger to
+  see, and the view rested short of the newest line. New output now scrolls into view whenever the view is at its own end, a scroll away from the end detaches so the view holds the
+  line the developer is reading, scrolling back to the end follows again, and running a command from the terminal shows its output whether the view was parked or not. "At the end"
+  is the scroller's own value against its extent, so the mouse wheel, the scrollbar, and a scripted scroll all read the same. One limit: a command run from the quick-launch bar
+  writes to the same log, so a parked view stays parked - the bar is its own surface.
+- The package's own inspectors now escape the names they print. The custom inspectors for `TerminalUI`, `TerminalThemePack`, and `TerminalFontPack` built their tooltips and
+  dropdown labels from theme names, font names, command names, and asset paths with no escaping, so a name carrying a bidirectional override, a zero-width joiner, an invisible tag
+  character, or a control character read one way there and another way in the value it selected. Those tooltips and popup labels render the same visible escapes the console shows.
+  The value an index selects is still the raw name, so `SetTheme`, `SetFont`, the theme and font dropdowns, and the disabled-command list are unchanged. One limit, the same one the
+  log has: a name holding the literal text `Admin\u202Eexe` prints the same as a name holding a real override.
+- A command that throws now says so in the console. A handler exception used to escape the terminal's input path, so in a device or standalone build it produced no in-game output
+  at all and only Unity's own logger saw it. It is now contained and reported like every other command failure - one line in the log and in the quick-launch bar's error bar, naming
+  the command, the exception type, and its message - while `Debug.LogException` keeps the stack trace in the Editor console and the player log. Later commands still run, and
+  `RunCommand` still answers `true`, because the command ran and the failure is on the error queue.
+- The quick-launch bar no longer closes over its own error. A command that ran and then reported a controlled error through the shell's error queue - a builder validation failure,
+  a rejected value, a thrown handler - returned success to the bar, which closed and took the error text with it, so the developer saw nothing at all. The bar now keeps the error
+  visible, keeps the rejected line editable, and reports the submission as failed. A command that printed output still keeps the bar open, unchanged.
+- History recall now parks the caret at the end of the recalled line. Pressing Up or Down in a line the developer had already typed left the caret where it was, so the next
+  character landed in the middle of the command they had just recalled. A recalled line is a new value, so the caret moves with it; applying a suggestion from the bar does the
+  same. As with every other caret write, this needs Unity 2022.1 or newer: on 2021.3 the engine places the caret after the value lands.
+- The suggestion bar no longer shows the previous keystroke's candidates. In `HintDisplayMode.Always` the bar re-rendered on the number of rows and the selected index only, so
+  typing a character that changed the candidates without changing how many there are - `zapo` narrowed to `zapt` - left the earlier candidates on screen, and clicking a row applied
+  the candidate the row was built with instead of the one it showed. The bar now compares what its rows carry against the candidates the current input resolves to on every refresh,
+  so it always shows and applies the current set.
+- The suggestion bar and the quick-launch result rows now escape what they render. Log text is escaped where it enters the terminal, and both row lists printed a completion
+  candidate - a history line, a `GameObject` name, a command description - verbatim, so the same text read one way in the log and another in the bar. Both now render a
+  bidirectional override, a zero-width joiner, an invisible tag character, or a control character as the same visible `\uXXXX` escape the log shows, and the row still applies and
+  runs the raw text: the escape is for the reader, and the command is what you chose.
+- A caret inside a character no longer splits it. A text field moves its caret one UTF-16 code unit at a time, so a caret could sit between the two halves of an emoji, an accented
+  letter, a joined emoji sequence, or a flag. The terminal then cut the argument at that offset: a completion provider was handed half a character, which no candidate can start
+  with, so it filtered everything out and Tab did nothing at all without a word; and a paste landing on such a caret left half a surrogate in the field, which is not text a command
+  can run. Every caret the console reads is now snapped out to the start of the character it is in, and every caret it computes is snapped where it is computed, so a provider is
+  handed whole text, the replacement range still covers the whole character, a paste lands beside it, and an argument that holds an emoji no longer ends in half of one. Two limits,
+  unchanged in kind: the snap moves the caret to the front of the character rather than past it, the jamo sequence Unicode composes into a Hangul syllable is the one character it
+  does not join, and a paste leaves its caret at the end of the pasted text - a clipboard cut mid-emoji would otherwise snap the caret in front of the character just pasted.
+- A whitespace character, not only a space, now ends an unquoted argument. A pasted block, a log line, or a message from another system that reached the console as `give\nitem\t42`
+  ran as one argument holding two newlines and a tab; it now runs as the three arguments it reads as. This closes the class for every caller, not just paste: execution,
+  `CommandShell.TryEatArgument`, completion, and the paste handler all read one shared definition of a token boundary, and a non-breaking space separates as well. Quoting is
+  unchanged, so whitespace inside quotes is still one argument, and a completion candidate containing any whitespace is now quoted rather than only one containing a space. One
+  limit, unchanged and intended: a `$variable` is substituted after the split, so a value you set with `set-variable` or `CommandShell.SetVariable` is substituted whole and keeps
+  the whitespace it holds.
+- Logged text is now escaped where it enters the terminal. `Terminal.Log`, the Unity log callback, and any direct `CommandLog` write now render bidirectional overrides, zero-width
+  joiners, invisible tag characters, line and paragraph separators, and control characters as visible `\uXXXX` escapes instead of passing them through, so a `GameObject` named
+  `"Admin\u202Eexe"` no longer reads one way and copies out as another. Newlines, tabs, and carriage returns are kept (a CRLF pair folds to one line break, so multi-frame stack
+  traces stay clean on Windows), and readable text - paths, regexes, JSON, emoji - is left exactly as written. A quick-launch error bar that quotes the token you typed gets the
+  same treatment, and both quick-launch panels now bound long text with a visible `(+N more chars)`, because neither has a scroller of its own. Sanitizing adds no allocation to a
+  log write that allocated none before. Nothing is truncated: the log list keeps what you logged. One limit: a name holding the literal text `Admin\u202Eexe` prints the same as a
+  name holding a real override, so the escape is readable but not machine-decodable.
+- A `PlayerInput` action bound to a character key no longer runs its message while a console field has focus. Every routed message (`ToggleSmall`, `ToggleFull`, `Close`,
+  `EnterCommand`, `HandlePrevious`, `HandleNext`, `CompleteCommand`, `ReverseCompleteCommand`) now leaves its character to the field, matching the polled-hotkey path, so a
+  `ToggleSmall` action on `` ` `` cannot close the console mid-sentence. The console reads the control that performed the action, so a gamepad button, a mouse button, a `ctrl+`
+  chord, a composite driven by any of those, and the same character key with no field focused all work as before. Bind a message to a `Button` action: a `Value` action also sends a
+  message on release, so a toggle on a key that types no character opens the console and closes it again.
+- Published npm and Unity package artifacts no longer include the repository's test assemblies. Installing the Test Framework no longer breaks headless `-nographics` compilation.
+  The test suites remain available in the source checkout.
+- Unity 2021.3 compiles again: `TerminalUI` and `CommandPaletteUI` wrote the input field's `cursorIndex`/`selectIndex` caret properties, which only gained setters in Unity 2022.1,
+  so the package failed to compile on the supported minimum editor. Caret placement (after a Tab completion, and the palette's panel re-clamp re-assert) is unchanged on Unity
+  2022.1+; on 2021.3 the engine places the caret after the input lands.
+- Unity 2021.3 and 2022.3 compile again: `SceneObjectArgumentAdapter<T>`'s sort-key field and the theme asset postprocessor's asset-identity check used Unity 6000.4+ entity-id APIs
+  outside version checks, so the package failed to compile on the supported minimum editors. The guarded code paths are unchanged on Unity 6000.4+.
+- A `CommandPaletteUI` without any `TerminalUI` in the scene now bootstraps the shared session on enable, so the palette lists and runs commands and `Terminal.Log` works with no
+  terminal present. Previously a palette-only setup showed no commands and logged nothing ("No command shell is available."). The bootstrap uses the assigned `TerminalSettings`
+  asset, or the default capacities without one, and only when no other component has already created the session — an existing session's buffers, filters, and registrations are
+  never reconfigured by a palette. Command discovery stays deferred to first use.
+- Attributed commands no longer vanish in player builds with managed stripping (`Medium` or higher, IL2CPP/WebGL). A new editor build hook feeds the stripping stage an additional
+  `link.xml` (written under `Temp`, never under `Assets/`) that preserves exactly the handlers reached only through reflection: private or protected handlers in non-partial types,
+  handlers whose shape the generated catalog cannot bind directly (non-void returns, generic methods, invalid signatures), and handlers in precompiled assemblies without a
+  generated catalog. Handlers the generated code binds as direct delegates or names through a partial companion are already rooted and are not preserved; `EditorOnly` handlers
+  never register in players and are skipped. If the manifest cannot be written, the build proceeds with a warning and today's behavior.
+- Swapping the `TerminalFontPack` on a live `TerminalUI` now re-resolves and reapplies the font immediately. Previously the pack change only took effect after a rebuild
+  (`set-font`, a persisted font assignment, or a disable/re-enable), so the old pack's font kept rendering. Clearing the pack on a live terminal logs an error and keeps the last
+  applied font, matching a rebuild.
+- The first time a terminal opens, it now renders the resolved `TerminalFontPack` font. Previously the first UI build never wrote the font definition to the fresh document root
+  (the resolved font applied only after a rebuild, `set-font`, a persisted font assignment, or a palette open), so a fresh terminal drew Unity's default OS font even with a font
+  pack assigned. The quick-launch bar now also re-resolves the font each time it opens, so a bar opened before the terminal's first build picks the pack font up too.
+- Reopening a terminal whose component was disabled and re-enabled no longer logs a spurious `Cannot set null font.` error. The rebuild now reapplies the resolved font to the fresh
+  visual tree instead of dropping the font definition silently.
+- Terminal and quick-launch completions preserve literal `$` names, close open quotes, and switch conflicting quote delimiters. Values that cannot form one literal token are not
+  applied. Manually typed variables keep their existing behavior.
+- Attributed commands with multidimensional `CommandArg` arrays no longer cause generated-code compilation errors. They remain rejected commands, matching reflection-based
+  registration.
+- Quick-launch bar caret parking under panel resets: the caret for an applied completion or auto-loaded command name could land away from its target when the text field's own
+  deferred caret reset ran after the first parking pass, leaving the caret mid-token (visible with quoted insertions). The queued caret is now retried until it holds across two
+  panel passes, a user edit cancels any still-queued write, and the caret is not written to positions the field does not hold yet.
+- Dangling font-pack entries no longer throw: a `TerminalFontPack` list containing a destroyed font reference (for example after upgrading and a referenced weight no longer ships)
+  crashed `list-fonts`, `set-font`, `SetRandomFont`, default font selection, and theme persistence with a `NullReferenceException`. Those paths now skip the invalid entry, keeping
+  font selection, `list-fonts`, and persistence working until the slot is reassigned in the inspector.
+- Quick-launch bar output visibility: commands that print output (`list-fonts`, `list-themes`, `help`, ...) now clear the executed command from the bar, display the output inside
+  the palette, and keep it open instead of closing silently on success; silent successes still close per `closeOnSuccessfulExecution`, Enter with the cleared bar does not re-run,
+  and typing a new query clears the shown output.
+- Quick-launch bar shared-surface layout: with a `TerminalUI` and `CommandPaletteUI` on the same UIDocument, the terminal's per-frame window-height clamp no longer tweens the
+  palette to the top of the screen while it is open; the terminal yields the shared document root while the palette owns it and reclaims it when the palette closes.
+- Quick-launch bar input focus: auto-loading a command name into the input now reliably parks the caret at the end (the text field's own deferred caret reset raced the write and
+  could leave the caret mid-name or visibly select the loaded text), and clicking the results scrollbar no longer steals panel focus from the search input.
 - `TerminalUI.SetState` no longer throws a NullReferenceException when the terminal component is disabled before its UI setup completed.
 
-
-
-- Dynamic choice providers on subcommand arguments now receive a subcommand-relative completion context: `ActiveArgumentIndex` counts from the subcommand's first argument and `PrecedingArguments` contains exactly the subcommand's own arguments, matching what the same provider sees on a top-level command. Previously router tokens leaked into both.
-- `CommandShell.ClearCustomCommands` no longer leaves the auto-registered tracking state stale: it now also cancels a pending deferred registration and reports `AutoRegisteredCommands`/`ClearAutoRegisteredCommands` counts that match the actually registered commands. The returned count still covers every registered command (auto and custom), and `ClearAllCommands` returns the same total.
+- Dynamic choice providers on subcommand arguments now receive a subcommand-relative completion context: `ActiveArgumentIndex` counts from the subcommand's first argument and
+  `PrecedingArguments` contains exactly the subcommand's own arguments, matching what the same provider sees on a top-level command. Previously router tokens leaked into both.
+- `CommandShell.ClearCustomCommands` no longer leaves the auto-registered tracking state stale: it now also cancels a pending deferred registration and reports
+  `AutoRegisteredCommands`/`ClearAutoRegisteredCommands` counts that match the actually registered commands. The returned count still covers every registered command (auto and
+  custom), and `ClearAllCommands` returns the same total.
 - The input caret no longer jumps to line end when a scheduled focus pass re-fires; accepted completions place the caret after the insertion.
 - Scene transitions that detach the text input from its panel no longer throw a per-frame `NullReferenceException`.
 - `TerminalUI` guards `using UnityEditor;` with `#if UNITY_EDITOR`; the unguarded directive fails player-target compilation on Unity 2021.3/2022 (Unity 6 tolerates it).
@@ -187,7 +382,8 @@ the issue reference at the end. Details live in the docs and the linked issue.
 
 ### Added
 
-- Per-command history opt-out: set `AddToHistory = false` on `RegisterCommandAttribute` to prevent a command from being recorded in history. Also available as the `addToHistory` parameter and field on `CommandInfo` and the `addToHistory` parameter on `CommandShell.AddCommand` (all defaulting to `true`).
+- Per-command history opt-out: set `AddToHistory = false` on `RegisterCommandAttribute` to prevent a command from being recorded in history. Also available as the `addToHistory`
+  parameter and field on `CommandInfo` and the `addToHistory` parameter on `CommandShell.AddCommand` (all defaulting to `true`).
 - `ReadOnlyHashSet<T>` and `ReadOnlyHashSetExtensions` (with `ToReadOnlyHashSet` extension method) in `WallstopStudios.DxCommandTerminal.DataStructures`.
 
 ### Changed
@@ -197,8 +393,10 @@ the issue reference at the end. Details live in the docs and the linked issue.
 
 ### Removed
 
-- Bundled `System.Collections.Immutable.dll` has been removed; projects that already reference `System.Collections.Immutable` (e.g. via NuGet or another package) will no longer experience DLL conflicts.
+- Bundled `System.Collections.Immutable.dll` has been removed; projects that already reference `System.Collections.Immutable` (e.g. via NuGet or another package) will no longer
+  experience DLL conflicts.
 
 ### Fixed
 
-- Setting `ignoreDefaultCommands` to `true` on `TerminalUI` had no effect — built-in commands were still registered. Root cause: the `RegisterCommandAttribute` internal constructor was not propagating the `isDefault` parameter to the `Default` property.
+- Setting `ignoreDefaultCommands` to `true` on `TerminalUI` had no effect — built-in commands were still registered. Root cause: the `RegisterCommandAttribute` internal constructor
+  was not propagating the `isDefault` parameter to the `Default` property.
