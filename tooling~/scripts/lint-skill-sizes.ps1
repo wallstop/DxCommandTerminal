@@ -3,25 +3,17 @@
     Validates LLM file sizes against the repo's line limits.
 
 .DESCRIPTION
-    Checks all authored files under .llm/ (context.md, skills/**, references,
-    code samples - any .md/.cs/.sh text file) against size thresholds:
-    - >300 lines: ERROR (MUST split/reduce - hard limit)
-    - 270-300 lines: CRITICAL WARNING (always shown, near limit)
-    - <=269 lines: OK
+    Delegates to the typed-python implementation (tooling~/scripts/
+    lint_skill_sizes.py, issue #220 stage 1): the implementation and its
+    tests live in python under uv; this file stays only so the entry
+    points keep their names and shape (pre-commit hook, the LLM
+    Instructions Lint workflow, and this path in the skills docs). The
+    runner prefers uv (pinned interpreter via tooling~/pyproject.toml)
+    and falls back to any system python 3.9+ - the script is standard
+    library only.
 
-    The generated .llm/skills/index.md is exempt: it is machine-written by
-    tooling~/scripts/generate-skills-index.ps1, not an authored file.
-
-    Skill/context messages use [skill-sizes] / [context-size] prefixes.
-
-.PARAMETER VerboseOutput
-    Emit per-file OK status.
-
-.PARAMETER FailOnCritical
-    Exit non-zero when a file is in the 270-300 critical band.
-
-.PARAMETER RepoRoot
-    Repository root. Defaults to the parent of this script's directory.
+    Thresholds: >300 lines ERROR, 270-300 CRITICAL warning, <=269 OK.
+    The generated .llm/skills/index.md is exempt.
 
 .EXAMPLE
     pwsh -NoProfile -File tooling~/scripts/lint-skill-sizes.ps1
@@ -36,102 +28,28 @@ Param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-function Write-ErrorMsg($msg, $prefix = "[skill-sizes]") {
-    Write-Host "$prefix ERROR: $msg" -ForegroundColor Red
+$scriptsRoot = $PSScriptRoot
+$toolingRoot = (Get-Item $scriptsRoot).Parent.FullName
+$pythonScript = Join-Path $scriptsRoot 'lint_skill_sizes.py'
+
+$pythonArgs = @()
+if ($VerboseOutput) { $pythonArgs += '--verbose-output' }
+if ($FailOnCritical) { $pythonArgs += '--fail-on-critical' }
+if ($RepoRoot) { $pythonArgs += @('--repo-root', $RepoRoot) }
+
+$runnerCommand = $null
+$runnerPrefix = @()
+foreach ($candidate in @(@('uv', 'run', '--project', $toolingRoot, 'python'), @('python'), @('python3'))) {
+    if (Get-Command $candidate[0] -ErrorAction SilentlyContinue) {
+        $runnerCommand = $candidate[0]
+        if ($candidate.Count -gt 1) { $runnerPrefix = $candidate[1..($candidate.Count - 1)] }
+        break
+    }
+}
+if ($null -eq $runnerCommand) {
+    Write-Host "[skill-sizes] ERROR: no runner found (need uv, python, or python3 on PATH)" -ForegroundColor Red
+    exit 1
 }
 
-function Write-CriticalWarningMsg($msg, $prefix = "[skill-sizes]") {
-    Write-Host "$prefix CRITICAL: $msg" -ForegroundColor Magenta
-}
-
-function Write-SuccessMsg($msg, $prefix = "[skill-sizes]") {
-    Write-Host "$prefix OK: $msg" -ForegroundColor Green
-}
-
-function Invoke-SkillSizesLint {
-    param(
-        [switch]$VerboseOutput,
-        [switch]$FailOnCritical,
-        [string]$RepoRoot
-    )
-
-    if (-not $RepoRoot) {
-        $RepoRoot = (Get-Item $PSScriptRoot).Parent.Parent.FullName
-    }
-
-    $llmDir = Join-Path -Path $RepoRoot -ChildPath '.llm'
-    $maxLines = 300
-    $criticalLines = 270
-    $exitCode = 0
-
-    if (-not (Test-Path -LiteralPath $llmDir)) {
-        Write-ErrorMsg "LLM directory not found at: $llmDir"
-        return 1
-    }
-
-    # Authored files: everything under .llm/ EXCEPT the machine-written index.
-    $authoredFiles = @(
-        Get-ChildItem -Path $llmDir -Recurse -File |
-            Where-Object { $_.FullName -ne (Join-Path $llmDir 'skills/index.md') } |
-            Sort-Object FullName
-    )
-
-    $errorCount = 0
-    $criticalCount = 0
-    $okCount = 0
-
-    foreach ($file in $authoredFiles) {
-        $lineCount = @([System.IO.File]::ReadAllLines($file.FullName)).Count
-        $relativePath = $file.FullName.Substring($llmDir.Length + 1).Replace('\', '/')
-
-        if ($lineCount -gt $maxLines) {
-            Write-ErrorMsg "${relativePath}: $lineCount lines (max: $maxLines) - MUST split/reduce"
-            $exitCode = 1
-            $errorCount++
-        }
-        elseif ($lineCount -ge $criticalLines) {
-            $remaining = $maxLines - $lineCount
-            if ($remaining -eq 0) {
-                Write-CriticalWarningMsg "${relativePath}: $lineCount lines - AT the $maxLines line limit! Must split/reduce"
-            }
-            else {
-                Write-CriticalWarningMsg "${relativePath}: $lineCount lines - only $remaining lines from the $maxLines limit! Consider splitting now"
-            }
-            $criticalCount++
-            if ($FailOnCritical) {
-                $exitCode = 1
-            }
-        }
-        else {
-            if ($VerboseOutput) {
-                Write-SuccessMsg "${relativePath}: $lineCount lines"
-            }
-            $okCount++
-        }
-    }
-
-    # Summary
-    Write-Host ""
-    Write-Host ("=" * 60)
-    Write-Host "[skill-sizes] Summary: $($authoredFiles.Count) authored files checked (limits: error >$maxLines, critical >=$criticalLines)"
-    if ($VerboseOutput -or $criticalCount -gt 0 -or $errorCount -gt 0) {
-        Write-Host "[skill-sizes]   OK: $okCount, Critical: $criticalCount, Errors: $errorCount"
-    }
-
-    if ($exitCode -eq 0) {
-        Write-Host "All files within size limits" -ForegroundColor Green
-    }
-    else {
-        Write-Host "Some files exceed size limits - see errors above" -ForegroundColor Red
-    }
-    Write-Host ("=" * 60)
-
-    return $exitCode
-}
-
-# Main guard: dot-sourcing defines the functions without running (the test
-# suite drives the linter in-process; spawning a pwsh per case costs
-# ~0.5-1s and dominated the lint trio).
-if ($MyInvocation.InvocationName -ne '.') {
-    exit (Invoke-SkillSizesLint -VerboseOutput:$VerboseOutput -FailOnCritical:$FailOnCritical -RepoRoot:$RepoRoot)
-}
+& $runnerCommand @runnerPrefix $pythonScript @pythonArgs
+exit $LASTEXITCODE
