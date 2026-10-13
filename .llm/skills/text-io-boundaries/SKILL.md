@@ -159,6 +159,26 @@ entries.
 
 For every writer in the family, ask: does this value carry a character the format reserves, and does anything print it back without asking again?
 
+## A scanner that consumes literals must re-scan their holes
+
+When a source linter masks string literals to skip their contents, an interpolated string's holes (`$"...{expr}..."`) are NOT literal contents - they are executable code, and
+masking them hides whatever the banned vocabulary looks like inside a formatting expression. Bugbot caught it on the blocking-waits linter (PR #254: `$"{task.Wait()}"` scanned
+clean while `task.Wait()` was a real main-thread block); the sweep found the same masking in the LINQ linter, whose vocabulary (a qualified `System.Linq.Enumerable` call inside a
+string-building interpolation) is precisely the shape that shows up in holes. The literal scanner (`consumeLiteral`) already reports each hole's `{start,end}` - copy hole contents
+through verbatim, mask only the literal segments around them. Sweep the copiers of a shared scanner whenever one copy gains a fix: the comparison-direction linter had holes right
+all along; `lint-multiline-comments` skips holes harmlessly (its rule counts comment-only lines, and a line carrying a literal is never comment-only).
+
+Rules:
+
+- Every linter that strips literals before pattern-matching must decide where its holes go, in the linter's own header: code (copy through) or data (mask), and why.
+- The regression test names the hole shape as a violation row plus the literal-mention shape as an exempt row - a mask that leaks vocabulary into data, or hides code behind data,
+  both fail.
+- A rule whose vocabulary cannot appear inside a hole (an expression cannot contain `using`) may state that instead; instance method calls compile only with the directive the ban
+  already catches, so the hole question narrows to the qualified/static shapes.
+- Ban patterns must cover every overload the banned call takes: a no-argument-only pattern scans the timed overload (`.Wait(450)`, `.Join(timeout)`) clean, and the timed overload
+  is the exact shape the ban exists for (Bugbot, PR #254). Receiver-shaped exemptions (string.Join concatenates; Thread.Join blocks) exempt by the receiver's type name, with the
+  exemption named in the pattern comment - and the exempt test rows pin the receiver shapes, so a widening cannot silently make a concatenation illegal or a wait legal.
+
 ## Read the record grammar from the wire, not a comment
 
 A NUL-delimited format paired by convention invites one wrong assumption, and a comment repeating it makes the bug look documented: porcelain v1 -z renames are `XY NEW\0OLD\0` -

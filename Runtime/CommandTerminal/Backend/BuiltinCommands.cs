@@ -13,6 +13,15 @@ namespace WallstopStudios.DxCommandTerminal.Backend
     // ReSharper disable once UnusedType.Global
     public static class BuiltInCommands
     {
+        /*
+            The one refusal a failed clipboard copy reports, verbatim here so
+            the fixtures can gate on the exact logged line (log-echo contract:
+            a gate that matches the log matches the full string, never a
+            prefix - a prefix never fires and the environment ignore it gates
+            silently dies).
+         */
+        internal const string ClipboardRefusalMessage = "The platform did not keep the text. tvOS has no clipboard, and a browser clipboard may refuse without a user gesture.";
+
         private const string BulkSeparator = "    ";
 
         private const int AverageThemeNameCapacity = 24;
@@ -732,7 +741,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
             if (!TerminalClipboard.TryWrite(builder.ToString()))
             {
-                Terminal.Log(TerminalLogType.Warning, "The platform did not keep the text. tvOS has no clipboard, and a " + "browser clipboard may refuse without a user gesture.");
+                Terminal.Log(TerminalLogType.Warning, ClipboardRefusalMessage);
                 return;
             }
 

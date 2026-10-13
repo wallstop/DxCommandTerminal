@@ -1123,7 +1123,8 @@ test("a busy editor that refuses the idle probe is waited out, not failed", asyn
   await waitForTestIdle(
     () => answers[Math.min(probes++, answers.length - 1)](),
     60_000,
-    () => clock
+    () => clock,
+    async () => {}
   );
   assert.equal(probes, 3, "the wait must keep asking through a refused call");
 
@@ -1136,7 +1137,8 @@ test("a busy editor that refuses the idle probe is waited out, not failed", asyn
       () => {
         clock = 3_000;
         return clock;
-      }
+      },
+      async () => {}
     ),
     /stayed busy/u
   );
@@ -1254,7 +1256,8 @@ test("the run reporter survives a probe that races an editor reload", async () =
         probes += 1;
         if (probes === 1) throw new Error("Main thread operation timed out after 5000ms");
         return reporterProbeAnswer(true);
-      }
+      },
+      async () => {}
     );
     assert.equal(probes, 2, "a failed probe is retried once");
     assert.equal(
@@ -1272,7 +1275,8 @@ test("the run reporter survives a probe that races an editor reload", async () =
       () => {
         falseProbes += 1;
         return reporterProbeAnswer(false);
-      }
+      },
+      async () => {}
     );
     assert.equal(falseProbes, 1, "an editor-answered false is the whole answer, so it is asked once");
     assert.equal(absent, null, "no reporter in the editor means no claim path");
@@ -1300,7 +1304,7 @@ test("the mid-run idle wait probes on a short window and returns on the first re
     asked.push(expression);
     options.push(window);
     return refused();
-  }, deadline);
+  }, deadline, async () => {});
   assert.equal(end, undefined, "a refused probe ends the wait quietly");
   assert.equal(asked.length, 1, "a refusal is not retried by this wait");
   assert.ok(options[0].deadline <= deadline, "the probe window never passes the leg deadline");
@@ -1312,7 +1316,7 @@ test("the mid-run idle wait probes on a short window and returns on the first re
   const end2 = await waitForTestIdleQuietly(null, () => {
     probes += 1;
     return answered(probes === 1 ? "true" : "false");
-  }, deadline);
+  }, deadline, async () => {});
   assert.equal(end2, undefined);
   assert.equal(probes, 2, "busy once, then idle");
 });

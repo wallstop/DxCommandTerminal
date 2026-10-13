@@ -116,7 +116,8 @@ test("buildChecks: unique names, non-empty commands, expected canaries", () => {
     "package-validate",
     "docs-guides",
     "compat-check",
-    "test-editor",
+    "editor-compile",
+    "editor-run",
     "lint-linq-production",
     "lint-docs-catalog",
     "lint-md-format"
@@ -136,19 +137,27 @@ test("buildChecks: unique names, non-empty commands, expected canaries", () => {
     "tooling~/compat/runtime-2021.3.csproj"
   ]);
   assert.deepEqual(compatCheck.cacheExcludes, ["Runtime/Analyzers"]);
-  const editorCheck = checks.find((check) => check.name === "test-editor");
-  assert.equal(editorCheck.lane, "dotnet", "the dotnet builds must share one lane");
-  assert.equal(editorCheck.cacheDotnet, true);
-  assert.ok(editorCheck.cachePaths.includes("Tests/Editor"));
-  assert.ok(editorCheck.cachePaths.includes("Generator~"));
+  const editorCompileCheck = checks.find((check) => check.name === "editor-compile");
+  assert.equal(editorCompileCheck.lane, "dotnet", "the compile gate shares the compat restore lane");
+  assert.equal(editorCompileCheck.cacheDotnet, true);
+  assert.ok(editorCompileCheck.cachePaths.includes("Tests/Editor"));
   assert.ok(
-    editorCheck.cachePaths.includes("tooling~/package.json"),
-    "the lane must key the manifest whose scripts define its commands"
+    editorCompileCheck.cachePaths.includes("tooling~/compat/tests-2021.3.csproj"),
+    "the compile gate must key the csproj it builds"
   );
-  for (const buildOutput of ["Runtime/Analyzers", "tooling~/compat/obj", "tooling~/compat/testhost/bin", "tooling~/compat/testhost/TestResult.xml"]) {
+  assert.ok(
+    editorCompileCheck.cacheExcludes.includes("tooling~/compat/obj"),
+    "the compile gate writes tooling~/compat/obj and must not key it"
+  );
+  const editorRunCheck = checks.find((check) => check.name === "editor-run");
+  assert.equal(editorRunCheck.lane, undefined, "testhost's restore owns its obj state, so it runs outside the dotnet lane");
+  assert.equal(editorRunCheck.cacheDotnet, true);
+  assert.ok(editorRunCheck.cachePaths.includes("Tests/Editor"));
+  assert.ok(editorRunCheck.cachePaths.includes("Generator~"));
+  for (const buildOutput of ["Runtime/Analyzers", "tooling~/compat/testhost/obj", "tooling~/compat/testhost/bin", "tooling~/compat/testhost/TestResult.xml"]) {
     assert.ok(
-      editorCheck.cacheExcludes.includes(buildOutput),
-      `test-editor must not key its own build output ${buildOutput}`
+      editorRunCheck.cacheExcludes.includes(buildOutput),
+      `editor-run must not key its own build output ${buildOutput}`
     );
   }
   for (const keyedManifest of checks.filter((check) =>

@@ -172,14 +172,16 @@ export function buildChecks() {
       ]
     },
     /*
-        One lane: both are dotnet builds whose projects live in
-        tooling~/compat and share its obj state, and concurrent restores
-        there scramble each other's references into a CS0246 storm
-        (measured: a 1,294-error build failure that passes either build
-        alone). The lane serializes them; everything else stays parallel.
+        One lane for the two builds whose projects restore into
+        tooling~/compat/obj (runtime-2021.3's own build and the
+        tests-2021.3 compile gate below): concurrent restores there
+        scramble each other's references into a CS0246 storm (measured: a
+        1,294-error build failure that passes either build alone). The
+        lane serializes them; testhost, whose restore lands in
+        tooling~/compat/testhost/obj, runs alongside as editor-run.
 
-        Both are cached (keyed below on the sources each project compiles
-        plus the dotnet environment). The old reason not to - "the input
+        Both are cached (keyed on the sources each project compiles plus
+        the dotnet environment). The old reason not to - "the input
         surface is the whole tree, so a key either hashes everything or
         goes stale" - was the keying wall that git-index identity removed:
         the key now costs one index listing and reads only dirty bytes.
@@ -212,37 +214,61 @@ export function buildChecks() {
     /*
         test:editor builds tests-2021.3 (the compile gate) and testhost
         (the execution host), and the testhost build applies the source
-        generator, so the key spans everything those projects compile:
-        the two csproj files, their exact sources (the compat tests stub,
-        the testhost directory), Runtime, Tests/Editor, the generator
-        sources, and the npm manifest whose scripts define the command.
-        The generator's test project, compat's T13 fixture project, and
-        matrix.json compile nowhere here and are excluded or simply not
-        rooted; obj/bin are excluded - they are the builds' own outputs,
-        and keying them would invalidate the cache on every run the
-        builds themselves run - and so is the NUnitLite result XML a
-        direct testhost run drops into the keyed tree.
+        generator. Preflight splits the command into its two halves so
+        the halves can leave the dotnet lane separately: tests-2021.3 and
+        runtime-2021.3 both restore into tooling~/compat/obj, so the
+        compile half shares the compat-check lane (the CS0246 storm the
+        lane exists for), while testhost's restore lands in its own
+        tooling~/compat/testhost/obj and runs alongside. compat-2021.yml
+        keeps the chained npm script; the halves here are its steps in
+        CI's order, called directly because the npm wrapper would chain
+        them again.
+
+        Keys: editor-compile spans what tests-2021.3 compiles (Runtime,
+        all of Tests/Editor, the LogAssert stub, its csproj); editor-run
+        spans what testhost compiles (selected Runtime and Tests/Editor
+        sources, the stub surface in its own directory, and the generator
+        its analyzer reference applies). The generator's test project,
+        compat's T13 fixture project, and matrix.json compile nowhere
+        here and are excluded or simply not rooted; obj/bin are excluded
+        - they are the builds' own outputs, and keying them would
+        invalidate the cache on every run the builds themselves run - and
+        so is the NUnitLite result XML a direct testhost run drops into
+        the keyed tree.
      */
     {
-      name: "test-editor",
-      command: "npm --prefix tooling~ run test:editor",
+      name: "editor-compile",
+      command: "dotnet build tooling~/compat/tests-2021.3.csproj -c Release --nologo",
       lane: "dotnet",
-      cacheNpm: true,
+      cacheDotnet: true,
+      cacheRuntimeEnvironment: true,
+      cachePaths: [
+        "Runtime",
+        "Tests/Editor",
+        "tooling~/compat/tests-2021.3.csproj",
+        "tooling~/compat/tests"
+      ],
+      cacheExcludes: [
+        "Runtime/Analyzers",
+        "tooling~/compat/obj",
+        "tooling~/compat/bin"
+      ]
+    },
+    {
+      name: "editor-run",
+      command:
+        "dotnet build tooling~/compat/testhost/testhost.csproj -c Release --nologo "
+          + "&& dotnet run --project tooling~/compat/testhost -c Release --no-build --",
       cacheDotnet: true,
       cacheRuntimeEnvironment: true,
       cachePaths: [
         "Runtime",
         "Tests/Editor",
         "Generator~",
-        "tooling~/package.json",
-        "tooling~/compat/tests-2021.3.csproj",
-        "tooling~/compat/tests",
         "tooling~/compat/testhost"
       ],
       cacheExcludes: [
         "Runtime/Analyzers",
-        "tooling~/compat/obj",
-        "tooling~/compat/bin",
         "tooling~/compat/testhost/obj",
         "tooling~/compat/testhost/bin",
         "tooling~/compat/testhost/TestResult.xml",
@@ -280,6 +306,13 @@ export function buildChecks() {
       "lint-linq-production.mjs",
       ["Runtime", "Editor"],
       ["LINQ_PRODUCTION_ROOTS"]
+    ),
+    csharpCheck(
+      "lint-blocking-waits",
+      "node tooling~/scripts/lint-blocking-waits.mjs",
+      "lint-blocking-waits.mjs",
+      ["Runtime", "Editor"],
+      ["BLOCKING_WAIT_ROOTS"]
     ),
     csharpCheck(
       "lint-string-equality",

@@ -168,6 +168,7 @@ const OPTION_NAMES = new Set([
   "token",
   "no-discover",
   "offline",
+  "no-install",
   "out",
   "project-container",
   "scenarios",
@@ -1437,6 +1438,13 @@ export async function assertPortAvailable(port, host = DEFAULTS.bindHost) {
 // the probe even when a raw socket occupant never answers: measured on this
 // host, request.destroy() after a timeout emits no error event to hook.
 function probeBridgeHealth(port, timeoutMs = 1_000) {
+  /*
+      The timeout is also the fixture seam: a raw socket occupier never
+      answers /healthz, so a bridge-bind test would pay the whole second
+      learning that; tests pass a short one. Production keeps the second -
+      a live bridge answers in milliseconds, and a busy one is still worth
+      detecting instead of spawning a duplicate.
+   */
   return new Promise((resolve) => {
     let settled = false;
     const finish = (value) => {
@@ -1486,7 +1494,7 @@ export async function nextProjectPort(startPort, isTaken, range = PROJECT_PORT_R
 // - a .env.local or project-derived port heals: it moves to the next free port
 //   in the project range and persists the choice so every later configure and
 //   client reads the port the bridge actually bound.
-async function resolveBridgeBind(options) {
+async function resolveBridgeBind(options, runtime = {}) {
   let conflict;
   try {
     await assertPortAvailable(options.port, options.bindHost);
@@ -1494,7 +1502,7 @@ async function resolveBridgeBind(options) {
     conflict = error;
   }
   if (!conflict) return { port: options.port };
-  if (await probeBridgeHealth(options.port)) {
+  if (await probeBridgeHealth(options.port, runtime.healthProbeTimeoutMs)) {
     return {
       alreadyRunning: true,
       port: options.port,
@@ -1618,7 +1626,7 @@ export async function startBridge(inputOptions, runtime = {}) {
     options.backend === "relay"
       ? findRelay(options.relayPath, runtime.relayRuntime)
       : (options.cliPath ?? "unity");
-  const bind = await resolveBridgeBind(options);
+  const bind = await resolveBridgeBind(options, runtime);
   if (bind.alreadyRunning) return bind;
   options.port = bind.port;
 
@@ -2591,13 +2599,15 @@ function assertEvalAnswer(evalAnswer, action) {
 
     Exported for the refresh tests: a command that drops this call is a command
     that reports the assembly it already had. The clock and the pause between
-    attempts are injected so a test can cross eight refusures without waiting.
+    attempts are injected so a test can cross eight refusures without waiting;
+    the same pause drives the idle wait the accepted refresh hands off to, so
+    a busy editor costs a test no real second either.
  */
 export async function refreshScripts(
   evalCall,
   deadline,
   now = () => Date.now(),
-  pause = () => new Promise((resolve) => setTimeout(resolve, 1_000))
+  pause = () => new Promise((resolve) => setTimeout(resolve, IDLE_POLL_INTERVAL_MS))
 ) {
   for (let attempt = 0; attempt < 8 && now() < deadline; attempt += 1) {
     let answer;
@@ -2617,7 +2627,7 @@ export async function refreshScripts(
     // Outside the retry: a reported failure is the editor's own answer, and
     // asking again would only repeat it.
     assertEvalAnswer(answer, "script refresh");
-    return waitForEditorIdle(evalCall, deadline, now);
+    return waitForEditorIdle(evalCall, deadline, now, pause);
   }
 
   fail(
@@ -2626,7 +2636,12 @@ export async function refreshScripts(
   );
 }
 
-async function waitForEditorIdle(evalCall, deadline, now = () => Date.now()) {
+async function waitForEditorIdle(
+  evalCall,
+  deadline,
+  now = () => Date.now(),
+  sleep = () => new Promise((resolve) => setTimeout(resolve, IDLE_POLL_INTERVAL_MS))
+) {
   const expression =
     "return (UnityEditor.EditorApplication.isCompiling || UnityEditor.EditorApplication.isUpdating);";
   while (now() < deadline) {
@@ -2640,10 +2655,17 @@ async function waitForEditorIdle(evalCall, deadline, now = () => Date.now()) {
       if (evalAnswerIsFalse(extractText(call))) return;
     } catch {}
 
-    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    await sleep(IDLE_POLL_INTERVAL_MS);
   }
   fail("The editor did not reach an idle (non-compiling) state before the deadline.");
 }
+
+/*
+    Poll interval both idle waits use between probes. Exported for tests: the
+    waits take an injectable `sleep`, so a fixture can advance a fake clock
+    instead of paying the real second per probe.
+ */
+export const IDLE_POLL_INTERVAL_MS = 1_000;
 
 /*
     A test run additionally needs play mode over: a PlayMode run leaves the
@@ -2654,7 +2676,12 @@ async function waitForEditorIdle(evalCall, deadline, now = () => Date.now()) {
     Exported for the idle-wait tests: a call the busy editor refuses is the
     expected answer here, not a reason to fail the command.
  */
-export async function waitForTestIdle(evalCall, deadline, now = () => Date.now()) {
+export async function waitForTestIdle(
+  evalCall,
+  deadline,
+  now = () => Date.now(),
+  sleep = () => new Promise((resolve) => setTimeout(resolve, IDLE_POLL_INTERVAL_MS))
+) {
   const expression =
     "return (UnityEditor.EditorApplication.isCompiling || UnityEditor.EditorApplication.isUpdating || UnityEditor.EditorApplication.isPlayingOrWillChangePlaymode);";
   while (now() < deadline) {
@@ -2663,7 +2690,7 @@ export async function waitForTestIdle(evalCall, deadline, now = () => Date.now()
       if (evalAnswerIsFalse(extractText(call))) return;
     } catch {}
 
-    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    await sleep(IDLE_POLL_INTERVAL_MS);
   }
   fail(
     "The editor stayed busy (compiling or in play mode) until the deadline; "
@@ -3488,6 +3515,16 @@ async function noTestsMatchedSummary(client, signal, initial) {
   return null;
 }
 
+/*
+    The reload-retry delay is a named default so the wait test can inject an
+    instant one instead of paying the real five seconds.
+ */
+const RUN_REPORTER_PROBE_RETRY_MS = 5_000;
+
+function runReporterProbeRetrySleep() {
+  return new Promise((resolve) => setTimeout(resolve, RUN_REPORTER_PROBE_RETRY_MS));
+}
+
 /**
  * Claim paths when the reporter is installed in the editor and its artifact
  * directory can be written from here, or null to poll the bridge instead. The
@@ -3495,7 +3532,7 @@ async function noTestsMatchedSummary(client, signal, initial) {
  * no reporter, no local project, an unwritable directory) means the fallback,
  * never a failed command.
  */
-export async function openRunReporter(options, evalCall) {
+export async function openRunReporter(options, evalCall, sleep = runReporterProbeRetrySleep) {
   const localProjectPath = options.projectContainerPath ?? options.projectPath;
   if (localProjectPath === undefined || !fs.existsSync(localProjectPath)) return null;
   let installed = false;
@@ -3510,7 +3547,7 @@ export async function openRunReporter(options, evalCall) {
         there. One retry after a short wait covers the reload window; a probe
         the editor answered with false is a real absence and is not retried.
      */
-    await new Promise((resolve) => setTimeout(resolve, 5_000));
+    await sleep(RUN_REPORTER_PROBE_RETRY_MS);
     try {
       const { call } = await evalCall(RUN_REPORTER_PROBE);
       installed = evalAnswerIsTrue(extractText(call));
@@ -3899,7 +3936,12 @@ async function pollTestStatus(client, signal, attempts = 5) {
     skip the in-flight polls and a second identical green run would read as
     stale (found by Cursor Bugbot on PR #216).
  */
-export async function waitForTestIdleQuietly(client, evalCall, deadline) {
+export async function waitForTestIdleQuietly(
+  client,
+  evalCall,
+  deadline,
+  sleep = () => new Promise((resolve) => setTimeout(resolve, IDLE_POLL_INTERVAL_MS))
+) {
   const expression =
     "return (UnityEditor.EditorApplication.isCompiling || UnityEditor.EditorApplication.isUpdating || UnityEditor.EditorApplication.isPlayingOrWillChangePlaymode);";
   for (let attempt = 0; attempt < 30; ++attempt) {
@@ -3913,7 +3955,7 @@ export async function waitForTestIdleQuietly(client, evalCall, deadline) {
       return;
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    await sleep(IDLE_POLL_INTERVAL_MS);
   }
 }
 

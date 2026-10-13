@@ -46,10 +46,12 @@ const { consumeLiteral } = await import(
 );
 
 /**
- * Replaces comment contents with spaces, keeping newlines, so banned
- * vocabulary inside comments can never trip the scan. String/char literals
- * are consumed with the comparison-direction scanner so `//` or `/*` inside a
- * literal stays data.
+ * Replaces comment and string-literal contents with spaces, keeping newlines,
+ * EXCEPT the holes of an interpolated string (`$"...{expr}..."`), which are
+ * executable code and are copied through verbatim - a LINQ call inside a
+ * formatting hole is a real allocation-heavy operator chain, and string
+ * assembly is precisely where they show up. consumeLiteral already reports
+ * where the holes are. `//` or `/*` inside a literal stays data.
  */
 export function stripComments(text) {
   let out = "";
@@ -70,10 +72,18 @@ export function stripComments(text) {
       }
 
       /*
-          Mask literal contents too: banned vocabulary inside a string is
-          data, not code, and must not read as a violation.
+          Hole contents are code and stay; literal contents (including the
+          quotes and every non-hole segment) are data and are masked.
        */
-      for (let j = i; j < literal.end; j++) {
+      let cursor = i;
+      for (const hole of literal.holes) {
+        for (let j = cursor; j < hole.start; j++) {
+          out += text[j] === "\n" ? "\n" : " ";
+        }
+        out += text.slice(hole.start, hole.end);
+        cursor = hole.end;
+      }
+      for (let j = cursor; j < literal.end; j++) {
         out += text[j] === "\n" ? "\n" : " ";
       }
       i = literal.end;

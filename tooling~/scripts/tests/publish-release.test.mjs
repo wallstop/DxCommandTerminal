@@ -169,7 +169,8 @@ test("workflow path filters include repository execution inputs", () => {
     "docs-build.yml",
     "theme-style-lint.yml",
     "generator-tests.yml",
-    "compat-2021.yml"
+    "compat-2021.yml",
+    "content-gates.yml"
   ]) {
     const workflow = readWorkflow(name);
     assert.strictEqual(workflow.match(/["']\.gitattributes["']/g)?.length, 2, `${name} must trigger on .gitattributes`);

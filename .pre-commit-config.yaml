@@ -79,6 +79,22 @@ repos:
           it outright: 'using System.Linq', qualified 'System.Linq.' calls, and static
           'Enumerable.' calls all fail under Runtime/ and Editor/. No --fix by design;
           rewrite call sites as loops with caller-owned buffers.
+      - id: blocking-waits-lint
+        name: Lint blocking waits in production code (Runtime/, Editor/; PR #254 review)
+        entry: node tooling~/scripts/lint-blocking-waits.mjs
+        language: system
+        files: \.cs$
+        pass_filenames: false
+        stages:
+          - pre-commit
+          - pre-push
+        description: >
+          Every copy command and key handler runs on Unity's main thread, so shipped
+          code never blocks it: Thread.Sleep, SpinWait/SpinUntil, Task.Wait/.Result,
+          GetAwaiter().GetResult(), WaitOne, Join, and Monitor.Wait all fail under
+          Runtime/ and Editor/. A reason-carrying '// blocking-waits:allow: <reason>'
+          marker is the one exemption (a guarded completed-task read). No --fix by
+          design; replacing a wait is a per-site design decision.
       - id: string-equality-lint
         name: Lint explicit string comparisons (Runtime/, Editor/; PR #73 review)
         entry: node tooling~/scripts/lint-string-equality.mjs

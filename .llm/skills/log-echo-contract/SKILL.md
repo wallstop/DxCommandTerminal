@@ -116,6 +116,16 @@ When a handler reads the log, its test helper owes the echo. When it does not, t
 
 Symptom to recognise: a test that asserts the copied text equals the message above, and passes, while the command returns its own name in the console.
 
+## A gate that matches the log matches the full logged string
+
+`Contains(window, message)` compares the whole line with `string.Equals` - a gate fed a PREFIX of the logged sentence never fires, and the branch it guards (an environment
+`Assert.Ignore`, a verdict) silently dies; the test then fails on the path the gate was supposed to absorb (Bugbot on PR #254: a gate fed `"The platform did not keep the text."`
+never matched the logged refusal). Rules:
+
+- Gate on the exact constant the product logs, imported from the product when both sides compile against it (`BuiltInCommands.ClipboardRefusalMessage`), never a retyped prefix.
+- The same applies to message-shape asserts: `"Invalid line count not-a-number."` matches because it is the whole formatted line; a sentence fragment matches nothing.
+- Sweep when adding a gate: read the product's `Terminal.Log` line beside the gate's argument and compare them character for character.
+
 ## Sweep checklist
 
 When a command starts reading the log:
