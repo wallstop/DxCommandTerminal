@@ -130,13 +130,41 @@ const BLOCKING_PATTERNS = [
   /\bSpinWait\s*\.\s*(SpinUntil|Wait)\b/,
   /\bSpinWait\b/,
   /\bSpinUntil\s*[\.(]/,
-  /\.\s*Wait\s*\(\s*\)/,
+  /*
+      Member .Wait(...) and .Join(...) block for ANY argument list: Task.Wait
+      takes a TimeSpan or cancellation token, Thread.Join a timeout - the
+      timed overloads are the exact shape the ban exists for (Bugbot,
+      PR #254: a no-argument-only pattern scanned `.Wait(450)` clean).
+      string.Join/String.Join/Path.Join concatenate and stay legal, so a
+      match whose receiver is one of those type names is exempt by the
+      receiver check in blockingWaitViolations.
+   */
+  /\.\s*Wait\s*\(/,
   /\.\s*Result\b/,
+  /\.\s*Join\s*\(/,
   /\.\s*GetAwaiter\s*\(\s*\)\s*\.\s*GetResult\s*\(\s*\)/,
   /\.\s*WaitOne\s*\(/,
-  /\.\s*Join\s*\(\s*\)/,
   /\bMonitor\s*\.\s*Wait\b/
 ];
+
+/*
+    Member names whose `.Join(...)`/`.Wait(...)` calls concatenate or poll
+    rather than block: the receiver's type name decides, because a timed
+    Thread.Join/Task.Wait overload and a two-argument string.Join differ
+    only in that receiver.
+ */
+const NON_BLOCKING_JOIN_RECEIVERS = new Set([
+  "string",
+  "String",
+  "Path",
+  "Environment",
+  "Uri",
+]);
+
+function isNonBlockingJoinCall(text, matchIndex) {
+  const receiver = /([A-Za-z_][A-Za-z0-9_]*)\s*$/.exec(text.slice(0, matchIndex));
+  return receiver !== null && NON_BLOCKING_JOIN_RECEIVERS.has(receiver[1]);
+}
 
 /*
     An opted-out line must carry its reason: `// blocking-waits:allow: <reason>`,
@@ -169,7 +197,17 @@ export function blockingWaitViolations(rawText) {
       continue;
     }
     const line = lines[index];
-    if (BLOCKING_PATTERNS.some((pattern) => pattern.test(line))) {
+    const column = BLOCKING_PATTERNS.findIndex((pattern) => {
+      const match = pattern.exec(line);
+      if (match === null) {
+        return false;
+      }
+      if (pattern.source.endsWith("Join\\s*\\(") && isNonBlockingJoinCall(line, match.index)) {
+        return false;
+      }
+      return true;
+    });
+    if (0 <= column) {
       violations.push({ line: index + 1, text: line.trim() });
     }
   }

@@ -175,6 +175,9 @@ Rules:
   both fail.
 - A rule whose vocabulary cannot appear inside a hole (an expression cannot contain `using`) may state that instead; instance method calls compile only with the directive the ban
   already catches, so the hole question narrows to the qualified/static shapes.
+- Ban patterns must cover every overload the banned call takes: a no-argument-only pattern scans the timed overload (`.Wait(450)`, `.Join(timeout)`) clean, and the timed overload
+  is the exact shape the ban exists for (Bugbot, PR #254). Receiver-shaped exemptions (string.Join concatenates; Thread.Join blocks) exempt by the receiver's type name, with the
+  exemption named in the pattern comment - and the exempt test rows pin the receiver shapes, so a widening cannot silently make a concatenation illegal or a wait legal.
 
 ## Read the record grammar from the wire, not a comment
 

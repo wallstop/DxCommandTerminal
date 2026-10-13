@@ -76,6 +76,16 @@ const EXEMPT = [
   ],
 
   [
+    "String.Join is the same concatenation",
+    "string line = String.Join(separator, parts);",
+  ],
+
+  [
+    "Path.Join is path concatenation",
+    'string p = Path.Join(a, b);',
+  ],
+
+  [
     "a wait vocabulary mention inside a literal segment stays data",
     'string msg = $"Thread.Sleep is banned, use {nameof(task)} later";'
   ],
@@ -101,6 +111,10 @@ const VIOLATIONS = [
     "a wait inside an interpolated string's hole is code (Bugbot, PR #254)",
     'string msg = $"{task.Wait()} wait done";'
   ],
+  ["Task.Wait with a timeout (Bugbot, PR #254)", "task.Wait(450);"],
+  ["Task.Wait with a TimeSpan", "task.Wait(TimeSpan.FromSeconds(1));"],
+  ["Thread.Join with a timeout", "worker.Join(450);"],
+  ["Task.Join with a timeout", "task.Join(450);"],
 ];
 
 test("exempt shapes stay silent", () => {

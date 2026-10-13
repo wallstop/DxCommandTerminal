@@ -181,9 +181,10 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             ArrangeClipboard("torch\npick");
 
             using KeyDownEvent paste = PasteKeyDown(EventModifiers.Control);
-            Assert.IsTrue(TextFieldPaste.TryApply(field, paste, out _), "Ctrl+V should paste");
+            Assert.IsTrue(TextFieldPaste.TryApply(field, paste, out int landed), "Ctrl+V should paste");
+            Assert.AreEqual(15, landed, "The reported caret sits after the pasted text");
             Assert.AreEqual("give torch pick 42", field.value, "The selection was replaced");
-            Assert.AreEqual(15, field.cursorIndex, "Caret sits after the pasted text");
+            AssertCaretHeld(field, 15, "Caret sits after the pasted text");
         }
 
         [Test]
@@ -205,9 +206,9 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             using KeyDownEvent paste = PasteKeyDown(EventModifiers.Command);
             Assert.IsTrue(TextFieldPaste.TryApply(field, paste, out int caret), "A macOS Cmd+V pastes the same way");
-            Assert.AreEqual("give torch 42", field.value, "The selection was replaced");
             Assert.AreEqual(10, caret, "The reported caret is where the paste landed");
-            Assert.AreEqual(caret, field.cursorIndex, "The field was left on the same caret");
+            Assert.AreEqual("give torch 42", field.value, "The selection was replaced");
+            AssertCaretHeld(field, caret, "The field was left on the same caret");
         }
 
         /*
