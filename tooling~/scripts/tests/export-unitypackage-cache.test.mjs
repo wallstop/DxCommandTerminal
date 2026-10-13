@@ -58,10 +58,12 @@ test("the entry sits under the recomputable key and answers byte-identically", (
 test("a packaged edit re-exports; an excluded edit does not", async () => {
   /*
       The key memoizes per process, so the invalidation classes are tested
-      across fresh module instances - the shape a real iteration has: one
-      process exports, a later one (after the edit) must not answer the
+      across fresh module instances - a URL fragment makes a distinct module
+      URL, so each import re-keys. That is the shape a real iteration has:
+      one process exports, a later one (after the edit) must not answer the
       old bytes. Content edits change file sizes, so the stat signature
-      moves regardless of mtime granularity.
+      moves regardless of mtime granularity; if Node ever dropped fragment
+      identity the second assert fails loudly instead of passing vacuously.
    */
   const first = await import(exporterHref);
   const packageRoot = fixturePackage("inputs");

@@ -49,10 +49,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             raced the OS write. The pinned host's settle window measured
             ~100-400 ms (a 150 ms wait answered correctly every time, one
             400 ms wait still answered the previous value once), so the
-            delays grow 50 -> 800 ms, ~1.55 s worst case on the path that
-            reports a refusal anyway. A platform that will never keep the
-            text answers the same wrong value on every read and is not
-            changed by waiting.
+            delays grow 50 -> 800 ms; the worst case lands on the refusal
+            path (see the class header).
          */
         private static readonly int[] WriteReadRetryDelaysMs = { 50, 100, 200, 400, 800 };
 
@@ -78,11 +76,8 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             previous value or empty, and a read a moment later answers the
             written value. Reporting a refusal off that first race would tell
             a developer their platform declined a copy that landed, so a
-            mismatched read is re-read a few times before false is reported.
-            A platform that truly has no clipboard, or one that refuses
-            without a gesture, answers the same wrong value on every read, so
-            the whole budget (~1.55 s of blocked calling thread) is spent on
-            the path that reports the refusal anyway.
+            mismatched read is re-read a few times before false is reported;
+            the cost a refusing platform pays is stated in the class header.
          */
         public static bool TryWrite(string text)
         {
