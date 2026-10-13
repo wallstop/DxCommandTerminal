@@ -12,8 +12,7 @@ Entry style follows [unity-helpers](https://github.com/Ambiguous-Interactive/uni
 
 ### Fixed
 
-- Fix `copy-last`, `copy-log`, and Ctrl+C/Ctrl+X copy reporting "the platform did not keep the text" for copies that did land: the write's read-back is re-read under a bounded
-  budget before a refusal is reported, so a clipboard that settles a beat later is a successful copy, not a reported refusal
+- Fix `copy-last`, `copy-log`, and Ctrl+C/Ctrl+X copy reporting a refused copy when the clipboard kept the text; the clipboard's answer is waited out before a refusal is reported
   ([#250](https://github.com/wallstop/DxCommandTerminal/issues/250)).
 
 ## [1.0.2] - 2026-10-12

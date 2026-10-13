@@ -60,6 +60,8 @@ export function makeFixturePackage(root, { name = "test.pkg", version = "0.1.0" 
       "Runtime/Analyzers.meta",
       "Runtime/Analyzers/Payload.cs",
       "Runtime/Analyzers/Payload.cs.meta",
+      "!Runtime/Analyzers/Payload.dll",
+      "!Runtime/Analyzers/Payload.dll.meta",
       "README.md",
       "README.md.meta",
       "package.json",
@@ -82,6 +84,8 @@ export function makeFixturePackage(root, { name = "test.pkg", version = "0.1.0" 
   writeMeta(root, "Runtime/Analyzers", FIXTURE_GUIDS.analyzersFolder, true);
   fs.writeFileSync(path.join(root, "Runtime", "Analyzers", "Payload.cs"), "// analyzer payload stand-in\n");
   writeMeta(root, "Runtime/Analyzers/Payload.cs", FIXTURE_GUIDS.analyzerPayload, false);
+  fs.writeFileSync(path.join(root, "Runtime", "Analyzers", "Payload.dll"), "binary payload\n");
+  fs.writeFileSync(path.join(root, "Runtime", "Analyzers", "Payload.dll.meta"), "fileFormatVersion: 2\n");
   fs.mkdirSync(path.join(root, "Samples~"), { recursive: true });
   fs.writeFileSync(path.join(root, "Samples~", "Widget.cs"), "// sample\n");
   return root;

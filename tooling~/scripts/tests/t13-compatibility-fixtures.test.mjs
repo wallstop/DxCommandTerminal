@@ -164,10 +164,10 @@ test("matrix manifests record complete identity and reject stale reports", async
   /*
       The fixture carries the real checkout's package identity, so the
       runner's source-vs-artifact compare holds without the real tree's
-      whole-package export. The freshness contract - the cache answers a
-      fresh build byte-for-byte - is owned by export-unitypackage-real;
-      a stale entry misses there first, and the manifest's hash check
-      fails in every leg.
+      whole-package export. Cache freshness is pinned where it is
+      decidable: the fixture cache test (a packaged edit re-exports, a
+      non-shipped edit does not) and the digest miss; no test compares
+      two builds of the real tree.
    */
   const source = JSON.parse(fs.readFileSync(path.resolve(TOOLING_ROOT, "..", "package.json"), "utf8"));
   const packageRoot = makeFixturePackage(temporaryRoot("package"), { name: source.name, version: source.version });

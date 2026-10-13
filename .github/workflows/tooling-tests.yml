@@ -280,6 +280,17 @@ jobs:
           key: ${{ runner.os }}-nuget-${{ hashFiles('tooling~/scripts/mcp/grammar/DxTerminalClaimGrammar.csproj') }}
           restore-keys: ${{ runner.os }}-nuget-
 
+      # The claim reader is imported from unity-mcp.mjs, so this job needs the
+      # npm project even though it runs no node suite. The node_modules cache
+      # is resolved BEFORE the npm-tarball cache steps that gate on its outcome.
+      - name: Cache tooling node_modules
+        id: tooling-modules
+        if: steps.grammar-inputs.outputs.changed == 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: tooling~/node_modules
+          key: ${{ runner.os }}-tooling-node_modules-${{ hashFiles('tooling~/package.json') }}
+
       - name: Resolve npm cache directory
         if: steps.grammar-inputs.outputs.changed == 'true' && steps.tooling-modules.outputs.cache-hit != 'true'
         id: npm-cache
@@ -293,16 +304,6 @@ jobs:
           path: ${{ steps.npm-cache.outputs.dir }}
           key: ${{ runner.os }}-npm-${{ hashFiles('tooling~/package.json') }}
           restore-keys: ${{ runner.os }}-npm-
-
-      # The claim reader is imported from unity-mcp.mjs, so this job needs the
-      # npm project even though it runs no node suite.
-      - name: Cache tooling node_modules
-        id: tooling-modules
-        if: steps.grammar-inputs.outputs.changed == 'true'
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: tooling~/node_modules
-          key: ${{ runner.os }}-tooling-node_modules-${{ hashFiles('tooling~/package.json') }}
 
       - name: Install dependencies
         if: steps.grammar-inputs.outputs.changed == 'true' && steps.tooling-modules.outputs.cache-hit != 'true'

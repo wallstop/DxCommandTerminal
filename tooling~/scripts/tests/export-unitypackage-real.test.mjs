@@ -1,12 +1,15 @@
 /*
     Real-package export contract for tooling~/scripts/release/export-unitypackage.mjs
     (T14). Lives apart from the fixture tests so the parallel test runner overlaps
-    it with every other file. Both exports ask for the cache: on a cold cache
-    the first call is the full build and the second is its digest-checked disk
-    echo; on a warm one both are echoes, so the equality below is nearly free
-    and no run here pays a second real build. The fresh-build side of the
-    contract is CI's cold backstop (a fresh runner always misses) plus the
-    fixture tests, which build identical trees twice and compare.
+    it with every other file. Both exports ask for the cache, so a run pays one
+    real build on a cold cache and two disk echoes on a warm one. What is pinned
+    where now: THIS file pins the real tree (the real allowlist ships the full
+    production tree, no Samples~, no Tests/); export-unitypackage.test.mjs's
+    two-checkout test pins archive determinism with two independent fresh
+    builds; export-unitypackage-cache.test.mjs pins the key's input classes
+    (a packaged edit re-exports, a non-shipped edit does not) and the digest
+    miss. No test compares two builds of the real tree anymore - the real
+    tree's build is the expensive one, and determinism is tree-agnostic.
 */
 import test from "node:test";
 import assert from "node:assert";
@@ -19,7 +22,7 @@ const packageRoot = path.resolve(toolingRoot, "..");
 const exporterPath = path.join(toolingRoot, "scripts", "release", "export-unitypackage.mjs");
 const { exportUnityPackage } = await import(pathToFileURL(exporterPath).href);
 
-test("the real package exports, validates, and rebuilds byte-identically", () => {
+test("the real package exports and validates, and the cache echoes it byte-identically", () => {
   const artifact = exportUnityPackage({ packageRoot, out: "", cache: true });
   const repeated = exportUnityPackage({ packageRoot, out: "", cache: true });
   assert.strictEqual(artifact.buffer.equals(repeated.buffer), true);

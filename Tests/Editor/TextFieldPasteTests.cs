@@ -70,7 +70,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             return string.Join("|", contents);
         }
 
-        private static void AssertCaretHeld(TextField field, int expectedCaret, string cursorLabel, string selectionLabel)
+        private static void AssertCaretHeld(TextField field, int expectedCaret, string label)
         {
             /*
                 The field-caret pins double as an engine-hold question: TryApply
@@ -86,11 +86,27 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             if (field.cursorIndex != expectedCaret || field.selectIndex != expectedCaret)
             {
                 Assert.Ignore(
-                    $"{cursorLabel}: the engine did not hold the post-paste caret (wanted {expectedCaret}, "
+                    $"{label}: the engine did not hold the post-paste caret (wanted {expectedCaret}, "
                         + $"holds [{field.selectIndex}, {field.cursorIndex}]); caret placement is not "
                         + "measurable on this host (#250)"
                 );
             }
+        }
+
+        /*
+            Restores the clipboard the test saved. TryWrite refuses an empty
+            text, so a saved empty clipboard falls back to the bare write the
+            whole suite used before the retry budget existed.
+         */
+        private static void RestoreClipboard(string text)
+        {
+            if (0 < (text ?? string.Empty).Length)
+            {
+                _ = TerminalClipboard.TryWrite(text);
+                return;
+            }
+
+            GUIUtility.systemCopyBuffer = string.Empty;
         }
 
         [SetUp]
@@ -102,7 +118,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [TearDown]
         public void TearDown()
         {
-            _ = TerminalClipboard.TryWrite(_originalClipboard);
+            RestoreClipboard(_originalClipboard);
         }
 
         [TestCase("give item 42", "give item 42", Description = "Plain text is untouched")]
@@ -137,7 +153,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.IsTrue(TextFieldPaste.TryApply(field, paste, out int landed), $"Ctrl+V should paste '{clipboard}'");
             Assert.AreEqual(expectedCaret, landed, "The reported caret is where the paste landed");
             Assert.AreEqual(expectedValue, field.value, "Pasted value");
-            AssertCaretHeld(field, expectedCaret, "Caret after the paste", "Selection after the paste");
+            AssertCaretHeld(field, expectedCaret, "Caret after the paste");
         }
 
         [Test]
@@ -198,7 +214,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             using KeyDownEvent paste = PasteKeyDown(EventModifiers.Control);
             Assert.IsTrue(TextFieldPaste.TryApply(field, paste, out int caret), "Ctrl+V should paste");
             Assert.AreEqual(expectedCaret, caret, $"The reported caret for '{value}' + '{clipboard}'");
-            AssertCaretHeld(field, expectedCaret, "The field holds that caret too", "The field holds that caret too");
+            AssertCaretHeld(field, expectedCaret, "The field holds that caret too");
         }
 
         [Test]
@@ -286,7 +302,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.IsTrue(TextFieldPaste.TryApply(field, paste, out int landed), "Ctrl+V should paste");
             Assert.AreEqual(expectedValue, field.value, "The character is not split");
             Assert.AreEqual(expectedCaret, landed, "The reported caret is after the pasted text");
-            AssertCaretHeld(field, expectedCaret, "The field holds that caret too", "The field holds that caret too");
+            AssertCaretHeld(field, expectedCaret, "The field holds that caret too");
         }
 
         /*

@@ -3516,10 +3516,8 @@ async function noTestsMatchedSummary(client, signal, initial) {
 }
 
 /*
-    One retry after a short wait covers the reload window; a probe the editor
-    answered with false is a real absence and is not retried. The delay is a
-    named default so the wait test can inject an instant one instead of paying
-    the real five seconds.
+    The reload-retry delay is a named default so the wait test can inject an
+    instant one instead of paying the real five seconds.
  */
 const RUN_REPORTER_PROBE_RETRY_MS = 5_000;
 

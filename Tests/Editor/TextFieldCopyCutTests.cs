@@ -58,6 +58,22 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             return field;
         }
 
+        /*
+            Restores the clipboard the test saved. TryWrite refuses an empty
+            text, so a saved empty clipboard falls back to the bare write the
+            whole suite used before the retry budget existed.
+         */
+        private static void RestoreClipboard(string text)
+        {
+            if (0 < (text ?? string.Empty).Length)
+            {
+                _ = TerminalClipboard.TryWrite(text);
+                return;
+            }
+
+            GUIUtility.systemCopyBuffer = string.Empty;
+        }
+
         [SetUp]
         public void SetUp()
         {
@@ -67,7 +83,7 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         [TearDown]
         public void TearDown()
         {
-            _ = TerminalClipboard.TryWrite(_originalClipboard);
+            RestoreClipboard(_originalClipboard);
         }
 
         [Test]
