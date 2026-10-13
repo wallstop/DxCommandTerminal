@@ -141,6 +141,10 @@ Adding a skill: create the directory + `SKILL.md`, then run the generator. The l
     the fake-null operator), `Assert.IsNull`/`Assert.IsNotNull` in tests, and implicit truthiness - write `component != null` / `Assert.That(x == null)`. `lint:unity-null-patterns`
     enforces the Assert half (`:fix` converts); the repo-internal `UnityObjectNullPatternAnalyzer` DxCmd0001-0005 type-checks the rest, warnaserror fails the compile; it never
     ships and no-ops outside the repo's assemblies - keep both layers (issues #98/#100). Delegate `?.`/plain C# `??` stay legal.
+26. Production code never blocks the calling thread: every copy command and UI key handler runs on Unity's main thread, and a sleep, spin, or blocking await freezes the game or
+    editor for its duration. Banned under `Runtime/` and `Editor/`: `Thread.Sleep`, `SpinWait`/`SpinUntil`, `Task.Wait`/`.Result`/`GetAwaiter().GetResult()`, `WaitOne`, `Join`,
+    `Monitor.Wait`. A reason-carrying `// blocking-waits:allow: <reason>` marker exempts one guarded site (a completed-task read behind a pump); no unguarded exemptions.
+    `lint:blocking-waits` enforces it (pre-commit + CI; no `:fix` by design; PR #254 review).
 
 ### Unity Package Rules
 

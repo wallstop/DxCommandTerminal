@@ -179,6 +179,13 @@ jobs:
       - name: Lint LINQ ban in production code
         run: node tooling~/scripts/lint-linq-production.mjs
 
+      - name: Lint blocking waits in production code
+        # PR #254: every copy command and key handler runs on Unity's main
+        # thread, so a sleep, spin, or blocking await freezes the game or
+        # editor for its duration. Reason-carrying allow markers are the one
+        # exemption (a guarded completed-task read).
+        run: node tooling~/scripts/lint-blocking-waits.mjs
+
       - name: Lint explicit string comparisons
         run: node tooling~/scripts/lint-string-equality.mjs
 

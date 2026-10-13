@@ -308,6 +308,13 @@ export function buildChecks() {
       ["LINQ_PRODUCTION_ROOTS"]
     ),
     csharpCheck(
+      "lint-blocking-waits",
+      "node tooling~/scripts/lint-blocking-waits.mjs",
+      "lint-blocking-waits.mjs",
+      ["Runtime", "Editor"],
+      ["BLOCKING_WAIT_ROOTS"]
+    ),
+    csharpCheck(
       "lint-string-equality",
       "node tooling~/scripts/lint-string-equality.mjs",
       "lint-string-equality.mjs",

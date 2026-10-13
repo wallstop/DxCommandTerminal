@@ -84,6 +84,11 @@ const EXEMPT = [
   ],
 
   [
+    "banned vocabulary inside an interpolated literal segment (a hole mention stays data only when it is not code)",
+    'string note = $"no Enumerable here, {name} said so";',
+  ],
+
+  [
     "banned vocabulary inside a string after a block comment opens mid-line",
     "int a = 0; /* note: Enumerable.Empty */",
   ],
@@ -117,6 +122,10 @@ const VIOLATIONS = [
   ["the static Enumerable call", "Enumerable.Range(0, 10)"],
   ["the static Enumerable call with a space", "Enumerable .Empty<string>()"],
   ["the using with odd spacing", "using   System.Linq;"],
+  [
+    "the qualified static call inside an interpolation hole (holes are code, PR #254)",
+    'string names = $"{System.Linq.Enumerable.Range(0, 9)} joined";'
+  ],
 ];
 
 test("exempt shapes stay silent", () => {

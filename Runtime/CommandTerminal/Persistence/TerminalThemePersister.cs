@@ -145,6 +145,12 @@ namespace WallstopStudios.DxCommandTerminal.Persistence
                         yield break;
                     }
 
+                    /*
+                        Guarded by the pump above: .Result on a completed task returns
+                        synchronously and never blocks; removing the pump is what would
+                        deadlock. The allow marker below is the linter's one exemption.
+                     */
+                    // blocking-waits:allow: the guard is the pump, stated above.
                     string inputJson = readerTask.Result;
                     try
                     {
