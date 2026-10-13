@@ -103,6 +103,19 @@ then wait for `isCompiling` to clear and check the `Library/ScriptAssemblies` ti
 A modal dialog blocks the editor's main thread, so every bridge request times out and the outage reads as a hang. The drills, the refusal preflight, and the scene-restore order are
 in [unity-mcp](../unity-mcp/SKILL.md#host-editor-hygiene-eval-drills); read them before any eval that writes.
 
+## The clipboard is a laggy read, not an instant echo
+
+Measured on a degraded host editor (2026-10-12, #250): `GUIUtility.systemCopyBuffer`'s first read-back after a write answers empty or the PREVIOUS value roughly half the time, and
+the wrong answer can persist ~100-400 ms. The write itself lands (the OS clipboard holds it; verified through WinForms `Clipboard.GetText`). Three consequences:
+
+- Every test-side clipboard write goes through `TerminalClipboard.TryWrite` (the product's settled path), never a bare `GUIUtility.systemCopyBuffer =` assignment followed by an
+  immediate read. The EditMode fixtures' TearDown restores go through their `RestoreClipboard` helper, which falls back to the bare write for an empty saved value (`TryWrite`
+  refuses empty by contract).
+- A verification probe must write a DIFFERENT value per pass and demand the read-back name it: a constant probe falsely "holds" on its own echo under the lag, so the verdict rig
+  (`ProbeClipboard` in both PlayMode suites, the paste fixture's `_syncReadHeld` health check) cannot tell a healthy clipboard from a one-write-behind one.
+- An arrange a fixture cannot hold (a caret write the field re-clamps to 0 on a degraded host) is environment, not product: read the arrange back and `Assert.Ignore` with the
+  reason (#250), AFTER the product's own assert has run - order the product verdict first so the ignore cannot swallow it (the paste fixtures' `AssertCaretHeld` shows the shape).
+
 ## UI test timing (frame-coupled reads)
 
 `TerminalUI` applies programmatic value and caret writes through `RefreshUI` on `LateUpdate`, and UI Toolkit applies them on its own schedule after that. In a throttled or freshly
