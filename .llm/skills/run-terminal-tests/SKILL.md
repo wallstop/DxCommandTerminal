@@ -114,6 +114,9 @@ the wrong answer can persist ~100-400 ms. The write itself lands (the OS clipboa
 - A clipboard health check must verify the SAME write the key handler will consume - write the payload through `TryWrite` and read it back - so a lagging host cannot put a probe
   write one write behind the paste's read (Bugbot on PR #254: a distinct throwaway probe turned that environment into a "routing defect" verdict). A verdict-only probe that runs
   after exhaustion and can only lower the verdict to Ignore is the one safe place for a standalone probe value.
+- A clipboard-CONTENT assert reads through the product's own verdict: when the command answered "Copied", `TryWrite`'s read-back already matched, so a read made after that answer
+  returns the same bytes and cannot race the host's lag (the BuiltinCommandsTests `RunCopyAndReadClipboard` gate shows the shape). A raw content assert after a command whose answer
+  was not consulted can read a value the lag left stale in dispatch and fail for the environment.
 - An arrange a fixture cannot hold (a caret write the field re-clamps to 0 on a degraded host) is environment, not product: read the arrange back and `Assert.Ignore` with the
   reason (#250), AFTER the product's own assert has run - order the product verdict first so the ignore cannot swallow it (the paste fixtures' `AssertCaretHeld` shows the shape).
 
