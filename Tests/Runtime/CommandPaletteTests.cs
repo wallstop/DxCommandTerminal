@@ -1990,15 +1990,16 @@
         }
 
         /*
-            Writes and reads back probe strings through the system clipboard
-            until it holds on two consecutive passes, the same evidence
-            TerminalClipboard.TryWrite uses. Every pass writes a DIFFERENT
-            value and demands the read-back name that same value: a host that
-            answers one write behind (#250) reads the previous pass's value
-            for every read, so a constant probe would falsely hold on the
-            echo, and the paste fixtures would ship against a clipboard no
-            product path can use. Sets _clipboardProbeHeld; the caller
-            asserts in its own enumerator.
+            Verdict-only clipboard health probe: writes and reads back probe
+            strings until the clipboard holds on two consecutive passes, then
+            sets _clipboardProbeHeld. Runs only after the fixture's attempts
+            exhausted, and its verdict can only LOWER the outcome to Ignore -
+            it never gates a product-defect Fail in the direction a stale
+            echo could forge, and each pass demands the read-back name the
+            pass's own fresh value, so a lag host that answers one write
+            behind reads the previous probe and stays unheld (the honest
+            "environment" answer) rather than holding on its echo (#207,
+            #250). The caller asserts in its own enumerator.
          */
         private IEnumerator ProbeClipboard()
         {

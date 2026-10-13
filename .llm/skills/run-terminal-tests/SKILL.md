@@ -111,8 +111,9 @@ the wrong answer can persist ~100-400 ms. The write itself lands (the OS clipboa
 - Every test-side clipboard write goes through `TerminalClipboard.TryWrite` (the product's settled path), never a bare `GUIUtility.systemCopyBuffer =` assignment followed by an
   immediate read. The EditMode fixtures' TearDown restores go through their `RestoreClipboard` helper, which falls back to the bare write for an empty saved value (`TryWrite`
   refuses empty by contract).
-- A verification probe must write a DIFFERENT value per pass and demand the read-back name it: a constant probe falsely "holds" on its own echo under the lag, so the verdict rig
-  (`ProbeClipboard` in both PlayMode suites, the paste fixture's `_syncReadHeld` health check) cannot tell a healthy clipboard from a one-write-behind one.
+- A clipboard health check must verify the SAME write the key handler will consume - write the payload through `TryWrite` and read it back - so a lagging host cannot put a probe
+  write one write behind the paste's read (Bugbot on PR #254: a distinct throwaway probe turned that environment into a "routing defect" verdict). A verdict-only probe that runs
+  after exhaustion and can only lower the verdict to Ignore is the one safe place for a standalone probe value.
 - An arrange a fixture cannot hold (a caret write the field re-clamps to 0 on a degraded host) is environment, not product: read the arrange back and `Assert.Ignore` with the
   reason (#250), AFTER the product's own assert has run - order the product verdict first so the ignore cannot swallow it (the paste fixtures' `AssertCaretHeld` shows the shape).
 

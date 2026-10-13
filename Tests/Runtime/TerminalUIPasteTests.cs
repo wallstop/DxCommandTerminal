@@ -85,31 +85,30 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 because a paste that read a stale buffer looks exactly like a
                 key that never routed: _vReached says whether the V arrived
                 at the field at all, and _syncReadHeld says whether the
-                clipboard answered a fresh-value write through the same
-                synchronous read the paste performs (a lag host that echoes
-                the previous write must not count as held). Exhaustion with
-                both healthy names a paste-routing defect; either one
-                answering wrong ignores as the environment.
+                clipboard held the paste's own payload through the product's
+                settled write (the paste reads the same buffer this check
+                reads, so the two verdicts cannot diverge on the host's lag).
+                Exhaustion with both healthy names a paste-routing defect;
+                either one answering wrong ignores as the environment.
              */
             bool pasteRouted = false;
             bool syncReadEverHeld = false;
             for (int attempt = 0; attempt < 8; ++attempt)
             {
                 /*
-                    The clipboard-health probe writes a fresh throwaway value
-                    and demands the read-back name it: a host that answers one
-                    write behind (#250) reads the previous write's value, so a
-                    constant probe would falsely hold on its own echo and turn
-                    this environment into a routing defect. The probe is the
-                    write, so the value the V reads is the real paste text set
-                    right after.
+                    The clipboard-health check verifies the PAYLOAD itself,
+                    written through the product's own settled write path: the
+                    paste reads the same buffer this read reads, so a health
+                    answer and a paste answer cannot diverge because of the
+                    host's lag (a probe write distinct from the payload could
+                    sit one write behind the paste's read and turn this
+                    environment into a routing defect - Bugbot, PR #254). A
+                    lag host that echoes the previous attempt echoes the same
+                    payload, which is the state the paste also reads; an
+                    empty answer misses, and the retry covers it.
                  */
-                string probe = $"dxct-clipboard-probe-{attempt}";
-                GUIUtility.systemCopyBuffer = probe;
-                _syncReadHeld = TerminalClipboard.Read() == probe;
+                _syncReadHeld = TerminalClipboard.TryWrite("give\titem\n42");
                 syncReadEverHeld |= _syncReadHeld;
-
-                GUIUtility.systemCopyBuffer = "give\titem\n42";
                 _vReached = false;
                 using (KeyDownEvent key = KeyDownEvent.GetPooled('\0', KeyCode.V, EventModifiers.Control))
                 {
@@ -285,15 +284,16 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
         }
 
         /*
-            Writes and reads back probe strings through the system clipboard
-            until it holds on two consecutive passes, the same evidence
-            TerminalClipboard.TryWrite uses. Every pass writes a DIFFERENT
-            value and demands the read-back name that same value: a host that
-            answers one write behind (#250) reads the previous pass's value
-            for every read, so a constant probe would falsely hold on the
-            echo, and the paste fixtures would ship against a clipboard no
-            product path can use. Sets _clipboardProbeHeld; the caller
-            asserts in its own enumerator.
+            Verdict-only clipboard health probe: writes and reads back probe
+            strings until the clipboard holds on two consecutive passes, then
+            sets _clipboardProbeHeld. Runs only after the fixture's attempts
+            exhausted, and its verdict can only LOWER the outcome to Ignore -
+            it never gates a product-defect Fail in the direction a stale
+            echo could forge, and each pass demands the read-back name the
+            pass's own fresh value, so a lag host that answers one write
+            behind reads the previous probe and stays unheld (the honest
+            "environment" answer) rather than holding on its echo (#207,
+            #250). The caller asserts in its own enumerator.
          */
         private IEnumerator ProbeClipboard()
         {

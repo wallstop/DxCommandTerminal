@@ -30,11 +30,20 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         The cost is stated, not hidden: a copy is a rare, user-initiated
         command, and a platform that will never keep the text pays the whole
-        budget (450 ms of blocked calling thread, sleeping rather than
-        spinning) on the path that reports the refusal anyway. A refusing
+        budget (450 ms of blocked calling thread, slept in 10 ms ticks, no
+        core burned) on the path that reports the refusal anyway. A refusing
         WebGL page pauses for the budget once per copy attempt; tvOS
-        likewise. The delays grow 50 -> 300 ms because the settle window
-        measured on the pinned host (#250) spans ~100-400 ms.
+        likewise.
+
+        Why not check in the background instead of blocking: the clipboard is
+        a main-thread API (worker-thread clipboard access is unsupported and,
+        on some platforms, crashes), and the callers' answers are synchronous
+        - the console line a copy command prints, the key a handler consumes.
+        A non-blocking design would defer every answer ("copying...", then a
+        second line amending it) or move verification into per-keystroke
+        coroutines on a host component; both are product surface bought to
+        cover a race measured on one degraded host. If that trade is ever
+        wanted, it replaces this budget wholesale.
 
         A limit worth stating: the clipboard is a main-thread engine API. The
         read side has always been driven from a key handler, but a write from
@@ -50,10 +59,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             raced the OS write. The pinned host's settle window measured
             ~100-400 ms (a 150 ms wait answered correctly every time, one
             400 ms wait still answered the previous value once), so the
-            delays grow 50 -> 300 ms; the 450 ms worst case lands on the
+            budget is 450 ms ticked every 10 ms; the worst case lands on the
             refusal path only (see the class header).
          */
-        private static readonly int[] WriteReadRetryDelaysMs = { 50, 150, 300 };
+        private const int WriteReadRetryBudgetMs = 450;
+        private const int WriteReadRetryTickMs = 10;
 
         /*
             The clipboard's text, or empty where the platform has none. The
@@ -110,9 +120,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
                 return true;
             }
 
-            for (int attempt = 0; attempt < WriteReadRetryDelaysMs.Length; ++attempt)
+            for (int waitedMs = 0; waitedMs < WriteReadRetryBudgetMs; waitedMs += WriteReadRetryTickMs)
             {
-                Sleep(WriteReadRetryDelaysMs[attempt]);
+                Sleep(WriteReadRetryTickMs);
                 if (string.Equals(GUIUtility.systemCopyBuffer, text, StringComparison.Ordinal))
                 {
                     return true;
