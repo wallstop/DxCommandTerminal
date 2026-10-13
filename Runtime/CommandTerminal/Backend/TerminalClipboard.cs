@@ -30,10 +30,11 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         The cost is stated, not hidden: a copy is a rare, user-initiated
         command, and a platform that will never keep the text pays the whole
-        budget (~1.55 s of blocked main thread) on the path that reports the
-        refusal anyway. A refusing WebGL page freezes for the budget once per
-        copy attempt; tvOS likewise. The delays grow 50 -> 800 ms because the
-        settle window measured on the pinned host (#250) spans ~100-400 ms.
+        budget (450 ms of blocked calling thread, sleeping rather than
+        spinning) on the path that reports the refusal anyway. A refusing
+        WebGL page pauses for the budget once per copy attempt; tvOS
+        likewise. The delays grow 50 -> 300 ms because the settle window
+        measured on the pinned host (#250) spans ~100-400 ms.
 
         A limit worth stating: the clipboard is a main-thread engine API. The
         read side has always been driven from a key handler, but a write from
@@ -49,10 +50,10 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             raced the OS write. The pinned host's settle window measured
             ~100-400 ms (a 150 ms wait answered correctly every time, one
             400 ms wait still answered the previous value once), so the
-            delays grow 50 -> 800 ms; the worst case lands on the refusal
-            path (see the class header).
+            delays grow 50 -> 300 ms; the 450 ms worst case lands on the
+            refusal path only (see the class header).
          */
-        private static readonly int[] WriteReadRetryDelaysMs = { 50, 100, 200, 400, 800 };
+        private static readonly int[] WriteReadRetryDelaysMs = { 50, 150, 300 };
 
         /*
             The clipboard's text, or empty where the platform has none. The
@@ -76,8 +77,9 @@ namespace WallstopStudios.DxCommandTerminal.Backend
             previous value or empty, and a read a moment later answers the
             written value. Reporting a refusal off that first race would tell
             a developer their platform declined a copy that landed, so a
-            mismatched read is re-read a few times before false is reported;
-            the cost a refusing platform pays is stated in the class header.
+            mismatched read is re-read a few times, sleeping between reads,
+            before false is reported; the cost a refusing platform pays is
+            stated in the class header.
          */
         public static bool TryWrite(string text)
         {
@@ -110,7 +112,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
             for (int attempt = 0; attempt < WriteReadRetryDelaysMs.Length; ++attempt)
             {
-                SpinWait(WriteReadRetryDelaysMs[attempt]);
+                Sleep(WriteReadRetryDelaysMs[attempt]);
                 if (string.Equals(GUIUtility.systemCopyBuffer, text, StringComparison.Ordinal))
                 {
                     return true;
@@ -121,17 +123,13 @@ namespace WallstopStudios.DxCommandTerminal.Backend
         }
 
         /*
-            Blocks the calling thread for the requested wall time. The command
-            shell can run on any thread a caller chose; this is a spin, not a
-            sleep, because a sleep blocks the thread harder without giving the
-            answer back any sooner - the wait's whole purpose is the re-read
-            that follows it.
+            Blocks the calling thread for the requested wall time without
+            burning CPU: Thread.Sleep hands the core back to the OS for the
+            interval, so the answer is awaited this way rather than spun for.
          */
-        private static void SpinWait(int milliseconds)
+        private static void Sleep(int milliseconds)
         {
-            long start = System.Diagnostics.Stopwatch.GetTimestamp();
-            long end = start + (long)(milliseconds / 1000d * System.Diagnostics.Stopwatch.Frequency);
-            while (System.Diagnostics.Stopwatch.GetTimestamp() < end) { }
+            System.Threading.Thread.Sleep(milliseconds);
         }
     }
 }
