@@ -15,7 +15,7 @@
 
       - node suite, t11 baseline gate, package content gate, docs guides build,
         compat compile tripwire
-      - the nine C#/asset linters (mirrors the pre-commit fleet + CI)
+      - the ten C#/asset linters (mirrors the pre-commit fleet + CI)
 
     Usage:
       node tooling~/scripts/preflight.mjs [--skip=name1,name2] [--no-cache]
@@ -301,6 +301,13 @@ export function buildChecks() {
       "lint-multiline-comments.mjs",
       ["Runtime", "Editor", "Tests", "Generator~"],
       ["MULTILINE_COMMENT_ROOTS"]
+    ),
+    csharpCheck(
+      "lint-minimal-comments",
+      "node tooling~/scripts/lint-minimal-comments.mjs",
+      "lint-minimal-comments.mjs",
+      ["Runtime", "Editor", "Tests", "Generator~"],
+      ["MINIMAL_COMMENT_ROOTS"]
     ),
     csharpCheck(
       "lint-linq-production",

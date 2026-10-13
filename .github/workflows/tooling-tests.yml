@@ -148,13 +148,13 @@ jobs:
         run: node tooling~/scripts/release/validate-package-contents.mjs
 
   csharp-lints:
-    # The eight C# linters that ran inside both OS legs of node-tests run
+    # The ten C# linters that ran inside both OS legs of node-tests run
     # once here instead. They read tracked bytes,
     # which are OS-identical by checkout (no CRLF rewrite without a matching
     # .gitattributes pin), so the second leg was a duplicate bill - Windows
     # minutes cost twice - and a serial tail on the node-tests job's wall.
-    # Dependency-free node scripts: no npm install. The ninth fleet member,
-    # the theme palette token lint, keeps its own theme-style-lint workflow
+    # Dependency-free node scripts: no npm install. The theme palette token
+    # lint keeps its own theme-style-lint workflow
     # and its Styles trigger, so it is not repeated here.
     name: csharp-lints (ubuntu-latest)
     runs-on: ubuntu-latest
@@ -175,6 +175,13 @@ jobs:
 
       - name: Lint multi-line comments
         run: node tooling~/scripts/lint-multiline-comments.mjs
+
+      - name: Lint minimal comments
+        # Issue #255: a comment must carry the why the code cannot say. A
+        # comment whose every content word appears in the line it annotates
+        # restates that code; a comment with no content at all says nothing.
+        # No --fix by design; deleting or rewriting is a judgement call.
+        run: node tooling~/scripts/lint-minimal-comments.mjs
 
       - name: Lint LINQ ban in production code
         run: node tooling~/scripts/lint-linq-production.mjs

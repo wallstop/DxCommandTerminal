@@ -305,7 +305,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             string[] entries = history.GetHistory(false, false).ToArray();
             Assert.AreEqual(3, entries.Length, "Should have 3 history entries before clear-history");
 
-            // Run clear-history
             shell.RunCommand("clear-history");
 
             // After fix: history should be completely empty

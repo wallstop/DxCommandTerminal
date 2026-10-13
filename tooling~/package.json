@@ -32,6 +32,7 @@
     "lint:out-param-discipline": "node scripts/lint-out-param-discipline.mjs",
     "lint:md": "node scripts/lint-md-format.mjs",
     "lint:md:fix": "node scripts/lint-md-format.mjs --fix",
+    "lint:minimal-comments": "node scripts/lint-minimal-comments.mjs",
     "lint:theme-palette-tokens": "node scripts/lint-theme-palette-tokens.mjs",
     "lint:docs-catalog": "node scripts/lint-docs-catalog.mjs",
     "docs:guides": "node docs/build.mjs --guides-only",

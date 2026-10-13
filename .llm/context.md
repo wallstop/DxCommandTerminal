@@ -145,6 +145,9 @@ Adding a skill: create the directory + `SKILL.md`, then run the generator. The l
     editor for its duration. Banned under `Runtime/` and `Editor/`: `Thread.Sleep`, `SpinWait`/`SpinUntil`, `Task.Wait`/`.Result`/`GetAwaiter().GetResult()`, `WaitOne`, `Join`,
     `Monitor.Wait`. A reason-carrying `// blocking-waits:allow: <reason>` marker exempts one guarded site (a completed-task read behind a pump); no unguarded exemptions.
     `lint:blocking-waits` enforces it (pre-commit + CI; no `:fix` by design; PR #254 review).
+27. A comment earns its bytes by carrying the why the code cannot say. A comment whose every content word appears in the line it annotates restates that code - delete it or write
+    the why - and a comment with no content at all (`//`, `// TODO`, a dash line) says nothing (issue #255). `lint:minimal-comments` enforces it (pre-commit + CI; no `:fix` by
+    design); a reason-carrying `// minimal-comments:allow: <reason>` marker exempts one site.
 
 ### Unity Package Rules
 

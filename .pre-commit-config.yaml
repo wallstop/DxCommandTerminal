@@ -65,6 +65,21 @@ repos:
           Two or more consecutive comment-only '//' lines must be one '/*'...'*/' block
           comment instead. Single '//' lines and '///' doc comments stay legal. Use
           `--fix` to convert runs to block comments.
+      - id: minimal-comments-lint
+        name: Lint minimal comments (why, never what; issue #255)
+        entry: node tooling~/scripts/lint-minimal-comments.mjs
+        language: system
+        files: \.cs$
+        pass_filenames: false
+        stages:
+          - pre-commit
+          - pre-push
+        description: >
+          A comment earns its bytes by carrying the why the code cannot say: a comment
+          whose every content word appears in the line it annotates restates that code,
+          and a comment with no content at all (a bare //, a marker-only TODO, a dash
+          line) says nothing. Both fail lint; no --fix by design. A reason-carrying
+          '// minimal-comments:allow: <reason>' marker is the one exemption.
       - id: linq-production-lint
         name: Lint LINQ ban in production code (Runtime/, Editor/; PR #60 review)
         entry: node tooling~/scripts/lint-linq-production.mjs
