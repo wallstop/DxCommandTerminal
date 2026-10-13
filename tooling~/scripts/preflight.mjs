@@ -8,7 +8,11 @@
     Run concurrently, the wall time is the slowest single check (~5s) and one
     command replaces the list.
 
-    Checks (all Unity-free, same commands CI runs):
+    Checks (all Unity-free): each command runs the same script CI runs,
+    called directly - the `npm --prefix` wrapper adds a startup per check
+    and preflight spawns every check at once, so the wrapper is what CI's
+    npm-script steps keep and preflight drops.
+
       - node suite, t11 baseline gate, package content gate, docs guides build,
         compat compile tripwire
       - the nine C#/asset linters (mirrors the pre-commit fleet + CI)
@@ -59,7 +63,8 @@ export function buildChecks() {
   return [
     {
       name: "node-tests",
-      command: "npm --prefix tooling~ test",
+      command:
+        'node --test "tooling~/scripts/mcp/__tests__/*.test.mjs" "tooling~/scripts/tests/*.test.mjs"',
       cacheTrackedFiles: true,
       cacheNpm: true,
       cacheGit: true,
@@ -103,7 +108,7 @@ export function buildChecks() {
     },
     {
       name: "t11-check",
-      command: "npm --prefix tooling~ run t11:check",
+      command: "node tooling~/scripts/t11/check.mjs",
       cacheNpm: true,
       cacheRuntimeEnvironment: true,
       cacheNpmConfig: true,
@@ -115,7 +120,7 @@ export function buildChecks() {
     },
     {
       name: "package-validate",
-      command: "npm --prefix tooling~ run package:validate",
+      command: "node tooling~/scripts/release/validate-package-contents.mjs",
       cacheGitTracked: true,
       cacheGit: true,
       cacheTar: true,
@@ -152,7 +157,7 @@ export function buildChecks() {
     },
     {
       name: "docs-guides",
-      command: "npm --prefix tooling~ run docs:guides",
+      command: "node tooling~/docs/build.mjs --guides-only",
       cacheNpm: true,
       cacheRuntimeEnvironment: true,
       cacheNpmConfig: true,
@@ -172,13 +177,14 @@ export function buildChecks() {
       ]
     },
     /*
-        One lane for the two builds whose projects restore into
-        tooling~/compat/obj (runtime-2021.3's own build and the
-        tests-2021.3 compile gate below): concurrent restores there
-        scramble each other's references into a CS0246 storm (measured: a
-        1,294-error build failure that passes either build alone). The
-        lane serializes them; testhost, whose restore lands in
-        tooling~/compat/testhost/obj, runs alongside as editor-run.
+        Two Unity-free dotnet builds (runtime-2021.3.csproj and the
+        tests-2021.3 compile gate below), each in its own directory since
+        the compile gate moved to tooling~/compat/tests/ - concurrent
+        restores in one obj used to scramble each other's references into
+        a CS0246 storm (measured: a 1,294-error build that passes either
+        build alone), and the old shared-obj layout is what the retired
+        dotnet lane serialized. testhost, whose restore lands in
+        tooling~/compat/testhost/obj, was already isolated.
 
         Both are cached (keyed on the sources each project compiles plus
         the dotnet environment). The old reason not to - "the input
@@ -196,8 +202,7 @@ export function buildChecks() {
      */
     {
       name: "compat-check",
-      command: "npm --prefix tooling~ run compat:check",
-      lane: "dotnet",
+      command: "dotnet build tooling~/compat/runtime-2021.3.csproj -c Release --nologo",
       cacheNpm: true,
       cacheDotnet: true,
       cacheRuntimeEnvironment: true,
@@ -215,14 +220,13 @@ export function buildChecks() {
         test:editor builds tests-2021.3 (the compile gate) and testhost
         (the execution host), and the testhost build applies the source
         generator. Preflight splits the command into its two halves so
-        the halves can leave the dotnet lane separately: tests-2021.3 and
-        runtime-2021.3 both restore into tooling~/compat/obj, so the
-        compile half shares the compat-check lane (the CS0246 storm the
-        lane exists for), while testhost's restore lands in its own
-        tooling~/compat/testhost/obj and runs alongside. compat-2021.yml
-        keeps the chained npm script; the halves here are its steps in
-        CI's order, called directly because the npm wrapper would chain
-        them again.
+        they run concurrently: each project restores into its own
+        directory's obj (the compile gate moved to tooling~/compat/tests/
+        for exactly that - the shared tooling~/compat/obj was the CS0246
+        storm the retired dotnet lane existed for). compat-2021.yml keeps
+        the chained npm script; the halves here are its steps in CI's
+        order, called directly because the npm wrapper would chain them
+        again.
 
         Keys: editor-compile spans what tests-2021.3 compiles (Runtime,
         all of Tests/Editor, the LogAssert stub, its csproj); editor-run
@@ -238,20 +242,18 @@ export function buildChecks() {
      */
     {
       name: "editor-compile",
-      command: "dotnet build tooling~/compat/tests-2021.3.csproj -c Release --nologo",
-      lane: "dotnet",
+      command: "dotnet build tooling~/compat/tests/tests-2021.3.csproj -c Release --nologo",
       cacheDotnet: true,
       cacheRuntimeEnvironment: true,
       cachePaths: [
         "Runtime",
         "Tests/Editor",
-        "tooling~/compat/tests-2021.3.csproj",
         "tooling~/compat/tests"
       ],
       cacheExcludes: [
         "Runtime/Analyzers",
-        "tooling~/compat/obj",
-        "tooling~/compat/bin"
+        "tooling~/compat/tests/obj",
+        "tooling~/compat/tests/bin"
       ]
     },
     {
@@ -344,16 +346,18 @@ export function buildChecks() {
     },
     {
       /*
-          Keys the tracked-file snapshot: the file list comes from
-          `git ls-files`, so any tracked edit (markdown or the config the
-          formatter reads) moves the key, and untracked scratch never
-          does.
+          Keys the tracked markdown files it formats (index listing, not the
+          whole snapshot: a C# edit must not re-run the markdown gate - the
+          local mirror of CI's trigger diet) plus the formatter's own inputs:
+          both config files prettier resolves (.prettierrc.json and
+          .editorconfig) and the node_modules tree prettier runs from.
        */
       name: "lint-md-format",
       command: "node tooling~/scripts/lint-md-format.mjs",
-      cacheTrackedFiles: true,
+      cacheTrackedPaths: ["*.md", ":!.llm/skills/index.md", ".prettierrc.json", ".editorconfig"],
+      cacheDependencies: true,
       cacheRuntimeEnvironment: true,
-      cachePaths: ["tooling~/scripts/lint-md-format.mjs"]
+      cachePaths: ["tooling~/scripts/lint-md-format.mjs", ".prettierrc.json", ".editorconfig"]
     },
     {
       name: "lint-docs-catalog",
@@ -384,78 +388,54 @@ function tailLines(text, maxLines = OUTPUT_TAIL_LINES) {
 }
 
 /**
- * Runs every check concurrently, except checks that share a lane: a check
- * with a `lane` string runs after any other check in the same lane, and
- * checks in different lanes (and lane-less checks, which get their own) run
- * together. The lane exists for checks whose processes share build state -
- * the two dotnet builds both write tooling~/compat/obj, and concurrent
- * restores there scramble each other's references into a CS0246 storm.
- * Resolves once all exits are collected; never rejects for a check's
- * non-zero exit (that is a result, not a crash). A check exceeding
- * CHECK_TIMEOUT_MS is killed and reported as failed so a hung gate cannot
- * hang the run.
+ * Runs every check concurrently and resolves once all exits are collected;
+ * never rejects for a check's non-zero exit (that is a result, not a crash).
+ * A check exceeding CHECK_TIMEOUT_MS is killed and reported as failed so a
+ * hung gate cannot hang the run.
  */
 export function runChecks(checks, { onSettled = () => {} } = {}) {
-  const lanes = new Map();
-  for (const check of checks) {
-    const lane = check.lane ?? check.name;
-    if (!lanes.has(lane)) {
-      lanes.set(lane, []);
-    }
-    lanes.get(lane).push(check);
-  }
+  return Promise.all(
+    checks.map((check) => runOne(check).then((result) => {
+      onSettled(result);
+      return result;
+    }))
+  );
+}
 
-  const runOne = (check) =>
-    new Promise((resolve) => {
-      const startedAt = Date.now();
-      const child = spawn(check.command, {
-        shell: true,
-        cwd: REPO_ROOT,
-        stdio: ["ignore", "pipe", "pipe"]
-      });
-      let output = "";
-      let timedOut = false;
-      const capture = (chunk) => {
-        output += chunk;
-      };
-      const timer = setTimeout(() => {
-        timedOut = true;
-        output += `\n[preflight] check exceeded ${CHECK_TIMEOUT_MS / 1000}s; killed`;
-        child.kill("SIGKILL");
-      }, CHECK_TIMEOUT_MS);
-      child.stdout.on("data", capture);
-      child.stderr.on("data", capture);
-      child.on("error", (error) => {
-        output += `\n[preflight] failed to spawn: ${error.message}`;
-      });
-      child.on("close", (code) => {
-        clearTimeout(timer);
-        const result = {
-          name: check.name,
-          command: check.command,
-          ok: code === 0 && !timedOut,
-          durationMs: Date.now() - startedAt,
-          output: tailLines(output)
-        };
-        onSettled(result);
-        resolve(result);
+function runOne(check) {
+  return new Promise((resolve) => {
+    const startedAt = Date.now();
+    const child = spawn(check.command, {
+      shell: true,
+      cwd: REPO_ROOT,
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    let output = "";
+    let timedOut = false;
+    const capture = (chunk) => {
+      output += chunk;
+    };
+    const timer = setTimeout(() => {
+      timedOut = true;
+      output += `\n[preflight] check exceeded ${CHECK_TIMEOUT_MS / 1000}s; killed`;
+      child.kill("SIGKILL");
+    }, CHECK_TIMEOUT_MS);
+    child.stdout.on("data", capture);
+    child.stderr.on("data", capture);
+    child.on("error", (error) => {
+      output += `\n[preflight] failed to spawn: ${error.message}`;
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      resolve({
+        name: check.name,
+        command: check.command,
+        ok: code === 0 && !timedOut,
+        durationMs: Date.now() - startedAt,
+        output: tailLines(output)
       });
     });
-
-  return Promise.all(
-    /*
-        One chain per lane: a lane's checks run in order, every other lane
-        runs alongside, and each lane resolves to ALL of its results so the
-        summary counts checks, not lanes.
-     */
-    [...lanes.values()].map((laneChecks) =>
-      laneChecks.reduce(
-        (chain, check) =>
-          chain.then((results) => runOne(check).then((result) => [...results, result])),
-        Promise.resolve([])
-      )
-    )
-  ).then((groups) => groups.flat());
+  });
 }
 
 /** Extracts the --skip value (accepts `--skip=a,b` and `--skip a,b`). */

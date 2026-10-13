@@ -52,6 +52,8 @@ tooling~/docs/obj/
 # 2021.3 compile tripwire build state (tooling~/compat; rebuilt by npm run compat:check)
 tooling~/compat/bin/
 tooling~/compat/obj/
+tooling~/compat/tests/bin/
+tooling~/compat/tests/obj/
 tooling~/compat/testhost/bin/
 tooling~/compat/testhost/obj/
 tooling~/compat/testhost/TestResult.xml

@@ -8,9 +8,10 @@
     test fails the build outright.
 
     UnityEngine.TestRunner (LogAssert) is not part of the
-    UnityEngine.Modules package; tests/LogAssertCompileStub.cs stands in
-    for the members the suite calls. The stub is compile-only: the two
-    files that call LogAssert run on a live editor, never here.
+    UnityEngine.Modules package; LogAssertCompileStub.cs next to this
+    file stands in for the members the suite calls. The stub is
+    compile-only: the two files that call LogAssert run on a live
+    editor, never here.
 
     Stated limit: `#if UNITY_EDITOR` regions compile nowhere in CI - the
     pin carries no UnityEditor assemblies, and the host deliberately
@@ -22,8 +23,20 @@
     Execution of the engine-independent fixtures is testhost/'s job;
     this project only answers "does it compile against 2021.3".
 
-    Run via `dotnet build tooling~/compat/tests-2021.3.csproj`, or as
-    part of `npm run test:editor`.
+    The project lives in its own directory so its obj/bin never touch
+    another project's: runtime-2021.3.csproj sat beside this file and
+    both restored into one tooling~/compat/obj, where concurrent
+    restores scrambled each other's project.assets.json into a CS0246
+    storm (measured: a 1,294-error build that passes either build
+    alone). Directory isolation is what lets the compile gate run
+    concurrently with the runtime build instead of serialized behind
+    it - setting BaseIntermediateOutputPath in the project body fires
+    after Microsoft.Common.props resolved the extensions path, so the
+    restore still collided (measured: MSB3539 + a 2,724-error NUnit
+    storm under concurrency).
+
+    Run via `dotnet build tooling~/compat/tests/tests-2021.3.csproj`, or
+    as part of `npm run test:editor`.
 -->
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
@@ -41,9 +54,9 @@
   <ItemGroup>
     <PackageReference Include="UnityEngine.Modules" Version="2021.3.33" />
     <PackageReference Include="NUnit" Version="3.14.0" />
-    <Compile Include="../../Runtime/**/*.cs" Exclude="../../Runtime/Analyzers/**" />
-    <Compile Include="../../Tests/Editor/**/*.cs" />
-    <Compile Include="tests/LogAssertCompileStub.cs" />
+    <Compile Include="../../../Runtime/**/*.cs" Exclude="../../../Runtime/Analyzers/**" />
+    <Compile Include="../../../Tests/Editor/**/*.cs" />
+    <Compile Include="LogAssertCompileStub.cs" />
   </ItemGroup>
   <PropertyGroup>
     <DefineConstants>$(DefineConstants);ENABLE_LEGACY_INPUT_MANAGER</DefineConstants>

@@ -129,7 +129,7 @@ test("buildChecks: unique names, non-empty commands, expected canaries", () => {
     assert.equal(check.cacheRuntimeEnvironment, true, `${check.name} must key inherited runtime state`);
   }
   const compatCheck = checks.find((check) => check.name === "compat-check");
-  assert.equal(compatCheck.lane, "dotnet", "the dotnet builds must share one lane");
+  assert.equal(compatCheck.lane, undefined, "no check shares build state anymore; every check owns a lane");
   assert.equal(compatCheck.cacheDotnet, true);
   assert.deepEqual(compatCheck.cachePaths, [
     "Runtime",
@@ -138,17 +138,45 @@ test("buildChecks: unique names, non-empty commands, expected canaries", () => {
   ]);
   assert.deepEqual(compatCheck.cacheExcludes, ["Runtime/Analyzers"]);
   const editorCompileCheck = checks.find((check) => check.name === "editor-compile");
-  assert.equal(editorCompileCheck.lane, "dotnet", "the compile gate shares the compat restore lane");
+  assert.equal(editorCompileCheck.lane, undefined);
   assert.equal(editorCompileCheck.cacheDotnet, true);
   assert.ok(editorCompileCheck.cachePaths.includes("Tests/Editor"));
   assert.ok(
-    editorCompileCheck.cachePaths.includes("tooling~/compat/tests-2021.3.csproj"),
-    "the compile gate must key the csproj it builds"
+    editorCompileCheck.cachePaths.includes("tooling~/compat/tests"),
+    "the compile gate must key the directory its project and stub live in"
   );
+  for (const buildOutput of ["tooling~/compat/tests/obj", "tooling~/compat/tests/bin"]) {
+    assert.ok(
+      editorCompileCheck.cacheExcludes.includes(buildOutput),
+      `editor-compile must not key its own build output ${buildOutput}`
+    );
+  }
   assert.ok(
-    editorCompileCheck.cacheExcludes.includes("tooling~/compat/obj"),
-    "the compile gate writes tooling~/compat/obj and must not key it"
+    !editorCompileCheck.cacheExcludes.includes("tooling~/compat/obj"),
+    "the compile gate no longer writes the shared compat obj"
   );
+  /*
+      Directory isolation is the retired dotnet lane's replacement: two
+      projects restoring into one obj scramble each other's assets into a
+      CS0246 storm, so the compile gate's project must not sit beside
+      runtime-2021.3.csproj - and no obj-path override may try to
+      reintroduce isolation from inside the project body (that fires
+      after Microsoft.Common.props resolved the extensions path, and the
+      restore still collides).
+   */
+  const testsDirectory = fs
+    .readdirSync(path.join(toolingRoot, "compat", "tests"))
+    .filter((entry) => entry.endsWith(".csproj"));
+  assert.deepEqual(
+    testsDirectory,
+    ["tests-2021.3.csproj"],
+    "tests-2021.3.csproj must be the only project in its directory"
+  );
+  const csproj = fs.readFileSync(
+    path.join(toolingRoot, "compat", "tests", "tests-2021.3.csproj"),
+    "utf8"
+  );
+  assert.ok(!csproj.includes("<BaseIntermediateOutputPath"), "directory isolation replaces the obj-path override");
   const editorRunCheck = checks.find((check) => check.name === "editor-run");
   assert.equal(editorRunCheck.lane, undefined, "testhost's restore owns its obj state, so it runs outside the dotnet lane");
   assert.equal(editorRunCheck.cacheDotnet, true);
@@ -160,12 +188,11 @@ test("buildChecks: unique names, non-empty commands, expected canaries", () => {
       `editor-run must not key its own build output ${buildOutput}`
     );
   }
-  for (const keyedManifest of checks.filter((check) =>
-    check.command.startsWith("npm --prefix tooling~")
-  )) {
-    assert.ok(
-      keyedManifest.cachePaths.includes("tooling~/package.json"),
-      `${keyedManifest.name} runs npm scripts; it must key the manifest defining them`
+  for (const check of checks) {
+    assert.equal(
+      check.command.includes("npm --prefix"),
+      false,
+      `${check.name} must run its script directly; the npm wrapper only adds a startup per check`
     );
   }
   const linterCheck = checks.find((check) => check.name === "lint-linq-production");
@@ -281,13 +308,12 @@ test("runChecks: settles once per check and preserves results", async () => {
   assert.ok(results.every((result) => result.ok), "all subjects pass");
 });
 
-test("runChecks: same-lane checks serialize while other lanes run concurrently", async () => {
+test("runChecks: checks run concurrently with no shared-lane serialization", async () => {
   /*
-      The lane exists because two dotnet builds sharing compat/obj scramble
-      each other's restores. The pin: two checks in one lane never overlap
-      (each records a start after the other's end), while a third check in
-      another lane overlaps the first anyway, so the lane costs no more
-      serialization than it needs.
+      The dotnet lane is retired: every compat project restores into its
+      own directory's obj, so no two checks share build state and none
+      may serialize behind another. The pin: two slow checks overlap -
+      the second starts before the first ends.
    */
   const marker = path.join(os.tmpdir(), `dxct-preflight-lane-${process.pid}-${Date.now()}`);
   const overlap = (label, holdMs) => `
@@ -301,8 +327,8 @@ test("runChecks: same-lane checks serialize while other lanes run concurrently",
     fs.writeFileSync(marker, JSON.stringify(state));
     setTimeout(() => {
       /*
-          Re-read at write time: a sibling in another lane finished while
-          this one held, and its entry must survive this write.
+          Re-read at write time: a sibling that finished while this one
+          held must survive this write.
        */
       const fresh = read();
       fresh[key] = { ...state[key], end: Date.now() };
@@ -310,25 +336,15 @@ test("runChecks: same-lane checks serialize while other lanes run concurrently",
       process.exit(0);
     }, ${holdMs});
   `;
-  const scripts = {
-    laneA1: overlap("laneA1", 300),
-    laneA2: overlap("laneA2", 0),
-    laneB: overlap("laneB", 150)
-  };
   try {
     await runChecks([
-      { name: "laneA1", command: `node "${writeTempScript(scripts.laneA1)}"`, lane: "A" },
-      { name: "laneA2", command: `node "${writeTempScript(scripts.laneA2)}"`, lane: "A" },
-      { name: "laneB", command: `node "${writeTempScript(scripts.laneB)}"`, lane: "B" }
+      { name: "slow-a", command: `node "${writeTempScript(overlap("slow-a", 300))}"` },
+      { name: "slow-b", command: `node "${writeTempScript(overlap("slow-b", 300))}"` }
     ]);
     const state = JSON.parse(fs.readFileSync(marker, "utf8"));
     assert.ok(
-      state.laneA2.start >= state.laneA1.end,
-      "the second check in a lane must start at or after the first one ends"
-    );
-    assert.ok(
-      state.laneB.start < state.laneA1.end,
-      "a check in another lane must overlap the lane, not wait for it"
+      state["slow-b"].start < state["slow-a"].end,
+      "a second check must overlap a still-running one, not queue behind it"
     );
   } finally {
     fs.rmSync(marker, { force: true });
@@ -800,6 +816,89 @@ test("a dirty tracked file outside declared roots moves keys by content", async 
     fs.writeFileSync(tracked, original);
   }
   assert.equal(await observe(), clean, "restoring the bytes must restore the key");
+});
+
+test("a pathspec-scoped listing keys only the files under the pathspec", async () => {
+  /*
+      The tracked-listing keying is how a whole-tree gate stops paying for
+      edits it never reads: the listing is `ls-files -s` restricted to the
+      check's pathspecs (here, the markdown gate's own set), so an edit
+      under them moves the key, an edit anywhere else does not, and an
+      untracked draft under them does not either - the gates keyed this
+      way read tracked files only. The probe stages two markdown files in
+      the scratch repository; the dirty-worktree byte fold is what makes
+      mdA's rewrite re-key.
+   */
+  const repo = scratchRepo();
+  const mdA = path.join(repo.root, "notes-a.md");
+  const mdB = path.join(repo.root, "nested", "notes-b.md");
+  fs.mkdirSync(path.join(repo.root, "nested"), { recursive: true });
+  fs.writeFileSync(mdA, "one\n");
+  fs.writeFileSync(mdB, "one\n");
+  repo.git("add", "-A");
+  const txt = path.join(repo.root, "tooling~", "scripts", "tracked-fixture.txt");
+  const txtOriginal = fs.readFileSync(txt, "utf8");
+  const observe = (pathspecs) =>
+    repo.run(`
+        const check = { name: "listing", command: "node listing.mjs", cacheTrackedPaths: ${JSON.stringify(pathspecs)} };
+        const key = () => module.cacheKeyForCheck(check, { node: "node", platform: "linux", arch: "x64", files: [] });
+        console.log(key());
+      `);
+  const gateSpecs = ["*.md", ":!.llm/skills/index.md", ":!nested/notes-b.md", ".prettierrc.json", ".editorconfig"];
+  const untrackedDraft = path.join(repo.root, "untracked-draft.md");
+  try {
+    const clean = await observe(gateSpecs);
+    fs.writeFileSync(mdA, "two\n");
+    const mdDirty = await observe(gateSpecs);
+    assert.notEqual(mdDirty, clean, "an edit under the pathspec must move the key");
+    fs.writeFileSync(txt, `${txtOriginal}unrelated\n`);
+    assert.equal(
+      await observe(gateSpecs),
+      mdDirty,
+      "an edit outside the pathspec must not move the key"
+    );
+    fs.writeFileSync(untrackedDraft, "untracked scratch\n");
+    assert.equal(
+      await observe(gateSpecs),
+      mdDirty,
+      "an untracked file under the pathspec must not move the key: the gates keyed here read tracked files only"
+    );
+
+    const withExclusion = await observe(gateSpecs);
+    fs.writeFileSync(mdB, "excluded\n");
+    assert.equal(
+      await observe(gateSpecs),
+      withExclusion,
+      "an edit under an exclude pathspec must not move the key"
+    );
+    fs.writeFileSync(mdA, "three\n");
+    assert.notEqual(
+      await observe(gateSpecs),
+      withExclusion,
+      "an edit under a non-excluded pathspec must move the key"
+    );
+  } finally {
+    fs.rmSync(untrackedDraft, { force: true });
+    fs.rmSync(mdA, { force: true });
+    fs.rmSync(mdB, { force: true });
+    fs.writeFileSync(txt, txtOriginal);
+  }
+});
+
+test("the markdown gate keys its own files, not the whole snapshot", () => {
+  const mdCheck = buildChecks().find((check) => check.name === "lint-md-format");
+  assert.deepEqual(
+    mdCheck.cacheTrackedPaths,
+    ["*.md", ":!.llm/skills/index.md", ".prettierrc.json", ".editorconfig"],
+    "the gate reads tracked markdown (index exempt) and both config files prettier resolves"
+  );
+  assert.deepEqual(
+    mdCheck.cachePaths,
+    ["tooling~/scripts/lint-md-format.mjs", ".prettierrc.json", ".editorconfig"],
+    "the configs key the gate directly, not only through the tracked listing"
+  );
+  assert.equal(mdCheck.cacheTrackedFiles, undefined, "the whole-snapshot key would re-run the gate on any edit");
+  assert.equal(mdCheck.cacheDependencies, true, "prettier runs from node_modules; its tree must key the gate");
 });
 
 test("the run's key computer answers the live key and moves with its inputs", () => {
