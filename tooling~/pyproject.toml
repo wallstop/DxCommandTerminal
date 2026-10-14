@@ -1,13 +1,23 @@
 [project]
 # The typed-python surface for the repo's script tooling (issue #220).
-# Stage 1 hosts the lint-skill-sizes port; later stages move the remaining
-# .ps1 linters in one entry point at a time. Runtime dependencies stay
-# empty - the scripts are standard library only, so `uv run` only needs
-# to resolve the interpreter, and CI needs nothing beyond setup-python
-# plus uv itself. The node tooling next door pins exact versions with no
-# lockfile; the same convention holds here (requires-python is the pin).
+# Stage 1 hosts the lint-skill-sizes port; stage 2 the lint-unity-meta port.
+# Later stages move the remaining .ps1 linters in one entry point at a time.
+# Runtime dependencies stay empty - the scripts are standard library only,
+# so `uv run` only needs to resolve the interpreter, and CI needs nothing
+# beyond setup-python plus uv itself. The node tooling next door pins exact
+# versions with no lockfile; the same convention holds here (requires-python
+# is the pin).
 name = "dxcommandterminal-tooling"
 version = "0.0.0"
 private = true
 requires-python = ">=3.11"
 dependencies = []
+
+[dependency-groups]
+# The typing gate (issue #256): a pinned pyright in basic mode. Non-default
+# group on purpose - plain `uv run` (every ps1 delegator's path) never
+# syncs it, so the pre-commit hooks stay dependency-free; the CI step and
+# a local `uv run --project tooling~ --group typing pyright` request it
+# explicitly, and the pip cache keyed on this manifest busts when the pin
+# moves.
+typing = ["pyright==1.1.414"]

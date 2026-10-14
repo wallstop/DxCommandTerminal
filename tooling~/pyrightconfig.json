@@ -1,0 +1,8 @@
+{
+  "include": ["scripts"],
+  "extraPaths": ["scripts"],
+  "pythonVersion": "3.11",
+  "pythonPlatform": "All",
+  "typeCheckingMode": "basic",
+  "reportMissingTypeStubs": false
+}
