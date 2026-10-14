@@ -234,3 +234,5 @@ repos:
           Validates Unity .meta hygiene over tracked files: every .meta has its target
           tracked (no orphan metas for gitignored/generated data), every Unity-visible
           file/directory has a tracked .meta, and every meta declares a unique 32-hex guid.
+          Implemented by lint_unity_meta.py (typed python under uv, issue #220 stage 2); this
+          ps1 entry is the delegator so the hook keeps its command.
