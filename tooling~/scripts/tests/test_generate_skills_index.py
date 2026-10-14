@@ -30,6 +30,29 @@ class SkillsIndexTests(unittest.TestCase):
         self.assertEqual(index_content(REPO_ROOT / ".llm" / "skills").encode("utf-8"),
                          (REPO_ROOT / ".llm" / "skills" / "index.md").read_bytes())
 
+    def test_repeated_generation_is_byte_identical(self) -> None:
+        self.skill("alpha", "---\ndescription: Text\n---\nbody")
+        first = self.root / "first.md"
+        second = self.root / "second.md"
+        self.assertEqual(0, generate_skills_index(self.root, output_path=first))
+        self.assertEqual(0, generate_skills_index(self.root, output_path=second))
+        self.assertEqual(first.read_bytes(), second.read_bytes())
+
+    def test_category_section_order(self) -> None:
+        for category in ("Feature", "Performance", "Core"):
+            self.skill(category.lower(), f"---\ndescription: Text\nmetadata:\n  category: {category}\n---\nbody")
+        content = index_content(self.skills)
+        positions = [content.index(f"## {category} Skills") for category in ("Core", "Performance", "Feature")]
+        self.assertEqual(positions, sorted(positions))
+
+    def test_quoted_description_is_unquoted(self) -> None:
+        for quote in ('"', "'"):
+            with self.subTest(quote=quote):
+                self.skill("alpha", f"---\ndescription: {quote}Quoted description here.{quote}\n---\nbody")
+                content = index_content(self.skills)
+                self.assertIn("| Quoted description here. |", content)
+                self.assertNotIn(f"{quote}Quoted", content)
+
     def test_bom_and_line_boundaries(self) -> None:
         for encoding in ("utf-8", "utf-8-sig", "utf-16", "utf-32"):
             for separator in ("\n", "\r", "\r\n"):
@@ -105,6 +128,24 @@ class SkillsIndexTests(unittest.TestCase):
         wrapper = REPO_ROOT / "tooling~" / "scripts" / "generate-skills-index.ps1"
         self.check_normal_verbose_process(["pwsh", "-NoProfile", "-File", str(wrapper)],
                                           ["-RepoRoot", str(self.root), "-VerboseOutput"])
+
+    @unittest.skipUnless(shutil.which("pwsh"), "PowerShell is required for wrapper process coverage")
+    def test_powershell_dot_source_custom_output_and_integer_return(self) -> None:
+        self.skill("alpha", "---\ndescription: Text\n---\nbody")
+        wrapper = REPO_ROOT / "tooling~" / "scripts" / "generate-skills-index.ps1"
+        output = self.root / "custom index.md"
+        driver = self.root / "driver.ps1"
+        driver.write_text(". $args[0]; $code = New-SkillsIndex -RepoRoot $args[1] -OutputPath $args[2]; "
+                          "if ($code -isnot [int]) { exit 99 }; exit $code", encoding="utf-8")
+        command = ["pwsh", "-NoProfile", "-File", str(driver), str(wrapper), str(self.root), str(output)]
+        result = subprocess.run(command, capture_output=True, check=False, timeout=60)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(index_content(self.skills).encode("utf-8"), output.read_bytes())
+        self.assertFalse((self.skills / "index.md").exists())
+        self.skills.rename(self.root / "saved-skills")
+        failed = subprocess.run(command, capture_output=True, check=False, timeout=60)
+        self.assertEqual(1, failed.returncode, failed.stderr)
+        self.assertIn(b"Skills directory not found", failed.stdout)
 
     def check_normal_verbose_process(self, command: list[str], arguments: list[str]) -> None:
         self.skill("alpha", "---\ndescription: Text\n---\nbody")

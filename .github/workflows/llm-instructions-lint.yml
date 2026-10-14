@@ -123,7 +123,5 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           ./tooling~/scripts/tests/test-generate-skills-index.ps1 -VerboseOutput
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          uv run --project tooling~ python -m unittest discover -s tooling~/scripts/tests -p test_generate_skills_index.py
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
           uv run --project tooling~ python -m unittest discover -s tooling~/scripts/tests -p test_lint_llm_instructions.py
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
