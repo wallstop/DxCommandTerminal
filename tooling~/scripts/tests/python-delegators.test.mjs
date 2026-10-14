@@ -46,11 +46,11 @@ function Invoke-MockRunner {
     if ($Arguments[0] -eq '-c') {
         if ($runners[$Name] -eq 'throw') { throw 'Cannot launch interpreter' }
         Write-Output 'probe output must be suppressed'
-        Set-Variable -Name LASTEXITCODE -Scope 2 -Value $runners[$Name]
+        Set-Variable -Name LASTEXITCODE -Scope Global -Value $runners[$Name]
     }
     else {
         Write-Output 'payload output'
-        Set-Variable -Name LASTEXITCODE -Scope 2 -Value ${payloadExit}
+        Set-Variable -Name LASTEXITCODE -Scope Global -Value ${payloadExit}
     }
 }
 function uv { Invoke-MockRunner 'uv' $args }
@@ -116,3 +116,42 @@ if ([Console]::OutputEncoding.CodePage -ne 20127) { throw 'Console encoding was 
     fs.rmSync(temp, { recursive: true, force: true });
   }
 });
+
+for (const [delegate, payload] of delegates) {
+  for (const [runner, exitCode] of [["python", 0], ["python3", 23]]) {
+    test(`${delegate}: real ${runner} fallback preserves native exit ${exitCode}`, () => {
+      const temp = fs.mkdtempSync(path.join(os.tmpdir(), "native-python-fallback-"));
+      try {
+        const copiedDelegate = path.join(temp, "tooling~", "scripts", delegate);
+        fs.mkdirSync(path.dirname(copiedDelegate), { recursive: true });
+        fs.copyFileSync(path.join(scriptsRoot, delegate), copiedDelegate);
+        const copiedPayload = path.join(path.dirname(copiedDelegate), payload);
+        fs.writeFileSync(copiedPayload, `import sys\nprint('real native payload')\nsys.exit(${exitCode})\n`);
+        const harness = path.join(temp, "native.ps1");
+        fs.writeFileSync(harness, `
+$ErrorActionPreference = 'Stop'
+$nativePython = foreach ($name in @('python', 'python3')) {
+    $command = Microsoft.PowerShell.Core\\Get-Command $name -CommandType Application -ErrorAction SilentlyContinue
+    if ($command) { $command[0].Source; break }
+}
+if (-not $nativePython) { throw 'Python 3.11+ test prerequisite missing' }
+Set-Alias -Name ${runner} -Value $nativePython
+function Get-Command {
+    param($Name, $ErrorAction, $CommandType)
+    if ($Name -ne '${runner}') { return $null }
+    Microsoft.PowerShell.Core\\Get-Command @PSBoundParameters
+}
+& ${quote(copiedDelegate)}
+exit $global:LASTEXITCODE
+`);
+        const result = spawnSync("pwsh", ["-NoProfile", "-File", harness], { encoding: "utf8", timeout: 20_000 });
+        assert.ifError(result.error);
+        assert.equal(result.status, exitCode, result.stdout + result.stderr);
+        assert.match(result.stdout, /real native payload/u);
+        assert.doesNotMatch(result.stdout, /no working runner/u);
+      } finally {
+        fs.rmSync(temp, { recursive: true, force: true });
+      }
+    });
+  }
+}
