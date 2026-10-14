@@ -157,38 +157,45 @@ function installEditorDevTools(project) {
   }
   return hashes;
 }
-export function writeProjectSettings(project, matrix, leg) {
-  const settingsDirectory = path.join(project, "ProjectSettings");
-  const settings = legSettings(matrix, leg);
-  fs.mkdirSync(settingsDirectory, { recursive: true });
-  fs.writeFileSync(
-    path.join(settingsDirectory, "EditorSettings.asset"),
-    `%YAML 1.1\n%TAG !u! tag:unity3d.com,2011:\n--- !u!159 &15900000\nEditorSettings:\n  m_ObjectHideFlags: 0\n  m_Enabled: 1\n  m_EnterPlayModeOptionsEnabled: ${settings.domainReloadEnabled ? 0 : 1}\n  m_EnterPlayModeOptions: ${settings.domainReloadEnabled ? 0 : 1}\n`
-  );
-  fs.writeFileSync(
-    path.join(settingsDirectory, "ProjectSettings.asset"),
-    `%YAML 1.1\n%TAG !u! tag:unity3d.com,2011:\n--- !u!129 &12900000\nPlayerSettings:\n  m_ObjectHideFlags: 0\n  activeInputHandler: ${INPUT_PROFILES.get(settings.inputProfile)}\n`
-  );
+function canonicalField(text, field, allowedValues) {
+  const pattern = new RegExp(`^([ \t]*${field}:[ \t]*)(.*?)([ \t]*\r?)$`, "gmu");
+  const matches = [...text.matchAll(pattern)];
+  if (matches.length !== 1) throw new Error(`settings must contain exactly one ${field} field (found ${matches.length})`);
+  if (!/^[0-9]+$/u.test(matches[0][2]) || !allowedValues.includes(Number(matches[0][2]))) throw new Error(`settings have an unsupported ${field} value: ${matches[0][2]}`);
+  return { match: matches[0], value: Number(matches[0][2]) };
 }
-const INPUT_HANDLER_FIELD = /^([ \t]*activeInputHandler:[ \t]*)(.*?)([ \t]*\r?)$/gmu;
-function inputHandlerField(text) {
-  const matches = [...text.matchAll(INPUT_HANDLER_FIELD)];
-  if (matches.length !== 1) throw new Error(`ProjectSettings.asset must contain exactly one activeInputHandler field (found ${matches.length})`);
-  if (!/^[012]$/u.test(matches[0][2])) throw new Error(`ProjectSettings.asset has an unsupported activeInputHandler value: ${matches[0][2]}`);
-  const value = Number(matches[0][2]);
-  return { match: matches[0], value };
+function replaceCanonicalField(text, field, value, allowedValues) {
+  const { match } = canonicalField(text, field, allowedValues);
+  const replacement = `${match[1]}${value}${match[3]}`;
+  return text.slice(0, match.index) + replacement + text.slice(match.index + match[0].length);
 }
 export function readInputHandler(project) {
-  return inputHandlerField(fs.readFileSync(path.join(project, "ProjectSettings", "ProjectSettings.asset"), "utf8")).value;
+  const text = fs.readFileSync(path.join(project, "ProjectSettings", "ProjectSettings.asset"), "utf8");
+  return canonicalField(text, "activeInputHandler", [0, 1, 2]).value;
+}
+export function readDomainReloadSettings(project) {
+  const text = fs.readFileSync(path.join(project, "ProjectSettings", "EditorSettings.asset"), "utf8");
+  const enabled = canonicalField(text, "m_EnterPlayModeOptionsEnabled", [0, 1]).value;
+  const options = canonicalField(text, "m_EnterPlayModeOptions", [0, 1, 2, 3]).value;
+  return { enabled, options, domainReloadEnabled: enabled === 0 || (options & 1) === 0 };
 }
 export function applyCanonicalInputProfile(project, profile) {
   validateInputProfile(profile, "input profile");
   const file = path.join(project, "ProjectSettings", "ProjectSettings.asset");
   const text = fs.readFileSync(file, "utf8");
-  const { match } = inputHandlerField(text);
-  const replacement = `${match[1]}${INPUT_PROFILES.get(profile)}${match[3]}`;
-  fs.writeFileSync(file, text.slice(0, match.index) + replacement + text.slice(match.index + match[0].length));
+  fs.writeFileSync(file, replaceCanonicalField(text, "activeInputHandler", INPUT_PROFILES.get(profile), [0, 1, 2]));
   return readInputHandler(project);
+}
+export function applyCanonicalProjectSettings(project, matrix, leg) {
+  const settings = legSettings(matrix, leg);
+  validateInputProfile(settings.inputProfile, "input profile");
+  const playerFile = path.join(project, "ProjectSettings", "ProjectSettings.asset");
+  const editorFile = path.join(project, "ProjectSettings", "EditorSettings.asset");
+  const player = replaceCanonicalField(fs.readFileSync(playerFile, "utf8"), "activeInputHandler", INPUT_PROFILES.get(settings.inputProfile), [0, 1, 2]);
+  let editor = replaceCanonicalField(fs.readFileSync(editorFile, "utf8"), "m_EnterPlayModeOptionsEnabled", settings.domainReloadEnabled ? 0 : 1, [0, 1]);
+  editor = replaceCanonicalField(editor, "m_EnterPlayModeOptions", settings.domainReloadEnabled ? 0 : 1, [0, 1, 2, 3]);
+  fs.writeFileSync(playerFile, player);
+  fs.writeFileSync(editorFile, editor);
 }
 function testUnityArgs(project, resultsPath, logPath, platform = "editmode") {
   return [
@@ -458,6 +465,7 @@ export async function runLeg(options, matrix, leg, runtime = {}) {
     inputProfile: settings.inputProfile,
     requestedInputHandler: INPUT_PROFILES.get(settings.inputProfile),
     effectiveInputHandlers: [],
+    effectiveDomainReloadSettings: [],
     domainReloadEnabled: settings.domainReloadEnabled,
     artifact: options.artifact,
     artifactSha256,
@@ -495,7 +503,6 @@ export async function runLeg(options, matrix, leg, runtime = {}) {
       ...artifact.scratchDependencies,
       "com.unity.test-framework": "1.1.33"
     });
-    writeProjectSettings(project, matrix, leg);
     manifest.editorDevToolHashes = installEditorDevTools(project);
   } catch (error) {
     manifest.failure = `fixture scaffold failed: ${error.message}`;
@@ -529,10 +536,11 @@ export async function runLeg(options, matrix, leg, runtime = {}) {
     if (phase.name === "import") {
       try {
         copyFixtureFiles(options.fixtureRoot, project);
-        const value = applyCanonicalInputProfile(project, settings.inputProfile);
-        manifest.effectiveInputHandlers.push({ phase: phase.name, value });
+        applyCanonicalProjectSettings(project, matrix, leg);
+        manifest.effectiveInputHandlers.push({ phase: phase.name, value: readInputHandler(project) });
+        manifest.effectiveDomainReloadSettings.push({ phase: phase.name, ...readDomainReloadSettings(project) });
       } catch (error) {
-        manifest.failure = `fixture or input profile setup failed: ${error.message}`;
+        manifest.failure = `fixture or project profile setup failed: ${error.message}`;
         break;
       }
     }
@@ -557,8 +565,11 @@ export async function runLeg(options, matrix, leg, runtime = {}) {
         const value = readInputHandler(project);
         manifest.effectiveInputHandlers.push({ phase: phase.name, value });
         if (value !== manifest.requestedInputHandler) throw new Error(`activeInputHandler is ${value}, expected ${manifest.requestedInputHandler} (${settings.inputProfile})`);
+        const domain = readDomainReloadSettings(project);
+        manifest.effectiveDomainReloadSettings.push({ phase: phase.name, ...domain });
+        if (domain.domainReloadEnabled !== settings.domainReloadEnabled) throw new Error(`domain reload is ${domain.domainReloadEnabled}, expected ${settings.domainReloadEnabled}`);
       } catch (error) {
-        manifest.failure = `${phase.name} input profile verification failed: ${error.message}`;
+        manifest.failure = `${phase.name} project profile verification failed: ${error.message}`;
         break;
       }
     }

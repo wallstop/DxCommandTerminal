@@ -18,7 +18,8 @@ import {
   resolveLegs,
   runMatrix,
   validateMatrix,
-  writeProjectSettings
+  applyCanonicalProjectSettings,
+  readDomainReloadSettings
 } from "../t13/compatibility-fixtures.mjs";
 
 const TOOLING_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -56,7 +57,10 @@ test("matrix validates profiles, coverage, and no-domain-reload settings", () =>
   ];
   for (const [leg, inputHandler, enterPlayMode] of settingsCases) {
     const project = temporaryRoot(`settings-${inputHandler}-${enterPlayMode}`);
-    writeProjectSettings(project, matrix, leg);
+    fs.mkdirSync(path.join(project, "ProjectSettings"));
+    fs.writeFileSync(path.join(project, "ProjectSettings/ProjectSettings.asset"), "--- !u!129 &1\nPlayerSettings:\n  serializedVersion: 28\n  activeInputHandler: 0\n");
+    fs.writeFileSync(path.join(project, "ProjectSettings/EditorSettings.asset"), "--- !u!159 &1\nEditorSettings:\n  serializedVersion: 10\n  m_EnterPlayModeOptionsEnabled: 0\n  m_EnterPlayModeOptions: 3\n");
+    applyCanonicalProjectSettings(project, matrix, leg);
     assert.match(fs.readFileSync(path.join(project, "ProjectSettings/ProjectSettings.asset"), "utf8"), new RegExp(`activeInputHandler: ${inputHandler}\\b`));
     assert.match(fs.readFileSync(path.join(project, "ProjectSettings/EditorSettings.asset"), "utf8"), new RegExp(`m_EnterPlayModeOptionsEnabled: ${enterPlayMode}\\b`));
     assert.match(fs.readFileSync(path.join(project, "ProjectSettings/EditorSettings.asset"), "utf8"), new RegExp(`m_EnterPlayModeOptions: ${enterPlayMode}\\b`));
@@ -87,6 +91,31 @@ test("canonical input settings preserve Unity fields and fail closed on ambiguou
     fs.writeFileSync(file, bad);
     assert.throws(() => applyCanonicalInputProfile(project, "both"), /exactly one activeInputHandler|unsupported activeInputHandler/);
     assert.equal(fs.readFileSync(file, "utf8"), bad);
+  }
+});
+
+test("canonical reload settings reject duplicate objects and preserve both files on refusal", () => {
+  const matrix = loadMatrix(MATRIX_PATH);
+  const project = temporaryRoot("reload-profile");
+  fs.mkdirSync(path.join(project, "ProjectSettings"));
+  const playerFile = path.join(project, "ProjectSettings/ProjectSettings.asset");
+  const editorFile = path.join(project, "ProjectSettings/EditorSettings.asset");
+  const player = "--- !u!129 &1\nPlayerSettings:\n  activeInputHandler: 0\n";
+  const editor = "--- !u!159 &1\nEditorSettings:\n  m_EnterPlayModeOptionsEnabled: 0\n  m_EnterPlayModeOptions: 3\n  unrelated: Preserved\n";
+  for (const bad of [
+    editor + "--- !u!159 &15900000\nEditorSettings:\n  m_EnterPlayModeOptions: 1\n",
+    editor.replace("  m_EnterPlayModeOptionsEnabled: 0\n", ""),
+    editor.replace("m_EnterPlayModeOptionsEnabled: 0", "m_EnterPlayModeOptionsEnabled: 2")
+  ]) {
+    fs.writeFileSync(playerFile, player);
+    fs.writeFileSync(editorFile, bad);
+    assert.throws(() => applyCanonicalProjectSettings(project, matrix, { ...matrix.editors[0], inputProfile: "both" }), /exactly one|unsupported/);
+    assert.equal(fs.readFileSync(playerFile, "utf8"), player);
+    assert.equal(fs.readFileSync(editorFile, "utf8"), bad);
+  }
+  for (const [enabled, options, expected] of [[0, 3, true], [1, 0, true], [1, 1, false], [1, 2, true], [1, 3, false]]) {
+    fs.writeFileSync(editorFile, editor.replace("OptionsEnabled: 0", `OptionsEnabled: ${enabled}`).replace("Options: 3", `Options: ${options}`));
+    assert.equal(readDomainReloadSettings(project).domainReloadEnabled, expected);
   }
 });
 
@@ -227,7 +256,9 @@ test("matrix manifests record complete identity and reject stale reports", async
   let compileFailure = null;
   let playModeXml = PASSED_XML;
   let revertPhase = null;
+  let revertDomain = false;
   const requestedHandlers = new Map();
+  let requestedProfile = "legacy";
   const runtime = {
     probeEditorVersion: () => "6000.4.6f1",
     validateImportedProject: () => ({ failures: [], checks: [] }),
@@ -235,8 +266,11 @@ test("matrix manifests record complete identity and reject stale reports", async
       const project = args[args.indexOf("-projectPath") + 1];
       const settingsFile = path.join(project, "ProjectSettings", "ProjectSettings.asset");
       if (args.includes("-importPackage")) {
-        requestedHandlers.set(project, readInputHandler(project));
-        fs.writeFileSync(settingsFile, "PlayerSettings:\n  serializedVersion: 28\n  productName: Preserved\n  activeInputHandler: 0\n");
+        assert.equal(fs.existsSync(settingsFile), false, "Unity must create its own canonical PlayerSettings object");
+        assert.equal(fs.existsSync(path.join(project, "ProjectSettings", "EditorSettings.asset")), false);
+        requestedHandlers.set(project, { legacy: 0, "input-system": 1, both: 2 }[requestedProfile]);
+        fs.writeFileSync(path.join(project, "ProjectSettings", "EditorSettings.asset"), "--- !u!159 &1\nEditorSettings:\n  serializedVersion: 10\n  m_EnterPlayModeOptionsEnabled: 0\n  m_EnterPlayModeOptions: 3\n");
+        fs.writeFileSync(settingsFile, "--- !u!129 &1\nPlayerSettings:\n  serializedVersion: 28\n  productName: Preserved\n  activeInputHandler: 0\n");
       } else {
         assert.equal(readInputHandler(project), requestedHandlers.get(project));
         assert.match(fs.readFileSync(settingsFile, "utf8"), /productName: Preserved/);
@@ -279,7 +313,12 @@ test("matrix manifests record complete identity and reject stale reports", async
         assert.equal(environment.DX_T13_INPUT_PROFILE, { 0: "legacy", 1: "input-system", 2: "both" }[requestedHandlers.get(project)]);
       }
       const phase = args.includes("-runTests") ? args[args.indexOf("-testPlatform") + 1] : args.includes("-importPackage") ? "import" : "settle";
-      if (phase === revertPhase) fs.writeFileSync(settingsFile, fs.readFileSync(settingsFile, "utf8").replace(/activeInputHandler: [012]/u, "activeInputHandler: 0"));
+      if (phase === revertPhase) {
+        const changedFile = revertDomain ? path.join(project, "ProjectSettings", "EditorSettings.asset") : settingsFile;
+        const pattern = revertDomain ? /m_EnterPlayModeOptionsEnabled: 1/u : /activeInputHandler: [012]/u;
+        const replacement = revertDomain ? "m_EnterPlayModeOptionsEnabled: 0" : "activeInputHandler: 0";
+        fs.writeFileSync(changedFile, fs.readFileSync(changedFile, "utf8").replace(pattern, replacement));
+      }
       fs.writeFileSync(logPath, compileFailure === null ? "phase complete\n" : `Assets/Editor/${compileFailure}.cs(1,1): error CS1002: ; expected\n`);
       if (args.includes("-runTests")) {
         const resultsPath = args[args.indexOf("-testResults") + 1];
@@ -306,6 +345,7 @@ test("matrix manifests record complete identity and reject stale reports", async
   assert.deepStrictEqual(testEnvironments.map((environment) => environment.DX_T13_DOMAIN_RELOAD_ENABLED), ["1", "1", "0", "0"]);
   assert.equal(noReloadReport.failed, false);
   for (const profile of ["input-system", "both"]) {
+    requestedProfile = profile;
     for (const domainReloadEnabled of [true, false]) {
       const selected = domainReloadEnabled ? "unity-6" : "unity-6-no-reload";
       const profiled = await runMatrix({ ...options, out: path.join(root, `${profile}-${selected}`), only: selected }, { ...matrix, inputProfile: profile }, runtime);
@@ -315,15 +355,26 @@ test("matrix manifests record complete identity and reject stale reports", async
       assert.deepStrictEqual(profiled.legs[0].effectiveInputHandlers, ["import", "settle", "tests", "playmode-tests"].map(phase => ({ phase, value })));
     }
   }
+  requestedProfile = "input-system";
   for (const phase of ["settle", "editmode", "playmode"]) {
     revertPhase = phase;
     const reverted = await runMatrix({ ...options, out: path.join(root, `reverted-${phase}`), keep: false }, { ...matrix, inputProfile: "input-system" }, runtime);
     assert.equal(reverted.failed, true);
-    assert.match(reverted.legs[0].failure, /input profile verification failed/);
+    assert.match(reverted.legs[0].failure, /project profile verification failed/);
     assert.equal(reverted.legs[0].effectiveInputHandlers.at(-1).value, 0);
     assert.ok(fs.existsSync(reverted.legs[0].project));
     if (phase === "playmode") assert.equal(reverted.legs[0].playModeTestResults.passed, true);
   }
+  requestedProfile = "legacy";
+  revertDomain = true;
+  revertPhase = "playmode";
+  const restoredReload = await runMatrix({ ...options, out: path.join(root, "reverted-domain"), only: "unity-6-no-reload", keep: false }, matrix, runtime);
+  assert.equal(restoredReload.failed, true);
+  assert.match(restoredReload.legs[0].failure, /domain reload is true, expected false/);
+  assert.equal(restoredReload.legs[0].playModeTestResults.passed, true);
+  assert.equal(restoredReload.legs[0].effectiveDomainReloadSettings.at(-1).domainReloadEnabled, true);
+  assert.ok(fs.existsSync(restoredReload.legs[0].project));
+  revertDomain = false;
   revertPhase = null;
   assert.match(report.matrixSha256, /^[0-9a-f]{64}$/);
   assert.match(report.git.revision, /^[0-9a-f]{40}$/);
@@ -386,7 +437,7 @@ test("matrix manifests record complete identity and reject stale reports", async
   assert.equal(installationFailure.failed, true);
   assert.equal(installationFailure.complete, true);
   assert.equal(failedInstallation.complete, true);
-  assert.match(failedInstallation.failure, /fixture or input profile setup failed: fixture root has no Assets directory/);
+  assert.match(failedInstallation.failure, /fixture or project profile setup failed: fixture root has no Assets directory/);
   assert.deepStrictEqual(failedInstallation.phases.map((phase) => phase.name), ["import"]);
   assert.ok(fs.existsSync(failedInstallation.project));
   assert.deepStrictEqual(
