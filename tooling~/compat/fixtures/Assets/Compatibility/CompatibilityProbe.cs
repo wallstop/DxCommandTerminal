@@ -26,10 +26,25 @@ namespace DxCommandTerminal.T13.Compatibility.Tests
         [UnityTest]
         public IEnumerator StoredPrefabPlayModeLifecycle()
         {
+            if (!DomainReloadEnabled)
+            {
+                // Fresh imports can force compilation during the first Play Mode entry.
+                EditorSettings.enterPlayModeOptionsEnabled = false;
+                yield return new EnterPlayMode(expectDomainReload: true);
+                yield return new ExitPlayMode();
+                EditorSettings.enterPlayModeOptionsEnabled = true;
+                EditorSettings.enterPlayModeOptions = EnterPlayModeOptions.DisableDomainReload;
+            }
+            string persistenceBase = Environment.GetEnvironmentVariable("DX_T13_PERSISTENCE_FILE");
+            Assert.That(string.IsNullOrEmpty(persistenceBase), Is.False);
             CommandLog previousBuffer = null;
             for (int session = 0; session < (DomainReloadEnabled ? 1 : 2); ++session)
             {
                 Assert.That(Application.isPlaying, Is.False);
+                if (!DomainReloadEnabled)
+                {
+                    Environment.SetEnvironmentVariable("DX_T13_PERSISTENCE_FILE", $"{persistenceBase}.session-{session}.json");
+                }
                 yield return new EnterPlayMode(expectDomainReload: DomainReloadEnabled);
                 Assert.That(Application.isPlaying, Is.True);
                 Assert.That(TerminalUI.Instance == null, Is.True);
@@ -184,7 +199,6 @@ namespace DxCommandTerminal.T13.Compatibility.Tests
                         SceneManager.UnloadSceneAsync(scenes[index]);
                     }
                 }
-                File.Delete(persistenceFile);
             }
         }
 
@@ -204,7 +218,14 @@ namespace DxCommandTerminal.T13.Compatibility.Tests
 
         private static bool PersistenceContains(string path, string expected)
         {
-            return File.Exists(path) && 0 <= File.ReadAllText(path).IndexOf(expected, StringComparison.Ordinal);
+            try
+            {
+                return File.Exists(path) && 0 <= File.ReadAllText(path).IndexOf(expected, StringComparison.Ordinal);
+            }
+            catch (IOException)
+            {
+                return false;
+            }
         }
     }
 }
