@@ -399,7 +399,7 @@ test("scaffoldProject writes the version file, dependency manifest, and driver",
     dependencies: { "com.unity.inputsystem": "1.7.0" }
   });
   assert.strictEqual(
-    fs.readFileSync(path.join(project, "Assets", "DxTerminalImportDrill.cs"), "utf8"),
+    fs.readFileSync(path.join(project, "Assets", "Editor", "DxTerminalImportDrill.cs"), "utf8"),
     buildImportDriver()
   );
 });
@@ -647,7 +647,7 @@ test("runImportDrill keeps the project with --keep and ignores unrelated warning
   );
   assert.strictEqual(manifest.outcome, null);
   assert.deepStrictEqual(manifest.logErrors, []);
-  assert.ok(fs.existsSync(path.join(manifest.project, "Assets", "DxTerminalImportDrill.cs")));
+  assert.ok(fs.existsSync(path.join(manifest.project, "Assets", "Editor", "DxTerminalImportDrill.cs")));
   assert.ok(fs.existsSync(manifest.unityImport.log));
   assert.ok(fs.existsSync(manifest.unitySettle.log));
 });

@@ -84,6 +84,22 @@ npm --prefix tooling~ run package:import-drill -- \
 The import drill creates a clean scratch project, imports with the Unity CLI, waits for compilation, and checks all entries, GUIDs, and shipped assemblies. It never imports into
 the live project. Failures keep logs and a manifest under `.artifacts/import-drill/`; successful runs delete the scratch project.
 
+## Retained-project Mono player drill
+
+On the Windows host, keep a passing T13 matrix's scratch projects and run:
+
+```sh
+python tooling~/scripts/t13/player_smoke.py \
+  --matrix-report <verified-matrix-manifest.json> --out C:/dxt13/player-smoke
+```
+
+The output root must be fresh. The default editor is Unity 2021; use `--editor-id unity-2022` for that retained family. Each family needs legacy, Input System, and combined input
+legs. The drill checks the artifact against its original clean source revision and imported files. It records the package and harness revisions separately. To update owned
+fixtures, pass `--previous-player-report <prior-player-matrix.json>`. Existing bytes must match its recorded hashes.
+
+Each release Mono player must load its generated catalog, execute generated and manual commands, parse arguments, and reject excess arguments. All compiler, analyzer, and build
+warnings fail. The batch build retains graphics for scene probes. This drill uses Low stripping; IL2CPP, WebGL, UI, and performance gates remain separate.
+
 ## Maintenance
 
 Run the release contract tests through `npm test` when changing these workflows. Keep immutable action SHA pins, minimal job permissions, and `persist-credentials=false`. Git

@@ -151,7 +151,10 @@ namespace DxTerminalDevTools
         /// </summary>
         private static string ReadRequest()
         {
-            return ReadTrimmed(RequestFileName);
+            string request = ReadTrimmed(RequestFileName);
+            return request.StartsWith("token=", StringComparison.Ordinal)
+                ? FieldValue(request, "token")
+                : request;
         }
 
         /// <summary>
@@ -458,13 +461,69 @@ namespace DxTerminalDevTools
         /// at the finish: re-reading the request file there would let an earlier
         /// run's finish adopt the next run's token.
         /// </summary>
-        private sealed class RunClaim : ICallbacks
+        private sealed class RunClaim : IErrorCallbacks
         {
             private string _token = string.Empty;
             private string _mode = UnknownMode;
+            private bool _terminal;
+
+            public void OnError(string message)
+            {
+                if (_terminal)
+                {
+                    string request = ReadRequest();
+                    if (ReadActive()[0].Length != 0 || request.Length == 0 || request == _token)
+                    {
+                        return;
+                    }
+
+                    _token = request;
+                    string mode = FieldValue(ReadTrimmed(RequestFileName), "mode");
+                    _mode = mode.Length == 0 ? UnknownMode : mode;
+                }
+                else if (_mode == UnknownMode)
+                {
+                    string[] active = ReadActive();
+                    if (active[0].Length != 0)
+                    {
+                        _token = active[0] == UnattributedToken ? string.Empty : active[0];
+                        _mode = active[1];
+                    }
+                    else
+                    {
+                        _token = ReadRequest();
+                        string mode = FieldValue(ReadTrimmed(RequestFileName), "mode");
+                        _mode = mode.Length == 0 ? UnknownMode : mode;
+                    }
+                }
+
+                StringBuilder reason = new();
+                foreach (char character in message ?? string.Empty)
+                {
+                    if (char.IsWhiteSpace(character))
+                    {
+                        reason.Append(' ');
+                    }
+                    else if (' ' <= character && character <= '~')
+                    {
+                        reason.Append(character);
+                    }
+                    else
+                    {
+                        reason.Append("\\u").Append(((int)character).ToString("X4", CultureInfo.InvariantCulture));
+                    }
+                }
+
+                string detail = reason.ToString().Trim();
+                WriteClaim(
+                    $"did-not-run token={Reported(_token)} mode={_mode} "
+                        + $"reason={(detail.Length == 0 ? "test runner aborted" : detail)}"
+                );
+            }
 
             public void RunStarted(ITestAdaptor testsToRun)
             {
+                _terminal = false;
                 _token = ReadRequest();
                 _mode = testsToRun.TestMode.ToString();
                 /* Written before the refusal below, so the finish callback can
@@ -488,6 +547,11 @@ namespace DxTerminalDevTools
 
             public void RunFinished(ITestResultAdaptor result)
             {
+                if (_terminal)
+                {
+                    return;
+                }
+
                 if (_token.Length == 0)
                 {
                     string[] active = ReadActive();
@@ -546,6 +610,23 @@ namespace DxTerminalDevTools
             private void WriteClaim(string line)
             {
                 WriteAtomically(ClaimFileName, line);
+                if (
+                    !line.StartsWith("running ", StringComparison.Ordinal)
+                    && ReadActive()[0] == Reported(_token)
+                )
+                {
+                    try
+                    {
+                        File.Delete(Path.Combine(ClaimRoot(), ActiveFileName));
+                    }
+                    catch (IOException) { }
+                    catch (UnauthorizedAccessException) { }
+                }
+
+                if (!line.StartsWith("running ", StringComparison.Ordinal))
+                {
+                    _terminal = true;
+                }
             }
         }
     }

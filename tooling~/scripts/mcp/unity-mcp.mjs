@@ -2256,10 +2256,10 @@ async function withMcpSession(options, endpoint, run, fetchImpl = fetch) {
  * session instantly with the recorded reason, so one unlucky request kills the
  * rest of the command: the observed symptom was `test_status` failing in 0 ms
  * with "The operation was aborted due to timeout" while the editor answered
- * the same call fine from a new session. Reconnecting turns a dead session
- * into one retry.
+ * the same call fine from a new session. Read-only calls reconnect once.
+ * Test starts never replay: a lost response can belong to a running test.
  */
-function reconnectingSession(connect) {
+export function reconnectingSession(connect) {
   let session = null;
   let pending = null;
 
@@ -2279,13 +2279,14 @@ function reconnectingSession(connect) {
     return pending;
   };
 
-  const withReconnect = async (invoke) => {
-    for (let attempt = 0; attempt < 2; ++attempt) {
+  const withReconnect = async (invoke, retry = true) => {
+    const attempts = retry ? 2 : 1;
+    for (let attempt = 0; attempt < attempts; ++attempt) {
       const current = await live();
       try {
         return await invoke(current.client);
       } catch (error) {
-        if (attempt == 1) throw error;
+        if (attempt + 1 === attempts) throw error;
         // A dropped transport would fail every later call on this session, so
         // release it (the DELETE is what frees the editor's slot) and rebuild.
         await current.release().catch(() => {});
@@ -2296,7 +2297,7 @@ function reconnectingSession(connect) {
   };
 
   return {
-    callTool: (...args) => withReconnect((current) => current.callTool(...args)),
+    callTool: (...args) => withReconnect((current) => current.callTool(...args), args[0]?.name !== "run_tests"),
     listTools: (...args) => withReconnect((current) => current.listTools(...args)),
     close: async () => {
       const current = session;
@@ -2353,13 +2354,21 @@ function transientEnvelopeFailure(text) {
 
 const TOOL_VERDICT = Object.freeze({ ANSWERED: 0, SCHEMA: 1, TRANSIENT: 2 });
 
+function testStartWasRejected(message, code) {
+  if (code === -32601 || code === -32602) return true;
+  const envelope = parseEnvelope(message);
+  if (envelope?.error?.code === -32601 || envelope?.error?.code === -32602) return true;
+  const validation = envelope?.error ?? message;
+  return typeof validation === "string" && /^(?:Pipeline server returned 400 Bad Request:\s*)?(?:Parameter Validation Failed\b|Required parameter\b[^\r\n]*\bis missing\b|MCP error -(?:32601|32602):)/iu.test(validation);
+}
+
 async function attemptToolCall(client, candidate, signal) {
   let call;
   try {
     call = await client.callTool(candidate, undefined, { signal });
   } catch (error) {
     const message = error?.message ?? String(error);
-    return transientToolErrorMessage(message)
+    return (candidate.name === "run_tests" ? !testStartWasRejected(message, error?.code) : transientToolErrorMessage(message))
       ? { verdict: TOOL_VERDICT.TRANSIENT, message }
       : { verdict: TOOL_VERDICT.SCHEMA, message };
   }
@@ -2367,7 +2376,9 @@ async function attemptToolCall(client, candidate, signal) {
   const text = extractText(call);
   if (call.isError) {
     const message = text.slice(0, 200) || "tool reported an error";
-    const transient = transientToolErrorMessage(message) || transientEnvelopeFailure(text);
+    const transient = candidate.name === "run_tests"
+      ? !testStartWasRejected(text)
+      : transientToolErrorMessage(message) || transientEnvelopeFailure(text);
     return transient
       ? { verdict: TOOL_VERDICT.TRANSIENT, message }
       : { verdict: TOOL_VERDICT.SCHEMA, message };
@@ -2378,7 +2389,8 @@ async function attemptToolCall(client, candidate, signal) {
 
 /**
  * Beta backend tool schemas drift; try each documented argument shape until
- * one answers. A busy editor is waited out until the deadline (the command's,
+ * one answers. Uncertain test starts return to their claim observer without
+ * resending. Other busy calls wait until the deadline (the command's,
  * or 30 s when the caller has none) instead of ending the command; a variant
  * the bridge rejects outright never gets a second round. The final refusal
  * names every variant and what it answered, so a genuine schema drift reads
@@ -2403,6 +2415,10 @@ export async function callFirstWorking(client, candidates, signal, options = {})
 
       const recorded = `${candidate.name}: ${attempt.message}`;
       if (attempt.verdict === TOOL_VERDICT.TRANSIENT) {
+        if (candidate.name === "run_tests") {
+          // A lost start response can already have entered Play Mode. Observe its claim; another start aborts that run.
+          return { candidate, call: { content: [] }, uncertain: true };
+        }
         transientAnswers.push(recorded);
         sawTransient = true;
         break;
@@ -2928,7 +2944,7 @@ export async function runT4Capture(options, runtime = {}) {
     let requestedAt = null;
     if (reporter !== null) {
       token = newRunToken("t4");
-      beginRunRequest(reporter, token);
+      beginRunRequest(reporter, token, "playmode");
       requestedAt = Date.now();
     } else {
       previousKey = readSummaryKey(await pollTestStatus(client, signal));
@@ -2962,6 +2978,7 @@ export async function runT4Capture(options, runtime = {}) {
       token,
       expectMode: "playmode",
       initial: extractText(runTests.call),
+      uncertain: runTests.uncertain ?? false,
       previousKey,
       requestedAt,
       deadline
@@ -3195,6 +3212,7 @@ export function parseRunClaim(text) {
   if (parts.length === 0) return { state: "unreadable", token: null };
   const head = parts.shift();
   for (const part of parts) {
+    if (head === "did-not-run" && part.startsWith("reason=")) break;
     const separator = part.indexOf("=");
     if (separator <= 0) continue;
     fields.set(part.slice(0, separator), part.slice(separator + 1));
@@ -3486,33 +3504,12 @@ export async function awaitRunClaim({
 
 /**
  * The bridge's own "nothing matched" answer: a finished summary whose total is
- * zero. Only a zero total is accepted, so the previous run's counts can never be
- * read as this run's result. Null when the bridge says anything else, or does
- * not answer.
+ * zero in the start response. A later status poll can belong to a prior run.
+ * Null when that response says anything else, or was lost.
  */
-async function noTestsMatchedSummary(client, signal, initial) {
-  const candidates = [initial];
-  try {
-    candidates.push(
-      extractText(
-        (
-          await callFirstWorking(client, [{ name: "test_status", arguments: {} }], signal, {
-            // Best effort by contract: this poll's answer is optional, so it
-            // must not sit out a whole busy window inside a swallowed catch.
-            deadline: Date.now() + 5_000
-          })
-        ).call
-      )
-    );
-  } catch {}
-
-  for (const candidate of candidates) {
-    const status = parseTestStatus(candidate, true);
-    if (status.finished && Number(status.summary?.total ?? -1) === 0) {
-      return status.summary;
-    }
-  }
-  return null;
+export function noTestsMatchedSummary(initial) {
+  const status = parseTestStatus(initial, false);
+  return status.finished && Number(status.summary?.total ?? -1) === 0 ? status.summary : null;
 }
 
 /*
@@ -3580,11 +3577,11 @@ export async function openRunReporter(options, evalCall, sleep = runReporterProb
  * the previous claim so a leftover line is never the first thing read. The wait
  * removes the request again once the editor acknowledges the token.
  */
-function beginRunRequest(paths, token) {
+function beginRunRequest(paths, token, mode) {
   fs.mkdirSync(path.dirname(paths.request), { recursive: true });
   // World readable: the editor runs as the host user, this writes as the
   // container user.
-  atomicWrite(paths.request, token, 0o644);
+  atomicWrite(paths.request, `token=${token} mode=${mode}`, 0o644);
   fs.rmSync(paths.claim, { force: true });
 }
 
@@ -4033,7 +4030,7 @@ export async function awaitRunResult({
  * answer, so it fails the command here instead of returning as a missing
  * result: `did-not-run` must never read as patience.
  */
-async function awaitTestRunResult({
+export async function awaitTestRunResult({
   label,
   client,
   signal,
@@ -4041,6 +4038,7 @@ async function awaitTestRunResult({
   token = null,
   expectMode = null,
   initial = null,
+  uncertain = false,
   previousKey = null,
   requestedAt = null,
   deadline,
@@ -4048,6 +4046,9 @@ async function awaitTestRunResult({
 }) {
   const paths = reporter ?? null;
   if (paths === null) {
+    if (uncertain) {
+      return { summary: null, detail: "the test-start response was lost and no owner reporter can attribute its status" };
+    }
     const summary = await awaitRunResult({
       initial,
       previousKey,
@@ -4089,7 +4090,7 @@ async function awaitTestRunResult({
         zero total across legs fails. Nothing else is taken from the bridge here,
         because a non-zero summary on this path is unverified by construction.
      */
-    const empty = await noTestsMatchedSummary(client, signal, initial);
+    const empty = noTestsMatchedSummary(initial);
     if (empty !== null) {
       return { summary: empty, detail: null };
     }
@@ -4117,7 +4118,7 @@ async function runTestLeg(client, signal, leg, filter, deadline, reporter = null
   let requestedAt = null;
   if (paths !== null) {
     token = newRunToken(leg);
-    beginRunRequest(paths, token);
+    beginRunRequest(paths, token, leg);
     requestedAt = Date.now();
   } else {
     previousKey = readSummaryKey(await pollTestStatus(client, signal));
@@ -4147,6 +4148,7 @@ async function runTestLeg(client, signal, leg, filter, deadline, reporter = null
     token,
     expectMode: leg,
     initial: extractText(run.call),
+    uncertain: run.uncertain ?? false,
     previousKey,
     requestedAt,
     deadline,

@@ -6,6 +6,10 @@ import {
   RUN_REQUEST_FILE,
   TEST_MODES,
   assertCompilationSucceeded,
+  awaitTestRunResult,
+  noTestsMatchedSummary,
+  callFirstWorking,
+  reconnectingSession,
   awaitRunClaim,
   awaitRunResult,
   isSessionCapError,
@@ -1319,4 +1323,158 @@ test("the mid-run idle wait probes on a short window and returns on the first re
   }, deadline, async () => {});
   assert.equal(end2, undefined);
   assert.equal(probes, 2, "busy once, then idle");
+});
+
+for (const lostResponse of [
+    new Error("Main thread operation timed out"),
+    new Error("The operation was aborted due to timeout"),
+  new Error("Test execution crashed: invalid argument while reading result"),
+    { isError: true, content: [{ text: '{"success":false,"error":"Runtime Error","diagnostics":[]}' }] },
+]) {
+    test(`an uncertain test start is observed without another start: ${lostResponse.message ?? "error envelope"}`, async () => {
+        let starts = 0;
+        const client = {
+            callTool: async () => {
+                starts++;
+                if (lostResponse instanceof Error) throw lostResponse;
+                return lostResponse;
+            },
+        };
+        const request = await callFirstWorking(
+            client,
+            [
+                { name: "run_tests", arguments: { mode: "playmode", async_tests: true } },
+                { name: "run_tests", arguments: { mode: "playmode" } },
+            ],
+            undefined,
+            {
+                deadline: 1000,
+                now: () => 0,
+                pause: async () => {
+                    throw new Error("start must not retry");
+                },
+            },
+        );
+        assert.equal(request.uncertain, true);
+        let reads = 0;
+        const result = await awaitRunClaim({
+            claim: "claim",
+            token: "owned",
+            expectMode: "playmode",
+            requestedAt: 0,
+            deadline: 1000,
+            now: () => 0,
+            sleep: async () => {},
+            read: () => ["", "running token=owned mode=PlayMode", "pass=2 fail=0 skipped=0 inconclusive=0 token=owned mode=PlayMode"][Math.min(reads++, 2)],
+        });
+        assert.equal(result.summary.passed, 2);
+        assert.equal(starts, 1);
+    });
+}
+
+for (const rejection of [
+  new Error("Parameter Validation Failed: Required parameter 'async_tests' is missing"),
+  Object.assign(new Error("Invalid params"), { code: -32602 }),
+  { isError: true, content: [{ text: '{"success":false,"error":"Parameter Validation Failed","diagnostics":[]}' }] }
+]) {
+  test(`explicit test-start rejection permits the next schema: ${rejection.message ?? "validation envelope"}`, async () => {
+    const asked = [];
+    const client = { callTool: async (candidate) => {
+      asked.push(candidate);
+      if (asked.length === 1) {
+        if (rejection instanceof Error) throw rejection;
+        return rejection;
+      }
+      return { content: [{ text: "running" }] };
+    } };
+    const result = await callFirstWorking(client, [
+      { name: "run_tests", arguments: { mode: "playmode", async_tests: true } },
+      { name: "run_tests", arguments: { mode: "playmode" } }
+    ], undefined, { deadline: 1000, now: () => 0 });
+    assert.equal(asked.length, 2);
+    assert.equal(result.candidate.arguments.async_tests, undefined);
+  });
+}
+
+test("session reconnect never replays a test start, while status reads recover", async () => {
+    let connected = 0;
+    let releases = 0;
+    let starts = 0;
+    const session = reconnectingSession(async () => {
+        connected++;
+        const connection = connected;
+        return {
+            release: async () => {
+                releases++;
+            },
+            client: {
+                callTool: async (candidate) => {
+                    if (candidate.name === "run_tests") {
+                        starts++;
+                        throw new Error("socket hang up");
+                    }
+                    if (connection === 1) throw new Error("connection reset");
+                    return { content: [{ text: "running" }] };
+                },
+            },
+        };
+    });
+    try {
+        await assert.rejects(session.callTool({ name: "run_tests" }), /socket hang up/);
+        assert.equal(starts, 1);
+        assert.equal(connected, 1);
+        assert.equal((await session.callTool({ name: "test_status" })).content[0].text, "running");
+        assert.equal(connected, 2);
+        assert.equal(releases, 1);
+    } finally {
+        await session.close();
+    }
+    assert.equal(releases, 2);
+});
+
+
+test("refusal reasons cannot replace protocol ownership or mode", () => {
+  const claim = parseRunClaim("did-not-run token=owned mode=PlayMode reason=crashed token=foreign mode=EditMode");
+  assert.equal(claim.token, "owned");
+  assert.equal(claim.mode, "PlayMode");
+  assert.equal(claim.reason, "crashed token=foreign mode=EditMode");
+});
+
+
+test("an uncertain start without an owner reporter cannot borrow bridge status", async () => {
+  const result = await awaitTestRunResult({
+    label: "playmode", uncertain: true, deadline: Date.now() + 1000,
+    client: { callTool: async () => { throw new Error("stale status must not be polled"); } }
+  });
+  assert.equal(result.summary, null);
+  assert.match(result.detail, /no owner reporter/);
+});
+
+test("zero-match acceptance requires a certain finished start response", () => {
+  const empty = { total: 0, passed: 0, failed: 0, skipped: 0, inconclusive: 0 };
+  assert.equal(noTestsMatchedSummary(undefined), null);
+  assert.equal(noTestsMatchedSummary(""), null);
+  for (const status of ["running", "idle"]) {
+    assert.equal(noTestsMatchedSummary(JSON.stringify({ status, summary: empty })), null);
+  }
+  assert.equal(noTestsMatchedSummary(JSON.stringify({ status: "completed", summary: empty })).total, 0);
+  assert.equal(noTestsMatchedSummary(JSON.stringify({ status: "completed", summary: { ...empty, total: 1, passed: 1 } })), null);
+});
+
+test("an unacknowledged uncertain start refuses a stale zero-total status", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dxt-unacknowledged-"));
+  let polls = 0;
+  try {
+    const result = await awaitTestRunResult({
+      label: "playmode", uncertain: true, initial: "", reporter: runClaimPaths(root), token: "lost-start",
+      requestedAt: Date.now() - 120001, deadline: Date.now() + 1000,
+      client: { callTool: async () => {
+        polls++;
+        return { content: [{ text: JSON.stringify({ status: "completed", summary: { total: 0, passed: 0, failed: 0, skipped: 0, inconclusive: 0 } }) }] };
+      } }
+    });
+    assert.equal(result.summary, null);
+    assert.equal(polls, 0);
+    assert.match(result.detail, /no claim|never acknowledged/);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });

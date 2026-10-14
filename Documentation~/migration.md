@@ -28,8 +28,14 @@ Registration moves to the `Terminal` static facade (`Terminal.Shell`, `Terminal.
 ## Known limitations
 
 - Completion is synchronous and local; async or network providers are out of scope by design.
-- Variable watches, persistent command buttons, and a custom inspector redesign are not planned; measured performance defects in existing inspectors are in scope.
+- Variable watches, persistent command buttons, and redesigned inspectors are planned for a future release. They are unavailable in the current package.
 - Byte-level allocation counters report `Unavailable` on Unity's Mono - the allocation claims rest on a validated instrument, not raw bytes (see [Performance](performance.md)).
+
+## Planned migration
+
+The [DxTerminal roadmap](https://github.com/wallstop/DxCommandTerminal/issues/228) tracks the next migration. Watches, command actions, and redesigned inspectors remain open in
+[#244](https://github.com/wallstop/DxCommandTerminal/issues/244), [#243](https://github.com/wallstop/DxCommandTerminal/issues/243), and
+[#240](https://github.com/wallstop/DxCommandTerminal/issues/240). Keep the current lifecycle registration pattern until the session bootstrap change ships.
 
 ## Where next
 

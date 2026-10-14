@@ -325,6 +325,11 @@ namespace UnityEditor.TestTools.TestRunner.Api
         void TestFinished(ITestResultAdaptor result);
     }
 
+    public interface IErrorCallbacks : ICallbacks
+    {
+        void OnError(string message);
+    }
+
     public class TestRunnerApi : ScriptableObject
     {
         public void RegisterCallbacks<T>(T testCallbacks, int priority = 0)
