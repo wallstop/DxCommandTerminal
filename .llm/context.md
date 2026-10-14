@@ -152,7 +152,8 @@ Adding a skill: create the directory + `SKILL.md`, then run the generator. The l
 ### Unity Package Rules
 
 1. Every visible file/folder needs a `.meta` file (see existing `*.meta`). Dot-prefixed paths (`.llm/`, `.github/`, `.config/`, `.git/`) are ignored by Unity - never add `.meta`
-   for them.
+   for them. Enforced by `tooling~/scripts/lint_unity_meta.py` (typed python under uv, issue #220; the `lint-unity-meta.ps1` entry keeps the pre-commit and CI command): orphan
+   metas, missing metas, and guid uniqueness over tracked files. See [create-unity-meta](./skills/create-unity-meta/SKILL.md).
 2. Assembly layout is fixed: `Runtime` (no editor refs), `Editor` (references Runtime + testable internals), `Tests.Runtime` (PlayMode). Adding an assembly requires updating
    `InternalsVisibleTo` usages too.
 3. UI is [UI Toolkit](https://docs.unity3d.com/Manual/UIElements.html) (`TerminalUI` + `Styles/*.uss`/`*.tss`); theming flows through `TerminalThemePack` assets and
@@ -214,7 +215,8 @@ and wait for wallstop. Review feedback lags the head (Bugbot names the commit it
 
 1. **Line limits**: every authored file under `.llm/` MUST stay at or below 300 lines; 270+ gets a critical warning. The generated `.llm/skills/index.md` is exempt
    (machine-written). Enforced by `tooling~/scripts/lint_skill_sizes.py` (typed python under uv, issue #220; the `lint-skill-sizes.ps1` entry keeps the pre-commit and CI command;
-   pre-commit + CI + tests).
+   pre-commit + CI + tests). The typed-python tooling is type-checked by a pinned pyright in basic mode (issue #256; the pin lives in `tooling~/pyproject.toml`'s non-default
+   `typing` group, `uv run --project tooling~ --group typing pyright --project tooling~`; CI only).
 2. **SKILL.md validity + index freshness + pointer delegation**: enforced by `tooling~/scripts/lint-llm-instructions.ps1` (pre-commit + CI + tests).
 3. **Generated files are byte-stable**: UTF-8 without BOM, LF line endings, ordinal sorting, no timestamps. Never hand-edit `.llm/skills/index.md`.
 4. **Encoding overrides**: `.editorconfig` forces UTF-8 (no BOM) + LF for `.llm/**` and `tooling~/**`, overriding the BOM/CRLF defaults C# assets keep per repo convention.

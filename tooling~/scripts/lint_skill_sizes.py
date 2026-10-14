@@ -29,6 +29,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+from typing import Protocol
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -38,6 +39,12 @@ CRITICAL_LINES = 270
 PREFIX = "[skill-sizes]"
 
 EXEMPT_RELATIVE_PATHS = frozenset({"skills/index.md"})
+
+
+class Stream(Protocol):
+    """What the report writes through: anything with a text-mode write()."""
+
+    def write(self, text: str, /) -> object: ...
 
 
 class FileSize:
@@ -76,13 +83,13 @@ def lint_skill_sizes(
     *,
     verbose_output: bool = False,
     fail_on_critical: bool = False,
-    stream: object = sys.stdout,
+    stream: Stream = sys.stdout,
 ) -> int:
     """Runs the lint and returns the exit code: 0 clean, 1 on any error, or on
     any critical band file when fail_on_critical is set. Writes the same report
     the PowerShell linter wrote, through `stream` (tests capture it)."""
     llm_dir = repo_root / ".llm"
-    write = getattr(stream, "write")
+    write = stream.write
 
     def emit(message: str) -> None:
         write(f"{message}\n")
