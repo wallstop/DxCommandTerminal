@@ -82,12 +82,18 @@ test("test results require a strict all-passed test-run", () => {
   const directory = temporaryRoot("results");
   const valid = [
     '<test-run id="1" result="Passed" total="2" passed="2" failed="0" skipped="0" inconclusive="0" />',
-    '<?xml version="1.0"?><test-run result="Passed" total="1" passed="1" failed="0" skipped="0" inconclusive="0"><test-suite /></test-run>'
+    '<?xml version="1.0"?><test-run result="Passed" total="1" passed="1" failed="0" skipped="0" inconclusive="0"><test-suite /></test-run>',
+    '<test-run result="Passed" total="1" passed="1" failed="0" skipped="0" inconclusive="0"><test-suite name="Fixture" result="Passed"><test-case name="Lifecycle" result="Passed"><output><![CDATA[early log <test-run>ready</test-run>]]></output><!-- literal </test-run> text --></test-case></test-suite></test-run>'
   ];
   const invalid = [
     ["missing", /not written/],
     ["malformed", /malformed test-run root/],
     ["malformed body", /malformed test-run root/],
+    ["unclosed child", /malformed test-run root/],
+    ["nested test run", /malformed test-run root/],
+    ["invalid child close", /malformed test-run root/],
+    ["invalid child attributes", /malformed test-run root/],
+    ["unseparated child attributes", /malformed test-run root/],
     ["zero", /no passed tests/],
     ["negative", /total count is invalid/],
     ["failed", /failed, skipped, or inconclusive/],
@@ -121,6 +127,17 @@ test("test results require a strict all-passed test-run", () => {
           ? '<test-run result="Passed" total="1" passed="1" failed="0" skipped="0" inconclusive="0"><<<</test-run>'
           : "<test-run result=\"Passed\""
       );
+    }
+    if (name === "nested test run") {
+      fs.writeFileSync(file, '<test-run result="Passed" total="1" passed="1" failed="0" skipped="0" inconclusive="0"><test-run /></test-run>');
+    }
+    if (name === "unclosed child" || name === "invalid child close") {
+      const body = name === "unclosed child" ? "<test-suite>tail" : "<test-suite></test-suite garbage>";
+      fs.writeFileSync(file, `<test-run result="Passed" total="1" passed="1" failed="0" skipped="0" inconclusive="0">${body}</test-run>`);
+    }
+    if (name === "invalid child attributes" || name === "unseparated child attributes") {
+      const body = name === "invalid child attributes" ? "<test-suite nonsense></test-suite>" : '<test-suite name="a"name="b"/>';
+      fs.writeFileSync(file, `<test-run result="Passed" total="1" passed="1" failed="0" skipped="0" inconclusive="0">${body}</test-run>`);
     }
     if (name === "negative") fs.writeFileSync(file, '<test-run result="Passed" total="-1" passed="-1" failed="0" skipped="0" inconclusive="0" />');
     if (name === "missing count") fs.writeFileSync(file, '<test-run result="Passed" total="1" passed="1" failed="0" skipped="0" />');
@@ -177,7 +194,9 @@ test("matrix manifests record complete identity and reject stale reports", async
   const options = { artifact: artifactPath, out, only: "unity-6", unity: "unity", unityById: new Map(), fixtureRoot: FIXTURE_ROOT, keep: true, timeoutMinutes: 5, expectedArtifactSha256: crypto.createHash("sha256").update(artifact.buffer).digest("hex") };
   const matrix = loadMatrix(MATRIX_PATH);
   const testEnvironments = [];
+  const testPlatforms = [];
   let compileFailure = null;
+  let playModeXml = PASSED_XML;
   const runtime = {
     probeEditorVersion: () => "6000.4.6f1",
     validateImportedProject: () => ({ failures: [], checks: [] }),
@@ -196,6 +215,15 @@ test("matrix manifests record complete identity and reject stale reports", async
           );
         }
       }
+      if (!args.includes("-importPackage")) {
+        const fixture = path.join(project, "Assets", "Compatibility");
+        assert.deepStrictEqual(JSON.parse(fs.readFileSync(path.join(fixture, "Compatibility.Tests.asmdef"))).includePlatforms, []);
+        const editorAssembly = JSON.parse(fs.readFileSync(path.join(fixture, "Editor", "Compatibility.Editor.Tests.asmdef")));
+        assert.deepStrictEqual(editorAssembly.includePlatforms, ["Editor"]);
+        assert.ok(editorAssembly.references.includes("DxCommandTerminal.T13.Compatibility.Tests"));
+        assert.equal(fs.existsSync(path.join(fixture, "Editor", "EditorCompatibilityProbe.cs")), true);
+        assert.equal(fs.existsSync(path.join(fixture, "EditorCompatibilityProbe.cs")), false);
+      }
       const manifest = JSON.parse(fs.readFileSync(path.join(project, "Packages", "manifest.json"), "utf8"));
       assert.equal(manifest.dependencies["com.unity.test-framework"], "1.1.33");
       for (const name of ["DxTerminalStateCapture", "DxTerminalTestRunReporter"]) {
@@ -206,12 +234,17 @@ test("matrix manifests record complete identity and reject stale reports", async
       }
       if (args.includes("-runTests")) {
         assert.equal(args.includes("-quit"), false);
-        assert.equal(args[args.indexOf("-testPlatform") + 1], "editmode");
+        assert.ok(["editmode", "playmode"].includes(args[args.indexOf("-testPlatform") + 1]));
+        testPlatforms.push(args[args.indexOf("-testPlatform") + 1]);
         testEnvironments.push(environment);
       }
       fs.writeFileSync(logPath, compileFailure === null ? "phase complete\n" : `Assets/Editor/${compileFailure}.cs(1,1): error CS1002: ; expected\n`);
       if (args.includes("-runTests")) {
-        fs.writeFileSync(path.join(path.dirname(project), "results.xml"), PASSED_XML);
+        const resultsPath = args[args.indexOf("-testResults") + 1];
+        const platform = args[args.indexOf("-testPlatform") + 1];
+        if (platform !== "playmode" || playModeXml !== null) {
+          fs.writeFileSync(resultsPath, platform === "playmode" ? playModeXml : PASSED_XML);
+        }
       }
       return { code: 0, signal: null, timedOut: false };
     }
@@ -220,12 +253,15 @@ test("matrix manifests record complete identity and reject stale reports", async
   assert.deepStrictEqual(report.requestedLegs, ["unity-6"]);
   assert.deepStrictEqual(report.selectedLegs, ["unity-6"]);
   assert.equal(testEnvironments[0].DX_T13_DOMAIN_RELOAD_ENABLED, "1");
+  assert.deepStrictEqual(testPlatforms, ["editmode", "playmode"]);
+  assert.ok(fs.existsSync(path.join(out, "unity-6", "results.xml")));
+  assert.ok(fs.existsSync(path.join(out, "unity-6", "playmode-results.xml")));
   const noReloadReport = await runMatrix(
     { ...options, out: path.join(root, "no-reload"), only: "unity-6-no-reload" },
     matrix,
     runtime
   );
-  assert.equal(testEnvironments[1].DX_T13_DOMAIN_RELOAD_ENABLED, "0");
+  assert.deepStrictEqual(testEnvironments.map((environment) => environment.DX_T13_DOMAIN_RELOAD_ENABLED), ["1", "1", "0", "0"]);
   assert.equal(noReloadReport.failed, false);
   assert.match(report.matrixSha256, /^[0-9a-f]{64}$/);
   assert.match(report.git.revision, /^[0-9a-f]{40}$/);
@@ -233,7 +269,26 @@ test("matrix manifests record complete identity and reject stale reports", async
   assert.equal(report.packageIdentity.matches, true);
   assert.equal(report.complete, true);
   assert.equal(report.failed, false);
-  assert.deepStrictEqual(report.legs[0].phases.map((phase) => phase.name), ["import", "settle", "tests"]);
+  assert.deepStrictEqual(report.legs[0].phases.map((phase) => phase.name), ["import", "settle", "tests", "playmode-tests"]);
+  assert.equal(report.legs[0].testResults.passed, true);
+  assert.equal(report.legs[0].playModeTestResults.passed, true);
+  for (const [name, xml] of [
+    ["missing", null],
+    ["malformed", "malformed"],
+    ["zero", '<test-run result="Passed" total="0" passed="0" failed="0" skipped="0" inconclusive="0" />'],
+    ["failed", '<test-run result="Failed" total="1" passed="0" failed="1" skipped="0" inconclusive="0" />'],
+    ["skipped", '<test-run result="Passed" total="2" passed="1" failed="0" skipped="1" inconclusive="0" />'],
+    ["inconclusive", '<test-run result="Passed" total="2" passed="1" failed="0" skipped="0" inconclusive="1" />']
+  ]) {
+    playModeXml = xml;
+    const failed = await runMatrix({ ...options, out: path.join(root, `playmode-${name}`), keep: false }, matrix, runtime);
+    assert.equal(failed.failed, true, name);
+    assert.equal(failed.legs[0].testResults.passed, true, name);
+    assert.equal(failed.legs[0].playModeTestResults.passed, false, name);
+    assert.match(failed.legs[0].failure, /playmode-tests compatibility tests did not pass/, name);
+    assert.ok(fs.existsSync(failed.legs[0].project), name);
+  }
+  playModeXml = PASSED_XML;
   for (const name of ["DxTerminalStateCapture", "DxTerminalTestRunReporter"]) {
     assert.equal(
       report.legs[0].editorDevToolHashes[`Assets/Editor/${name}.cs`],

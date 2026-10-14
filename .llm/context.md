@@ -217,7 +217,8 @@ and wait for wallstop. Review feedback lags the head (Bugbot names the commit it
    (machine-written). Enforced by `tooling~/scripts/lint_skill_sizes.py` (typed python under uv, issue #220; the `lint-skill-sizes.ps1` entry keeps the pre-commit and CI command;
    pre-commit + CI + tests). The typed-python tooling is type-checked by a pinned pyright in basic mode (issue #256; the pin lives in `tooling~/pyproject.toml`'s non-default
    `typing` group, `uv run --project tooling~ --group typing pyright --project tooling~`; CI only).
-2. **SKILL.md validity + index freshness + pointer delegation**: enforced by `tooling~/scripts/lint-llm-instructions.ps1` (pre-commit + CI + tests).
+2. **SKILL.md validity + index freshness + pointer delegation**: enforced by `tooling~/scripts/lint_llm_instructions.py` (typed Python; `lint-llm-instructions.ps1` keeps the
+   pre-commit and CI entry point).
 3. **Generated files are byte-stable**: UTF-8 without BOM, LF line endings, ordinal sorting, no timestamps. Never hand-edit `.llm/skills/index.md`.
 4. **Encoding overrides**: `.editorconfig` forces UTF-8 (no BOM) + LF for `.llm/**` and `tooling~/**`, overriding the BOM/CRLF defaults C# assets keep per repo convention.
 

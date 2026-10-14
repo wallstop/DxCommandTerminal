@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "fixtureRevision": "t13-first-tranche-v1",
+  "fixtureRevision": "t13-first-tranche-v2",
   "inputProfile": "legacy",
   "domainReloadEnabled": true,
   "coverage": [

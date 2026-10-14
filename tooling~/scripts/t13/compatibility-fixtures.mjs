@@ -135,6 +135,11 @@ export function copyFixtureFiles(fixtureRoot, project) {
   const source = path.join(fixtureRoot, "Assets");
   if (!fs.existsSync(source)) throw new Error(`fixture root has no Assets directory: ${fixtureRoot}`);
   fs.cpSync(source, path.join(project, "Assets"), { recursive: true });
+  const editorTests = path.join(project, "Assets", "Compatibility", "Editor");
+  fs.mkdirSync(editorTests);
+  for (const name of ["EditorCompatibilityProbe.cs", "EditorCompatibilityProbe.cs.meta", "Compatibility.Editor.Tests.asmdef", "Compatibility.Editor.Tests.asmdef.meta"]) {
+    fs.renameSync(path.join(project, "Assets", "Compatibility", name), path.join(editorTests, name));
+  }
   // The serialized component must compile outside the Editor-only test assembly.
   for (const name of ["FixtureThemePersister.cs", "FixtureThemePersister.cs.meta"]) {
     fs.renameSync(path.join(project, "Assets", "Compatibility", name), path.join(project, "Assets", name));
@@ -165,7 +170,7 @@ export function writeProjectSettings(project, matrix, leg) {
     `%YAML 1.1\n%TAG !u! tag:unity3d.com,2011:\n--- !u!129 &12900000\nPlayerSettings:\n  m_ObjectHideFlags: 0\n  activeInputHandler: ${INPUT_PROFILES.get(settings.inputProfile)}\n`
   );
 }
-function testUnityArgs(project, resultsPath, logPath) {
+function testUnityArgs(project, resultsPath, logPath, platform = "editmode") {
   return [
     "-batchmode",
     "-nographics",
@@ -173,7 +178,7 @@ function testUnityArgs(project, resultsPath, logPath) {
     project,
     "-runTests",
     "-testPlatform",
-    "editmode",
+    platform,
     "-testFilter",
     TEST_FILTER,
     "-testResults",
@@ -188,7 +193,7 @@ export function parseTestResults(resultsPath) {
   const paired = /^(?:\s*<\?xml\s+[^?]*\?>\s*)?<test-run\b([^>]*)>([\s\S]*)<\/test-run>\s*$/u.exec(text);
   const selfClosing = /^(?:\s*<\?xml\s+[^?]*\?>\s*)?<test-run\b([^>]*)\/>\s*$/u.exec(text);
   const match = paired ?? selfClosing;
-  if (match === null || (paired !== null && (!validXmlBody(match[2]) || /<\/?test-run\b/u.test(match[2])))) {
+  if (match === null || (paired !== null && !validXmlBody(match[2]))) {
     return { passed: false, result: null, reason: "test results have a malformed test-run root" };
   }
   const attributes = parseTestRunAttributes(match[1].trim());
@@ -214,7 +219,7 @@ function validXmlBody(body) {
   let offset = 0;
   while (offset < body.length) {
     const start = body.indexOf("<", offset);
-    if (start === -1) return true;
+    if (start === -1) return stack.length === 0;
     if (body.startsWith("<!--", start)) {
       const end = body.indexOf("-->", start + 4);
       if (end === -1) return false;
@@ -237,11 +242,14 @@ function validXmlBody(body) {
     if (end === -1) return false;
     const tag = body.slice(start, end + 1);
     const name = /^<\/?([A-Za-z_][A-Za-z0-9_.:-]*)/u.exec(tag)?.[1];
-    if (name === undefined) return false;
+    if (name === undefined || name === "test-run") return false;
     if (tag.startsWith("</")) {
+      if (!/^<\/[A-Za-z_][A-Za-z0-9_.:-]*\s*>$/u.test(tag)) return false;
       if (stack.pop() !== name) return false;
-    } else if (!tag.endsWith("/>")) {
-      stack.push(name);
+    } else {
+      const attributes = tag.slice(name.length + 1, tag.length - (tag.endsWith("/>") ? 2 : 1));
+      if (attributes.length > 0 && (!/^\s/u.test(attributes) || parseTestRunAttributes(attributes.trim()) === null)) return false;
+      if (!tag.endsWith("/>")) stack.push(name);
     }
     offset = end + 1;
   }
@@ -440,6 +448,7 @@ export async function runLeg(options, matrix, leg, runtime = {}) {
     phases: [],
     checks: [],
     testResults: null,
+    playModeTestResults: null,
     failed: true,
     failure: null,
     complete: false
@@ -474,10 +483,13 @@ export async function runLeg(options, matrix, leg, runtime = {}) {
   const logsDirectory = path.join(reportDirectory, "logs");
   fs.mkdirSync(logsDirectory, { recursive: true });
   const resultsPath = path.join(reportDirectory, "results.xml");
+  const testEnvironment = { DX_T13_DOMAIN_RELOAD_ENABLED: settings.domainReloadEnabled ? "1" : "0", DX_T13_PERSISTENCE_FILE: path.join(reportDirectory, "fixture-persistence.json") };
+  const playModeResultsPath = path.join(reportDirectory, "playmode-results.xml");
   const phases = [
     { name: "import", args: importUnityArgs(project, options.artifact, path.join(logsDirectory, "import.log")), env: undefined },
     { name: "settle", args: settleUnityArgs(project, path.join(logsDirectory, "settle.log")), env: SETTLE_PHASE_ENV },
-    { name: "tests", args: testUnityArgs(project, resultsPath, path.join(logsDirectory, "tests.log")), env: { DX_T13_DOMAIN_RELOAD_ENABLED: settings.domainReloadEnabled ? "1" : "0", DX_T13_PERSISTENCE_FILE: path.join(reportDirectory, "fixture-persistence.json") } }
+    { name: "tests", args: testUnityArgs(project, resultsPath, path.join(logsDirectory, "tests.log")), env: testEnvironment },
+    { name: "playmode-tests", args: testUnityArgs(project, playModeResultsPath, path.join(logsDirectory, "playmode-tests.log"), "playmode"), env: testEnvironment }
   ];
   const timeoutMs = options.timeoutMinutes * 60_000;
   for (const phase of phases) {
@@ -508,10 +520,11 @@ export async function runLeg(options, matrix, leg, runtime = {}) {
         break;
       }
     }
-    if (phase.name === "tests") {
-      manifest.testResults = parseTestResults(resultsPath);
-      if (!manifest.testResults.passed) {
-        manifest.failure = `compatibility tests did not pass: ${manifest.testResults.reason ?? manifest.testResults.result}`;
+    if (phase.name === "tests" || phase.name === "playmode-tests") {
+      const results = parseTestResults(phase.name === "tests" ? resultsPath : playModeResultsPath);
+      manifest[phase.name === "tests" ? "testResults" : "playModeTestResults"] = results;
+      if (!results.passed) {
+        manifest.failure = `${phase.name} compatibility tests did not pass: ${results.reason ?? results.result}`;
         break;
       }
     }
