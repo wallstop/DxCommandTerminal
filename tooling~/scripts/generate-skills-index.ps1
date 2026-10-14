@@ -39,9 +39,9 @@ function New-SkillsIndex {
         if (-not (Get-Command $candidate[0] -ErrorAction SilentlyContinue)) { continue }
         if ($candidate[0] -ne 'uv') {
             try {
-                $LASTEXITCODE = 1
+                $global:LASTEXITCODE = 1
                 & $candidate[0] -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' *> $null
-                if ($LASTEXITCODE -ne 0) { continue }
+                if ($global:LASTEXITCODE -ne 0) { continue }
             }
             catch { continue }
         }
@@ -82,7 +82,7 @@ function New-SkillsIndex {
     & $runnerCommand @runnerPrefix $pythonScript @pythonArgs | ForEach-Object {
         Write-Host $_
     }
-    return $LASTEXITCODE
+    return $global:LASTEXITCODE
 }
 
 if ($MyInvocation.InvocationName -ne '.') {

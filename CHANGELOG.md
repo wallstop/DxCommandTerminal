@@ -10,6 +10,10 @@ Entry style follows [unity-helpers](https://github.com/Ambiguous-Interactive/uni
 
 ## Unreleased
 
+### Fixed
+
+- Fix package compilation in Unity 2021.3 ([#264](https://github.com/wallstop/DxCommandTerminal/issues/264)).
+
 ## [1.0.2] - 2026-10-12
 
 ### Added

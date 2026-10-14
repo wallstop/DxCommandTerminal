@@ -43,9 +43,9 @@ foreach ($candidate in @(@('uv', 'run', '--project', $toolingRoot, 'python'), @(
     if ($candidate[0] -ne 'uv') {
         # WindowsApps aliases resolve on PATH even when no interpreter is installed.
         try {
-            $LASTEXITCODE = 1
+            $global:LASTEXITCODE = 1
             & $candidate[0] -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' *> $null
-            if ($LASTEXITCODE -ne 0) { continue }
+            if ($global:LASTEXITCODE -ne 0) { continue }
         }
         catch { continue }
     }
@@ -59,4 +59,4 @@ if ($null -eq $runnerCommand) {
 }
 
 & $runnerCommand @runnerPrefix $pythonScript @pythonArgs
-exit $LASTEXITCODE
+exit $global:LASTEXITCODE

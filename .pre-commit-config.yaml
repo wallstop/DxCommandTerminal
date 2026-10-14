@@ -198,7 +198,7 @@ repos:
         name: Lint .llm instructions (SKILL.md spec, index freshness, pointer delegation)
         entry: pwsh -NoProfile -File tooling~/scripts/lint-llm-instructions.ps1
         language: system
-        files: (^\.llm/)|(AGENTS\.md$)|(CLAUDE\.md$)|(^\.cursorrules$)|(^\.github/copilot-instructions\.md$)|(tooling~/scripts/(lint-llm-instructions|generate-skills-index)\.ps1$)
+        files: (^\.llm/)|(AGENTS\.md$)|(CLAUDE\.md$)|(^\.cursorrules$)|(^\.github/copilot-instructions\.md$)|(tooling~/scripts/(lint-llm-instructions|generate-skills-index)\.ps1$)|(tooling~/scripts/(lint_llm_instructions|generate_skills_index)\.py$)|(tooling~/pyproject\.toml$)
         pass_filenames: false
         stages:
           - pre-commit

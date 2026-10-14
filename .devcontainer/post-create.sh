@@ -225,7 +225,7 @@ main() {
     run_optional "Restoring .NET local tools (CSharpier)" dotnet tool restore
     # npm install reuses the persistent modules tree; npm ci would remove it.
     # The npm project lives under tooling~/ so Unity never imports node_modules.
-    run_optional "Installing workspace npm dependencies" npm --prefix tooling~ install --prefer-offline --no-audit --no-fund
+    run_optional "Installing workspace npm dependencies" npm --prefix tooling~ install --prefer-online --no-audit --no-fund
     run_optional "Configuring MCP servers for every agent front end" configure_agent_mcps
     run_optional "Installing Z.AI and OpenRouter agent launchers" \
         bash "${SCRIPT_DIR}/ai-backends.sh" install

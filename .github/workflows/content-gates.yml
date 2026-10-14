@@ -87,7 +87,7 @@ jobs:
 
       - name: Install dependencies
         if: steps.tooling-modules.outputs.cache-hit != 'true'
-        run: npm --prefix tooling~ install --no-audit --no-fund --prefer-offline
+        run: npm --prefix tooling~ install --no-audit --no-fund --prefer-online
 
       - name: Lint markdown format
         # Issue #215: prettier at the 180-character measure.

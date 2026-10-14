@@ -135,6 +135,11 @@ export function copyFixtureFiles(fixtureRoot, project) {
   const source = path.join(fixtureRoot, "Assets");
   if (!fs.existsSync(source)) throw new Error(`fixture root has no Assets directory: ${fixtureRoot}`);
   fs.cpSync(source, path.join(project, "Assets"), { recursive: true });
+  const editorTests = path.join(project, "Assets", "Compatibility", "Editor");
+  fs.mkdirSync(editorTests);
+  for (const name of ["EditorCompatibilityProbe.cs", "EditorCompatibilityProbe.cs.meta", "Compatibility.Editor.Tests.asmdef", "Compatibility.Editor.Tests.asmdef.meta"]) {
+    fs.renameSync(path.join(project, "Assets", "Compatibility", name), path.join(editorTests, name));
+  }
   // The serialized component must compile outside the Editor-only test assembly.
   for (const name of ["FixtureThemePersister.cs", "FixtureThemePersister.cs.meta"]) {
     fs.renameSync(path.join(project, "Assets", "Compatibility", name), path.join(project, "Assets", name));
@@ -152,20 +157,47 @@ function installEditorDevTools(project) {
   }
   return hashes;
 }
-export function writeProjectSettings(project, matrix, leg) {
-  const settingsDirectory = path.join(project, "ProjectSettings");
-  const settings = legSettings(matrix, leg);
-  fs.mkdirSync(settingsDirectory, { recursive: true });
-  fs.writeFileSync(
-    path.join(settingsDirectory, "EditorSettings.asset"),
-    `%YAML 1.1\n%TAG !u! tag:unity3d.com,2011:\n--- !u!159 &15900000\nEditorSettings:\n  m_ObjectHideFlags: 0\n  m_Enabled: 1\n  m_EnterPlayModeOptionsEnabled: ${settings.domainReloadEnabled ? 0 : 1}\n  m_EnterPlayModeOptions: ${settings.domainReloadEnabled ? 0 : 1}\n`
-  );
-  fs.writeFileSync(
-    path.join(settingsDirectory, "ProjectSettings.asset"),
-    `%YAML 1.1\n%TAG !u! tag:unity3d.com,2011:\n--- !u!129 &12900000\nPlayerSettings:\n  m_ObjectHideFlags: 0\n  activeInputHandler: ${INPUT_PROFILES.get(settings.inputProfile)}\n`
-  );
+function canonicalField(text, field, allowedValues) {
+  const pattern = new RegExp(`^([ \t]*${field}:[ \t]*)(.*?)([ \t]*\r?)$`, "gmu");
+  const matches = [...text.matchAll(pattern)];
+  if (matches.length !== 1) throw new Error(`settings must contain exactly one ${field} field (found ${matches.length})`);
+  if (!/^[0-9]+$/u.test(matches[0][2]) || !allowedValues.includes(Number(matches[0][2]))) throw new Error(`settings have an unsupported ${field} value: ${matches[0][2]}`);
+  return { match: matches[0], value: Number(matches[0][2]) };
 }
-function testUnityArgs(project, resultsPath, logPath) {
+function replaceCanonicalField(text, field, value, allowedValues) {
+  const { match } = canonicalField(text, field, allowedValues);
+  const replacement = `${match[1]}${value}${match[3]}`;
+  return text.slice(0, match.index) + replacement + text.slice(match.index + match[0].length);
+}
+export function readInputHandler(project) {
+  const text = fs.readFileSync(path.join(project, "ProjectSettings", "ProjectSettings.asset"), "utf8");
+  return canonicalField(text, "activeInputHandler", [0, 1, 2]).value;
+}
+export function readDomainReloadSettings(project) {
+  const text = fs.readFileSync(path.join(project, "ProjectSettings", "EditorSettings.asset"), "utf8");
+  const enabled = canonicalField(text, "m_EnterPlayModeOptionsEnabled", [0, 1]).value;
+  const options = canonicalField(text, "m_EnterPlayModeOptions", [0, 1, 2, 3]).value;
+  return { enabled, options, domainReloadEnabled: enabled === 0 || (options & 1) === 0 };
+}
+export function applyCanonicalInputProfile(project, profile) {
+  validateInputProfile(profile, "input profile");
+  const file = path.join(project, "ProjectSettings", "ProjectSettings.asset");
+  const text = fs.readFileSync(file, "utf8");
+  fs.writeFileSync(file, replaceCanonicalField(text, "activeInputHandler", INPUT_PROFILES.get(profile), [0, 1, 2]));
+  return readInputHandler(project);
+}
+export function applyCanonicalProjectSettings(project, matrix, leg) {
+  const settings = legSettings(matrix, leg);
+  validateInputProfile(settings.inputProfile, "input profile");
+  const playerFile = path.join(project, "ProjectSettings", "ProjectSettings.asset");
+  const editorFile = path.join(project, "ProjectSettings", "EditorSettings.asset");
+  const player = replaceCanonicalField(fs.readFileSync(playerFile, "utf8"), "activeInputHandler", INPUT_PROFILES.get(settings.inputProfile), [0, 1, 2]);
+  let editor = replaceCanonicalField(fs.readFileSync(editorFile, "utf8"), "m_EnterPlayModeOptionsEnabled", settings.domainReloadEnabled ? 0 : 1, [0, 1]);
+  editor = replaceCanonicalField(editor, "m_EnterPlayModeOptions", settings.domainReloadEnabled ? 0 : 1, [0, 1, 2, 3]);
+  fs.writeFileSync(playerFile, player);
+  fs.writeFileSync(editorFile, editor);
+}
+function testUnityArgs(project, resultsPath, logPath, platform = "editmode") {
   return [
     "-batchmode",
     "-nographics",
@@ -173,7 +205,7 @@ function testUnityArgs(project, resultsPath, logPath) {
     project,
     "-runTests",
     "-testPlatform",
-    "editmode",
+    platform,
     "-testFilter",
     TEST_FILTER,
     "-testResults",
@@ -188,7 +220,7 @@ export function parseTestResults(resultsPath) {
   const paired = /^(?:\s*<\?xml\s+[^?]*\?>\s*)?<test-run\b([^>]*)>([\s\S]*)<\/test-run>\s*$/u.exec(text);
   const selfClosing = /^(?:\s*<\?xml\s+[^?]*\?>\s*)?<test-run\b([^>]*)\/>\s*$/u.exec(text);
   const match = paired ?? selfClosing;
-  if (match === null || (paired !== null && (!validXmlBody(match[2]) || /<\/?test-run\b/u.test(match[2])))) {
+  if (match === null || (paired !== null && !validXmlBody(match[2]))) {
     return { passed: false, result: null, reason: "test results have a malformed test-run root" };
   }
   const attributes = parseTestRunAttributes(match[1].trim());
@@ -214,7 +246,7 @@ function validXmlBody(body) {
   let offset = 0;
   while (offset < body.length) {
     const start = body.indexOf("<", offset);
-    if (start === -1) return true;
+    if (start === -1) return stack.length === 0;
     if (body.startsWith("<!--", start)) {
       const end = body.indexOf("-->", start + 4);
       if (end === -1) return false;
@@ -237,11 +269,14 @@ function validXmlBody(body) {
     if (end === -1) return false;
     const tag = body.slice(start, end + 1);
     const name = /^<\/?([A-Za-z_][A-Za-z0-9_.:-]*)/u.exec(tag)?.[1];
-    if (name === undefined) return false;
+    if (name === undefined || name === "test-run") return false;
     if (tag.startsWith("</")) {
+      if (!/^<\/[A-Za-z_][A-Za-z0-9_.:-]*\s*>$/u.test(tag)) return false;
       if (stack.pop() !== name) return false;
-    } else if (!tag.endsWith("/>")) {
-      stack.push(name);
+    } else {
+      const attributes = tag.slice(name.length + 1, tag.length - (tag.endsWith("/>") ? 2 : 1));
+      if (attributes.length > 0 && (!/^\s/u.test(attributes) || parseTestRunAttributes(attributes.trim()) === null)) return false;
+      if (!tag.endsWith("/>")) stack.push(name);
     }
     offset = end + 1;
   }
@@ -428,6 +463,9 @@ export async function runLeg(options, matrix, leg, runtime = {}) {
     editorVersion,
     unity,
     inputProfile: settings.inputProfile,
+    requestedInputHandler: INPUT_PROFILES.get(settings.inputProfile),
+    effectiveInputHandlers: [],
+    effectiveDomainReloadSettings: [],
     domainReloadEnabled: settings.domainReloadEnabled,
     artifact: options.artifact,
     artifactSha256,
@@ -440,6 +478,7 @@ export async function runLeg(options, matrix, leg, runtime = {}) {
     phases: [],
     checks: [],
     testResults: null,
+    playModeTestResults: null,
     failed: true,
     failure: null,
     complete: false
@@ -464,7 +503,6 @@ export async function runLeg(options, matrix, leg, runtime = {}) {
       ...artifact.scratchDependencies,
       "com.unity.test-framework": "1.1.33"
     });
-    writeProjectSettings(project, matrix, leg);
     manifest.editorDevToolHashes = installEditorDevTools(project);
   } catch (error) {
     manifest.failure = `fixture scaffold failed: ${error.message}`;
@@ -474,10 +512,13 @@ export async function runLeg(options, matrix, leg, runtime = {}) {
   const logsDirectory = path.join(reportDirectory, "logs");
   fs.mkdirSync(logsDirectory, { recursive: true });
   const resultsPath = path.join(reportDirectory, "results.xml");
+  const testEnvironment = { DX_T13_INPUT_PROFILE: settings.inputProfile, DX_T13_DOMAIN_RELOAD_ENABLED: settings.domainReloadEnabled ? "1" : "0", DX_T13_PERSISTENCE_FILE: path.join(reportDirectory, "fixture-persistence.json") };
+  const playModeResultsPath = path.join(reportDirectory, "playmode-results.xml");
   const phases = [
     { name: "import", args: importUnityArgs(project, options.artifact, path.join(logsDirectory, "import.log")), env: undefined },
     { name: "settle", args: settleUnityArgs(project, path.join(logsDirectory, "settle.log")), env: SETTLE_PHASE_ENV },
-    { name: "tests", args: testUnityArgs(project, resultsPath, path.join(logsDirectory, "tests.log")), env: { DX_T13_DOMAIN_RELOAD_ENABLED: settings.domainReloadEnabled ? "1" : "0", DX_T13_PERSISTENCE_FILE: path.join(reportDirectory, "fixture-persistence.json") } }
+    { name: "tests", args: testUnityArgs(project, resultsPath, path.join(logsDirectory, "tests.log")), env: testEnvironment },
+    { name: "playmode-tests", args: testUnityArgs(project, playModeResultsPath, path.join(logsDirectory, "playmode-tests.log"), "playmode"), env: testEnvironment }
   ];
   const timeoutMs = options.timeoutMinutes * 60_000;
   for (const phase of phases) {
@@ -495,8 +536,11 @@ export async function runLeg(options, matrix, leg, runtime = {}) {
     if (phase.name === "import") {
       try {
         copyFixtureFiles(options.fixtureRoot, project);
+        applyCanonicalProjectSettings(project, matrix, leg);
+        manifest.effectiveInputHandlers.push({ phase: phase.name, value: readInputHandler(project) });
+        manifest.effectiveDomainReloadSettings.push({ phase: phase.name, ...readDomainReloadSettings(project) });
       } catch (error) {
-        manifest.failure = `fixture install failed: ${error.message}`;
+        manifest.failure = `fixture or project profile setup failed: ${error.message}`;
         break;
       }
     }
@@ -508,10 +552,24 @@ export async function runLeg(options, matrix, leg, runtime = {}) {
         break;
       }
     }
-    if (phase.name === "tests") {
-      manifest.testResults = parseTestResults(resultsPath);
-      if (!manifest.testResults.passed) {
-        manifest.failure = `compatibility tests did not pass: ${manifest.testResults.reason ?? manifest.testResults.result}`;
+    if (phase.name === "tests" || phase.name === "playmode-tests") {
+      const results = parseTestResults(phase.name === "tests" ? resultsPath : playModeResultsPath);
+      manifest[phase.name === "tests" ? "testResults" : "playModeTestResults"] = results;
+      if (!results.passed) {
+        manifest.failure = `${phase.name} compatibility tests did not pass: ${results.reason ?? results.result}`;
+        break;
+      }
+    }
+    if (phase.name !== "import") {
+      try {
+        const value = readInputHandler(project);
+        manifest.effectiveInputHandlers.push({ phase: phase.name, value });
+        if (value !== manifest.requestedInputHandler) throw new Error(`activeInputHandler is ${value}, expected ${manifest.requestedInputHandler} (${settings.inputProfile})`);
+        const domain = readDomainReloadSettings(project);
+        manifest.effectiveDomainReloadSettings.push({ phase: phase.name, ...domain });
+        if (domain.domainReloadEnabled !== settings.domainReloadEnabled) throw new Error(`domain reload is ${domain.domainReloadEnabled}, expected ${settings.domainReloadEnabled}`);
+      } catch (error) {
+        manifest.failure = `${phase.name} project profile verification failed: ${error.message}`;
         break;
       }
     }
