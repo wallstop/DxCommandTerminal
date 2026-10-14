@@ -145,6 +145,9 @@ Adding a skill: create the directory + `SKILL.md`, then run the generator. The l
     editor for its duration. Banned under `Runtime/` and `Editor/`: `Thread.Sleep`, `SpinWait`/`SpinUntil`, `Task.Wait`/`.Result`/`GetAwaiter().GetResult()`, `WaitOne`, `Join`,
     `Monitor.Wait`. A reason-carrying `// blocking-waits:allow: <reason>` marker exempts one guarded site (a completed-task read behind a pump); no unguarded exemptions.
     `lint:blocking-waits` enforces it (pre-commit + CI; no `:fix` by design; PR #254 review).
+27. A comment earns its bytes by carrying the why the code cannot say. A comment whose every content word appears in the line it annotates restates that code - delete it or write
+    the why - and a comment with no content at all (`//`, `// TODO`, a dash line) says nothing (issue #255). `lint:minimal-comments` enforces it (pre-commit + CI; no `:fix` by
+    design); a reason-carrying `// minimal-comments:allow: <reason>` marker exempts one site.
 
 ### Unity Package Rules
 
@@ -210,7 +213,8 @@ and wait for wallstop. Review feedback lags the head (Bugbot names the commit it
 ## Enforcement (LLM Context Hygiene)
 
 1. **Line limits**: every authored file under `.llm/` MUST stay at or below 300 lines; 270+ gets a critical warning. The generated `.llm/skills/index.md` is exempt
-   (machine-written). Enforced by `tooling~/scripts/lint-skill-sizes.ps1` (pre-commit + CI + tests).
+   (machine-written). Enforced by `tooling~/scripts/lint_skill_sizes.py` (typed python under uv, issue #220; the `lint-skill-sizes.ps1` entry keeps the pre-commit and CI command;
+   pre-commit + CI + tests).
 2. **SKILL.md validity + index freshness + pointer delegation**: enforced by `tooling~/scripts/lint-llm-instructions.ps1` (pre-commit + CI + tests).
 3. **Generated files are byte-stable**: UTF-8 without BOM, LF line endings, ordinal sorting, no timestamps. Never hand-edit `.llm/skills/index.md`.
 4. **Encoding overrides**: `.editorconfig` forces UTF-8 (no BOM) + LF for `.llm/**` and `tooling~/**`, overriding the BOM/CRLF defaults C# assets keep per repo convention.

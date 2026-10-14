@@ -93,7 +93,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.That(controlOrderField != null, "_controlOrder field should exist on TerminalKeyboardController");
 
             List<TerminalControlTypes> orderWithDuplicates = GetControlTypes().ToList();
-            // Add duplicates
             orderWithDuplicates.Add(orderWithDuplicates[0]);
             orderWithDuplicates.Add(orderWithDuplicates[1]);
             controlOrderField.SetValue(controller, orderWithDuplicates);

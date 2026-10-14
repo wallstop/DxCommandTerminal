@@ -18,7 +18,7 @@ metadata:
 tooling~/scripts/
   generate-skills-index.ps1      # Index generator (deterministic)
   lint-llm-instructions.ps1      # Contract linter (-Fix regenerates the index)
-  lint-skill-sizes.ps1           # Line-limit linter
+  lint-skill-sizes.ps1           # Line-limit linter (delegates to lint_skill_sizes.py, typed python)
   tests/                         # Red-green tests for the linters and generator
 ```
 
@@ -30,8 +30,8 @@ tooling~/scripts/
     - `description`: required, SINGLE LINE, ASCII-only, 1-1024 chars. Describe what the skill does AND when to use it, with concrete keywords. Non-ASCII (em-dash, smart quotes)
       fails the lint: it is the known cross-OS index-drift vector.
     - `metadata.category`: `Core`, `Performance`, or `Feature` (default `Feature`).
-3. Body: instructions, examples, edge cases. Reference sibling files with relative paths from the skill root. Keep the file at or below 300 lines (`lint-skill-sizes.ps1`; 270+
-   warns).
+3. Body: instructions, examples, edge cases. Reference sibling files with relative paths from the skill root. Keep the file at or below 300 lines (`lint-skill-sizes.ps1`, the
+   delegator to `lint_skill_sizes.py`; 270+ warns).
 4. Regenerate the index: `pwsh -NoProfile -File tooling~/scripts/generate-skills-index.ps1`
 5. Run both linters; commit `.llm/skills/index.md` together with the skill.
 

@@ -663,6 +663,73 @@ function gitTrackedState() {
   );
 }
 
+/*
+    A pathspec-scoped tracked listing: the identity of exactly the files one
+    check reads, where the whole-snapshot key would re-run it on any tracked
+    edit anywhere - the local mirror of CI's trigger diet (session 088).
+
+    The hash folds two git answers scoped to the pathspecs (git's own
+    matching, not a JS reimplementation):
+      - `ls-files -s`: the index's blob hashes under the pathspec, so a
+        staged or committed edit moves the key;
+      - `status --porcelain`: every pathspec path that differs from HEAD,
+        with each TRACKED dirty path's worktree bytes folded by content
+        (same size cap as the snapshot) - a worktree rewrite that the
+        index cannot see must still move the key.
+
+    Untracked files are deliberately excluded from the fold: the gates
+    keyed this way read tracked files only (`ls-files`), so untracked
+    scratch is not an input and must not re-run the check.
+ */
+export function trackedListingState(pathspecs) {
+  if (!Array.isArray(pathspecs) || pathspecs.length === 0) {
+    throw new Error("cacheTrackedPaths needs at least one git pathspec");
+  }
+  const spawnOptions = { cwd: REPO_ROOT, maxBuffer: 256 * 1024 * 1024, encoding: "utf8" };
+  const listing = execFileSync("git", ["ls-files", "-s", "-z", "--", ...pathspecs], spawnOptions);
+  const status = execFileSync(
+    "git",
+    ["status", "--porcelain=v1", "-z", "--untracked-files=all", "--", ...pathspecs],
+    spawnOptions
+  );
+  /*
+      Untracked records (`?? <path>`) are dropped before the status is
+      hashed: the gates keyed this way read tracked files only
+      (`ls-files`), so untracked scratch under the pathspec is not an
+      input and must not move the key. Rename records keep their
+      old-path pair field, which never starts with `?? `.
+  */
+  const trackedStatus = status
+    .split("\0")
+    .filter((record) => !record.startsWith("?? "))
+    .join("\0");
+  const listings = gitListings();
+  if (listings === GIT_LISTINGS_UNAVAILABLE) {
+    throw new Error("git is unavailable; the tracked listing cannot be computed");
+  }
+  const { worktreeDirty } = parseStatusRecords(trackedStatus);
+  const trackedDirty = [...worktreeDirty].filter((relative) => listings.tracked.has(relative));
+  const hash = crypto.createHash("sha256");
+  hash.update(trackedStatus);
+  hash.update(listing);
+  for (const relative of trackedDirty) {
+    hash.update(relative);
+    hash.update("\0");
+    const absolute = path.join(REPO_ROOT, relative);
+    try {
+      const stat = fs.statSync(absolute);
+      if (stat.isFile() && stat.size <= UNTRACKED_CONTENT_HASH_LIMIT) {
+        hash.update(fs.readFileSync(absolute));
+        continue;
+      }
+      hash.update(statSignature(stat));
+    } catch {
+      hash.update("unreadable");
+    }
+  }
+  return hash.digest("hex");
+}
+
 export function npmConfigState() {
   const home = os.homedir();
   const npm = process.platform === "win32" ? "npm.cmd" : "npm";
@@ -799,7 +866,8 @@ function checkPathState(check, sources) {
 export function cacheKeyForCheck(check, context = createCacheContext()) {
   return buildCacheKey(check, context, {
     pathState: combinedPathStateDefault,
-    repoSnapshot: repositorySnapshot
+    repoSnapshot: repositorySnapshot,
+    trackedListing: trackedListingState
   });
 }
 
@@ -819,6 +887,7 @@ function combinedPathStateDefault(value, excludes) {
  */
 export function createCacheKeyComputer() {
   const entryCache = new Map();
+  const listingCache = new Map();
   let repoState = null;
   return {
     keyFor(check, context = createCacheContext()) {
@@ -833,7 +902,16 @@ export function createCacheKeyComputer() {
             }
             return state;
           }),
-        repoSnapshot: () => (repoState ??= repositorySnapshot())
+        repoSnapshot: () => (repoState ??= repositorySnapshot()),
+        trackedListing: (pathspecs) => {
+          const memoKey = pathspecs.join("\0");
+          let state = listingCache.get(memoKey);
+          if (state === undefined) {
+            state = trackedListingState(pathspecs);
+            listingCache.set(memoKey, state);
+          }
+          return state;
+        }
       });
     }
   };
@@ -877,7 +955,8 @@ function buildCacheKey(check, context, sources) {
     `cache-paths=${JSON.stringify(check.cachePaths ?? null)}`,
     `cache-excludes=${JSON.stringify(check.cacheExcludes ?? null)}`,
     `repo-paths=${checkPathState(check, sources)}`,
-    `repo-files=${check.cacheTrackedFiles === true ? sources.repoSnapshot() : ""}`
+    `repo-files=${check.cacheTrackedFiles === true ? sources.repoSnapshot() : ""}`,
+    `repo-listing=${Array.isArray(check.cacheTrackedPaths) ? sources.trackedListing(check.cacheTrackedPaths) : ""}`
   ].join("\n");
   return hashText(identity);
 }

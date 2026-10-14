@@ -32,7 +32,7 @@ namespace WallstopStudios.DxCommandTerminal.Backend
 
         public bool HasReplacementOverride => Replacement is CommandCompletionReplacement;
 
-        /// <summary>Effective display label, never null.</summary>
+        /// <summary>Label the palette renders; never null.</summary>
         public string EffectiveDisplayLabel => DisplayLabel ?? InsertionText;
 
         public CommandCompletion(string insertionText, string displayLabel = null, string description = null, CommandCompletionReplacement? replacement = null)

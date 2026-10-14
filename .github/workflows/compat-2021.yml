@@ -79,7 +79,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-compat-${{ hashFiles('tooling~/compat/runtime-2021.3.csproj', 'tooling~/compat/tests-2021.3.csproj', 'tooling~/compat/testhost/testhost.csproj', 'Generator~/WallstopStudios.DxCommandTerminal.SourceGenerators/*.csproj') }}
+          key: ${{ runner.os }}-nuget-compat-${{ hashFiles('tooling~/compat/runtime-2021.3.csproj', 'tooling~/compat/tests/tests-2021.3.csproj', 'tooling~/compat/testhost/testhost.csproj', 'Generator~/WallstopStudios.DxCommandTerminal.SourceGenerators/*.csproj') }}
           restore-keys: ${{ runner.os }}-nuget-compat-
 
       - name: Compile Runtime against 2021.3

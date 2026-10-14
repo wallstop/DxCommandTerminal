@@ -7,7 +7,7 @@
   },
   "scripts": {
     "test": "node --test \"scripts/mcp/__tests__/*.test.mjs\" \"scripts/tests/*.test.mjs\"",
-    "test:editor": "dotnet build compat/tests-2021.3.csproj -c Release --nologo && dotnet build compat/testhost/testhost.csproj -c Release --nologo && dotnet run --project compat/testhost -c Release --no-build --",
+    "test:editor": "dotnet build compat/tests/tests-2021.3.csproj -c Release --nologo && dotnet build compat/testhost/testhost.csproj -c Release --nologo && dotnet run --project compat/testhost -c Release --no-build --",
     "preflight": "node scripts/preflight.mjs",
     "docs:build": "node docs/build.mjs",
     "compat:check": "dotnet build compat/runtime-2021.3.csproj -c Release --nologo",
@@ -32,6 +32,7 @@
     "lint:out-param-discipline": "node scripts/lint-out-param-discipline.mjs",
     "lint:md": "node scripts/lint-md-format.mjs",
     "lint:md:fix": "node scripts/lint-md-format.mjs --fix",
+    "lint:minimal-comments": "node scripts/lint-minimal-comments.mjs",
     "lint:theme-palette-tokens": "node scripts/lint-theme-palette-tokens.mjs",
     "lint:docs-catalog": "node scripts/lint-docs-catalog.mjs",
     "docs:guides": "node docs/build.mjs --guides-only",

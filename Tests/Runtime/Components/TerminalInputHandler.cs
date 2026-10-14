@@ -2,8 +2,5 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime.Components
 {
     using UnityEngine;
 
-    public sealed class TerminalInputHandler : MonoBehaviour
-    {
-        // TODO
-    }
+    public sealed class TerminalInputHandler : MonoBehaviour { }
 }

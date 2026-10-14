@@ -58,10 +58,12 @@ Restore tools first (`dotnet tool restore`) - the `dotnet-tool-restore` pre-comm
 
 1. `dotnet-tool-restore` (pre-commit, pre-push, post-checkout, post-rewrite)
 2. `csharpier` on staged `*.cs` files
-3. C# style linters (Node, whole-tree scans; each has an `npm --prefix tooling~ run lint:<name>` script, a contract-test suite under `tooling~/scripts/tests/`, and a CI step):
+3. C# style linters (Node, whole-tree scans; each has a contract-test suite under `tooling~/scripts/tests/` and a CI step; invoke with `node tooling~/scripts/lint-<name>.mjs`):
     - `comparison-direction` (only `<`, `<=`, `==`; `:fix` swaps operands)
     - `member-ordering` (member order, nested types last, explicit enum values and obsolete zero sentinels; `:fix` only reorders members, never renumbers enums)
     - `multiline-comments` (stacked `//` become one `/* */` block; `:fix` converts)
+    - `minimal-comments` (comments state why, never what - a comment whose every content word appears in the line it annotates, or one with no content at all, fails; no `:fix`;
+      issue #255)
     - `unity-null-patterns` (bans `Assert.IsNull`/`Assert.IsNotNull`; `:fix` converts to `Assert.That(x == null / x != null)`; issue #100)
     - `linq-production` (no LINQ in `Runtime/`, `Editor/`; no `:fix`)
     - `string-equality` (no `==`/`!=` on string literals or `string.Empty` in shipped code; use `string.Equals` with an explicit `StringComparison`; no `:fix`)

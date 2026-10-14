@@ -1,0 +1,13 @@
+[project]
+# The typed-python surface for the repo's script tooling (issue #220).
+# Stage 1 hosts the lint-skill-sizes port; later stages move the remaining
+# .ps1 linters in one entry point at a time. Runtime dependencies stay
+# empty - the scripts are standard library only, so `uv run` only needs
+# to resolve the interpreter, and CI needs nothing beyond setup-python
+# plus uv itself. The node tooling next door pins exact versions with no
+# lockfile; the same convention holds here (requires-python is the pin).
+name = "dxcommandterminal-tooling"
+version = "0.0.0"
+private = true
+requires-python = ">=3.11"
+dependencies = []

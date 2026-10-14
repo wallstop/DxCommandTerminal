@@ -919,7 +919,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 }
             }
 
-            // x,y
             for (int i = 0; i < NumTries; ++i)
             {
                 int x = _random.Next(int.MinValue, int.MaxValue);
@@ -941,7 +940,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 }
             }
 
-            // x,y, z
             for (int i = 0; i < NumTries; ++i)
             {
                 int x = _random.Next(int.MinValue, int.MaxValue);
@@ -1019,7 +1017,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 }
             }
 
-            // x,y
             for (int i = 0; i < NumTries; ++i)
             {
                 int x = _random.Next(int.MinValue, int.MaxValue);
@@ -1041,7 +1038,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 }
             }
 
-            // x,y,z
             for (int i = 0; i < NumTries; ++i)
             {
                 int x = _random.Next(int.MinValue, int.MaxValue);
@@ -1276,7 +1272,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             const float vector2RoundTolerance = 0.01f;
 
-            // x,y
             for (int i = 0; i < NumTries; ++i)
             {
                 float x = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
@@ -1387,7 +1382,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 }
             }
 
-            // x,y
             for (int i = 0; i < NumTries; ++i)
             {
                 float x = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
@@ -1424,7 +1418,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 }
             }
 
-            // x,y,z (z is ok, but ignored)
             for (int i = 0; i < NumTries; ++i)
             {
                 float x = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
@@ -1542,7 +1535,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 }
             }
 
-            // x,y
             for (int i = 0; i < NumTries; ++i)
             {
                 float x = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
@@ -1581,7 +1573,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 }
             }
 
-            // x,y,z
             for (int i = 0; i < NumTries; ++i)
             {
                 float x = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
@@ -1620,7 +1611,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
                 }
             }
 
-            // x,y,z,w
             for (int i = 0; i < NumTries; ++i)
             {
                 float x = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
@@ -1900,7 +1890,6 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
 
             const float quaternionRoundTolerance = 0.00001f;
 
-            // x,y,z, w (z is ok, but ignored)
             for (int i = 0; i < NumTries; ++i)
             {
                 float x = (float)(_random.NextDouble() * _random.Next(short.MinValue, short.MaxValue));
