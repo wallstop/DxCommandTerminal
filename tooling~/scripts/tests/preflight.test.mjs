@@ -312,38 +312,51 @@ test("runChecks: checks run concurrently with no shared-lane serialization", asy
   /*
       The dotnet lane is retired: every compat project restores into its
       own directory's obj, so no two checks share build state and none
-      may serialize behind another. The pin: two slow checks overlap -
-      the second starts before the first ends.
+      may serialize behind another. The pin: a still-running check
+      OBSERVES the second one starting.
+
+      The window is a poll deadline, not a fixed hold: the first check
+      waits up to 5 s for the second's start marker, so pass/fail does
+      not depend on the second child's spawn landing inside a 300 ms
+      hold - a runner under load used to fail the fixed window (spawn
+      lag past it) while the checks really did overlap.
    */
   const marker = path.join(os.tmpdir(), `dxct-preflight-lane-${process.pid}-${Date.now()}`);
-  const overlap = (label, holdMs) => `
+  const head = `
     const fs = await import("node:fs");
     const marker = ${JSON.stringify(marker)};
-    const key = ${JSON.stringify(label)};
     const read = () =>
       fs.existsSync(marker) ? JSON.parse(fs.readFileSync(marker, "utf8")) : {};
-    const state = read();
-    state[key] = { start: Date.now(), end: 0 };
-    fs.writeFileSync(marker, JSON.stringify(state));
-    setTimeout(() => {
-      /*
-          Re-read at write time: a sibling that finished while this one
-          held must survive this write.
-       */
-      const fresh = read();
-      fresh[key] = { ...state[key], end: Date.now() };
-      fs.writeFileSync(marker, JSON.stringify(fresh));
-      process.exit(0);
-    }, ${holdMs});
+    /* Re-read at write time: a sibling that finished while this one
+       ran must survive this write. */
+    const mergeWrite = (label, fields) =>
+      fs.writeFileSync(marker, JSON.stringify({ ...read(), [label]: fields }));
+  `;
+  const lead = `
+    ${head}
+    mergeWrite("slow-a", { start: Date.now(), end: 0 });
+    const deadline = Date.now() + 5000;
+    let sawSibling = false;
+    while (Date.now() < deadline) {
+      if (read()["slow-b"]?.start) { sawSibling = true; break; }
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    mergeWrite("slow-a", { ...read()["slow-a"], end: Date.now(), sawSibling });
+    process.exit(0);
+  `;
+  const follower = `
+    ${head}
+    mergeWrite("slow-b", { start: Date.now(), end: Date.now() });
+    process.exit(0);
   `;
   try {
     await runChecks([
-      { name: "slow-a", command: `node "${writeTempScript(overlap("slow-a", 300))}"` },
-      { name: "slow-b", command: `node "${writeTempScript(overlap("slow-b", 300))}"` }
+      { name: "slow-a", command: `node "${writeTempScript(lead)}"` },
+      { name: "slow-b", command: `node "${writeTempScript(follower)}"` }
     ]);
     const state = JSON.parse(fs.readFileSync(marker, "utf8"));
     assert.ok(
-      state["slow-b"].start < state["slow-a"].end,
+      state["slow-a"].sawSibling,
       "a second check must overlap a still-running one, not queue behind it"
     );
   } finally {

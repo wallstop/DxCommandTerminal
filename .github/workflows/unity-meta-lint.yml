@@ -19,8 +19,15 @@ jobs:
     # No path filter: a .meta can lose its target (or a target its .meta) from
     # any commit, so the check runs on every push/PR. The job only queries
     # git ls-files and reads text metas; it stays fast and Unity-free.
-    name: lint-unity-meta (ubuntu-latest)
-    runs-on: ubuntu-latest
+    # BOTH OS legs, like the llm lint matrix: the ps1 delegator's Windows
+    # wiring (tilde paths through Join-Path, the uv fallback, exit-code
+    # propagation) is enforced in CI, not just assumed.
+    name: lint-unity-meta (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

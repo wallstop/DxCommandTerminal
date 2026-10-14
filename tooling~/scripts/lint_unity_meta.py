@@ -20,11 +20,15 @@ Messages use the [meta-lint] prefix.
 
 Stated limits: git output is read NUL-delimited (`ls-files -z`), so a
 non-ASCII path round-trips without core.quotepath and the ps1's backslash
-guard becomes a no-op normalization; meta files read with utf-8-sig and
-splitlines() (a CRLF file reads the same as .NET's ReadAllLines did, while a
-stray vertical-tab line splits and reads one line longer); traversal is
-sorted, so the report order is deterministic where the ps1 iterated a
-HashSet.
+guard becomes a no-op normalization; the line patterns keep the
+case-insensitive match PowerShell's -match family gave the ps1 (re.IGNORECASE,
+python's default being case-sensitive); meta files read with utf-8-sig and
+splitlines() - a CRLF file reads the same as .NET's ReadAllLines did, while a
+stray vertical-tab line splits and reads one line longer, failing toward the
+stricter read, and bytes that are not UTF-8 decode with U+FFFD replacement the
+way .NET's default decoder did; traversal is sorted, so the report order is
+deterministic where the ps1's directory loop enumerated a HashSet (its file
+loops already followed git's sorted output).
 
 Entry points (all keep their command names; the ps1 is the delegator):
 - pre-commit hook `unity-meta-lint`
@@ -39,15 +43,24 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from typing import Protocol
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 META_SUFFIX = ".meta"
 
-GUID_LINE = re.compile(r"guid:\s*([0-9a-fA-F]{32})\s*")
-FOLDER_ASSET_LINE = re.compile(r"folderAsset:\s*yes\s*")
+# PowerShell's -match is case-insensitive; the port keeps that (Unity writes
+# the keys lowercase, and a hand-written case drift stays a parseable line).
+GUID_LINE = re.compile(r"guid:\s*([0-9a-fA-F]{32})\s*", re.IGNORECASE)
+FOLDER_ASSET_LINE = re.compile(r"folderAsset:\s*yes\s*", re.IGNORECASE)
 
 PREFIX = "[meta-lint]"
+
+
+class Stream(Protocol):
+    """What the report writes through: anything with a text-mode write()."""
+
+    def write(self, text: str, /) -> object: ...
 
 
 def git_tracked_paths(repo_root: Path) -> list[str] | None:
@@ -88,14 +101,14 @@ def lint_unity_meta(
     *,
     tracked_paths: list[str] | None = None,
     verbose_output: bool = False,
-    stream: object = sys.stdout,
+    stream: Stream = sys.stdout,
 ) -> int:
     """Runs the lint and returns the exit code: 0 clean, 1 on any error.
     Writes the same report the PowerShell linter wrote, through `stream`
     (tests capture it). tracked_paths is the `git ls-files` seam: None runs
     git, tests inject a synthetic listing so the rules run without spawning.
     """
-    write = getattr(stream, "write")
+    write = stream.write
 
     def emit(message: str) -> None:
         write(f"{message}\n")
@@ -122,8 +135,10 @@ def lint_unity_meta(
 
         meta_path = repo_root / file
         try:
-            lines = meta_path.read_text(encoding="utf-8-sig").splitlines()
-        except (OSError, UnicodeDecodeError) as error:
+            # errors="replace" mirrors .NET's default ReadAllLines decode:
+            # bytes that are not UTF-8 become U+FFFD instead of a read error.
+            lines = meta_path.read_text(encoding="utf-8-sig", errors="replace").splitlines()
+        except OSError as error:
             emit(f"{PREFIX} ERROR: '{file}' could not be read: {error}")
             guid_errors += 1
             continue

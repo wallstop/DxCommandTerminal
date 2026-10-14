@@ -9,7 +9,7 @@
     points keep their names and shape (pre-commit hook, the LLM
     Instructions Lint workflow, and this path in the skills docs). The
     runner prefers uv (pinned interpreter via tooling~/pyproject.toml)
-    and falls back to any system python 3.9+ - the script is standard
+    and falls back to any system python 3.11+ (the manifest floor) - the script is standard
     library only.
 
     Thresholds: >300 lines ERROR, 270-300 CRITICAL warning, <=269 OK.

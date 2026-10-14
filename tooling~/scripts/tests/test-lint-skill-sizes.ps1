@@ -7,7 +7,7 @@
     test_lint_skill_sizes.py, issue #220 stage 1); this file stays only
     so the CI step and the test-runner entry points keep their names.
     The runner prefers uv (pinned interpreter via tooling~/pyproject.toml)
-    and falls back to any system python 3.9+.
+    and falls back to any system python 3.11+ (the manifest floor).
 
 .EXAMPLE
     pwsh -NoProfile -File tooling~/scripts/tests/test-lint-skill-sizes.ps1

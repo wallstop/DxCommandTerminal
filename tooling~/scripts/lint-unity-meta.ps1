@@ -9,7 +9,7 @@
     points keep their names and shape (pre-commit hook `unity-meta-lint`
     and the Unity Meta Lint workflow). The runner prefers uv (pinned
     interpreter via tooling~/pyproject.toml) and falls back to any system
-    python 3.9+ - the script is standard library only.
+    python 3.11+ (the manifest floor) - the script is standard library only.
 
     Rules over `git ls-files` (what a fresh clone contains): every tracked
     .meta has its target tracked (no orphan metas), every Unity-visible

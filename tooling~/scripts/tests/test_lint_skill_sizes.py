@@ -18,6 +18,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from typing import Any
 
 TESTS_DIR = Path(__file__).resolve().parent
 SCRIPTS_DIR = TESTS_DIR.parent
@@ -54,11 +55,9 @@ class SkillSizesFixture(unittest.TestCase):
             encoding="utf-8",
         )
 
-    def lint(self, **kwargs: object) -> tuple[int, str]:
+    def lint(self, **kwargs: Any) -> tuple[int, str]:
         stream = io.StringIO()
-        exit_code = lint_skill_sizes.lint_skill_sizes(
-            self.root, stream=stream, **kwargs  # type: ignore[arg-type]
-        )
+        exit_code = lint_skill_sizes.lint_skill_sizes(self.root, stream=stream, **kwargs)
         return exit_code, stream.getvalue()
 
 
@@ -114,9 +113,7 @@ class SkillSizesBoundaryTests(SkillSizesFixture):
     def test_missing_llm_directory_fails_fast(self) -> None:
         with tempfile.TemporaryDirectory() as empty:
             stream = io.StringIO()
-            exit_code = lint_skill_sizes.lint_skill_sizes(
-                Path(empty), stream=stream  # type: ignore[arg-type]
-            )
+            exit_code = lint_skill_sizes.lint_skill_sizes(Path(empty), stream=stream)
             self.assertEqual(exit_code, 1, "missing .llm dir must fail")
             self.assertIn("LLM directory not found", stream.getvalue())
 

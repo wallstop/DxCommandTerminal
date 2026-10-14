@@ -55,10 +55,10 @@ class MetaFixture(unittest.TestCase):
     def tearDown(self) -> None:
         self._temporary.cleanup()
 
-    def add_file(self, relative: str, text: str | None = None) -> None:
+    def add_file(self, relative: str, text: str | None = None, encoding: str = "utf-8") -> None:
         target = self.root / relative
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text("content\n" if text is None else text, encoding="utf-8")
+        target.write_text("content\n" if text is None else text, encoding=encoding)
 
     def lint(self, tracked: list[str] | None = None, **kwargs: Any) -> tuple[int, str]:
         stream = io.StringIO()
@@ -99,7 +99,9 @@ class CleanTreeTests(MetaFixture):
     def test_unity_ignored_segments_need_no_meta(self) -> None:
         self.add_file(".llm/context.md")
         self.add_file("tooling~/scripts/tool.ps1")
-        exit_code, output = self.lint(tracked=self.tracked + [".llm/context.md", "tooling~/scripts/tool.ps1"])
+        self.add_file("Assets/.hidden/leaf.txt")
+        ignored = [".llm/context.md", "tooling~/scripts/tool.ps1", "Assets/.hidden/leaf.txt"]
+        exit_code, output = self.lint(tracked=self.tracked + ignored)
         self.assertEqual(exit_code, 0, "dot-prefixed and ~-suffixed segments are invisible to Unity")
         self.assertNotIn("[meta-lint] ERROR: missing meta", output)
 
@@ -133,22 +135,53 @@ class OrphanMetaTests(MetaFixture):
             output,
         )
 
-    def test_folder_asset_values_gate_the_file_target_rule(self) -> None:
-        # Only the exact "yes" line means folder asset: case or value drift
-        # makes the legacy file-target rule pass.
-        for value, expect_ok in (("yes", False), ("no", True), ("YES", True)):
-            with self.subTest(value=value):
+    def test_folder_asset_lines_gate_the_file_target_rule(self) -> None:
+        # The line value is case-insensitive (the ps1's -match family) and the
+        # match is anchored: a value other than "yes" or an indented line is
+        # not a folder-asset line, so a file target stays legal.
+        for line, expect_ok in (
+            ("folderAsset: yes", False),
+            ("folderAsset: no", True),
+            ("folderAsset: YES", False),
+            (" folderAsset: yes", True),
+        ):
+            with self.subTest(line=line):
                 guid = "e5f6a7b8c1d2e3f4a5b6c7d8e1f2a3b4"
-                self.add_file(f"Bogus{value}.asset")
-                self.add_file(f"Bogus{value}.asset.meta", f"fileFormatVersion: 2\nguid: {guid}\nfolderAsset: {value}\n")
+                label = line.strip().replace(" ", "-")
+                self.add_file(f"Bogus{label}.asset")
+                self.add_file(f"Bogus{label}.asset.meta", f"fileFormatVersion: 2\nguid: {guid}\n{line}\n")
                 exit_code, output = self.lint(
-                    tracked=self.tracked + [f"Bogus{value}.asset", f"Bogus{value}.asset.meta"]
+                    tracked=self.tracked + [f"Bogus{label}.asset", f"Bogus{label}.asset.meta"]
                 )
                 if expect_ok:
-                    self.assertNotIn("targets a tracked file, not a directory", output)
+                    self.assertEqual(exit_code, 0, f"folderAsset line {line!r} must not be read as folder asset")
+                    self.assertIn("Unity meta hygiene passed", output)
                 else:
                     self.assertEqual(exit_code, 1)
                     self.assertIn("targets a tracked file, not a directory", output)
+
+    def test_bom_and_crlf_metas_parse(self) -> None:
+        # .NET's ReadAllLines stripped a BOM and split CRLF; the port keeps
+        # both, so a meta written by Unity on Windows reads the same.
+        self.add_file("Assets/Bom.asset")
+        self.add_file("Assets/Bom.asset.meta", meta_text("c3d4e5f6a7b8c1d2e3f4a5b6c7d8e1f2"), encoding="utf-8-sig")
+        bom_meta = self.root / "Assets/Bom.asset.meta"
+        bom_meta.write_text(bom_meta.read_text(encoding="utf-8-sig").replace("\n", "\r\n"), encoding="utf-8")
+        exit_code, output = self.lint(tracked=self.tracked + ["Assets/Bom.asset", "Assets/Bom.asset.meta"])
+        self.assertEqual(exit_code, 0, "a BOM + CRLF meta must read like any other")
+        self.assertIn("Unity meta hygiene passed", output)
+
+    def test_non_utf8_meta_bytes_decode_as_replacement_not_as_a_read_error(self) -> None:
+        # .NET's default decoder replaced invalid bytes with U+FFFD instead of
+        # throwing; the port keeps that, so a stray latin-1 byte in a meta
+        # cannot move a file from the orphan bucket into the guid bucket.
+        self.add_file("Assets/Fuzzy.asset")
+        (self.root / "Assets/Fuzzy.asset.meta").write_bytes(
+            f"fileFormatVersion: 2\nguid: {UPPER_GUID_LOWER}\ncomment: caf\xe9\n".encode("latin-1")
+        )
+        exit_code, output = self.lint(tracked=self.tracked + ["Assets/Fuzzy.asset", "Assets/Fuzzy.asset.meta"])
+        self.assertEqual(exit_code, 0, "invalid bytes decode as replacement; the guid still parses")
+        self.assertIn("Unity meta hygiene passed", output)
 
 
 class MissingMetaTests(MetaFixture):
@@ -245,6 +278,10 @@ class DiscoveryTests(MetaFixture):
                 ("Assets/Foo.asset", None),
                 ("Assets.meta", meta_text("d0e1f2a3b4c5d6e7f0a1b2c3d4e5f6a7")),
                 ("Assets/Foo.asset.meta", meta_text("a1b2c3d4e5f6a7b8c1d2e3f4a5b6c7d8")),
+                # A non-ASCII path exercises the NUL-delimited decode (-z keeps
+                # raw bytes; core.quotepath cannot quote them).
+                ("Assets/Föld.asset", None),
+                ("Assets/Föld.asset.meta", meta_text("f0a1b2c3d4e5f6a7b8c1d2e3f4a5b6c7")),
             ]
             for relative, text in staged:
                 target = root / relative
