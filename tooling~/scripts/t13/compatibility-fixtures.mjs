@@ -135,6 +135,10 @@ export function copyFixtureFiles(fixtureRoot, project) {
   const source = path.join(fixtureRoot, "Assets");
   if (!fs.existsSync(source)) throw new Error(`fixture root has no Assets directory: ${fixtureRoot}`);
   fs.cpSync(source, path.join(project, "Assets"), { recursive: true });
+  // The serialized component must compile outside the Editor-only test assembly.
+  for (const name of ["FixtureThemePersister.cs", "FixtureThemePersister.cs.meta"]) {
+    fs.renameSync(path.join(project, "Assets", "Compatibility", name), path.join(project, "Assets", name));
+  }
 }
 function installEditorDevTools(project) {
   const directory = path.join(project, "Assets", "Editor");

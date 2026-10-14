@@ -187,6 +187,15 @@ test("matrix manifests record complete identity and reject stale reports", async
         fs.existsSync(path.join(project, "Assets", "Compatibility", "CompatibilityProbe.cs")),
         !args.includes("-importPackage")
       );
+      if (!args.includes("-importPackage")) {
+        for (const name of ["FixtureThemePersister.cs", "FixtureThemePersister.cs.meta"]) {
+          assert.equal(fs.existsSync(path.join(project, "Assets", "Compatibility", name)), false);
+          assert.deepStrictEqual(
+            fs.readFileSync(path.join(project, "Assets", name)),
+            fs.readFileSync(path.join(FIXTURE_ROOT, "Assets", "Compatibility", name))
+          );
+        }
+      }
       const manifest = JSON.parse(fs.readFileSync(path.join(project, "Packages", "manifest.json"), "utf8"));
       assert.equal(manifest.dependencies["com.unity.test-framework"], "1.1.33");
       for (const name of ["DxTerminalStateCapture", "DxTerminalTestRunReporter"]) {

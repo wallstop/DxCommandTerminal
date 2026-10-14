@@ -16,7 +16,7 @@ metadata:
     index.md                     # GENERATED - never hand-edit
     <skill-name>/SKILL.md        # One directory per skill (agentskills.io format)
 tooling~/scripts/
-  generate-skills-index.ps1      # Delegates to generate_skills_index.py; keeps New-SkillsIndex
+  generate-skills-index.ps1      # Index generator (deterministic)
   lint-llm-instructions.ps1      # Contract linter (-Fix regenerates the index)
   lint-skill-sizes.ps1           # Line-limit linter (delegates to lint_skill_sizes.py, typed python)
   tests/                         # Red-green tests for the linters and generator

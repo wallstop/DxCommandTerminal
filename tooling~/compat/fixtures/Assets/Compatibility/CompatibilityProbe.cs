@@ -97,6 +97,8 @@ namespace DxCommandTerminal.T13.Compatibility.Tests
                 GameObject firstObject = Object.Instantiate(prefab);
                 TerminalUI firstTerminal = firstObject.GetComponent<TerminalUI>();
                 TerminalThemePersister persister = firstObject.GetComponent<TerminalThemePersister>();
+                Assert.That(persister != null, Is.True);
+                persister.savePeriod = 0;
                 UIDocument document = firstObject.AddComponent<UIDocument>();
                 SerializedObject terminalObject = new SerializedObject(firstTerminal);
                 terminalObject.FindProperty("_uiDocument").objectReferenceValue = document;
@@ -125,7 +127,6 @@ namespace DxCommandTerminal.T13.Compatibility.Tests
                 firstTerminal.SetTheme("light-theme", persist: true);
                 firstTerminal.SetFont(persistedFont, persist: true);
                 persister.savePeriodically = true;
-                persister.savePeriod = 0;
                 frameBudget = 120;
                 while (0 < frameBudget-- && !PersistenceContains(persistenceFile, persistedFont.name))
                 {
