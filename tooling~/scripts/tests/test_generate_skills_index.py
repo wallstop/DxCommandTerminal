@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import io
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -15,7 +17,7 @@ class SkillsIndexTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
-        self.root = Path(self.temporary.name)
+        self.root = Path(self.temporary.name) / "fixture space \u00e9"
         self.skills = self.root / ".llm" / "skills"
         self.skills.mkdir(parents=True)
 
@@ -88,6 +90,67 @@ class SkillsIndexTests(unittest.TestCase):
         stream = io.StringIO()
         self.assertEqual(1, generate_skills_index(self.root / "missing", stream=stream))
         self.assertIn("Skills directory not found", stream.getvalue())
+
+    def test_cli_stdout_bytes_and_diagnostics(self) -> None:
+        self.check_stdout_process([sys.executable, str(REPO_ROOT / "tooling~" / "scripts" / "generate_skills_index.py")],
+                                  ["--repo-root", str(self.root), "--stdout", "--verbose-output",
+                                   "--output-path", str(self.root / "stdout.md")])
+
+    def test_cli_normal_verbose_keeps_diagnostics_on_stdout(self) -> None:
+        self.check_normal_verbose_process([sys.executable, str(REPO_ROOT / "tooling~" / "scripts" / "generate_skills_index.py")],
+                                          ["--repo-root", str(self.root), "--verbose-output"])
+
+    @unittest.skipUnless(shutil.which("pwsh"), "PowerShell is required for wrapper process coverage")
+    def test_powershell_normal_verbose_keeps_diagnostics_on_stdout(self) -> None:
+        wrapper = REPO_ROOT / "tooling~" / "scripts" / "generate-skills-index.ps1"
+        self.check_normal_verbose_process(["pwsh", "-NoProfile", "-File", str(wrapper)],
+                                          ["-RepoRoot", str(self.root), "-VerboseOutput"])
+
+    def check_normal_verbose_process(self, command: list[str], arguments: list[str]) -> None:
+        self.skill("alpha", "---\ndescription: Text\n---\nbody")
+        self.skill("skipped", "missing frontmatter")
+        result = subprocess.run(command + arguments, capture_output=True, check=False, timeout=60)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn(b"No frontmatter in skipped", result.stdout)
+        self.assertIn(b"[skills-index] Wrote", result.stdout)
+        self.assertEqual(b"", result.stderr)
+        self.assertEqual(index_content(self.skills).encode("utf-8"), (self.skills / "index.md").read_bytes())
+        self.skills.rename(self.root / "saved-skills")
+        failed = subprocess.run(command + arguments, capture_output=True, check=False, timeout=60)
+        self.assertEqual(1, failed.returncode, failed.stderr)
+        self.assertIn(b"Skills directory not found", failed.stdout)
+        self.assertEqual(b"", failed.stderr)
+
+    @unittest.skipUnless(shutil.which("pwsh"), "PowerShell is required for wrapper process coverage")
+    def test_powershell_stdout_bytes_and_diagnostics(self) -> None:
+        wrapper = REPO_ROOT / "tooling~" / "scripts" / "generate-skills-index.ps1"
+        command = ("[Console]::OutputEncoding = [System.Text.Encoding]::ASCII; "
+                   ". $args[0]; $code = New-SkillsIndex -RepoRoot $args[1] -Stdout -VerboseOutput "
+                   "-OutputPath (Join-Path $args[1] 'stdout.md'); "
+                   "if ($code -isnot [int]) { exit 99 }; exit $code")
+        driver = self.root / "driver.ps1"
+        driver.write_text(command, encoding="utf-8")
+        self.check_stdout_process(["pwsh", "-NoProfile", "-File", str(driver), str(wrapper)], [str(self.root)])
+
+    def check_stdout_process(self, command: list[str], arguments: list[str]) -> None:
+        self.skill("unicode", "---\ndescription: Caf\u00e9 \u65e5\u672c \U0001f600\n---\nbody")
+        self.skill("skipped", "missing frontmatter")
+        expected_path = self.root / "expected.md"
+        self.assertEqual(0, generate_skills_index(self.root, output_path=expected_path))
+        expected = expected_path.read_bytes()
+        result = subprocess.run(command + arguments, capture_output=True, check=False, timeout=60)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(expected, result.stdout)
+        self.assertIn(b"No frontmatter in skipped", result.stderr)
+        self.assertFalse((self.skills / "index.md").exists())
+        self.assertFalse((self.root / "stdout.md").exists())
+        self.assertNotIn(b"\r", result.stdout)
+        self.assertFalse(result.stdout.startswith(b"\xef\xbb\xbf"))
+        self.skills.rename(self.root / "saved-skills")
+        failed = subprocess.run(command + arguments, capture_output=True, check=False, timeout=60)
+        self.assertEqual(1, failed.returncode, failed.stderr)
+        self.assertEqual(b"", failed.stdout)
+        self.assertIn(b"Skills directory not found", failed.stderr)
 
 
 if __name__ == "__main__":

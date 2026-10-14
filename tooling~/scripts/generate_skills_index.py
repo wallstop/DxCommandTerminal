@@ -131,19 +131,21 @@ def index_content(skills_dir: Path, *, verbose_output: bool = False,
 
 def generate_skills_index(repo_root: Path, *, output_path: Path | None = None,
                           stdout: bool = False, verbose_output: bool = False,
-                          stream: TextIO = sys.stdout) -> int:
+                          stream: TextIO = sys.stdout,
+                          diagnostic_stream: TextIO | None = None) -> int:
+    diagnostics = diagnostic_stream if diagnostic_stream is not None else (sys.stderr if stdout else stream)
     skills_dir = repo_root / ".llm" / "skills"
     if not skills_dir.exists():
-        stream.write(f"{PREFIX} ERROR: Skills directory not found at: {skills_dir}\n")
+        diagnostics.write(f"{PREFIX} ERROR: Skills directory not found at: {skills_dir}\n")
         return 1
     destination = output_path or skills_dir / "index.md"
-    content = index_content(skills_dir, verbose_output=verbose_output, stream=stream)
+    content = index_content(skills_dir, verbose_output=verbose_output, stream=diagnostics)
     if stdout:
         stream.write(content)
     else:
         destination.write_bytes(content.encode("utf-8"))
         if verbose_output:
-            stream.write(f"{PREFIX} Wrote {destination}\n")
+            diagnostics.write(f"{PREFIX} Wrote {destination}\n")
     return 0
 
 
@@ -162,4 +164,6 @@ if __name__ == "__main__":
     # Redirected stdout keeps UTF-8 and LF on Windows as well as Unix.
     if isinstance(sys.stdout, io.TextIOWrapper):
         sys.stdout.reconfigure(encoding="utf-8", newline="\n")
+    if isinstance(sys.stderr, io.TextIOWrapper):
+        sys.stderr.reconfigure(encoding="utf-8", newline="\n")
     sys.exit(main())
