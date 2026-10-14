@@ -951,7 +951,7 @@
 
         private static void ConsumeAndLogErrors()
         {
-            while (Terminal.Shell?.TryConsumeErrorMessage(out string error) == true)
+            while (Terminal.Shell is CommandShell shell && shell.TryConsumeErrorMessage(out string error))
             {
                 Terminal.Log(TerminalLogType.Error, $"Error: {error}");
             }
@@ -1515,10 +1515,7 @@
 
                 Terminal.Log(TerminalLogType.Input, commandText);
                 Terminal.Shell?.RunCommand(commandText);
-                while (Terminal.Shell?.TryConsumeErrorMessage(out string error) == true)
-                {
-                    Terminal.Log(TerminalLogType.Error, $"Error: {error}");
-                }
+                ConsumeAndLogErrors();
 
                 _input.CommandText = string.Empty;
                 _needsFocus = true;

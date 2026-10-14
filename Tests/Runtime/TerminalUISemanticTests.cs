@@ -144,6 +144,42 @@ namespace WallstopStudios.DxCommandTerminal.Tests.Runtime
             Assert.AreEqual(1, runs, "The terminal must stay usable after a failed command");
         }
 
+        [UnityTest]
+        public IEnumerator EnterCommandDrainsTheShellReplacedByItsHandler()
+        {
+            yield return SpawnOpenTerminal();
+
+            CommandShell originalShell = Terminal.Shell;
+            try
+            {
+                CommandShell replacement = new CommandShell(Terminal.History);
+                Assert.IsTrue(
+                    Terminal.Shell.AddCommand(
+                        "semanticswap",
+                        _ =>
+                        {
+                            Terminal.Shell = replacement;
+                            replacement.RunCommand("missing-on-replacement-shell");
+                        },
+                        minArgs: 0,
+                        maxArgs: 0,
+                        help: "test"
+                    )
+                );
+
+                DefaultTerminalInput.Instance.CommandText = "semanticswap";
+                _terminal.EnterCommand();
+
+                Assert.That(Terminal.Shell, Is.SameAs(replacement));
+                AssertLogContains(TerminalLogType.Error, "missing-on-replacement-shell", "The active shell's error must reach the log");
+                Assert.IsFalse(replacement.TryConsumeErrorMessage(out _));
+            }
+            finally
+            {
+                Terminal.Shell = originalShell;
+            }
+        }
+
         /*
             The user-visible half of the containment: EnterCommand drains the
             shell's error queue into the log, so a handler that throws leaves a
