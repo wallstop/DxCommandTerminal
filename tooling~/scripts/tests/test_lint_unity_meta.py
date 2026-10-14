@@ -14,6 +14,7 @@ create-unity-meta skill documents, and the summary counters.
 from __future__ import annotations
 
 import io
+import os
 import subprocess
 import sys
 import tempfile
@@ -368,6 +369,30 @@ class CliTests(unittest.TestCase):
         )
         self.assertIn("[meta-lint] Summary:", result.stdout)
         self.assertIn("Unity meta hygiene passed", result.stdout)
+
+
+class InvalidPathTests(unittest.TestCase):
+    def test_cli_reports_a_non_utf8_path_instead_of_crashing(self) -> None:
+        """A tracked filename whose bytes are not UTF-8 decodes with
+        surrogates; printing it must not lose the report to a
+        UnicodeEncodeError traceback (the ps1 printed it lossily)."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            assets = root / "Assets"
+            assets.mkdir()
+            raw_name = os.fsdecode(b"Assets/bad\xff.asset")
+            (root / raw_name).write_bytes(b"content\n")
+            subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+            result = subprocess.run(
+                [sys.executable, str(LINTER_SCRIPT), "--repo-root", str(root)],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 1, "the missing meta must fail the gate")
+            self.assertIn("missing meta: 'Assets/bad", result.stdout)
+            self.assertNotIn("Traceback", result.stderr)
 
 
 if __name__ == "__main__":

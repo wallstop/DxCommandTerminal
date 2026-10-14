@@ -31,7 +31,8 @@ meta files read with utf-8-sig and split on CR/LF/CRLF only, the .NET
 ReadAllLines set (str.splitlines would also split \x0b-\x1e and the
 U+2028/2029 family, reading such lines shorter than the ps1 did), while
 bytes that are not UTF-8 decode with U+FFFD replacement the way .NET's
-default decoder did; traversal is sorted, so the report order is
+default decoder did - .NET's reader also BOM-sniffed UTF-16/32, which the
+port does not, so a UTF-16 meta fails closed as an unparsable guid; traversal is sorted, so the report order is
 deterministic where the ps1's directory loop enumerated a HashSet (its file
 loops already followed git's sorted output).
 
@@ -249,6 +250,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    # A tracked path whose bytes are not UTF-8 carries surrogates after the
+    # decode; printing it must not crash the report the ps1 printed lossily.
+    for console in (sys.stdout, sys.stderr):
+        reconfigure = getattr(console, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(errors="backslashreplace")
     return lint_unity_meta(Path(args.repo_root), verbose_output=args.verbose_output)
 
 
