@@ -372,6 +372,12 @@ class CliTests(unittest.TestCase):
 
 
 class InvalidPathTests(unittest.TestCase):
+    @unittest.skipIf(
+        os.name == "nt",
+        "os.fsdecode is strict UTF-8 on Windows (PEP 529) and an NTFS checkout "
+        "cannot hold a byte-invalid tracked name; the pinned console behavior "
+        "is the POSIX checkout's",
+    )
     def test_cli_reports_a_non_utf8_path_instead_of_crashing(self) -> None:
         """A tracked filename whose bytes are not UTF-8 decodes with
         surrogates; printing it must not lose the report to a
