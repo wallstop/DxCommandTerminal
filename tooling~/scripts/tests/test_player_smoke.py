@@ -19,6 +19,56 @@ SPEC.loader.exec_module(smoke)
 
 
 class PlayerSmokeTests(unittest.TestCase):
+    def test_editor_version_uses_first_plausible_line(self) -> None:
+        for output, expected in [
+            ("2021.3.45f1", "2021.3.45f1"),
+            ("Unity banner\n  2022.3.62f3 \r\n6000.4.6f1\n", "2022.3.62f3"),
+            ("\t6000.4.0b1-test\t\n", "6000.4.0b1-test"),
+            ("Banner\n \ufeff2022.3.62f3\ufeff \r\n", "2022.3.62f3"),
+            ("2021.3.45f1\u00e9\n２０２１.3.45f1\n6000.4.6f1", "6000.4.6f1"),
+        ]:
+            with self.subTest(output=output):
+                self.assertEqual(expected, smoke.parse_editor_version(output))
+        for output in ("", "Unity banner only", "2021.3.45f1 extra", "21.3.45f1", "2021.x", "２０２１.3.45f1",
+                       "\x1c2021.3.45f1", "2021.3.45f1\x85", "Banner\u20282021.3.45f1"):
+            with self.subTest(output=output):
+                with self.assertRaisesRegex(ValueError, "no plausible version"):
+                    smoke.parse_editor_version(output)
+
+    def profile_legs(self, identifiers: list[str]) -> list[dict[str, Any]]:
+        return [dict(editor=identifier, inputProfile=profile, requestedFamily="2021.3",
+                     editorVersion="2021.3.45f1", domainReloadEnabled=True)
+                for identifier, profile in zip(identifiers, ("legacy", "input-system", "both"))]
+
+    def test_profile_selection_accepts_suffix_custom_and_repeated_identifiers(self) -> None:
+        for identifiers in (["unity-2021", "unity-2021-input-system", "unity-2021-both"],
+                            ["custom-legacy", "custom-input", "custom-combined"], ["shared"] * 3):
+            with self.subTest(identifiers=identifiers):
+                legs = self.profile_legs(identifiers)
+                self.assertEqual(legs, smoke.select_profile_legs({"legs": list(reversed(legs))}, identifiers[0]))
+
+    def test_profile_selection_separates_version_family_and_reload_rows(self) -> None:
+        legs = self.profile_legs(["anchor", "input", "both"])
+        unrelated = [dict(legs[1], editorVersion="2022.3.62f3"),
+                     dict(legs[2], domainReloadEnabled=False), dict(legs[1], requestedFamily="6000.4")]
+        self.assertEqual(legs, smoke.select_profile_legs({"legs": unrelated + legs}, "anchor"))
+        for field, value in (("editorVersion", "2022.3.62f3"), ("requestedFamily", "6000.4"),
+                             ("domainReloadEnabled", False), ("domainReloadEnabled", 1)):
+            with self.subTest(field=field, value=value):
+                mismatched = [legs[0], dict(legs[1], **{field: value}), legs[2]]
+                with self.assertRaises(ValueError):
+                    smoke.select_profile_legs({"legs": mismatched}, "anchor")
+
+    def test_profile_selection_rejects_missing_and_ambiguous_legs(self) -> None:
+        legs = self.profile_legs(["anchor", "input", "both"])
+        for rows in (legs[1:], legs[:2], legs + [dict(legs[0])], legs + [dict(legs[1], editor="other-input")],
+                     legs + [dict(legs[2], editor="other-both")],
+                     [dict(legs[0], editorVersion=""), legs[1], legs[2]],
+                     [dict(legs[0], domainReloadEnabled=None), legs[1], legs[2]]):
+            with self.subTest(rows=rows):
+                with self.assertRaises(ValueError):
+                    smoke.select_profile_legs({"legs": rows}, "anchor")
+
     def test_stale_or_partial_player_verdict_is_rejected(self) -> None:
         good: dict[str, Any] = {"passed": True, "unityVersion": "2021.3.45f1", "platform": "WindowsPlayer", "developmentBuild": False, "monoBackend": True, "inputSystem": False, "legacyInput": True, "catalogPresent": True, "catalogEntries": 2, "catalogBindersExecuted": 2, "generatedCalls": 1, "privateCalls": 1, "manualCalls": 1}
         with tempfile.TemporaryDirectory() as directory:

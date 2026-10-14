@@ -25,6 +25,36 @@ def sha256(file: Path) -> str:
     return hashlib.sha256(file.read_bytes()).hexdigest()
 
 
+def parse_editor_version(stdout: str) -> str:
+    for line in stdout.split("\n"):
+        # JavaScript trim includes BOM, but excludes Python's record separators and NEL.
+        candidate = re.sub(r"^(?:[^\S\x1c-\x1f\x85]|\ufeff)+|(?:[^\S\x1c-\x1f\x85]|\ufeff)+$", "", line)
+        if re.fullmatch(r"[0-9]{4,}\.[0-9][A-Za-z0-9_.-]*", candidate):
+            return candidate
+    raise ValueError(f"Editor probe printed no plausible version: {stdout.strip()[:200]}")
+
+
+def select_profile_legs(matrix: dict[str, Any], editor_id: str) -> list[dict[str, Any]]:
+    anchors = [leg for leg in matrix["legs"] if leg["editor"] == editor_id and leg["inputProfile"] == "legacy"]
+    if len(anchors) != 1:
+        raise ValueError(f"Need one legacy anchor for {editor_id}")
+    anchor = anchors[0]
+    dimensions = ("requestedFamily", "editorVersion", "domainReloadEnabled")
+    if (not isinstance(anchor.get("requestedFamily"), str) or not anchor["requestedFamily"]
+            or not isinstance(anchor.get("editorVersion"), str) or not anchor["editorVersion"]
+            or type(anchor.get("domainReloadEnabled")) is not bool):
+        raise ValueError("Legacy anchor lacks family, version, or domain reload evidence")
+    legs: list[dict[str, Any]] = []
+    for profile in PROFILES:
+        matches = [leg for leg in matrix["legs"] if leg["inputProfile"] == profile
+                   and all(type(leg.get(field)) is type(anchor[field]) and leg.get(field) == anchor[field]
+                           for field in dimensions)]
+        if len(matches) != 1:
+            raise ValueError(f"Need one matching import leg for {editor_id}/{profile}")
+        legs.append(matches[0])
+    return legs
+
+
 def validate_payload(artifact: Path, project: Path, source_revision: str | None = None) -> dict[str, str]:
     hashes: dict[str, str] = {}
     source_files: dict[str, bytes] | None = None
@@ -145,7 +175,8 @@ def run_leg(leg: dict[str, Any], artifact: Path, output: Path, timeout: int, pre
             raise ValueError("Prior clean import leg did not pass")
         if evidence["artifactSha256"] != leg["artifactSha256"]:
             raise ValueError("Artifact hash differs from verified import")
-        actual_version = subprocess.check_output([str(unity), "-version"], timeout=30, text=True).strip()
+        evidence["editorVersionProbeOutput"] = subprocess.check_output([str(unity), "-version"], timeout=30, encoding="utf-8", errors="replace")
+        actual_version = parse_editor_version(evidence["editorVersionProbeOutput"])
         if actual_version != version:
             raise ValueError(f"Editor version differs: {actual_version} != {version}")
         validate_profile(project, profile)
@@ -195,13 +226,10 @@ def main() -> int:
     if args.out.exists() or args.timeout < 60:
         parser.error("Output must be fresh and timeout must be at least 60 seconds")
     matrix = json.loads(args.matrix_report.read_text(encoding="utf-8-sig"))
-    legs: list[dict[str, Any]] = []
-    for profile in PROFILES:
-        editor_id = args.editor_id if profile == "legacy" else f"{args.editor_id}-{profile}"
-        matches = [leg for leg in matrix["legs"] if leg["editor"] == editor_id and leg["inputProfile"] == profile]
-        if len(matches) != 1:
-            parser.error(f"Need one verified import leg for {editor_id}/{profile}")
-        legs.append(matches[0])
+    try:
+        legs = select_profile_legs(matrix, args.editor_id)
+    except ValueError as exception:
+        parser.error(str(exception))
     args.out.mkdir(parents=True)
     (args.out / "harness-source.py").write_bytes(HARNESS_SOURCE)
     prior: dict[str, dict[str, Any]] = {}
