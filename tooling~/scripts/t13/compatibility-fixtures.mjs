@@ -135,6 +135,22 @@ export function copyFixtureFiles(fixtureRoot, project) {
   const source = path.join(fixtureRoot, "Assets");
   if (!fs.existsSync(source)) throw new Error(`fixture root has no Assets directory: ${fixtureRoot}`);
   fs.cpSync(source, path.join(project, "Assets"), { recursive: true });
+  // The serialized component must compile outside the Editor-only test assembly.
+  for (const name of ["FixtureThemePersister.cs", "FixtureThemePersister.cs.meta"]) {
+    fs.renameSync(path.join(project, "Assets", "Compatibility", name), path.join(project, "Assets", name));
+  }
+}
+function installEditorDevTools(project) {
+  const directory = path.join(project, "Assets", "Editor");
+  fs.mkdirSync(directory, { recursive: true });
+  const hashes = {};
+  for (const name of ["DxTerminalStateCapture", "DxTerminalTestRunReporter"]) {
+    const source = path.join(TOOLING_ROOT, "scripts", "mcp", `${name}.cs.txt`);
+    const target = `Assets/Editor/${name}.cs`;
+    fs.copyFileSync(source, path.join(project, target));
+    hashes[target] = sha256File(source);
+  }
+  return hashes;
 }
 export function writeProjectSettings(project, matrix, leg) {
   const settingsDirectory = path.join(project, "ProjectSettings");
@@ -153,12 +169,11 @@ function testUnityArgs(project, resultsPath, logPath) {
   return [
     "-batchmode",
     "-nographics",
-    "-quit",
     "-projectPath",
     project,
     "-runTests",
     "-testPlatform",
-    "playmode",
+    "editmode",
     "-testFilter",
     TEST_FILTER,
     "-testResults",
@@ -421,6 +436,7 @@ export async function runLeg(options, matrix, leg, runtime = {}) {
     packageIdentity: packageIdentityRecord(artifact.packageIdentity),
     project,
     fixtureHashes: fixtureHashes(options.fixtureRoot),
+    editorDevToolHashes: {},
     phases: [],
     checks: [],
     testResults: null,
@@ -444,9 +460,12 @@ export async function runLeg(options, matrix, leg, runtime = {}) {
     return manifest;
   }
   try {
-    scaffoldProject(project, editorVersion, artifact.scratchDependencies);
+    scaffoldProject(project, editorVersion, {
+      ...artifact.scratchDependencies,
+      "com.unity.test-framework": "1.1.33"
+    });
     writeProjectSettings(project, matrix, leg);
-    copyFixtureFiles(options.fixtureRoot, project);
+    manifest.editorDevToolHashes = installEditorDevTools(project);
   } catch (error) {
     manifest.failure = `fixture scaffold failed: ${error.message}`;
     writeManifest(manifestPath, manifest);
@@ -472,6 +491,14 @@ export async function runLeg(options, matrix, leg, runtime = {}) {
     }
     if (manifest.failure !== null) {
       break;
+    }
+    if (phase.name === "import") {
+      try {
+        copyFixtureFiles(options.fixtureRoot, project);
+      } catch (error) {
+        manifest.failure = `fixture install failed: ${error.message}`;
+        break;
+      }
     }
     if (phase.name === "settle") {
       const validation = validateProject(project, artifact);
