@@ -170,6 +170,26 @@ export function writeProjectSettings(project, matrix, leg) {
     `%YAML 1.1\n%TAG !u! tag:unity3d.com,2011:\n--- !u!129 &12900000\nPlayerSettings:\n  m_ObjectHideFlags: 0\n  activeInputHandler: ${INPUT_PROFILES.get(settings.inputProfile)}\n`
   );
 }
+const INPUT_HANDLER_FIELD = /^([ \t]*activeInputHandler:[ \t]*)(.*?)([ \t]*\r?)$/gmu;
+function inputHandlerField(text) {
+  const matches = [...text.matchAll(INPUT_HANDLER_FIELD)];
+  if (matches.length !== 1) throw new Error(`ProjectSettings.asset must contain exactly one activeInputHandler field (found ${matches.length})`);
+  if (!/^[012]$/u.test(matches[0][2])) throw new Error(`ProjectSettings.asset has an unsupported activeInputHandler value: ${matches[0][2]}`);
+  const value = Number(matches[0][2]);
+  return { match: matches[0], value };
+}
+export function readInputHandler(project) {
+  return inputHandlerField(fs.readFileSync(path.join(project, "ProjectSettings", "ProjectSettings.asset"), "utf8")).value;
+}
+export function applyCanonicalInputProfile(project, profile) {
+  validateInputProfile(profile, "input profile");
+  const file = path.join(project, "ProjectSettings", "ProjectSettings.asset");
+  const text = fs.readFileSync(file, "utf8");
+  const { match } = inputHandlerField(text);
+  const replacement = `${match[1]}${INPUT_PROFILES.get(profile)}${match[3]}`;
+  fs.writeFileSync(file, text.slice(0, match.index) + replacement + text.slice(match.index + match[0].length));
+  return readInputHandler(project);
+}
 function testUnityArgs(project, resultsPath, logPath, platform = "editmode") {
   return [
     "-batchmode",
@@ -436,6 +456,8 @@ export async function runLeg(options, matrix, leg, runtime = {}) {
     editorVersion,
     unity,
     inputProfile: settings.inputProfile,
+    requestedInputHandler: INPUT_PROFILES.get(settings.inputProfile),
+    effectiveInputHandlers: [],
     domainReloadEnabled: settings.domainReloadEnabled,
     artifact: options.artifact,
     artifactSha256,
@@ -483,7 +505,7 @@ export async function runLeg(options, matrix, leg, runtime = {}) {
   const logsDirectory = path.join(reportDirectory, "logs");
   fs.mkdirSync(logsDirectory, { recursive: true });
   const resultsPath = path.join(reportDirectory, "results.xml");
-  const testEnvironment = { DX_T13_DOMAIN_RELOAD_ENABLED: settings.domainReloadEnabled ? "1" : "0", DX_T13_PERSISTENCE_FILE: path.join(reportDirectory, "fixture-persistence.json") };
+  const testEnvironment = { DX_T13_INPUT_PROFILE: settings.inputProfile, DX_T13_DOMAIN_RELOAD_ENABLED: settings.domainReloadEnabled ? "1" : "0", DX_T13_PERSISTENCE_FILE: path.join(reportDirectory, "fixture-persistence.json") };
   const playModeResultsPath = path.join(reportDirectory, "playmode-results.xml");
   const phases = [
     { name: "import", args: importUnityArgs(project, options.artifact, path.join(logsDirectory, "import.log")), env: undefined },
@@ -507,8 +529,10 @@ export async function runLeg(options, matrix, leg, runtime = {}) {
     if (phase.name === "import") {
       try {
         copyFixtureFiles(options.fixtureRoot, project);
+        const value = applyCanonicalInputProfile(project, settings.inputProfile);
+        manifest.effectiveInputHandlers.push({ phase: phase.name, value });
       } catch (error) {
-        manifest.failure = `fixture install failed: ${error.message}`;
+        manifest.failure = `fixture or input profile setup failed: ${error.message}`;
         break;
       }
     }
@@ -525,6 +549,16 @@ export async function runLeg(options, matrix, leg, runtime = {}) {
       manifest[phase.name === "tests" ? "testResults" : "playModeTestResults"] = results;
       if (!results.passed) {
         manifest.failure = `${phase.name} compatibility tests did not pass: ${results.reason ?? results.result}`;
+        break;
+      }
+    }
+    if (phase.name !== "import") {
+      try {
+        const value = readInputHandler(project);
+        manifest.effectiveInputHandlers.push({ phase: phase.name, value });
+        if (value !== manifest.requestedInputHandler) throw new Error(`activeInputHandler is ${value}, expected ${manifest.requestedInputHandler} (${settings.inputProfile})`);
+      } catch (error) {
+        manifest.failure = `${phase.name} input profile verification failed: ${error.message}`;
         break;
       }
     }

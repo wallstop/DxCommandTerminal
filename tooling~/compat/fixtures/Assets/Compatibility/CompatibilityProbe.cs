@@ -20,6 +20,16 @@ namespace DxCommandTerminal.T13.Compatibility.Tests
     public sealed class CompatibilityProbe
     {
         private const string FixtureRoot = "Assets/Compatibility";
+#if ENABLE_INPUT_SYSTEM
+        private const bool InputSystemEnabled = true;
+#else
+        private const bool InputSystemEnabled = false;
+#endif
+#if ENABLE_LEGACY_INPUT_MANAGER
+        private const bool LegacyInputEnabled = true;
+#else
+        private const bool LegacyInputEnabled = false;
+#endif
 
         [UnityTest]
         public IEnumerator StoredPrefabPlayModeLifecycle()
@@ -36,6 +46,10 @@ namespace DxCommandTerminal.T13.Compatibility.Tests
         public static IEnumerator VerifyStoredPrefabLifecycle()
         {
             Assert.That(Application.isPlaying, Is.True);
+            string expectedInputProfile = Environment.GetEnvironmentVariable("DX_T13_INPUT_PROFILE");
+            Assert.That(expectedInputProfile, Is.EqualTo("legacy").Or.EqualTo("input-system").Or.EqualTo("both"));
+            Assert.That(InputSystemEnabled, Is.EqualTo(!string.Equals(expectedInputProfile, "legacy", StringComparison.Ordinal)));
+            Assert.That(LegacyInputEnabled, Is.EqualTo(!string.Equals(expectedInputProfile, "input-system", StringComparison.Ordinal)));
             string expectedDomainReload = Environment.GetEnvironmentVariable("DX_T13_DOMAIN_RELOAD_ENABLED");
             if (expectedDomainReload != null)
             {

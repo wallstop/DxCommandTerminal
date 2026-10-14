@@ -9,6 +9,8 @@ import { runUnityProcess } from "../release/import-drill.mjs";
 import { exportUnityPackage } from "../release/export-unitypackage.mjs";
 import { makeFixturePackage } from "./support/fixture-package.mjs";
 import {
+  applyCanonicalInputProfile,
+  readInputHandler,
   loadMatrix,
   parseArgs,
   parseTestResults,
@@ -58,6 +60,33 @@ test("matrix validates profiles, coverage, and no-domain-reload settings", () =>
     assert.match(fs.readFileSync(path.join(project, "ProjectSettings/ProjectSettings.asset"), "utf8"), new RegExp(`activeInputHandler: ${inputHandler}\\b`));
     assert.match(fs.readFileSync(path.join(project, "ProjectSettings/EditorSettings.asset"), "utf8"), new RegExp(`m_EnterPlayModeOptionsEnabled: ${enterPlayMode}\\b`));
     assert.match(fs.readFileSync(path.join(project, "ProjectSettings/EditorSettings.asset"), "utf8"), new RegExp(`m_EnterPlayModeOptions: ${enterPlayMode}\\b`));
+  }
+});
+
+test("canonical input settings preserve Unity fields and fail closed on ambiguous keys", () => {
+  const project = temporaryRoot("canonical-profile");
+  fs.mkdirSync(path.join(project, "ProjectSettings"));
+  const file = path.join(project, "ProjectSettings", "ProjectSettings.asset");
+  const canonical = "PlayerSettings:\n  serializedVersion: 28\n  companyName: Kept\n  activeInputHandler: 0\n  productName: Kept\n";
+  for (const newline of ["\n", "\r\n"]) {
+    for (const [profile, value] of [["legacy", 0], ["input-system", 1], ["both", 2]]) {
+      const original = canonical.replaceAll("\n", newline);
+      fs.writeFileSync(file, original);
+      assert.equal(applyCanonicalInputProfile(project, profile), value);
+      assert.equal(readInputHandler(project), value);
+      assert.equal(fs.readFileSync(file, "utf8"), original.replace("activeInputHandler: 0", `activeInputHandler: ${value}`));
+    }
+  }
+  for (const bad of [
+    canonical.replace("  activeInputHandler: 0\n", ""),
+    canonical + "  activeInputHandler: 1\n",
+    canonical + "  activeInputHandler: invalid\n",
+    canonical.replace("activeInputHandler: 0", "activeInputHandler: 3"),
+    canonical.replace("activeInputHandler: 0", "activeInputHandler:")
+  ]) {
+    fs.writeFileSync(file, bad);
+    assert.throws(() => applyCanonicalInputProfile(project, "both"), /exactly one activeInputHandler|unsupported activeInputHandler/);
+    assert.equal(fs.readFileSync(file, "utf8"), bad);
   }
 });
 
@@ -197,11 +226,21 @@ test("matrix manifests record complete identity and reject stale reports", async
   const testPlatforms = [];
   let compileFailure = null;
   let playModeXml = PASSED_XML;
+  let revertPhase = null;
+  const requestedHandlers = new Map();
   const runtime = {
     probeEditorVersion: () => "6000.4.6f1",
     validateImportedProject: () => ({ failures: [], checks: [] }),
     runUnity: async (unity, args, logPath, timeoutMs, environment) => {
       const project = args[args.indexOf("-projectPath") + 1];
+      const settingsFile = path.join(project, "ProjectSettings", "ProjectSettings.asset");
+      if (args.includes("-importPackage")) {
+        requestedHandlers.set(project, readInputHandler(project));
+        fs.writeFileSync(settingsFile, "PlayerSettings:\n  serializedVersion: 28\n  productName: Preserved\n  activeInputHandler: 0\n");
+      } else {
+        assert.equal(readInputHandler(project), requestedHandlers.get(project));
+        assert.match(fs.readFileSync(settingsFile, "utf8"), /productName: Preserved/);
+      }
       assert.equal(
         fs.existsSync(path.join(project, "Assets", "Compatibility", "CompatibilityProbe.cs")),
         !args.includes("-importPackage")
@@ -237,7 +276,10 @@ test("matrix manifests record complete identity and reject stale reports", async
         assert.ok(["editmode", "playmode"].includes(args[args.indexOf("-testPlatform") + 1]));
         testPlatforms.push(args[args.indexOf("-testPlatform") + 1]);
         testEnvironments.push(environment);
+        assert.equal(environment.DX_T13_INPUT_PROFILE, { 0: "legacy", 1: "input-system", 2: "both" }[requestedHandlers.get(project)]);
       }
+      const phase = args.includes("-runTests") ? args[args.indexOf("-testPlatform") + 1] : args.includes("-importPackage") ? "import" : "settle";
+      if (phase === revertPhase) fs.writeFileSync(settingsFile, fs.readFileSync(settingsFile, "utf8").replace(/activeInputHandler: [012]/u, "activeInputHandler: 0"));
       fs.writeFileSync(logPath, compileFailure === null ? "phase complete\n" : `Assets/Editor/${compileFailure}.cs(1,1): error CS1002: ; expected\n`);
       if (args.includes("-runTests")) {
         const resultsPath = args[args.indexOf("-testResults") + 1];
@@ -263,6 +305,26 @@ test("matrix manifests record complete identity and reject stale reports", async
   );
   assert.deepStrictEqual(testEnvironments.map((environment) => environment.DX_T13_DOMAIN_RELOAD_ENABLED), ["1", "1", "0", "0"]);
   assert.equal(noReloadReport.failed, false);
+  for (const profile of ["input-system", "both"]) {
+    for (const domainReloadEnabled of [true, false]) {
+      const selected = domainReloadEnabled ? "unity-6" : "unity-6-no-reload";
+      const profiled = await runMatrix({ ...options, out: path.join(root, `${profile}-${selected}`), only: selected }, { ...matrix, inputProfile: profile }, runtime);
+      assert.equal(profiled.failed, false);
+      const value = profile === "input-system" ? 1 : 2;
+      assert.equal(profiled.legs[0].requestedInputHandler, value);
+      assert.deepStrictEqual(profiled.legs[0].effectiveInputHandlers, ["import", "settle", "tests", "playmode-tests"].map(phase => ({ phase, value })));
+    }
+  }
+  for (const phase of ["settle", "editmode", "playmode"]) {
+    revertPhase = phase;
+    const reverted = await runMatrix({ ...options, out: path.join(root, `reverted-${phase}`), keep: false }, { ...matrix, inputProfile: "input-system" }, runtime);
+    assert.equal(reverted.failed, true);
+    assert.match(reverted.legs[0].failure, /input profile verification failed/);
+    assert.equal(reverted.legs[0].effectiveInputHandlers.at(-1).value, 0);
+    assert.ok(fs.existsSync(reverted.legs[0].project));
+    if (phase === "playmode") assert.equal(reverted.legs[0].playModeTestResults.passed, true);
+  }
+  revertPhase = null;
   assert.match(report.matrixSha256, /^[0-9a-f]{64}$/);
   assert.match(report.git.revision, /^[0-9a-f]{40}$/);
   assert.equal(typeof report.git.dirty, "boolean");
@@ -324,7 +386,7 @@ test("matrix manifests record complete identity and reject stale reports", async
   assert.equal(installationFailure.failed, true);
   assert.equal(installationFailure.complete, true);
   assert.equal(failedInstallation.complete, true);
-  assert.match(failedInstallation.failure, /fixture install failed: fixture root has no Assets directory/);
+  assert.match(failedInstallation.failure, /fixture or input profile setup failed: fixture root has no Assets directory/);
   assert.deepStrictEqual(failedInstallation.phases.map((phase) => phase.name), ["import"]);
   assert.ok(fs.existsSync(failedInstallation.project));
   assert.deepStrictEqual(
