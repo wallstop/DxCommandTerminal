@@ -165,12 +165,11 @@ function testUnityArgs(project, resultsPath, logPath) {
   return [
     "-batchmode",
     "-nographics",
-    "-quit",
     "-projectPath",
     project,
     "-runTests",
     "-testPlatform",
-    "playmode",
+    "editmode",
     "-testFilter",
     TEST_FILTER,
     "-testResults",
@@ -462,7 +461,6 @@ export async function runLeg(options, matrix, leg, runtime = {}) {
       "com.unity.test-framework": "1.1.33"
     });
     writeProjectSettings(project, matrix, leg);
-    copyFixtureFiles(options.fixtureRoot, project);
     manifest.editorDevToolHashes = installEditorDevTools(project);
   } catch (error) {
     manifest.failure = `fixture scaffold failed: ${error.message}`;
@@ -489,6 +487,14 @@ export async function runLeg(options, matrix, leg, runtime = {}) {
     }
     if (manifest.failure !== null) {
       break;
+    }
+    if (phase.name === "import") {
+      try {
+        copyFixtureFiles(options.fixtureRoot, project);
+      } catch (error) {
+        manifest.failure = `fixture install failed: ${error.message}`;
+        break;
+      }
     }
     if (phase.name === "settle") {
       const validation = validateProject(project, artifact);

@@ -183,6 +183,10 @@ test("matrix manifests record complete identity and reject stale reports", async
     validateImportedProject: () => ({ failures: [], checks: [] }),
     runUnity: async (unity, args, logPath, timeoutMs, environment) => {
       const project = args[args.indexOf("-projectPath") + 1];
+      assert.equal(
+        fs.existsSync(path.join(project, "Assets", "Compatibility", "CompatibilityProbe.cs")),
+        !args.includes("-importPackage")
+      );
       const manifest = JSON.parse(fs.readFileSync(path.join(project, "Packages", "manifest.json"), "utf8"));
       assert.equal(manifest.dependencies["com.unity.test-framework"], "1.1.33");
       for (const name of ["DxTerminalStateCapture", "DxTerminalTestRunReporter"]) {
@@ -191,7 +195,11 @@ test("matrix manifests record complete identity and reject stale reports", async
           fs.readFileSync(path.join(TOOLING_ROOT, "scripts", "mcp", `${name}.cs.txt`))
         );
       }
-      if (args.includes("-runTests")) testEnvironments.push(environment);
+      if (args.includes("-runTests")) {
+        assert.equal(args.includes("-quit"), false);
+        assert.equal(args[args.indexOf("-testPlatform") + 1], "editmode");
+        testEnvironments.push(environment);
+      }
       fs.writeFileSync(logPath, compileFailure === null ? "phase complete\n" : `Assets/Editor/${compileFailure}.cs(1,1): error CS1002: ; expected\n`);
       if (args.includes("-runTests")) {
         fs.writeFileSync(path.join(path.dirname(project), "results.xml"), PASSED_XML);
@@ -230,8 +238,35 @@ test("matrix manifests record complete identity and reject stale reports", async
     assert.ok(failed.legs[0].failure.includes(`${name}.cs`));
     assert.equal(failed.legs[0].phases.length, 1);
     assert.ok(fs.existsSync(failed.legs[0].project));
+    assert.equal(fs.existsSync(path.join(failed.legs[0].project, "Assets", "Compatibility")), false);
   }
   compileFailure = null;
+  const disappearingFixture = path.join(root, "disappearing-fixture");
+  fs.cpSync(FIXTURE_ROOT, disappearingFixture, { recursive: true });
+  const installationFailure = await runMatrix(
+    { ...options, out: path.join(root, "installation-failure"), fixtureRoot: disappearingFixture, keep: false },
+    matrix,
+    {
+      ...runtime,
+      runUnity: async (...args) => {
+        assert.ok(args[1].includes("-importPackage"), "fixture installation failure must prevent settle and tests");
+        const result = await runtime.runUnity(...args);
+        fs.renameSync(path.join(disappearingFixture, "Assets"), path.join(disappearingFixture, "UnavailableAssets"));
+        return result;
+      }
+    }
+  );
+  const failedInstallation = installationFailure.legs[0];
+  assert.equal(installationFailure.failed, true);
+  assert.equal(installationFailure.complete, true);
+  assert.equal(failedInstallation.complete, true);
+  assert.match(failedInstallation.failure, /fixture install failed: fixture root has no Assets directory/);
+  assert.deepStrictEqual(failedInstallation.phases.map((phase) => phase.name), ["import"]);
+  assert.ok(fs.existsSync(failedInstallation.project));
+  assert.deepStrictEqual(
+    JSON.parse(fs.readFileSync(path.join(path.dirname(failedInstallation.project), "manifest.json"), "utf8")),
+    failedInstallation
+  );
   const mismatch = await runMatrix(
     { ...options, out: path.join(root, "mismatch"), expectedArtifactSha256: "0".repeat(64) },
     matrix,

@@ -21,8 +21,54 @@ namespace DxCommandTerminal.T13.Compatibility.Tests
     {
         private const string FixtureRoot = "Assets/Compatibility";
 
+        private static bool DomainReloadEnabled => !string.Equals(Environment.GetEnvironmentVariable("DX_T13_DOMAIN_RELOAD_ENABLED"), "0", StringComparison.Ordinal);
+
         [UnityTest]
         public IEnumerator StoredPrefabPlayModeLifecycle()
+        {
+            CommandLog previousBuffer = null;
+            for (int session = 0; session < (DomainReloadEnabled ? 1 : 2); ++session)
+            {
+                Assert.That(Application.isPlaying, Is.False);
+                yield return new EnterPlayMode(expectDomainReload: DomainReloadEnabled);
+                Assert.That(Application.isPlaying, Is.True);
+                Assert.That(TerminalUI.Instance == null, Is.True);
+                Assert.That(Terminal.Buffer, Is.Null);
+                Assert.That(Terminal.History, Is.Null);
+                Assert.That(Terminal.Shell, Is.Null);
+                Assert.That(Terminal.AutoComplete, Is.Null);
+                if (previousBuffer != null)
+                {
+                    Assert.That(ContainsLog(previousBuffer, "t13-previous-session"), Is.True);
+                }
+                IEnumerator lifecycle = VerifyStoredPrefabLifecycle();
+                using (IDisposable lifecycleScope = (IDisposable)lifecycle)
+                {
+                    while (lifecycle.MoveNext())
+                    {
+                        if (lifecycle.Current is AsyncOperation operation)
+                        {
+                            while (!operation.isDone)
+                            {
+                                yield return null;
+                            }
+                        }
+                        else
+                        {
+                            yield return lifecycle.Current;
+                        }
+                    }
+                }
+                Assert.That(Terminal.Buffer, Is.Not.SameAs(previousBuffer));
+                Assert.That(ContainsLog(Terminal.Buffer, "t13-previous-session"), Is.False);
+                Assert.That(Terminal.Log("t13-previous-session"), Is.True);
+                previousBuffer = Terminal.Buffer;
+                yield return new ExitPlayMode();
+                Assert.That(Application.isPlaying, Is.False);
+            }
+        }
+
+        private static IEnumerator VerifyStoredPrefabLifecycle()
         {
             Assert.That(Application.isPlaying, Is.True);
             string expectedDomainReload = Environment.GetEnvironmentVariable("DX_T13_DOMAIN_RELOAD_ENABLED");
@@ -59,7 +105,9 @@ namespace DxCommandTerminal.T13.Compatibility.Tests
                 Assert.That(Terminal.Buffer.Capacity, Is.EqualTo(64));
                 Assert.That(Terminal.History.Capacity, Is.EqualTo(32));
                 Assert.That(firstTerminal.CurrentTheme, Is.EqualTo("light-theme"));
-                Assert.That(firstTerminal.CurrentFont.name, Is.EqualTo("Courier Prime"));
+                Font initialFont = AssetDatabase.LoadAssetAtPath<Font>("Packages/com.wallstop-studios.dxcommandterminal/Fonts/Courier_Prime/CourierPrime-Regular.ttf");
+                Assert.That(initialFont != null, Is.True);
+                Assert.That(firstTerminal.CurrentFont, Is.SameAs(initialFont));
                 CommandLog buffer = Terminal.Buffer;
                 Assert.That(Terminal.Log("t13-early-log"), Is.True);
                 yield return null;

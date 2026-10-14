@@ -57,8 +57,8 @@ metadata:
     not failed. The editor's own report is what a red leg is read from: a reporter that predates the name field, or the bridge fallback, names nothing and the leg says so.
 
 3. Unity Test Runner: Window > General > Test Runner -> PlayMode tab -> Run All.
-4. Unity CLI (CI-style): `Unity -batchmode -projectPath <proj> -runTests -testPlatform PlayMode -testResults results.xml -quit` (requires a valid Unity license; exit code reflects
-   test success).
+4. Unity CLI (CI-style): `Unity -batchmode -projectPath <proj> -runTests -testPlatform PlayMode -testResults results.xml` (requires a valid Unity license). Omit `-quit`: Test
+   Framework 1.1.33 warns that it prevents command-line tests. The test runner exits after completion; inspect the XML results as well as the process exit code.
 
 ## House style (from existing suites)
 
