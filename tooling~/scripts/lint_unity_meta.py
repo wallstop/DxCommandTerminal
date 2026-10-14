@@ -1,4 +1,4 @@
-"""Unity .meta hygiene linter (issue #220 stage 2).
+r"""Unity .meta hygiene linter (issue #220 stage 2).
 
 The typed-python port of tooling~/scripts/lint-unity-meta.ps1. Enforces three
 rules over `git ls-files`, so the check reflects what a fresh clone (the
@@ -21,12 +21,17 @@ Messages use the [meta-lint] prefix.
 Stated limits: git output is read NUL-delimited (`ls-files -z`), so a
 non-ASCII path round-trips without core.quotepath and the ps1's backslash
 guard becomes a no-op normalization; the line patterns keep the
-case-insensitive match PowerShell's -match family gave the ps1 (re.IGNORECASE,
-python's default being case-sensitive); meta files read with utf-8-sig and
-splitlines() - a CRLF file reads the same as .NET's ReadAllLines did, while a
-stray vertical-tab line splits and reads one line longer, failing toward the
-stricter read, and bytes that are not UTF-8 decode with U+FFFD replacement the
-way .NET's default decoder did; traversal is sorted, so the report order is
+case-insensitive match PowerShell's -match family gave the ps1
+(re.IGNORECASE; python's default is case-sensitive) with two exotic-byte
+leniencies the ps1 did not have - python's case-insensitivity Unicode-
+casefolds (a "guıd:" key would parse where .NET's invariant culture would
+not) and python's \s folds \x1c-\x1f, which .NET's \s does not - neither
+reachable from a meta Unity writes;
+meta files read with utf-8-sig and split on CR/LF/CRLF only, the .NET
+ReadAllLines set (str.splitlines would also split \x0b-\x1e and the
+U+2028/2029 family, reading such lines shorter than the ps1 did), while
+bytes that are not UTF-8 decode with U+FFFD replacement the way .NET's
+default decoder did; traversal is sorted, so the report order is
 deterministic where the ps1's directory loop enumerated a HashSet (its file
 loops already followed git's sorted output).
 
@@ -54,6 +59,11 @@ META_SUFFIX = ".meta"
 GUID_LINE = re.compile(r"guid:\s*([0-9a-fA-F]{32})\s*", re.IGNORECASE)
 FOLDER_ASSET_LINE = re.compile(r"folderAsset:\s*yes\s*", re.IGNORECASE)
 
+# .NET's ReadAllLines split on exactly these three; str.splitlines() also
+# splits \x0b-\x1e and the U+2028/2029 family, which would read a line the
+# ps1 saw whole as several.
+LINE_SEPARATORS = re.compile(r"\r\n|\r|\n")
+
 PREFIX = "[meta-lint]"
 
 
@@ -65,13 +75,16 @@ class Stream(Protocol):
 
 def git_tracked_paths(repo_root: Path) -> list[str] | None:
     """The repo's tracked paths, NUL-delimited so no path can split; None on
-    any git failure."""
-    result = subprocess.run(
-        ["git", "ls-files", "-z"],
-        cwd=repo_root,
-        capture_output=True,
-        check=False,
-    )
+    any git failure (non-zero exit, missing git, missing repo root)."""
+    try:
+        result = subprocess.run(
+            ["git", "ls-files", "-z"],
+            cwd=repo_root,
+            capture_output=True,
+            check=False,
+        )
+    except OSError:
+        return None
     if result.returncode != 0:
         return None
     return [
@@ -137,7 +150,7 @@ def lint_unity_meta(
         try:
             # errors="replace" mirrors .NET's default ReadAllLines decode:
             # bytes that are not UTF-8 become U+FFFD instead of a read error.
-            lines = meta_path.read_text(encoding="utf-8-sig", errors="replace").splitlines()
+            lines = LINE_SEPARATORS.split(meta_path.read_text(encoding="utf-8-sig", errors="replace"))
         except OSError as error:
             emit(f"{PREFIX} ERROR: '{file}' could not be read: {error}")
             guid_errors += 1

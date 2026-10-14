@@ -139,26 +139,46 @@ class OrphanMetaTests(MetaFixture):
         # The line value is case-insensitive (the ps1's -match family) and the
         # match is anchored: a value other than "yes" or an indented line is
         # not a folder-asset line, so a file target stays legal.
-        for line, expect_ok in (
-            ("folderAsset: yes", False),
-            ("folderAsset: no", True),
-            ("folderAsset: YES", False),
-            (" folderAsset: yes", True),
+        for index, (line, expect_ok) in enumerate(
+            (
+                ("folderAsset: yes", False),
+                ("folderAsset: no", True),
+                ("folderAsset: YES", False),
+                (" folderAsset: yes", True),
+            )
         ):
             with self.subTest(line=line):
                 guid = "e5f6a7b8c1d2e3f4a5b6c7d8e1f2a3b4"
-                label = line.strip().replace(" ", "-")
-                self.add_file(f"Bogus{label}.asset")
-                self.add_file(f"Bogus{label}.asset.meta", f"fileFormatVersion: 2\nguid: {guid}\n{line}\n")
-                exit_code, output = self.lint(
-                    tracked=self.tracked + [f"Bogus{label}.asset", f"Bogus{label}.asset.meta"]
-                )
+                self.add_file(f"Bogus{index}.asset")
+                self.add_file(f"Bogus{index}.asset.meta", f"fileFormatVersion: 2\nguid: {guid}\n{line}\n")
+                exit_code, output = self.lint(tracked=self.tracked + [f"Bogus{index}.asset", f"Bogus{index}.asset.meta"])
                 if expect_ok:
                     self.assertEqual(exit_code, 0, f"folderAsset line {line!r} must not be read as folder asset")
                     self.assertIn("Unity meta hygiene passed", output)
                 else:
                     self.assertEqual(exit_code, 1)
                     self.assertIn("targets a tracked file, not a directory", output)
+
+    def test_exotic_separators_read_like_net_did(self) -> None:
+        # .NET's ReadAllLines kept \x0b and the UTF-8 NEL (0x85) inside a
+        # line; the port splits on CR/LF/CRLF only, so the folder-asset value
+        # is seen whole and a trailing word still kills the guid parse.
+        self.add_file("Assets/Vt.asset")
+        self.add_file(
+            "Assets/Vt.asset.meta",
+            "fileFormatVersion: 2\nguid: c3d4e5f6a7b8c1d2e3f4a5b6c7d8e1f2\nfolderAsset:\x0byes\n",
+        )
+        self.add_file("Assets/Nel.meta", "fileFormatVersion: 2\nguid: d1e2f3a4b5c6d7e8f1a2b3c4d5e6f7a0\u0085trailing\n")
+        exit_code, output = self.lint(
+            tracked=self.tracked
+            + ["Assets/Vt.asset", "Assets/Vt.asset.meta", "Assets/Nel.meta"]
+        )
+        self.assertEqual(exit_code, 1)
+        self.assertIn(
+            "folder meta 'Assets/Vt.asset.meta' targets a tracked file, not a directory",
+            output,
+        )
+        self.assertIn("has no parsable 32-hex 'guid:' line", output)
 
     def test_bom_and_crlf_metas_parse(self) -> None:
         # .NET's ReadAllLines stripped a BOM and split CRLF; the port keeps
@@ -300,6 +320,16 @@ class DiscoveryTests(MetaFixture):
             self.assertEqual(exit_code, 1)
             self.assertIn("git ls-files failed; is", stream.getvalue())
             self.assertIn("a git repository?", stream.getvalue())
+
+    def test_missing_repo_root_reports_the_git_failure_message(self) -> None:
+        # A --repo-root that does not exist used to surface as a raw
+        # FileNotFoundError traceback from the git spawn; the ps1 answered
+        # with the controlled message, and so does the port.
+        stream = io.StringIO()
+        exit_code = lint_unity_meta.lint_unity_meta(self.root / "missing", stream=stream)
+        self.assertEqual(exit_code, 1)
+        self.assertIn("git ls-files failed; is", stream.getvalue())
+        self.assertIn("a git repository?", stream.getvalue())
 
 
 class CliTests(unittest.TestCase):
