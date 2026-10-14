@@ -177,14 +177,23 @@ test("matrix manifests record complete identity and reject stale reports", async
   const options = { artifact: artifactPath, out, only: "unity-6", unity: "unity", unityById: new Map(), fixtureRoot: FIXTURE_ROOT, keep: true, timeoutMinutes: 5, expectedArtifactSha256: crypto.createHash("sha256").update(artifact.buffer).digest("hex") };
   const matrix = loadMatrix(MATRIX_PATH);
   const testEnvironments = [];
+  let compileFailure = null;
   const runtime = {
     probeEditorVersion: () => "6000.4.6f1",
     validateImportedProject: () => ({ failures: [], checks: [] }),
     runUnity: async (unity, args, logPath, timeoutMs, environment) => {
+      const project = args[args.indexOf("-projectPath") + 1];
+      const manifest = JSON.parse(fs.readFileSync(path.join(project, "Packages", "manifest.json"), "utf8"));
+      assert.equal(manifest.dependencies["com.unity.test-framework"], "1.1.33");
+      for (const name of ["DxTerminalStateCapture", "DxTerminalTestRunReporter"]) {
+        assert.deepStrictEqual(
+          fs.readFileSync(path.join(project, "Assets", "Editor", `${name}.cs`)),
+          fs.readFileSync(path.join(TOOLING_ROOT, "scripts", "mcp", `${name}.cs.txt`))
+        );
+      }
       if (args.includes("-runTests")) testEnvironments.push(environment);
-      fs.writeFileSync(logPath, "phase complete\n");
+      fs.writeFileSync(logPath, compileFailure === null ? "phase complete\n" : `Assets/Editor/${compileFailure}.cs(1,1): error CS1002: ; expected\n`);
       if (args.includes("-runTests")) {
-        const project = args[args.indexOf("-projectPath") + 1];
         fs.writeFileSync(path.join(path.dirname(project), "results.xml"), PASSED_XML);
       }
       return { code: 0, signal: null, timedOut: false };
@@ -208,6 +217,21 @@ test("matrix manifests record complete identity and reject stale reports", async
   assert.equal(report.complete, true);
   assert.equal(report.failed, false);
   assert.deepStrictEqual(report.legs[0].phases.map((phase) => phase.name), ["import", "settle", "tests"]);
+  for (const name of ["DxTerminalStateCapture", "DxTerminalTestRunReporter"]) {
+    assert.equal(
+      report.legs[0].editorDevToolHashes[`Assets/Editor/${name}.cs`],
+      crypto.createHash("sha256").update(fs.readFileSync(path.join(TOOLING_ROOT, "scripts", "mcp", `${name}.cs.txt`))).digest("hex")
+    );
+    compileFailure = name;
+    const failed = await runMatrix({ ...options, out: path.join(root, name) }, matrix, runtime);
+    assert.equal(failed.failed, true);
+    assert.equal(failed.legs[0].editorVersion, "6000.4.6f1");
+    assert.match(failed.legs[0].failure, /import log validation failed/);
+    assert.ok(failed.legs[0].failure.includes(`${name}.cs`));
+    assert.equal(failed.legs[0].phases.length, 1);
+    assert.ok(fs.existsSync(failed.legs[0].project));
+  }
+  compileFailure = null;
   const mismatch = await runMatrix(
     { ...options, out: path.join(root, "mismatch"), expectedArtifactSha256: "0".repeat(64) },
     matrix,

@@ -29,14 +29,22 @@ if ($VerboseOutput) { $pythonArgs += '-v' }
 $runnerCommand = $null
 $runnerPrefix = @()
 foreach ($candidate in @(@('uv', 'run', '--project', $toolingRoot, 'python'), @('python'), @('python3'))) {
-    if (Get-Command $candidate[0] -ErrorAction SilentlyContinue) {
-        $runnerCommand = $candidate[0]
-        if ($candidate.Count -gt 1) { $runnerPrefix = $candidate[1..($candidate.Count - 1)] }
-        break
+    if (-not (Get-Command $candidate[0] -ErrorAction SilentlyContinue)) { continue }
+    if ($candidate[0] -ne 'uv') {
+        # WindowsApps aliases resolve on PATH even when no interpreter is installed.
+        try {
+            $LASTEXITCODE = 1
+            & $candidate[0] -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' *> $null
+            if ($LASTEXITCODE -ne 0) { continue }
+        }
+        catch { continue }
     }
+    $runnerCommand = $candidate[0]
+    if ($candidate.Count -gt 1) { $runnerPrefix = $candidate[1..($candidate.Count - 1)] }
+    break
 }
 if ($null -eq $runnerCommand) {
-    Write-Host "[meta-lint] ERROR: no runner found (need uv, python, or python3 on PATH)" -ForegroundColor Red
+    Write-Host "[meta-lint] ERROR: no working runner found (need uv or Python 3.11+ on PATH)" -ForegroundColor Red
     exit 1
 }
 

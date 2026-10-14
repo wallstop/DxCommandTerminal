@@ -1,6 +1,6 @@
 [project]
 # The typed-python surface for the repo's script tooling (issue #220).
-# Stage 1 hosts the lint-skill-sizes port; stage 2 the lint-unity-meta port.
+# Ports cover skill sizes, Unity metas, and skills-index generation.
 # Later stages move the remaining .ps1 linters in one entry point at a time.
 # Runtime dependencies stay empty - the scripts are standard library only,
 # so `uv run` only needs to resolve the interpreter, and CI needs nothing
