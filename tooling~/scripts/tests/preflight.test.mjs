@@ -319,48 +319,57 @@ test("runChecks: checks run concurrently with no shared-lane serialization", asy
       waits up to 5 s for the second's start marker, so pass/fail does
       not depend on the second child's spawn landing inside a 300 ms
       hold - a runner under load used to fail the fixed window (spawn
-      lag past it) while the checks really did overlap.
+      lag past it) while the checks really did overlap. Each child owns
+      its own marker file, so no read-modify-write can lose a sibling's
+      update.
    */
-  const marker = path.join(os.tmpdir(), `dxct-preflight-lane-${process.pid}-${Date.now()}`);
-  const head = `
+  const markerDir = path.join(os.tmpdir(), `dxct-preflight-lane-${process.pid}-${Date.now()}`);
+  const head = (ownFile, siblingFile) => `
     const fs = await import("node:fs");
-    const marker = ${JSON.stringify(marker)};
-    const read = () =>
-      fs.existsSync(marker) ? JSON.parse(fs.readFileSync(marker, "utf8")) : {};
-    /* Re-read at write time: a sibling that finished while this one
-       ran must survive this write. */
-    const mergeWrite = (label, fields) =>
-      fs.writeFileSync(marker, JSON.stringify({ ...read(), [label]: fields }));
+    const own = ${JSON.stringify(ownFile)};
+    const sibling = ${JSON.stringify(siblingFile)};
+    const write = (fields) => fs.writeFileSync(own, JSON.stringify(fields));
+    const siblingStarted = () => {
+      try {
+        return fs.existsSync(sibling) && JSON.parse(fs.readFileSync(sibling, "utf8")).start > 0;
+      } catch {
+        return false;
+      }
+    };
   `;
   const lead = `
-    ${head}
-    mergeWrite("slow-a", { start: Date.now(), end: 0 });
+    ${head(path.join(markerDir, "A.marker.json"), path.join(markerDir, "B.marker.json"))}
+    write({ start: Date.now(), end: 0, sawSibling: false });
     const deadline = Date.now() + 5000;
-    let sawSibling = false;
     while (Date.now() < deadline) {
-      if (read()["slow-b"]?.start) { sawSibling = true; break; }
+      if (siblingStarted()) break;
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
-    mergeWrite("slow-a", { ...read()["slow-a"], end: Date.now(), sawSibling });
+    write({ ...JSON.parse(fs.readFileSync(own, "utf8")), end: Date.now(), sawSibling: siblingStarted() });
     process.exit(0);
   `;
   const follower = `
-    ${head}
-    mergeWrite("slow-b", { start: Date.now(), end: Date.now() });
+    ${head(path.join(markerDir, "B.marker.json"), path.join(markerDir, "A.marker.json"))}
+    write({ start: Date.now(), end: Date.now() });
     process.exit(0);
   `;
   try {
-    await runChecks([
+    fs.mkdirSync(markerDir, { recursive: true });
+    const results = await runChecks([
       { name: "slow-a", command: `node "${writeTempScript(lead)}"` },
       { name: "slow-b", command: `node "${writeTempScript(follower)}"` }
     ]);
-    const state = JSON.parse(fs.readFileSync(marker, "utf8"));
     assert.ok(
-      state["slow-a"].sawSibling,
+      results.every((result) => result.ok),
+      `both lane children must run cleanly: ${JSON.stringify(results.map((result) => ({ name: result.name, ok: result.ok, output: result.output })))}`
+    );
+    const state = JSON.parse(fs.readFileSync(path.join(markerDir, "A.marker.json"), "utf8"));
+    assert.ok(
+      state.sawSibling,
       "a second check must overlap a still-running one, not queue behind it"
     );
   } finally {
-    fs.rmSync(marker, { force: true });
+    fs.rmSync(markerDir, { recursive: true, force: true });
   }
 });
 

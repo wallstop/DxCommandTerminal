@@ -183,11 +183,14 @@ class OrphanMetaTests(MetaFixture):
 
     def test_bom_and_crlf_metas_parse(self) -> None:
         # .NET's ReadAllLines stripped a BOM and split CRLF; the port keeps
-        # both, so a meta written by Unity on Windows reads the same.
+        # both, so a meta written by Unity on Windows reads the same. The
+        # bytes assert keeps the fixture honest: the BOM must survive the
+        # write (a utf-8 re-write would drop it and empty this pin).
         self.add_file("Assets/Bom.asset")
-        self.add_file("Assets/Bom.asset.meta", meta_text("c3d4e5f6a7b8c1d2e3f4a5b6c7d8e1f2"), encoding="utf-8-sig")
+        body = meta_text("c3d4e5f6a7b8c1d2e3f4a5b6c7d8e1f2").replace("\n", "\r\n")
         bom_meta = self.root / "Assets/Bom.asset.meta"
-        bom_meta.write_text(bom_meta.read_text(encoding="utf-8-sig").replace("\n", "\r\n"), encoding="utf-8")
+        bom_meta.write_bytes(body.encode("utf-8-sig"))
+        self.assertTrue(bom_meta.read_bytes().startswith(b"\xef\xbb\xbf"), "the fixture must carry a real BOM")
         exit_code, output = self.lint(tracked=self.tracked + ["Assets/Bom.asset", "Assets/Bom.asset.meta"])
         self.assertEqual(exit_code, 0, "a BOM + CRLF meta must read like any other")
         self.assertIn("Unity meta hygiene passed", output)
