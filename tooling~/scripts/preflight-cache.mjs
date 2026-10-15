@@ -182,7 +182,7 @@ function repoRelativePath(target) {
 }
 
 function statSignature(stat) {
-  return `${stat.mode}\0${stat.size}\0${stat.mtimeMs}\0${stat.ino}\0`;
+  return `${stat.mode}\0${stat.size}\0${stat.mtimeNs ?? stat.mtimeMs}\0${stat.ino}\0`;
 }
 
 /*
@@ -204,27 +204,11 @@ function updatePathHash(hash, target, label, visited, excludes) {
   hash.update(`${label}\0`);
   let stat;
   try {
-    stat = fs.lstatSync(target);
+    stat = fs.lstatSync(target, { bigint: true });
   } catch {
     hash.update("missing\0");
     return;
   }
-
-  /*
-      The walk's identity key is dev+ino, not a resolved real path:
-      realpathSync cost three extra metadata syscalls per entry, and on a
-      container where one stat costs milliseconds that tripled the keying
-      wall. dev+ino answers the same question - have I walked this exact
-      directory already - for the symlink-cycle guard, for a fraction of
-      the cost. A symlink hashes its link text and is then followed, so a
-      retargeted link still moves the key through the target's own walk.
-   */
-  const identity = `${stat.dev}:${stat.ino}`;
-  if (visited.has(identity)) {
-    hash.update("cycle\0");
-    return;
-  }
-  visited.add(identity);
 
   if (stat.isSymbolicLink()) {
     let link;
@@ -239,22 +223,15 @@ function updatePathHash(hash, target, label, visited, excludes) {
 
     /*
         The link is followed, like the realpath walk it replaces: the
-        hashed state is the target's, and the followed identity joins the
-        visited set so a symlinked directory cycles out through the same
-        guard.
+        hashed state is the target's. Directory identities below stop
+        links to an ancestor without skipping regular file content.
      */
     try {
-      stat = fs.statSync(target);
+      stat = fs.statSync(target, { bigint: true });
     } catch {
       hash.update("broken\0");
       return;
     }
-    const followed = `${stat.dev}:${stat.ino}`;
-    if (visited.has(followed)) {
-      hash.update("cycle\0");
-      return;
-    }
-    visited.add(followed);
   }
 
   if (stat.isFile()) {
@@ -289,6 +266,15 @@ function updatePathHash(hash, target, label, visited, excludes) {
     hash.update(`other\0${stat.mode}\0`);
     return;
   }
+
+  /* BigInt preserves distinct 64-bit inode IDs; Number can round them to
+     one identity and omit a directory from the content hash. */
+  const identity = `${stat.dev}:${stat.ino}`;
+  if (visited.has(identity)) {
+    hash.update("cycle\0");
+    return;
+  }
+  visited.add(identity);
 
   let entries;
   try {

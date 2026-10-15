@@ -720,6 +720,66 @@ test("an ignored root still walks the filesystem: its content edits move the key
   }
 });
 
+for (const collision of ["directory-file", "sibling-directories"]) {
+  test(`filesystem walk preserves content with rounded inode collisions: ${collision}`, (context) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "preflight-inodes-"));
+    const first = collision === "directory-file" ? root : path.join(root, "first");
+    const second = path.join(root, "second");
+    fs.mkdirSync(first, { recursive: true });
+    if (collision === "sibling-directories") fs.mkdirSync(second);
+    const file = collision === "directory-file" ? second : path.join(second, "scratch.txt");
+    fs.writeFileSync(file, "one");
+    const originalStat = fs.lstatSync;
+    const identities = new Map([[first, 9007199254740992n], [second, 9007199254740993n]]);
+    assert.equal(Number(identities.get(first)), Number(identities.get(second)));
+    context.mock.method(fs, "lstatSync", (target, options) => {
+      const stat = originalStat(target, options);
+      const identity = identities.get(target);
+      if (identity === undefined) return stat;
+      return new Proxy(stat, {
+        get(object, property) {
+          if (property === "ino") return options?.bigint ? identity : Number(identity);
+          const value = Reflect.get(object, property);
+          return typeof value === "function" ? value.bind(object) : value;
+        }
+      });
+    });
+    try {
+      const before = pathState(root);
+      fs.writeFileSync(file, "two");
+      assert.notEqual(pathState(root), before, "distinct filesystem entries must retain their content in the key");
+    } finally {
+      context.mock.restoreAll();
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+}
+
+test("filesystem walk stops an ancestor directory symlink cycle", { skip: process.platform === "win32" }, (context) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "preflight-cycle-"));
+  const originalRead = fs.readdirSync;
+  let directoryReads = 0;
+  context.mock.method(fs, "readdirSync", (...args) => {
+    directoryReads++;
+    return originalRead(...args);
+  });
+  try {
+    fs.mkdirSync(path.join(root, "nested"));
+    fs.symlinkSync(root, path.join(root, "nested", "ancestor"));
+    const file = path.join(root, "scratch.txt");
+    fs.writeFileSync(file, "one");
+    const before = pathState(root);
+    assert.equal(directoryReads, 2, "each directory must be walked once");
+    directoryReads = 0;
+    fs.writeFileSync(file, "two");
+    assert.notEqual(pathState(root), before);
+    assert.equal(directoryReads, 2, "ancestor links must stop before another directory read");
+  } finally {
+    context.mock.restoreAll();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("a committed edit moves the snapshot key where status goes quiet", async () => {
   /*
       The committed half of the snapshot class: status names only
