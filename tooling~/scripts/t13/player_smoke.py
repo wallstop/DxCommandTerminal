@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import gzip
 import io
 import json
 import os
@@ -55,7 +56,20 @@ def select_profile_legs(matrix: dict[str, Any], editor_id: str) -> list[dict[str
     return legs
 
 
-def validate_payload(artifact: Path, project: Path, source_revision: str | None = None) -> dict[str, str]:
+def metadata_matches(relative: str, expected: bytes, actual: bytes) -> bool:
+    if actual == expected:
+        return True
+    # Older editors expand GUID-only script metas with these measured defaults.
+    header = expected.rstrip(b"\r\n")
+    if not relative.endswith(".cs.meta") or re.fullmatch(rb"fileFormatVersion: 2\r?\nguid: [0-9a-fA-F]{32}", header) is None:
+        return False
+    defaults = (b"\nMonoImporter:\n  externalObjects: {}\n  serializedVersion: 2\n"
+                b"  defaultReferences: []\n  executionOrder: 0\n  icon: {instanceID: 0}\n"
+                b"  userData: \n  assetBundleName: \n  assetBundleVariant: \n")
+    return actual.replace(b"\r\n", b"\n") == header.replace(b"\r\n", b"\n") + defaults
+
+
+def validate_payload(artifact: Path, project: Path, source_revision: str | None = None, normalized_metadata: dict[str, str] | None = None) -> dict[str, str]:
     hashes: dict[str, str] = {}
     source_files: dict[str, bytes] | None = None
     if source_revision is not None:
@@ -72,11 +86,18 @@ def validate_payload(artifact: Path, project: Path, source_revision: str | None 
         if source_bytes is None or hashlib.sha256(source_bytes).hexdigest() != digest:
             raise ValueError(f"Artifact bytes differ from committed package source: {relative}")
         imported = project / "Packages" / "com.wallstop-studios.dxcommandterminal" / relative
-        if not imported.is_file() or sha256(imported) != digest:
+        if not imported.is_file():
             raise ValueError(f"Artifact bytes differ from source/import: {imported}")
+        actual = imported.read_bytes()
+        matches = metadata_matches(relative, payload, actual) if relative.endswith(".meta") else actual == payload
+        if not matches:
+            raise ValueError(f"Artifact bytes differ from source/import: {imported}")
+        if normalized_metadata is not None and actual != payload:
+            normalized_metadata[relative] = hashlib.sha256(actual).hexdigest()
         hashes[relative] = digest
 
-    with tarfile.open(artifact, "r:gz") as archive:
+    # Random member reads otherwise decompress the gzip stream for every backward seek.
+    with tarfile.open(fileobj=io.BytesIO(gzip.decompress(artifact.read_bytes())), mode="r:") as archive:
         entries = archive.getmembers()
         members = {member.name: member for member in entries}
         if len(members) != len(entries):
@@ -218,7 +239,9 @@ def run_leg(leg: dict[str, Any], artifact: Path, output: Path, timeout: int, pre
         if leg["git"].get("dirty") is not False or not re.fullmatch(r"[0-9a-f]{40}", source_revision):
             raise ValueError("Verified import has no clean exact source revision")
         evidence["packageSourceRevision"] = source_revision
-        evidence["payloadHashes"] = validate_payload(artifact, project, source_revision)
+        normalized_metadata: dict[str, str] = {}
+        evidence["normalizedMetadataHashes"] = normalized_metadata
+        evidence["payloadHashes"] = validate_payload(artifact, project, source_revision, normalized_metadata)
         evidence["fixtureHashes"] = install_fixtures(project, previous)
         env = dict(os.environ, DX_T13_PLAYER_OUT=str(output), DX_T13_INPUT_PROFILE=profile, DX_T13_BACKEND=backend, DX_T13_STRIPPING=stripping)
         command = [str(unity), "-batchmode", "-projectPath", str(project), "-executeMethod", "DxCommandTerminal.T13.PlayerSmoke.Editor.BuildProbe.Run", "-logFile", str(output / "build.log")]

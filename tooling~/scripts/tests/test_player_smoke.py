@@ -102,12 +102,33 @@ class PlayerSmokeTests(unittest.TestCase):
             (output / "build-settings.txt").write_text("IL2CPP/High", encoding="utf-8")
             self.assertEqual("IL2CPP/High", smoke.checked_build_settings(output, "IL2CPP", "High"))
 
+    def test_only_measured_defaults_can_expand_minimal_script_metadata(self) -> None:
+        header = b"fileFormatVersion: 2\nguid: 0123456789abcdef0123456789abcdef"
+        defaults = (b"\nMonoImporter:\n  externalObjects: {}\n  serializedVersion: 2\n"
+                    b"  defaultReferences: []\n  executionOrder: 0\n  icon: {instanceID: 0}\n"
+                    b"  userData: \n  assetBundleName: \n  assetBundleVariant: \n")
+        actual = header + defaults
+        for newline in (b"\n", b"\r\n"):
+            with self.subTest(newline=newline):
+                self.assertTrue(smoke.metadata_matches("Runtime/Script.cs.meta", header, actual.replace(b"\n", newline)))
+        for changed in (actual.replace(b"executionOrder: 0", b"executionOrder: 1"),
+                        actual.replace(b"userData: ", b"userData: changed"),
+                        actual.replace(b"externalObjects: {}", b"externalObjects: {custom: 1}"),
+                        actual.replace(b"defaultReferences: []", b"defaultReferences: [custom]"),
+                        actual.replace(b"serializedVersion: 2", b"serializedVersion: 3"),
+                        actual + b"unknownSetting: 0\n"):
+            with self.subTest(changed=changed):
+                self.assertFalse(smoke.metadata_matches("Runtime/Script.cs.meta", header, changed))
+        self.assertFalse(smoke.metadata_matches("Runtime/Texture.png.meta", header, actual))
+        self.assertFalse(smoke.metadata_matches("Runtime/Script.cs.meta", header + b"\nlabels: [custom]", actual))
+        self.assertFalse(smoke.metadata_matches("Runtime/Script.cs.meta", actual, actual.replace(b"executionOrder: 0", b"executionOrder: 1")))
+
     def payload_fixture(self, root: Path) -> tuple[Path, Path, Path, list[tuple[str, bytes]]]:
         source = root / "source"
         project = root / "project"
         artifact = root / "payload.unitypackage"
         assets = {"package.json": b'{"name":"com.wallstop-studios.dxcommandterminal"}',
-                  "Runtime/Analyzers/Generator.dll": b"actual-generator", "Runtime": None}
+                  "Runtime/Analyzers/Generator.dll": b"actual-generator", "Runtime": None, "Runtime/Script.cs": b"// script"}
         entries: list[tuple[str, bytes]] = []
         for index, (name, data) in enumerate(assets.items()):
             meta = f"fileFormatVersion: 2\nguid: {index:032x}\n".encode()
@@ -149,6 +170,25 @@ class PlayerSmokeTests(unittest.TestCase):
                             imported.write_bytes(b"corrupted")
                         with self.assertRaisesRegex(ValueError, "bytes differ"):
                             smoke.validate_payload(artifact, project)
+
+    def test_default_expansions_keep_artifact_hash_and_record_imported_hash(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source, project, artifact, _ = self.payload_fixture(Path(directory))
+            relative = "Runtime/Script.cs.meta"
+            expected = (source / relative).read_bytes()
+            expanded = expected + (b"MonoImporter:\n  externalObjects: {}\n  serializedVersion: 2\n"
+                                   b"  defaultReferences: []\n  executionOrder: 0\n  icon: {instanceID: 0}\n"
+                                   b"  userData: \n  assetBundleName: \n  assetBundleVariant: \n")
+            imported = project / "Packages/com.wallstop-studios.dxcommandterminal" / relative
+            imported.write_bytes(expanded)
+            normalized: dict[str, str] = {}
+            with patch.object(smoke, "ROOT", source):
+                hashes = smoke.validate_payload(artifact, project, normalized_metadata=normalized)
+                self.assertEqual(hashes[relative], smoke.sha256(source / relative))
+                self.assertEqual(normalized, {relative: smoke.sha256(imported)})
+                imported.write_bytes(expanded.replace(b"executionOrder: 0", b"executionOrder: 1"))
+                with self.assertRaisesRegex(ValueError, "source/import"):
+                    smoke.validate_payload(artifact, project)
 
     def test_archive_metadata_must_match_source(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
