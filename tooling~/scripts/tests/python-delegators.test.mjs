@@ -13,6 +13,8 @@ const delegates = [
   ["generate-skills-index.ps1", "generate_skills_index.py", ["-VerboseOutput", "-OutputPath", "out with spaces", "-RepoRoot", "root with spaces"], ["--output-path", "out with spaces", "--verbose-output", "--repo-root", "root with spaces"]],
   ["lint-skill-sizes.ps1", "lint_skill_sizes.py", ["-VerboseOutput", "-FailOnCritical", "-RepoRoot", "root with spaces"], ["--verbose-output", "--fail-on-critical", "--repo-root", "root with spaces"]],
   ["lint-unity-meta.ps1", "lint_unity_meta.py", ["-VerboseOutput", "-RepoRoot", "root with spaces"], ["--verbose-output", "--repo-root", "root with spaces"]],
+  ["tests/test-llm-instructions-lint.ps1", "test_lint_llm_instructions.py", ["-VerboseOutput"], ["-v"]],
+  ["tests/test-generate-skills-index.ps1", "test_generate_skills_index.py", ["-VerboseOutput"], ["-v"]],
   ["tests/test-lint-skill-sizes.ps1", "test_lint_skill_sizes.py", ["-VerboseOutput"], ["-v"]],
   ["tests/test-lint-unity-meta.ps1", "test_lint_unity_meta.py", ["-VerboseOutput"], ["-v"]]
 ];
@@ -42,7 +44,7 @@ function Get-Command {
 }
 function Invoke-MockRunner {
     param($Name, $Arguments)
-    ConvertTo-Json -Compress -InputObject @{ name = $Name; arguments = @($Arguments) } | Add-Content -LiteralPath ${quote(callsPath)}
+    ConvertTo-Json -Compress -InputObject @{ name = $Name; arguments = @($Arguments); environment = $env:UV_PROJECT_ENVIRONMENT } | Add-Content -LiteralPath ${quote(callsPath)}
     if ($Arguments[0] -eq '-c') {
         if ($runners[$Name] -eq 'throw') { throw 'Cannot launch interpreter' }
         Write-Output 'probe output must be suppressed'
@@ -125,6 +127,7 @@ for (const [delegate, payload] of delegates) {
         const copiedDelegate = path.join(temp, "tooling~", "scripts", delegate);
         fs.mkdirSync(path.dirname(copiedDelegate), { recursive: true });
         fs.copyFileSync(path.join(scriptsRoot, delegate), copiedDelegate);
+        fs.copyFileSync(path.join(scriptsRoot, "python-runner.ps1"), path.join(temp, "tooling~", "scripts", "python-runner.ps1"));
         const copiedPayload = path.join(path.dirname(copiedDelegate), payload);
         fs.writeFileSync(copiedPayload, `import sys\nprint('real native payload')\nsys.exit(${exitCode})\n`);
         const harness = path.join(temp, "native.ps1");
@@ -155,3 +158,69 @@ exit $global:LASTEXITCODE
     });
   }
 }
+
+for (const scope of ["host", "container"]) {
+  for (const override of [null, "custom environment with spaces"]) {
+    test(`uv environment: ${scope}, ${override ? "explicit override" : "platform default"}`, () => {
+      const temp = fs.mkdtempSync(path.join(os.tmpdir(), "uv-environment-"));
+      try {
+        const harness = path.join(temp, "environment.ps1");
+        fs.writeFileSync(harness, `
+$ErrorActionPreference = 'Stop'
+. ${quote(path.join(scriptsRoot, "python-runner.ps1"))}
+$env:UV_PROJECT_ENVIRONMENT = ${override ? quote(override) : "$null"}
+$env:VIRTUAL_ENV = 'inherited environment'
+function Get-Command { param($Name, $ErrorAction) if ($Name -eq 'uv') { return 'uv' } }
+function Test-Path { param($LiteralPath) return $${scope === "container" ? "true" : "false"} }
+function uv {
+    if ($null -ne $env:VIRTUAL_ENV) { throw 'uv inherited another active environment' }
+    [Console]::WriteLine($env:UV_PROJECT_ENVIRONMENT)
+    $global:LASTEXITCODE = 23
+}
+$result = Invoke-ToolingPython -ToolingRoot ${quote(temp)} -PythonArguments @('payload.py') -ErrorPrefix 'test'
+if ($result -ne 23) { throw 'Payload exit code changed' }
+if ($env:VIRTUAL_ENV -cne 'inherited environment') { throw 'Caller active environment changed' }
+if ($env:UV_PROJECT_ENVIRONMENT -cne ${override ? quote(override) : "$null"}) { throw 'Caller environment changed' }
+`);
+        const result = spawnSync("pwsh", ["-NoProfile", "-File", harness], { encoding: "utf8", timeout: 20_000 });
+        assert.ifError(result.error);
+        assert.equal(result.status, 0, result.stdout + result.stderr);
+        const platform = process.platform === "win32" ? "windows" : process.platform === "darwin" ? "macos" : "linux";
+        assert.equal(result.stdout.trim(), override ?? path.join(temp, `.venv-${scope}-${platform}-${os.arch()}`));
+      } finally { fs.rmSync(temp, { recursive: true, force: true }); }
+    });
+  }
+}
+
+test("alternating host and container uv runs preserve both environments and raw output", { skip: spawnSync("uv", ["--version"]).status !== 0 ? "uv is not installed" : false }, () => {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), "uv-alternating-"));
+  try {
+    fs.writeFileSync(path.join(temp, "pyproject.toml"), '[project]\nname = "environment-test"\nversion = "0.0.0"\nrequires-python = ">=3.11"\n');
+    const payload = path.join(temp, "payload.py");
+    fs.writeFileSync(payload, 'import sys\nfrom pathlib import Path\np = Path(sys.prefix) / "sentinel"\np.touch(exist_ok=True)\nprint(str(p))\n');
+    const harness = path.join(temp, "alternating.ps1");
+    fs.writeFileSync(harness, `
+$ErrorActionPreference = 'Stop'
+. ${quote(path.join(scriptsRoot, "python-runner.ps1"))}
+$env:UV_PROJECT_ENVIRONMENT = $null
+$script:container = $false
+function Test-Path { param($LiteralPath) return $script:container }
+foreach ($scope in @($false, $true, $false, $true)) {
+    $script:container = $scope
+    $code = Invoke-ToolingPython -ToolingRoot ${quote(temp)} -PythonArguments @(${quote(payload)}) -ErrorPrefix 'test' -RawOutput
+    if ($code -ne 0) { throw 'uv run failed' }
+    if ($null -ne $env:UV_PROJECT_ENVIRONMENT) { throw 'Caller environment changed' }
+}
+`);
+    const result = spawnSync("pwsh", ["-NoProfile", "-File", harness], { encoding: "utf8", timeout: 60_000, env: { ...process.env, UV_PYTHON_DOWNLOADS: "never" } });
+    assert.ifError(result.error);
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    const sentinels = result.stdout.trim().split(/\r?\n/);
+    assert.equal(sentinels.length, 4, result.stdout);
+    assert.equal(sentinels[0], sentinels[2]);
+    assert.equal(sentinels[1], sentinels[3]);
+    assert.notEqual(sentinels[0], sentinels[1]);
+    for (const sentinel of sentinels.slice(0, 2)) assert.ok(fs.existsSync(sentinel), sentinel);
+    assert.ok(!fs.existsSync(path.join(temp, ".venv")));
+  } finally { fs.rmSync(temp, { recursive: true, force: true }); }
+});

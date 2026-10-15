@@ -182,6 +182,11 @@ test("workflow path filters include repository execution inputs", () => {
   }
   const tooling = readWorkflow("tooling-tests.yml");
   assert.strictEqual(tooling.match(/["']\.npmignore["']/g)?.length, 2, "package input changes must trigger tooling tests");
+  const llm = readWorkflow("llm-instructions-lint.yml");
+  for (const event of ["push", "pull_request"]) {
+    const trigger = llm.match(new RegExp(`^  ${event}:\\n([\\s\\S]*?)(?=^  [a-z_]+:|^permissions:)`, "m"))?.[1];
+    assert.match(trigger ?? "", /^      - "tooling~\/scripts\/python-runner\.ps1"$/m, `${event} must trigger when the shared Python runner changes`);
+  }
 });
 
 test("workflow structure: an existing Release is reused on re-run, never re-created", () => {

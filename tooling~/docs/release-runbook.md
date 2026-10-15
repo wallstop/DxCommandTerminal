@@ -84,7 +84,7 @@ npm --prefix tooling~ run package:import-drill -- \
 The import drill creates a clean scratch project, imports with the Unity CLI, waits for compilation, and checks all entries, GUIDs, and shipped assemblies. It never imports into
 the live project. Failures keep logs and a manifest under `.artifacts/import-drill/`; successful runs delete the scratch project.
 
-## Retained-project Mono player drill
+## Retained-project Windows player drill
 
 On the Windows host, keep a passing T13 matrix's scratch projects and run:
 
@@ -97,8 +97,12 @@ The output root must be fresh. The default editor is Unity 2021; use `--editor-i
 legs. The drill checks the artifact against its original clean source revision and imported files. It records the package and harness revisions separately. To update owned
 fixtures, pass `--previous-player-report <prior-player-matrix.json>`. Existing bytes must match its recorded hashes.
 
-Each release Mono player must load its generated catalog, execute generated and manual commands, parse arguments, and reject excess arguments. All compiler, analyzer, and build
-warnings fail. The batch build retains graphics for scene probes. This drill uses Low stripping; IL2CPP, WebGL, UI, and performance gates remain separate.
+Add `--backend IL2CPP --stripping High` to test native code and aggressive stripping. Defaults remain `Mono` and `Low`. Use a new output root per backend/stripping pair. Windows
+IL2CPP support and its native toolchain must be installed for that editor.
+
+Each release player must load its generated catalog, execute generated and manual commands, parse arguments, and reject excess arguments. All compiler, analyzer, and build warnings
+fail. The batch build retains graphics for scene probes. The compiled player must confirm the requested backend. Recorded build settings must match the requested stripping level.
+WebGL, UI, and performance gates remain separate.
 
 ## Maintenance
 

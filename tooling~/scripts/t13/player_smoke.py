@@ -1,4 +1,4 @@
-"""Run release Mono players from verified, retained clean artifact imports."""
+"""Run release Mono or IL2CPP players from verified, retained clean artifact imports."""
 from __future__ import annotations
 
 import argparse
@@ -111,9 +111,9 @@ def validate_profile(project: Path, profile: str) -> None:
         raise ValueError(f"Input profile mismatch: {profile}, activeInputHandler={values}")
 
 
-def checked_player_report(file: Path, profile: str, version: str) -> dict[str, Any]:
+def checked_player_report(file: Path, profile: str, version: str, backend: str = "Mono") -> dict[str, Any]:
     report = json.loads(file.read_text(encoding="utf-8-sig"))
-    expected = {"passed": True, "unityVersion": version, "platform": "WindowsPlayer", "developmentBuild": False, "monoBackend": True, "inputSystem": profile != "legacy", "legacyInput": profile != "input-system", "catalogPresent": True, "catalogEntries": 2, "catalogBindersExecuted": 2, "generatedCalls": 1, "privateCalls": 1, "manualCalls": 1}
+    expected = {"passed": True, "unityVersion": version, "platform": "WindowsPlayer", "developmentBuild": False, "monoBackend": backend == "Mono", "il2cppBackend": backend == "IL2CPP", "inputSystem": profile != "legacy", "legacyInput": profile != "input-system", "catalogPresent": True, "catalogEntries": 2, "catalogBindersExecuted": 2, "generatedCalls": 1, "privateCalls": 1, "manualCalls": 1}
     for name, value in expected.items():
         actual = report.get(name)
         if type(actual) is not type(value) or actual != value:
@@ -121,6 +121,13 @@ def checked_player_report(file: Path, profile: str, version: str) -> dict[str, A
     if report.get("failure") not in (None, ""):
         raise ValueError(f"Player reported failure: {report['failure']}")
     return report
+
+
+def checked_build_settings(output: Path, backend: str, stripping: str) -> str:
+    settings = (output / "build-settings.txt").read_text(encoding="utf-8-sig")
+    if settings != f"{backend}/{stripping}":
+        raise ValueError(f"Actual build settings differ: {settings}")
+    return settings
 
 
 def install_fixtures(project: Path, previous: dict[str, Any] | None = None) -> dict[str, str]:
@@ -163,13 +170,13 @@ def stop_owned_process(process: subprocess.Popen[Any]) -> None:
     process.wait(timeout=30)
 
 
-def run_leg(leg: dict[str, Any], artifact: Path, output: Path, timeout: int, previous: dict[str, Any] | None = None) -> dict[str, Any]:
+def run_leg(leg: dict[str, Any], artifact: Path, output: Path, timeout: int, previous: dict[str, Any] | None = None, backend: str = "Mono", stripping: str = "Low") -> dict[str, Any]:
     profile = leg["inputProfile"]
     project = Path(leg["project"])
     unity = Path(leg["unity"])
     version = leg["editorVersion"]
     output.mkdir(parents=True, exist_ok=False)
-    evidence: dict[str, Any] = {"passed": False, "inputProfile": profile, "project": str(project), "editor": str(unity), "editorVersion": version, "artifactSha256": sha256(artifact), "harnessRevision": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(), "harnessSha256": HARNESS_SHA256, "backend": "Mono", "stripping": "Low", "development": False}
+    evidence: dict[str, Any] = {"passed": False, "inputProfile": profile, "project": str(project), "editor": str(unity), "editorVersion": version, "artifactSha256": sha256(artifact), "harnessRevision": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(), "harnessSha256": HARNESS_SHA256, "backend": backend, "stripping": stripping, "development": False}
     try:
         if leg.get("failed") is not False or leg.get("complete") is not True or leg.get("artifactHashMatches") is not True:
             raise ValueError("Prior clean import leg did not pass")
@@ -186,7 +193,7 @@ def run_leg(leg: dict[str, Any], artifact: Path, output: Path, timeout: int, pre
         evidence["packageSourceRevision"] = source_revision
         evidence["payloadHashes"] = validate_payload(artifact, project, source_revision)
         evidence["fixtureHashes"] = install_fixtures(project, previous)
-        env = dict(os.environ, DX_T13_PLAYER_OUT=str(output), DX_T13_INPUT_PROFILE=profile)
+        env = dict(os.environ, DX_T13_PLAYER_OUT=str(output), DX_T13_INPUT_PROFILE=profile, DX_T13_BACKEND=backend, DX_T13_STRIPPING=stripping)
         command = [str(unity), "-batchmode", "-projectPath", str(project), "-executeMethod", "DxCommandTerminal.T13.PlayerSmoke.Editor.BuildProbe.Run", "-logFile", str(output / "build.log")]
         process = subprocess.Popen(command, env=env)
         evidence["buildPid"] = process.pid
@@ -197,6 +204,11 @@ def run_leg(leg: dict[str, Any], artifact: Path, output: Path, timeout: int, pre
             raise TimeoutError("Owned player drill exceeded deadline")
         if evidence["buildExit"] != 0:
             raise ValueError(f"Build/run process exited {evidence['buildExit']}")
+        evidence["buildSettings"] = checked_build_settings(output, backend, stripping)
+        binaries = ["Player/Smoke.exe"]
+        if backend == "IL2CPP":
+            binaries.append("Player/GameAssembly.dll")
+        evidence["playerBinaryHashes"] = {name: sha256(output / name) for name in binaries}
         for name in ["build.log", "player.log"]:
             log = (output / name).read_text(encoding="utf-8-sig", errors="replace")
             matches = ERRORS.findall(log)
@@ -204,7 +216,7 @@ def run_leg(leg: dict[str, Any], artifact: Path, output: Path, timeout: int, pre
                 raise ValueError(f"{name} contains errors: {matches[:10]}")
         if (output / "player-exit.txt").read_text().strip() != "0":
             raise ValueError("Actual player exit is not zero")
-        evidence["playerReport"] = checked_player_report(output / "player-report.json", profile, version)
+        evidence["playerReport"] = checked_player_report(output / "player-report.json", profile, version, backend)
         validate_profile(project, profile)
         evidence["passed"] = True
     except Exception as exception:
@@ -219,6 +231,8 @@ def main() -> int:
     parser.add_argument("--out", type=Path, required=True, help="Fresh short Windows output root")
     parser.add_argument("--editor-id", default="unity-2021")
     parser.add_argument("--previous-player-report", type=Path, help="Prior owned player matrix for verified fixture updates")
+    parser.add_argument("--backend", choices=("Mono", "IL2CPP"), default="Mono")
+    parser.add_argument("--stripping", choices=("Low", "Medium", "High"), default="Low")
     parser.add_argument("--timeout", type=int, default=1200)
     args = parser.parse_args()
     if os.name != "nt":
@@ -241,10 +255,10 @@ def main() -> int:
             if profile in prior:
                 parser.error(f"Duplicate prior owned profile: {profile}")
             prior[profile] = previous
-    reports = [run_leg(leg, Path(leg["artifact"]), args.out / leg["inputProfile"], args.timeout, prior.get(leg["inputProfile"])) for leg in legs]
+    reports = [run_leg(leg, Path(leg["artifact"]), args.out / leg["inputProfile"], args.timeout, prior.get(leg["inputProfile"]), args.backend, args.stripping) for leg in legs]
     passed = all(report["passed"] for report in reports)
-    (args.out / "matrix-manifest.json").write_text(json.dumps({"passed": passed, "coverage": ["release-Mono-generated-private-manual-dispatch", "consumer-generator-loading", "compiled-input-profiles", "argument-parsing-and-arity"], "legs": reports}, indent=2) + "\n", encoding="utf-8")
-    print(f"Mono player profiles: {sum(report['passed'] for report in reports)}/3 passed")
+    (args.out / "matrix-manifest.json").write_text(json.dumps({"passed": passed, "coverage": [f"release-{args.backend}-{args.stripping}-generated-private-manual-dispatch", "consumer-generator-loading", "compiled-input-profiles", "argument-parsing-and-arity"], "legs": reports}, indent=2) + "\n", encoding="utf-8")
+    print(f"{args.backend}/{args.stripping} player profiles: {sum(report['passed'] for report in reports)}/3 passed")
     return 0 if passed else 1
 
 
