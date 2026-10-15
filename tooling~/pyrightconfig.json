@@ -1,5 +1,5 @@
 {
-  "include": ["scripts"],
+  "include": ["scripts", "../.devcontainer/verify_opencode.py"],
   "extraPaths": ["scripts"],
   "pythonVersion": "3.11",
   "pythonPlatform": "All",

@@ -105,6 +105,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 # launches working.
 # ------------------------------------------------------------------------------
 COPY .devcontainer/verify-opencode.sh /tmp/verify-opencode.sh
+COPY .devcontainer/verify_opencode.py /tmp/verify_opencode.py
 RUN npm install --global --prefix /usr/local \
         @openai/codex@latest \
         @opencode/cli@2 \

@@ -81,8 +81,8 @@ npm --prefix tooling~ run package:import-drill -- \
   --artifact /tmp/release.unitypackage --unity '<path to Unity editor>'
 ```
 
-The import drill creates a clean scratch project, imports with the Unity CLI, waits for compilation, and checks all entries, GUIDs, and shipped assemblies. It never imports into
-the live project. Failures keep logs and a manifest under `.artifacts/import-drill/`; successful runs delete the scratch project.
+The import drill creates a clean scratch project, imports with the Unity CLI, waits for compilation, and checks all entries, importer settings, GUIDs, and shipped assemblies. It
+never imports into the live project. Failures keep logs and a manifest under `.artifacts/import-drill/`; successful runs delete the scratch project.
 
 ## Retained-project Windows player drill
 
@@ -98,6 +98,8 @@ Use short Windows paths for both the editor and output roots. Unity support inst
 The output root must be fresh. The default editor is Unity 2021; use `--editor-id unity-2022` for that retained family. Each family needs legacy, Input System, and combined input
 legs. The drill checks the artifact against its original clean source revision and imported files. It records the package and harness revisions separately. To update owned
 fixtures, pass `--previous-player-report <prior-player-matrix.json>`. Existing bytes must match its recorded hashes.
+
+Metadata must match the artifact. GUID-only script metas can gain Unity's default MonoImporter block. Other changes fail. Player manifests record hashes for these expansions.
 
 Add `--backend IL2CPP --stripping High` to test native code and aggressive stripping. Defaults remain `Mono` and `Low`. Use a new output root per backend/stripping pair. Windows
 IL2CPP support and its native toolchain must be installed for that editor.

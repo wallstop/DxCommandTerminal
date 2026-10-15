@@ -23,6 +23,7 @@ const {
   importUnityArgs,
   listArtifact,
   metaLabels,
+  metadataMatches,
   parseArgs,
   probeEditorVersion,
   readTar,
@@ -456,7 +457,39 @@ test("validateImportedProject accepts a complete import", () => {
   assert.ok(names.includes("compiled assembly exists WallstopStudios.DxCommandTerminal.dll"));
 });
 
+test("minimal script metas accept only measured default importer expansion", () => {
+  const header = metaFor(RUNTIME_GUID);
+  const expanded = header + "MonoImporter:\n  externalObjects: {}\n  serializedVersion: 2\n" +
+    "  defaultReferences: []\n  executionOrder: 0\n  icon: {instanceID: 0}\n" +
+    "  userData: \n  assetBundleName: \n  assetBundleVariant: \n";
+  assert.ok(metadataMatches("Script.cs.meta", header, expanded));
+  assert.ok(metadataMatches("Script.cs.meta", header, expanded.replaceAll("\n", "\r\n")));
+  for (const actual of [expanded.replace("executionOrder: 0", "executionOrder: 1"),
+    expanded.replace("userData: ", "userData: custom"),
+    expanded.replace("defaultReferences: []", "defaultReferences: [custom]"),
+    expanded + "unknownSetting: 0\n"]) {
+    assert.strictEqual(metadataMatches("Script.cs.meta", header, actual), false);
+  }
+  assert.strictEqual(metadataMatches("Folder.meta", header, expanded), false);
+  assert.strictEqual(metadataMatches("Script.cs.meta", header + "labels: [custom]\n", expanded), false);
+  assert.strictEqual(metadataMatches("Script.cs.meta", expanded, expanded.replace("executionOrder: 0", "executionOrder: 1")), false);
+});
+
 const importFailures = [
+  {
+    name: "file importer settings changed with intact guid",
+    mutate: (project) => {
+      fs.appendFileSync(path.join(project, `${ROOT}/Runtime/CommandTerminal/Backend/Terminal.cs.meta`), "userData: rewritten\n");
+    },
+    matches: /meta content matches .*Terminal\.cs/
+  },
+  {
+    name: "folder metadata changed with intact guid",
+    mutate: (project) => {
+      fs.appendFileSync(path.join(project, `${ROOT}/Runtime/Helper.meta`), "userData: rewritten\n");
+    },
+    matches: /meta content matches .*Runtime\/Helper/
+  },
   {
     name: "missing imported file",
     mutate: (project, artifact) => {

@@ -476,6 +476,17 @@ const ASSEMBLY_NAME_PATTERN = /^[A-Za-z0-9._-]+$/u;
 // compiled-DLL check pass off the scratch project's own driver assembly.
 const RESERVED_ASSEMBLY_NAMES = new Set(["Assembly-CSharp", "Assembly-CSharp-Editor", "Assembly-CSharp-firstpass"]);
 
+export function metadataMatches(relative, expected, actual) {
+  if (actual === expected) return true;
+  // Older editors expand GUID-only script metas with these measured defaults.
+  const header = expected.replace(/[\r\n]+$/, "");
+  if (!relative.endsWith(".cs.meta") || !/^fileFormatVersion: 2\r?\nguid: [0-9a-fA-F]{32}$/.test(header)) return false;
+  const defaults = "\nMonoImporter:\n  externalObjects: {}\n  serializedVersion: 2\n" +
+    "  defaultReferences: []\n  executionOrder: 0\n  icon: {instanceID: 0}\n" +
+    "  userData: \n  assetBundleName: \n  assetBundleVariant: \n";
+  return actual.replaceAll("\r\n", "\n") === header.replaceAll("\r\n", "\n") + defaults;
+}
+
 /*
     Post-import validation. Purely file-system based against the artifact
     model; returns { failures, checks } and never throws for a failed check
@@ -507,6 +518,8 @@ export function validateImportedProject(projectDir, artifact) {
       : null;
     check(`meta exists ${asset.pathname}.meta`, importedMeta !== null);
     if (importedMeta !== null) {
+      const metaMatches = metadataMatches(`${asset.pathname}.meta`, asset.metaText, importedMeta);
+      check(`meta content matches ${asset.pathname}`, metaMatches, metaMatches && importedMeta !== asset.metaText ? "Unity default MonoImporter expansion" : "");
       const importedGuid = GUID_LINE_PATTERN.exec(importedMeta)?.[1]?.toLowerCase();
       check(
         `meta guid matches ${asset.pathname}`,
