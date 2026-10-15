@@ -1,0 +1,211 @@
+namespace DxCommandTerminal.T13.PlayerSmoke
+{
+    using System;
+    using System.Collections.Generic;
+    using System.Globalization;
+    using System.IO;
+    using System.Reflection;
+    using UnityEngine;
+    using UnityEngine.Rendering;
+    using WallstopStudios.DxCommandTerminal.Backend;
+    using Stopwatch = System.Diagnostics.Stopwatch;
+
+    public static class ReadinessProbe
+    {
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void Run()
+        {
+            string path = Environment.GetEnvironmentVariable("DX_T13_PLAYER_REPORT");
+            Report report = new Report();
+            List<string> logs = new List<string>();
+            Application.LogCallback capture = (message, stack, type) => logs.Add($"[{type}] {message}\n{stack}");
+            Application.logMessageReceived += capture;
+            try
+            {
+                Application.runInBackground = true;
+                report.token = Environment.GetEnvironmentVariable("DX_T13_RUN_TOKEN");
+                if (!Guid.TryParseExact(report.token, "N", out _))
+                {
+                    throw new InvalidOperationException("Missing run owner token");
+                }
+                if (Application.isEditor || Debug.isDebugBuild || Application.isBatchMode || SystemInfo.graphicsDeviceType == GraphicsDeviceType.Null)
+                {
+                    throw new InvalidOperationException("Readiness requires a regular release player with graphics");
+                }
+                string requested = Environment.GetEnvironmentVariable("DX_T13_WARM_SAMPLES");
+                if (!int.TryParse(requested, NumberStyles.None, CultureInfo.InvariantCulture, out int warmCount) || !(warmCount == 0 || warmCount == 1000))
+                {
+                    throw new InvalidOperationException("Expected zero or 1000 warm samples");
+                }
+                // Catalog and handler validation follows timing so it cannot prime discovery.
+                report.phaseTicks = new long[3];
+                report.coldTicks = Measure(out CommandShell coldShell, report.phaseTicks);
+                report.frequency = Stopwatch.Frequency;
+                report.warmTicks = new long[warmCount];
+                if (0 < warmCount)
+                {
+                    for (int index = 0; index < 8; index++)
+                    {
+                        Measure(out _);
+                    }
+                    GC.Collect();
+                    GC.WaitForPendingFinalizers();
+                    GC.Collect();
+                    for (int index = 0; index < warmCount; index++)
+                    {
+                        report.warmTicks[index] = Measure(out _);
+                    }
+                }
+                report.clockTicks = new long[1000];
+                for (int index = 0; index < report.clockTicks.Length; index++)
+                {
+                    long start = Stopwatch.GetTimestamp();
+                    report.clockTicks[index] = Stopwatch.GetTimestamp() - start;
+                }
+                Type catalog = typeof(ReadinessProbe).Assembly.GetType("WallstopStudios.DxCommandTerminal.Generated.CommandCatalog", false);
+                MethodInfo collect = catalog?.GetMethod("Collect", BindingFlags.Public | BindingFlags.Static);
+                int expected = ReadinessCommands.Count;
+                if (collect == null && expected != 0)
+                {
+                    throw new InvalidOperationException("Generated consumer catalog missing");
+                }
+                List<CommandCatalogEntry> entries = new List<CommandCatalogEntry>();
+                if (collect != null)
+                {
+                    collect.Invoke(null, new object[] { entries });
+                }
+                report.catalogEntries = entries.Count;
+                if (entries.Count != expected)
+                {
+                    throw new InvalidOperationException("Generated entry count differs");
+                }
+                foreach (CommandCatalogEntry entry in entries)
+                {
+                    if (!entry.IsValid || !entry.Name.StartsWith("t13-readiness-", StringComparison.Ordinal))
+                    {
+                        throw new InvalidOperationException("Invalid workload entry");
+                    }
+                    Action<CommandArg[]> handler = entry.GetHandler();
+                    if (handler == null)
+                    {
+                        throw new InvalidOperationException("Workload handler missing");
+                    }
+                    handler(Array.Empty<CommandArg>());
+                }
+                report.totalCommands = coldShell.Commands.Count;
+                foreach (string name in coldShell.Commands.Keys)
+                {
+                    if (name.StartsWith("t13-readiness-", StringComparison.Ordinal))
+                    {
+                        report.workloadCommands++;
+                    }
+                }
+                if (report.workloadCommands != expected || ReadinessCommands.Calls != expected)
+                {
+                    throw new InvalidOperationException("Workload registration or binder execution differs");
+                }
+                if (
+                    expected != 0
+                    && (
+                        !coldShell.RunCommand("t13-readiness-0000") || !coldShell.RunCommand("t13-readiness-0999") || coldShell.HasErrors || ReadinessCommands.Calls != expected + 2
+                    )
+                )
+                {
+                    throw new InvalidOperationException("Workload dispatch failed");
+                }
+                report.handlerCalls = ReadinessCommands.Calls;
+                report.unityVersion = Application.unityVersion;
+                report.platform = Application.platform.ToString();
+                report.batchMode = Application.isBatchMode;
+                report.developmentBuild = Debug.isDebugBuild;
+                report.processor = SystemInfo.processorType;
+                report.processorCount = SystemInfo.processorCount;
+                report.os = SystemInfo.operatingSystem;
+                report.graphics = SystemInfo.graphicsDeviceType.ToString();
+#if ENABLE_MONO
+                report.monoBackend = true;
+#endif
+#if ENABLE_IL2CPP
+                report.il2cppBackend = true;
+#endif
+#if ENABLE_INPUT_SYSTEM
+                report.inputSystem = true;
+#endif
+#if ENABLE_LEGACY_INPUT_MANAGER
+                report.legacyInput = true;
+#endif
+                using (System.Diagnostics.Process process = System.Diagnostics.Process.GetCurrentProcess())
+                {
+                    report.pid = process.Id;
+                }
+                report.passed = true;
+            }
+            catch (Exception exception)
+            {
+                report.failure = exception.ToString();
+                Debug.LogException(exception);
+            }
+            finally
+            {
+                Application.logMessageReceived -= capture;
+                report.logs = logs.ToArray();
+                if (!string.IsNullOrEmpty(path))
+                {
+                    File.WriteAllText(path, JsonUtility.ToJson(report, true));
+                }
+                Application.Quit(report.passed ? 0 : 2);
+            }
+        }
+
+        private static long Measure(out CommandShell shell, long[] phases = null)
+        {
+            long start = Stopwatch.GetTimestamp();
+            CommandShell measured = new CommandShell(new CommandHistory(32));
+            long constructed = Stopwatch.GetTimestamp();
+            measured.InitializeAutoRegisteredCommands(ignoreDefaultCommands: true, deferRegistration: true);
+            long configured = Stopwatch.GetTimestamp();
+            measured.EnsureAutoCommandsRegistered();
+            long ready = Stopwatch.GetTimestamp();
+            if (phases != null)
+            {
+                phases[0] = constructed - start;
+                phases[1] = configured - constructed;
+                phases[2] = ready - configured;
+            }
+            long elapsed = ready - start;
+            shell = measured;
+            return elapsed;
+        }
+
+        [Serializable]
+        private sealed class Report
+        {
+            public bool passed;
+            public string failure;
+            public string token;
+            public int pid;
+            public long frequency;
+            public long coldTicks;
+            public long[] phaseTicks;
+            public long[] warmTicks;
+            public long[] clockTicks;
+            public int catalogEntries;
+            public int totalCommands;
+            public int workloadCommands;
+            public int handlerCalls;
+            public string unityVersion;
+            public string platform;
+            public bool batchMode;
+            public bool developmentBuild;
+            public bool monoBackend;
+            public bool il2cppBackend;
+            public bool inputSystem;
+            public bool legacyInput;
+            public string processor;
+            public int processorCount;
+            public string os;
+            public string graphics;
+            public string[] logs;
+        }
+    }
+}
