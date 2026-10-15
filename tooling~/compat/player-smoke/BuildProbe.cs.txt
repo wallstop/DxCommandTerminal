@@ -1,0 +1,115 @@
+namespace DxCommandTerminal.T13.PlayerSmoke.Editor
+{
+    using System;
+    using System.Diagnostics;
+    using System.IO;
+    using UnityEditor;
+    using UnityEditor.Build;
+    using UnityEditor.Build.Reporting;
+    using UnityEditor.SceneManagement;
+    using UnityEngine;
+
+    public static class BuildProbe
+    {
+        public static void Run()
+        {
+            int exit = 2;
+            try
+            {
+                string output = Environment.GetEnvironmentVariable("DX_T13_PLAYER_OUT");
+                string profile = Environment.GetEnvironmentVariable("DX_T13_INPUT_PROFILE");
+                if (string.IsNullOrEmpty(output))
+                {
+                    throw new InvalidOperationException("Missing output root");
+                }
+                Directory.CreateDirectory(output);
+                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+                const string scene = "Assets/T13PlayerSmoke.unity";
+                if (
+                    !EditorSceneManager.SaveScene(
+                        UnityEngine.SceneManagement.SceneManager.GetActiveScene(),
+                        scene
+                    )
+                )
+                {
+                    throw new InvalidOperationException("Could not save scene");
+                }
+                PlayerSettings.SetScriptingBackend(
+                    NamedBuildTarget.Standalone,
+                    ScriptingImplementation.Mono2x
+                );
+                PlayerSettings.SetManagedStrippingLevel(
+                    NamedBuildTarget.Standalone,
+                    ManagedStrippingLevel.Low
+                );
+                string executable = Path.Combine(output, "Player", "Smoke.exe");
+                BuildReport build = BuildPipeline.BuildPlayer(
+                    new BuildPlayerOptions
+                    {
+                        scenes = new[] { scene },
+                        locationPathName = executable,
+                        target = BuildTarget.StandaloneWindows64,
+                        options = BuildOptions.None,
+                    }
+                );
+                File.WriteAllText(
+                    Path.Combine(output, "build-result.txt"),
+                    $"{build.summary.result} errors={build.summary.totalErrors} warnings={build.summary.totalWarnings} duration={build.summary.totalTime}"
+                );
+                if (
+                    build.summary.result != BuildResult.Succeeded
+                    || build.summary.totalErrors != 0
+                    || build.summary.totalWarnings != 0
+                )
+                {
+                    throw new InvalidOperationException("Player build failed");
+                }
+                ProcessStartInfo start = new ProcessStartInfo(
+                    executable,
+                    $"-batchmode -nographics -logFile \"{Path.Combine(output, "player.log")}\""
+                )
+                {
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                };
+                start.EnvironmentVariables["DX_T13_PLAYER_REPORT"] = Path.Combine(
+                    output,
+                    "player-report.json"
+                );
+                start.EnvironmentVariables["DX_T13_INPUT_PROFILE"] = profile;
+                using (Process player = Process.Start(start))
+                {
+                    File.WriteAllText(Path.Combine(output, "player-pid.txt"), player.Id.ToString());
+                    if (!player.WaitForExit(60000))
+                    {
+                        player.Kill();
+                        if (!player.WaitForExit(5000))
+                        {
+                            throw new TimeoutException("Killed player did not exit");
+                        }
+                        throw new TimeoutException("Actual player timed out");
+                    }
+                    File.WriteAllText(
+                        Path.Combine(output, "player-exit.txt"),
+                        player.ExitCode.ToString()
+                    );
+                    if (
+                        player.ExitCode != 0
+                        || !File.Exists(Path.Combine(output, "player-report.json"))
+                    )
+                    {
+                        throw new InvalidOperationException(
+                            "Actual player failed or emitted no report"
+                        );
+                    }
+                }
+                exit = 0;
+            }
+            catch (Exception exception)
+            {
+                UnityEngine.Debug.LogException(exception);
+            }
+            EditorApplication.Exit(exit);
+        }
+    }
+}

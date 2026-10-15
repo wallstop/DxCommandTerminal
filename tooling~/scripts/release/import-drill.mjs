@@ -459,7 +459,7 @@ export function scaffoldProject(projectDir, editorVersion, dependencies) {
   }
   fs.mkdirSync(path.join(projectDir, "ProjectSettings"), { recursive: true });
   fs.mkdirSync(path.join(projectDir, "Packages"), { recursive: true });
-  fs.mkdirSync(path.join(projectDir, "Assets"), { recursive: true });
+  fs.mkdirSync(path.join(projectDir, "Assets", "Editor"), { recursive: true });
   fs.writeFileSync(
     path.join(projectDir, "ProjectSettings", "ProjectVersion.txt"),
     `m_EditorVersion: ${editorVersion}\n`
@@ -468,7 +468,7 @@ export function scaffoldProject(projectDir, editorVersion, dependencies) {
     path.join(projectDir, "Packages", "manifest.json"),
     `${JSON.stringify({ dependencies }, null, 2)}\n`
   );
-  fs.writeFileSync(path.join(projectDir, "Assets", "DxTerminalImportDrill.cs"), buildImportDriver());
+  fs.writeFileSync(path.join(projectDir, "Assets", "Editor", "DxTerminalImportDrill.cs"), buildImportDriver());
 }
 
 const ASSEMBLY_NAME_PATTERN = /^[A-Za-z0-9._-]+$/u;

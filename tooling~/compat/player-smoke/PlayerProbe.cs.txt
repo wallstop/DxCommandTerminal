@@ -1,0 +1,215 @@
+namespace DxCommandTerminal.T13.PlayerSmoke
+{
+    using System;
+    using System.Collections.Generic;
+    using System.IO;
+    using System.Reflection;
+    using UnityEngine;
+    using WallstopStudios.DxCommandTerminal.Attributes;
+    using WallstopStudios.DxCommandTerminal.Backend;
+
+    public static class PlayerProbe
+    {
+        private static int generatedCalls;
+        private static int privateCalls;
+
+        [RegisterCommand(Name = "t13-generated", MinArgCount = 1, MaxArgCount = 1)]
+        public static void Generated(CommandArg[] arguments)
+        {
+            if (arguments == null)
+            {
+                throw new ArgumentNullException(nameof(arguments));
+            }
+            if (arguments.Length != 1)
+            {
+                throw new InvalidOperationException("Generated argument count differs");
+            }
+            if (!arguments[0].TryGet<int>(out int value) || value != 37)
+            {
+                throw new InvalidOperationException("Generated argument parsing failed");
+            }
+            generatedCalls++;
+        }
+
+        [RegisterCommand(Name = "t13-private", MinArgCount = 0, MaxArgCount = 0)]
+        private static void Private(CommandArg[] arguments)
+        {
+            privateCalls++;
+        }
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void Run()
+        {
+            string reportPath = Environment.GetEnvironmentVariable("DX_T13_PLAYER_REPORT");
+            Report report = new Report
+            {
+                unityVersion = Application.unityVersion,
+                platform = Application.platform.ToString(),
+                inputSystem = false,
+                legacyInput = false,
+                monoBackend = false,
+                developmentBuild = Debug.isDebugBuild,
+            };
+#if ENABLE_MONO
+            report.monoBackend = true;
+#endif
+#if ENABLE_INPUT_SYSTEM
+            report.inputSystem = true;
+#endif
+#if ENABLE_LEGACY_INPUT_MANAGER
+            report.legacyInput = true;
+#endif
+            try
+            {
+                if (Application.isEditor || report.developmentBuild || !report.monoBackend)
+                {
+                    throw new InvalidOperationException("Smoke must run in a release Mono player");
+                }
+                if (string.IsNullOrEmpty(reportPath))
+                {
+                    throw new InvalidOperationException("Missing report path");
+                }
+                string profile = Environment.GetEnvironmentVariable("DX_T13_INPUT_PROFILE");
+                bool isLegacy = string.Equals(profile, "legacy", StringComparison.Ordinal);
+                bool isInputSystem = string.Equals(
+                    profile,
+                    "input-system",
+                    StringComparison.Ordinal
+                );
+                if (
+                    !isLegacy
+                    && !isInputSystem
+                    && !string.Equals(profile, "both", StringComparison.Ordinal)
+                )
+                {
+                    throw new InvalidOperationException("Invalid expected input profile");
+                }
+                if (report.inputSystem != !isLegacy || report.legacyInput != !isInputSystem)
+                {
+                    throw new InvalidOperationException(
+                        "Compiled input symbols do not match profile"
+                    );
+                }
+                Type catalog = typeof(PlayerProbe).Assembly.GetType(
+                    "WallstopStudios.DxCommandTerminal.Generated.CommandCatalog",
+                    false
+                );
+                report.catalogPresent = catalog != null;
+                if (catalog == null)
+                {
+                    throw new InvalidOperationException(
+                        "Consumer source generator did not create a catalog"
+                    );
+                }
+                MethodInfo collect = catalog.GetMethod(
+                    "Collect",
+                    BindingFlags.Public | BindingFlags.Static
+                );
+                if (collect == null)
+                {
+                    throw new InvalidOperationException("Generated collector missing");
+                }
+                List<CommandCatalogEntry> entries = new List<CommandCatalogEntry>();
+                collect.Invoke(null, new object[] { entries });
+                if (entries.Count != 2)
+                {
+                    throw new InvalidOperationException("Generated catalog entry count differs");
+                }
+                foreach (CommandCatalogEntry entry in entries)
+                {
+                    if (!entry.IsValid)
+                    {
+                        throw new InvalidOperationException("Generated binder is invalid");
+                    }
+                    Action<CommandArg[]> handler = entry.GetHandler();
+                    if (handler == null)
+                    {
+                        throw new InvalidOperationException("Generated binder returned no handler");
+                    }
+                    if (string.Equals(entry.Name, "t13-generated", StringComparison.Ordinal))
+                    {
+                        handler(new[] { new CommandArg("37") });
+                    }
+                    else if (string.Equals(entry.Name, "t13-private", StringComparison.Ordinal))
+                    {
+                        handler(Array.Empty<CommandArg>());
+                    }
+                    else
+                    {
+                        throw new InvalidOperationException("Unexpected catalog entry");
+                    }
+                    report.catalogBindersExecuted++;
+                }
+                if (generatedCalls != 1 || privateCalls != 1)
+                {
+                    throw new InvalidOperationException("Catalog binder dispatch failed");
+                }
+                report.catalogEntries = entries.Count;
+                generatedCalls = 0;
+                privateCalls = 0;
+                CommandShell shell = new CommandShell(new CommandHistory(32));
+                shell.InitializeAutoRegisteredCommands();
+                if (!shell.RunCommand("t13-generated 37") || generatedCalls != 1 || shell.HasErrors)
+                {
+                    throw new InvalidOperationException("Generated command dispatch failed");
+                }
+                if (!shell.RunCommand("t13-private") || privateCalls != 1 || shell.HasErrors)
+                {
+                    throw new InvalidOperationException(
+                        "Private reflected command dispatch failed"
+                    );
+                }
+                int manualCalls = 0;
+                if (!shell.AddCommand("t13-manual", arguments => manualCalls++, 0, 0))
+                {
+                    throw new InvalidOperationException("Manual registration failed");
+                }
+                if (!shell.RunCommand("t13-manual") || manualCalls != 1 || shell.HasErrors)
+                {
+                    throw new InvalidOperationException("Manual dispatch failed");
+                }
+                if (
+                    shell.RunCommand("t13-generated 37 38")
+                    || generatedCalls != 1
+                    || !shell.HasErrors
+                )
+                {
+                    throw new InvalidOperationException("Excess arguments were accepted");
+                }
+                report.generatedCalls = generatedCalls;
+                report.privateCalls = privateCalls;
+                report.manualCalls = manualCalls;
+                report.passed = true;
+            }
+            catch (Exception exception)
+            {
+                report.failure = exception.ToString();
+                Debug.LogException(exception);
+            }
+            if (!string.IsNullOrEmpty(reportPath))
+            {
+                File.WriteAllText(reportPath, JsonUtility.ToJson(report, true));
+            }
+            Application.Quit(report.passed ? 0 : 2);
+        }
+
+        [Serializable]
+        private sealed class Report
+        {
+            public bool passed;
+            public string failure;
+            public string unityVersion;
+            public string platform;
+            public bool inputSystem;
+            public bool legacyInput;
+            public bool developmentBuild;
+            public bool monoBackend;
+            public bool catalogPresent;
+            public int catalogEntries;
+            public int catalogBindersExecuted;
+            public int generatedCalls;
+            public int privateCalls;
+            public int manualCalls;
+        }
+    }
+}

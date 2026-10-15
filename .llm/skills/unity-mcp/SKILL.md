@@ -88,7 +88,7 @@ exposes a leak.
 
 The editor serves tool calls on its main thread. A request that lands while the editor is busy (a Play Mode run winding down, a domain reload) comes back as
 `The operation was aborted due to timeout`, and the SDK then rejects every later call on that session instantly with that first reason - one unlucky request kills the rest of the
-command. So a session rebuilds its transport once when a call throws, and the caller retries.
+command. Read-only calls rebuild their transport once and retry. A `run_tests` start never replays after a lost response; its owner claim proves whether it started.
 
 Do not gate on `isCompiling`: reference runs recorded it as `false` while every call was timing out
 (`ambiguous-interactive/unity-helpers/.llm/references/unity-mcp-fixture-runner-part-1.md`). Play mode is the discriminating flag, because play mode over MCP times out every tool
@@ -98,9 +98,10 @@ The robust fix is in place: `DxTerminalTestRunReporter` (installed by `npm run u
 `.artifacts/unity-state/test-run.txt`, and `unity:tests` / `t4:capture` read that file instead of polling a main thread a Play Mode run occupies. The first token is `running`,
 `pass=`, or `did-not-run`, and every line carries the owner token from `test-run-request.txt`, so a late callback from an earlier run is never read as this run's result. Without
 the reporter compiled in, or without a writable claim directory, the command falls back to `test_status` polling. The claim path replaces the status poll, never the `run_tests`
-request. Two facts worth keeping: an editor that answers `did-not-run token=none` saw no request file, which is normal when something other than the MCP tooling started the run and
-means the two sides resolved different claim directories on the first leg; and a run that matches no test never starts, so the editor reports nothing and the bridge's zero-total
-answer is used instead.
+request. Explicit schema rejection permits another argument shape; an uncertain start waits for its claim without resending. Aborts write a token-scoped refusal through
+`IErrorCallbacks.OnError`. Two facts worth keeping: an editor that answers `did-not-run token=none` saw no request file, which is normal when something other than the MCP tooling
+started the run and means the two sides resolved different claim directories on the first leg; and a run that matches no test never starts, so the editor reports nothing and the
+bridge's zero-total answer is used instead.
 
 ### Busy-window retry windows are the caller's deadline
 

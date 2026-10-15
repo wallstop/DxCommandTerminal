@@ -126,6 +126,9 @@ jobs:
       - name: Test tooling
         run: npm --prefix tooling~ test
 
+      - name: Test player evidence validation
+        run: python -m unittest discover -s tooling~/scripts/tests -p test_player_smoke.py
+
       - name: Test AI backends
         if: matrix.os == 'ubuntu-latest'
         run: |

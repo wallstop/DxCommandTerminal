@@ -56,10 +56,7 @@ namespace DxTerminalDevTools
                 return 2;
             }
 
-            string project = Path.Combine(
-                Path.GetTempPath(),
-                "dxt-grammar-" + Guid.NewGuid().ToString("N")
-            );
+            string project = Path.Combine(Path.GetTempPath(), "dxt-grammar-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(Path.Combine(project, "Assets"));
             TestProject.DataPath = Path.Combine(project, "Assets");
 
@@ -83,6 +80,8 @@ namespace DxTerminalDevTools
                 RunEveryPrintableAsciiCharacter(callbacks, expectations);
                 RunCharactersOutsideAscii(callbacks, expectations);
                 RunMessagesThatNeedEncoding(callbacks, expectations);
+                RunAbortedRuns(expectations);
+                RunLateAbortCallbacks(expectations);
                 WriteJson(args[0], expectations);
             }
             catch (Exception exception)
@@ -122,21 +121,13 @@ namespace DxTerminalDevTools
             as nobody's at the end: a late callback must never adopt the token of
             the next request, and the reader is looking for a token of its own.
          */
-        private static void RunNobodyAskedFor(
-            ICallbacks callbacks,
-            List<ClaimExpectation> expectations
-        )
+        private static void RunNobodyAskedFor(ICallbacks callbacks, List<ClaimExpectation> expectations)
         {
             File.Delete(DxTerminalTestRunReporter.RequestPath());
             string[] names = { $"{Fixture}.Unattributed" };
             callbacks.RunStarted(Leaf(Fixture, isSuite: true));
-            Require(
-                ReadClaim().Contains("did-not-run token=none", StringComparison.Ordinal),
-                "a run nobody asked for is refused at the start, not acknowledged"
-            );
-            callbacks.RunFinished(
-                Root(children: new List<FakeTest> { Failed(names[0]) }, failed: 1)
-            );
+            Require(ReadClaim().Contains("did-not-run token=none", StringComparison.Ordinal), "a run nobody asked for is refused at the start, not acknowledged");
+            callbacks.RunFinished(Root(children: new List<FakeTest> { Failed(names[0]) }, failed: 1));
             expectations.Add(Finished("a run nobody asked for", "none", names, failed: 1));
         }
 
@@ -145,21 +136,12 @@ namespace DxTerminalDevTools
             result to report, and a claim that looked finished with no tests in
             it would read as a green run.
          */
-        private static void RunThatExecutedNoTests(
-            ICallbacks callbacks,
-            List<ClaimExpectation> expectations
-        )
+        private static void RunThatExecutedNoTests(ICallbacks callbacks, List<ClaimExpectation> expectations)
         {
             Request("grammar-empty");
             StartRun(callbacks, "grammar-empty");
             callbacks.RunFinished(Root());
-            expectations.Add(
-                Refused(
-                    "a run that executed no tests",
-                    "grammar-empty",
-                    "the run executed no tests"
-                )
-            );
+            expectations.Add(Refused("a run that executed no tests", "grammar-empty", "the run executed no tests"));
         }
 
         /*
@@ -175,24 +157,10 @@ namespace DxTerminalDevTools
                 Root(
                     passed: 2,
                     skipped: 1,
-                    children: new List<FakeTest>
-                    {
-                        Leaf($"{Fixture}.One.TestAlpha"),
-                        Leaf($"{Fixture}.One.TestBeta"),
-                        Leaf($"{Fixture}.One.TestGamma", TestStatus.Skipped),
-                    }
+                    children: new List<FakeTest> { Leaf($"{Fixture}.One.TestAlpha"), Leaf($"{Fixture}.One.TestBeta"), Leaf($"{Fixture}.One.TestGamma", TestStatus.Skipped) }
                 )
             );
-            expectations.Add(
-                Finished(
-                    "a green run",
-                    token,
-                    new string[0],
-                    passed: 2,
-                    skipped: 1,
-                    mode: "PlayMode"
-                )
-            );
+            expectations.Add(Finished("a green run", token, new string[0], passed: 2, skipped: 1, mode: "PlayMode"));
         }
 
         /*
@@ -202,26 +170,13 @@ namespace DxTerminalDevTools
             test never arrived has no name to give, and more failures than the cap
             become the cap plus a count of the rest.
          */
-        private static void RunRedOverTheCap(
-            ICallbacks callbacks,
-            List<ClaimExpectation> expectations
-        )
+        private static void RunRedOverTheCap(ICallbacks callbacks, List<ClaimExpectation> expectations)
         {
             List<string> names = new() { $"{Fixture}.Alpha.One", $"{Fixture}.Beta.One" };
             List<FakeTest> children = new()
             {
-                FailedFixture(
-                    $"{Fixture}.Alpha",
-                    new List<FakeTest>
-                    {
-                        Leaf($"{Fixture}.Alpha.Skipped", TestStatus.Skipped),
-                        Failed($"{Fixture}.Alpha.One"),
-                    }
-                ),
-                FailedFixture(
-                    $"{Fixture}.Beta",
-                    new List<FakeTest> { Failed($"{Fixture}.Beta.One") }
-                ),
+                FailedFixture($"{Fixture}.Alpha", new List<FakeTest> { Leaf($"{Fixture}.Alpha.Skipped", TestStatus.Skipped), Failed($"{Fixture}.Alpha.One") }),
+                FailedFixture($"{Fixture}.Beta", new List<FakeTest> { Failed($"{Fixture}.Beta.One") }),
                 /*
                    A childless failed node is still a suite, and reporting it
                    would point the reader at the fixture instead of the test.
@@ -245,15 +200,7 @@ namespace DxTerminalDevTools
                fixtures come before the bulk leaves, and the suites themselves are
                never among them.
             */
-            expectations.Add(
-                Finished(
-                    "a red run over the cap",
-                    "grammar-red",
-                    names.GetRange(0, ReportedCap).ToArray(),
-                    failed: names.Count,
-                    more: names.Count - ReportedCap
-                )
-            );
+            expectations.Add(Finished("a red run over the cap", "grammar-red", names.GetRange(0, ReportedCap).ToArray(), failed: names.Count, more: names.Count - ReportedCap));
         }
 
         /*
@@ -264,26 +211,16 @@ namespace DxTerminalDevTools
             reported itself as somebody else's, or as nobody's, would be discarded
             by the caller waiting for it.
          */
-        private static void RunAcrossADomainReload(
-            ICallbacks callbacks,
-            List<ClaimExpectation> expectations
-        )
+        private static void RunAcrossADomainReload(ICallbacks callbacks, List<ClaimExpectation> expectations)
         {
             string[] names = { $"{Fixture}.Reload.One" };
             Request("grammar-reload");
             StartRun(callbacks, "grammar-reload");
             DxTerminalTestRunReporter.RegisterCallbacks();
             ICallbacks reloaded = Last();
-            Require(
-                !ReferenceEquals(callbacks, reloaded),
-                "registering again must hand back a new instance, or this case proves nothing"
-            );
-            reloaded.RunFinished(
-                Root(failed: 1, children: new List<FakeTest> { Failed(names[0]) })
-            );
-            expectations.Add(
-                Finished("a run across a domain reload", "grammar-reload", names, failed: 1)
-            );
+            Require(!ReferenceEquals(callbacks, reloaded), "registering again must hand back a new instance, or this case proves nothing");
+            reloaded.RunFinished(Root(failed: 1, children: new List<FakeTest> { Failed(names[0]) }));
+            expectations.Add(Finished("a run across a domain reload", "grammar-reload", names, failed: 1));
         }
 
         /*
@@ -293,43 +230,23 @@ namespace DxTerminalDevTools
             Without the guard the exception leaves RunFinished and the caller is
             left with no line at all.
          */
-        private static void RunWithAThrowingResultTree(
-            ICallbacks callbacks,
-            List<ClaimExpectation> expectations
-        )
+        private static void RunWithAThrowingResultTree(ICallbacks callbacks, List<ClaimExpectation> expectations)
         {
             Request("grammar-throwing");
             int warningsBefore = TestProject.Warnings.Count;
             StartRun(callbacks, "grammar-throwing");
             callbacks.RunFinished(
-                Root(
-                    passed: 4,
-                    failed: 2,
-                    children: new List<FakeTest>
-                    {
-                        Failed($"{Fixture}.Alpha.One"),
-                        Leaf($"{Fixture}.Broken", TestStatus.Failed, throwsOnChildren: true),
-                    }
-                )
+                Root(passed: 4, failed: 2, children: new List<FakeTest> { Failed($"{Fixture}.Alpha.One"), Leaf($"{Fixture}.Broken", TestStatus.Failed, throwsOnChildren: true) })
             );
 
-            expectations.Add(
-                Finished(
-                    "a result tree the walk cannot survive",
-                    "grammar-throwing",
-                    new string[0],
-                    passed: 4,
-                    failed: 2
-                )
-            );
+            expectations.Add(Finished("a result tree the walk cannot survive", "grammar-throwing", new string[0], passed: 4, failed: 2));
             int raised = TestProject.Warnings.Count - warningsBefore;
             Require(raised == 1, $"the degrade path must be reported once, not {raised} times");
             if (raised == 1)
             {
                 string warning = TestProject.Warnings[warningsBefore];
                 Require(
-                    warning.Contains("walk failed", StringComparison.Ordinal)
-                        && warning.Contains("broken tree", StringComparison.Ordinal),
+                    warning.Contains("walk failed", StringComparison.Ordinal) && warning.Contains("broken tree", StringComparison.Ordinal),
                     $"the warning must name the walk and the failure, got: {warning}"
                 );
             }
@@ -341,10 +258,7 @@ namespace DxTerminalDevTools
             key=value and the names are split on a comma, so each of those three
             characters is a delimiter a name may hold.
          */
-        private static void RunEveryPrintableAsciiCharacter(
-            ICallbacks callbacks,
-            List<ClaimExpectation> expectations
-        )
+        private static void RunEveryPrintableAsciiCharacter(ICallbacks callbacks, List<ClaimExpectation> expectations)
         {
             for (int code = 0x20; code <= 0x7F; ++code)
             {
@@ -364,10 +278,7 @@ namespace DxTerminalDevTools
             and an em space read as a space, a line separator ends the line, an
             emoji is a surrogate pair, and a bare percent is the escape itself.
          */
-        private static void RunCharactersOutsideAscii(
-            ICallbacks callbacks,
-            List<ClaimExpectation> expectations
-        )
+        private static void RunCharactersOutsideAscii(ICallbacks callbacks, List<ClaimExpectation> expectations)
         {
             string[] names =
             {
@@ -392,22 +303,12 @@ namespace DxTerminalDevTools
             for (int start = 0; start < names.Length; start += ReportedCap)
             {
                 List<string> group = new();
-                for (
-                    int index = start;
-                    index < names.Length && index < start + ReportedCap;
-                    ++index
-                )
+                for (int index = start; index < names.Length && index < start + ReportedCap; ++index)
                 {
                     group.Add(names[index]);
                 }
 
-                RunNames(
-                    callbacks,
-                    "grammar-unicode",
-                    "characters outside ASCII",
-                    group.ToArray(),
-                    expectations
-                );
+                RunNames(callbacks, "grammar-unicode", "characters outside ASCII", group.ToArray(), expectations);
             }
         }
 
@@ -415,13 +316,7 @@ namespace DxTerminalDevTools
             One claim per group of names, every one of them failed, so the names
             the reader gets back are exactly the group.
          */
-        private static void RunNames(
-            ICallbacks callbacks,
-            string token,
-            string label,
-            string[] names,
-            List<ClaimExpectation> expectations
-        )
+        private static void RunNames(ICallbacks callbacks, string token, string label, string[] names, List<ClaimExpectation> expectations)
         {
             List<FakeTest> children = new();
             foreach (string name in names)
@@ -445,10 +340,7 @@ namespace DxTerminalDevTools
             message is the cap: the claim carries its head, because the
             expectation it failed is what the reader needs.
          */
-        private static void RunMessagesThatNeedEncoding(
-            ICallbacks callbacks,
-            List<ClaimExpectation> expectations
-        )
+        private static void RunMessagesThatNeedEncoding(ICallbacks callbacks, List<ClaimExpectation> expectations)
         {
             string longBody = new('x', 400);
             (string Name, string Message)[] cases =
@@ -478,15 +370,7 @@ namespace DxTerminalDevTools
             Request("grammar-why");
             StartRun(callbacks, "grammar-why");
             callbacks.RunFinished(Root(failed: names.Count, children: children));
-            expectations.Add(
-                Finished(
-                    "failure messages the encoder must survive",
-                    "grammar-why",
-                    names.ToArray(),
-                    failed: names.Count,
-                    whys: whys.ToArray()
-                )
-            );
+            expectations.Add(Finished("failure messages the encoder must survive", "grammar-why", names.ToArray(), failed: names.Count, whys: whys.ToArray()));
         }
 
         /// <summary>
@@ -515,31 +399,17 @@ namespace DxTerminalDevTools
             so a claim it cannot see is a false diagnosis rather than a slow
             run: the running line is part of the grammar, not a courtesy.
          */
-        private static void StartRun(
-            ICallbacks callbacks,
-            string token,
-            TestMode mode = TestMode.EditMode
-        )
+        private static void StartRun(ICallbacks callbacks, string token, TestMode mode = TestMode.EditMode)
         {
             callbacks.RunStarted(Leaf(Fixture, isSuite: true, mode: mode));
             string claim = ReadClaim();
-            Require(
-                claim.Contains($"running token={token} mode={mode}", StringComparison.Ordinal),
-                $"the start must be acknowledged with its own token, got: {claim}"
-            );
-            Require(
-                claim.Contains("started=", StringComparison.Ordinal),
-                $"the acknowledgement must carry its timestamp, got: {claim}"
-            );
+            Require(claim.Contains($"running token={token} mode={mode}", StringComparison.Ordinal), $"the start must be acknowledged with its own token, got: {claim}");
+            Require(claim.Contains("started=", StringComparison.Ordinal), $"the acknowledgement must carry its timestamp, got: {claim}");
         }
 
         private static void Request(string token)
         {
-            File.WriteAllText(
-                DxTerminalTestRunReporter.RequestPath(),
-                token + Environment.NewLine,
-                new UTF8Encoding(false)
-            );
+            File.WriteAllText(DxTerminalTestRunReporter.RequestPath(), token + Environment.NewLine, new UTF8Encoding(false));
         }
 
         private static ICallbacks Last()
@@ -603,7 +473,72 @@ namespace DxTerminalDevTools
             return whys;
         }
 
-        private static ClaimExpectation Refused(string label, string token, string reason)
+        private static void RunAbortedRuns(List<ClaimExpectation> expectations)
+        {
+            DxTerminalTestRunReporter.RegisterCallbacks();
+            ICallbacks callbacks = Last();
+            Request("grammar-aborted");
+            StartRun(callbacks, "grammar-aborted", TestMode.PlayMode);
+            Request("grammar-next");
+            ((IErrorCallbacks)callbacks).OnError("Run cancelled\r\nby framework");
+            expectations.Add(Refused("started abort keeps its token", "grammar-aborted", "Run cancelled  by framework", "PlayMode"));
+
+            Request("grammar-reload-abort");
+            StartRun(callbacks, "grammar-reload-abort", TestMode.PlayMode);
+            DxTerminalTestRunReporter.RegisterCallbacks();
+            File.WriteAllText(DxTerminalTestRunReporter.RequestPath(), "token=grammar-pending mode=EditMode\n");
+            File.Delete(DxTerminalTestRunReporter.ClaimPath());
+            ((IErrorCallbacks)Last()).OnError("Domain reload abort");
+            expectations.Add(Refused("reload abort keeps active token", "grammar-reload-abort", "Domain reload abort", "PlayMode"));
+
+            Request("grammar-completed");
+            StartRun(callbacks, "grammar-completed");
+            callbacks.RunFinished(Root(passed: 1));
+            File.WriteAllText(DxTerminalTestRunReporter.RequestPath(), "token=grammar-reused-no-start mode=PlayMode\n");
+            ((IErrorCallbacks)callbacks).OnError("Next prebuild failed");
+            expectations.Add(Refused("reused callback prestart abort uses pending request", "grammar-reused-no-start", "Next prebuild failed", "PlayMode"));
+            DxTerminalTestRunReporter.RegisterCallbacks();
+            File.WriteAllText(DxTerminalTestRunReporter.RequestPath(), "token=grammar-no-start mode=PlayMode\n");
+            ((IErrorCallbacks)Last()).OnError("Prebuild failed \u00e9");
+            expectations.Add(Refused("prestart abort uses pending request", "grammar-no-start", "Prebuild failed \\u00E9", "PlayMode"));
+
+            DxTerminalTestRunReporter.RegisterCallbacks();
+            Request("grammar-legacy-request");
+            ((IErrorCallbacks)Last()).OnError(string.Empty);
+            expectations.Add(Refused("legacy prestart abort has unknown mode", "grammar-legacy-request", "test runner aborted", "unknown"));
+
+            DxTerminalTestRunReporter.RegisterCallbacks();
+            File.WriteAllText(DxTerminalTestRunReporter.RequestPath(), "token=grammar-structured-start mode=PlayMode\n");
+            StartRun(Last(), "grammar-structured-start", TestMode.PlayMode);
+            ((IErrorCallbacks)Last()).OnError("Structured start abort");
+            expectations.Add(Refused("structured request starts with token", "grammar-structured-start", "Structured start abort", "PlayMode"));
+        }
+
+        private static void RunLateAbortCallbacks(List<ClaimExpectation> expectations)
+        {
+            DxTerminalTestRunReporter.RegisterCallbacks();
+            ICallbacks old = Last();
+            Request("grammar-old-aborted");
+            StartRun(old, "grammar-old-aborted", TestMode.PlayMode);
+            ((IErrorCallbacks)old).OnError("Old run aborted");
+            DxTerminalTestRunReporter.RegisterCallbacks();
+            ICallbacks next = Last();
+            Request("grammar-next-active");
+            StartRun(next, "grammar-next-active", TestMode.PlayMode);
+            string running = ReadClaim();
+            old.RunFinished(Root(passed: 1));
+            Require(ReadClaim() == running, "late finish must not complete the next active run");
+            ((IErrorCallbacks)old).OnError("Late old error");
+            Require(ReadClaim() == running, "late error must not adopt the next active run");
+            ((IErrorCallbacks)next).OnError("Next run aborted");
+            expectations.Add(Refused("next run survives old callbacks", "grammar-next-active", "Next run aborted", "PlayMode"));
+            Request("grammar-old-reused");
+            StartRun(old, "grammar-old-reused", TestMode.PlayMode);
+            old.RunFinished(Root(passed: 1));
+            expectations.Add(Finished("terminal callback can start a new run", "grammar-old-reused", Array.Empty<string>(), passed: 1, mode: "PlayMode"));
+        }
+
+        private static ClaimExpectation Refused(string label, string token, string reason, string mode = "EditMode")
         {
             return new ClaimExpectation
             {
@@ -611,7 +546,7 @@ namespace DxTerminalDevTools
                 Claim = ReadClaim(),
                 State = "refused",
                 Token = token,
-                Mode = "EditMode",
+                Mode = mode,
                 Reason = reason,
                 Names = new string[0],
             };
@@ -636,21 +571,14 @@ namespace DxTerminalDevTools
              */
             writer.WriteStartObject("layout");
             writer.WriteString("claim", Path.GetFileName(DxTerminalTestRunReporter.ClaimPath()));
-            writer.WriteString(
-                "request",
-                Path.GetFileName(DxTerminalTestRunReporter.RequestPath())
-            );
+            writer.WriteString("request", Path.GetFileName(DxTerminalTestRunReporter.RequestPath()));
             writer.WriteEndObject();
             writer.WritePropertyName("claims");
             /*
                 camelCase, so a hand-written key and a record's own field read the
                 same in the document the node side consumes.
              */
-            JsonSerializer.Serialize(
-                writer,
-                expectations,
-                new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }
-            );
+            JsonSerializer.Serialize(writer, expectations, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
             writer.WriteEndObject();
         }
 
@@ -690,22 +618,9 @@ namespace DxTerminalDevTools
             return new FakeTest(name, TestStatus.Failed, isSuite: true, children: children);
         }
 
-        private static FakeTest Root(
-            List<FakeTest> children = null,
-            int passed = 0,
-            int failed = 0,
-            int skipped = 0
-        )
+        private static FakeTest Root(List<FakeTest> children = null, int passed = 0, int failed = 0, int skipped = 0)
         {
-            return new FakeTest(
-                Fixture,
-                TestStatus.Passed,
-                isSuite: true,
-                children: children,
-                passed: passed,
-                failed: failed,
-                skipped: skipped
-            );
+            return new FakeTest(Fixture, TestStatus.Passed, isSuite: true, children: children, passed: passed, failed: failed, skipped: skipped);
         }
 
         /*
@@ -748,8 +663,7 @@ namespace DxTerminalDevTools
                 Explicit, because the two interfaces declare Children with
                 different element types and the fake is both.
              */
-            IEnumerable<ITestResultAdaptor> ITestResultAdaptor.Children =>
-                Children<ITestResultAdaptor>();
+            IEnumerable<ITestResultAdaptor> ITestResultAdaptor.Children => Children<ITestResultAdaptor>();
 
             IEnumerable<ITestAdaptor> ITestAdaptor.Children => Children<ITestAdaptor>();
 
