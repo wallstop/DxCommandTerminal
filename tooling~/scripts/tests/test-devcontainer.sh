@@ -117,6 +117,7 @@ LIFECYCLE_ROOT="$(cd "${LIFECYCLE_ROOT}" && pwd)"
 cp "${REPO_ROOT}/.devcontainer/post-start.sh" \
     "${REPO_ROOT}/.devcontainer/env-autoload.sh" \
     "${REPO_ROOT}/.devcontainer/install-env-autoload.sh" \
+    "${REPO_ROOT}/.devcontainer/install_env_autoload.py" \
     "${REPO_ROOT}/.devcontainer/verify-opencode.sh" \
     "${REPO_ROOT}/.devcontainer/verify_opencode.py" \
     "${REPO_ROOT}/.devcontainer/ai-backends.sh" \
