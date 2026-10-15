@@ -66,37 +66,64 @@ def validate_payload(artifact: Path, project: Path, source_revision: str | None 
                 file = source_tar.extractfile(entry) if entry.isfile() else None
                 if file is not None:
                     source_files[entry.name] = file.read()
+    def verify_bytes(relative: str, payload: bytes) -> None:
+        digest = hashlib.sha256(payload).hexdigest()
+        source_bytes = source_files.get(relative) if source_files is not None else (ROOT / relative).read_bytes()
+        if source_bytes is None or hashlib.sha256(source_bytes).hexdigest() != digest:
+            raise ValueError(f"Artifact bytes differ from committed package source: {relative}")
+        imported = project / "Packages" / "com.wallstop-studios.dxcommandterminal" / relative
+        if not imported.is_file() or sha256(imported) != digest:
+            raise ValueError(f"Artifact bytes differ from source/import: {imported}")
+        hashes[relative] = digest
+
     with tarfile.open(artifact, "r:gz") as archive:
-        members = {member.name: member for member in archive.getmembers()}
+        entries = archive.getmembers()
+        members = {member.name: member for member in entries}
+        if len(members) != len(entries):
+            raise ValueError("Duplicate archive member")
+        pathnames: set[str] = set()
         for name, member in members.items():
             if not name.endswith("/pathname"):
                 continue
+            if not member.isfile():
+                raise ValueError(f"Non-file pathname: {name}")
             pathname_file = archive.extractfile(member)
             if pathname_file is None:
                 raise ValueError(f"Unreadable pathname: {name}")
-            pathname = pathname_file.read().decode("utf-8").strip()
+            pathname = pathname_file.read().decode("utf-8")
             prefix = "Packages/com.wallstop-studios.dxcommandterminal/"
             if not pathname.startswith(prefix):
-                if pathname == prefix.rstrip("/"):
-                    continue
                 raise ValueError(f"Unexpected artifact pathname: {pathname}")
             relative = pathname[len(prefix):]
-            if ".." in Path(relative).parts or "\\" in relative:
+            parts = relative.split("/")
+            if any(part in ("", ".", "..") for part in parts) or "\\" in relative or ":" in relative:
                 raise ValueError(f"Unsafe pathname: {pathname}")
-            asset = members.get(name.removesuffix("pathname") + "asset")
-            if asset is None:
+            # Windows imports cannot distinguish paths that differ only by case.
+            identity = relative.casefold()
+            if identity in pathnames:
+                raise ValueError(f"Duplicate artifact pathname: {pathname}")
+            pathnames.add(identity)
+            base = name.removesuffix("pathname")
+            meta = members.get(base + "asset.meta")
+            if meta is None or not meta.isfile():
+                raise ValueError(f"Missing or non-file metadata: {pathname}")
+            metadata = archive.extractfile(meta)
+            if metadata is None:
+                raise ValueError(f"Unreadable metadata: {pathname}")
+            meta_bytes = metadata.read()
+            verify_bytes(relative + ".meta", meta_bytes)
+            asset = members.get(base + "asset")
+            folder = re.search(rb"^folderAsset:[ \t]*yes[ \t]*\r?$", meta_bytes, re.MULTILINE) is not None
+            if folder:
+                if asset is not None or not (project / pathname).is_dir():
+                    raise ValueError(f"Invalid imported folder: {pathname}")
                 continue
+            if asset is None or not asset.isfile():
+                raise ValueError(f"Missing or non-file asset: {pathname}")
             payload = archive.extractfile(asset)
             if payload is None:
                 raise ValueError(f"Unreadable asset: {pathname}")
-            digest = hashlib.sha256(payload.read()).hexdigest()
-            source_bytes = source_files.get(relative) if source_files is not None else (ROOT / relative).read_bytes()
-            if source_bytes is None or hashlib.sha256(source_bytes).hexdigest() != digest:
-                raise ValueError(f"Artifact bytes differ from committed package source: {relative}")
-            for file in [project / pathname]:
-                if not file.is_file() or sha256(file) != digest:
-                    raise ValueError(f"Artifact bytes differ from source/import: {file}")
-            hashes[relative] = digest
+            verify_bytes(relative, payload.read())
     if "package.json" not in hashes or not any(name.endswith(".dll") and "/Analyzers/" in name for name in hashes):
         raise ValueError("Artifact lacks package identity or generator payload")
     return hashes

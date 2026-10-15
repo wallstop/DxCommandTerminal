@@ -102,32 +102,87 @@ class PlayerSmokeTests(unittest.TestCase):
             (output / "build-settings.txt").write_text("IL2CPP/High", encoding="utf-8")
             self.assertEqual("IL2CPP/High", smoke.checked_build_settings(output, "IL2CPP", "High"))
 
-    def test_corrupt_import_with_intact_guid_is_rejected(self) -> None:
+    def payload_fixture(self, root: Path) -> tuple[Path, Path, Path, list[tuple[str, bytes]]]:
+        source = root / "source"
+        project = root / "project"
+        artifact = root / "payload.unitypackage"
+        assets = {"package.json": b'{"name":"com.wallstop-studios.dxcommandterminal"}',
+                  "Runtime/Analyzers/Generator.dll": b"actual-generator", "Runtime": None}
+        entries: list[tuple[str, bytes]] = []
+        for index, (name, data) in enumerate(assets.items()):
+            meta = f"fileFormatVersion: 2\nguid: {index:032x}\n".encode()
+            if data is None:
+                meta += b"folderAsset: yes\n"
+            entries.extend([(f"{index:032x}/pathname", f"Packages/com.wallstop-studios.dxcommandterminal/{name}".encode()),
+                            (f"{index:032x}/asset.meta", meta)])
+            if data is not None:
+                entries.append((f"{index:032x}/asset", data))
+            for base in (source, project / "Packages/com.wallstop-studios.dxcommandterminal"):
+                file = base / name
+                file.parent.mkdir(parents=True, exist_ok=True)
+                if data is None:
+                    file.mkdir(exist_ok=True)
+                else:
+                    file.write_bytes(data)
+                file.with_name(file.name + ".meta").write_bytes(meta)
+        self.write_artifact(artifact, entries)
+        return source, project, artifact, entries
+
+    def write_artifact(self, artifact: Path, entries: list[tuple[str, bytes]]) -> None:
+        with tarfile.open(artifact, "w:gz") as archive:
+            for name, content in entries:
+                member = tarfile.TarInfo(name)
+                member.size = len(content)
+                archive.addfile(member, io.BytesIO(content))
+
+    def test_imported_assets_and_file_or_folder_metas_must_match(self) -> None:
+        for relative in ("Runtime/Analyzers/Generator.dll", "Runtime/Analyzers/Generator.dll.meta", "Runtime.meta"):
+            for mutation in ("corrupt", "missing"):
+                with self.subTest(relative=relative, mutation=mutation), tempfile.TemporaryDirectory() as directory:
+                    source, project, artifact, _ = self.payload_fixture(Path(directory))
+                    with patch.object(smoke, "ROOT", source):
+                        smoke.validate_payload(artifact, project)
+                        imported = project / "Packages/com.wallstop-studios.dxcommandterminal" / relative
+                        if mutation == "missing":
+                            imported.unlink()
+                        else:
+                            imported.write_bytes(b"corrupted")
+                        with self.assertRaisesRegex(ValueError, "bytes differ"):
+                            smoke.validate_payload(artifact, project)
+
+    def test_archive_metadata_must_match_source(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            source = root / "source"
-            project = root / "project"
-            artifact = root / "payload.unitypackage"
-            assets = {"package.json": b'{"name":"com.wallstop-studios.dxcommandterminal"}', "Runtime/Analyzers/Generator.dll": b"actual-generator"}
-            with tarfile.open(artifact, "w:gz") as archive:
-                for index, (name, data) in enumerate(assets.items()):
-                    for entry, content in [("pathname", f"Packages/com.wallstop-studios.dxcommandterminal/{name}".encode()), ("asset", data)]:
-                        member = tarfile.TarInfo(f"{index:032x}/{entry}")
-                        member.size = len(content)
-                        archive.addfile(member, io.BytesIO(content))
-                    for file in [source / name, project / "Packages/com.wallstop-studios.dxcommandterminal" / name]:
-                        file.parent.mkdir(parents=True, exist_ok=True)
-                        file.write_bytes(data)
-            previous_root = smoke.ROOT
-            setattr(smoke, "ROOT", source)
-            try:
+            source, project, artifact, entries = self.payload_fixture(Path(directory))
+            entries = [(name, b"changed" if name.endswith("/asset.meta") else content) for name, content in entries]
+            self.write_artifact(artifact, entries)
+            with patch.object(smoke, "ROOT", source), self.assertRaisesRegex(ValueError, "committed package source"):
                 smoke.validate_payload(artifact, project)
-                imported = project / "Packages/com.wallstop-studios.dxcommandterminal/Runtime/Analyzers/Generator.dll"
-                imported.write_bytes(b"stale-generator")
-                with self.assertRaises(ValueError):
+
+    def test_missing_payloads_and_duplicate_members_or_paths_are_rejected(self) -> None:
+        for mutation in ("missing-meta", "missing-asset", "duplicate-member", "duplicate-path", "case-collision"):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory:
+                source, project, artifact, entries = self.payload_fixture(Path(directory))
+                if mutation.startswith("missing"):
+                    suffix = "/asset.meta" if mutation == "missing-meta" else "/asset"
+                    entries = [(name, content) for name, content in entries if not name.endswith(suffix)]
+                elif mutation == "duplicate-member":
+                    entries.append(entries[0])
+                else:
+                    original = entries[0][1]
+                    pathname = original.upper().replace(b"PACKAGES/COM.WALLSTOP-STUDIOS.DXCOMMANDTERMINAL/", b"Packages/com.wallstop-studios.dxcommandterminal/") if mutation == "case-collision" else original
+                    entries.append(("extra/pathname", pathname))
+                self.write_artifact(artifact, entries)
+                with patch.object(smoke, "ROOT", source), self.assertRaises(ValueError):
                     smoke.validate_payload(artifact, project)
-            finally:
-                setattr(smoke, "ROOT", previous_root)
+
+    def test_noncanonical_paths_are_rejected_before_reading_source(self) -> None:
+        for relative in ("../outside", "/rooted", "./package.json", "Runtime//file", "C:/rooted", "Runtime\\file"):
+            with self.subTest(relative=relative), tempfile.TemporaryDirectory() as directory:
+                source, project, artifact, entries = self.payload_fixture(Path(directory))
+                entries[0] = (entries[0][0], f"Packages/com.wallstop-studios.dxcommandterminal/{relative}".encode())
+                self.write_artifact(artifact, entries)
+                with patch.object(smoke, "ROOT", source), self.assertRaisesRegex(ValueError, "Unsafe pathname"):
+                    smoke.validate_payload(artifact, project)
 
     def test_fixture_update_requires_matching_recorded_owned_bytes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -118,6 +118,7 @@ cp "${REPO_ROOT}/.devcontainer/post-start.sh" \
     "${REPO_ROOT}/.devcontainer/env-autoload.sh" \
     "${REPO_ROOT}/.devcontainer/install-env-autoload.sh" \
     "${REPO_ROOT}/.devcontainer/verify-opencode.sh" \
+    "${REPO_ROOT}/.devcontainer/verify_opencode.py" \
     "${REPO_ROOT}/.devcontainer/ai-backends.sh" \
     "${LIFECYCLE_ROOT}/.devcontainer/"
 cat >"${LIFECYCLE_ROOT}/.devcontainer/cache-contract.sh" <<'EOF'

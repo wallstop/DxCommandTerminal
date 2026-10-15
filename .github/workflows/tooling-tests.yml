@@ -126,6 +126,9 @@ jobs:
       - name: Test tooling
         run: npm --prefix tooling~ test
 
+      - name: Test OpenCode readiness
+        run: python -m unittest discover -s tooling~/scripts/tests -p test_verify_opencode.py
+
       - name: Test player evidence validation
         run: python -m unittest discover -s tooling~/scripts/tests -p test_player_smoke.py
 
