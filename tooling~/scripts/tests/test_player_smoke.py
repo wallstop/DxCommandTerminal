@@ -70,16 +70,37 @@ class PlayerSmokeTests(unittest.TestCase):
                     smoke.select_profile_legs({"legs": rows}, "anchor")
 
     def test_stale_or_partial_player_verdict_is_rejected(self) -> None:
-        good: dict[str, Any] = {"passed": True, "unityVersion": "2021.3.45f1", "platform": "WindowsPlayer", "developmentBuild": False, "monoBackend": True, "inputSystem": False, "legacyInput": True, "catalogPresent": True, "catalogEntries": 2, "catalogBindersExecuted": 2, "generatedCalls": 1, "privateCalls": 1, "manualCalls": 1}
+        good: dict[str, Any] = {"passed": True, "unityVersion": "2021.3.45f1", "platform": "WindowsPlayer", "developmentBuild": False, "monoBackend": True, "il2cppBackend": False, "inputSystem": False, "legacyInput": True, "catalogPresent": True, "catalogEntries": 2, "catalogBindersExecuted": 2, "generatedCalls": 1, "privateCalls": 1, "manualCalls": 1}
         with tempfile.TemporaryDirectory() as directory:
             file = Path(directory) / "report.json"
             file.write_text(json.dumps(good), encoding="utf-8")
             smoke.checked_player_report(file, "legacy", "2021.3.45f1")
-            for field, value in [("passed", 1), ("catalogPresent", False), ("developmentBuild", True), ("monoBackend", False), ("privateCalls", 0), ("unityVersion", "6000.4.6f1"), ("legacyInput", False), ("failure", "Failed dispatch")]:
+            native = dict(good, monoBackend=False, il2cppBackend=True)
+            file.write_text(json.dumps(native), encoding="utf-8")
+            smoke.checked_player_report(file, "legacy", "2021.3.45f1", "IL2CPP")
+            with self.assertRaises(ValueError):
+                smoke.checked_player_report(file, "legacy", "2021.3.45f1", "Mono")
+            file.write_text(json.dumps(good), encoding="utf-8")
+            with self.assertRaises(ValueError):
+                smoke.checked_player_report(file, "legacy", "2021.3.45f1", "IL2CPP")
+            for field, value in [("il2cppBackend", True), ("passed", 1), ("catalogPresent", False), ("developmentBuild", True), ("monoBackend", False), ("privateCalls", 0), ("unityVersion", "6000.4.6f1"), ("legacyInput", False), ("failure", "Failed dispatch")]:
                 with self.subTest(field=field):
                     file.write_text(json.dumps(dict(good, **{field: value})), encoding="utf-8")
                     with self.assertRaises(ValueError):
                         smoke.checked_player_report(file, "legacy", "2021.3.45f1")
+
+    def test_missing_or_mismatched_build_settings_are_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory)
+            with self.assertRaises(FileNotFoundError):
+                smoke.checked_build_settings(output, "IL2CPP", "High")
+            for actual in ("Mono/High", "IL2CPP/Low", "IL2CPP/High\n", ""):
+                with self.subTest(actual=actual):
+                    (output / "build-settings.txt").write_text(actual, encoding="utf-8")
+                    with self.assertRaises(ValueError):
+                        smoke.checked_build_settings(output, "IL2CPP", "High")
+            (output / "build-settings.txt").write_text("IL2CPP/High", encoding="utf-8")
+            self.assertEqual("IL2CPP/High", smoke.checked_build_settings(output, "IL2CPP", "High"))
 
     def test_corrupt_import_with_intact_guid_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -13,6 +14,8 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from generate_skills_index import generate_skills_index
 from lint_llm_instructions import ENTRYPOINTS, frontmatter_failures, hidden_directory, lint_llm_instructions
+
+LINTER = Path(__file__).resolve().parents[1] / "lint_llm_instructions.py"
 
 SKILL = "---\nname: valid-skill\ndescription: A fixture skill.\nmetadata:\n  category: Feature\n---\n\nBody.\n"
 
@@ -68,6 +71,86 @@ class InstructionLintTests(unittest.TestCase):
                     self.assertEqual(failures, [])
                 else:
                     self.assertIn(expected, "\n".join(failures))
+
+    def test_invalid_skill_fixtures_fail(self) -> None:
+        rows = (
+            ("# No frontmatter\n", "missing '---' delimited YAML frontmatter"),
+            (SKILL.replace("name: valid-skill", "name: other-name"), "must match parent directory"),
+            (SKILL.replace("description: A fixture skill.\n", ""), "missing required 'description'"),
+            (SKILL.replace("A fixture skill.", "A \u2014 fixture skill."), "non-ASCII character"),
+            (SKILL.split("\nBody.")[0], "skill body is empty"),
+        )
+        for content, expected in rows:
+            with self.subTest(expected=expected):
+                self.skill.write_bytes(content.encode())
+                code, output = self.run_lint()
+                self.assertEqual(code, 1, output)
+                self.assertIn(expected, output)
+
+    def test_invalid_repository_fixtures_fail(self) -> None:
+        rows = (
+            ("AGENTS.md", b"# No delegation\n", "entrypoint must delegate"),
+            (".llm/context.md", b"# Title\nNo link here.\n", "must link to the generated index"),
+            (".llm/context.md", b"# Title\n[index](./skills/index.md)\n# Second\n", "exactly one H1 (found 2)"),
+            (".llm/context.md", b"# Title\n[index](./skills/index.md)\n<!-- BEGIN GENERATED SKILLS INDEX -->\n", "stale embedded-index marker"),
+        )
+        for relative, data, expected in rows:
+            path = self.root / relative
+            original = path.read_bytes()
+            with self.subTest(relative=relative, expected=expected):
+                try:
+                    path.write_bytes(data)
+                    code, output = self.run_lint()
+                    self.assertEqual(code, 1, output)
+                    self.assertIn(expected, output)
+                finally:
+                    path.write_bytes(original)
+
+    def test_skill_directory_without_skill_file_fails(self) -> None:
+        (self.skill.parent.parent / "empty-skill").mkdir()
+        code, output = self.run_lint()
+        self.assertEqual(code, 1, output)
+        self.assertIn("Skill directory 'empty-skill' has no SKILL.md", output)
+
+    def test_index_crlf_fails_encoding_gate(self) -> None:
+        index = self.skill.parent.parent / "index.md"
+        index.write_bytes(index.read_bytes().replace(b"\n", b"\r\n"))
+        code, output = self.run_lint()
+        self.assertEqual(code, 1, output)
+        self.assertIn("contains CR (CRLF)", output)
+
+    def run_cli(self, *arguments: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [sys.executable, str(LINTER), "--repo-root", str(self.root), *arguments],
+            capture_output=True, text=True, encoding="utf-8", check=False, timeout=60,
+        )
+
+    def test_cli_valid_and_missing_pointer(self) -> None:
+        result = self.run_cli("--verbose-output")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("LLM instructions validation passed!", result.stdout)
+        self.assertIn("Checking required paths", result.stdout)
+        (self.root / "CLAUDE.md").unlink()
+        result = self.run_cli()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("Claude Code entrypoint not found", result.stdout)
+
+    def test_cli_stale_index_fix(self) -> None:
+        self.skill.write_bytes(SKILL.replace("A fixture skill.", "Edited description.").encode())
+        result = self.run_cli()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("Skills index index.md is out of date!", result.stdout)
+        result = self.run_cli("--fix")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("Regenerated index.md", result.stdout)
+        self.assertIn(b"Edited description.", (self.skill.parent.parent / "index.md").read_bytes())
+        self.assertEqual(self.run_cli().returncode, 0)
+
+    def test_cli_missing_index_fails(self) -> None:
+        (self.skill.parent.parent / "index.md").unlink()
+        result = self.run_cli()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("index.md does not exist", result.stdout)
 
     def test_hidden_directory_platform_rules(self) -> None:
         rows = (("linux", ".dot", 0, True), ("linux", "visible", 2, False),

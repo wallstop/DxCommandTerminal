@@ -48,10 +48,14 @@ namespace DxCommandTerminal.T13.PlayerSmoke
                 inputSystem = false,
                 legacyInput = false,
                 monoBackend = false,
+                il2cppBackend = false,
                 developmentBuild = Debug.isDebugBuild,
             };
 #if ENABLE_MONO
             report.monoBackend = true;
+#endif
+#if ENABLE_IL2CPP
+            report.il2cppBackend = true;
 #endif
 #if ENABLE_INPUT_SYSTEM
             report.inputSystem = true;
@@ -61,9 +65,12 @@ namespace DxCommandTerminal.T13.PlayerSmoke
 #endif
             try
             {
-                if (Application.isEditor || report.developmentBuild || !report.monoBackend)
+                string backend = Environment.GetEnvironmentVariable("DX_T13_BACKEND");
+                bool expectMono = string.Equals(backend, "Mono", StringComparison.Ordinal);
+                bool expectIL2CPP = string.Equals(backend, "IL2CPP", StringComparison.Ordinal);
+                if (Application.isEditor || report.developmentBuild || !(expectMono || expectIL2CPP) || report.monoBackend != expectMono || report.il2cppBackend != expectIL2CPP)
                 {
-                    throw new InvalidOperationException("Smoke must run in a release Mono player");
+                    throw new InvalidOperationException("Smoke must run in the requested release player");
                 }
                 if (string.IsNullOrEmpty(reportPath))
                 {
@@ -71,40 +78,22 @@ namespace DxCommandTerminal.T13.PlayerSmoke
                 }
                 string profile = Environment.GetEnvironmentVariable("DX_T13_INPUT_PROFILE");
                 bool isLegacy = string.Equals(profile, "legacy", StringComparison.Ordinal);
-                bool isInputSystem = string.Equals(
-                    profile,
-                    "input-system",
-                    StringComparison.Ordinal
-                );
-                if (
-                    !isLegacy
-                    && !isInputSystem
-                    && !string.Equals(profile, "both", StringComparison.Ordinal)
-                )
+                bool isInputSystem = string.Equals(profile, "input-system", StringComparison.Ordinal);
+                if (!isLegacy && !isInputSystem && !string.Equals(profile, "both", StringComparison.Ordinal))
                 {
                     throw new InvalidOperationException("Invalid expected input profile");
                 }
                 if (report.inputSystem != !isLegacy || report.legacyInput != !isInputSystem)
                 {
-                    throw new InvalidOperationException(
-                        "Compiled input symbols do not match profile"
-                    );
+                    throw new InvalidOperationException("Compiled input symbols do not match profile");
                 }
-                Type catalog = typeof(PlayerProbe).Assembly.GetType(
-                    "WallstopStudios.DxCommandTerminal.Generated.CommandCatalog",
-                    false
-                );
+                Type catalog = typeof(PlayerProbe).Assembly.GetType("WallstopStudios.DxCommandTerminal.Generated.CommandCatalog", false);
                 report.catalogPresent = catalog != null;
                 if (catalog == null)
                 {
-                    throw new InvalidOperationException(
-                        "Consumer source generator did not create a catalog"
-                    );
+                    throw new InvalidOperationException("Consumer source generator did not create a catalog");
                 }
-                MethodInfo collect = catalog.GetMethod(
-                    "Collect",
-                    BindingFlags.Public | BindingFlags.Static
-                );
+                MethodInfo collect = catalog.GetMethod("Collect", BindingFlags.Public | BindingFlags.Static);
                 if (collect == null)
                 {
                     throw new InvalidOperationException("Generated collector missing");
@@ -155,9 +144,7 @@ namespace DxCommandTerminal.T13.PlayerSmoke
                 }
                 if (!shell.RunCommand("t13-private") || privateCalls != 1 || shell.HasErrors)
                 {
-                    throw new InvalidOperationException(
-                        "Private reflected command dispatch failed"
-                    );
+                    throw new InvalidOperationException("Private reflected command dispatch failed");
                 }
                 int manualCalls = 0;
                 if (!shell.AddCommand("t13-manual", arguments => manualCalls++, 0, 0))
@@ -168,11 +155,7 @@ namespace DxCommandTerminal.T13.PlayerSmoke
                 {
                     throw new InvalidOperationException("Manual dispatch failed");
                 }
-                if (
-                    shell.RunCommand("t13-generated 37 38")
-                    || generatedCalls != 1
-                    || !shell.HasErrors
-                )
+                if (shell.RunCommand("t13-generated 37 38") || generatedCalls != 1 || !shell.HasErrors)
                 {
                     throw new InvalidOperationException("Excess arguments were accepted");
                 }
@@ -204,6 +187,7 @@ namespace DxCommandTerminal.T13.PlayerSmoke
             public bool legacyInput;
             public bool developmentBuild;
             public bool monoBackend;
+            public bool il2cppBackend;
             public bool catalogPresent;
             public int catalogEntries;
             public int catalogBindersExecuted;

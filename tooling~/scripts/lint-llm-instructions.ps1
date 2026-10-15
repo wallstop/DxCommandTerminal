@@ -30,40 +30,8 @@ function Invoke-LlmInstructionsLint {
     if ($VerboseOutput) { $pythonArgs += '--verbose-output' }
     if ($RepoRoot) { $pythonArgs += @('--repo-root', $RepoRoot) }
 
-    $runnerCommand = $null
-    $runnerPrefix = @()
-    foreach ($candidate in @(@('uv', 'run', '--project', $toolingRoot, 'python'), @('python'), @('python3'))) {
-        if (-not (Get-Command $candidate[0] -ErrorAction SilentlyContinue)) { continue }
-        if ($candidate[0] -ne 'uv') {
-            try {
-                $global:LASTEXITCODE = 1
-                & $candidate[0] -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' *> $null
-                if ($global:LASTEXITCODE -ne 0) { continue }
-            }
-            catch { continue }
-        }
-        $runnerCommand = $candidate[0]
-        if ($candidate.Count -gt 1) { $runnerPrefix = $candidate[1..($candidate.Count - 1)] }
-        break
-    }
-    if ($null -eq $runnerCommand) {
-        $message = '[llm-lint] ERROR: no working runner found (need uv or Python 3.11+ on PATH)'
-        Write-Host $message -ForegroundColor Red
-        return 1
-    }
-
-    # Python emits UTF-8 even when the inherited native-output decoder differs.
-    $previousEncoding = [Console]::OutputEncoding
-    try {
-        [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
-        & $runnerCommand @runnerPrefix $pythonScript @pythonArgs | ForEach-Object {
-            Write-Host $_
-        }
-        return $global:LASTEXITCODE
-    }
-    finally {
-        [Console]::OutputEncoding = $previousEncoding
-    }
+    . (Join-Path $PSScriptRoot 'python-runner.ps1')
+    return (Invoke-ToolingPython -ToolingRoot $toolingRoot -PythonArguments (@($pythonScript) + $pythonArgs) -ErrorPrefix 'llm-lint')
 }
 
 if ($MyInvocation.InvocationName -ne '.') {

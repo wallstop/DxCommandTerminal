@@ -68,6 +68,8 @@ fi
 # shellcheck disable=SC2016
 assert_contains "${DEVCONTAINER}" '"workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/package,type=bind,consistency=consistent"'
 assert_contains "${DEVCONTAINER}" '"workspaceFolder": "/workspaces/package"'
+# shellcheck disable=SC2016
+assert_contains "${DEVCONTAINER}" '"UV_PROJECT_ENVIRONMENT": "${localEnv:UV_PROJECT_ENVIRONMENT:/workspaces/package/tooling~/.venv-container-linux}"'
 assert_contains "${DEVCONTAINER}" '"postAttachCommand": "bash .devcontainer/post-start.sh --attach"'
 if grep -Fq '"BASH_ENV"' "${DEVCONTAINER}"; then
     fail "devcontainer must not inject credentials into every Bash subprocess"

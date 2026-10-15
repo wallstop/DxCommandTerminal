@@ -25,23 +25,41 @@ namespace DxCommandTerminal.T13.PlayerSmoke.Editor
                 Directory.CreateDirectory(output);
                 EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
                 const string scene = "Assets/T13PlayerSmoke.unity";
-                if (
-                    !EditorSceneManager.SaveScene(
-                        UnityEngine.SceneManagement.SceneManager.GetActiveScene(),
-                        scene
-                    )
-                )
+                if (!EditorSceneManager.SaveScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene(), scene))
                 {
                     throw new InvalidOperationException("Could not save scene");
                 }
-                PlayerSettings.SetScriptingBackend(
-                    NamedBuildTarget.Standalone,
-                    ScriptingImplementation.Mono2x
-                );
-                PlayerSettings.SetManagedStrippingLevel(
-                    NamedBuildTarget.Standalone,
-                    ManagedStrippingLevel.Low
-                );
+                string backendName = Environment.GetEnvironmentVariable("DX_T13_BACKEND");
+                string strippingName = Environment.GetEnvironmentVariable("DX_T13_STRIPPING");
+                ScriptingImplementation backend;
+                if (string.Equals(backendName, "Mono", StringComparison.Ordinal))
+                {
+                    backend = ScriptingImplementation.Mono2x;
+                }
+                else if (string.Equals(backendName, "IL2CPP", StringComparison.Ordinal))
+                {
+                    backend = ScriptingImplementation.IL2CPP;
+                }
+                else
+                {
+                    throw new InvalidOperationException("Invalid expected scripting backend");
+                }
+                if (
+                    !Enum.TryParse(strippingName, out ManagedStrippingLevel stripping)
+                    || !(stripping == ManagedStrippingLevel.Low || stripping == ManagedStrippingLevel.Medium || stripping == ManagedStrippingLevel.High)
+                )
+                {
+                    throw new InvalidOperationException("Invalid expected stripping level");
+                }
+                PlayerSettings.SetScriptingBackend(NamedBuildTarget.Standalone, backend);
+                PlayerSettings.SetManagedStrippingLevel(NamedBuildTarget.Standalone, stripping);
+                ScriptingImplementation actualBackend = PlayerSettings.GetScriptingBackend(NamedBuildTarget.Standalone);
+                ManagedStrippingLevel actualStripping = PlayerSettings.GetManagedStrippingLevel(NamedBuildTarget.Standalone);
+                if (actualBackend != backend || actualStripping != stripping)
+                {
+                    throw new InvalidOperationException("Player settings did not retain requested backend/stripping");
+                }
+                File.WriteAllText(Path.Combine(output, "build-settings.txt"), $"{backendName}/{actualStripping}");
                 string executable = Path.Combine(output, "Player", "Smoke.exe");
                 BuildReport build = BuildPipeline.BuildPlayer(
                     new BuildPlayerOptions
@@ -56,27 +74,18 @@ namespace DxCommandTerminal.T13.PlayerSmoke.Editor
                     Path.Combine(output, "build-result.txt"),
                     $"{build.summary.result} errors={build.summary.totalErrors} warnings={build.summary.totalWarnings} duration={build.summary.totalTime}"
                 );
-                if (
-                    build.summary.result != BuildResult.Succeeded
-                    || build.summary.totalErrors != 0
-                    || build.summary.totalWarnings != 0
-                )
+                if (build.summary.result != BuildResult.Succeeded || build.summary.totalErrors != 0 || build.summary.totalWarnings != 0)
                 {
                     throw new InvalidOperationException("Player build failed");
                 }
-                ProcessStartInfo start = new ProcessStartInfo(
-                    executable,
-                    $"-batchmode -nographics -logFile \"{Path.Combine(output, "player.log")}\""
-                )
+                ProcessStartInfo start = new ProcessStartInfo(executable, $"-batchmode -nographics -logFile \"{Path.Combine(output, "player.log")}\"")
                 {
                     UseShellExecute = false,
                     CreateNoWindow = true,
                 };
-                start.EnvironmentVariables["DX_T13_PLAYER_REPORT"] = Path.Combine(
-                    output,
-                    "player-report.json"
-                );
+                start.EnvironmentVariables["DX_T13_PLAYER_REPORT"] = Path.Combine(output, "player-report.json");
                 start.EnvironmentVariables["DX_T13_INPUT_PROFILE"] = profile;
+                start.EnvironmentVariables["DX_T13_BACKEND"] = backendName;
                 using (Process player = Process.Start(start))
                 {
                     File.WriteAllText(Path.Combine(output, "player-pid.txt"), player.Id.ToString());
@@ -89,18 +98,10 @@ namespace DxCommandTerminal.T13.PlayerSmoke.Editor
                         }
                         throw new TimeoutException("Actual player timed out");
                     }
-                    File.WriteAllText(
-                        Path.Combine(output, "player-exit.txt"),
-                        player.ExitCode.ToString()
-                    );
-                    if (
-                        player.ExitCode != 0
-                        || !File.Exists(Path.Combine(output, "player-report.json"))
-                    )
+                    File.WriteAllText(Path.Combine(output, "player-exit.txt"), player.ExitCode.ToString());
+                    if (player.ExitCode != 0 || !File.Exists(Path.Combine(output, "player-report.json")))
                     {
-                        throw new InvalidOperationException(
-                            "Actual player failed or emitted no report"
-                        );
+                        throw new InvalidOperationException("Actual player failed or emitted no report");
                     }
                 }
                 exit = 0;
