@@ -93,6 +93,8 @@ python tooling~/scripts/t13/player_smoke.py \
   --matrix-report <verified-matrix-manifest.json> --out C:/dxt13/player-smoke
 ```
 
+Use short Windows paths for both the editor and output roots. Unity support installers can silently skip files at long paths.
+
 The output root must be fresh. The default editor is Unity 2021; use `--editor-id unity-2022` for that retained family. Each family needs legacy, Input System, and combined input
 legs. The drill checks the artifact against its original clean source revision and imported files. It records the package and harness revisions separately. To update owned
 fixtures, pass `--previous-player-report <prior-player-matrix.json>`. Existing bytes must match its recorded hashes.
