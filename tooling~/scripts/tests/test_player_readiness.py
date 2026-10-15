@@ -120,6 +120,8 @@ class ReadinessTests(unittest.TestCase):
             def git(*arguments: str) -> str:
                 return subprocess.check_output(["git", *arguments], cwd=source, text=True, stderr=subprocess.PIPE).strip()
             git("init", "-q")
+            git("config", "core.autocrlf", "true")
+            (source / ".gitattributes").write_bytes(b"* -text\n")
             git("add", ".")
             git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "Package")
             original = git("rev-parse", "HEAD")
