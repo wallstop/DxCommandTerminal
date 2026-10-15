@@ -7,6 +7,9 @@ namespace DxCommandTerminal.T13.PlayerSmoke
     using UnityEngine;
     using WallstopStudios.DxCommandTerminal.Attributes;
     using WallstopStudios.DxCommandTerminal.Backend;
+#if UNITY_WEBGL && !UNITY_EDITOR
+    using System.Runtime.InteropServices;
+#endif
 
     public static class PlayerProbe
     {
@@ -37,10 +40,22 @@ namespace DxCommandTerminal.T13.PlayerSmoke
             privateCalls++;
         }
 
+#if UNITY_WEBGL && !UNITY_EDITOR
+        [DllImport("__Internal")]
+        private static extern void DxT13Report(string report);
+#endif
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Run()
         {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            const string backend = "IL2CPP";
+            string profile = ExpectedProfile.InputProfile;
+#else
             string reportPath = Environment.GetEnvironmentVariable("DX_T13_PLAYER_REPORT");
+            string backend = Environment.GetEnvironmentVariable("DX_T13_BACKEND");
+            string profile = Environment.GetEnvironmentVariable("DX_T13_INPUT_PROFILE");
+#endif
             Report report = new Report
             {
                 unityVersion = Application.unityVersion,
@@ -63,20 +78,23 @@ namespace DxCommandTerminal.T13.PlayerSmoke
 #if ENABLE_LEGACY_INPUT_MANAGER
             report.legacyInput = true;
 #endif
+            List<string> logs = new List<string>();
+            Application.LogCallback capture = (message, stack, type) => logs.Add($"[{type}] {message}\n{stack}");
+            Application.logMessageReceived += capture;
             try
             {
-                string backend = Environment.GetEnvironmentVariable("DX_T13_BACKEND");
                 bool expectMono = string.Equals(backend, "Mono", StringComparison.Ordinal);
                 bool expectIL2CPP = string.Equals(backend, "IL2CPP", StringComparison.Ordinal);
                 if (Application.isEditor || report.developmentBuild || !(expectMono || expectIL2CPP) || report.monoBackend != expectMono || report.il2cppBackend != expectIL2CPP)
                 {
                     throw new InvalidOperationException("Smoke must run in the requested release player");
                 }
+#if !UNITY_WEBGL || UNITY_EDITOR
                 if (string.IsNullOrEmpty(reportPath))
                 {
                     throw new InvalidOperationException("Missing report path");
                 }
-                string profile = Environment.GetEnvironmentVariable("DX_T13_INPUT_PROFILE");
+#endif
                 bool isLegacy = string.Equals(profile, "legacy", StringComparison.Ordinal);
                 bool isInputSystem = string.Equals(profile, "input-system", StringComparison.Ordinal);
                 if (!isLegacy && !isInputSystem && !string.Equals(profile, "both", StringComparison.Ordinal))
@@ -169,11 +187,20 @@ namespace DxCommandTerminal.T13.PlayerSmoke
                 report.failure = exception.ToString();
                 Debug.LogException(exception);
             }
+            finally
+            {
+                Application.logMessageReceived -= capture;
+                report.logs = logs.ToArray();
+            }
+#if UNITY_WEBGL && !UNITY_EDITOR
+            DxT13Report(JsonUtility.ToJson(report));
+#else
             if (!string.IsNullOrEmpty(reportPath))
             {
                 File.WriteAllText(reportPath, JsonUtility.ToJson(report, true));
             }
             Application.Quit(report.passed ? 0 : 2);
+#endif
         }
 
         [Serializable]
@@ -194,6 +221,7 @@ namespace DxCommandTerminal.T13.PlayerSmoke
             public int generatedCalls;
             public int privateCalls;
             public int manualCalls;
+            public string[] logs;
         }
     }
 }

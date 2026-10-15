@@ -84,7 +84,7 @@ npm --prefix tooling~ run package:import-drill -- \
 The import drill creates a clean scratch project, imports with the Unity CLI, waits for compilation, and checks all entries, importer settings, GUIDs, and shipped assemblies. It
 never imports into the live project. Failures keep logs and a manifest under `.artifacts/import-drill/`; successful runs delete the scratch project.
 
-## Retained-project Windows player drill
+## Retained-project player drill
 
 On the Windows host, keep a passing T13 matrix's scratch projects and run:
 
@@ -106,7 +106,16 @@ IL2CPP support and its native toolchain must be installed for that editor.
 
 Each release player must load its generated catalog, execute generated and manual commands, parse arguments, and reject excess arguments. All compiler, analyzer, and build warnings
 fail. The batch build retains graphics for scene probes. The compiled player must confirm the requested backend. Recorded build settings must match the requested stripping level.
-WebGL, UI, and performance gates remain separate.
+For browser players, install that editor's WebGL support and add:
+
+```sh
+--target WebGL --backend IL2CPP --stripping High \
+  --browser 'C:/Program Files/Google/Chrome/Application/chrome.exe'
+```
+
+The drill serves the build on loopback and starts an isolated headless Chromium profile. Only that run's report token is accepted. The browser confirms the platform, backend, input
+profile, catalog binders, and command results. Output includes the report, browser log, and build hashes. Software WebGL is allowed for these command checks. UI, rendered visual
+acceptance, and performance gates remain separate.
 
 ## Maintenance
 

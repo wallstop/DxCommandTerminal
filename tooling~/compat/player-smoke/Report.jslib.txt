@@ -1,0 +1,14 @@
+mergeInto(LibraryManager.library, {
+    DxT13Report: function (pointer) {
+        var report = JSON.parse(UTF8ToString(pointer));
+        report.browserUserAgent = navigator.userAgent;
+        window.dxT13Report = report;
+        fetch("/report" + window.location.search, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(report),
+        }).catch(function (error) {
+            console.error("T13 report failed", error);
+        });
+    },
+});
