@@ -12,6 +12,7 @@ Entry style follows [unity-helpers](https://github.com/Ambiguous-Interactive/uni
 
 ### Fixed
 
+- Fix generated catalog compilation for signed execution context masks ([#285](https://github.com/wallstop/DxCommandTerminal/issues/285)).
 - Reduce first-use command registration time for large generated catalogs on Mono ([#282](https://github.com/wallstop/DxCommandTerminal/issues/282)).
 - Fix package compilation in Unity 2021.3 ([#264](https://github.com/wallstop/DxCommandTerminal/issues/264)).
 

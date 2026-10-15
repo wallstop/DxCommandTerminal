@@ -2,9 +2,22 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+import { execFile, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
+
+const cases = [];
+function testCase(name, options, action) {
+  cases.push(typeof options === "function" ? { name, options: {}, action: options } : { name, options, action });
+}
+
+function runProcess(command, arguments_, options) {
+  return new Promise((resolve) => {
+    execFile(command, arguments_, options, (error, stdout, stderr) => {
+      resolve({ error: error && typeof error.code !== "number" ? error : null, status: error ? error.code : 0, stdout, stderr });
+    });
+  });
+}
 
 const scriptsRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const quote = (value) => `'${value.replaceAll("'", "''")}'`;
@@ -31,7 +44,7 @@ const scenarios = [
 
 for (const [delegate, payload, cliArgs, payloadArgs] of delegates) {
   for (const [scenario, runners, selected, payloadExit] of scenarios) {
-    test(`${delegate}: ${scenario}`, () => {
+    testCase(`${delegate}: ${scenario}`, async () => {
       const temp = fs.mkdtempSync(path.join(os.tmpdir(), "python-delegators-"));
       try {
         const callsPath = path.join(temp, "calls.jsonl");
@@ -62,7 +75,7 @@ function python3 { Invoke-MockRunner 'python3' $args }
 & ${quote(path.join(scriptsRoot, delegate))} ${cliArgs.map((value) => value.startsWith("-") ? value : quote(value)).join(" ")}
 exit $LASTEXITCODE
 `);
-        const result = spawnSync("pwsh", ["-NoProfile", "-File", harnessPath], { encoding: "utf8", timeout: 20_000 });
+        const result = await runProcess("pwsh", ["-NoProfile", "-File", harnessPath], { encoding: "utf8", timeout: 20_000 });
         assert.ifError(result.error);
         assert.equal(result.status, payloadExit, result.stdout + result.stderr);
         assert.ok(!result.stdout.includes("probe output"), result.stdout);
@@ -91,7 +104,7 @@ exit $LASTEXITCODE
   }
 }
 
-test("instruction linter decodes UTF-8 with an inherited ASCII console", () => {
+testCase("instruction linter decodes UTF-8 with an inherited ASCII console", async () => {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), "llm-native-encoding-"));
   try {
     fs.mkdirSync(path.join(temp, ".llm", "skills", "valid-skill"), { recursive: true });
@@ -110,7 +123,7 @@ if ($script:result -ne 1) { throw 'Expected frontmatter failure' }
 if ([Console]::OutputEncoding.CodePage -ne 20127) { throw 'Console encoding was not restored' }
 [Console]::WriteLine([Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($output -join "\n"))))
 `);
-    const result = spawnSync("pwsh", ["-NoProfile", "-File", harness], { encoding: "utf8", timeout: 20_000 });
+    const result = await runProcess("pwsh", ["-NoProfile", "-File", harness], { encoding: "utf8", timeout: 20_000 });
     assert.ifError(result.error);
     assert.equal(result.status, 0, result.stdout + result.stderr);
     const output = Buffer.from(result.stdout.trim(), "base64").toString("utf8");
@@ -122,7 +135,7 @@ if ([Console]::OutputEncoding.CodePage -ne 20127) { throw 'Console encoding was 
 
 for (const [delegate, payload] of delegates) {
   for (const [runner, exitCode] of [["python", 0], ["python3", 23]]) {
-    test(`${delegate}: real ${runner} fallback preserves native exit ${exitCode}`, () => {
+    testCase(`${delegate}: real ${runner} fallback preserves native exit ${exitCode}`, async () => {
       const temp = fs.mkdtempSync(path.join(os.tmpdir(), "native-python-fallback-"));
       try {
         const copiedDelegate = path.join(temp, "tooling~", "scripts", delegate);
@@ -148,7 +161,7 @@ function Get-Command {
 & ${quote(copiedDelegate)}
 exit $global:LASTEXITCODE
 `);
-        const result = spawnSync("pwsh", ["-NoProfile", "-File", harness], { encoding: "utf8", timeout: 20_000 });
+        const result = await runProcess("pwsh", ["-NoProfile", "-File", harness], { encoding: "utf8", timeout: 20_000 });
         assert.ifError(result.error);
         assert.equal(result.status, exitCode, result.stdout + result.stderr);
         assert.match(result.stdout, /real native payload/u);
@@ -162,7 +175,7 @@ exit $global:LASTEXITCODE
 
 for (const scope of ["host", "container"]) {
   for (const override of [null, "custom environment with spaces"]) {
-    test(`uv environment: ${scope}, ${override ? "explicit override" : "platform default"}`, () => {
+    testCase(`uv environment: ${scope}, ${override ? "explicit override" : "platform default"}`, async () => {
       const temp = fs.mkdtempSync(path.join(os.tmpdir(), "uv-environment-"));
       try {
         const harness = path.join(temp, "environment.ps1");
@@ -183,7 +196,7 @@ if ($result -ne 23) { throw 'Payload exit code changed' }
 if ($env:VIRTUAL_ENV -cne 'inherited environment') { throw 'Caller active environment changed' }
 if ($env:UV_PROJECT_ENVIRONMENT -cne ${override ? quote(override) : "$null"}) { throw 'Caller environment changed' }
 `);
-        const result = spawnSync("pwsh", ["-NoProfile", "-File", harness], { encoding: "utf8", timeout: 20_000 });
+        const result = await runProcess("pwsh", ["-NoProfile", "-File", harness], { encoding: "utf8", timeout: 20_000 });
         assert.ifError(result.error);
         assert.equal(result.status, 0, result.stdout + result.stderr);
         const platform = process.platform === "win32" ? "windows" : process.platform === "darwin" ? "macos" : "linux";
@@ -193,7 +206,7 @@ if ($env:UV_PROJECT_ENVIRONMENT -cne ${override ? quote(override) : "$null"}) { 
   }
 }
 
-test("alternating host and container uv runs preserve both environments and raw output", { skip: spawnSync("uv", ["--version"]).status !== 0 ? "uv is not installed" : false }, () => {
+testCase("alternating host and container uv runs preserve both environments and raw output", { skip: spawnSync("uv", ["--version"]).status !== 0 ? "uv is not installed" : false }, async () => {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), "uv-alternating-"));
   try {
     fs.writeFileSync(path.join(temp, "pyproject.toml"), '[project]\nname = "environment-test"\nversion = "0.0.0"\nrequires-python = ">=3.11"\n');
@@ -213,7 +226,7 @@ foreach ($scope in @($false, $true, $false, $true)) {
     if ($null -ne $env:UV_PROJECT_ENVIRONMENT) { throw 'Caller environment changed' }
 }
 `);
-    const result = spawnSync("pwsh", ["-NoProfile", "-File", harness], { encoding: "utf8", timeout: 60_000, env: { ...process.env, UV_PYTHON_DOWNLOADS: "never" } });
+    const result = await runProcess("pwsh", ["-NoProfile", "-File", harness], { encoding: "utf8", timeout: 60_000, env: { ...process.env, UV_PYTHON_DOWNLOADS: "never" } });
     assert.ifError(result.error);
     assert.equal(result.status, 0, result.stdout + result.stderr);
     const sentinels = result.stdout.trim().split(/\r?\n/);
@@ -224,4 +237,9 @@ foreach ($scope in @($false, $true, $false, $true)) {
     for (const sentinel of sentinels.slice(0, 2)) assert.ok(fs.existsSync(sentinel), sentinel);
     assert.ok(!fs.existsSync(path.join(temp, ".venv")));
   } finally { fs.rmSync(temp, { recursive: true, force: true }); }
+});
+
+/* Every case owns its files and child environment; cap simultaneous PowerShell starts. */
+test("Python delegators", { concurrency: 4 }, async (context) => {
+  await Promise.all(cases.map(({ name, options, action }) => context.test(name, options, action)));
 });
