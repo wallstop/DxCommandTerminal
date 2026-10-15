@@ -1,4 +1,4 @@
-namespace WallstopStudios.DxCommandTerminal.SourceGenerators
+﻿namespace WallstopStudios.DxCommandTerminal.SourceGenerators
 {
     using System;
     using System.Collections.Generic;
@@ -52,6 +52,7 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
          */
         private const int PerCommandCapacityEstimate = 512;
         private const int BaseCapacityEstimate = 4096;
+        private const int EntriesPerMethod = 64;
 
         internal static SymbolDisplayFormat FullyQualified => SymbolDisplayFormat.FullyQualifiedFormat;
 
@@ -162,14 +163,47 @@ namespace WallstopStudios.DxCommandTerminal.SourceGenerators
             builder.Append(Indent3).AppendLine("{");
             builder.Append(Indent4).Append(EntryListType).AppendLine(" entries = new " + EntryListType + "();");
 
-            for (int i = 0; i < commandCount; i++)
+            if (commandCount <= EntriesPerMethod)
             {
-                EmitCommand(builder, i, commands[i], holderIndicesByCommand[i]);
+                for (int i = 0; i < commandCount; i++)
+                {
+                    EmitCommand(builder, i, commands[i], holderIndicesByCommand[i]);
+                }
+            }
+            else
+            {
+                for (int start = 0; start < commandCount; start += EntriesPerMethod)
+                {
+                    builder.Append(Indent4).Append("AddEntries").Append(start.ToString(CultureInfo.InvariantCulture)).AppendLine("(entries);");
+                }
             }
 
             builder.AppendLine();
             builder.Append(Indent4).AppendLine("return entries;");
             builder.Append(Indent3).AppendLine("}");
+
+            // Large methods make first-use catalog compilation expensive on Unity's Mono.
+            if (EntriesPerMethod < commandCount)
+            {
+                for (int start = 0; start < commandCount; start += EntriesPerMethod)
+                {
+                    builder.AppendLine();
+                    builder
+                        .Append(Indent3)
+                        .Append("private static void AddEntries")
+                        .Append(start.ToString(CultureInfo.InvariantCulture))
+                        .Append("(")
+                        .Append(EntryListType)
+                        .AppendLine(" entries)");
+                    builder.Append(Indent3).AppendLine("{");
+                    int end = Math.Min(start + EntriesPerMethod, commandCount);
+                    for (int index = start; index < end; index++)
+                    {
+                        EmitCommand(builder, index, commands[index], holderIndicesByCommand[index]);
+                    }
+                    builder.Append(Indent3).AppendLine("}");
+                }
+            }
 
             if (needsUnboundFinder)
             {
