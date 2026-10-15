@@ -1,12 +1,14 @@
-namespace WallstopStudios.DxCommandTerminal.SourceGenerators.Tests
+﻿namespace WallstopStudios.DxCommandTerminal.SourceGenerators.Tests
 {
     using System;
     using System.Collections.Generic;
     using System.Collections.Immutable;
     using System.Linq;
     using System.Reflection;
+    using System.Text;
     using Microsoft.CodeAnalysis;
     using Microsoft.CodeAnalysis.CSharp;
+    using Microsoft.CodeAnalysis.CSharp.Syntax;
     using Xunit;
 
     /*
@@ -609,6 +611,59 @@ namespace Fixtures
             CatalogView catalog = CatalogView.Load(assembly);
             Assert.Equal(expectedEntryCount, catalog.Entries.Count);
             Assert.Contains(catalog.Entries, entry => catalog.NameOf(entry) == "Always");
+        }
+
+        [Theory]
+        [InlineData(1)]
+        [InlineData(64)]
+        [InlineData(65)]
+        [InlineData(129)]
+        [InlineData(1000)]
+        public void LargeCatalogBuildersStayBoundedAndPreserveEveryHandler(int count)
+        {
+            StringBuilder fixture = new StringBuilder();
+            fixture.AppendLine("namespace Fixtures { using WallstopStudios.DxCommandTerminal.Attributes; using WallstopStudios.DxCommandTerminal.Backend;");
+            fixture.AppendLine("public static class BatchCommands {");
+            fixture.Append("public static int[] Calls = new int[").Append(count).AppendLine("];");
+            for (int index = 0; index < count; index++)
+            {
+                string suffix = index.ToString("D4", System.Globalization.CultureInfo.InvariantCulture);
+                fixture.Append("[RegisterCommand(Name = \"batch").Append(suffix).Append("\", Help = \"help").Append(suffix).Append("\", MaxArgCount = 0)] ");
+                fixture.Append("public static void Command").Append(suffix).Append("(CommandArg[] arguments) { Calls[").Append(index).AppendLine("]++; }");
+            }
+            fixture.AppendLine("} }");
+            (SyntaxTree generated, CSharpCompilation output) = TestCompilationFactory.RunGenerator(TestCompilationFactory.CreateCompilation("Batch" + count, fixture.ToString()));
+            List<int> constructionCounts = generated
+                .GetRoot()
+                .DescendantNodes()
+                .OfType<MethodDeclarationSyntax>()
+                .Select(method =>
+                    method
+                        .DescendantNodes()
+                        .OfType<ObjectCreationExpressionSyntax>()
+                        .Count(creation => creation.Type.ToString().EndsWith(".CommandCatalogEntry", StringComparison.Ordinal))
+                )
+                .Where(value => 0 < value)
+                .ToList();
+            Assert.Equal(count, constructionCounts.Sum());
+            Assert.All(constructionCounts, value => Assert.InRange(value, 1, 64));
+            Assembly assembly = TestCompilationFactory.CompileAndLoad(output);
+            CatalogView catalog = CatalogView.Load(assembly);
+            Assert.Equal(count, catalog.Entries.Count);
+            object[] arguments = { Array.CreateInstance(assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"), 0) };
+            for (int index = 0; index < count; index++)
+            {
+                object entry = catalog.Entries[index];
+                string suffix = index.ToString("D4", System.Globalization.CultureInfo.InvariantCulture);
+                Assert.Equal("batch" + suffix, catalog.NameOf(entry));
+                Assert.Equal("help" + suffix, catalog.HelpOf(entry));
+                Assert.Equal(0, catalog.MaxArgCountOf(entry));
+                (object first, object second) = catalog.GetHandlerPairOf(entry);
+                Assert.Same(first, second);
+                ((Delegate)first).DynamicInvoke(arguments);
+            }
+            int[] calls = (int[])assembly.GetType("Fixtures.BatchCommands").GetField("Calls").GetValue(null);
+            Assert.All(calls, value => Assert.Equal(1, value));
         }
 
         [Fact]
