@@ -627,12 +627,42 @@ namespace Fixtures
             fixture.Append("public static int[] Calls = new int[").Append(count).AppendLine("];");
             for (int index = 0; index < count; index++)
             {
+                if (index == Math.Max(1, count / 2))
+                {
+                    fixture.AppendLine("} public static class OtherBatchCommands {");
+                }
                 string suffix = index.ToString("D4", System.Globalization.CultureInfo.InvariantCulture);
-                fixture.Append("[RegisterCommand(Name = \"batch").Append(suffix).Append("\", Help = \"help").Append(suffix).Append("\", MaxArgCount = 0)] ");
-                fixture.Append("public static void Command").Append(suffix).Append("(CommandArg[] arguments) { Calls[").Append(index).AppendLine("]++; }");
+                fixture
+                    .Append(index % 8 == 6 ? "[RegisterCommand(true, Name = \"batch" : "[RegisterCommand(Name = \"batch")
+                    .Append(suffix)
+                    .Append("\", Help = \"help")
+                    .Append(suffix)
+                    .Append("\", Hint = \"hint")
+                    .Append(suffix)
+                    .Append("\", MinArgCount = ")
+                    .Append(index % 8 == 1 ? 1 : 0)
+                    .Append(", MaxArgCount = ")
+                    .Append(
+                        index == count - 1 ? 17
+                        : index % 8 == 2 ? -1
+                        : 3
+                    )
+                    .Append(", EditorOnly = ")
+                    .Append(index % 8 == 4 ? "true" : "false")
+                    .Append(", DevelopmentOnly = ")
+                    .Append(index % 8 == 5 ? "true" : "false")
+                    .Append(", AddToHistory = ")
+                    .Append(index % 8 != 3 ? "true" : "false")
+                    .Append(", Contexts = (CommandExecutionContexts)(")
+                    .Append(index % 8 == 7 ? -17 : 7)
+                    .Append("))] ");
+                fixture.Append("public static void Command").Append(suffix).Append("(CommandArg[] arguments) { BatchCommands.Calls[").Append(index).AppendLine("]++; }");
             }
             fixture.AppendLine("} }");
-            (SyntaxTree generated, CSharpCompilation output) = TestCompilationFactory.RunGenerator(TestCompilationFactory.CreateCompilation("Batch" + count, fixture.ToString()));
+            string[] defines = { "UNITY_EDITOR", "DEVELOPMENT_BUILD" };
+            (SyntaxTree generated, CSharpCompilation output) = TestCompilationFactory.RunGenerator(
+                TestCompilationFactory.CreateCompilation("Batch" + count, fixture.ToString(), defines)
+            );
             List<int> constructionCounts = generated
                 .GetRoot()
                 .DescendantNodes()
@@ -640,8 +670,8 @@ namespace Fixtures
                 .Select(method =>
                     method
                         .DescendantNodes()
-                        .OfType<ObjectCreationExpressionSyntax>()
-                        .Count(creation => creation.Type.ToString().EndsWith(".CommandCatalogEntry", StringComparison.Ordinal))
+                        .OfType<InvocationExpressionSyntax>()
+                        .Count(invocation => string.Equals(invocation.Expression.ToString(), "entries.Add", StringComparison.Ordinal))
                 )
                 .Where(value => 0 < value)
                 .ToList();
@@ -650,14 +680,32 @@ namespace Fixtures
             Assembly assembly = TestCompilationFactory.CompileAndLoad(output);
             CatalogView catalog = CatalogView.Load(assembly);
             Assert.Equal(count, catalog.Entries.Count);
+            CatalogView repeated = CatalogView.Load(assembly);
             object[] arguments = { Array.CreateInstance(assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"), 0) };
             for (int index = 0; index < count; index++)
             {
                 object entry = catalog.Entries[index];
+                Assert.Same(entry, repeated.Entries[index]);
                 string suffix = index.ToString("D4", System.Globalization.CultureInfo.InvariantCulture);
                 Assert.Equal("batch" + suffix, catalog.NameOf(entry));
                 Assert.Equal("help" + suffix, catalog.HelpOf(entry));
-                Assert.Equal(0, catalog.MaxArgCountOf(entry));
+                Assert.Equal("hint" + suffix, catalog.HintOf(entry));
+                Assert.Equal(
+                    index == count - 1 ? 17
+                        : index % 8 == 2 ? -1
+                        : 3,
+                    catalog.MaxArgCountOf(entry)
+                );
+                Assert.Equal(index % 8 == 4, catalog.EditorOnlyOf(entry));
+                Assert.Equal(index % 8 == 5, catalog.DevelopmentOnlyOf(entry));
+                Assert.Equal(index % 8 != 3, catalog.AddToHistoryOf(entry));
+                Assert.Equal(index % 8 == 7 ? -17 : 7, catalog.ContextsOf(entry));
+                Assert.Equal("Command" + suffix, catalog.MethodNameOf(entry));
+                Assert.Equal(index % 8 == 1 ? 1 : 0, catalog.MinArgCountOf(entry));
+                Assert.Equal(index % 8 == 6, catalog.IsDefaultOf(entry));
+                Assert.Equal(index < Math.Max(1, count / 2) ? "Fixtures.BatchCommands" : "Fixtures.OtherBatchCommands", catalog.DeclaringTypeNameOf(entry));
+                Delegate factory = (Delegate)entry.GetType().GetProperty("Binder").GetValue(entry);
+                Assert.Null(factory.Target);
                 (object first, object second) = catalog.GetHandlerPairOf(entry);
                 Assert.Same(first, second);
                 ((Delegate)first).DynamicInvoke(arguments);
@@ -751,10 +799,21 @@ namespace Fixtures
         [Fact]
         public void GeneratedTextIsDeterministic()
         {
-            string first = TestCompilationFactory.RunGenerator(TestCompilationFactory.CreateCompilation("DeterminismA", DeterminismFixture)).generated?.ToString();
-            string second = TestCompilationFactory.RunGenerator(TestCompilationFactory.CreateCompilation("DeterminismB", DeterminismFixture)).generated?.ToString();
-
-            Assert.Equal(first, second);
+            System.Globalization.CultureInfo original = System.Globalization.CultureInfo.CurrentCulture;
+            try
+            {
+                System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
+                string first = TestCompilationFactory.RunGenerator(TestCompilationFactory.CreateCompilation("DeterminismA", DeterminismFixture)).generated?.ToString();
+                System.Globalization.CultureInfo alternate = (System.Globalization.CultureInfo)System.Globalization.CultureInfo.InvariantCulture.Clone();
+                alternate.NumberFormat.NegativeSign = "minus";
+                System.Globalization.CultureInfo.CurrentCulture = alternate;
+                string second = TestCompilationFactory.RunGenerator(TestCompilationFactory.CreateCompilation("DeterminismB", DeterminismFixture)).generated?.ToString();
+                Assert.Equal(first, second);
+            }
+            finally
+            {
+                System.Globalization.CultureInfo.CurrentCulture = original;
+            }
         }
 
         [Fact]

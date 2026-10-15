@@ -112,6 +112,8 @@
                 holderIndicesByCommand[i] = holderIndex;
             }
 
+            int?[] sharedMetadata = FindSharedMetadata(commands, holderIndicesByCommand);
+
             AppendHeader(builder);
             if (preserveCatalog)
             {
@@ -167,7 +169,7 @@
             {
                 for (int i = 0; i < commandCount; i++)
                 {
-                    EmitCommand(builder, i, commands[i], holderIndicesByCommand[i]);
+                    EmitCommand(builder, i, commands[i], holderIndicesByCommand[i], sharedMetadata[i]);
                 }
             }
             else
@@ -199,7 +201,7 @@
                     int end = Math.Min(start + EntriesPerMethod, commandCount);
                     for (int index = start; index < end; index++)
                     {
-                        EmitCommand(builder, index, commands[index], holderIndicesByCommand[index]);
+                        EmitCommand(builder, index, commands[index], holderIndicesByCommand[index], sharedMetadata[index]);
                     }
                     builder.Append(Indent3).AppendLine("}");
                 }
@@ -213,9 +215,20 @@
             for (int i = 0; i < commandCount; i++)
             {
                 CommandModel command = commands[i];
-                if (command.HasValidSignature && !command.DirectlyBindable)
+                if (sharedMetadata[i] == i)
                 {
-                    EmitCachedBinder(builder, i, command);
+                    EmitSharedEntryFactory(builder, i, command, holderIndicesByCommand[i]);
+                }
+                if (command.HasValidSignature)
+                {
+                    if (command.DirectlyBindable)
+                    {
+                        EmitDirectBinder(builder, i, command);
+                    }
+                    else
+                    {
+                        EmitCachedBinder(builder, i, command);
+                    }
                 }
             }
 
@@ -260,53 +273,55 @@
             builder.AppendLine("{");
         }
 
-        private static void EmitCommand(StringBuilder builder, int commandIndex, CommandModel command, int holderIndex)
+        private static void EmitCommand(StringBuilder builder, int commandIndex, CommandModel command, int holderIndex, int? sharedMetadataIndex)
         {
             builder.AppendLine();
-            builder.Append(Indent4).Append("// ").Append(commandIndex);
-            builder.Append(": command '");
-            foreach (char c in command.CommandName)
+            builder.Append(Indent4).Append("entries.Add(");
+            if (sharedMetadataIndex.HasValue)
             {
-                if (c != '\r' && c != '\n')
-                {
-                    builder.Append(c);
-                }
+                builder.Append("CreateEntry").Append(sharedMetadataIndex.Value.ToString(CultureInfo.InvariantCulture)).AppendLine("(");
             }
-
-            builder.Append("' from method ").AppendLine(command.MethodName);
-            builder.Append(Indent4).Append("entries.Add(new ").Append(EntryType).AppendLine("(");
+            else
+            {
+                builder.Append("new ").Append(EntryType).AppendLine("(");
+            }
             AppendLiteral(builder, command.CommandName);
             builder.AppendLine(",");
             AppendLiteral(builder, command.MethodName);
             builder.AppendLine(",");
-            builder.Append(Indent4).Append("    ").Append(command.MinArgCount);
-            builder.Append(", ").Append(command.MaxArgCount).AppendLine(",");
+            if (!sharedMetadataIndex.HasValue)
+            {
+                builder.Append(Indent4).Append("    ").Append(command.MinArgCount.ToString(CultureInfo.InvariantCulture));
+                builder.Append(", ").Append(command.MaxArgCount.ToString(CultureInfo.InvariantCulture)).AppendLine(",");
+            }
             AppendLiteral(builder, command.Help);
             builder.AppendLine(",");
             AppendLiteral(builder, command.Hint);
             builder.AppendLine(",");
-            builder.Append(Indent4).Append("    ").AppendLine(command.AddToHistory ? "true," : "false,");
-            builder.Append(Indent4).Append("    ").AppendLine(command.EditorOnly ? "true," : "false,");
-            builder.Append(Indent4).Append("    ").AppendLine(command.DevelopmentOnly ? "true," : "false,");
-            builder.Append(Indent4).Append("    ").AppendLine(command.IsDefault ? "true," : "false,");
+            if (!sharedMetadataIndex.HasValue)
+            {
+                builder.Append(Indent4).Append("    ").AppendLine(command.AddToHistory ? "true," : "false,");
+                builder.Append(Indent4).Append("    ").AppendLine(command.EditorOnly ? "true," : "false,");
+                builder.Append(Indent4).Append("    ").AppendLine(command.DevelopmentOnly ? "true," : "false,");
+                builder.Append(Indent4).Append("    ").AppendLine(command.IsDefault ? "true," : "false,");
+            }
 
             if (command.HasValidSignature)
             {
                 if (command.DirectlyBindable)
                 {
-                    builder.Append(Indent4).Append("    delegate");
-                    builder.Append(Indent4).AppendLine("    {");
                     builder
-                        .Append(Indent5)
-                        .Append("return new ")
+                        .Append(Indent4)
+                        .Append("    new global::System.Func<")
                         .Append(BinderType)
-                        .Append("(")
-                        .Append(command.ContainingTypeDisplay)
-                        .Append(".")
-                        .Append(command.MethodNameIdentifierDisplay)
-                        .AppendLine(");");
-                    builder.Append(Indent4).AppendLine("    },");
-                    builder.Append(Indent4).AppendLine("    null,");
+                        .Append(">(")
+                        .Append(BinderMethodPrefix)
+                        .Append(commandIndex.ToString(CultureInfo.InvariantCulture))
+                        .AppendLine(sharedMetadataIndex.HasValue ? ")" : "),");
+                    if (!sharedMetadataIndex.HasValue)
+                    {
+                        builder.Append(Indent4).AppendLine("    null,");
+                    }
                 }
                 else
                 {
@@ -359,10 +374,110 @@
                 without re-scanning assembly types; rejected commands resolve
                 through their accessor and carry no holder.
              */
-            builder.Append(Indent4).Append("    (").Append(ContextsType).Append(")");
-            builder.Append(command.Contexts).AppendLine(",");
-            builder.Append(Indent4).Append("    ").AppendLine(0 <= holderIndex ? $"HolderNames[{holderIndex}]" : "null");
+            if (!sharedMetadataIndex.HasValue)
+            {
+                builder.Append(Indent4).Append("    (").Append(ContextsType).Append(")(");
+                builder.Append(command.Contexts.ToString(CultureInfo.InvariantCulture)).AppendLine("),");
+                builder.Append(Indent4).Append("    ").AppendLine(0 <= holderIndex ? $"HolderNames[{holderIndex}]" : "null");
+            }
             builder.Append(Indent4).AppendLine("));");
+        }
+
+        private static int?[] FindSharedMetadata(List<CommandModel> commands, int[] holderIndices)
+        {
+            int count = commands.Count;
+            int?[] sharedMetadata = new int?[count];
+            if (count <= EntriesPerMethod)
+            {
+                return sharedMetadata;
+            }
+            Dictionary<(int Min, int Max, (bool History, bool Editor, bool Development, bool Default) Flags, int Contexts, int Holder), List<int>> groups =
+                new Dictionary<(int, int, (bool, bool, bool, bool), int, int), List<int>>();
+            for (int index = 0; index < count; index++)
+            {
+                CommandModel command = commands[index];
+                if (!command.HasValidSignature || !command.DirectlyBindable)
+                {
+                    continue;
+                }
+                (int, int, (bool, bool, bool, bool), int, int) key = (
+                    command.MinArgCount,
+                    command.MaxArgCount,
+                    (command.AddToHistory, command.EditorOnly, command.DevelopmentOnly, command.IsDefault),
+                    command.Contexts,
+                    holderIndices[index]
+                );
+                if (!groups.TryGetValue(key, out List<int> indices))
+                {
+                    indices = new List<int>();
+                    groups.Add(key, indices);
+                }
+                indices.Add(index);
+            }
+            foreach (List<int> indices in groups.Values)
+            {
+                // A helper must replace enough repeated IL to repay its own first-use compilation.
+                if (indices.Count < 4)
+                {
+                    continue;
+                }
+                int representative = indices[0];
+                foreach (int index in indices)
+                {
+                    sharedMetadata[index] = representative;
+                }
+            }
+            return sharedMetadata;
+        }
+
+        private static void EmitSharedEntryFactory(StringBuilder builder, int index, CommandModel command, int holderIndex)
+        {
+            builder.AppendLine();
+            builder.Append(Indent3).Append("private static ").Append(EntryType).Append(" CreateEntry").Append(index.ToString(CultureInfo.InvariantCulture)).AppendLine("(");
+            builder.Append(Indent4).AppendLine("string name, string methodName, string help, string hint,");
+            builder.Append(Indent4).Append("global::System.Func<").Append(BinderType).AppendLine("> binder)");
+            builder.Append(Indent3).AppendLine("{");
+            builder
+                .Append(Indent4)
+                .Append("return new ")
+                .Append(EntryType)
+                .Append("(name, methodName, ")
+                .Append(command.MinArgCount.ToString(CultureInfo.InvariantCulture))
+                .Append(", ")
+                .Append(command.MaxArgCount.ToString(CultureInfo.InvariantCulture))
+                .AppendLine(", help, hint,");
+            builder
+                .Append(Indent5)
+                .Append(command.AddToHistory ? "true, " : "false, ")
+                .Append(command.EditorOnly ? "true, " : "false, ")
+                .Append(command.DevelopmentOnly ? "true, " : "false, ")
+                .Append(command.IsDefault ? "true, " : "false, ")
+                .AppendLine("binder, null,");
+            builder.Append(Indent5).Append('(').Append(ContextsType).Append(")(").Append(command.Contexts.ToString(CultureInfo.InvariantCulture)).Append("), ");
+            builder.AppendLine(0 <= holderIndex ? $"HolderNames[{holderIndex}]);" : "null);");
+            builder.Append(Indent3).AppendLine("}");
+        }
+
+        private static void EmitDirectBinder(StringBuilder builder, int index, CommandModel command)
+        {
+            builder.AppendLine();
+            builder
+                .Append(Indent3)
+                .Append("private static ")
+                .Append(BinderType)
+                .Append(' ')
+                .Append(BinderMethodPrefix)
+                .Append(index.ToString(CultureInfo.InvariantCulture))
+                .AppendLine("() =>");
+            builder
+                .Append(Indent4)
+                .Append("new ")
+                .Append(BinderType)
+                .Append('(')
+                .Append(command.ContainingTypeDisplay)
+                .Append('.')
+                .Append(command.MethodNameIdentifierDisplay)
+                .AppendLine(");");
         }
 
         private static void EmitUnboundMethodFinder(StringBuilder builder)
