@@ -19,7 +19,7 @@ class ReadinessTests(unittest.TestCase):
         return dict(passed=True, token="owner", pid=42, unityVersion="2021.3.45f1", platform="WindowsPlayer",
                     batchMode=False, developmentBuild=False, monoBackend=True, il2cppBackend=False,
                     inputSystem=False, legacyInput=True, catalogEntries=1000, workloadCommands=1000, totalCommands=1000,
-                    handlerCalls=1002, frequency=10000000, coldTicks=10000, warmTicks=[10000] * warm,
+                    handlerCalls=1002, frequency=10000000, coldTicks=10000, phaseTicks=[1000, 1000, 8000], warmTicks=[10000] * warm,
                     clockTicks=[1] * 1000, processor="processor", processorCount=8, os="Windows", graphics="Direct3D11", logs=[])
 
     def test_exact_player_report_and_sample_windows_are_required(self) -> None:
@@ -31,7 +31,7 @@ class ReadinessTests(unittest.TestCase):
             for name, value in [("passed", 1), ("token", "stale"), ("pid", 43), ("unityVersion", "2022.3.62f1"),
                                 ("batchMode", True), ("graphics", "Null"), ("monoBackend", False), ("inputSystem", True),
                                 ("catalogEntries", 999), ("workloadCommands", 999), ("handlerCalls", 1001),
-                                ("frequency", 0), ("coldTicks", True), ("warmTicks", [10000] * 999),
+                                ("frequency", 0), ("coldTicks", True), ("phaseTicks", [1, 2, 3]), ("warmTicks", [10000] * 999),
                                 ("warmTicks", [False] * 1000), ("warmTicks", [-1] * 1000), ("clockTicks", []),
                                 ("logs", ["[Warning] fallback"]), ("logs", None), ("failure", "dispatch failed")]:
                 with self.subTest(name=name, value=str(value)[:60]):
@@ -44,6 +44,16 @@ class ReadinessTests(unittest.TestCase):
         for index, report in enumerate(reports):
             report["token"] = str(index)
         return reports
+
+    def test_empty_control_never_approves_the_readiness_gate(self) -> None:
+        reports = self.series()
+        for report in reports:
+            report.update(catalogEntries=0, workloadCommands=0, totalCommands=0, handlerCalls=0)
+        with tempfile.TemporaryDirectory() as temporary:
+            file = Path(temporary) / "report.json"
+            file.write_text(json.dumps(reports[0]))
+            readiness.checked_report(file, "legacy", "2021.3.45f1", "0", 42, 1000, 0)
+        self.assertFalse(readiness.summarize(reports, 0)["passed"])
 
     def test_raw_windows_and_statistics_are_separate(self) -> None:
         reports = self.series()

@@ -38,7 +38,8 @@ namespace DxCommandTerminal.T13.PlayerSmoke
                     throw new InvalidOperationException("Expected zero or 1000 warm samples");
                 }
                 // Catalog and handler validation follows timing so it cannot prime discovery.
-                report.coldTicks = Measure(out CommandShell coldShell);
+                report.phaseTicks = new long[3];
+                report.coldTicks = Measure(out CommandShell coldShell, report.phaseTicks);
                 report.frequency = Stopwatch.Frequency;
                 report.warmTicks = new long[warmCount];
                 if (0 < warmCount)
@@ -63,16 +64,20 @@ namespace DxCommandTerminal.T13.PlayerSmoke
                 }
                 Type catalog = typeof(ReadinessProbe).Assembly.GetType("WallstopStudios.DxCommandTerminal.Generated.CommandCatalog", false);
                 MethodInfo collect = catalog?.GetMethod("Collect", BindingFlags.Public | BindingFlags.Static);
-                if (collect == null)
+                int expected = ReadinessCommands.Count;
+                if (collect == null && expected != 0)
                 {
                     throw new InvalidOperationException("Generated consumer catalog missing");
                 }
                 List<CommandCatalogEntry> entries = new List<CommandCatalogEntry>();
-                collect.Invoke(null, new object[] { entries });
-                report.catalogEntries = entries.Count;
-                if (entries.Count != 1000)
+                if (collect != null)
                 {
-                    throw new InvalidOperationException("Expected 1000 generated entries");
+                    collect.Invoke(null, new object[] { entries });
+                }
+                report.catalogEntries = entries.Count;
+                if (entries.Count != expected)
+                {
+                    throw new InvalidOperationException("Generated entry count differs");
                 }
                 foreach (CommandCatalogEntry entry in entries)
                 {
@@ -95,11 +100,16 @@ namespace DxCommandTerminal.T13.PlayerSmoke
                         report.workloadCommands++;
                     }
                 }
-                if (report.workloadCommands != 1000 || ReadinessCommands.Calls != 1000)
+                if (report.workloadCommands != expected || ReadinessCommands.Calls != expected)
                 {
                     throw new InvalidOperationException("Workload registration or binder execution differs");
                 }
-                if (!coldShell.RunCommand("t13-readiness-0000") || !coldShell.RunCommand("t13-readiness-0999") || coldShell.HasErrors || ReadinessCommands.Calls != 1002)
+                if (
+                    expected != 0
+                    && (
+                        !coldShell.RunCommand("t13-readiness-0000") || !coldShell.RunCommand("t13-readiness-0999") || coldShell.HasErrors || ReadinessCommands.Calls != expected + 2
+                    )
+                )
                 {
                     throw new InvalidOperationException("Workload dispatch failed");
                 }
@@ -147,13 +157,22 @@ namespace DxCommandTerminal.T13.PlayerSmoke
             }
         }
 
-        private static long Measure(out CommandShell shell)
+        private static long Measure(out CommandShell shell, long[] phases = null)
         {
             long start = Stopwatch.GetTimestamp();
             CommandShell measured = new CommandShell(new CommandHistory(32));
+            long constructed = Stopwatch.GetTimestamp();
             measured.InitializeAutoRegisteredCommands(ignoreDefaultCommands: true, deferRegistration: true);
+            long configured = Stopwatch.GetTimestamp();
             measured.EnsureAutoCommandsRegistered();
-            long elapsed = Stopwatch.GetTimestamp() - start;
+            long ready = Stopwatch.GetTimestamp();
+            if (phases != null)
+            {
+                phases[0] = constructed - start;
+                phases[1] = configured - constructed;
+                phases[2] = ready - configured;
+            }
+            long elapsed = ready - start;
             shell = measured;
             return elapsed;
         }
@@ -167,6 +186,7 @@ namespace DxCommandTerminal.T13.PlayerSmoke
             public int pid;
             public long frequency;
             public long coldTicks;
+            public long[] phaseTicks;
             public long[] warmTicks;
             public long[] clockTicks;
             public int catalogEntries;

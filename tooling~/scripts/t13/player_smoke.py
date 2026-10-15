@@ -195,14 +195,14 @@ def readiness_commands(count: int) -> bytes:
     lines = ["namespace DxCommandTerminal.T13.PlayerSmoke", "{",
              "    using WallstopStudios.DxCommandTerminal.Attributes;",
              "    using WallstopStudios.DxCommandTerminal.Backend;", "",
-             "    public static class ReadinessCommands", "    {", "        public static int Calls;"]
+             "    public static class ReadinessCommands", "    {", f"        public const int Count = {count};", "", "        public static int Calls;"]
     for index in range(count):
         lines += ["", f'        [RegisterCommand(Name = "t13-readiness-{index:04d}", MinArgCount = 0, MaxArgCount = 0)]',
                   f"        public static void Command{index:04d}(CommandArg[] arguments)", "        {", "            Calls++;", "        }"]
     return ("\n".join(lines + ["    }", "}", ""])).encode("utf-8")
 
 
-def install_fixtures(project: Path, previous: dict[str, Any] | None = None, profile: str = "legacy", target_name: str = "StandaloneWindows64", readiness: bool = False) -> dict[str, str]:
+def install_fixtures(project: Path, previous: dict[str, Any] | None = None, profile: str = "legacy", target_name: str = "StandaloneWindows64", readiness: bool = False, command_count: int = 1000) -> dict[str, str]:
     if readiness and target_name != "StandaloneWindows64":
         raise ValueError("Readiness currently requires a native player")
     target = project / "Assets" / "T13PlayerSmoke"
@@ -210,7 +210,7 @@ def install_fixtures(project: Path, previous: dict[str, Any] | None = None, prof
     for name, relative in [("PlayerProbe.cs.txt", "PlayerProbe.cs"), ("BuildProbe.cs.txt", "Editor/BuildProbe.cs")]:
         source = "ReadinessProbe.cs.txt" if readiness and name == "PlayerProbe.cs.txt" else name
         files[name] = (relative, (FIXTURES / source).read_bytes())
-    files["ReadinessCommands.cs"] = ("ReadinessCommands.cs", readiness_commands(1000 if readiness else 0))
+    files["ReadinessCommands.cs"] = ("ReadinessCommands.cs", readiness_commands(command_count if readiness else 0))
     for relative, assembly in [
         ("PlayerSmoke.asmdef", {"name": "DxCommandTerminal.T13.PlayerSmoke", "references": ["WallstopStudios.DxCommandTerminal"]}),
         ("Editor/PlayerSmoke.Editor.asmdef", {"name": "DxCommandTerminal.T13.PlayerSmoke.Editor", "includePlatforms": ["Editor"], "references": ["DxCommandTerminal.T13.PlayerSmoke"]}),

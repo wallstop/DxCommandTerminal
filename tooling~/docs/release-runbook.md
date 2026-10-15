@@ -130,7 +130,8 @@ on the Windows host. The default cohort is Unity 2021 Mono with all three input 
 
 The drill builds 1,000 generated consumer commands and launches 30 regular release players per profile. Each process measures its first shell readiness after Unity startup; the
 first process also measures 1,000 warmed shells after eight warmups. Timings include history/shell construction, deferred configuration, and registration. Catalog validation
-follows timing. Raw clock samples, timings, player identities, environment, and build hashes remain in the output.
+follows timing. Raw clock samples, timings, player identities, environment, and build hashes remain in the output. Cold phase timings split construction, configuration, and
+registration. `--commands 0` collects an empty-workload control and cannot approve the readiness gate.
 
 Both cold and warm p95 must stay below 5 ms. `executionPassed` records successful workload checks even when the timing gate fails; `passed` requires both. These measurements do not
 approve UI, input routing, numeric allocations, or pinned-editor recovery. A normal smoke run can restore the owned fixture by using the readiness matrix as its previous ownership
