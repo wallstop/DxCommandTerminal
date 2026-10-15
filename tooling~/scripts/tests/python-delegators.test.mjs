@@ -9,6 +9,7 @@ import test from "node:test";
 const scriptsRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const quote = (value) => `'${value.replaceAll("'", "''")}'`;
 const delegates = [
+  ["verify-analyzer-payload.ps1", "verify_analyzer_payload.py", ["-RepoRoot", "root with spaces", "-TwoCheckout"], ["--repo-root", "root with spaces", "--two-checkout"]],
   ["lint-llm-instructions.ps1", "lint_llm_instructions.py", ["-Fix", "-VerboseOutput", "-RepoRoot", "root with spaces"], ["--fix", "--verbose-output", "--repo-root", "root with spaces"]],
   ["generate-skills-index.ps1", "generate_skills_index.py", ["-VerboseOutput", "-OutputPath", "out with spaces", "-RepoRoot", "root with spaces"], ["--output-path", "out with spaces", "--verbose-output", "--repo-root", "root with spaces"]],
   ["lint-skill-sizes.ps1", "lint_skill_sizes.py", ["-VerboseOutput", "-FailOnCritical", "-RepoRoot", "root with spaces"], ["--verbose-output", "--fail-on-critical", "--repo-root", "root with spaces"]],
