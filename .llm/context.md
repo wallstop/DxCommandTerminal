@@ -7,8 +7,8 @@ Every skill is a `SKILL.md` folder following the [Agent Skills](https://agentski
 
 ## Repository Overview
 
-**Package**: `com.wallstop-studios.dxcommandterminal` **Version**: `1.0.0-rc25.0` (see `package.json`) **Repository**: <https://github.com/wallstop/DxCommandTerminal> **Root
-Namespace**: `WallstopStudios.DxCommandTerminal` **Minimum Unity**: `2021.3` **License**: MIT
+**Package**: `com.wallstop-studios.dxcommandterminal` **Version**: `1.0.2` (see `package.json`) **Repository**: <https://github.com/wallstop/DxCommandTerminal> **Root Namespace**:
+`WallstopStudios.DxCommandTerminal` **Minimum Unity**: `2021.3` **License**: MIT
 
 **Design Principles**: Performance-first in-game console (O(1) buffer wrap, pooled allocations), defensive input validation on all public APIs, immutable-by-default collections,
 zero warnings, CSharpier-formatted code, self-documenting names over comments.
@@ -210,6 +210,11 @@ and wait for wallstop. Review feedback lags the head (Bugbot names the commit it
 
 - Pure-logic suites are EditMode tests under `Tests/Editor/`; UI/allocation/player-adjacent suites stay PlayMode under `Tests/Runtime/`. Command-behavior tests are data-driven over
   the facades. House style and the EditMode-safe screen: [run-terminal-tests](./skills/run-terminal-tests/SKILL.md).
+
+## Planning and progress
+
+Keep `PLAN.md` to ordered open tasks, blockers, and acceptance criteria. Follow [plan-hygiene](./skills/plan-hygiene/SKILL.md). Standing modernization contracts and targets live in
+[modernization.md](./modernization.md); completed work and evidence live in local `progress/` logs. Planning files and progress logs stay gitignored. Never force-add them.
 
 ## Enforcement (LLM Context Hygiene)
 

@@ -139,6 +139,10 @@ jobs:
           for script in .devcontainer/*.sh; do bash -n "${script}"; done
           bash tooling~/scripts/tests/test-ai-backends.sh
 
+      - name: Test environment autoload migration
+        if: matrix.os == 'ubuntu-latest'
+        run: python -m unittest discover -s tooling~/scripts/tests -p test_install_env_autoload.py
+
       - name: Test devcontainer contract
         if: matrix.os == 'ubuntu-latest'
         run: bash tooling~/scripts/tests/test-devcontainer.sh

@@ -1,66 +1,52 @@
 ---
 name: plan-hygiene
-description: Keep PLAN.md a lean living plan (status, open work, gates, constraints only) and route history to progress/ session logs. Use when editing PLAN.md, ending a session, archiving plan content, or when PLAN.md grows with session summaries, evidence, or completed items.
+description: Audit and keep PLAN.md lean: executable open tasks, blockers, and acceptance criteria only. Move standing contracts to context or skills and completed work to progress/ session logs. Use when editing PLAN.md, ending a session, or removing plan bloat.
 metadata:
   category: Core
 ---
 
 # Plan Hygiene
 
-`PLAN.md` is a living plan, not a log. It answers one question: what is left to do and what still binds that work. Everything else has a home (see the document map).
+`PLAN.md` answers: what remains, what blocks it, and how will we know it is done? Every line must change the next action or its acceptance. Link supporting knowledge once.
 
-## Document map (what lives where)
+## Content ownership
 
-| Content                                                                | Home                                         |
-| ---------------------------------------------------------------------- | -------------------------------------------- |
-| In-progress + future work, open performance gates, binding constraints | `PLAN.md`                                    |
-| Work style, session scoping, fix philosophy, PR targets                | `GOAL.md`                                    |
-| Standing code/repo rules and skills                                    | `.llm/context.md`, `.llm/skills/`            |
-| Session history, RCA, measurements, evidence tallies                   | `progress/session-NNN-slug.md` (git-ignored) |
-| Raw benchmark/capture artifacts                                        | `.artifacts/`                                |
+| Content                                                             | Home                              |
+| ------------------------------------------------------------------- | --------------------------------- |
+| Ordered open tasks, blockers, dependencies, acceptance criteria     | `PLAN.md`                         |
+| Session scope and work style                                        | `GOAL.md`                         |
+| Standing repository rules                                           | `.llm/context.md`                 |
+| Modernization constraints, target definitions, execution references | `.llm/modernization.md`           |
+| Reusable procedures                                                 | Existing `.llm/skills/*/SKILL.md` |
+| Completed work, gate results, measurements, diagnosis, audit trail  | `progress/session-NNN-slug.md`    |
+| Raw captures and benchmarks                                         | `.artifacts/`                     |
 
-## PLAN.md contract
+`PLAN.md`, `GOAL.md`, `progress/`, and their Unity metas are local-only and gitignored. Never force-add, package, or publish them. Keep durable agent knowledge in tracked `.llm/`
+files.
 
-The file contains ONLY:
+## Plan contract
 
-1. A dated status snapshot (a few lines: what landed, what is open, by issue/task).
-2. Order of attack for remaining work.
-3. Open work by task, each bullet requirement-bearing (a future session could execute it).
-4. The performance gate table with per-gate status (MET/OPEN).
-5. Binding constraints agreed with the owner.
-6. References needed by open work only.
+- Keep one date, one ordered task list, and links needed to execute it.
+- Each task states the remaining action and acceptance; include a blocker only when it changes execution.
+- Preserve issue/task IDs and unresolved requirements. Merge duplicate actions; do not silently cancel scope.
+- Keep open gates with their owning tasks. Put target definitions in context and measured outcomes in session logs.
+- Delete completed tasks immediately. Do not keep checked boxes, MET rows, landed PRs, or session summaries.
+- Omit standing constraints, measurement methods, command catalogs, archival headers, and repeated status/order sections.
+- Do not copy an issue, runbook, or skill into the plan. Link the authoritative source.
 
-Never place in `PLAN.md`:
+## Audit and session close
 
-- Session narration or summaries ("Session-NNN landed ...") - that belongs in the session's `progress/` log, written once, never mirrored.
-- Measurement numbers, test tallies, evidence trails (live in `progress/` records).
-- Completed items. Delete them; do not merely tick the box. Landed tasks collapse into one status line.
-- Stale grounding ("starting evidence", dependency schedules for finished work, links consumed by landed work).
+1. Read the whole plan and relevant session evidence. Do not infer completion from a partial pass.
+2. Before a structural rewrite, copy the plan byte-for-byte to `progress/plan-archive-YYYY-MM-DD-slug.md`.
+3. Map each old requirement to an open task, durable context/skill, or completed-work record.
+4. Move history into the session log. Route durable facts to their existing owner; add a focused context file only when needed.
+5. Rewrite the plan. Check that each unresolved requirement, blocker, target, and authorization boundary survives.
+6. Review adversarially: can the next session execute each task without reconstructing its requirements from history?
+7. Record before/after line and word counts, destinations, and validation in the session log.
+8. Run instruction/skill-size checks; regenerate the skill index when skills change.
 
-## Session-end checklist
+## Size review
 
-1. Write the session log: `progress/session-NNN-brief-description.md`.
-2. Update `PLAN.md`: refresh the status date/snapshot, delete items this session completed entirely, and add new open items with their acceptance criteria.
-3. Re-read the file top to bottom: if a line no longer changes what a future session would do, delete it.
-
-## Size budget
-
-- Soft target: ~200 lines. Hard cap: 250.
-- Before adding material, cut: landed items, closed references, superseded constraints.
-- Growth past the cap is a signal to restructure, not to compress prose.
-
-## Structural cleanup (rare)
-
-When the plan needs a rewrite (scope shift, post-milestone reset):
-
-1. Copy the current file to `progress/plan-archive-YYYY-MM-DD-slug.md` first (lossless).
-2. Rewrite; keep only items 1-6 of the contract above.
-3. Record the archive path in the new file's header.
-
-## Red flags (fix on sight)
-
-- Any paragraph starting with a session number.
-- A checkbox that has been checked for more than one session without being deleted.
-- Evidence parentheticals growing inside task bullets.
-- Gate rows without a status.
-- The file only ever growing between sessions.
+Target at most 60 lines; review before exceeding 80. This is a review budget, not permission to drop requirements. Count words too: joining paragraphs into long lines does not make
+a plan lean. If it grows, remove duplication and relocate context before adding sections or creating more planning files. Do not add a plan-specific linter for this local-only
+document unless recurring failures justify it.
