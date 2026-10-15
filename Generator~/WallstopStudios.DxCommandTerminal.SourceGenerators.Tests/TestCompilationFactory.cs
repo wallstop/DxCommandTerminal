@@ -94,7 +94,7 @@
             return CSharpCompilation.Create(assemblyName, syntaxTrees, References, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
         }
 
-        public static Assembly CompileAndLoad(CSharpCompilation compilation)
+        public static Assembly CompileAndLoad(CSharpCompilation compilation, params byte[][] dependencyImages)
         {
             List<Diagnostic> errors = compilation.GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error).ToList();
             if (0 < errors.Count)
@@ -130,6 +130,11 @@
 
             peStream.Position = 0;
             TestAssemblyLoadContext loadContext = new TestAssemblyLoadContext();
+            foreach (byte[] dependencyImage in dependencyImages)
+            {
+                using MemoryStream dependencyStream = new MemoryStream(dependencyImage);
+                loadContext.LoadFromStream(dependencyStream);
+            }
             return loadContext.LoadFromStream(peStream);
         }
 

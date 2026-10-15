@@ -3,6 +3,7 @@
     using System;
     using System.Collections.Generic;
     using System.Collections.Immutable;
+    using System.IO;
     using System.Linq;
     using System.Reflection;
     using System.Text;
@@ -623,13 +624,14 @@ namespace Fixtures
         {
             StringBuilder fixture = new StringBuilder();
             fixture.AppendLine("namespace Fixtures { using WallstopStudios.DxCommandTerminal.Attributes; using WallstopStudios.DxCommandTerminal.Backend;");
-            fixture.AppendLine("public static class BatchCommands {");
-            fixture.Append("public static int[] Calls = new int[").Append(count).AppendLine("];");
+            fixture.Append("public static partial class BatchCommands { public static int[] Calls = new int[").Append(count).AppendLine("]; }");
+            int[] metadataCounts = new int[16];
             for (int index = 0; index < count; index++)
             {
-                if (index == Math.Max(1, count / 2))
+                fixture.AppendLine(index % 16 < 8 ? "public static partial class BatchCommands {" : "public static partial class OtherBatchCommands {");
+                if (index != count - 1)
                 {
-                    fixture.AppendLine("} public static class OtherBatchCommands {");
+                    ++metadataCounts[index % 16];
                 }
                 string suffix = index.ToString("D4", System.Globalization.CultureInfo.InvariantCulture);
                 fixture
@@ -656,9 +658,9 @@ namespace Fixtures
                     .Append(", Contexts = (CommandExecutionContexts)(")
                     .Append(index % 8 == 7 ? -17 : 7)
                     .Append("))] ");
-                fixture.Append("public static void Command").Append(suffix).Append("(CommandArg[] arguments) { BatchCommands.Calls[").Append(index).AppendLine("]++; }");
+                fixture.Append("public static void Command").Append(suffix).Append("(CommandArg[] arguments) { BatchCommands.Calls[").Append(index).AppendLine("]++; } }");
             }
-            fixture.AppendLine("} }");
+            fixture.AppendLine("}");
             string[] defines = { "UNITY_EDITOR", "DEVELOPMENT_BUILD" };
             (SyntaxTree generated, CSharpCompilation output) = TestCompilationFactory.RunGenerator(
                 TestCompilationFactory.CreateCompilation("Batch" + count, fixture.ToString(), defines)
@@ -677,11 +679,35 @@ namespace Fixtures
                 .ToList();
             Assert.Equal(count, constructionCounts.Sum());
             Assert.All(constructionCounts, value => Assert.InRange(value, 1, 64));
+            List<MethodDeclarationSyntax> binderGroups = generated
+                .GetRoot()
+                .DescendantNodes()
+                .OfType<MethodDeclarationSyntax>()
+                .Where(method => method.Identifier.ValueText.StartsWith("BindGroup", StringComparison.Ordinal))
+                .ToList();
+            Assert.Equal(64 < count, 0 < binderGroups.Count);
+            Assert.All(
+                binderGroups,
+                method =>
+                {
+                    Assert.InRange(method.DescendantNodes().OfType<CaseSwitchLabelSyntax>().Count(), 1, 64);
+                    IEnumerable<string> holders = method
+                        .DescendantNodes()
+                        .OfType<ObjectCreationExpressionSyntax>()
+                        .Select(creation => creation.ArgumentList.Arguments[0].Expression)
+                        .OfType<MemberAccessExpressionSyntax>()
+                        .Select(member => member.Expression.ToString())
+                        .Distinct(StringComparer.Ordinal);
+                    Assert.Single(holders);
+                }
+            );
             Assembly assembly = TestCompilationFactory.CompileAndLoad(output);
             CatalogView catalog = CatalogView.Load(assembly);
             Assert.Equal(count, catalog.Entries.Count);
             CatalogView repeated = CatalogView.Load(assembly);
             object[] arguments = { Array.CreateInstance(assembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"), 0) };
+            FieldInfo cachedHandler = catalog.Entries[0].GetType().GetField("_boundHandler", BindingFlags.Instance | BindingFlags.NonPublic);
+            HashSet<int> slots = new HashSet<int>();
             for (int index = 0; index < count; index++)
             {
                 object entry = catalog.Entries[index];
@@ -703,15 +729,151 @@ namespace Fixtures
                 Assert.Equal("Command" + suffix, catalog.MethodNameOf(entry));
                 Assert.Equal(index % 8 == 1 ? 1 : 0, catalog.MinArgCountOf(entry));
                 Assert.Equal(index % 8 == 6, catalog.IsDefaultOf(entry));
-                Assert.Equal(index < Math.Max(1, count / 2) ? "Fixtures.BatchCommands" : "Fixtures.OtherBatchCommands", catalog.DeclaringTypeNameOf(entry));
+                string holder = index % 16 < 8 ? "Fixtures.BatchCommands" : "Fixtures.OtherBatchCommands";
+                Assert.Equal(holder, catalog.DeclaringTypeNameOf(entry));
+                Assert.Null(cachedHandler.GetValue(entry));
                 Delegate factory = (Delegate)entry.GetType().GetProperty("Binder").GetValue(entry);
-                Assert.Null(factory.Target);
+                if (64 < count && index != count - 1 && 4 <= metadataCounts[index % 16])
+                {
+                    Assert.NotNull(factory.Target);
+                    Assert.Equal("IndexedBinder", factory.Target.GetType().Name);
+                    FieldInfo slot = Assert.Single(factory.Target.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic));
+                    Assert.Equal(typeof(int), slot.FieldType);
+                    Assert.True(slot.IsInitOnly);
+                    int value = (int)slot.GetValue(factory.Target);
+                    Assert.True(slots.Add(value));
+                    MethodDeclarationSyntax group = Assert.Single(
+                        binderGroups,
+                        method =>
+                            string.Equals(
+                                method.Identifier.ValueText,
+                                "BindGroup" + (value / 64).ToString(System.Globalization.CultureInfo.InvariantCulture),
+                                StringComparison.Ordinal
+                            )
+                    );
+                    Assert.Contains(
+                        group.DescendantNodes().OfType<CaseSwitchLabelSyntax>(),
+                        label => string.Equals(label.Value.ToString(), (value % 64).ToString(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal)
+                    );
+                }
+                else
+                {
+                    Assert.Null(factory.Target);
+                }
                 (object first, object second) = catalog.GetHandlerPairOf(entry);
                 Assert.Same(first, second);
-                ((Delegate)first).DynamicInvoke(arguments);
+                Delegate handler = (Delegate)first;
+                Assert.Null(handler.Target);
+                Assert.True(handler.Method.IsStatic);
+                Assert.Equal("Command" + suffix, handler.Method.Name);
+                Assert.Equal(holder, handler.Method.DeclaringType.FullName);
+                handler.DynamicInvoke(arguments);
             }
+            Assert.Equal(slots.Count, binderGroups.Sum(method => method.DescendantNodes().OfType<CaseSwitchLabelSyntax>().Count()));
             int[] calls = (int[])assembly.GetType("Fixtures.BatchCommands").GetField("Calls").GetValue(null);
             Assert.All(calls, value => Assert.Equal(1, value));
+        }
+
+        [Theory]
+        [InlineData(1)]
+        [InlineData(4)]
+        public void SharedBindersDoNotLoadAnExcludedHolderDependency(int excludedCount)
+        {
+            StringBuilder fixture = new StringBuilder();
+            fixture.AppendLine("namespace Fixtures { using WallstopStudios.DxCommandTerminal.Attributes; using WallstopStudios.DxCommandTerminal.Backend;");
+            fixture.AppendLine("public static class GoodCommands { public static int Calls;");
+            for (int index = 0; index < 65; index++)
+            {
+                fixture
+                    .Append("[RegisterCommand(Name = \"good")
+                    .Append(index)
+                    .Append("\", MaxArgCount = 0)] public static void Command")
+                    .Append(index)
+                    .AppendLine("(CommandArg[] arguments) { Calls++; }");
+            }
+            fixture.AppendLine("} public class ExcludedCommands : OptionalDependency.Base { public static int Calls;");
+            for (int index = 0; index < excludedCount; index++)
+            {
+                fixture
+                    .Append("[RegisterCommand(Name = \"excluded")
+                    .Append(index)
+                    .Append("\", MaxArgCount = 0, EditorOnly = true)] public static void Excluded")
+                    .Append(index)
+                    .AppendLine("(CommandArg[] arguments) { Calls++; }");
+            }
+            fixture.AppendLine("} }");
+            CSharpCompilation consumer = TestCompilationFactory.CreateCompilation("OptionalBindingIsolation" + excludedCount, fixture.ToString());
+            CSharpCompilation dependency = CSharpCompilation.Create(
+                "OptionalCatalogDependency",
+                new[] { CSharpSyntaxTree.ParseText("namespace OptionalDependency { public class Base { } }") },
+                consumer.References,
+                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
+            );
+            using MemoryStream dependencyStream = new MemoryStream();
+            Microsoft.CodeAnalysis.Emit.EmitResult emitted = dependency.Emit(dependencyStream);
+            Assert.True(emitted.Success, string.Join(Environment.NewLine, emitted.Diagnostics));
+            byte[] dependencyImage = dependencyStream.ToArray();
+            consumer = consumer.AddReferences(MetadataReference.CreateFromImage(dependencyImage));
+            (SyntaxTree generated, CSharpCompilation output) = TestCompilationFactory.RunGenerator(consumer);
+            int[] groupSizes = generated
+                .GetRoot()
+                .DescendantNodes()
+                .OfType<MethodDeclarationSyntax>()
+                .Where(method => method.Identifier.ValueText.StartsWith("BindGroup", StringComparison.Ordinal))
+                .Select(method => method.DescendantNodes().OfType<CaseSwitchLabelSyntax>().Count())
+                .OrderBy(size => size)
+                .ToArray();
+            Assert.Equal(excludedCount == 1 ? 2 : 3, groupSizes.Length);
+            Assert.Equal(1, groupSizes[0]);
+            Assert.Equal(64, groupSizes[groupSizes.Length - 1]);
+            if (excludedCount == 4)
+            {
+                Assert.Equal(4, groupSizes[1]);
+            }
+
+            Assembly presentAssembly = TestCompilationFactory.CompileAndLoad(output, dependencyImage);
+            CatalogView present = CatalogView.Load(presentAssembly);
+            object[] presentArguments = { Array.CreateInstance(presentAssembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"), 0) };
+            foreach (object entry in present.Entries)
+            {
+                (object first, object second) = present.GetHandlerPairOf(entry);
+                Assert.Same(first, second);
+                ((Delegate)first).DynamicInvoke(presentArguments);
+            }
+            Assert.Equal(65, presentAssembly.GetType("Fixtures.GoodCommands").GetField("Calls").GetValue(null));
+            Assert.Equal(excludedCount, presentAssembly.GetType("Fixtures.ExcludedCommands").GetField("Calls").GetValue(null));
+
+            Assembly missingAssembly = TestCompilationFactory.CompileAndLoad(output);
+            CatalogView missing = CatalogView.Load(missingAssembly);
+            CatalogView repeated = CatalogView.Load(missingAssembly);
+            Assert.Equal(65 + excludedCount, missing.Entries.Count);
+            FieldInfo cache = missing.Entries[0].GetType().GetField("_boundHandler", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.All(missing.Entries, entry => Assert.Null(cache.GetValue(entry)));
+            object[] missingArguments = { Array.CreateInstance(missingAssembly.GetType("WallstopStudios.DxCommandTerminal.Backend.CommandArg"), 0) };
+            for (int index = 0; index < 65; index++)
+            {
+                object entry = missing.Entries[index];
+                Assert.Same(entry, repeated.Entries[index]);
+                Assert.False(missing.EditorOnlyOf(entry));
+                (object first, object second) = missing.GetHandlerPairOf(entry);
+                Assert.Same(first, second);
+                Delegate handler = (Delegate)first;
+                Assert.Null(handler.Target);
+                Assert.Equal("Command" + index, handler.Method.Name);
+                Assert.Equal("Fixtures.GoodCommands", handler.Method.DeclaringType.FullName);
+                handler.DynamicInvoke(missingArguments);
+            }
+            Assert.Equal(65, missingAssembly.GetType("Fixtures.GoodCommands").GetField("Calls").GetValue(null));
+            for (int index = 65; index < missing.Entries.Count; index++)
+            {
+                object entry = missing.Entries[index];
+                Assert.True(missing.EditorOnlyOf(entry));
+                Assert.Null(cache.GetValue(entry));
+                TargetInvocationException failure = Assert.Throws<TargetInvocationException>(() => missing.GetHandlerPairOf(entry));
+                Assert.True(failure.InnerException is FileNotFoundException or FileLoadException or TypeLoadException, failure.ToString());
+                Assert.Contains("OptionalCatalogDependency", failure.ToString(), StringComparison.Ordinal);
+                Assert.Null(cache.GetValue(entry));
+            }
         }
 
         [Fact]
@@ -799,16 +961,28 @@ namespace Fixtures
         [Fact]
         public void GeneratedTextIsDeterministic()
         {
+            StringBuilder fixture = new StringBuilder(DeterminismFixture);
+            for (int index = 0; index < 64; index++)
+            {
+                fixture.Append(
+                    "namespace Fixtures { using WallstopStudios.DxCommandTerminal.Attributes; using WallstopStudios.DxCommandTerminal.Backend; public static partial class "
+                );
+                fixture.Append(index % 2 == 0 ? "IndexedFirst" : "IndexedSecond");
+                fixture.Append(" { [RegisterCommand(Contexts = (CommandExecutionContexts)(-17), MaxArgCount = ").Append(index % 3).Append(")] public static void Command");
+                fixture.Append(index).AppendLine("(CommandArg[] arguments) { } } }");
+            }
+            string source = fixture.ToString();
             System.Globalization.CultureInfo original = System.Globalization.CultureInfo.CurrentCulture;
             try
             {
                 System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
-                string first = TestCompilationFactory.RunGenerator(TestCompilationFactory.CreateCompilation("DeterminismA", DeterminismFixture)).generated?.ToString();
+                string first = TestCompilationFactory.RunGenerator(TestCompilationFactory.CreateCompilation("DeterminismA", source)).generated?.ToString();
                 System.Globalization.CultureInfo alternate = (System.Globalization.CultureInfo)System.Globalization.CultureInfo.InvariantCulture.Clone();
                 alternate.NumberFormat.NegativeSign = "minus";
                 System.Globalization.CultureInfo.CurrentCulture = alternate;
-                string second = TestCompilationFactory.RunGenerator(TestCompilationFactory.CreateCompilation("DeterminismB", DeterminismFixture)).generated?.ToString();
+                string second = TestCompilationFactory.RunGenerator(TestCompilationFactory.CreateCompilation("DeterminismB", source)).generated?.ToString();
                 Assert.Equal(first, second);
+                Assert.Contains("private sealed class IndexedBinder", first, StringComparison.Ordinal);
             }
             finally
             {

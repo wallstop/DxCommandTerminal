@@ -53,6 +53,7 @@
         private const int PerCommandCapacityEstimate = 512;
         private const int BaseCapacityEstimate = 4096;
         private const int EntriesPerMethod = 64;
+        private const int HandlersPerBinder = 64;
 
         internal static SymbolDisplayFormat FullyQualified => SymbolDisplayFormat.FullyQualifiedFormat;
 
@@ -112,7 +113,7 @@
                 holderIndicesByCommand[i] = holderIndex;
             }
 
-            int?[] sharedMetadata = FindSharedMetadata(commands, holderIndicesByCommand);
+            int?[] sharedMetadata = FindSharedMetadata(commands, holderIndicesByCommand, out int?[] indexedSlots, out List<List<int>> indexedChunks);
 
             AppendHeader(builder);
             if (preserveCatalog)
@@ -169,7 +170,7 @@
             {
                 for (int i = 0; i < commandCount; i++)
                 {
-                    EmitCommand(builder, i, commands[i], holderIndicesByCommand[i], sharedMetadata[i]);
+                    EmitCommand(builder, i, commands[i], holderIndicesByCommand[i], sharedMetadata[i], indexedSlots[i]);
                 }
             }
             else
@@ -201,7 +202,7 @@
                     int end = Math.Min(start + EntriesPerMethod, commandCount);
                     for (int index = start; index < end; index++)
                     {
-                        EmitCommand(builder, index, commands[index], holderIndicesByCommand[index], sharedMetadata[index]);
+                        EmitCommand(builder, index, commands[index], holderIndicesByCommand[index], sharedMetadata[index], indexedSlots[index]);
                     }
                     builder.Append(Indent3).AppendLine("}");
                 }
@@ -223,7 +224,10 @@
                 {
                     if (command.DirectlyBindable)
                     {
-                        EmitDirectBinder(builder, i, command);
+                        if (!indexedSlots[i].HasValue)
+                        {
+                            EmitDirectBinder(builder, i, command);
+                        }
                     }
                     else
                     {
@@ -232,6 +236,10 @@
                 }
             }
 
+            if (0 < indexedChunks.Count)
+            {
+                EmitIndexedBinders(builder, commands, indexedChunks);
+            }
             builder.Append(Indent2).AppendLine("}");
             builder.AppendLine("}");
             EmitPartialCompanions(builder, commands);
@@ -273,7 +281,7 @@
             builder.AppendLine("{");
         }
 
-        private static void EmitCommand(StringBuilder builder, int commandIndex, CommandModel command, int holderIndex, int? sharedMetadataIndex)
+        private static void EmitCommand(StringBuilder builder, int commandIndex, CommandModel command, int holderIndex, int? sharedMetadataIndex, int? indexedSlot)
         {
             builder.AppendLine();
             builder.Append(Indent4).Append("entries.Add(");
@@ -310,16 +318,20 @@
             {
                 if (command.DirectlyBindable)
                 {
-                    builder
-                        .Append(Indent4)
-                        .Append("    new global::System.Func<")
-                        .Append(BinderType)
-                        .Append(">(")
-                        .Append(BinderMethodPrefix)
-                        .Append(commandIndex.ToString(CultureInfo.InvariantCulture))
-                        .AppendLine(sharedMetadataIndex.HasValue ? ")" : "),");
-                    if (!sharedMetadataIndex.HasValue)
+                    if (sharedMetadataIndex.HasValue)
                     {
+                        builder.Append(Indent4).Append("    ").AppendLine(indexedSlot.Value.ToString(CultureInfo.InvariantCulture));
+                    }
+                    else
+                    {
+                        builder
+                            .Append(Indent4)
+                            .Append("    new global::System.Func<")
+                            .Append(BinderType)
+                            .Append(">(")
+                            .Append(BinderMethodPrefix)
+                            .Append(commandIndex.ToString(CultureInfo.InvariantCulture))
+                            .AppendLine("),");
                         builder.Append(Indent4).AppendLine("    null,");
                     }
                 }
@@ -383,16 +395,21 @@
             builder.Append(Indent4).AppendLine("));");
         }
 
-        private static int?[] FindSharedMetadata(List<CommandModel> commands, int[] holderIndices)
+        private static int?[] FindSharedMetadata(List<CommandModel> commands, int[] holderIndices, out int?[] indexedSlots, out List<List<int>> indexedChunks)
         {
             int count = commands.Count;
             int?[] sharedMetadata = new int?[count];
+            int?[] slots = new int?[count];
+            List<List<int>> chunks = new List<List<int>>();
             if (count <= EntriesPerMethod)
             {
+                indexedSlots = slots;
+                indexedChunks = chunks;
                 return sharedMetadata;
             }
             Dictionary<(int Min, int Max, (bool History, bool Editor, bool Development, bool Default) Flags, int Contexts, int Holder), List<int>> groups =
                 new Dictionary<(int, int, (bool, bool, bool, bool), int, int), List<int>>();
+            List<List<int>> orderedGroups = new List<List<int>>();
             for (int index = 0; index < count; index++)
             {
                 CommandModel command = commands[index];
@@ -411,22 +428,37 @@
                 {
                     indices = new List<int>();
                     groups.Add(key, indices);
+                    orderedGroups.Add(indices);
                 }
                 indices.Add(index);
             }
-            foreach (List<int> indices in groups.Values)
+            foreach (List<int> indices in orderedGroups)
             {
                 // A helper must replace enough repeated IL to repay its own first-use compilation.
-                if (indices.Count < 4)
+                int groupCount = indices.Count;
+                if (groupCount < 4)
                 {
                     continue;
                 }
                 int representative = indices[0];
-                foreach (int index in indices)
+                /* A compiled switch must not resolve handlers from a skipped holder or eligibility group. */
+                for (int start = 0; start < groupCount; start += HandlersPerBinder)
                 {
-                    sharedMetadata[index] = representative;
+                    int chunkIndex = chunks.Count;
+                    int chunkCount = Math.Min(HandlersPerBinder, groupCount - start);
+                    List<int> chunk = new List<int>(chunkCount);
+                    for (int offset = 0; offset < chunkCount; offset++)
+                    {
+                        int commandIndex = indices[start + offset];
+                        sharedMetadata[commandIndex] = representative;
+                        slots[commandIndex] = chunkIndex * HandlersPerBinder + offset;
+                        chunk.Add(commandIndex);
+                    }
+                    chunks.Add(chunk);
                 }
             }
+            indexedSlots = slots;
+            indexedChunks = chunks;
             return sharedMetadata;
         }
 
@@ -435,7 +467,7 @@
             builder.AppendLine();
             builder.Append(Indent3).Append("private static ").Append(EntryType).Append(" CreateEntry").Append(index.ToString(CultureInfo.InvariantCulture)).AppendLine("(");
             builder.Append(Indent4).AppendLine("string name, string methodName, string help, string hint,");
-            builder.Append(Indent4).Append("global::System.Func<").Append(BinderType).AppendLine("> binder)");
+            builder.Append(Indent4).AppendLine("int slot)");
             builder.Append(Indent3).AppendLine("{");
             builder
                 .Append(Indent4)
@@ -452,7 +484,9 @@
                 .Append(command.EditorOnly ? "true, " : "false, ")
                 .Append(command.DevelopmentOnly ? "true, " : "false, ")
                 .Append(command.IsDefault ? "true, " : "false, ")
-                .AppendLine("binder, null,");
+                .Append("new global::System.Func<")
+                .Append(BinderType)
+                .AppendLine(">(new IndexedBinder(slot).Bind), null,");
             builder.Append(Indent5).Append('(').Append(ContextsType).Append(")(").Append(command.Contexts.ToString(CultureInfo.InvariantCulture)).Append("), ");
             builder.AppendLine(0 <= holderIndex ? $"HolderNames[{holderIndex}]);" : "null);");
             builder.Append(Indent3).AppendLine("}");
@@ -478,6 +512,73 @@
                 .Append('.')
                 .Append(command.MethodNameIdentifierDisplay)
                 .AppendLine(");");
+        }
+
+        private static void EmitIndexedBinders(StringBuilder builder, List<CommandModel> commands, List<List<int>> chunks)
+        {
+            builder.AppendLine();
+            builder.Append(Indent3).Append("private static ").Append(BinderType).AppendLine(" BindIndexed(int slot)");
+            builder.Append(Indent3).AppendLine("{");
+            builder.Append(Indent4).Append("switch (slot / ").Append(HandlersPerBinder.ToString(CultureInfo.InvariantCulture)).AppendLine(")");
+            builder.Append(Indent4).AppendLine("{");
+            int chunkCount = chunks.Count;
+            for (int chunkIndex = 0; chunkIndex < chunkCount; chunkIndex++)
+            {
+                string chunkName = chunkIndex.ToString(CultureInfo.InvariantCulture);
+                builder
+                    .Append(Indent5)
+                    .Append("case ")
+                    .Append(chunkName)
+                    .Append(": return BindGroup")
+                    .Append(chunkName)
+                    .Append("(slot % ")
+                    .Append(HandlersPerBinder.ToString(CultureInfo.InvariantCulture))
+                    .AppendLine(");");
+            }
+            builder.Append(Indent5).AppendLine("default: throw new global::System.ArgumentOutOfRangeException(nameof(slot));");
+            builder.Append(Indent4).AppendLine("}");
+            builder.Append(Indent3).AppendLine("}");
+            for (int chunkIndex = 0; chunkIndex < chunkCount; chunkIndex++)
+            {
+                builder.AppendLine();
+                builder
+                    .Append(Indent3)
+                    .Append("private static ")
+                    .Append(BinderType)
+                    .Append(" BindGroup")
+                    .Append(chunkIndex.ToString(CultureInfo.InvariantCulture))
+                    .AppendLine("(int offset)");
+                builder.Append(Indent3).AppendLine("{");
+                builder.Append(Indent4).AppendLine("switch (offset)");
+                builder.Append(Indent4).AppendLine("{");
+                List<int> chunk = chunks[chunkIndex];
+                int handlerCount = chunk.Count;
+                for (int offset = 0; offset < handlerCount; offset++)
+                {
+                    CommandModel command = commands[chunk[offset]];
+                    builder
+                        .Append(Indent5)
+                        .Append("case ")
+                        .Append(offset.ToString(CultureInfo.InvariantCulture))
+                        .Append(": return new ")
+                        .Append(BinderType)
+                        .Append('(')
+                        .Append(command.ContainingTypeDisplay)
+                        .Append('.')
+                        .Append(command.MethodNameIdentifierDisplay)
+                        .AppendLine(");");
+                }
+                builder.Append(Indent5).AppendLine("default: throw new global::System.ArgumentOutOfRangeException(nameof(offset));");
+                builder.Append(Indent4).AppendLine("}");
+                builder.Append(Indent3).AppendLine("}");
+            }
+            builder.AppendLine();
+            builder.Append(Indent3).AppendLine("private sealed class IndexedBinder");
+            builder.Append(Indent3).AppendLine("{");
+            builder.Append(Indent4).AppendLine("private readonly int _slot;");
+            builder.Append(Indent4).AppendLine("public IndexedBinder(int slot) { _slot = slot; }");
+            builder.Append(Indent4).Append("public ").Append(BinderType).AppendLine(" Bind() => BindIndexed(_slot);");
+            builder.Append(Indent3).AppendLine("}");
         }
 
         private static void EmitUnboundMethodFinder(StringBuilder builder)
