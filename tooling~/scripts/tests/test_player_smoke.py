@@ -8,10 +8,12 @@ from pathlib import Path
 import tarfile
 import tempfile
 import subprocess
+import sys
 from unittest.mock import Mock, patch
 import unittest
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).parents[1] / "t13"))
 SPEC = importlib.util.spec_from_file_location("player_smoke", Path(__file__).parents[1] / "t13" / "player_smoke.py")
 assert SPEC is not None and SPEC.loader is not None
 smoke = importlib.util.module_from_spec(SPEC)
@@ -70,7 +72,7 @@ class PlayerSmokeTests(unittest.TestCase):
                     smoke.select_profile_legs({"legs": rows}, "anchor")
 
     def test_stale_or_partial_player_verdict_is_rejected(self) -> None:
-        good: dict[str, Any] = {"passed": True, "unityVersion": "2021.3.45f1", "platform": "WindowsPlayer", "developmentBuild": False, "monoBackend": True, "il2cppBackend": False, "inputSystem": False, "legacyInput": True, "catalogPresent": True, "catalogEntries": 2, "catalogBindersExecuted": 2, "generatedCalls": 1, "privateCalls": 1, "manualCalls": 1}
+        good: dict[str, Any] = {"passed": True, "unityVersion": "2021.3.45f1", "platform": "WindowsPlayer", "developmentBuild": False, "monoBackend": True, "il2cppBackend": False, "inputSystem": False, "legacyInput": True, "catalogPresent": True, "catalogEntries": 2, "catalogBindersExecuted": 2, "generatedCalls": 1, "privateCalls": 1, "manualCalls": 1, "logs": [], "browserUserAgent": "Chromium fixture"}
         with tempfile.TemporaryDirectory() as directory:
             file = Path(directory) / "report.json"
             file.write_text(json.dumps(good), encoding="utf-8")
@@ -238,6 +240,38 @@ class PlayerSmokeTests(unittest.TestCase):
                     self.assertEqual(target.read_bytes(), b"old-owned-fixture")
             smoke.install_fixtures(project, prior)
             self.assertEqual(target.read_bytes(), (smoke.FIXTURES / "PlayerProbe.cs.txt").read_bytes())
+
+    def test_fixture_refusal_does_not_replace_an_earlier_owned_file(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory)
+            target = project / "Assets" / "T13PlayerSmoke"
+            (target / "Editor").mkdir(parents=True)
+            first, second = target / "PlayerProbe.cs", target / "Editor/BuildProbe.cs"
+            first.write_bytes(b"old-owned-player")
+            second.write_bytes(b"unowned-editor-change")
+            prior = {"project": str(project), "fixtureHashes": {"PlayerProbe.cs.txt": smoke.sha256(first)}}
+            with self.assertRaises(ValueError):
+                smoke.install_fixtures(project, prior)
+            self.assertEqual(first.read_bytes(), b"old-owned-player")
+            self.assertEqual(second.read_bytes(), b"unowned-editor-change")
+
+    def test_webgl_report_cannot_be_native_or_from_another_profile(self) -> None:
+        good = {"passed": True, "unityVersion": "2021.3.45f1", "platform": "WebGLPlayer", "developmentBuild": False,
+                "monoBackend": False, "il2cppBackend": True, "inputSystem": True, "legacyInput": False,
+                "catalogPresent": True, "catalogEntries": 2, "catalogBindersExecuted": 2, "generatedCalls": 1,
+                "privateCalls": 1, "manualCalls": 1, "logs": [], "browserUserAgent": "Chromium fixture"}
+        with tempfile.TemporaryDirectory() as directory:
+            file = Path(directory) / "report.json"
+            file.write_text(json.dumps(good))
+            smoke.checked_player_report(file, "input-system", "2021.3.45f1", "IL2CPP", "WebGL")
+            for changes in ({"platform": "WindowsPlayer"}, {"inputSystem": False}, {"legacyInput": True},
+                            {"catalogBindersExecuted": 0}, {"il2cppBackend": False}, {"generatedCalls": True}, {"logs": None}, {"logs": ["falling back to reflected discovery"]},
+                            {"browserUserAgent": ""}, {"logs": ["[Error] a runtime failure"]},
+                            {"logs": ["[Warning] a runtime warning"]}):
+                with self.subTest(changes=changes):
+                    file.write_text(json.dumps(dict(good, **changes)))
+                    with self.assertRaises(ValueError):
+                        smoke.checked_player_report(file, "input-system", "2021.3.45f1", "IL2CPP", "WebGL")
 
     def test_failed_tree_kill_uses_bounded_direct_fallback(self) -> None:
         for failure in [subprocess.TimeoutExpired("taskkill", 30), FileNotFoundError("taskkill missing")]:

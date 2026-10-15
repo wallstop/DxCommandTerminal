@@ -51,22 +51,39 @@ namespace DxCommandTerminal.T13.PlayerSmoke.Editor
                 {
                     throw new InvalidOperationException("Invalid expected stripping level");
                 }
-                PlayerSettings.SetScriptingBackend(NamedBuildTarget.Standalone, backend);
-                PlayerSettings.SetManagedStrippingLevel(NamedBuildTarget.Standalone, stripping);
-                ScriptingImplementation actualBackend = PlayerSettings.GetScriptingBackend(NamedBuildTarget.Standalone);
-                ManagedStrippingLevel actualStripping = PlayerSettings.GetManagedStrippingLevel(NamedBuildTarget.Standalone);
+                string targetName = Environment.GetEnvironmentVariable("DX_T13_TARGET");
+                bool webGL = string.Equals(targetName, "WebGL", StringComparison.Ordinal);
+                if (!string.IsNullOrEmpty(targetName) && !webGL && !string.Equals(targetName, "StandaloneWindows64", StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException("Invalid requested build target");
+                }
+                if (webGL && backend != ScriptingImplementation.IL2CPP)
+                {
+                    throw new InvalidOperationException("WebGL requires IL2CPP");
+                }
+                NamedBuildTarget settingsTarget = webGL ? NamedBuildTarget.WebGL : NamedBuildTarget.Standalone;
+                BuildTarget target = webGL ? BuildTarget.WebGL : BuildTarget.StandaloneWindows64;
+                PlayerSettings.SetScriptingBackend(settingsTarget, backend);
+                PlayerSettings.SetManagedStrippingLevel(settingsTarget, stripping);
+                ScriptingImplementation actualBackend = PlayerSettings.GetScriptingBackend(settingsTarget);
+                ManagedStrippingLevel actualStripping = PlayerSettings.GetManagedStrippingLevel(settingsTarget);
                 if (actualBackend != backend || actualStripping != stripping)
                 {
                     throw new InvalidOperationException("Player settings did not retain requested backend/stripping");
                 }
                 File.WriteAllText(Path.Combine(output, "build-settings.txt"), $"{backendName}/{actualStripping}");
-                string executable = Path.Combine(output, "Player", "Smoke.exe");
+                File.WriteAllText(Path.Combine(output, "build-target.txt"), target.ToString());
+                if (webGL)
+                {
+                    PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Disabled;
+                }
+                string executable = webGL ? Path.Combine(output, "Player") : Path.Combine(output, "Player", "Smoke.exe");
                 BuildReport build = BuildPipeline.BuildPlayer(
                     new BuildPlayerOptions
                     {
                         scenes = new[] { scene },
                         locationPathName = executable,
-                        target = BuildTarget.StandaloneWindows64,
+                        target = target,
                         options = BuildOptions.None,
                     }
                 );
@@ -77,6 +94,11 @@ namespace DxCommandTerminal.T13.PlayerSmoke.Editor
                 if (build.summary.result != BuildResult.Succeeded || build.summary.totalErrors != 0 || build.summary.totalWarnings != 0)
                 {
                     throw new InvalidOperationException("Player build failed");
+                }
+                if (webGL)
+                {
+                    EditorApplication.Exit(0);
+                    return;
                 }
                 ProcessStartInfo start = new ProcessStartInfo(executable, $"-batchmode -nographics -logFile \"{Path.Combine(output, "player.log")}\"")
                 {
